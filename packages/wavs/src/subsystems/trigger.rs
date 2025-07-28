@@ -564,20 +564,74 @@ impl TriggerManager {
                     program_logs,
                     parsed_events,
                 } => {
-                    // Process SVM program events
-                    for parsed_event in parsed_events {
-                        // Look up triggers that match this program and event pattern
-                        let program_id = program_logs.iter()
-                            .find(|log| !log.logs.is_empty())
-                            .map(|log| log.program_id.clone())
-                            .unwrap_or_default();
+                    tracing::info!("Processing SVM event: signature={}, slot={}, logs_count={}, parsed_events_count={}",
+                        signature, slot, program_logs.len(), parsed_events.len());
 
-                        // TODO: Implement get_svm_triggers in lookup maps
-                        tracing::info!("Received SVM program event: program_id={}, event_type={}, chain={}",
-                            program_id, parsed_event.event_type, chain_name);
+                    // For now, just process all SVM program events regardless of program_id
+                    // Look up triggers by chain name and the program_id from config
+                    let triggers_by_svm = self.lookup_maps.triggers_by_svm_program_event.read().unwrap();
 
-                        // For now, just log the event. The lookup maps will need to be extended
-                        // to support SVM trigger lookup by program_id and event pattern
+                    // Find any triggers for this chain and any program_id
+                    for ((trigger_chain_name, trigger_program_id), lookup_ids) in triggers_by_svm.iter() {
+                        if trigger_chain_name == &chain_name {
+                            tracing::info!("Found {} SVM triggers for chain={} program_id={}",
+                                lookup_ids.len(), trigger_chain_name, trigger_program_id);
+
+                            // Get trigger configs for these lookup IDs
+                            let trigger_configs = self.lookup_maps.get_trigger_configs(lookup_ids);
+
+                            for trigger_config in trigger_configs {
+                                tracing::info!("Dispatching SVM trigger for service={} workflow={}",
+                                    trigger_config.service_id, trigger_config.workflow_id);
+
+                                // Create trigger data for each program log
+                                for program_log in program_logs.iter() {
+                                    // For each parsed event, create a separate trigger
+                                    if parsed_events.is_empty() {
+                                        // No parsed events, but still trigger with raw logs
+                                        dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
+                                            data: TriggerData::SvmProgramEvent {
+                                                chain_name: chain_name.clone(),
+                                                program_id: program_log.program_id.clone(),
+                                                signature: signature.clone(),
+                                                slot,
+                                                success: program_log.success,
+                                                logs: program_log.logs.clone(),
+                                                parsed_event: None,
+                                            },
+                                            config: trigger_config.clone(),
+                                        }));
+                                    } else {
+                                        // Create a trigger for each parsed event
+                                        for parsed_event in &parsed_events {
+                                            dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
+                                                data: TriggerData::SvmProgramEvent {
+                                                    chain_name: chain_name.clone(),
+                                                    program_id: program_log.program_id.clone(),
+                                                    signature: signature.clone(),
+                                                    slot,
+                                                    success: program_log.success,
+                                                    logs: program_log.logs.clone(),
+                                                    parsed_event: Some(parsed_event.clone()),
+                                                },
+                                                config: trigger_config.clone(),
+                                            }));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Also log all events for debugging
+                    for parsed_event in &parsed_events {
+                        tracing::info!("SVM event: type={}, data={:?}", parsed_event.event_type, parsed_event.data);
+                    }
+
+                    // Log all raw program logs for debugging
+                    for program_log in &program_logs {
+                        tracing::info!("SVM program logs: program_id={}, success={}, logs={:?}",
+                            program_log.program_id, program_log.success, program_log.logs);
                     }
                 }
                 StreamTriggers::Cron {

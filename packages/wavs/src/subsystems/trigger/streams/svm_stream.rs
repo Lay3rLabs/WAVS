@@ -1,4 +1,4 @@
-use futures::{stream, Stream, StreamExt};
+use futures::{stream, Stream};
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use utils::{svm_client::SvmQueryClient, telemetry::TriggerMetrics};
@@ -17,34 +17,99 @@ pub struct SvmProgramLog {
 }
 
 pub async fn start_svm_event_stream(
-    _query_client: SvmQueryClient,
+    query_client: SvmQueryClient,
     chain_name: ChainName,
     _metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
-    // Create a placeholder stream that will be replaced with actual subscription logic
-    // This structure follows the pattern of EVM and Cosmos streams
+    use futures::stream::StreamExt;
+
     let chain_name_clone = chain_name.clone();
 
-    // For now, create an empty stream that will be replaced with actual Solana subscription
-    let stream = stream::empty::<()>();
+    let event_stream = async_stream::stream! {
+        // Subscribe to all program logs (watch everything as requested)
+        let client = match query_client.endpoint.to_pubsub_client().await {
+            Ok(client) => client,
+            Err(e) => {
+                yield Err(TriggerError::SvmSubscription(e.into()));
+                return;
+            }
+        };
 
-    let event_stream: Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>> = Box::pin(stream.filter_map(move |_: ()| {
-        let _chain_name = chain_name_clone.clone();
-        async move {
-            // This will be replaced with actual log processing
-            None::<Result<StreamTriggers, TriggerError>>
+        // Subscribe to all logs (not filtered by program ID)
+        let logs_config = query_client.get_logs_config();
+        let filter = solana_client::rpc_config::RpcTransactionLogsFilter::All;
+
+        let (mut logs_subscription, _unsubscriber) = match client
+            .logs_subscribe(filter, logs_config)
+            .await
+        {
+            Ok(subscription) => subscription,
+            Err(e) => {
+                yield Err(TriggerError::SvmSubscription(e.into()));
+                return;
+            }
+        };
+        while let Some(log_response) = logs_subscription.next().await {
+            let value = log_response.value;
+            tracing::info!("Received SVM log event for signature: {}", value.signature);
+
+            // Convert logs to our internal format
+            let logs = value.logs;
+
+            // Try to extract program ID from the first log line
+            // Solana logs typically start with "Program <program_id> invoke [1]"
+            let program_id = logs.iter()
+                .find_map(|log| {
+                    if log.starts_with("Program ") && log.contains(" invoke ") {
+                        let parts: Vec<&str> = log.split_whitespace().collect();
+                        if parts.len() >= 2 {
+                            Some(parts[1].to_string())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| "unknown".to_string());
+
+            let program_logs = vec![SvmProgramLog {
+                program_id,
+                logs,
+                success: value.err.is_none(),
+            }];
+
+            // Parse events from the logs
+            let all_logs: Vec<String> = program_logs.iter()
+                .flat_map(|log| log.logs.iter().cloned())
+                .collect();
+            let parsed_events = parse_program_events(&all_logs);
+
+            if !parsed_events.is_empty() || !all_logs.is_empty() {
+                tracing::info!("Found {} parsed events and {} total logs", parsed_events.len(), all_logs.len());
+
+                yield Ok(StreamTriggers::Svm {
+                    chain_name: chain_name_clone.clone(),
+                    signature: value.signature,
+                    slot: log_response.context.slot,
+                    program_logs: program_logs.clone(),
+                    parsed_events,
+                });
+            }
         }
-    }));
 
-    Ok(event_stream)
+        tracing::warn!("SVM logs subscription ended");
+    };
+
+    Ok(Box::pin(event_stream))
 }
 
 /// Subscribes to program logs for a specific program ID
 pub async fn subscribe_to_program_logs(
-    query_client: SvmQueryClient,
-    program_id: String,
-    chain_name: ChainName,
+    _query_client: SvmQueryClient,
+    _program_id: String,
+    _chain_name: ChainName,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError> {
     // For now, return an empty stream as a placeholder
     // This will be implemented when SVM integration is ready
