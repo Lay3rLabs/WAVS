@@ -262,6 +262,9 @@ impl From<ChainConfigs> for BTreeMap<ChainName, AnyChainConfig> {
         for (name, config) in configs.evm {
             map.insert(name, AnyChainConfig::Evm(config));
         }
+        for (name, config) in configs.svm {
+            map.insert(name, AnyChainConfig::Svm(config));
+        }
         map
     }
 }
@@ -271,18 +274,30 @@ impl ChainConfigs {
         &self,
         chain_name: &ChainName,
     ) -> std::result::Result<Option<AnyChainConfig>, ChainConfigError> {
-        match (self.evm.get(chain_name), self.cosmos.get(chain_name)) {
-            (Some(_), Some(_)) => Err(ChainConfigError::DuplicateChainName(chain_name.clone())),
-            (Some(evm_chain_config), None) => {
+        match (
+            self.evm.get(chain_name),
+            self.cosmos.get(chain_name),
+            self.svm.get(chain_name),
+        ) {
+            (Some(_), Some(_), _) | (Some(_), _, Some(_)) | (_, Some(_), Some(_)) => {
+                Err(ChainConfigError::DuplicateChainName(chain_name.clone()))
+            }
+            (Some(evm_chain_config), None, None) => {
                 Ok(Some(AnyChainConfig::Evm(evm_chain_config.clone())))
             }
-            (None, Some(cosmos)) => Ok(Some(AnyChainConfig::Cosmos(cosmos.clone()))),
-            (None, None) => Ok(None),
+            (None, Some(cosmos), None) => Ok(Some(AnyChainConfig::Cosmos(cosmos.clone()))),
+            (None, None, Some(svm)) => Ok(Some(AnyChainConfig::Svm(svm.clone()))),
+            (None, None, None) => Ok(None),
         }
     }
 
     pub fn all_chain_names(&self) -> Vec<ChainName> {
-        self.evm.keys().chain(self.cosmos.keys()).cloned().collect()
+        self.evm
+            .keys()
+            .chain(self.cosmos.keys())
+            .chain(self.svm.keys())
+            .cloned()
+            .collect()
     }
 
     pub fn add_chain(
@@ -369,6 +384,7 @@ mod test {
 
     use super::{
         ChainConfigs, CliEnvExt, ConfigBuilder, ConfigExt, CosmosChainConfig, EvmChainConfig,
+        SvmChainConfig,
     };
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -620,6 +636,14 @@ mod test {
             .try_into()
             .unwrap();
         assert_eq!(chain.chain_id, "evm");
+
+        let chain: SvmChainConfig = chain_configs
+            .get_chain(&"solana".try_into().unwrap())
+            .unwrap()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(chain.cluster, "devnet");
     }
 
     #[test]
@@ -939,8 +963,19 @@ mod test {
             ]
             .into_iter()
             .collect(),
-            // TODO:
-            svm: Default::default(),
+            svm: vec![
+                (
+                    "solana".try_into().unwrap(),
+                    SvmChainConfig {
+                        cluster: "devnet".to_string(),
+                        ws_endpoint: "ws://127.0.0.1:8900".to_string(),
+                        commitment: Some("confirmed".to_string()),
+                        poll_interval_ms: None,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
         }
     }
 }
