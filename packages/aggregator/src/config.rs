@@ -78,6 +78,7 @@ impl Default for Config {
             chains: ChainConfigs {
                 cosmos: Default::default(),
                 evm: Default::default(),
+                svm: Default::default(),
             },
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
             wasm_lru_size: DEFAULT_WASM_LRU_SIZE,

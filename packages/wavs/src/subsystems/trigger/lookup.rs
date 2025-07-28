@@ -30,6 +30,11 @@ pub struct LookupMaps {
     pub triggers_by_evm_contract_event: Arc<
         RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
+    // TODO: do this with event regex ?
+    /// lookup id by (chain id, program id)
+    pub triggers_by_svm_program_event: Arc<
+        RwLock<HashMap<(ChainName, String), HashSet<LookupId>>>,
+    >,
     // ServiceID <-> ServiceManager address
     pub service_manager: Arc<RwLock<BiMap<ServiceID, layer_climb::prelude::Address>>>,
     /// Efficient block schedulers (one per chain) for block interval triggers
@@ -50,6 +55,7 @@ impl LookupMaps {
             lookup_id: Arc::new(AtomicUsize::new(0)),
             triggers_by_cosmos_contract_event: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_evm_contract_event: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_svm_program_event: Arc::new(RwLock::new(HashMap::new())),
             block_schedulers: BlockSchedulers::default(),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
             service_manager: Arc::new(RwLock::new(BiMap::new())),
@@ -145,6 +151,19 @@ impl LookupMaps {
             } => {
                 let key = (chain_name.clone(), address.clone(), event_type.clone());
                 self.triggers_by_cosmos_contract_event
+                    .write()
+                    .unwrap()
+                    .entry(key)
+                    .or_default()
+                    .insert(lookup_id);
+            }
+            Trigger::SvmProgramEvent {
+               chain_name,
+               event_pattern, // TODO:
+                program_id,
+            } => {
+                let key = (chain_name.clone(), program_id.clone());
+                self.triggers_by_svm_program_event
                     .write()
                     .unwrap()
                     .entry(key)
@@ -254,6 +273,15 @@ impl LookupMaps {
                         }
                     }
                 }
+                Trigger::SvmProgramEvent { program_id, chain_name, event_pattern } => {
+                    let mut lock = self.triggers_by_svm_program_event.write().unwrap();
+                    if let Some(set) = lock.get_mut(&(chain_name.clone(), program_id.clone())) {
+                        set.remove(&lookup_id);
+                        if set.is_empty() {
+                            lock.remove(&(chain_name, program_id));
+                        }
+                    }
+                }
                 Trigger::BlockInterval { chain_name, .. } => {
                     // Remove from block scheduler
                     if let Some(mut scheduler) = self.block_schedulers.get_mut(&chain_name) {
@@ -337,6 +365,14 @@ impl LookupMaps {
                                         address.clone(),
                                         event_type.clone(),
                                     ));
+                                }
+                            }
+                        }
+                        Trigger::SvmProgramEvent { program_id, chain_name, event_pattern } => {
+                            if let Some(set) = self.triggers_by_svm_program_event.write().unwrap().get_mut(&(chain_name.clone(), program_id.clone())) {
+                                set.remove(lookup_id);
+                                if set.is_empty() {
+                                    self.triggers_by_svm_program_event.write().unwrap().remove(&(chain_name.clone(), program_id.clone()));
                                 }
                             }
                         }

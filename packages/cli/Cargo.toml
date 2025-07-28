@@ -34,3 +34,4 @@ alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
 alloy-json-abi = { workspace = true }
 cron = { workspace = true }
+solana-sdk = { workspace = true }

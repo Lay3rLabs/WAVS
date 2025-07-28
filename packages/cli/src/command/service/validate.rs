@@ -114,74 +114,74 @@ pub async fn validate_contracts_exist(
     for (workflow_id, trigger) in triggers {
         match trigger {
             Trigger::EvmContractEvent {
-                address,
-                chain_name,
-                ..
-            } => {
-                // Check if we have a provider for this chain
-                if let Some(provider) = evm_providers.get(chain_name) {
-                    // Only check each contract once per chain
-                    let key = (address.to_string(), chain_name.to_string());
-                    if let std::collections::hash_map::Entry::Vacant(e) =
-                        checked_evm_contracts.entry(key)
-                    {
-                        let context =
-                            format!("Service {} workflow {} trigger", service_name, workflow_id);
-                        match check_evm_contract_exists(address, provider, errors, &context).await {
-                            Ok(exists) => {
-                                e.insert(exists);
+                        address,
+                        chain_name,
+                        ..
+                    } => {
+                        // Check if we have a provider for this chain
+                        if let Some(provider) = evm_providers.get(chain_name) {
+                            // Only check each contract once per chain
+                            let key = (address.to_string(), chain_name.to_string());
+                            if let std::collections::hash_map::Entry::Vacant(e) =
+                                checked_evm_contracts.entry(key)
+                            {
+                                let context =
+                                    format!("Service {} workflow {} trigger", service_name, workflow_id);
+                                match check_evm_contract_exists(address, provider, errors, &context).await {
+                                    Ok(exists) => {
+                                        e.insert(exists);
+                                    }
+                                    Err(err) => {
+                                        errors.push(format!(
+                                            "Error checking EVM contract for workflow {}: {}",
+                                            workflow_id, err
+                                        ));
+                                    }
+                                }
                             }
-                            Err(err) => {
-                                errors.push(format!(
-                                    "Error checking EVM contract for workflow {}: {}",
-                                    workflow_id, err
-                                ));
-                            }
+                        } else {
+                            errors.push(format!(
+                                "Cannot check EVM contract for workflow {} - no provider configured for chain {}",
+                                workflow_id, chain_name
+                            ));
                         }
                     }
-                } else {
-                    errors.push(format!(
-                        "Cannot check EVM contract for workflow {} - no provider configured for chain {}",
-                        workflow_id, chain_name
-                    ));
-                }
-            }
             Trigger::CosmosContractEvent {
-                address,
-                chain_name,
-                ..
-            } => {
-                // Check if we have a query client for this chain
-                if let Some(client) = cosmos_clients.get(chain_name) {
-                    // Only check each contract once per chain
-                    let key = (address.to_string(), chain_name.to_string());
-                    if let std::collections::hash_map::Entry::Vacant(e) =
-                        checked_cosmos_contracts.entry(key)
-                    {
-                        let context =
-                            format!("Service {} workflow {} trigger", service_name, workflow_id);
-                        match check_cosmos_contract_exists(address, client, errors, &context).await
-                        {
-                            Ok(exists) => {
-                                e.insert(exists);
+                        address,
+                        chain_name,
+                        ..
+                    } => {
+                        // Check if we have a query client for this chain
+                        if let Some(client) = cosmos_clients.get(chain_name) {
+                            // Only check each contract once per chain
+                            let key = (address.to_string(), chain_name.to_string());
+                            if let std::collections::hash_map::Entry::Vacant(e) =
+                                checked_cosmos_contracts.entry(key)
+                            {
+                                let context =
+                                    format!("Service {} workflow {} trigger", service_name, workflow_id);
+                                match check_cosmos_contract_exists(address, client, errors, &context).await
+                                {
+                                    Ok(exists) => {
+                                        e.insert(exists);
+                                    }
+                                    Err(err) => {
+                                        errors.push(format!(
+                                            "Error checking Cosmos contract for workflow {}: {}",
+                                            workflow_id, err
+                                        ));
+                                    }
+                                }
                             }
-                            Err(err) => {
-                                errors.push(format!(
-                                    "Error checking Cosmos contract for workflow {}: {}",
-                                    workflow_id, err
-                                ));
-                            }
+                        } else {
+                            errors.push(format!(
+                                "Cannot check Cosmos contract for workflow {} - no client configured for chain {}",
+                                workflow_id, chain_name
+                            ));
                         }
                     }
-                } else {
-                    errors.push(format!(
-                        "Cannot check Cosmos contract for workflow {} - no client configured for chain {}",
-                        workflow_id, chain_name
-                    ));
-                }
-            }
-            // Other trigger types don't need contract validation
             Trigger::Cron { .. } | Trigger::Manual | Trigger::BlockInterval { .. } => {}
+            Trigger::SvmProgramEvent { program_id, chain_name, event_pattern } => todo!(),
         }
     }
 

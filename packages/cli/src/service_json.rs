@@ -5,6 +5,7 @@ use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
     Component, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowID,
 };
+use solana_sdk::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -71,6 +72,24 @@ impl ServiceJson {
                                 errors.push(format!(
                                     "Workflow '{}' has an empty event type in Cosmos trigger",
                                     workflow_id
+                                ));
+                            }
+                        }
+                        Trigger::SvmProgramEvent { program_id, .. } => {
+                            // TODO: event / event pattern
+                            if program_id.is_empty() {
+                                errors.push(format!(
+                                    "Workflow '{}' has an empty program ID in SVM trigger",
+                                    workflow_id
+                                ));
+                            }
+
+                            let pubkey = Pubkey::from_str(program_id)
+                                .map_err(|e| format!("Invalid program ID '{}': {}", program_id, e));
+                            if pubkey.is_err() {
+                                errors.push(format!(
+                                    "Workflow '{}' has an invalid program ID in SVM trigger: {}",
+                                    workflow_id, pubkey.unwrap_err()
                                 ));
                             }
                         }

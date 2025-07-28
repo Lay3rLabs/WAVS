@@ -1,6 +1,5 @@
 use crate::bindings::aggregator::world::wavs::{
-    aggregator::aggregator as aggregator_types, types::chain as aggregator_chain,
-    types::core as aggregator_core, types::service as aggregator_service,
+    aggregator::aggregator::{self as aggregator_types, EvmAddress}, types::{chain as aggregator_chain, core as aggregator_core, service as aggregator_service},
 };
 use wavs_types::{Envelope, EnvelopeSignature, Packet};
 
@@ -225,6 +224,20 @@ impl TryFrom<wavs_types::Trigger> for aggregator_service::Trigger {
                     address: address.try_into()?,
                     chain_name: chain_name.to_string(),
                     event_type,
+                },
+            ),
+            // TODO: fix me with wavs-wasi to actually be SVM
+            wavs_types::Trigger::SvmProgramEvent {
+                chain_name,
+                program_id,
+                event_pattern,
+            } => aggregator_service::Trigger::EvmContractEvent(
+                aggregator_service::TriggerEvmContractEvent {
+                    address: EvmAddress {
+                        raw_bytes: vec![],
+                    },
+                    chain_name: chain_name.to_string(),
+                    event_hash: event_pattern.unwrap().as_bytes().to_vec(),
                 },
             ),
             wavs_types::Trigger::BlockInterval {

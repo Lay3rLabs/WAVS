@@ -10,6 +10,8 @@ pub enum ChainConfigError {
     ExpectedEvmChain,
     #[error("Expected Cosmos chain")]
     ExpectedCosmosChain,
+    #[error("Expected SVM chain")]
+    ExpectedSvmChain,
     #[error("Duplicate chain name for {0}")]
     DuplicateChainName(ChainName),
     #[error("Invalid chain name: {0}")]
@@ -37,10 +39,19 @@ pub struct EvmChainConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+pub struct SvmChainConfig {
+    pub cluster: String,
+    pub ws_endpoint: String,
+    pub commitment: Option<String>,
+    pub poll_interval_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AnyChainConfig {
     Cosmos(CosmosChainConfig),
     Evm(EvmChainConfig),
+    Svm(SvmChainConfig),
 }
 
 impl From<CosmosChainConfig> for AnyChainConfig {
@@ -55,6 +66,12 @@ impl From<EvmChainConfig> for AnyChainConfig {
     }
 }
 
+impl From<SvmChainConfig> for AnyChainConfig {
+    fn from(config: SvmChainConfig) -> Self {
+        AnyChainConfig::Svm(config)
+    }
+}
+
 impl TryFrom<AnyChainConfig> for CosmosChainConfig {
     type Error = ChainConfigError;
 
@@ -62,6 +79,7 @@ impl TryFrom<AnyChainConfig> for CosmosChainConfig {
         match config {
             AnyChainConfig::Cosmos(config) => Ok(config),
             AnyChainConfig::Evm(_) => Err(ChainConfigError::ExpectedCosmosChain),
+            AnyChainConfig::Svm(_) => Err(ChainConfigError::ExpectedCosmosChain),
         }
     }
 }
@@ -73,6 +91,19 @@ impl TryFrom<AnyChainConfig> for EvmChainConfig {
         match config {
             AnyChainConfig::Evm(config) => Ok(config),
             AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEvmChain),
+            AnyChainConfig::Svm(_) => Err(ChainConfigError::ExpectedEvmChain),
+        }
+    }
+}
+
+impl TryFrom<AnyChainConfig> for SvmChainConfig {
+    type Error = ChainConfigError;
+
+    fn try_from(config: AnyChainConfig) -> Result<Self, Self::Error> {
+        match config {
+            AnyChainConfig::Svm(config) => Ok(config),
+            AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedSvmChain),
+            AnyChainConfig::Evm(_) => Err(ChainConfigError::ExpectedSvmChain),
         }
     }
 }
@@ -143,6 +174,7 @@ impl AnyChainConfig {
         match self {
             AnyChainConfig::Cosmos(config) => Ok(config.clone()),
             AnyChainConfig::Evm(_) => Err(ChainConfigError::ExpectedCosmosChain),
+            AnyChainConfig::Svm(_) => Err(ChainConfigError::ExpectedCosmosChain),
         }
     }
 
@@ -150,6 +182,15 @@ impl AnyChainConfig {
         match self {
             AnyChainConfig::Evm(config) => Ok(config.clone()),
             AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEvmChain),
+            AnyChainConfig::Svm(_) => Err(ChainConfigError::ExpectedEvmChain),
+        }
+    }
+
+    pub fn to_svm_config(&self) -> Result<SvmChainConfig, ChainConfigError> {
+        match self {
+            AnyChainConfig::Svm(config) => Ok(config.clone()),
+            AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedSvmChain),
+            AnyChainConfig::Evm(_) => Err(ChainConfigError::ExpectedSvmChain),
         }
     }
 

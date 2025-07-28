@@ -249,6 +249,8 @@ pub struct ChainConfigs {
     pub cosmos: BTreeMap<ChainName, CosmosChainConfig>,
     /// EVM-style chains
     pub evm: BTreeMap<ChainName, EvmChainConfig>,
+    /// SVM-style chains (Solana)
+    pub svm: BTreeMap<ChainName, SvmChainConfig>,
 }
 
 impl From<ChainConfigs> for BTreeMap<ChainName, AnyChainConfig> {
@@ -299,13 +301,16 @@ impl ChainConfigs {
             AnyChainConfig::Cosmos(config) => {
                 self.cosmos.insert(chain_name, config);
             }
+            AnyChainConfig::Svm(config) => {
+                self.svm.insert(chain_name, config);
+            }
         }
 
         Ok(())
     }
 }
 
-pub use wavs_types::{CosmosChainConfig, EvmChainConfig};
+pub use wavs_types::{CosmosChainConfig, EvmChainConfig, SvmChainConfig};
 
 pub trait EvmChainConfigExt {
     fn signing_client_config(
@@ -934,6 +939,8 @@ mod test {
             ]
             .into_iter()
             .collect(),
+            // TODO:
+            svm: Default::default(),
         }
     }
 }

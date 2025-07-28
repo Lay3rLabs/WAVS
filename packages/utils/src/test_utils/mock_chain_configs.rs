@@ -28,5 +28,7 @@ pub fn mock_chain_configs() -> ChainConfigs {
         )]
         .into_iter()
         .collect(),
+        // TODO:
+        svm: Default::default(),
     }
 }

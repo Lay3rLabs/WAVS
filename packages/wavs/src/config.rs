@@ -84,6 +84,7 @@ impl Default for Config {
             chains: ChainConfigs {
                 cosmos: BTreeMap::new(),
                 evm: BTreeMap::new(),
+                svm: BTreeMap::new(),
             },
             wasm_lru_size: 20,
             wasm_threads: 4,

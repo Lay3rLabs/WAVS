@@ -61,6 +61,9 @@ cid = { workspace = true }
 reqwest = { workspace = true }
 tempfile = { workspace = true }
 alloy-contract = { workspace = true }
+solana-client = { workspace = true }
+solana-sdk = { workspace = true }
+solana-pubsub-client = { workspace = true }
 rand = { workspace = true, optional = true }
 bip39 = { workspace = true, optional = true}
 

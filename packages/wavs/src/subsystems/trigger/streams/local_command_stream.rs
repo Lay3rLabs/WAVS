@@ -34,10 +34,11 @@ impl LocalStreamCommand {
         match &trigger_config.trigger {
             Trigger::Cron { .. } => Some(Self::StartListeningCron),
             Trigger::EvmContractEvent { chain_name, .. }
-            | Trigger::CosmosContractEvent { chain_name, .. }
-            | Trigger::BlockInterval { chain_name, .. } => Some(Self::StartListeningChain {
-                chain_name: chain_name.clone(),
-            }),
+                    | Trigger::SvmProgramEvent { chain_name, .. }
+                    | Trigger::CosmosContractEvent { chain_name, .. }
+                    | Trigger::BlockInterval { chain_name, .. } => Some(Self::StartListeningChain {
+                        chain_name: chain_name.clone(),
+                    }),
             Trigger::Manual => None,
         }
     }

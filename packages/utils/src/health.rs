@@ -27,6 +27,10 @@ pub async fn health_check_chains_query<'a>(
                 check_cosmos_chain_health_query(chain_name, config).await?;
                 tracing::info!("Cosmos chain [{chain_name}] is healthy");
             }
+            AnyChainConfig::Svm(_config) => {
+                // TODO: Implement SVM health check
+                tracing::info!("Svm chain [{chain_name}] health check not implemented yet");
+            }
         }
     }
     Ok(())

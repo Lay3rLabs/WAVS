@@ -154,36 +154,37 @@ async fn run_test(
         // Execute the trigger once
         let trigger_id = match trigger {
             Trigger::EvmContractEvent {
-                chain_name,
-                address,
-                event_hash: _,
-            } => {
-                let evm_client = clients.get_evm_client(chain_name);
-                let client = SimpleEvmTriggerClient::new(evm_client, *address);
+                        chain_name,
+                        address,
+                        event_hash: _,
+                    } => {
+                        let evm_client = clients.get_evm_client(chain_name);
+                        let client = SimpleEvmTriggerClient::new(evm_client, *address);
 
-                client
-                    .add_trigger(input_bytes.expect("EVM triggers require an input"))
-                    .await?
-            }
+                        client
+                            .add_trigger(input_bytes.expect("EVM triggers require an input"))
+                            .await?
+                    }
             Trigger::CosmosContractEvent {
-                chain_name,
-                address,
-                event_type: _,
-            } => {
-                let client = SimpleCosmosTriggerClient::new(
-                    clients.get_cosmos_client(chain_name).await,
-                    address.clone(),
-                );
+                        chain_name,
+                        address,
+                        event_type: _,
+                    } => {
+                        let client = SimpleCosmosTriggerClient::new(
+                            clients.get_cosmos_client(chain_name).await,
+                            address.clone(),
+                        );
 
-                let trigger_id = client
-                    .add_trigger(input_bytes.expect("Cosmos triggers require an input"))
-                    .await?;
+                        let trigger_id = client
+                            .add_trigger(input_bytes.expect("Cosmos triggers require an input"))
+                            .await?;
 
-                TriggerId::new(trigger_id.u64())
-            }
+                        TriggerId::new(trigger_id.u64())
+                    }
             Trigger::BlockInterval { .. } => TriggerId::new(1337),
             Trigger::Cron { .. } => TriggerId::new(1338),
             Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
+            Trigger::SvmProgramEvent { program_id, chain_name, event_pattern } => todo!(),
         };
 
         // Validate all workflows associated with this trigger

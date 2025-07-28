@@ -1,6 +1,6 @@
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
-use utils::error::EvmClientError;
+use utils::error::{EvmClientError, SvmClientError};
 use wavs_types::{ByteArray, ChainName, ServiceID, WorkflowID};
 
 use crate::{
@@ -16,6 +16,10 @@ pub enum TriggerError {
     EvmClient(ChainName, EvmClientError),
     #[error("Evm subscription: {0}")]
     EvmSubscription(anyhow::Error),
+    #[error("SvmClient (chain {0}): {1}")]
+    SvmClient(ChainName, SvmClientError),
+    #[error("Svm subscription: {0}")]
+    SvmSubscription(anyhow::Error),
     #[error("parse avs payload: {0}")]
     ParseAvsPayload(anyhow::Error),
     #[error("Cannot find service: {0}")]
@@ -32,6 +36,8 @@ pub enum TriggerError {
     NoSuchCosmosContractEvent(ChainName, layer_climb::prelude::Address, String),
     #[error("Cannot find EVM trigger contract: {0} / {1} / {2}")]
     NoSuchEvmContractEvent(ChainName, alloy_primitives::Address, ByteArray<32>),
+    #[error("Cannot find SVM trigger program: {0} / {1}")]
+    NoSuchSvmProgramEvent(ChainName, String),
     #[error("Cannot find block interval trigger: {0} / {1}")]
     NoSuchBlockIntervalTrigger(ChainName, u32),
     #[error("Service exists, cannot register again: {0}")]

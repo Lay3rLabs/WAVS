@@ -45,3 +45,21 @@ pub enum EvmClientError {
     #[error("Unable to get block height")]
     BlockHeight,
 }
+
+#[derive(Debug, Error)]
+pub enum SvmClientError {
+    #[error("Unable to parse endpoint: {0}")]
+    ParseEndpoint(String),
+
+    #[error("Unable to create WebSocket client: {0:#?}")]
+    WebSocketClient(anyhow::Error),
+
+    #[error("Unable to subscribe to program logs: {0:#?}")]
+    ProgramLogsSubscription(anyhow::Error),
+
+    #[error("Invalid program ID: {0}")]
+    InvalidProgramId(String),
+
+    #[error("Connection failed: {0:#?}")]
+    ConnectionFailed(anyhow::Error),
+}

@@ -153,66 +153,76 @@ impl std::fmt::Display for WorkflowTriggerResult {
 
         match &self.trigger {
             Trigger::CosmosContractEvent {
-                address,
-                chain_name,
-                event_type,
-            } => {
-                writeln!(f, "  Trigger Type: Cosmos Contract Event")?;
-                writeln!(f, "    Address:    {}", address)?;
-                writeln!(f, "    Chain:      {}", chain_name)?;
-                writeln!(f, "    Event Type: {}", event_type)?;
-            }
+                        address,
+                        chain_name,
+                        event_type,
+                    } => {
+                        writeln!(f, "  Trigger Type: Cosmos Contract Event")?;
+                        writeln!(f, "    Address:    {}", address)?;
+                        writeln!(f, "    Chain:      {}", chain_name)?;
+                        writeln!(f, "    Event Type: {}", event_type)?;
+                    }
             Trigger::EvmContractEvent {
-                address,
-                chain_name,
-                event_hash,
-            } => {
-                writeln!(f, "  Trigger Type: EVM Contract Event")?;
-                writeln!(f, "    Address:    {}", address)?;
-                writeln!(f, "    Chain:      {}", chain_name)?;
-                writeln!(f, "    Event Hash: {}", event_hash)?;
-            }
+                        address,
+                        chain_name,
+                        event_hash,
+                    } => {
+                        writeln!(f, "  Trigger Type: EVM Contract Event")?;
+                        writeln!(f, "    Address:    {}", address)?;
+                        writeln!(f, "    Chain:      {}", chain_name)?;
+                        writeln!(f, "    Event Hash: {}", event_hash)?;
+                    }
+            Trigger::SvmProgramEvent { program_id, chain_name, event_pattern } => {
+                        writeln!(f, "  Trigger Type: SVM Program Event")?;
+                        writeln!(f, "    Program ID: {}", program_id)?;
+                        writeln!(f, "    Chain:      {}", chain_name)?;
+                        if let Some(pattern) = event_pattern {
+                            writeln!(f, "    Event Pattern: {}", pattern)?;
+                        } else {
+                            writeln!(f, "    Event Pattern: None")?;
+                        }
+            },
             Trigger::Manual => {
-                writeln!(f, "  Trigger Type: Manual")?;
-            }
+                        writeln!(f, "  Trigger Type: Manual")?;
+                    }
             Trigger::BlockInterval {
-                chain_name,
-                n_blocks,
-                start_block,
-                end_block,
-            } => {
-                writeln!(f, "  Trigger Type: Block Interval")?;
-                writeln!(f, "    Chain:      {}", chain_name)?;
-                writeln!(f, "    Interval:   {} blocks", n_blocks)?;
-                if let Some(start) = start_block {
-                    writeln!(f, "    Start Block: {}", u64::from(*start))?;
-                } else {
-                    writeln!(f, "    Start Block: None")?;
-                }
-                if let Some(end) = end_block {
-                    writeln!(f, "    End Block:   {}", u64::from(*end))?;
-                } else {
-                    writeln!(f, "    End Block:   None")?;
-                }
-            }
+                        chain_name,
+                        n_blocks,
+                        start_block,
+                        end_block,
+                    } => {
+                        writeln!(f, "  Trigger Type: Block Interval")?;
+                        writeln!(f, "    Chain:      {}", chain_name)?;
+                        writeln!(f, "    Interval:   {} blocks", n_blocks)?;
+                        if let Some(start) = start_block {
+                            writeln!(f, "    Start Block: {}", u64::from(*start))?;
+                        } else {
+                            writeln!(f, "    Start Block: None")?;
+                        }
+                        if let Some(end) = end_block {
+                            writeln!(f, "    End Block:   {}", u64::from(*end))?;
+                        } else {
+                            writeln!(f, "    End Block:   None")?;
+                        }
+                    }
             Trigger::Cron {
-                schedule,
-                start_time,
-                end_time,
-            } => {
-                writeln!(f, "  Trigger Type: Cron")?;
-                writeln!(f, "    Schedule:   {}", schedule)?;
-                if let Some(start) = start_time {
-                    writeln!(f, "    Start Time: {}", start.as_nanos())?;
-                } else {
-                    writeln!(f, "    Start Time: None")?;
-                }
-                if let Some(end) = end_time {
-                    writeln!(f, "    End Time:   {}", end.as_nanos())?;
-                } else {
-                    writeln!(f, "    End Time:   None")?;
-                }
-            }
+                        schedule,
+                        start_time,
+                        end_time,
+                    } => {
+                        writeln!(f, "  Trigger Type: Cron")?;
+                        writeln!(f, "    Schedule:   {}", schedule)?;
+                        if let Some(start) = start_time {
+                            writeln!(f, "    Start Time: {}", start.as_nanos())?;
+                        } else {
+                            writeln!(f, "    Start Time: None")?;
+                        }
+                        if let Some(end) = end_time {
+                            writeln!(f, "    End Time:   {}", end.as_nanos())?;
+                        } else {
+                            writeln!(f, "    End Time:   None")?;
+                        }
+                    }
         }
 
         writeln!(f, "  Updated:     {}", self.file_path.display())

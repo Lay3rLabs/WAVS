@@ -1063,6 +1063,10 @@ pub async fn validate_service(
                                 ));
                             }
                         }
+                        Some(AnyChainConfig::Svm(_)) => {
+                            let svm_client = ctx.new_svm_client(chain_name).await?;
+                            // TODO: impl
+                        }
                     },
                     _ => {}
                 }

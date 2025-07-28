@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use layer_climb::prelude::*;
 use utils::{
     config::{AnyChainConfig, EvmChainConfigExt},
-    evm_client::EvmSigningClient,
+    evm_client::EvmSigningClient, svm_client::{SvmEndpoint, SvmQueryClient},
 };
 use wavs_types::ChainName;
 
@@ -121,6 +121,20 @@ impl CliContext {
         SigningClient::new(climb_chain_config, key_signer, None).await
     }
 
+    pub async fn new_svm_client(&self, chain_name: &ChainName) -> Result<SvmQueryClient> {
+        let chain_config = self
+            .config
+            .chains
+            .svm
+            .get(chain_name)
+            .context(format!("chain {chain_name} not found"))?
+            .clone();
+
+        let ws_endpoint = chain_config.ws_endpoint;
+
+        SvmQueryClient::new(SvmEndpoint::WebSocket(ws_endpoint), None).await.map_err(anyhow::Error::from)
+    }
+
     pub async fn address_exists_on_chain(
         &self,
         chain_name: &ChainName,
@@ -156,6 +170,9 @@ impl CliContext {
                     .contract_info(&address)
                     .await
                     .is_ok(),
+                AnyChainConfig::Svm(_) => {
+                    todo!("SVM address existence check not implemented yet");
+                }
             },
         )
     }

@@ -2,14 +2,16 @@ pub mod cosmos_stream;
 pub mod cron_stream;
 pub mod evm_stream;
 pub mod local_command_stream;
+pub mod svm_stream;
 
 use crate::subsystems::trigger::streams::cosmos_stream::StreamTriggerCosmosContractEvent;
+use crate::subsystems::trigger::streams::svm_stream::SvmProgramLog;
 
 use super::{error::TriggerError, lookup::LookupId};
 use futures::{stream::SelectAll, Stream};
 use local_command_stream::LocalStreamCommand;
 use std::pin::Pin;
-use wavs_types::{ChainName, Timestamp};
+use wavs_types::{SvmParsedEvent, ChainName, Timestamp};
 
 pub type MultiplexedStream = SelectAll<
     Pin<Box<dyn Stream<Item = std::result::Result<StreamTriggers, TriggerError>> + Send>>,
@@ -44,6 +46,13 @@ pub enum StreamTriggers {
         /// Vector of lookup IDs for all triggers that are due at this time.
         /// Multiple triggers can fire simultaneously in a single tick.
         lookup_ids: Vec<LookupId>,
+    },
+    Svm {
+        chain_name: ChainName,
+        signature: String,
+        slot: u64,
+        program_logs: Vec<SvmProgramLog>,
+        parsed_events: Vec<SvmParsedEvent>,
     },
     LocalCommand(LocalStreamCommand),
 }

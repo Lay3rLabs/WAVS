@@ -79,6 +79,7 @@ shellexpand = "3.1.1"
 tokio = { version = "1.46.1", features = ["full"] }
 tokio-stream = { version = "0.1" }
 futures = "0.3.31"
+async-stream = "0.3"
 rayon = "1.10.0"
 ctrlc = "3.4.7"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
@@ -116,6 +117,12 @@ cosmwasm-std = { version = "3.0.1", features = ["stargate"] }
 cw-storage-plus = "3.0.0"
 cw2 = "3.0.0"
 wstd = "0.5.3"
+
+# SVM-specific dependencies
+solana-client = "2.3.6"
+solana-sdk = "2.3.1"
+solana-pubsub-client = "2.3.6"
+bs58 = "0.5"
 
 # WASM and WIT bindings
 wasm-pkg-client = "0.11.0"

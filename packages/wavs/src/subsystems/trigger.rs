@@ -19,10 +19,11 @@ use lookup::LookupMaps;
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroU64,
+    str::FromStr,
     sync::Arc,
 };
 use streams::{
-    cosmos_stream, cron_stream, evm_stream,
+    cosmos_stream, cron_stream, evm_stream, svm_stream,
     local_command_stream::{self, LocalStreamCommand},
     MultiplexedStream, StreamTriggers,
 };
@@ -31,6 +32,7 @@ use tracing::instrument;
 use utils::{
     config::{AnyChainConfig, ChainConfigs, EvmChainConfigExt},
     evm_client::EvmQueryClient,
+    svm_client::SvmQueryClient,
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
@@ -210,6 +212,7 @@ impl TriggerManager {
 
         let mut cosmos_clients = HashMap::new();
         let mut evm_clients = HashMap::new();
+        let mut svm_clients = HashMap::new();
 
         let mut listening_chains = HashSet::new();
         let mut has_started_cron_stream = false;
@@ -381,6 +384,44 @@ impl TriggerManager {
                                         }
                                     }
                                 }
+                                AnyChainConfig::Svm(chain_config) => {
+                                    // Parse endpoint to get SVM endpoint
+                                    let endpoint = utils::svm_client::SvmEndpoint::from_str(&chain_config.ws_endpoint)
+                                        .map_err(|e| TriggerError::SvmClient(chain_name.clone(), e))?;
+
+                                    // Parse commitment level if provided
+                                    let commitment = chain_config.commitment.as_ref()
+                                        .map(|c| c.parse())
+                                        .transpose()
+                                        .map_err(|e| TriggerError::SvmClient(chain_name.clone(),
+                                            utils::error::SvmClientError::ParseEndpoint(format!("Invalid commitment: {}", e))))?;
+
+                                    let svm_client = SvmQueryClient::new(endpoint, commitment)
+                                        .await
+                                        .map_err(|e| TriggerError::SvmClient(chain_name.clone(), e))?;
+
+                                    svm_clients.insert(chain_name.clone(), svm_client.clone());
+
+                                    // Start the SVM event stream
+                                    match svm_stream::start_svm_event_stream(
+                                        svm_client.clone(),
+                                        chain_name.clone(),
+                                        self.metrics.clone(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(svm_event_stream) => {
+                                            multiplexed_stream.push(svm_event_stream);
+                                        }
+                                        Err(err) => {
+                                            tracing::error!(
+                                                "Failed to start SVM event stream: {:?}",
+                                                err
+                                            );
+                                            continue;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -515,6 +556,29 @@ impl TriggerManager {
                     block_height,
                 } => {
                     dispatcher_commands.extend(self.process_blocks(chain_name, block_height));
+                }
+                StreamTriggers::Svm {
+                    chain_name,
+                    signature,
+                    slot,
+                    program_logs,
+                    parsed_events,
+                } => {
+                    // Process SVM program events
+                    for parsed_event in parsed_events {
+                        // Look up triggers that match this program and event pattern
+                        let program_id = program_logs.iter()
+                            .find(|log| !log.logs.is_empty())
+                            .map(|log| log.program_id.clone())
+                            .unwrap_or_default();
+
+                        // TODO: Implement get_svm_triggers in lookup maps
+                        tracing::info!("Received SVM program event: program_id={}, event_type={}, chain={}",
+                            program_id, parsed_event.event_type, chain_name);
+
+                        // For now, just log the event. The lookup maps will need to be extended
+                        // to support SVM trigger lookup by program_id and event pattern
+                    }
                 }
                 StreamTriggers::Cron {
                     trigger_time,

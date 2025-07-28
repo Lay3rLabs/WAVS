@@ -45,6 +45,8 @@ fn core_trigger_lookups() {
             )]
             .into_iter()
             .collect(),
+            // TODO:
+            svm: Default::default(),
         },
         ..Default::default()
     };
@@ -198,6 +200,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
             .into_iter()
             .collect(),
             cosmos: Default::default(),
+            svm: Default::default(),
         },
         ..Default::default()
     };

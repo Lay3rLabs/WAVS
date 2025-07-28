@@ -37,6 +37,7 @@ layer-climb = { workspace = true }
 ctrlc = { workspace = true }
 tempfile = { workspace = true }
 futures = { workspace = true }
+async-stream = { workspace = true }
 cosmwasm-std = { workspace = true }
 reqwest = { workspace = true }
 rand = { workspace = true }
@@ -47,6 +48,9 @@ url = { workspace = true }
 bip39 = { workspace = true }
 alloy-contract = { workspace = true }
 alloy-primitives = { workspace = true }
+solana-client = { workspace = true }
+solana-sdk = { workspace = true }
+solana-pubsub-client = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-signer-local = { workspace = true }
 alloy-signer = { workspace = true }

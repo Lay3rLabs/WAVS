@@ -56,6 +56,22 @@ impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
                 start_time: start_time.map(Into::into),
                 end_time: end_time.map(Into::into),
             }),
+            wavs_types::Trigger::SvmProgramEvent {
+                program_id,
+                chain_name,
+                event_pattern,
+            } => {
+                // TODO: Fix properly within wavs-wasi
+                // component_service::Trigger::SvmProgramEvent(
+                //     component_service::TriggerSvmProgramEvent {
+                //         address: program_id.to_string(),
+                //         chain_name: chain_name.to_string(),
+                //         event_type: event_pattern.unwrap().to_string(),
+                //     },
+                // )
+                println!("SVM Program Event trigger not implemented yet, using Manual trigger as placeholder: program_id={}, chain_name={}, event_pattern={:?}", program_id, chain_name, event_pattern);
+                component_service::Trigger::Manual
+            }
         })
     }
 }
@@ -401,6 +417,21 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                     trigger_time: trigger_time.into(),
                 }),
             ),
+            wavs_types::TriggerData::SvmProgramEvent {
+                chain_name,
+                program_id,
+                signature,
+                slot,
+                success,
+                logs,
+                parsed_event,
+            } => {
+                // TODO: Add proper SVM trigger data component binding
+                // For now, convert to raw data as placeholder
+                let raw_data = format!("SVM Program Event (temp as TriggerData::Raw, FIXME): {} on {} (slot: {}, success: {})",
+                    program_id, chain_name, slot, success);
+                Ok(component_input::TriggerData::Raw(raw_data.into_bytes()))
+            },
             wavs_types::TriggerData::Raw(data) => Ok(component_input::TriggerData::Raw(data)),
         }
     }

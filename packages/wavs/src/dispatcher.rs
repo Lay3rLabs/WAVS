@@ -408,6 +408,9 @@ async fn query_service_from_address(
         AnyChainConfig::Cosmos(_) => {
             unimplemented!()
         }
+        AnyChainConfig::Svm(_) => {
+            unimplemented!()
+        }
     }
 }
 

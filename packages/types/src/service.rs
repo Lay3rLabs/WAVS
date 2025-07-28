@@ -11,6 +11,15 @@ use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
 
 use super::{ChainName, ServiceID, WorkflowID};
 
+/// Parsed SVM program event data
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SvmParsedEvent {
+    /// The type of event (extracted from the log format)
+    pub event_type: String,
+    /// Key-value pairs of event data
+    pub data: BTreeMap<String, String>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Service {
@@ -205,6 +214,14 @@ pub enum Trigger {
         chain_name: ChainName,
         event_hash: ByteArray<32>,
     },
+    SvmProgramEvent {
+        /// The program ID to monitor for events
+        program_id: String,
+        /// The name of the chain where the program is deployed
+        chain_name: ChainName,
+        /// Optional regex pattern to match specific event formats
+        event_pattern: Option<String>,
+    },
     BlockInterval {
         /// The name of the chain to use for the block interval
         chain_name: ChainName,
@@ -273,6 +290,22 @@ pub enum TriggerData {
         chain_name: ChainName,
         /// The block height where the event was emitted
         block_height: u64,
+    },
+    SvmProgramEvent {
+        /// The name of the chain where the program event was emitted
+        chain_name: ChainName,
+        /// The program ID that emitted the event
+        program_id: String,
+        /// The transaction signature
+        signature: String,
+        /// The slot number where the transaction was processed
+        slot: u64,
+        /// Whether the transaction was successful
+        success: bool,
+        /// All program logs from the transaction
+        logs: Vec<String>,
+        /// Parsed event data if it matches the expected format
+        parsed_event: Option<SvmParsedEvent>,
     },
     Cron {
         /// The trigger time
