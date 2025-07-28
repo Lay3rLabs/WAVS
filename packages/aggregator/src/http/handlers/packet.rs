@@ -129,129 +129,146 @@ impl AggregatorProcess<'_> {
             signer,
         } = self;
 
-        match aggregator {
-            Aggregator::Evm(EvmContractSubmission {
-                chain_name: _,
-                address: _,
-                max_gas,
-            }) => {
-                // execute the logic within a transaction, keyed by queue_id
-                // other queue ids can run concurrently, but this makes sure that
-                // we aren't validating a queue that was updated from another request coming in
-                async_tx
-                    .run(queue_id.clone(), move || async move {
-                        let queue = match state.get_packet_queue(&queue_id)? {
-                            PacketQueue::Alive(queue) => {
-                                if let (Some(engine), wavs_types::Submit::Aggregator { component, .. }) =
-                                    (&state.aggregator_engine, &packet.service.workflows[&packet.workflow_id].submit)
-                                {
-                                    match engine.execute_packet(&component, packet).await {
-                                        Ok(actions) => {
-                                            let updated_queue = process_aggregator_actions(state, packet, queue, signer, actions).await?;
-                                            updated_queue
-                                        },
-                                        Err(e) => {
-                                            tracing::error!("Custom aggregator component failed: {}", e);
-                                            return Err(AggregatorError::ComponentExecution(e.to_string()));
-                                        }
-                                    }
-                                } else {
-                                    add_packet_to_queue(packet, queue, signer)?
-                                }
-                            }
-                            PacketQueue::Burned => {
-                                return Ok(AddPacketResponse::Burned);
-                            }
-                        };
+        let event_id = packet.event_id();
 
-                        let (chain_name, address) = match aggregator {
-                            Aggregator::Evm(EvmContractSubmission { chain_name, address, .. }) => {
-                                (chain_name, address)
-                            }
-                        };
-                        let service_manager = get_submission_service_manager(state, chain_name, *address).await?;
-
-                        // TODO: anvil specific (blockheight -1)? InvalidReferenceBlock(). ECDSA logic error / fixed in BLS?
-                        let block_height_minus_one = service_manager
-                            .provider()
-                            .get_block_number()
-                            .await
-                            .map_err(|e| AggregatorError::BlockNumber(e.into()))? - 1;
-
-                        let signatures: Vec<EnvelopeSignature> = queue
-                            .iter()
-                            .map(|queued| queued.packet.signature.clone())
-                            .collect();
-
-                        let signature_data = packet
-                            .envelope
-                            .signature_data(signatures, block_height_minus_one)?;
-
-                        let result = service_manager
-                            .validate(
-                                packet.envelope.clone().into(),
-                                signature_data.clone().into(),
-                            )
-                            .call()
-                            .await;
-
-
-                        match result {
-                            Ok(_) => {
-                                let client = state.get_evm_client(chain_name).await?;
-                                tracing::info!(
-                                    "Sending aggregated packet to chain: {}, address: {:?}, block_height: {}",
-                                    chain_name,
-                                    address,
-                                    block_height_minus_one
-                                );
-                                let tx_receipt = client
-                                    .send_envelope_signatures(
-                                        packet.envelope.clone(),
-                                        signature_data.clone(),
-                                        *address,
-                                        *max_gas,
-                                    )
-                                    .await?;
-                                tracing::info!(
-                                    "Transaction sent successfully: {:?}",
-                                    tx_receipt.transaction_hash
-                                );
-
-                                state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
-                                tracing::info!("Packet queue burned after successful submission");
-
-                                Ok(AddPacketResponse::Sent {
-                                    tx_receipt: Box::new(tx_receipt),
-                                    count: queue.len(),
-                                })
-                            },
-                            Err(err) => {
-                                match err.as_decoded_interface_error::<ServiceManagerError>() {
-                                    Some(ServiceManagerError::InsufficientQuorum(_)) => {
-                                        // insufficient quorum means we just keep aggregating
-                                        state.save_packet_queue(
-                                            &queue_id,
-                                            PacketQueue::Alive(queue.clone()),
-                                        )?;
-
-                                        Ok(AddPacketResponse::Aggregated { count: queue.len() })
-                                    },
-                                    Some(err) => {
-                                        Err(AggregatorError::ServiceManagerValidateKnown(err))
-                                    }
-                                    None => {
-                                        match err.as_revert_data() {
-                                            Some(raw) => Err(AggregatorError::ServiceManagerValidateAnyRevert(raw.to_string())),
-                                            None => Err(AggregatorError::ServiceManagerValidateUnknown(err))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    })
+        if let wavs_types::Submit::Aggregator { component, .. } =
+            &packet.service.workflows[&packet.workflow_id].submit
+        {
+            if let Some(engine) = &state.aggregator_engine {
+                let actions = engine
+                    .execute_packet(component, packet)
                     .await
+                    .map_err(|e| AggregatorError::ComponentExecution(e.to_string()))?;
+
+                for action in actions {
+                    let queue_id = PacketQueueId {
+                        event_id: event_id.clone(),
+                        aggregator_action: action.clone(),
+                    };
+
+                    let result = async_tx
+                        .run(queue_id.clone(), move || {
+                            let state = state.clone();
+                            let packet = packet.clone();
+                            let queue_id = queue_id.clone();
+                            let action = action.clone();
+
+                            async move {
+                                let queue = match state.get_packet_queue(&queue_id)? {
+                                    PacketQueue::Alive(queue) => {
+                                        process_aggregator_actions(&state, &packet, queue, signer, vec![action]).await?
+                                    }
+                                    PacketQueue::Burned => {
+                                        return Ok(AddPacketResponse::Burned);
+                                    }
+                                };
+
+                                match &action {
+                                    AggregatorAction::Submit(submit_action) => {
+                                        let chain_name = ChainName::new(submit_action.chain_name.clone())?;
+                                        let address = alloy_primitives::Address::from_slice(&submit_action.contract_address.raw_bytes);
+
+                                        let service_manager = get_submission_service_manager(&state, &chain_name, address).await?;
+
+                                        let block_height_minus_one = service_manager
+                                            .provider()
+                                            .get_block_number()
+                                            .await
+                                            .map_err(|e| AggregatorError::BlockNumber(e.into()))? - 1;
+
+                                        let signatures: Vec<EnvelopeSignature> = queue
+                                            .iter()
+                                            .map(|queued| queued.packet.signature.clone())
+                                            .collect();
+
+                                        let signature_data = packet
+                                            .envelope
+                                            .signature_data(signatures, block_height_minus_one)?;
+
+                                        let result = service_manager
+                                            .validate(
+                                                packet.envelope.clone().into(),
+                                                signature_data.clone().into(),
+                                            )
+                                            .call()
+                                            .await;
+
+                                        match result {
+                                            Ok(_) => {
+                                                let client = state.get_evm_client(&chain_name).await?;
+                                                tracing::info!(
+                                                    "Sending aggregated packet to chain: {}, address: {:?}, block_height: {}",
+                                                    chain_name,
+                                                    address,
+                                                    block_height_minus_one
+                                                );
+                                                let tx_receipt = client
+                                                    .send_envelope_signatures(
+                                                        packet.envelope.clone(),
+                                                        signature_data.clone(),
+                                                        address,
+                                                        None,
+                                                    )
+                                                    .await?;
+                                                tracing::info!(
+                                                    "Transaction sent successfully: {:?}",
+                                                    tx_receipt.transaction_hash
+                                                );
+
+                                                state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
+                                                tracing::info!("Packet queue burned after successful submission");
+
+                                                Ok(AddPacketResponse::Sent {
+                                                    tx_receipt: Box::new(tx_receipt),
+                                                    count: queue.len(),
+                                                })
+                                            },
+                                            Err(err) => {
+                                                match err.as_decoded_interface_error::<ServiceManagerError>() {
+                                                    Some(ServiceManagerError::InsufficientQuorum(_)) => {
+                                                        state.save_packet_queue(
+                                                            &queue_id,
+                                                            PacketQueue::Alive(queue.clone()),
+                                                        )?;
+
+                                                        Ok(AddPacketResponse::Aggregated { count: queue.len() })
+                                                    },
+                                                    Some(err) => {
+                                                        Err(AggregatorError::ServiceManagerValidateKnown(err))
+                                                    }
+                                                    None => {
+                                                        match err.as_revert_data() {
+                                                            Some(raw) => Err(AggregatorError::ServiceManagerValidateAnyRevert(raw.to_string())),
+                                                            None => Err(AggregatorError::ServiceManagerValidateUnknown(err))
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    AggregatorAction::Timer(_) => {
+                                        state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
+                                        Ok(AddPacketResponse::Aggregated { count: queue.len() })
+                                    }
+                                }
+                            }
+                        })
+                        .await?;
+
+                    return Ok(result);
+                }
+
+                Ok(AddPacketResponse::Aggregated { count: 0 })
+            } else {
+                Err(AggregatorError::ComponentExecution(
+                    "Aggregator engine not available".to_string(),
+                ))
             }
+        } else {
+            Err(AggregatorError::MissingWorkflow {
+                workflow_id: packet.workflow_id.clone(),
+                service_id: packet.service.id(),
+            })
         }
     }
 }
