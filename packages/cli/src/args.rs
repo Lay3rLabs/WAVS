@@ -269,6 +269,21 @@ pub enum TriggerCommand {
         event_hash: String,
     },
 
+    /// Set an SVM program event trigger for a workflow
+    SetSvm {
+        /// The program ID to monitor for events
+        #[clap(long)]
+        program_id: String,
+
+        /// The chain name (e.g., "solana-mainnet")
+        #[clap(long)]
+        chain_name: ChainName,
+
+        /// Optional regex pattern to match specific event formats
+        #[clap(long)]
+        event_pattern: Option<String>,
+    },
+
     /// Set a block interval trigger for a workflow
     SetBlockInterval {
         #[clap(long)]

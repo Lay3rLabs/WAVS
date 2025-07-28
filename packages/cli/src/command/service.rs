@@ -159,6 +159,14 @@ pub async fn handle_service_command(
                     let result = set_evm_trigger(&file, id, address, chain_name, event_hash)?;
                     display_result(ctx, result, json)?;
                 }
+                TriggerCommand::SetSvm {
+                    program_id,
+                    chain_name,
+                    event_pattern,
+                } => {
+                    let result = set_svm_trigger(&file, id, program_id, chain_name, event_pattern)?;
+                    display_result(ctx, result, json)?;
+                }
                 TriggerCommand::SetBlockInterval {
                     chain_name,
                     n_blocks,
@@ -497,6 +505,39 @@ pub fn set_evm_trigger(
             address,
             chain_name,
             event_hash: ByteArray::new(event_hash),
+        };
+        workflow.trigger = TriggerJson::Trigger(trigger.clone());
+
+        Ok((
+            service,
+            WorkflowTriggerResult {
+                workflow_id,
+                trigger,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+/// Set an SVM program event trigger for a workflow
+pub fn set_svm_trigger(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    program_id: String,
+    chain_name: ChainName,
+    event_pattern: Option<String>,
+) -> Result<WorkflowTriggerResult> {
+    modify_service_file(file_path, |mut service| {
+        // Check if the workflow exists
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        // Update the trigger
+        let trigger = Trigger::SvmProgramEvent {
+            program_id,
+            chain_name,
+            event_pattern,
         };
         workflow.trigger = TriggerJson::Trigger(trigger.clone());
 

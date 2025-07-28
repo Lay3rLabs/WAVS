@@ -181,7 +181,9 @@ pub async fn validate_contracts_exist(
                         }
                     }
             Trigger::Cron { .. } | Trigger::Manual | Trigger::BlockInterval { .. } => {}
-            Trigger::SvmProgramEvent { program_id, chain_name, event_pattern } => todo!(),
+            Trigger::SvmProgramEvent { program_id, chain_name, event_pattern } => {
+                // TODO:
+            },
         }
     }
 
