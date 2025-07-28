@@ -65,33 +65,7 @@ async fn process_packet(
 
     let workflow = &packet.service.workflows[&packet.workflow_id];
 
-    let aggregators = match &workflow.submit {
-        wavs_types::Submit::Aggregator {
-            evm_contracts: Some(contracts),
-            ..
-        } => contracts
-            .iter()
-            .map(|c| wavs_types::Aggregator::Evm(c.clone()))
-            .collect::<Vec<_>>(),
-        wavs_types::Submit::Aggregator {
-            component: Some(_),
-            evm_contracts: None,
-            ..
-        } => {
-            // TODO: Refactor this
-            // Aggregator component is returning the actual submission data, this is never used
-            vec![wavs_types::Aggregator::Evm(
-                wavs_types::EvmContractSubmission {
-                    chain_name: "component-only".parse().unwrap(),
-                    address: alloy_primitives::Address::ZERO,
-                    max_gas: None,
-                },
-            )]
-        }
-        _ => Vec::new(),
-    };
-
-    if aggregators.is_empty() {
+    if !matches!(workflow.submit, wavs_types::Submit::Aggregator { .. }) {
         return Err(AggregatorError::MissingWorkflow {
             workflow_id: packet.workflow_id.clone(),
             service_id: packet.service.id(),
@@ -121,62 +95,36 @@ async fn process_packet(
     };
     tracing::debug!("Packet signer address: {:?}", signer);
 
-    let mut responses: Vec<AddPacketResponse> = Vec::new();
-
-    for (aggregator_index, aggregator) in aggregators.iter().enumerate() {
-        let resp = AggregatorProcess {
-            state: &state,
-            async_tx: state.queue_transaction.clone(),
-            aggregator,
-            queue_id: PacketQueueId {
-                event_id: event_id.clone(),
-                aggregator_index,
-            },
-            packet,
-            signer,
-        }
-        .run()
-        .await;
-
-        match resp {
-            Ok(resp) => {
-                responses.push(resp);
-            }
-            Err(e) => {
-                responses.push(AddPacketResponse::Error {
-                    reason: format!("{:?}", e),
-                });
-            }
-        }
+    let resp = AggregatorProcess {
+        state: &state,
+        async_tx: state.queue_transaction.clone(),
+        packet,
+        signer,
     }
+    .run()
+    .await;
 
-    if responses.len() != aggregators.len() {
-        return Err(AggregatorError::UnexpectedResponsesLength {
-            responses: responses.len(),
-            aggregators: aggregators.len(),
-        });
+    match resp {
+        Ok(resp) => Ok(vec![resp]),
+        Err(e) => Ok(vec![AddPacketResponse::Error {
+            reason: format!("{:?}", e),
+        }]),
     }
-
-    Ok(responses)
 }
 
 struct AggregatorProcess<'a> {
     state: &'a HttpState,
     async_tx: AsyncTransaction<PacketQueueId>,
-    aggregator: &'a Aggregator,
-    queue_id: PacketQueueId,
     packet: &'a Packet,
     signer: Address,
 }
 
 impl AggregatorProcess<'_> {
-    #[instrument(level = "debug", skip(self), fields(queue_id = ?self.queue_id, signer = ?self.signer))]
+    #[instrument(level = "debug", skip(self), fields(signer = ?self.signer))]
     async fn run(self) -> AggregatorResult<AddPacketResponse> {
         let Self {
             state,
             async_tx,
-            aggregator,
-            queue_id,
             packet,
             signer,
         } = self;
