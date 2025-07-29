@@ -8,7 +8,7 @@ use utils::{config::CliEnvExt, filesystem::workspace_path};
 /// the basic idea is that every env var can be overriden by a cli arg
 /// and these override the config file
 /// env vars follow the pattern of WAVS_{UPPERCASE_ARG_NAME}
-#[derive(Debug, Parser, Serialize, Deserialize, Default)]
+#[derive(Debug, Parser, Serialize, Deserialize, Default, Clone)]
 #[command(version, about, long_about = None)]
 #[serde(default)]
 pub struct TestArgs {
@@ -21,6 +21,14 @@ pub struct TestArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub all: Option<bool>,
+
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub middleware_concurrency: Option<bool>,
+
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wavs_concurrency: Option<bool>,
 }
 
 impl CliEnvExt for TestArgs {

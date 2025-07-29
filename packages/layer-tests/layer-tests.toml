@@ -3,7 +3,9 @@ log_level = ["info", "wavs=debug"]
 
 [layer-tests]
 wavs_concurrency = true
-middleware_concurrency = false 
+# breaks on osx, so disabled by default 
+# middleware_concurrency = true
+
 # Run all tests
 mode = "all"
 
