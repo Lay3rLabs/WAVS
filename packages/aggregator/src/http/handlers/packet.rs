@@ -545,7 +545,7 @@ mod test {
         config::{ConfigBuilder, EvmChainConfig},
         filesystem::workspace_path,
         test_utils::{
-            middleware::{AvsOperator, MiddlewareServiceManagerConfig},
+            middleware::{AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig},
             mock_service_manager::MockServiceManager,
             test_contracts::TestContractDeps,
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
@@ -613,9 +613,11 @@ mod test {
             .map(|signer| AvsOperator::new(signer.address(), signer.address()))
             .collect::<Vec<_>>();
 
-        let service_manager = MockServiceManager::new(deps.contracts.client.clone())
-            .await
-            .unwrap();
+        let middleware_instance = MiddlewareInstance::new().await.unwrap();
+        let service_manager =
+            MockServiceManager::new(middleware_instance, deps.contracts.client.clone())
+                .await
+                .unwrap();
         service_manager
             .configure(&MiddlewareServiceManagerConfig::new(
                 &avs_operators,
@@ -628,19 +630,19 @@ mod test {
 
         let service_handler = deps
             .contracts
-            .deploy_simple_service_handler(service_manager.address)
+            .deploy_simple_service_handler(service_manager.address())
             .await;
 
         let fixed_second_service_handler = deps
             .contracts
-            .deploy_simple_service_handler(service_manager.address)
+            .deploy_simple_service_handler(service_manager.address())
             .await;
 
         // Make sure we properly collect errors without actually erroring out
         let mut service = deps
             .create_service(
                 "workflow-1".parse().unwrap(),
-                service_manager.address,
+                service_manager.address(),
                 vec![*service_handler.address(), Address::ZERO],
             )
             .await;
@@ -790,9 +792,11 @@ mod test {
 
         let avs_operators = vec![AvsOperator::new(signer.address(), signer.address())];
 
-        let service_manager = MockServiceManager::new(deps.contracts.client.clone())
-            .await
-            .unwrap();
+        let middleware_instance = MiddlewareInstance::new().await.unwrap();
+        let service_manager =
+            MockServiceManager::new(middleware_instance, deps.contracts.client.clone())
+                .await
+                .unwrap();
         service_manager
             .configure(&MiddlewareServiceManagerConfig::new(&avs_operators, 1u64))
             .await
@@ -800,14 +804,14 @@ mod test {
 
         let service_handler = deps
             .contracts
-            .deploy_simple_service_handler(service_manager.address)
+            .deploy_simple_service_handler(service_manager.address())
             .await;
 
         let envelope = mock_envelope(1, [1, 2, 3]);
         let service = deps
             .create_service(
                 "workflow-1".parse().unwrap(),
-                service_manager.address,
+                service_manager.address(),
                 vec![*service_handler.address()],
             )
             .await;
@@ -849,9 +853,11 @@ mod test {
             .map(|signer| AvsOperator::new(signer.address(), signer.address()))
             .collect::<Vec<_>>();
 
-        let service_manager = MockServiceManager::new(deps.contracts.client.clone())
-            .await
-            .unwrap();
+        let middleware_instance = MiddlewareInstance::new().await.unwrap();
+        let service_manager =
+            MockServiceManager::new(middleware_instance, deps.contracts.client.clone())
+                .await
+                .unwrap();
         service_manager
             .configure(&MiddlewareServiceManagerConfig::new(
                 &avs_operators,
@@ -862,12 +868,12 @@ mod test {
 
         let service_handler = deps
             .contracts
-            .deploy_simple_service_handler(service_manager.address)
+            .deploy_simple_service_handler(service_manager.address())
             .await;
         let service = deps
             .create_service(
                 "workflow-1".parse().unwrap(),
-                service_manager.address,
+                service_manager.address(),
                 vec![*service_handler.address()],
             )
             .await;

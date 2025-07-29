@@ -4,17 +4,19 @@ use alloy_provider::Provider;
 use anyhow::{anyhow, Context};
 use futures::{stream::FuturesUnordered, StreamExt};
 use ordermap::OrderMap;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::Arc;
-use wavs_types::{EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID};
+use wavs_types::{EvmContractSubmission, Service, Submit, Trigger, Workflow, WorkflowID};
 
 use crate::e2e::helpers::change_service_for_test;
 use crate::e2e::report::TestReport;
+use crate::e2e::service_managers::ServiceManagers;
+use crate::e2e::test_definition::ChangeServiceDefinition;
 use crate::e2e::test_registry::CosmosTriggerCodeMap;
 use crate::{
     e2e::{
-        clients::Clients, components::ComponentSources, helpers::deploy_service_for_test,
-        test_definition::TestDefinition, test_registry::TestRegistry,
+        clients::Clients, components::ComponentSources, test_definition::TestDefinition,
+        test_registry::TestRegistry,
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{SimpleEvmTriggerClient, TriggerId},
@@ -28,6 +30,7 @@ pub struct Runner {
     clients: Arc<Clients>,
     registry: Arc<TestRegistry>,
     component_sources: Arc<ComponentSources>,
+    service_managers: ServiceManagers,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
     report: TestReport,
 }
@@ -37,6 +40,7 @@ impl Runner {
         clients: Clients,
         registry: TestRegistry,
         component_sources: ComponentSources,
+        service_managers: ServiceManagers,
         cosmos_trigger_code_map: CosmosTriggerCodeMap,
         report: TestReport,
     ) -> Self {
@@ -44,34 +48,112 @@ impl Runner {
             clients: Arc::new(clients),
             registry: Arc::new(registry),
             component_sources: Arc::new(component_sources),
+            service_managers,
             cosmos_trigger_code_map,
             report,
         }
     }
 
     /// Run all tests in the registry
-    pub async fn run_tests(&self) {
+    pub async fn run_tests(&self, mut all_services: HashMap<String, Service>) {
         let test_groups = self.registry.list_all_grouped();
 
-        for (group, group_tests) in test_groups {
+        for (group, mut group_tests) in test_groups {
+            let services = group_tests
+                .iter()
+                .map(|test| all_services.get(&test.name).cloned().unwrap())
+                .collect::<Vec<_>>();
+
+            // This essentially deploys the services for the group
+            // since it updates the services to "Active"
+            // which is detected by wavs
+            self.service_managers
+                .update_services(&self.clients, services)
+                .await;
+
+            // However, we have some tests which demonstrate more specific service changes
+            // and so we need to re-update those before we can proceed
+            //
+            // First we just deploy the service changes (contracts, components, etc.)
+            let mut futures = FuturesUnordered::new();
+            for test in group_tests.iter() {
+                if let Some(change_service) = test.change_service.clone() {
+                    let service = all_services.get(&test.name).cloned().unwrap();
+                    futures.push(async move {
+                        let mut service = service;
+                        change_service_for_test(
+                            &mut service,
+                            change_service.clone(),
+                            &self.clients,
+                            &self.component_sources,
+                            self.cosmos_trigger_code_map.clone(),
+                        )
+                        .await;
+                        (service, change_service)
+                    });
+                }
+            }
+
+            // Then we need to deploy the update to service managers
+            if futures.is_empty() {
+                tracing::info!("No changes to services in group {}", group);
+            } else {
+                tracing::warn!("Running service changes for group {}", group);
+                let mut services_to_change = Vec::new();
+                while let Some((service, change_service)) = futures.next().await {
+                    // update our local copy of the service
+                    all_services.insert(service.name.clone(), service.clone());
+
+                    // and the definition so that tests know what to look for
+                    match change_service {
+                        ChangeServiceDefinition::AddWorkflow {
+                            workflow_id,
+                            workflow,
+                        } => {
+                            group_tests
+                                .iter_mut()
+                                .find(|test| test.name == service.name)
+                                .unwrap()
+                                .workflows
+                                .insert(workflow_id.clone(), workflow);
+                        }
+                        ChangeServiceDefinition::Component {
+                            workflow_id,
+                            component,
+                        } => {
+                            group_tests
+                                .iter_mut()
+                                .find(|test| test.name == service.name)
+                                .unwrap()
+                                .workflows
+                                .get_mut(&workflow_id)
+                                .unwrap()
+                                .component = component;
+                        }
+                    }
+
+                    services_to_change.push(service);
+                }
+
+                self.service_managers
+                    .update_services(&self.clients, services_to_change)
+                    .await;
+            }
+
+            // All services are now deployed and ready for the tests
+            // From here on in we're strictly testing the trigger->execute->aggregate->submit flow
             tracing::info!("Running group {} with {} tests", group, group_tests.len());
             let mut futures = FuturesUnordered::new();
 
             for test in group_tests {
                 let clients = self.clients.clone();
                 let component_sources = self.component_sources.clone();
-                let mut test = test.clone();
-                let cosmos_trigger_code_map = self.cosmos_trigger_code_map.clone();
+                let test = test.clone();
                 let report = self.report.clone();
+                let service = all_services.get(&test.name).cloned().unwrap();
                 futures.push(async move {
-                    self.execute_test(
-                        &mut test,
-                        clients,
-                        component_sources,
-                        cosmos_trigger_code_map,
-                        report,
-                    )
-                    .await
+                    self.execute_test(&test, service, clients, component_sources, report)
+                        .await
                 });
             }
 
@@ -82,15 +164,15 @@ impl Runner {
     // Execute a single test with timings
     async fn execute_test(
         &self,
-        test: &mut TestDefinition,
+        test: &TestDefinition,
+        service: Service,
         clients: Arc<Clients>,
         component_sources: Arc<ComponentSources>,
-        cosmos_trigger_code_map: CosmosTriggerCodeMap,
         report: TestReport,
     ) {
         report.start_test(test.name.clone());
 
-        run_test(test, &clients, &component_sources, cosmos_trigger_code_map)
+        run_test(test, service, &clients, &component_sources)
             .await
             .context(test.name.clone())
             .unwrap();
@@ -101,33 +183,11 @@ impl Runner {
 
 /// Run a single test
 async fn run_test(
-    test: &mut TestDefinition,
+    test: &TestDefinition,
+    service: Service,
     clients: &Clients,
     component_sources: &ComponentSources,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) -> anyhow::Result<()> {
-    let aggregator_registered_service_ids = Arc::new(std::sync::Mutex::new(HashSet::new()));
-    let (service, mock_service_manager) = deploy_service_for_test(
-        test,
-        clients,
-        component_sources,
-        cosmos_trigger_code_map.clone(),
-        aggregator_registered_service_ids,
-    )
-    .await;
-
-    if let Some(change_service) = &mut test.change_service {
-        change_service_for_test(
-            change_service,
-            &service,
-            clients,
-            component_sources,
-            &mock_service_manager,
-            cosmos_trigger_code_map,
-        )
-        .await;
-    }
-
     // Group workflows by trigger to handle multi-triggers
     let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowID, &Workflow)>> = OrderMap::new();
 

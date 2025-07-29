@@ -2,28 +2,13 @@ use alloy_primitives::Address;
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
-use std::{
-    collections::{BTreeMap, HashSet},
-    num::NonZero,
-    sync::Arc,
-    time::Duration,
-};
-use utils::{
-    config::WAVS_ENV_PREFIX,
-    evm_client::EvmSigningClient,
-    filesystem::workspace_path,
-    test_utils::{
-        middleware::{AvsOperator, MiddlewareServiceManagerConfig},
-        mock_service_manager::MockServiceManager,
-    },
-};
+use std::{collections::BTreeMap, num::NonZero, sync::Arc, time::Duration};
+use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
 
-use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
-    Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit, Trigger,
-    Workflow,
+    Service, ServiceManager, ServiceStatus, Submit, Trigger, Workflow,
 };
 
 use crate::{
@@ -35,7 +20,6 @@ use crate::{
             AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, SubmitDefinition,
             TestDefinition, TriggerDefinition,
         },
-        test_registry::TestRegistry,
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{
@@ -49,20 +33,23 @@ use super::{
     test_registry::CosmosTriggerCodeMap,
 };
 
-static SERVICE_UPDATE_TIMEOUT: Duration = Duration::from_secs(60 * 15);
-
 /// Helper function to deploy a service for a test
-pub async fn deploy_service_for_test(
-    test: &mut TestDefinition,
+pub async fn create_service_for_test(
+    test: &TestDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
+    service_manager: ServiceManager,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
-    aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<ServiceID>>>,
-) -> (Service, MockServiceManager) {
+) -> Service {
     tracing::info!("Deploying service for test: {}", test.name);
 
-    // Create unique service ID
-    let mut workflows = BTreeMap::new();
+    // No need to load the actual service, it was a placeholder
+    let mut service = Service {
+        name: test.name.clone(),
+        workflows: BTreeMap::new(),
+        status: ServiceStatus::Active,
+        manager: service_manager,
+    };
 
     // Deploy the service manager contract
     tracing::info!(
@@ -70,118 +57,22 @@ pub async fn deploy_service_for_test(
         test.name,
         test.service_manager_chain
     );
-    let mock_service_manager = deploy_service_manager(clients, &test.service_manager_chain)
-        .await
-        .unwrap();
 
-    for (workflow_id, workflow_definition) in test.workflows.iter_mut() {
+    for (workflow_id, workflow_definition) in test.workflows.iter() {
         let workflow = deploy_workflow(
             &test.name,
             workflow_definition,
-            mock_service_manager.address,
+            service.manager.evm_address_unchecked(),
             clients,
             component_sources,
             cosmos_trigger_code_map.clone(),
         )
         .await;
 
-        workflows.insert(workflow_id.clone(), workflow);
+        service.workflows.insert(workflow_id.clone(), workflow);
     }
 
-    // Create the service in Paused state
-    let mut service = Service {
-        name: test.name.clone(),
-        workflows,
-        status: ServiceStatus::Paused,
-        manager: ServiceManager::Evm {
-            chain_name: test.service_manager_chain.clone(),
-            address: mock_service_manager.address,
-        },
-    };
-
-    tracing::info!("[{}] Deploying service: {}", test.name, service.id());
-
-    // Save the service on WAVS endpoint (just a local test thing, real-world would be IPFS or similar)
-    let service_url = DeployService::save_service(&clients.cli_ctx, &service)
-        .await
-        .unwrap();
-
-    mock_service_manager
-        .set_service_uri(service_url)
-        .await
-        .unwrap();
-
-    // First, register the service to the aggregator if needed
-    for workflow in test.workflows.values() {
-        if aggregator_registered_service_ids
-            .lock()
-            .unwrap()
-            .insert(service.id())
-        {
-            let SubmitDefinition::Aggregator { url, .. } = &workflow.submit;
-            TestRegistry::register_to_aggregator(url, &service)
-                .await
-                .unwrap();
-        }
-    }
-
-    // Deploy the service on WAVS
-    DeployService::run(
-        &clients.cli_ctx,
-        DeployServiceArgs {
-            service: service.clone(),
-            set_service_url_args: None,
-        },
-    )
-    .await
-    .unwrap();
-
-    // give signer address some weight in the service manager
-    let SigningKeyResponse::Secp256k1 {
-        evm_address: avs_signer_address,
-        ..
-    } = clients
-        .http_client
-        .get_service_key(service.manager.clone())
-        .await
-        .unwrap();
-
-    let operator_address = clients
-        .get_evm_client(&test.service_manager_chain)
-        .address();
-    let avs_operator = AvsOperator::new(operator_address, avs_signer_address.parse().unwrap());
-
-    mock_service_manager
-        .configure(&MiddlewareServiceManagerConfig::new(&[avs_operator], 1))
-        .await
-        .unwrap();
-
-    // activate the service
-    // requires:
-    // 1. Changing the service JSON to active
-    // 2. Getting a URL for that updated JSON
-    // 3. Setting that URI on the service manager
-    // 4. waiting for that updated service to be observable on WAVS
-
-    service.status = ServiceStatus::Active;
-
-    let service_url = DeployService::save_service(&clients.cli_ctx, &service)
-        .await
-        .unwrap();
-
-    mock_service_manager
-        .set_service_uri(service_url)
-        .await
-        .unwrap();
-
-    // wait until WAVS sees the new service
-    clients
-        .http_client
-        .wait_for_service_update(&service, Some(SERVICE_UPDATE_TIMEOUT))
-        .await
-        .unwrap();
-
-    (service, mock_service_manager)
+    service
 }
 
 fn deploy_component(
@@ -215,7 +106,7 @@ fn deploy_component(
 
 async fn deploy_workflow(
     test_name: &str,
-    workflow_definition: &mut WorkflowDefinition,
+    workflow_definition: &WorkflowDefinition,
     service_manager_address: alloy_primitives::Address,
     clients: &Clients,
     component_sources: &ComponentSources,
@@ -276,7 +167,7 @@ pub async fn create_trigger_from_config(
     trigger_definition: TriggerDefinition,
     clients: &Clients,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
-    _workflow_definition: Option<&mut WorkflowDefinition>,
+    _workflow_definition: Option<&WorkflowDefinition>,
 ) -> Trigger {
     match trigger_definition {
         TriggerDefinition::NewEvmContract(evm_trigger_definition) => match evm_trigger_definition {
@@ -448,23 +339,6 @@ pub async fn create_submit_from_config(
     }
 }
 
-/// Deploy service manager contract with no operators
-pub async fn deploy_service_manager(
-    clients: &Clients,
-    chain_name: &ChainName,
-) -> Result<MockServiceManager> {
-    let wallet_client = clients.get_evm_client(chain_name);
-
-    let mock_service_manager = MockServiceManager::new(wallet_client).await?;
-
-    tracing::info!(
-        "Service manager deployed at address: {}",
-        mock_service_manager.address
-    );
-
-    Ok(mock_service_manager)
-}
-
 /// Deploy submit contract and return its address
 pub async fn deploy_submit_contract(
     clients: &Clients,
@@ -595,32 +469,26 @@ pub async fn wait_for_task_to_land(
 
 /// Helper function to deploy a service for a test
 pub async fn change_service_for_test(
-    change_service: &mut ChangeServiceDefinition,
-    old_service: &Service,
+    service: &mut Service,
+    change_service: ChangeServiceDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
-    mock_service_manager: &MockServiceManager,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) {
-    let mut new_service = old_service.clone();
-
     match change_service {
-        ChangeServiceDefinition::Name(new_name) => {
-            new_service.name = new_name.clone();
-        }
         ChangeServiceDefinition::Component {
             workflow_id,
             component: component_definition,
         } => {
             let component = deploy_component(
                 component_sources,
-                component_definition,
+                &component_definition,
                 Default::default(),
                 Default::default(),
             );
-            let workflow = new_service
+            let workflow = service
                 .workflows
-                .get_mut(workflow_id)
+                .get_mut(&workflow_id)
                 .expect("Workflow not found in service");
 
             workflow.component = component;
@@ -630,31 +498,18 @@ pub async fn change_service_for_test(
             workflow,
         } => {
             let deployed_workflow = deploy_workflow(
-                workflow_id,
-                workflow,
-                new_service.manager.evm_address_unchecked(),
+                &workflow_id,
+                &workflow,
+                service.manager.evm_address_unchecked(),
                 clients,
                 component_sources,
                 cosmos_trigger_code_map,
             )
             .await;
 
-            new_service
+            service
                 .workflows
                 .insert(workflow_id.clone(), deployed_workflow);
         }
     }
-
-    let url = DeployService::save_service(&clients.cli_ctx, &new_service)
-        .await
-        .unwrap();
-
-    mock_service_manager.set_service_uri(url).await.unwrap();
-
-    // wait until WAVS sees the new service
-    clients
-        .http_client
-        .wait_for_service_update(&new_service, Some(SERVICE_UPDATE_TIMEOUT))
-        .await
-        .unwrap();
 }

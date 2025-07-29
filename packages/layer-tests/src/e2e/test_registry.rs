@@ -54,12 +54,16 @@ impl TestRegistry {
     }
 
     /// Group all test definitions by group (ascending priority)
-    pub fn list_all_grouped(&self) -> BTreeMap<u64, Vec<&TestDefinition>> {
-        let mut map: BTreeMap<u64, Vec<&TestDefinition>> = BTreeMap::new();
-        for test in self.tests.iter() {
+    pub fn list_all_grouped(&self) -> BTreeMap<u64, Vec<TestDefinition>> {
+        let mut map: BTreeMap<u64, Vec<TestDefinition>> = BTreeMap::new();
+        for test in self.tests.iter().cloned() {
             map.entry(test.group).or_default().push(test);
         }
         map
+    }
+
+    pub fn list_all(&self) -> impl Iterator<Item = &TestDefinition> {
+        self.tests.iter()
     }
 
     /// Registers a service on the aggregator

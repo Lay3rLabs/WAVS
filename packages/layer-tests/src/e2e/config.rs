@@ -28,6 +28,8 @@ pub struct Configs {
     pub aggregators: Vec<wavs_aggregator::config::Config>,
     pub chains: ChainConfigs,
     pub mnemonics: TestMnemonics,
+    pub middleware_concurrency: bool,
+    pub wavs_concurrency: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -194,6 +196,8 @@ impl From<TestConfig> for Configs {
             wavs: wavs_config,
             chains: chain_configs,
             mnemonics,
+            middleware_concurrency: test_config.middleware_concurrency,
+            wavs_concurrency: test_config.wavs_concurrency,
         }
     }
 }

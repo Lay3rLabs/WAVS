@@ -49,20 +49,20 @@ impl HttpClient {
 
     pub async fn create_service(
         &self,
-        service: Service,
+        service_manager: ServiceManager,
         save_service_args: Option<SetServiceUrlArgs>,
-    ) -> Result<()> {
+    ) -> Result<Service> {
         if let Some(save_service) = save_service_args {
             self.set_service_url(
                 save_service.provider,
-                service.manager.evm_address_unchecked(),
+                service_manager.evm_address_unchecked(),
                 save_service.service_url,
             )
             .await?;
         }
 
         let body: String = serde_json::to_string(&AddServiceRequest {
-            service_manager: service.manager.clone(),
+            service_manager: service_manager.clone(),
         })?;
 
         let url = format!("{}/app", self.endpoint);
@@ -85,7 +85,9 @@ impl HttpClient {
             anyhow::bail!("{} from {}: {}", status, url, error_text);
         }
 
-        Ok(())
+        let service = self.get_service_from_node(service_manager).await?;
+
+        Ok(service)
     }
 
     pub async fn set_service_url(

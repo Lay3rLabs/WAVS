@@ -1,11 +1,12 @@
 mod cosmos;
 mod evm;
+mod middleware;
 
 use std::sync::Arc;
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
-use utils::{context::AppContext, telemetry::Metrics};
+use utils::{context::AppContext, telemetry::Metrics, test_utils::middleware::MiddlewareInstance};
 use wavs::dispatcher::Dispatcher;
 
 use super::config::Configs;
@@ -13,6 +14,7 @@ use super::config::Configs;
 pub struct AppHandles {
     pub wavs_handle: std::thread::JoinHandle<()>,
     pub aggregator_handles: Vec<std::thread::JoinHandle<()>>,
+    pub middleware_instance: MiddlewareInstance,
     _evm_chains: Vec<EvmInstance>,
     _cosmos_chains: Vec<CosmosInstance>,
 }
@@ -57,9 +59,14 @@ impl AppHandles {
             }));
         }
 
+        let middleware_instance = ctx
+            .rt
+            .block_on(async { MiddlewareInstance::new().await.unwrap() });
+
         Self {
             wavs_handle,
             aggregator_handles,
+            middleware_instance,
             _evm_chains: evm_chains,
             _cosmos_chains: cosmos_chains,
         }
