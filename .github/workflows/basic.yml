@@ -62,7 +62,7 @@ jobs:
         run: echo "WAVS_CLI_COSMOS_MNEMONIC=\"reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff\"" >> $GITHUB_ENV
 
       - name: Set env
-        run: echo "WAVS_LAYER_TESTS_middleware_concurrency=\"true"" >> $GITHUB_ENV
+        run: echo "WAVS_LAYER_TESTS_middleware_concurrency=\"true\"" >> $GITHUB_ENV
 
       - name: Run tests
         uses: actions-rs/cargo@v1
