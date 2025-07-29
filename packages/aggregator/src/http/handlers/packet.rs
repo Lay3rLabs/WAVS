@@ -143,7 +143,7 @@ impl AggregatorProcess<'_> {
                 for action in actions {
                     let queue_id = PacketQueueId {
                         event_id: event_id.clone(),
-                        aggregator_action: action.clone(),
+                        aggregator_action: action.clone().into(),
                     };
 
                     let result = async_tx
@@ -156,7 +156,7 @@ impl AggregatorProcess<'_> {
                             async move {
                                 let queue = match state.get_packet_queue(&queue_id)? {
                                     PacketQueue::Alive(queue) => {
-                                        process_aggregator_actions(&state, &packet, queue, signer, vec![action]).await?
+                                        process_aggregator_actions(&state, &packet, queue, signer, vec![action.clone()]).await?
                                     }
                                     PacketQueue::Burned => {
                                         return Ok(AddPacketResponse::Burned);
@@ -226,12 +226,13 @@ impl AggregatorProcess<'_> {
                                             Err(err) => {
                                                 match err.as_decoded_interface_error::<ServiceManagerError>() {
                                                     Some(ServiceManagerError::InsufficientQuorum(_)) => {
+                                                        let count = queue.len();
                                                         state.save_packet_queue(
                                                             &queue_id,
-                                                            PacketQueue::Alive(queue.clone()),
+                                                            PacketQueue::Alive(queue),
                                                         )?;
 
-                                                        Ok(AddPacketResponse::Aggregated { count: queue.len() })
+                                                        Ok(AddPacketResponse::Aggregated { count })
                                                     },
                                                     Some(err) => {
                                                         Err(AggregatorError::ServiceManagerValidateKnown(err))
@@ -247,8 +248,9 @@ impl AggregatorProcess<'_> {
                                         }
                                     },
                                     AggregatorAction::Timer(_) => {
+                                        let count = queue.len();
                                         state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
-                                        Ok(AddPacketResponse::Aggregated { count: queue.len() })
+                                        Ok(AddPacketResponse::Aggregated { count })
                                     }
                                 }
                             }
@@ -258,7 +260,9 @@ impl AggregatorProcess<'_> {
                     return Ok(result);
                 }
 
-                Ok(AddPacketResponse::Aggregated { count: 0 })
+                Err(AggregatorError::ComponentExecution(
+                    "Component returned no actions".to_string(),
+                ))
             } else {
                 Err(AggregatorError::ComponentExecution(
                     "Aggregator engine not available".to_string(),

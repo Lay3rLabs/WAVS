@@ -6,6 +6,7 @@ pub mod config;
 pub mod engine;
 pub mod error;
 pub mod http;
+pub mod types;
 
 use tracing::instrument;
 use utils::context::AppContext;
