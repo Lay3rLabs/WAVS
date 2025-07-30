@@ -1,5 +1,6 @@
 mod bytes;
 mod chain_config;
+pub mod contracts;
 mod http;
 mod id;
 mod packet;

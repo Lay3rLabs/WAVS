@@ -11,6 +11,7 @@ mod service_manager {
 }
 
 mod service_handler {
+
     alloy_sol_macro::sol!(
         #[allow(missing_docs)]
         #[cfg(feature = "solidity-rpc")]

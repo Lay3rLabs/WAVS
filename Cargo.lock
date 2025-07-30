@@ -9635,6 +9635,7 @@ dependencies = [
  "bincode",
  "chrono",
  "const-hex",
+ "cosmwasm-schema",
  "cosmwasm-std",
  "layer-climb",
  "layer-climb-address",

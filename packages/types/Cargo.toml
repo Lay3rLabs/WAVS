@@ -10,8 +10,9 @@ license.workspace = true
 publish = true
 
 [features]
-default = ["solidity-rpc"]
+default = ["solidity-rpc", "cosmwasm"]
 solidity-rpc = []
+cosmwasm = ["dep:cosmwasm-schema"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -38,6 +39,7 @@ alloy-contract = { workspace = true }
 async-trait = { workspace = true }
 utoipa = { workspace = true }
 semver = { workspace = true }
+cosmwasm-schema = { workspace = true, optional = true }
 
 [dev-dependencies]
 utils = { workspace = true, features = ["test-utils"] }
