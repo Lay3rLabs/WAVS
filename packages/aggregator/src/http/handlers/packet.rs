@@ -156,7 +156,7 @@ impl AggregatorProcess<'_> {
                             async move {
                                 let queue = match state.get_packet_queue(&queue_id)? {
                                     PacketQueue::Alive(queue) => {
-                                        add_packet_to_queue(&packet, queue, signer)?
+                                        process_aggregator_actions(&state, &packet, queue, signer, vec![action.clone()]).await?
                                     }
                                     PacketQueue::Burned => {
                                         return Ok(AddPacketResponse::Burned);
