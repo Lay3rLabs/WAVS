@@ -499,12 +499,13 @@ fn add_packet_to_queue(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{args::CliArgs, config::Config};
+    use crate::{args::CliArgs, config::Config, engine::{AggregatorEngine, SubmitAction as EngineSubmitAction}};
     use alloy_primitives::U256;
     use futures::{stream::FuturesUnordered, StreamExt};
     use std::{
         collections::{BTreeMap, HashSet},
         sync::{Arc, Mutex},
+        str::FromStr,
     };
 
     use utils::{
@@ -621,7 +622,7 @@ mod test {
             .create_service(
                 "workflow-1".parse().unwrap(),
                 *service_manager.address(),
-                vec![*service_handler.address(), Address::ZERO],
+                vec![*service_handler.address()],
             )
             .await;
         deps.state.register_service(&service.id()).unwrap();
@@ -640,30 +641,26 @@ mod test {
         }
 
         for (signer_index, final_results) in all_results.into_iter().enumerate() {
-            for (agg_index, result) in final_results.into_iter().enumerate() {
-                match (signer_index, agg_index) {
-                    // invalid chain errors
-                    (_, 1) => {
-                        assert!(matches!(result, AddPacketResponse::Error { .. }));
-                    }
-                    // first signer on valid chain is just aggregating
-                    (0, 0) => {
-                        assert!(matches!(
-                            result,
-                            AddPacketResponse::Aggregated { count: 1, .. }
-                        ));
-                    }
-                    // second signer on valid chain sends
-                    (1, 0) => {
-                        assert!(matches!(result, AddPacketResponse::Sent { count: 2, .. }));
-                    }
-                    _ => {
-                        panic!(
-                            "Unexpected result for signer {} and aggregator {}: {:?}",
-                            signer_index, agg_index, result
-                        );
-                    }
+            assert_eq!(final_results.len(), 1, "Should have exactly one response per packet");
+            let result = &final_results[0];
+            
+            match signer_index {
+                // first signer is just aggregating
+                0 => {
+                    assert!(matches!(
+                        result,
+                        AddPacketResponse::Aggregated { count: 1, .. }
+                    ), "First signer expected Aggregated {{ count: 1 }}, got {:?}", result);
                 }
+                // second signer sends (reaches threshold)
+                1 => {
+                    assert!(matches!(result, AddPacketResponse::Sent { count: 2, .. }));
+                }
+                // subsequent signers should see it's already sent (burned)
+                n if n >= 2 => {
+                    assert!(matches!(result, AddPacketResponse::Burned));
+                }
+                _ => {}
             }
         }
 
@@ -682,42 +679,14 @@ mod test {
         }
 
         for (signer_index, final_results) in all_results.into_iter().enumerate() {
-            for (agg_index, result) in final_results.into_iter().enumerate() {
-                match (signer_index, agg_index) {
-                    // valid chain is burned
-                    (_, 0) => {
-                        assert!(matches!(result, AddPacketResponse::Burned));
-                    }
-                    // invalid chain errors
-                    (_, 1) => {
-                        assert!(matches!(result, AddPacketResponse::Error { .. }));
-                    }
-                    _ => {
-                        panic!(
-                            "Unexpected result for signer {} and aggregator {}: {:?}",
-                            signer_index, agg_index, result
-                        );
-                    }
-                }
-            }
+            assert_eq!(final_results.len(), 1, "Should have exactly one response per packet");
+            let result = &final_results[0];
+            
+            // All packets should be burned since the envelope was already sent
+            assert!(matches!(result, AddPacketResponse::Burned),
+                "Signer {} expected Burned, got {:?}", signer_index, result);
         }
 
-        // now let's change reality, make the second aggregator valid
-        // we should get essentially the same as previous attempt, but second aggregator should succeed
-
-        if let wavs_types::Submit::Aggregator {
-            evm_contracts: Some(ref mut contracts),
-            ..
-        } = &mut service.workflows.iter_mut().next().unwrap().1.submit
-        {
-            if let Some(contract) = contracts.get_mut(1) {
-                *contract = wavs_types::EvmContractSubmission {
-                    chain_name: deps.contracts.chain_name.clone(),
-                    address: *fixed_second_service_handler.address(),
-                    max_gas: None,
-                };
-            }
-        }
 
         let mut all_results = Vec::new();
         for signer in signers.iter().take(NUM_THRESHOLD) {
@@ -977,6 +946,31 @@ mod test {
         service_manager_address: Address,
         service_handler_addresses: Vec<Address>,
     ) -> wavs_types::Service {
+        mock_service_with_submit(
+            chain_name,
+            workflow_id,
+            service_manager_address,
+            service_handler_addresses,
+            wavs_types::Submit::Aggregator {
+                url: "http://localhost:8080".to_string(),
+                component: wavs_types::Component::new(
+                    wavs_types::ComponentSource::Digest(
+                        wavs_types::ComponentDigest::from_str(
+                            "0e8b4ceb85a828d23386168fb71895e979e0f946b21d51afca7414bd1ae40143"
+                        ).unwrap(),
+                    ),
+                ),
+            },
+        ).await
+    }
+    
+    async fn mock_service_with_submit(
+        chain_name: ChainName,
+        workflow_id: WorkflowID,
+        service_manager_address: Address,
+        service_handler_addresses: Vec<Address>,
+        submit: wavs_types::Submit,
+    ) -> wavs_types::Service {
         let mut workflows = BTreeMap::new();
         workflows.insert(
             workflow_id,
@@ -985,20 +979,7 @@ mod test {
                 component: wavs_types::Component::new(wavs_types::ComponentSource::Digest(
                     wavs_types::ComponentDigest::hash([0; 32]),
                 )),
-                submit: wavs_types::Submit::Aggregator {
-                    url: "http://dummy".to_string(),
-                    component: None,
-                    evm_contracts: Some(
-                        service_handler_addresses
-                            .into_iter()
-                            .map(|address| wavs_types::EvmContractSubmission {
-                                chain_name: chain_name.clone(),
-                                address,
-                                max_gas: None,
-                            })
-                            .collect(),
-                    ),
-                },
+                submit,
             },
         );
 
@@ -1048,13 +1029,31 @@ mod test {
             config.credential =
                 Some("test test test test test test test test test test test junk".to_string());
 
-            let state = HttpState::new(config).unwrap();
-
-            Self {
+            let state = HttpState::new_with_engine(config).unwrap();
+            
+            // Upload SimpleAggregator component to storage
+            let wasm_path = workspace_path()
+                .join("examples")
+                .join("build")
+                .join("components")
+                .join("simple_aggregator.wasm");
+            
+            let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
+            let digest = state.aggregator_engine.as_ref().unwrap()
+                .upload_component(wasm_bytes)
+                .await
+                .unwrap();
+            
+            // Store the digest for use in tests
+            let mut test_deps = Self {
                 contracts: contract_deps,
                 state,
-            }
+            };
+            test_deps.simple_aggregator_digest = digest;
+            test_deps
         }
+        
+        pub simple_aggregator_digest: wavs_types::ComponentDigest,
 
         pub async fn create_service(
             &self,
