@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
-    time::Duration,
 };
 
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -38,8 +37,6 @@ impl ServiceManagers {
         }
     }
 }
-
-static SERVICE_UPDATE_TIMEOUT: Duration = Duration::from_secs(60 * 15);
 
 impl ServiceManagers {
     pub async fn bootstrap(
@@ -311,7 +308,7 @@ impl ServiceManagers {
                     .unwrap();
                 clients
                     .http_client
-                    .wait_for_service_update(&service, Some(SERVICE_UPDATE_TIMEOUT))
+                    .wait_for_service_update(&service, None)
                     .await
                     .unwrap();
             });
