@@ -1,10 +1,11 @@
 use crate::{clients::HttpClient, context::CliContext, deploy::CommandDeployResult};
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
-use wavs_types::Service;
+use wavs_types::{Service, ServiceManager};
 
 pub struct DeployService {
     pub args: DeployServiceArgs,
+    pub service: Service,
 }
 
 impl std::fmt::Display for DeployService {
@@ -13,7 +14,7 @@ impl std::fmt::Display for DeployService {
         if let Some(save_service_args) = &self.args.set_service_url_args {
             write!(f, "\n\n{:#?}", save_service_args.service_url)?;
         }
-        write!(f, "\n\n{:#?}", self.args.service)
+        write!(f, "\n\n{:#?}", self.args.service_manager)
     }
 }
 
@@ -21,13 +22,13 @@ impl CommandDeployResult for DeployService {
     fn update_deployment(&self, deployment: &mut crate::deploy::Deployment) {
         deployment
             .services
-            .insert(self.args.service.id(), self.args.service.clone());
+            .insert(self.service.id(), self.service.clone());
     }
 }
 
 #[derive(Clone)]
 pub struct DeployServiceArgs {
-    pub service: Service,
+    pub service_manager: ServiceManager,
     pub set_service_url_args: Option<SetServiceUrlArgs>,
 }
 
@@ -39,17 +40,19 @@ pub struct SetServiceUrlArgs {
 
 impl DeployService {
     pub async fn run(ctx: &CliContext, args: DeployServiceArgs) -> Result<Self> {
-        let service = args.service.clone();
-        let service_id = service.id();
+        let service_manager = args.service_manager.clone();
 
         let http_client = HttpClient::new(ctx.config.wavs_endpoint.clone());
 
-        http_client
-            .create_service(service, args.set_service_url_args.clone())
+        let service = http_client
+            .create_service(service_manager.clone(), args.set_service_url_args.clone())
             .await
-            .context(format!("Failed to deploy service with ID '{}'", service_id))?;
+            .context(format!(
+                "Failed to deploy service with '{:?}'",
+                service_manager
+            ))?;
 
-        let _self = Self { args };
+        let _self = Self { args, service };
 
         _self.update_deployment(&mut ctx.deployment.lock().unwrap());
 

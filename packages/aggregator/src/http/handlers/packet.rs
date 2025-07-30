@@ -535,7 +535,6 @@ fn add_packet_to_queue(
 mod test {
     use super::*;
     use crate::{args::CliArgs, config::Config};
-    use alloy_primitives::U256;
     use futures::{stream::FuturesUnordered, StreamExt};
     use std::{
         collections::{BTreeMap, HashSet},
@@ -546,6 +545,8 @@ mod test {
         config::{ConfigBuilder, EvmChainConfig},
         filesystem::workspace_path,
         test_utils::{
+            middleware::{AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig},
+            mock_service_manager::MockServiceManager,
             test_contracts::TestContractDeps,
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
@@ -602,60 +603,46 @@ mod test {
     async fn process_mixed_responses() {
         let deps = TestDeps::new().await;
 
-        let service_manager = deps.contracts.deploy_simple_service_manager().await;
-
-        let mut signers = Vec::new();
         const NUM_SIGNERS: usize = 3;
         const NUM_THRESHOLD: usize = 2;
 
-        service_manager
-            .setLastCheckpointTotalWeight(U256::from(NUM_SIGNERS as u64))
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
+        let signers = (0..NUM_SIGNERS).map(|_| mock_signer()).collect::<Vec<_>>();
 
-        service_manager
-            .setLastCheckpointThresholdWeight(U256::from(NUM_THRESHOLD as u64))
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
+        let avs_operators = signers
+            .iter()
+            .map(|signer| AvsOperator::new(signer.address(), signer.address()))
+            .collect::<Vec<_>>();
 
-        for _ in 0..NUM_SIGNERS {
-            let signer = mock_signer();
-            service_manager
-                .setOperatorWeight(signer.address(), U256::ONE)
-                .send()
-                .await
-                .unwrap()
-                .watch()
+        let middleware_instance = MiddlewareInstance::new().await.unwrap();
+        let service_manager =
+            MockServiceManager::new(middleware_instance, deps.contracts.client.clone())
                 .await
                 .unwrap();
-            signers.push(signer);
-        }
+        service_manager
+            .configure(&MiddlewareServiceManagerConfig::new(
+                &avs_operators,
+                NUM_THRESHOLD as u64,
+            ))
+            .await
+            .unwrap();
 
         let envelope = mock_envelope(1, [1, 2, 3]);
 
         let service_handler = deps
             .contracts
-            .deploy_simple_service_handler(*service_manager.address())
+            .deploy_simple_service_handler(service_manager.address())
             .await;
 
         let fixed_second_service_handler = deps
             .contracts
-            .deploy_simple_service_handler(*service_manager.address())
+            .deploy_simple_service_handler(service_manager.address())
             .await;
 
         // Make sure we properly collect errors without actually erroring out
         let mut service = deps
             .create_service(
                 "workflow-1".parse().unwrap(),
-                *service_manager.address(),
+                service_manager.address(),
                 vec![*service_handler.address(), Address::ZERO],
             )
             .await;
@@ -800,46 +787,31 @@ mod test {
     async fn first_packet_sent() {
         let deps = TestDeps::new().await;
 
-        let service_manager = deps.contracts.deploy_simple_service_manager().await;
+        // Configure the service with a threshold of 1 (first packet sends immediately)
+        let signer = mock_signer();
+
+        let avs_operators = vec![AvsOperator::new(signer.address(), signer.address())];
+
+        let middleware_instance = MiddlewareInstance::new().await.unwrap();
+        let service_manager =
+            MockServiceManager::new(middleware_instance, deps.contracts.client.clone())
+                .await
+                .unwrap();
+        service_manager
+            .configure(&MiddlewareServiceManagerConfig::new(&avs_operators, 1u64))
+            .await
+            .unwrap();
+
         let service_handler = deps
             .contracts
-            .deploy_simple_service_handler(*service_manager.address())
+            .deploy_simple_service_handler(service_manager.address())
             .await;
-
-        // Configure the service with a threshold of 1 (first packet sends immediately)
-        service_manager
-            .setLastCheckpointTotalWeight(U256::ONE)
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
-
-        service_manager
-            .setLastCheckpointThresholdWeight(U256::ONE)
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
-
-        let signer = mock_signer();
-        service_manager
-            .setOperatorWeight(signer.address(), U256::ONE)
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
 
         let envelope = mock_envelope(1, [1, 2, 3]);
         let service = deps
             .create_service(
                 "workflow-1".parse().unwrap(),
-                *service_manager.address(),
+                service_manager.address(),
                 vec![*service_handler.address()],
             )
             .await;
@@ -871,54 +843,41 @@ mod test {
     async fn process_many_packets(concurrent: bool) {
         let deps = TestDeps::new().await;
 
-        let service_manager = deps.contracts.deploy_simple_service_manager().await;
+        const NUM_SIGNERS: usize = 20;
+        const NUM_THRESHOLD: usize = NUM_SIGNERS / 2 + 1;
+
+        let signers = (0..NUM_SIGNERS).map(|_| mock_signer()).collect::<Vec<_>>();
+
+        let avs_operators = signers
+            .iter()
+            .map(|signer| AvsOperator::new(signer.address(), signer.address()))
+            .collect::<Vec<_>>();
+
+        let middleware_instance = MiddlewareInstance::new().await.unwrap();
+        let service_manager =
+            MockServiceManager::new(middleware_instance, deps.contracts.client.clone())
+                .await
+                .unwrap();
+        service_manager
+            .configure(&MiddlewareServiceManagerConfig::new(
+                &avs_operators,
+                NUM_THRESHOLD as u64,
+            ))
+            .await
+            .unwrap();
+
         let service_handler = deps
             .contracts
-            .deploy_simple_service_handler(*service_manager.address())
+            .deploy_simple_service_handler(service_manager.address())
             .await;
         let service = deps
             .create_service(
                 "workflow-1".parse().unwrap(),
-                *service_manager.address(),
+                service_manager.address(),
                 vec![*service_handler.address()],
             )
             .await;
         deps.state.register_service(&service.id()).unwrap();
-
-        let mut signers = Vec::new();
-        const NUM_SIGNERS: usize = 20;
-        const NUM_THRESHOLD: usize = NUM_SIGNERS / 2 + 1;
-
-        service_manager
-            .setLastCheckpointTotalWeight(U256::from(NUM_SIGNERS as u64))
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
-
-        service_manager
-            .setLastCheckpointThresholdWeight(U256::from(NUM_THRESHOLD as u64))
-            .send()
-            .await
-            .unwrap()
-            .watch()
-            .await
-            .unwrap();
-
-        for _ in 0..NUM_SIGNERS {
-            let signer = mock_signer();
-            service_manager
-                .setOperatorWeight(signer.address(), U256::ONE)
-                .send()
-                .await
-                .unwrap()
-                .watch()
-                .await
-                .unwrap();
-            signers.push(signer);
-        }
 
         let envelope = mock_envelope(1, [1, 2, 3]);
 

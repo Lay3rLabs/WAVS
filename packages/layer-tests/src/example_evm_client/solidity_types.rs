@@ -37,17 +37,5 @@ pub mod example_submit {
     }
 }
 
-pub mod example_service_manager {
-    use alloy_sol_types::sol;
-
-    sol!(
-        #[allow(missing_docs)]
-        #[sol(rpc)]
-        SimpleServiceManager,
-        "../../examples/contracts/solidity/abi/SimpleServiceManager.sol/SimpleServiceManager.json"
-    );
-}
-
 pub type SimpleTriggerT = SimpleTriggerInstance<DynProvider>;
 pub type SimpleSubmitT = SimpleSubmitInstance<DynProvider>;
-pub type SimpleServiceManagerT = SimpleSubmitInstance<DynProvider>;

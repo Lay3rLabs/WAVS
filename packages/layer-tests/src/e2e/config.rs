@@ -1,9 +1,5 @@
 use std::num::NonZeroU32;
 
-use alloy_network::TransactionBuilder;
-use alloy_primitives::utils::parse_ether;
-use alloy_provider::Provider;
-use alloy_rpc_types_eth::TransactionRequest;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
 use utils::{
     config::{ChainConfigs, ConfigBuilder, CosmosChainConfig, EvmChainConfig, EvmChainConfigExt},
@@ -32,6 +28,8 @@ pub struct Configs {
     pub aggregators: Vec<wavs_aggregator::config::Config>,
     pub chains: ChainConfigs,
     pub mnemonics: TestMnemonics,
+    pub middleware_concurrency: bool,
+    pub wavs_concurrency: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -72,20 +70,7 @@ impl TestMnemonics {
                     .unwrap()
                     .address();
 
-                let amount = parse_ether("100").unwrap();
-                let tx = TransactionRequest::default()
-                    .with_from(anvil_client.address())
-                    .with_to(dest_addr)
-                    .with_value(amount);
-
-                anvil_client
-                    .provider
-                    .send_transaction(tx)
-                    .await
-                    .unwrap()
-                    .watch()
-                    .await
-                    .unwrap();
+                anvil_client.transfer_funds(dest_addr, "100").await.unwrap();
             }
         }
     }
@@ -211,6 +196,8 @@ impl From<TestConfig> for Configs {
             wavs: wavs_config,
             chains: chain_configs,
             mnemonics,
+            middleware_concurrency: test_config.middleware_concurrency,
+            wavs_concurrency: test_config.wavs_concurrency,
         }
     }
 }

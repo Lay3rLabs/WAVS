@@ -5,7 +5,9 @@ mod config;
 mod handles;
 mod helpers;
 mod matrix;
+mod report;
 mod runner;
+mod service_managers;
 mod test_definition;
 mod test_registry;
 
@@ -20,9 +22,16 @@ use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
     telemetry::{setup_metrics, setup_tracing, Metrics},
+    test_utils::middleware::MiddlewareInstance,
 };
 
-use crate::{args::TestArgs, config::TestConfig, e2e::test_registry::CosmosTriggerCodeMap};
+use crate::{
+    args::TestArgs,
+    config::{TestConfig, TestMode},
+    e2e::{
+        report::TestReport, service_managers::ServiceManagers, test_registry::CosmosTriggerCodeMap,
+    },
+};
 
 pub fn run(args: TestArgs, ctx: AppContext) {
     let config: TestConfig = ConfigBuilder::new(args).build().unwrap();
@@ -68,37 +77,35 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     let configs: Configs = config.into();
 
     let handles = AppHandles::start(&ctx, &configs, metrics);
+    tracing::info!("Background processes started");
+
+    let mut kill_receiver = ctx.get_kill_receiver();
 
     ctx.rt.block_on(async {
-        let clients = clients::Clients::new(&configs).await;
-
-        let component_sources =
-            ComponentSources::new(&configs, &clients.http_client, &clients.aggregator_client).await;
-
-        let cosmos_trigger_code_map = CosmosTriggerCodeMap::new(DashMap::new());
-
-        // Create test registry from test mode
-        let registry = test_registry::TestRegistry::from_test_mode(
-            mode,
-            &configs.chains,
-            &clients,
-            &cosmos_trigger_code_map,
-        )
-        .await;
-
-        // Create and run the test runner (services will be deployed just-in-time)
-        Runner::new(
-            clients,
-            registry,
-            component_sources,
-            cosmos_trigger_code_map,
-        )
-        .run_tests()
-        .await;
+        tokio::select! {
+            _ = kill_receiver.recv() => {
+                tracing::debug!("Test runner killed");
+            },
+            _ = _run(configs, mode, handles.middleware_instance.clone()) => {
+                tracing::debug!("Test runner completed");
+            }
+        }
     });
 
+    let was_killed = ctx.killed();
+
+    tracing::warn!("shutting down...");
+
     ctx.kill();
-    handles.join();
+    let join_results = handles.try_join();
+    for result in join_results {
+        if let Err(e) = result {
+            tracing::warn!(
+                "error shutting down after tests completed successfully: {:?}",
+                e
+            );
+        }
+    }
     if let Some(tracer) = tracer_provider {
         tracer
             .shutdown()
@@ -109,4 +116,60 @@ pub fn run(args: TestArgs, ctx: AppContext) {
             .shutdown()
             .expect("MeterProvider should shutdown successfully")
     }
+
+    if was_killed {
+        panic!("Test runner was killed, exiting with error");
+    }
+}
+
+async fn _run(configs: Configs, mode: TestMode, middleware_instance: MiddlewareInstance) {
+    let report = TestReport::new();
+
+    let clients = clients::Clients::new(&configs).await;
+
+    let cosmos_trigger_code_map = CosmosTriggerCodeMap::new(DashMap::new());
+
+    // Create test registry from test mode
+    let registry = test_registry::TestRegistry::from_test_mode(
+        mode,
+        &configs.chains,
+        &clients,
+        &cosmos_trigger_code_map,
+    )
+    .await;
+
+    // bootstrap service managers
+    let mut service_managers = ServiceManagers::new(configs.clone());
+    service_managers
+        .bootstrap(&registry, &clients, middleware_instance)
+        .await;
+
+    // upload components
+    let component_sources =
+        ComponentSources::new(&configs, &clients.http_client, &clients.aggregator_client).await;
+
+    // create the real services (deploy contracts etc.)
+
+    let services = service_managers
+        .create_real_wavs_services(
+            &registry,
+            &clients,
+            &component_sources,
+            cosmos_trigger_code_map.clone(),
+        )
+        .await;
+
+    // Create and run the test runner (services will be deployed just-in-time)
+    Runner::new(
+        clients,
+        registry,
+        component_sources,
+        service_managers,
+        cosmos_trigger_code_map,
+        report.clone(),
+    )
+    .run_tests(services)
+    .await;
+
+    report.print();
 }

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use tokio::runtime::Runtime;
 use tracing::instrument;
@@ -6,6 +6,7 @@ use tracing::instrument;
 #[derive(Clone)]
 pub struct AppContext {
     pub rt: Arc<Runtime>,
+    killed: Arc<AtomicBool>,
     kill_sender: tokio::sync::broadcast::Sender<()>,
     // just to make sure we don't send in the case of "no receivers" accidentally
     _kill_receiver: Arc<tokio::sync::broadcast::Receiver<()>>,
@@ -33,6 +34,7 @@ impl AppContext {
             rt,
             kill_sender,
             _kill_receiver: Arc::new(kill_receiver),
+            killed: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -47,7 +49,12 @@ impl AppContext {
     /// This is typically only called from main or tests - it will kill the system gracefully
     #[instrument(level = "debug", skip(self), fields(subsys = "AppContext"))]
     pub fn kill(&self) {
+        self.killed.store(true, std::sync::atomic::Ordering::SeqCst);
         self.kill_sender.send(()).unwrap();
+    }
+
+    pub fn killed(&self) -> bool {
+        self.killed.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 

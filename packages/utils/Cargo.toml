@@ -62,7 +62,7 @@ reqwest = { workspace = true }
 tempfile = { workspace = true }
 alloy-contract = { workspace = true }
 rand = { workspace = true, optional = true }
-bip39 = { workspace = true, optional = true}
+bip39 = { workspace = true, features = ["rand"], optional = true}
 
 [dev-dependencies]
 tokio = { workspace = true }

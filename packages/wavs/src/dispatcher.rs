@@ -51,7 +51,7 @@ use crate::subsystems::submission::error::SubmissionError;
 use crate::subsystems::submission::SubmissionManager;
 use crate::subsystems::trigger::error::TriggerError;
 use crate::subsystems::trigger::TriggerManager;
-use crate::AppContext;
+use crate::{tracing_service_info, AppContext};
 use utils::storage::db::{DBError, RedbStorage};
 use utils::storage::{CAStorage, CAStorageError};
 use wasm_pkg_common::Error as RegistryError;
@@ -204,7 +204,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(level = "debug", skip(self, source), fields(subsys = "Dispatcher"))]
     pub fn store_component_bytes(
         &self,
         source: Vec<u8>,
@@ -254,6 +254,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     // this is public just so we can call it from tests
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
         let service_id = service.id();
         tracing::info!("Adding service: {}", service_id);
@@ -283,7 +284,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub fn remove_service(&self, id: ServiceID) -> Result<(), DispatcherError> {
-        tracing::info!("Removing service: {}", id);
         self.services.remove(&id)?;
         self.engine_manager.engine.remove_storage(&id);
         self.trigger_manager.remove_service(id.clone())?;
@@ -293,13 +293,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         let current_services = self.services.list(Bound::Unbounded, Bound::Unbounded)?;
         let total_workflows: usize = current_services.iter().map(|s| s.workflows.len()).sum();
 
-        tracing::info!(
-            "Service removed: service_id={}, remaining_services={}, remaining_workflows={}",
+        tracing_service_info!(
+            &self.services,
             id,
+            "Removed. Remaining services: {}, remaining workflows: {}",
             current_services.len(),
             total_workflows
         );
-
         Ok(())
     }
 
