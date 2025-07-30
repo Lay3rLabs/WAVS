@@ -1,6 +1,5 @@
 mod cosmos;
 mod evm;
-mod middleware;
 
 use std::sync::Arc;
 
