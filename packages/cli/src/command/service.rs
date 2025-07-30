@@ -36,15 +36,11 @@ use uuid::Uuid;
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
     Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentDigest,
-    ComponentSource, EvmContractSubmission, Registry, ServiceManager, ServiceStatus, Submit,
-    Timestamp, Trigger, WorkflowID,
+    ComponentSource, Registry, ServiceManager, ServiceStatus, Timestamp, Trigger, WorkflowID,
 };
 
 use crate::{
-    args::{
-        ComponentCommand, ManagerCommand, ServiceCommand, SubmitCommand, TriggerCommand,
-        WorkflowCommand,
-    },
+    args::{ComponentCommand, ManagerCommand, ServiceCommand, TriggerCommand, WorkflowCommand},
     context::CliContext,
     service_json::{
         validate_block_interval_config, validate_block_interval_config_on_chain,
@@ -109,28 +105,6 @@ pub async fn handle_service_command(
                 }
                 ComponentCommand::Env { values } => {
                     let result = update_component_env_keys(&file, id, values)?;
-                    display_result(ctx, result, json)?;
-                }
-            },
-            WorkflowCommand::Submit { id, command } => match command {
-                SubmitCommand::SetAggregator {
-                    url,
-                    chain_name,
-                    address,
-                    max_gas,
-                } => {
-                    let result =
-                        set_aggregator_submit(&file, id, url, chain_name, address, max_gas)?;
-                    display_result(ctx, result, json)?;
-                }
-                SubmitCommand::AddAggregator {
-                    url,
-                    address,
-                    chain_name,
-                    max_gas,
-                } => {
-                    let result =
-                        add_aggregator_submit(&file, id, url, chain_name, address, max_gas)?;
                     display_result(ctx, result, json)?;
                 }
             },
@@ -826,115 +800,6 @@ pub fn update_component_env_keys(
     })
 }
 
-/// Set an Aggregator submit for a workflow
-pub fn set_aggregator_submit(
-    file_path: &Path,
-    workflow_id: WorkflowID,
-    url: String,
-    chain_name: ChainName,
-    address: alloy_primitives::Address,
-    max_gas: Option<u64>,
-) -> Result<WorkflowSetSubmitAggregatorResult> {
-    // Validate the URL format
-    let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
-
-    modify_service_file(file_path, |mut service| {
-        // Check if the workflow exists
-        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
-            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
-        })?;
-
-        // Update the submit
-        let evm_contract = EvmContractSubmission {
-            chain_name,
-            address,
-            max_gas,
-        };
-        let submit = Submit::Aggregator {
-            url,
-            component: None,
-            evm_contracts: Some(vec![evm_contract.clone()]),
-        };
-        workflow.submit = SubmitJson::Submit(submit.clone());
-
-        let aggregator_submit = Aggregator::Evm(evm_contract);
-
-        Ok((
-            service,
-            WorkflowSetSubmitAggregatorResult {
-                workflow_id,
-                submit,
-                aggregator_submit,
-                file_path: file_path.to_path_buf(),
-            },
-        ))
-    })
-}
-
-/// Add an Aggregator submit for a workflow
-pub fn add_aggregator_submit(
-    file_path: &Path,
-    workflow_id: WorkflowID,
-    url: String,
-    chain_name: ChainName,
-    address: alloy_primitives::Address,
-    max_gas: Option<u64>,
-) -> Result<WorkflowAddAggregatorResult> {
-    // Validate the URL format
-    let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
-
-    modify_service_file(file_path, |mut service| {
-        // Check if the workflow exists
-        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
-            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
-        })?;
-
-        if !matches!(
-            workflow.submit,
-            SubmitJson::Submit(Submit::Aggregator { .. })
-        ) {
-            anyhow::bail!(
-                "Cannot add an aggregator submit when the workflow's submit is not set to aggregator"
-            );
-        }
-
-        // Add the EVM contract to the Submit variant and collect aggregator submits
-        let aggregator_submits =
-            if let SubmitJson::Submit(Submit::Aggregator { evm_contracts, .. }) =
-                &mut workflow.submit
-            {
-                let new_contract = EvmContractSubmission {
-                    chain_name,
-                    address,
-                    max_gas,
-                };
-
-                match evm_contracts {
-                    Some(contracts) => contracts.push(new_contract),
-                    None => *evm_contracts = Some(vec![new_contract]),
-                }
-
-                evm_contracts
-                    .as_ref()
-                    .unwrap()
-                    .iter()
-                    .map(|c| Aggregator::Evm(c.clone()))
-                    .collect()
-            } else {
-                Vec::new()
-            };
-
-        Ok((
-            service,
-            WorkflowAddAggregatorResult {
-                workflow_id,
-                aggregator_submits,
-                file_path: file_path.to_path_buf(),
-            },
-        ))
-    })
-}
-
 /// Set an EVM manager for the service
 pub fn set_evm_manager(
     file_path: &Path,
@@ -993,7 +858,7 @@ pub async fn validate_service(
         let mut chains_to_validate = HashSet::new();
         let mut triggers = Vec::new();
         let mut submits = Vec::new();
-        let mut aggregators: Vec<(&WorkflowID, Aggregator)> = Vec::new();
+        let aggregators: Vec<(&WorkflowID, Aggregator)> = Vec::new();
 
         for (workflow_id, workflow) in &service.workflows {
             if let TriggerJson::Trigger(trigger) = &workflow.trigger {
@@ -1072,18 +937,6 @@ pub async fn validate_service(
 
             if let SubmitJson::Submit(submit) = &workflow.submit {
                 submits.push((workflow_id, submit));
-
-                if let Submit::Aggregator {
-                    evm_contracts: Some(contracts),
-                    ..
-                } = submit
-                {
-                    for contract in contracts {
-                        chains_to_validate.insert((contract.chain_name.clone(), ChainType::EVM));
-                        let aggregator = Aggregator::Evm(contract.clone());
-                        aggregators.push((workflow_id, aggregator));
-                    }
-                }
             }
         }
 
