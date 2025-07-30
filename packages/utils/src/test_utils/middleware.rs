@@ -106,7 +106,7 @@ impl MiddlewareInstanceInner {
     ) -> Result<MiddlewareServiceManager> {
         let id = self
             .service_manager_count
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             .to_string();
         let filename = middleware_deploy_filename(&id);
 
