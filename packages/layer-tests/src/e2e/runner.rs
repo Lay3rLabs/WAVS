@@ -7,9 +7,10 @@ use ordermap::OrderMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
-use wavs_types::{EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID};
+use wavs_types::{Submit, Trigger, Workflow, WorkflowID};
 
 use crate::e2e::helpers::change_service_for_test;
+use crate::e2e::test_definition::{AggregatorDefinition, SubmitDefinition};
 use crate::e2e::test_registry::CosmosTriggerCodeMap;
 use crate::{
     e2e::{
@@ -107,7 +108,7 @@ async fn run_test(
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
 ) -> anyhow::Result<()> {
     let aggregator_registered_service_ids = Arc::new(std::sync::Mutex::new(HashSet::new()));
-    let service = deploy_service_for_test(
+    let deployment_result = deploy_service_for_test(
         test,
         clients,
         component_sources,
@@ -115,6 +116,7 @@ async fn run_test(
         aggregator_registered_service_ids,
     )
     .await;
+    let service = deployment_result.service;
 
     if let Some(change_service) = &mut test.change_service {
         change_service_for_test(
@@ -198,37 +200,39 @@ async fn run_test(
             ))?;
 
             let signed_data = match &workflow.submit {
-                Submit::Aggregator { evm_contracts, .. } => {
-                    let mut signed_data = vec![];
-                    let empty_vec = Vec::new();
-                    let contracts = evm_contracts.as_ref().unwrap_or(&empty_vec);
-                    for contract in contracts.iter() {
-                        let EvmContractSubmission {
-                            chain_name,
-                            address,
-                            ..
-                        } = contract;
+                Submit::Aggregator { .. } => {
+                    let workflow_def = test.workflows.get(workflow_id).ok_or_else(|| {
+                        anyhow!("Could not get workflow definition from id: {}", workflow_id)
+                    })?;
 
-                        let client = clients.get_evm_client(chain_name);
-                        let submit_start_block = client
-                            .provider
-                            .get_block_number()
-                            .await
-                            .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
+                    let SubmitDefinition::Aggregator { aggregators, .. } = &workflow_def.submit;
+                    let AggregatorDefinition::ComponentBasedAggregator { chain_name, .. } =
+                        &aggregators[0];
 
-                        signed_data.push(
-                            wait_for_task_to_land(
-                                client,
-                                *address,
-                                trigger_id,
-                                submit_start_block,
-                                *timeout,
-                            )
-                            .await?,
-                        );
-                    }
+                    let client = clients.get_evm_client(chain_name);
+                    let submit_start_block = client
+                        .provider
+                        .get_block_number()
+                        .await
+                        .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
 
-                    signed_data
+                    let submission_contract = deployment_result
+                        .submission_contracts
+                        .get(workflow_id)
+                        .ok_or_else(|| {
+                            anyhow!("No submission contract found for workflow {}", workflow_id)
+                        })?;
+
+                    vec![
+                        wait_for_task_to_land(
+                            client,
+                            *submission_contract,
+                            trigger_id,
+                            submit_start_block,
+                            *timeout,
+                        )
+                        .await?,
+                    ]
                 }
                 Submit::None => unimplemented!("Submit::None is not implemented"),
             };

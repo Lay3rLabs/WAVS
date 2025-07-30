@@ -2,17 +2,30 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
+use alloy_primitives::Address;
 use anyhow::{anyhow, ensure};
 use example_types::{
     CosmosQueryRequest, CosmosQueryResponse, KvStoreRequest, KvStoreResponse, PermissionsRequest,
     PermissionsResponse, SquareRequest, SquareResponse,
 };
 use regex::Regex;
-use wavs_types::{ChainName, Trigger, WorkflowID};
+use wavs_types::{ChainName, Service, Trigger, Workflow, WorkflowID};
 
 use crate::e2e::components::{ComponentName, ComponentSources};
 
 use super::config::DEFAULT_CHAIN_ID;
+
+#[derive(Clone, Debug)]
+pub struct DeploymentResult {
+    pub service: Service,
+    pub submission_contracts: BTreeMap<WorkflowID, Address>,
+}
+
+#[derive(Clone, Debug)]
+pub struct WorkflowDeploymentResult {
+    pub workflow: Workflow,
+    pub submission_contract: Address,
+}
 
 /// Defines a complete end-to-end test case
 #[derive(Clone, Debug)]
@@ -98,9 +111,6 @@ pub struct WorkflowDefinition {
 
 #[derive(Clone, Debug)]
 pub enum AggregatorDefinition {
-    NewEvmAggregatorSubmit {
-        chain_name: ChainName,
-    },
     ComponentBasedAggregator {
         component: ComponentDefinition,
         chain_name: ChainName,

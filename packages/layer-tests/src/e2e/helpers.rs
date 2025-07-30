@@ -13,9 +13,8 @@ use uuid::Uuid;
 
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
-    Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit, Trigger,
-    Workflow,
+    AllowedHostPermission, ByteArray, ChainName, Component, Permissions, Service, ServiceID,
+    ServiceManager, ServiceStatus, SigningKeyResponse, Submit, Trigger, Workflow,
 };
 
 use crate::{
@@ -24,8 +23,8 @@ use crate::{
         components::ComponentSources,
         config::BLOCK_INTERVAL,
         test_definition::{
-            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, SubmitDefinition,
-            TestDefinition, TriggerDefinition,
+            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, DeploymentResult,
+            SubmitDefinition, TestDefinition, TriggerDefinition, WorkflowDeploymentResult,
         },
         test_registry::TestRegistry,
     },
@@ -43,18 +42,17 @@ use super::{
 
 static SERVICE_UPDATE_TIMEOUT: Duration = Duration::from_secs(60 * 15);
 
-/// Helper function to deploy a service for a test
 pub async fn deploy_service_for_test(
     test: &mut TestDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
     aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<ServiceID>>>,
-) -> Service {
+) -> DeploymentResult {
     tracing::info!("Deploying service for test: {}", test.name);
 
-    // Create unique service ID
     let mut workflows = BTreeMap::new();
+    let mut submission_contracts = BTreeMap::new();
 
     // Deploy the service manager contract
     tracing::info!(
@@ -67,7 +65,7 @@ pub async fn deploy_service_for_test(
         .unwrap();
 
     for (workflow_id, workflow_definition) in test.workflows.iter_mut() {
-        let workflow = deploy_workflow(
+        let deployment_result = deploy_workflow(
             &test.name,
             workflow_definition,
             service_manager_address,
@@ -77,7 +75,8 @@ pub async fn deploy_service_for_test(
         )
         .await;
 
-        workflows.insert(workflow_id.clone(), workflow);
+        workflows.insert(workflow_id.clone(), deployment_result.workflow);
+        submission_contracts.insert(workflow_id.clone(), deployment_result.submission_contract);
     }
 
     // Create the service in Paused state
@@ -175,7 +174,10 @@ pub async fn deploy_service_for_test(
         .await
         .unwrap();
 
-    service
+    DeploymentResult {
+        service,
+        submission_contracts,
+    }
 }
 
 fn deploy_component(
@@ -214,7 +216,7 @@ async fn deploy_workflow(
     clients: &Clients,
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
-) -> Workflow {
+) -> WorkflowDeploymentResult {
     let component = deploy_component(
         component_sources,
         &workflow_definition.component,
@@ -231,7 +233,6 @@ async fn deploy_workflow(
             panic!("Expected at least one aggregator, but found none");
         };
         match first_agg {
-            AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => chain_name,
             AggregatorDefinition::ComponentBasedAggregator { chain_name, .. } => chain_name,
         }
     };
@@ -258,10 +259,13 @@ async fn deploy_workflow(
     .await;
 
     // Create service workflows
-    Workflow {
-        trigger: trigger.clone(), // Clone for possible use in multi-trigger service
-        component,
-        submit: submit.clone(),
+    WorkflowDeploymentResult {
+        workflow: Workflow {
+            trigger: trigger.clone(), // Clone for possible use in multi-trigger service
+            component,
+            submit: submit.clone(),
+        },
+        submission_contract,
     }
 }
 
@@ -381,63 +385,51 @@ pub async fn create_submit_from_config(
 ) -> Result<Submit> {
     match submit_config {
         SubmitDefinition::Aggregator { url, aggregators } => {
-            let mut evm_contracts = Vec::new();
-            let mut component = None;
+            if aggregators.is_empty() {
+                return Err(anyhow!(
+                    "Aggregator submit requires at least one aggregator"
+                ));
+            }
 
-            for agg in aggregators {
-                match agg {
-                    AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
-                        evm_contracts.push(EvmContractSubmission {
-                            chain_name: chain_name.clone(),
-                            address: *submission_contract,
-                            max_gas: None,
-                        });
-                    }
-                    AggregatorDefinition::ComponentBasedAggregator {
-                        component: component_def,
-                        ..
-                    } => {
-                        if let Some(sources) = component_sources {
-                            let mut config_vars = BTreeMap::new();
-                            let env_vars = BTreeMap::new();
+            // Take the first aggregator (for now we support one)
+            let agg = &aggregators[0];
 
-                            for (hardcoded_key, hardcoded_value) in
-                                &component_def.configs_to_add.hardcoded
-                            {
-                                config_vars.insert(hardcoded_key.clone(), hardcoded_value.clone());
-                            }
+            match agg {
+                AggregatorDefinition::ComponentBasedAggregator {
+                    component: component_def,
+                    ..
+                } => {
+                    if let Some(sources) = component_sources {
+                        let mut config_vars = BTreeMap::new();
+                        let env_vars = BTreeMap::new();
 
-                            if component_def.configs_to_add.contract_address {
-                                config_vars.insert(
-                                    "contract_address".to_string(),
-                                    format!("{:#x}", submission_contract),
-                                );
-                            }
-
-                            component = Some(Box::new(deploy_component(
-                                sources,
-                                component_def,
-                                config_vars,
-                                env_vars,
-                            )));
-                        } else {
-                            return Err(anyhow!(
-                                "ComponentBasedAggregator requires component_sources"
-                            ));
+                        for (hardcoded_key, hardcoded_value) in
+                            &component_def.configs_to_add.hardcoded
+                        {
+                            config_vars.insert(hardcoded_key.clone(), hardcoded_value.clone());
                         }
+
+                        if component_def.configs_to_add.contract_address {
+                            config_vars.insert(
+                                "contract_address".to_string(),
+                                format!("{:#x}", submission_contract),
+                            );
+                        }
+
+                        let component =
+                            deploy_component(sources, component_def, config_vars, env_vars);
+
+                        Ok(Submit::Aggregator {
+                            url: url.clone(),
+                            component,
+                        })
+                    } else {
+                        return Err(anyhow!(
+                            "ComponentBasedAggregator requires component_sources"
+                        ));
                     }
                 }
             }
-
-            Ok(Submit::Aggregator {
-                url: url.clone(),
-                component,
-                evm_contracts: if evm_contracts.is_empty() {
-                    None
-                } else {
-                    Some(evm_contracts)
-                },
-            })
         }
     }
 }
@@ -641,7 +633,7 @@ pub async fn change_service_for_test(
             workflow_id,
             workflow,
         } => {
-            let deployed_workflow = deploy_workflow(
+            let deployment_result = deploy_workflow(
                 workflow_id,
                 workflow,
                 new_service.manager.evm_address_unchecked(),
@@ -653,7 +645,7 @@ pub async fn change_service_for_test(
 
             new_service
                 .workflows
-                .insert(workflow_id.clone(), deployed_workflow);
+                .insert(workflow_id.clone(), deployment_result.workflow);
         }
     }
 
