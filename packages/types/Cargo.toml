@@ -24,7 +24,7 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 const-hex = { workspace = true }
 cosmwasm-std = { workspace = true }
-layer-climb = { workspace = true }
+layer-climb-config = { workspace = true }
 layer-climb-address = { workspace = true }
 bincode = { workspace = true }
 ripemd = { workspace = true }
