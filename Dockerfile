@@ -10,7 +10,7 @@ RUN cargo chef prepare  --recipe-path recipe.json
 
 FROM rust:1.88-slim-bookworm AS cacher
 WORKDIR /myapp
-RUN apt-get update && apt-get install -y pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y pkg-config libssl-dev ca-certificates curl && rm -rf /var/lib/apt/lists/*
 RUN cargo install cargo-chef
 COPY --from=planner /myapp/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
