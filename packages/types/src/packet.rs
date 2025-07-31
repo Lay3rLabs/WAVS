@@ -8,8 +8,6 @@ use alloy_signer::Signer;
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::SolValue;
 use async_trait::async_trait;
-#[cfg(feature = "cosmwasm")]
-use cosmwasm_schema::schemars;
 use ripemd::Ripemd160;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
@@ -135,8 +133,6 @@ impl Packet {
 #[derive(
     Serialize, Deserialize, Clone, Eq, PartialEq, Debug, Hash, bincode::Decode, bincode::Encode,
 )]
-#[cfg(feature = "cosmwasm")]
-#[derive(schemars::JsonSchema)]
 #[serde(transparent)]
 pub struct EventId([u8; 20]);
 
@@ -165,8 +161,6 @@ impl From<EventId> for FixedBytes<20> {
 #[derive(
     Serialize, Deserialize, Clone, Eq, PartialEq, Debug, Hash, bincode::Decode, bincode::Encode,
 )]
-#[cfg(feature = "cosmwasm")]
-#[derive(schemars::JsonSchema)]
 #[serde(transparent)]
 pub struct Ordering([u8; 12]);
 
