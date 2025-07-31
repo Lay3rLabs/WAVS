@@ -7,12 +7,14 @@ use ordermap::OrderMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use wavs_types::{Service, Submit, Trigger, Workflow, WorkflowID, DeploymentResult};
+use wavs_types::{DeploymentResult, Service, Submit, Trigger, Workflow, WorkflowID};
 
 use crate::e2e::helpers::change_service_for_test;
 use crate::e2e::report::TestReport;
 use crate::e2e::service_managers::ServiceManagers;
-use crate::e2e::test_definition::{AggregatorDefinition, ChangeServiceDefinition, SubmitDefinition};
+use crate::e2e::test_definition::{
+    AggregatorDefinition, ChangeServiceDefinition, SubmitDefinition,
+};
 use crate::e2e::test_registry::CosmosTriggerCodeMap;
 use crate::{
     e2e::{
@@ -116,16 +118,26 @@ impl Runner {
                             // When a workflow is added, it includes a new submission contract
                             // Extract it from the service's workflow that was just added
                             let deployment_result = all_services.get_mut(&service.name).unwrap();
-                            if let Some(service_workflow) = deployment_result.service.workflows.get(&workflow_id) {
-                                if let Submit::Aggregator { component, .. } = &service_workflow.submit {
-                                    if let Some(contract_address_str) = component.config.get("contract_address") {
-                                        if let Ok(address) = contract_address_str.parse::<alloy_primitives::Address>() {
-                                            deployment_result.submission_handlers.insert(workflow_id.clone(), address);
+                            if let Some(service_workflow) =
+                                deployment_result.service.workflows.get(&workflow_id)
+                            {
+                                if let Submit::Aggregator { component, .. } =
+                                    &service_workflow.submit
+                                {
+                                    if let Some(contract_address_str) =
+                                        component.config.get("contract_address")
+                                    {
+                                        if let Ok(address) = contract_address_str
+                                            .parse::<alloy_primitives::Address>()
+                                        {
+                                            deployment_result
+                                                .submission_handlers
+                                                .insert(workflow_id.clone(), address);
                                         }
                                     }
                                 }
                             }
-                            
+
                             group_tests
                                 .iter_mut()
                                 .find(|test| test.name == service.name)
@@ -210,7 +222,7 @@ async fn run_test(
     for (workflow_id, workflow) in service.service.workflows.iter() {
         trigger_groups
             .entry(&workflow.trigger)
-             .or_default()
+            .or_default()
             .push((workflow_id, workflow));
     }
 

@@ -10,7 +10,8 @@ use utils::test_utils::{
 };
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
-    ChainName, Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit, DeploymentResult
+    ChainName, DeploymentResult, Service, ServiceID, ServiceManager, ServiceStatus,
+    SigningKeyResponse, Submit,
 };
 
 use crate::e2e::{

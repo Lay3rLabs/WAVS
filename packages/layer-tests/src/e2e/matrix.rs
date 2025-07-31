@@ -128,53 +128,21 @@ impl TestMatrix {
 impl From<EvmService> for Vec<ComponentName> {
     fn from(service: EvmService) -> Self {
         match service {
-            EvmService::ChainTriggerLookup => vec![
-                ComponentName::ChainTriggerLookup,
-                ComponentName::SimpleAggregator,
-            ],
-            EvmService::CosmosQuery => {
-                vec![ComponentName::CosmosQuery, ComponentName::SimpleAggregator]
-            }
-            EvmService::EchoData => vec![ComponentName::EchoData, ComponentName::SimpleAggregator],
-            EvmService::ChangeWorkflow => vec![
-                ComponentName::Square,
-                ComponentName::EchoData,
-                ComponentName::SimpleAggregator,
-            ],
-            EvmService::EchoDataSecondaryChain => {
-                vec![ComponentName::EchoData, ComponentName::SimpleAggregator]
-            }
-            EvmService::KvStore => vec![ComponentName::KvStore, ComponentName::SimpleAggregator],
-            EvmService::Permissions => {
-                vec![ComponentName::Permissions, ComponentName::SimpleAggregator]
-            }
-            EvmService::Square => vec![ComponentName::Square, ComponentName::SimpleAggregator],
-            EvmService::MultiWorkflow => vec![
-                ComponentName::Square,
-                ComponentName::EchoData,
-                ComponentName::SimpleAggregator,
-            ],
-            EvmService::MultiTrigger => {
-                vec![ComponentName::EchoData, ComponentName::SimpleAggregator]
-            }
-            EvmService::BlockInterval => vec![
-                ComponentName::EchoBlockInterval,
-                ComponentName::SimpleAggregator,
-            ],
-            EvmService::BlockIntervalStartStop => vec![
-                ComponentName::EchoBlockInterval,
-                ComponentName::SimpleAggregator,
-            ],
-            EvmService::CronInterval => vec![
-                ComponentName::EchoCronInterval,
-                ComponentName::SimpleAggregator,
-            ],
-            EvmService::EmptyToEchoData => {
-                vec![ComponentName::EchoData, ComponentName::SimpleAggregator]
-            }
-            EvmService::SimpleAggregator => {
-                vec![ComponentName::EchoData, ComponentName::SimpleAggregator]
-            }
+            EvmService::ChainTriggerLookup => vec![ComponentName::ChainTriggerLookup],
+            EvmService::CosmosQuery => vec![ComponentName::CosmosQuery],
+            EvmService::EchoData => vec![ComponentName::EchoData],
+            EvmService::ChangeWorkflow => vec![ComponentName::Square, ComponentName::EchoData],
+            EvmService::EchoDataSecondaryChain => vec![ComponentName::EchoData],
+            EvmService::KvStore => vec![ComponentName::KvStore],
+            EvmService::Permissions => vec![ComponentName::Permissions],
+            EvmService::Square => vec![ComponentName::Square],
+            EvmService::MultiWorkflow => vec![ComponentName::Square, ComponentName::EchoData],
+            EvmService::MultiTrigger => vec![ComponentName::EchoData],
+            EvmService::BlockInterval => vec![ComponentName::EchoBlockInterval],
+            EvmService::BlockIntervalStartStop => vec![ComponentName::EchoBlockInterval],
+            EvmService::CronInterval => vec![ComponentName::EchoCronInterval],
+            EvmService::EmptyToEchoData => vec![ComponentName::EchoData],
+            EvmService::SimpleAggregator => vec![ComponentName::EchoData],
         }
     }
 }
@@ -182,32 +150,14 @@ impl From<EvmService> for Vec<ComponentName> {
 impl From<CosmosService> for Vec<ComponentName> {
     fn from(service: CosmosService) -> Self {
         match service {
-            CosmosService::ChainTriggerLookup => vec![
-                ComponentName::ChainTriggerLookup,
-                ComponentName::SimpleAggregator,
-            ],
-            CosmosService::CosmosQuery => {
-                vec![ComponentName::CosmosQuery, ComponentName::SimpleAggregator]
-            }
-            CosmosService::EchoData => {
-                vec![ComponentName::EchoData, ComponentName::SimpleAggregator]
-            }
-            CosmosService::Permissions => {
-                vec![ComponentName::Permissions, ComponentName::SimpleAggregator]
-            }
-            CosmosService::Square => vec![ComponentName::Square, ComponentName::SimpleAggregator],
-            CosmosService::BlockInterval => vec![
-                ComponentName::EchoBlockInterval,
-                ComponentName::SimpleAggregator,
-            ],
-            CosmosService::BlockIntervalStartStop => vec![
-                ComponentName::EchoBlockInterval,
-                ComponentName::SimpleAggregator,
-            ],
-            CosmosService::CronInterval => vec![
-                ComponentName::EchoCronInterval,
-                ComponentName::SimpleAggregator,
-            ],
+            CosmosService::ChainTriggerLookup => vec![ComponentName::ChainTriggerLookup],
+            CosmosService::CosmosQuery => vec![ComponentName::CosmosQuery],
+            CosmosService::EchoData => vec![ComponentName::EchoData],
+            CosmosService::Permissions => vec![ComponentName::Permissions],
+            CosmosService::Square => vec![ComponentName::Square],
+            CosmosService::BlockInterval => vec![ComponentName::EchoBlockInterval],
+            CosmosService::BlockIntervalStartStop => vec![ComponentName::EchoBlockInterval],
+            CosmosService::CronInterval => vec![ComponentName::EchoCronInterval],
         }
     }
 }
@@ -215,9 +165,7 @@ impl From<CosmosService> for Vec<ComponentName> {
 impl From<CrossChainService> for Vec<ComponentName> {
     fn from(service: CrossChainService) -> Self {
         match service {
-            CrossChainService::CosmosToEvmEchoData => {
-                vec![ComponentName::EchoData, ComponentName::SimpleAggregator]
-            }
+            CrossChainService::CosmosToEvmEchoData => vec![ComponentName::EchoData],
         }
     }
 }

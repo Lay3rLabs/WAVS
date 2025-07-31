@@ -51,7 +51,7 @@ impl ComponentSources {
         http_client: &HttpClient,
         aggregator_client: &HttpClient,
     ) -> Self {
-        let component_names: HashSet<ComponentName> = configs
+        let mut component_names: HashSet<ComponentName> = configs
             .matrix
             .evm
             .iter()
@@ -72,6 +72,9 @@ impl ComponentSources {
             )
             .flatten()
             .collect();
+
+        // Always include SimpleAggregator as it's needed for all tests
+        component_names.insert(ComponentName::SimpleAggregator);
 
         let mut futures = FuturesUnordered::new();
 

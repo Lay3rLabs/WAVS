@@ -7,8 +7,8 @@ use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::w
 use uuid::Uuid;
 
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, Permissions,
-    Service, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, DeploymentResult, WorkflowID, WorkflowDeploymentResult
+    AllowedHostPermission, ByteArray, ChainName, Component, DeploymentResult, Permissions, Service,
+    ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowDeploymentResult, WorkflowID,
 };
 
 use crate::{
@@ -17,8 +17,8 @@ use crate::{
         components::ComponentSources,
         config::BLOCK_INTERVAL,
         test_definition::{
-            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition,
-            SubmitDefinition, TestDefinition, TriggerDefinition,
+            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, SubmitDefinition,
+            TestDefinition, TriggerDefinition,
         },
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
@@ -71,7 +71,9 @@ pub async fn create_service_for_test(
         )
         .await;
 
-        service.workflows.insert(workflow_id.clone(), deployment_result.workflow);
+        service
+            .workflows
+            .insert(workflow_id.clone(), deployment_result.workflow);
         submission_handlers.insert(workflow_id.clone(), deployment_result.submission_handler);
     }
 
@@ -160,14 +162,14 @@ async fn deploy_workflow(
     .await;
 
     // Create service workflows
-    WorkflowDeploymentResult{
+    WorkflowDeploymentResult {
         workflow: Workflow {
-        trigger: trigger.clone(), // Clone for possible use in multi-trigger service
-        component,
-        submit: submit.clone(),
-    },
-    submission_handler: submission_contract
-}
+            trigger: trigger.clone(), // Clone for possible use in multi-trigger service
+            component,
+            submit: submit.clone(),
+        },
+        submission_handler: submission_contract,
+    }
 }
 
 /// Create a trigger based on test configuration
@@ -287,22 +289,23 @@ pub async fn create_submit_from_config(
     match submit_config {
         SubmitDefinition::Aggregator { url, aggregators } => {
             // Since we only have ComponentBasedAggregator now, we should always have exactly one
-            let agg = aggregators.first()
+            let agg = aggregators
+                .first()
                 .ok_or_else(|| anyhow!("No aggregators defined"))?;
-            
+
             match agg {
                 AggregatorDefinition::ComponentBasedAggregator {
                     component: component_def,
                     ..
                 } => {
-                    let sources = component_sources
-                        .ok_or_else(|| anyhow!("ComponentBasedAggregator requires component_sources"))?;
-                    
+                    let sources = component_sources.ok_or_else(|| {
+                        anyhow!("ComponentBasedAggregator requires component_sources")
+                    })?;
+
                     let mut config_vars = BTreeMap::new();
                     let env_vars = BTreeMap::new();
 
-                    for (hardcoded_key, hardcoded_value) in
-                        &component_def.configs_to_add.hardcoded
+                    for (hardcoded_key, hardcoded_value) in &component_def.configs_to_add.hardcoded
                     {
                         config_vars.insert(hardcoded_key.clone(), hardcoded_value.clone());
                     }
@@ -314,12 +317,7 @@ pub async fn create_submit_from_config(
                         );
                     }
 
-                    let component = deploy_component(
-                        sources,
-                        component_def,
-                        config_vars,
-                        env_vars,
-                    );
+                    let component = deploy_component(sources, component_def, config_vars, env_vars);
 
                     Ok(Submit::Aggregator {
                         url: url.clone(),

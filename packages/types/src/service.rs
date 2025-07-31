@@ -105,7 +105,6 @@ impl Service {
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub struct DeploymentResult {
     pub service: Service,
