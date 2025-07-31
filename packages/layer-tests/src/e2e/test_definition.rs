@@ -15,18 +15,6 @@ use crate::e2e::components::{ComponentName, ComponentSources};
 
 use super::config::DEFAULT_CHAIN_ID;
 
-#[derive(Clone, Debug)]
-pub struct DeploymentResult {
-    pub service: Service,
-    pub submission_contracts: BTreeMap<WorkflowID, Address>,
-}
-
-#[derive(Clone, Debug)]
-pub struct WorkflowDeploymentResult {
-    pub workflow: Workflow,
-    pub submission_contract: Address,
-}
-
 /// Defines a complete end-to-end test case
 #[derive(Clone, Debug)]
 pub struct TestDefinition {

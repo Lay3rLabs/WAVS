@@ -10,7 +10,7 @@ use utils::test_utils::{
 };
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
-    ChainName, Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit,
+    ChainName, Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit, DeploymentResult
 };
 
 use crate::e2e::{
@@ -243,7 +243,7 @@ impl ServiceManagers {
         clients: &Clients,
         component_sources: &ComponentSources,
         cosmos_trigger_code_map: CosmosTriggerCodeMap,
-    ) -> HashMap<String, Service> {
+    ) -> HashMap<String, DeploymentResult> {
         let mut futures = Vec::new();
 
         for test in registry.list_all() {
@@ -262,13 +262,13 @@ impl ServiceManagers {
 
         if self.configs.wavs_concurrency {
             let mut futures_unordered = FuturesUnordered::from_iter(futures);
-            while let Some(service) = futures_unordered.next().await {
-                services.insert(service.name.clone(), service);
+            while let Some(deployment_result) = futures_unordered.next().await {
+                services.insert(deployment_result.service.name.clone(), deployment_result);
             }
         } else {
             for future in futures {
-                let service = future.await;
-                services.insert(service.name.clone(), service);
+                let deployment_result = future.await;
+                services.insert(deployment_result.service.name.clone(), deployment_result);
             }
         }
 

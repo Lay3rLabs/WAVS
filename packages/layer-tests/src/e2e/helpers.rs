@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, Permissions,
-    Service, ServiceManager, ServiceStatus, Submit, Trigger, Workflow,
+    Service, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, DeploymentResult, WorkflowID, WorkflowDeploymentResult
 };
 
 use crate::{
@@ -17,8 +17,8 @@ use crate::{
         components::ComponentSources,
         config::BLOCK_INTERVAL,
         test_definition::{
-            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, DeploymentResult,
-            SubmitDefinition, TestDefinition, TriggerDefinition, WorkflowDeploymentResult,
+            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition,
+            SubmitDefinition, TestDefinition, TriggerDefinition,
         },
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
@@ -51,8 +51,8 @@ pub async fn create_service_for_test(
         manager: service_manager,
     };
 
-    let mut workflows = BTreeMap::new();
-    let mut submission_contracts = BTreeMap::new();
+    let mut workflows: BTreeMap<WorkflowID, Workflow> = BTreeMap::new();
+    let mut submission_handlers = BTreeMap::new();
 
     tracing::info!(
         "[{}] Deploying service manager on chain {}",
@@ -72,12 +72,12 @@ pub async fn create_service_for_test(
         .await;
 
         service.workflows.insert(workflow_id.clone(), deployment_result.workflow);
-        submission_contracts.insert(workflow_id.clone(), deployment_result.submission_contract);
+        submission_handlers.insert(workflow_id.clone(), deployment_result.submission_handler);
     }
 
     DeploymentResult {
         service,
-        submission_contracts,
+        submission_handlers,
     }
 }
 
@@ -160,16 +160,14 @@ async fn deploy_workflow(
     .await;
 
     // Create service workflows
-    let workflow = Workflow {
+    WorkflowDeploymentResult{
+        workflow: Workflow {
         trigger: trigger.clone(), // Clone for possible use in multi-trigger service
         component,
         submit: submit.clone(),
-    };
-
-    WorkflowDeploymentResult {
-        workflow,
-        submission_contract: *submission_contract,
-    }
+    },
+    submission_handler: submission_contract
+}
 }
 
 /// Create a trigger based on test configuration
@@ -288,50 +286,47 @@ pub async fn create_submit_from_config(
 ) -> Result<Submit> {
     match submit_config {
         SubmitDefinition::Aggregator { url, aggregators } => {
-            let mut component = None;
+            // Since we only have ComponentBasedAggregator now, we should always have exactly one
+            let agg = aggregators.first()
+                .ok_or_else(|| anyhow!("No aggregators defined"))?;
+            
+            match agg {
+                AggregatorDefinition::ComponentBasedAggregator {
+                    component: component_def,
+                    ..
+                } => {
+                    let sources = component_sources
+                        .ok_or_else(|| anyhow!("ComponentBasedAggregator requires component_sources"))?;
+                    
+                    let mut config_vars = BTreeMap::new();
+                    let env_vars = BTreeMap::new();
 
-            for agg in aggregators {
-                match agg {
-                    AggregatorDefinition::ComponentBasedAggregator {
-                        component: component_def,
-                        ..
-                    } => {
-                        if let Some(sources) = component_sources {
-                            let mut config_vars = BTreeMap::new();
-                            let env_vars = BTreeMap::new();
-
-                            for (hardcoded_key, hardcoded_value) in
-                                &component_def.configs_to_add.hardcoded
-                            {
-                                config_vars.insert(hardcoded_key.clone(), hardcoded_value.clone());
-                            }
-
-                            if component_def.configs_to_add.contract_address {
-                                config_vars.insert(
-                                    "contract_address".to_string(),
-                                    format!("{:#x}", submission_contract),
-                                );
-                            }
-
-                            component = Some(Box::new(deploy_component(
-                                sources,
-                                component_def,
-                                config_vars,
-                                env_vars,
-                            )));
-                        } else {
-                            return Err(anyhow!(
-                                "ComponentBasedAggregator requires component_sources"
-                            ));
-                        }
+                    for (hardcoded_key, hardcoded_value) in
+                        &component_def.configs_to_add.hardcoded
+                    {
+                        config_vars.insert(hardcoded_key.clone(), hardcoded_value.clone());
                     }
+
+                    if component_def.configs_to_add.contract_address {
+                        config_vars.insert(
+                            "contract_address".to_string(),
+                            format!("{:#x}", submission_contract),
+                        );
+                    }
+
+                    let component = deploy_component(
+                        sources,
+                        component_def,
+                        config_vars,
+                        env_vars,
+                    );
+
+                    Ok(Submit::Aggregator {
+                        url: url.clone(),
+                        component,
+                    })
                 }
             }
-
-            Ok(Submit::Aggregator {
-                url: url.clone(),
-                component: component.map(|c| *c),
-            })
         }
     }
 }
@@ -506,7 +501,7 @@ pub async fn change_service_for_test(
 
             service
                 .workflows
-                .insert(workflow_id.clone(), deployed_workflow);
+                .insert(workflow_id.clone(), deployed_workflow.workflow);
         }
     }
 }

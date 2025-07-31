@@ -12,7 +12,7 @@ mode = "all"
 
 # Run a specific test
 # mode = {"isolated" = [
-#     {evm = "permissions"},
+#     {evm = "cosmos_chain_trigger_lookup"},
 # ]}
 
 # Run a few specific tests

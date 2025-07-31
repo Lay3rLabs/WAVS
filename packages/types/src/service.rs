@@ -105,6 +105,13 @@ impl Service {
     }
 }
 
+
+#[derive(Clone, Debug)]
+pub struct DeploymentResult {
+    pub service: Service,
+    pub submission_handlers: BTreeMap<WorkflowID, alloy_primitives::Address>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Component {
@@ -186,6 +193,12 @@ pub struct Workflow {
 impl Workflow {
     pub const DEFAULT_FUEL_LIMIT: u64 = 100_000_000;
     pub const DEFAULT_TIME_LIMIT_SECONDS: u64 = 30;
+}
+
+#[derive(Clone, Debug)]
+pub struct WorkflowDeploymentResult {
+    pub workflow: Workflow,
+    pub submission_handler: alloy_primitives::Address,
 }
 
 // The TriggerManager reacts to these triggers

@@ -7,7 +7,7 @@ use ordermap::OrderMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use wavs_types::{Service, Submit, Trigger, Workflow, WorkflowID};
+use wavs_types::{Service, Submit, Trigger, Workflow, WorkflowID, DeploymentResult};
 
 use crate::e2e::helpers::change_service_for_test;
 use crate::e2e::report::TestReport;
@@ -56,13 +56,13 @@ impl Runner {
     }
 
     /// Run all tests in the registry
-    pub async fn run_tests(&self, mut all_services: HashMap<String, Service>) {
+    pub async fn run_tests(&self, mut all_services: HashMap<String, DeploymentResult>) {
         let test_groups = self.registry.list_all_grouped();
 
         for (group, mut group_tests) in test_groups {
             let services = group_tests
                 .iter()
-                .map(|test| all_services.get(&test.name).cloned().unwrap())
+                .map(|test| all_services.get(&test.name).cloned().unwrap().service)
                 .collect::<Vec<_>>();
 
             // This essentially deploys the services for the group
@@ -79,7 +79,7 @@ impl Runner {
             let mut futures = FuturesUnordered::new();
             for test in group_tests.iter() {
                 if let Some(change_service) = test.change_service.clone() {
-                    let service = all_services.get(&test.name).cloned().unwrap();
+                    let service = all_services.get(&test.name).cloned().unwrap().service;
                     futures.push(async move {
                         let mut service = service;
                         change_service_for_test(
@@ -102,8 +102,10 @@ impl Runner {
                 tracing::warn!("Running service changes for group {}", group);
                 let mut services_to_change = Vec::new();
                 while let Some((service, change_service)) = futures.next().await {
-                    // update our local copy of the service
-                    all_services.insert(service.name.clone(), service.clone());
+                    // update our local copy of the service while preserving submission handlers
+                    let mut deployment_result = all_services.get(&service.name).cloned().unwrap();
+                    deployment_result.service = service.clone();
+                    all_services.insert(service.name.clone(), deployment_result);
 
                     // and the definition so that tests know what to look for
                     match change_service {
@@ -111,6 +113,19 @@ impl Runner {
                             workflow_id,
                             workflow,
                         } => {
+                            // When a workflow is added, it includes a new submission contract
+                            // Extract it from the service's workflow that was just added
+                            let deployment_result = all_services.get_mut(&service.name).unwrap();
+                            if let Some(service_workflow) = deployment_result.service.workflows.get(&workflow_id) {
+                                if let Submit::Aggregator { component, .. } = &service_workflow.submit {
+                                    if let Some(contract_address_str) = component.config.get("contract_address") {
+                                        if let Ok(address) = contract_address_str.parse::<alloy_primitives::Address>() {
+                                            deployment_result.submission_handlers.insert(workflow_id.clone(), address);
+                                        }
+                                    }
+                                }
+                            }
+                            
                             group_tests
                                 .iter_mut()
                                 .find(|test| test.name == service.name)
@@ -166,7 +181,7 @@ impl Runner {
     async fn execute_test(
         &self,
         test: &TestDefinition,
-        service: Service,
+        service: DeploymentResult,
         clients: Arc<Clients>,
         component_sources: Arc<ComponentSources>,
         report: TestReport,
@@ -185,17 +200,17 @@ impl Runner {
 /// Run a single test
 async fn run_test(
     test: &TestDefinition,
-    service: Service,
+    service: DeploymentResult,
     clients: &Clients,
     component_sources: &ComponentSources,
 ) -> anyhow::Result<()> {
     // Group workflows by trigger to handle multi-triggers
     let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowID, &Workflow)>> = OrderMap::new();
 
-    for (workflow_id, workflow) in service.workflows.iter() {
+    for (workflow_id, workflow) in service.service.workflows.iter() {
         trigger_groups
             .entry(&workflow.trigger)
-            .or_default()
+             .or_default()
             .push((workflow_id, workflow));
     }
 
@@ -276,8 +291,8 @@ async fn run_test(
                         .await
                         .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
 
-                    let submission_contract = deployment_result
-                        .submission_contracts
+                    let submission_contract = service
+                        .submission_handlers
                         .get(workflow_id)
                         .ok_or_else(|| {
                             anyhow!("No submission contract found for workflow {}", workflow_id)
@@ -305,7 +320,7 @@ async fn run_test(
 
     clients
         .http_client
-        .delete_service(vec![service.manager])
+        .delete_service(vec![service.service.manager])
         .await?;
 
     Ok(())
