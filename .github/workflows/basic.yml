@@ -50,7 +50,12 @@ jobs:
         uses: extractions/setup-just@v2
 
       - name: Install cargo-all-features
-        run: cargo install cargo-all-features
+        run: |
+          if cargo install --list | grep -q "cargo-all-features"; then
+            echo "cargo-all-features already installed"
+          else
+            cargo install cargo-all-features
+          fi
 
       - name: Set env
         run: echo "WAVS_SUBMISSION_MNEMONIC=\"test test test test test test test test test test test junk\"" >> $GITHUB_ENV
