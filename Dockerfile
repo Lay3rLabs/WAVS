@@ -1,6 +1,7 @@
 # This whole pile will pre-build and cache the dependencies, so we just recompile local code below
 FROM rust:1.88-slim-bookworm AS planner
 WORKDIR /myapp
+RUN apt-get update && apt-get install -y pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 # We only pay the installation cost once,
 # it will be cached from the second build onwards
 RUN cargo install cargo-chef
@@ -9,6 +10,7 @@ RUN cargo chef prepare  --recipe-path recipe.json
 
 FROM rust:1.88-slim-bookworm AS cacher
 WORKDIR /myapp
+RUN apt-get update && apt-get install -y pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN cargo install cargo-chef
 COPY --from=planner /myapp/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
@@ -16,6 +18,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # This build step should just compile the local code and be faster
 FROM rust:1.88-slim-bookworm AS builder
 WORKDIR /myapp
+RUN apt-get update && apt-get install -y pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY . .
 # Copy over the cached dependencies
 COPY --from=cacher /myapp/target target
