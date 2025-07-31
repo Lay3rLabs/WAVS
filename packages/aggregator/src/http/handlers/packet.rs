@@ -6,7 +6,7 @@ use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, ChainName, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
+    ChainName, EnvelopeExt, EnvelopeSignature,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
     Packet, ServiceManagerError,
@@ -55,7 +55,6 @@ async fn process_packet(
     if !state.service_registered(&packet.service.id()) {
         return Err(AggregatorError::MissingService(packet.service.id()));
     }
-    let event_id = packet.event_id();
 
     tracing::info!(
         "Processing packet for service: {}, workflow: {}",
@@ -306,7 +305,7 @@ async fn get_submission_service_manager(
 async fn process_aggregator_actions(
     state: &HttpState,
     packet: &Packet,
-    mut queue: Vec<QueuedPacket>,
+    queue: Vec<QueuedPacket>,
     signer: Address,
     actions: Vec<AggregatorAction>,
 ) -> AggregatorResult<Vec<QueuedPacket>> {
@@ -315,22 +314,7 @@ async fn process_aggregator_actions(
         actions.len()
     );
 
-    for queued_packet in queue.iter_mut() {
-        // if the signer is the same as the one in the queue, we can just update it
-        // this effectively allows re-trying failed aggregation
-        if signer == queued_packet.signer {
-            *queued_packet = QueuedPacket {
-                packet: packet.clone(),
-                signer,
-            };
-            return Ok(queue);
-        }
-    }
-
-    queue.push(QueuedPacket {
-        packet: packet.clone(),
-        signer,
-    });
+    let queue = add_packet_to_queue(packet, queue, signer)?;
 
     if actions.is_empty() {
         tracing::debug!("Component returned no actions");
