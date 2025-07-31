@@ -499,24 +499,24 @@ fn add_packet_to_queue(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{args::CliArgs, config::Config, engine::{AggregatorEngine, SubmitAction as EngineSubmitAction}};
+    use crate::{args::CliArgs, config::Config};
     use alloy_primitives::U256;
     use futures::{stream::FuturesUnordered, StreamExt};
     use std::{
         collections::{BTreeMap, HashSet},
         sync::{Arc, Mutex},
-        str::FromStr,
     };
 
     use utils::{
         config::{ConfigBuilder, EvmChainConfig},
         filesystem::workspace_path,
         test_utils::{
+            mock_engine::COMPONENT_SIMPLE_AGGREGATOR_BYTES,
             test_contracts::TestContractDeps,
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{ChainName, Service, WorkflowID};
+    use wavs_types::{ChainName, ComponentDigest, Service, WorkflowID};
 
     #[test]
     fn packet_validation() {
@@ -641,16 +641,21 @@ mod test {
         }
 
         for (signer_index, final_results) in all_results.into_iter().enumerate() {
-            assert_eq!(final_results.len(), 1, "Should have exactly one response per packet");
+            assert_eq!(
+                final_results.len(),
+                1,
+                "Should have exactly one response per packet"
+            );
             let result = &final_results[0];
-            
+
             match signer_index {
                 // first signer is just aggregating
                 0 => {
-                    assert!(matches!(
-                        result,
-                        AddPacketResponse::Aggregated { count: 1, .. }
-                    ), "First signer expected Aggregated {{ count: 1 }}, got {:?}", result);
+                    assert!(
+                        matches!(result, AddPacketResponse::Aggregated { count: 1, .. }),
+                        "First signer expected Aggregated {{ count: 1 }}, got {:?}",
+                        result
+                    );
                 }
                 // second signer sends (reaches threshold)
                 1 => {
@@ -679,14 +684,21 @@ mod test {
         }
 
         for (signer_index, final_results) in all_results.into_iter().enumerate() {
-            assert_eq!(final_results.len(), 1, "Should have exactly one response per packet");
+            assert_eq!(
+                final_results.len(),
+                1,
+                "Should have exactly one response per packet"
+            );
             let result = &final_results[0];
-            
-            // All packets should be burned since the envelope was already sent
-            assert!(matches!(result, AddPacketResponse::Burned),
-                "Signer {} expected Burned, got {:?}", signer_index, result);
-        }
 
+            // All packets should be burned since the envelope was already sent
+            assert!(
+                matches!(result, AddPacketResponse::Burned),
+                "Signer {} expected Burned, got {:?}",
+                signer_index,
+                result
+            );
+        }
 
         let mut all_results = Vec::new();
         for signer in signers.iter().take(NUM_THRESHOLD) {
@@ -945,7 +957,21 @@ mod test {
         workflow_id: WorkflowID,
         service_manager_address: Address,
         service_handler_addresses: Vec<Address>,
+        aggregator_digest: ComponentDigest,
     ) -> wavs_types::Service {
+        let mut component =
+            wavs_types::Component::new(wavs_types::ComponentSource::Digest(aggregator_digest));
+        component
+            .config
+            .insert("chain_name".to_string(), chain_name.to_string());
+        // SimpleAggregator needs the submission contract address
+        if !service_handler_addresses.is_empty() {
+            component.config.insert(
+                "contract_address".to_string(),
+                service_handler_addresses[0].to_string(),
+            );
+        }
+
         mock_service_with_submit(
             chain_name,
             workflow_id,
@@ -953,17 +979,12 @@ mod test {
             service_handler_addresses,
             wavs_types::Submit::Aggregator {
                 url: "http://localhost:8080".to_string(),
-                component: wavs_types::Component::new(
-                    wavs_types::ComponentSource::Digest(
-                        wavs_types::ComponentDigest::from_str(
-                            "0e8b4ceb85a828d23386168fb71895e979e0f946b21d51afca7414bd1ae40143"
-                        ).unwrap(),
-                    ),
-                ),
+                component,
             },
-        ).await
+        )
+        .await
     }
-    
+
     async fn mock_service_with_submit(
         chain_name: ChainName,
         workflow_id: WorkflowID,
@@ -997,6 +1018,7 @@ mod test {
     struct TestDeps {
         contracts: TestContractDeps,
         state: HttpState,
+        simple_aggregator_digest: ComponentDigest,
     }
 
     impl TestDeps {
@@ -1030,30 +1052,22 @@ mod test {
                 Some("test test test test test test test test test test test junk".to_string());
 
             let state = HttpState::new_with_engine(config).unwrap();
-            
+
             // Upload SimpleAggregator component to storage
-            let wasm_path = workspace_path()
-                .join("examples")
-                .join("build")
-                .join("components")
-                .join("simple_aggregator.wasm");
-            
-            let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
-            let digest = state.aggregator_engine.as_ref().unwrap()
-                .upload_component(wasm_bytes)
+            let digest = state
+                .aggregator_engine
+                .as_ref()
+                .unwrap()
+                .upload_component(COMPONENT_SIMPLE_AGGREGATOR_BYTES.to_vec())
                 .await
                 .unwrap();
-            
-            // Store the digest for use in tests
-            let mut test_deps = Self {
+
+            Self {
                 contracts: contract_deps,
                 state,
-            };
-            test_deps.simple_aggregator_digest = digest;
-            test_deps
+                simple_aggregator_digest: digest,
+            }
         }
-        
-        pub simple_aggregator_digest: wavs_types::ComponentDigest,
 
         pub async fn create_service(
             &self,
@@ -1066,6 +1080,7 @@ mod test {
                 workflow_id,
                 service_manager_address,
                 service_handler_addresses,
+                self.simple_aggregator_digest.clone(),
             )
             .await
         }
