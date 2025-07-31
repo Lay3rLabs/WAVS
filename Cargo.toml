@@ -28,7 +28,7 @@ version = "0.5.2"
 license = "GPL-3.0-or-later"
 authors = ["Layer Labs (Cayman)"]
 repository = "https://github.com/Lay3rLabs/WAVS"
-rust-version = "1.85.0"
+rust-version = "1.88.0"
 
 [workspace.dependencies]
 # http utilities
