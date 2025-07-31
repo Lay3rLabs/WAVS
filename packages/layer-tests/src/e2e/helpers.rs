@@ -51,7 +51,7 @@ pub async fn create_service_for_test(
         manager: service_manager,
     };
 
-    let mut workflows: BTreeMap<WorkflowID, Workflow> = BTreeMap::new();
+    let workflows: BTreeMap<WorkflowID, Workflow> = BTreeMap::new();
     let mut submission_handlers = BTreeMap::new();
 
     tracing::info!(

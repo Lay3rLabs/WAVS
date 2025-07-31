@@ -13,8 +13,8 @@ use utils::{
 use wavs::dispatcher::DispatcherCommand;
 use wavs::init_tracing_tests;
 use wavs_types::{
-    ChainName, Component, ComponentSource, EvmContractSubmission, Service, ServiceManager,
-    ServiceStatus, Submit, Workflow, WorkflowID,
+    ChainName, Component, ComponentSource, Service, ServiceManager, ServiceStatus, Submit,
+    Workflow, WorkflowID,
 };
 mod wavs_systems;
 use wavs_systems::{

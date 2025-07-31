@@ -6,8 +6,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use ordermap::OrderMap;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
-use wavs_types::{DeploymentResult, Service, Submit, Trigger, Workflow, WorkflowID};
+use wavs_types::{DeploymentResult, Submit, Trigger, Workflow, WorkflowID};
 
 use crate::e2e::helpers::change_service_for_test;
 use crate::e2e::report::TestReport;

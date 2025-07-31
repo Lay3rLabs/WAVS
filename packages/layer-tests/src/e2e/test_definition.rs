@@ -2,14 +2,13 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
-use alloy_primitives::Address;
 use anyhow::{anyhow, ensure};
 use example_types::{
     CosmosQueryRequest, CosmosQueryResponse, KvStoreRequest, KvStoreResponse, PermissionsRequest,
     PermissionsResponse, SquareRequest, SquareResponse,
 };
 use regex::Regex;
-use wavs_types::{ChainName, Service, Trigger, Workflow, WorkflowID};
+use wavs_types::{ChainName, Trigger, WorkflowID};
 
 use crate::e2e::components::{ComponentName, ComponentSources};
 

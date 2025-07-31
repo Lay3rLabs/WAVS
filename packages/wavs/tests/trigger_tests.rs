@@ -2,9 +2,8 @@ use std::num::NonZero;
 
 use wavs::{config::Config, subsystems::trigger::TriggerManager};
 use wavs_types::{
-    ChainName, Component, ComponentDigest, ComponentSource, EvmContractSubmission, Service,
-    ServiceID, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow,
-    WorkflowID,
+    ChainName, Component, ComponentDigest, ComponentSource, Service, ServiceID, ServiceManager,
+    ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow, WorkflowID,
 };
 
 use layer_climb::prelude::*;

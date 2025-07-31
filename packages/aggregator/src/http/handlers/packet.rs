@@ -139,7 +139,7 @@ impl AggregatorProcess<'_> {
                     .await
                     .map_err(|e| AggregatorError::ComponentExecution(e.to_string()))?;
 
-                for action in actions {
+                if let Some(action) = actions.into_iter().next() {
                     let queue_id = PacketQueueId {
                         event_id: event_id.clone(),
                         aggregator_action: action.clone().into(),
@@ -589,7 +589,7 @@ mod test {
             .await;
 
         // Make sure we properly collect errors without actually erroring out
-        let mut service = deps
+        let service = deps
             .create_service(
                 "workflow-1".parse().unwrap(),
                 service_manager.address(),
