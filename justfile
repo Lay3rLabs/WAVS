@@ -119,6 +119,7 @@ test-ci:
     just test-workspace
 
 test-types-all-features:
+    cd packages/types && cargo test --no-default-features --locked -- --nocapture
     cd packages/types && cargo test-all-features -- --locked -- --nocapture
 
 test-workspace:
