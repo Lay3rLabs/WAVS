@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use crate::{config::Config, services::Services, AppContext};
+use crate::{config::Config, services::Services, tracing_service_info, AppContext};
 use alloy_signer_local::PrivateKeySigner;
 use chain_message::ChainMessage;
 use error::SubmissionError;
@@ -196,21 +196,40 @@ impl SubmissionManager {
         self.debug_packets.read().unwrap().clone()
     }
 
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub fn get_service_key(
         &self,
         service_id: ServiceID,
     ) -> Result<SigningKeyResponse, SubmissionError> {
-        self.evm_signers
+        let key = self
+            .evm_signers
             .read()
             .unwrap()
             .get(&service_id)
-            .ok_or(SubmissionError::MissingServiceKey { service_id })
+            .ok_or_else(|| SubmissionError::MissingServiceKey {
+                service_id: service_id.clone(),
+            })
             .map(
                 |SignerInfo { signer, hd_index }| SigningKeyResponse::Secp256k1 {
                     hd_index: *hd_index,
                     evm_address: signer.address().to_string(),
                 },
-            )
+            )?;
+
+        if tracing::enabled!(tracing::Level::INFO) {
+            let address = match &key {
+                SigningKeyResponse::Secp256k1 { evm_address, .. } => evm_address,
+            };
+
+            tracing_service_info!(
+                &self.services,
+                service_id,
+                "Signing key address: {}",
+                address
+            );
+        }
+
+        Ok(key)
     }
 
     async fn make_packet(

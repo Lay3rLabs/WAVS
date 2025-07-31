@@ -15,6 +15,8 @@ use crate::e2e::{AnyService, CosmosService, CrossChainService, EvmService, TestM
 pub struct TestConfig {
     pub registry: Option<bool>,
     pub mode: TestMode,
+    pub middleware_concurrency: bool,
+    pub wavs_concurrency: bool,
     pub jaeger: Option<String>,
     pub prometheus: Option<String>,
     _log_levels: Vec<String>,
@@ -44,6 +46,8 @@ impl Default for TestConfig {
                 .split(',')
                 .map(|s| s.to_string())
                 .collect(),
+            wavs_concurrency: true,
+            middleware_concurrency: false,
             jaeger: None,
             prometheus: None,
             _data_dir: tempfile::tempdir().unwrap().keep(),

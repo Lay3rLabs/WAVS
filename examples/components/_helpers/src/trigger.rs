@@ -25,7 +25,7 @@ pub fn decode_trigger_event(trigger_data: component_input::TriggerData) -> Resul
         ) => {
             let event: NewTrigger = decode_event_log_data!(log.data)?;
 
-            let trigger_info = TriggerInfo::abi_decode(&event._0)?;
+            let trigger_info = TriggerInfo::abi_decode(&event.triggerData)?;
             Ok((trigger_info.triggerId, trigger_info.data.to_vec()))
         }
         component_input::TriggerData::Raw(bytes) => Ok((0, bytes)),

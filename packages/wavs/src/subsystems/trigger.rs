@@ -8,7 +8,7 @@ use crate::{
     dispatcher::{DispatcherCommand, TRIGGER_CHANNEL_SIZE},
     services::Services,
     subsystems::trigger::streams::cosmos_stream::StreamTriggerCosmosContractEvent,
-    AppContext,
+    tracing_service_info, AppContext,
 };
 use alloy_sol_types::SolEvent;
 use anyhow::Result;
@@ -184,6 +184,24 @@ impl TriggerManager {
             .clone()
             .unwrap();
         for command in commands {
+            match &command {
+                DispatcherCommand::Trigger(action) => {
+                    tracing_service_info!(
+                        &self.services,
+                        action.config.service_id,
+                        "Sending trigger action for workflow {}",
+                        action.config.workflow_id,
+                    );
+                }
+                DispatcherCommand::ChangeServiceUri { service_id, uri } => {
+                    tracing_service_info!(
+                        &self.services,
+                        service_id,
+                        "Changing service URI to {}",
+                        uri
+                    );
+                }
+            }
             dispatcher_command_sender
                 .send(command)
                 .await
@@ -225,7 +243,7 @@ impl TriggerManager {
                 Ok(res) => res,
             };
 
-            tracing::info!("Processing trigger stream event: {:?}", res);
+            tracing::debug!("Processing trigger stream event: {:?}", res);
             let mut dispatcher_commands = Vec::new();
 
             match res {

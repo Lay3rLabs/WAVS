@@ -90,7 +90,6 @@ solidity-build CLEAN="":
     cp -r {{REPO_ROOT}}/out/ISimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/SimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/ISimpleSubmit.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
-    cp -r {{REPO_ROOT}}/out/SimpleServiceManager.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     # wavs-types
     cp -r {{REPO_ROOT}}/out/IWavsServiceHandler.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
@@ -176,6 +175,7 @@ download-wit branch="main":
 
     # Fetch deps
     cd wit-definitions/worker && wkg wit fetch
+    cd wit-definitions/aggregator && wkg wit fetch
     cd wit-definitions/types && wkg wit fetch
 
     # Clean up

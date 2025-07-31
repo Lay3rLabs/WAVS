@@ -3,30 +3,41 @@ pragma solidity ^0.8.27;
 
 import {ISimpleTrigger} from "./ISimpleTrigger.sol";
 
+/**
+ * @title SimpleTrigger
+ * @author Lay3r Labs
+ * @notice Contract for the simple trigger contract
+ * @dev This contract implements the ISimpleTrigger interface
+ */
 contract SimpleTrigger is ISimpleTrigger {
-    // Data structures
+    /**
+     * @notice Trigger is a struct containing the creator and data
+     * @param creator The creator
+     * @param data The data
+     */
     struct Trigger {
         address creator;
         bytes data;
     }
 
-    // Storage
-
+    /// @notice Mapping from trigger ID to trigger
     mapping(TriggerId => Trigger) public triggersById;
 
+    /// @notice Mapping from creator address to trigger IDs
     mapping(address => TriggerId[]) public triggerIdsByCreator;
 
-    // Events
-    event NewTrigger(bytes);
+    /**
+     * @notice Event emitted when a new trigger is added
+     * @param triggerData The data of the trigger
+     */
+    event NewTrigger(bytes triggerData);
 
-    // Global vars
+    /// @notice The next trigger id
     TriggerId public nextTriggerId;
 
-    // Functions
-
     /**
-     * @notice Add a new trigger.
-     * @param data The request data (bytes).
+     * @notice Adds a new trigger
+     * @param data The data of the trigger
      */
     function addTrigger(
         bytes memory data
@@ -52,10 +63,7 @@ contract SimpleTrigger is ISimpleTrigger {
         emit NewTrigger(abi.encode(triggerInfo));
     }
 
-    /**
-     * @notice Get a single trigger by triggerId.
-     * @param triggerId The identifier of the trigger.
-     */
+    /// @inheritdoc ISimpleTrigger
     function getTrigger(
         TriggerId triggerId
     ) public view returns (TriggerInfo memory) {

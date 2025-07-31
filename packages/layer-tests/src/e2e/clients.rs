@@ -87,6 +87,7 @@ impl Clients {
                 },
             };
 
+            tracing::info!("Setting up Cosmos client pool for {}", chain_name);
             let pool_manager = SigningClientPoolManager::new_mnemonic(
                 cli_ctx
                     .config

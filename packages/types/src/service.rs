@@ -37,7 +37,7 @@ impl Service {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceManager {
     Evm {

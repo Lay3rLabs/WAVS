@@ -97,7 +97,7 @@ async fn main() {
             let res = DeployService::run(
                 &ctx,
                 DeployServiceArgs {
-                    service,
+                    service_manager: service.manager.clone(),
                     set_service_url_args,
                 },
             )

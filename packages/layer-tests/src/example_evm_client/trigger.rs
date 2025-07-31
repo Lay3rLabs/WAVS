@@ -66,7 +66,7 @@ impl SimpleEvmTriggerClient {
             .solidity_event()
             .context("Not found new task creation event")?;
 
-        let trigger_info = TriggerInfo::abi_decode(&event._0)?;
+        let trigger_info = TriggerInfo::abi_decode(&event.triggerData)?;
 
         Ok(TriggerId::new(trigger_info.triggerId))
     }

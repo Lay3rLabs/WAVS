@@ -182,13 +182,10 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
 
         match result {
             Ok(actions) => Ok(actions),
-            Err(error) => {
-                tracing::error!("Timer callback execution failed: {}", error);
-                Err(AggregatorError::ComponentExecution(format!(
-                    "Timer callback execution failed: {}",
-                    error
-                )))
-            }
+            Err(error) => Err(AggregatorError::ComponentExecution(format!(
+                "Timer callback execution failed: {}",
+                error
+            ))),
         }
     }
 
@@ -221,13 +218,10 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
 
         match result {
             Ok(_) => Ok(()),
-            Err(error) => {
-                tracing::error!("Submit callback execution failed: {}", error);
-                Err(AggregatorError::ComponentExecution(format!(
-                    "Submit callback execution failed: {}",
-                    error
-                )))
-            }
+            Err(error) => Err(AggregatorError::ComponentExecution(format!(
+                "Submit callback execution failed: {}",
+                error
+            ))),
         }
     }
 
