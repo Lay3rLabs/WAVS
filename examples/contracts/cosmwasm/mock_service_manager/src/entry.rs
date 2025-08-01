@@ -6,7 +6,7 @@ use cw2::set_contract_version;
 use layer_climb_address::AddrEvm;
 use wavs_types::contracts::cosmwasm::service_manager::{
     ServiceManagerExecuteMessages, ServiceManagerQueryMessages, WavsServiceUriUpdatedEvent,
-    WavsValidateResult,
+    WavsValidateError, WavsValidateResult,
 };
 
 use crate::{
@@ -65,16 +65,26 @@ pub fn execute(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<QueryResponse> {
     match msg {
         QueryMsg::Wavs(msg) => match msg {
-            ServiceManagerQueryMessages::WavsOperatorWeight { address: _ } => {
-                to_json_binary(&Uint256::from(1u64)) // Placeholder for actual operator weight logic
+            ServiceManagerQueryMessages::WavsOperatorWeight { operator_address } => {
+                // TODO: query stake registry etc.
+                to_json_binary(
+                    &state::OPERATOR_WEIGHTS.load(deps.storage, operator_address.as_bytes())?,
+                )
             }
             ServiceManagerQueryMessages::WavsValidate {
                 envelope: _,
-                signature_data: _,
+                signature_data,
             } => {
-                to_json_binary(&WavsValidateResult::Ok) // Placeholder for actual validation logic
+                // TODO: real validation logic
+                if signature_data.signatures.is_empty() {
+                    to_json_binary(&WavsValidateResult::Err(
+                        WavsValidateError::InvalidSignatureLength,
+                    ))
+                } else {
+                    to_json_binary(&WavsValidateResult::Ok)
+                }
             }
-            ServiceManagerQueryMessages::WavsServiceUri => {
+            ServiceManagerQueryMessages::WavsServiceUri {} => {
                 to_json_binary(&state::SERVICE_URI.load(deps.storage)?)
             }
             ServiceManagerQueryMessages::WavsLatestOperatorForSigningKey { signing_key_addr } => {
