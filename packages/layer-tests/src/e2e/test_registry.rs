@@ -244,13 +244,13 @@ impl TestRegistry {
     }
 
     // Helper function to create simple aggregator configuration
-    fn simple_aggregator(chain_name: &ChainName) -> Vec<AggregatorDefinition> {
-        vec![AggregatorDefinition::ComponentBasedAggregator {
+    fn simple_aggregator(chain_name: &ChainName) -> AggregatorDefinition {
+        AggregatorDefinition::ComponentBasedAggregator {
             component: ComponentDefinition::from(ComponentName::SimpleAggregator)
                 .with_config_hardcoded("chain_name".to_string(), chain_name.to_string())
                 .with_config_contract_address(),
             chain_name: chain_name.clone(),
-        }]
+        }
     }
 
     // Individual test registration methods
@@ -273,7 +273,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::Text("The times".to_string()))
                         .with_expected_output(ExpectedOutput::Text("The times".to_string()))
@@ -302,7 +302,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(secondary_chain),
+                            aggregator: Self::simple_aggregator(secondary_chain),
                         })
                         .with_input_data(InputData::Text("collapse".to_string()))
                         .with_expected_output(ExpectedOutput::Text("collapse".to_string()))
@@ -333,7 +333,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::Text("The times".to_string()))
                         .with_expected_output(ExpectedOutput::Text("The times".to_string()))
@@ -362,7 +362,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: vec![AggregatorDefinition::ComponentBasedAggregator {
+                            aggregator: AggregatorDefinition::ComponentBasedAggregator {
                                 component: ComponentDefinition::from(
                                     ComponentName::SimpleAggregator,
                                 )
@@ -370,7 +370,7 @@ impl TestRegistry {
                                 .with_config_contract_address(),
                                 // for deploying the submission contract that the aggregator will use
                                 chain_name: chain.clone(),
-                            }],
+                            },
                         })
                         .with_input_data(InputData::Text("test packet".to_string()))
                         .with_expected_output(ExpectedOutput::Text("test packet".to_string()))
@@ -399,7 +399,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::Square(SquareRequest { x: 3 }))
                         .with_expected_output(ExpectedOutput::Square(SquareResponse { y: 9 }))
@@ -428,7 +428,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::Text("satoshi".to_string()))
                         .with_expected_output(ExpectedOutput::Text("satoshi".to_string()))
@@ -458,7 +458,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(evm_chain),
+                            aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::CosmosQuery(CosmosQueryRequest::BlockHeight {
                             chain_name: cosmos_chain.to_string(),
@@ -491,7 +491,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::Permissions(create_permissions_request()))
                         .with_expected_output(ExpectedOutput::Callback(PermissionsCallback::new()))
@@ -522,7 +522,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::KvStore(KvStoreRequest::Write {
                             bucket: "test_bucket".to_string(),
@@ -543,7 +543,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::KvStore(KvStoreRequest::Read {
                             bucket: "test_bucket".to_string(),
@@ -577,7 +577,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::Square(SquareRequest { x: 5 }))
                         .with_expected_output(ExpectedOutput::Square(SquareResponse { y: 25 }))
@@ -594,7 +594,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::Text("hello workflows".to_string()))
                         .with_expected_output(ExpectedOutput::Text("hello workflows".to_string()))
@@ -625,7 +625,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::Square(SquareRequest { x: 10 }))
                         // the original component is square, and so we expect '{"y": 100}'
@@ -659,7 +659,7 @@ impl TestRegistry {
                         .with_trigger(TriggerDefinition::Existing(trigger.clone()))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::Text("tttrrrrriiiigggeerrr".to_string()))
                         .with_expected_output(ExpectedOutput::Text(
@@ -674,7 +674,7 @@ impl TestRegistry {
                         .with_trigger(TriggerDefinition::Existing(trigger))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::Text("tttrrrrriiiigggeerrr".to_string()))
                         .with_expected_output(ExpectedOutput::Text(
@@ -704,7 +704,7 @@ impl TestRegistry {
                         })
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::None)
                         .with_expected_output(ExpectedOutput::Callback(BlockIntervalCallback::new(
@@ -737,7 +737,7 @@ impl TestRegistry {
                         })
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::None)
                         .with_expected_output(ExpectedOutput::Callback(BlockIntervalCallback::new(
@@ -769,7 +769,7 @@ impl TestRegistry {
                         }))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(chain),
+                            aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::None)
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
@@ -802,7 +802,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(evm_chain),
+                            aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::Text("on brink".to_string()))
                         .with_expected_output(ExpectedOutput::Text("on brink".to_string()))
@@ -832,7 +832,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(evm_chain),
+                            aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::Square(SquareRequest { x: 3 }))
                         .with_expected_output(ExpectedOutput::Square(SquareResponse { y: 9 }))
@@ -862,7 +862,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(evm_chain),
+                            aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::Text("nakamoto".to_string()))
                         .with_expected_output(ExpectedOutput::Text("nakamoto".to_string()))
@@ -892,7 +892,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(evm_chain),
+                            aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::CosmosQuery(CosmosQueryRequest::BlockHeight {
                             chain_name: cosmos_chain.to_string(),
@@ -928,7 +928,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(evm_chain),
+                            aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::Permissions(create_permissions_request()))
                         .with_expected_output(ExpectedOutput::StructureOnly(
@@ -959,7 +959,7 @@ impl TestRegistry {
                         })
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(evm_chain),
+                            aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::None)
                         .with_expected_output(ExpectedOutput::Callback(BlockIntervalCallback::new(
@@ -993,7 +993,7 @@ impl TestRegistry {
                         })
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(evm_chain),
+                            aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::None)
                         .with_expected_output(ExpectedOutput::Callback(BlockIntervalCallback::new(
@@ -1026,7 +1026,7 @@ impl TestRegistry {
                         }))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(evm_chain),
+                            aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::None)
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
@@ -1059,7 +1059,7 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: Self::simple_aggregator(evm_chain),
+                            aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::Text("hello EVM world from cosmos".to_string()))
                         .with_expected_output(ExpectedOutput::Text(

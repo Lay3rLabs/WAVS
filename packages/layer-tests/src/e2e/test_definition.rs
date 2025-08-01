@@ -150,7 +150,7 @@ pub enum EvmTriggerDefinition {
 pub enum SubmitDefinition {
     Aggregator {
         url: String,
-        aggregators: Vec<AggregatorDefinition>,
+        aggregator: AggregatorDefinition,
     },
 }
 
@@ -369,10 +369,7 @@ impl WorkflowBuilder {
         let submit = self.submit.expect("Submit not set");
         let expected_output = self.expected_output.expect("Expected output not set");
 
-        let SubmitDefinition::Aggregator { aggregators, .. } = &submit;
-        if aggregators.is_empty() {
-            panic!("No aggregators set when submit is aggregator")
-        }
+        let SubmitDefinition::Aggregator { .. } = &submit;
 
         WorkflowDefinition {
             component,

@@ -94,21 +94,14 @@ async fn process_packet(
     };
     tracing::debug!("Packet signer address: {:?}", signer);
 
-    let resp = AggregatorProcess {
+    AggregatorProcess {
         state: &state,
         async_tx: state.queue_transaction.clone(),
         packet,
         signer,
     }
     .run()
-    .await;
-
-    match resp {
-        Ok(resp) => Ok(vec![resp]),
-        Err(e) => Ok(vec![AddPacketResponse::Error {
-            reason: format!("{:?}", e),
-        }]),
-    }
+    .await
 }
 
 struct AggregatorProcess<'a> {
@@ -120,7 +113,7 @@ struct AggregatorProcess<'a> {
 
 impl AggregatorProcess<'_> {
     #[instrument(level = "debug", skip(self), fields(signer = ?self.signer))]
-    async fn run(self) -> AggregatorResult<AddPacketResponse> {
+    async fn run(self) -> AggregatorResult<Vec<AddPacketResponse>> {
         let Self {
             state,
             async_tx,
@@ -133,10 +126,13 @@ impl AggregatorProcess<'_> {
         let component = match &packet.service.workflows[&packet.workflow_id].submit {
             wavs_types::Submit::Aggregator { component, .. } => component,
             _ => {
-                return Err(AggregatorError::MissingWorkflow {
-                    workflow_id: packet.workflow_id.clone(),
-                    service_id: packet.service.id(),
-                })
+                return Ok(vec![AddPacketResponse::Error {
+                    reason: format!(
+                        "MissingWorkflow: workflow_id: {}, service_id: {}",
+                        packet.workflow_id,
+                        packet.service.id()
+                    ),
+                }])
             }
         };
 
@@ -144,26 +140,44 @@ impl AggregatorProcess<'_> {
             AggregatorError::ComponentExecution("Aggregator engine not available".to_string())
         })?;
 
-        let actions = engine
-            .execute_packet(component, packet)
-            .await
-            .map_err(|e| AggregatorError::ComponentExecution(e.to_string()))?;
-
-        // TOOD: Process all of the actions
-        let action = actions.into_iter().next().ok_or_else(|| {
-            AggregatorError::ComponentExecution("Component returned no actions".to_string())
-        })?;
-
-        let queue_id = PacketQueueId {
-            event_id: event_id.clone(),
-            aggregator_action: action.clone().into(),
+        let actions = match engine.execute_packet(component, packet).await {
+            Ok(actions) => actions,
+            Err(e) => {
+                return Ok(vec![AddPacketResponse::Error {
+                    reason: format!("ComponentExecution: {}", e),
+                }])
+            }
         };
 
-        async_tx
-            .run(queue_id.clone(), move || {
-                Self::process_action(state.clone(), packet.clone(), queue_id, action, signer)
-            })
-            .await
+        if actions.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut responses = Vec::new();
+
+        for action in actions {
+            let queue_id = PacketQueueId {
+                event_id: event_id.clone(),
+                aggregator_action: action.clone().into(),
+            };
+
+            let result = async_tx
+                .run(queue_id.clone(), {
+                    let state = state.clone();
+                    let packet = packet.clone();
+                    move || Self::process_action(state, packet, queue_id, action, signer)
+                })
+                .await;
+
+            match result {
+                Ok(response) => responses.push(response),
+                Err(e) => responses.push(AddPacketResponse::Error {
+                    reason: format!("{:?}", e),
+                }),
+            }
+        }
+
+        Ok(responses)
     }
 
     async fn process_action(

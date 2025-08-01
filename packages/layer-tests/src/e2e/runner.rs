@@ -291,9 +291,9 @@ async fn run_test(
                         anyhow!("Could not get workflow definition from id: {}", workflow_id)
                     })?;
 
-                    let SubmitDefinition::Aggregator { aggregators, .. } = &workflow_def.submit;
+                    let SubmitDefinition::Aggregator { aggregator, .. } = &workflow_def.submit;
                     let AggregatorDefinition::ComponentBasedAggregator { chain_name, .. } =
-                        &aggregators[0];
+                        aggregator;
 
                     let client = clients.get_evm_client(chain_name);
                     let submit_start_block = client

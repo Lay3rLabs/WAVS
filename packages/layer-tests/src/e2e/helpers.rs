@@ -130,11 +130,8 @@ async fn deploy_workflow(
 
     // Create the submit based on test configuration
     let chain_name = {
-        let SubmitDefinition::Aggregator { aggregators, .. } = &workflow_definition.submit;
-        let Some(first_agg) = aggregators.first() else {
-            panic!("Expected at least one aggregator, but found none");
-        };
-        match first_agg {
+        let SubmitDefinition::Aggregator { aggregator, .. } = &workflow_definition.submit;
+        match aggregator {
             AggregatorDefinition::ComponentBasedAggregator { chain_name, .. } => chain_name,
         }
     };
@@ -286,45 +283,37 @@ pub async fn create_submit_from_config(
     component_sources: Option<&ComponentSources>,
 ) -> Result<Submit> {
     match submit_config {
-        SubmitDefinition::Aggregator { url, aggregators } => {
-            // Since we only have ComponentBasedAggregator now, we should always have exactly one
-            let agg = aggregators
-                .first()
-                .ok_or_else(|| anyhow!("No aggregators defined"))?;
+        SubmitDefinition::Aggregator { url, aggregator } => match aggregator {
+            AggregatorDefinition::ComponentBasedAggregator {
+                component: component_def,
+                ..
+            } => {
+                let sources = component_sources.ok_or_else(|| {
+                    anyhow!("ComponentBasedAggregator requires component_sources")
+                })?;
 
-            match agg {
-                AggregatorDefinition::ComponentBasedAggregator {
-                    component: component_def,
-                    ..
-                } => {
-                    let sources = component_sources.ok_or_else(|| {
-                        anyhow!("ComponentBasedAggregator requires component_sources")
-                    })?;
+                let mut config_vars = BTreeMap::new();
+                let env_vars = BTreeMap::new();
 
-                    let mut config_vars = BTreeMap::new();
-                    let env_vars = BTreeMap::new();
-
-                    for (hardcoded_key, hardcoded_value) in &component_def.configs_to_add.hardcoded
-                    {
-                        config_vars.insert(hardcoded_key.clone(), hardcoded_value.clone());
-                    }
-
-                    if component_def.configs_to_add.contract_address {
-                        config_vars.insert(
-                            "contract_address".to_string(),
-                            format!("{:#x}", submission_contract),
-                        );
-                    }
-
-                    let component = deploy_component(sources, component_def, config_vars, env_vars);
-
-                    Ok(Submit::Aggregator {
-                        url: url.clone(),
-                        component: Box::new(component),
-                    })
+                for (hardcoded_key, hardcoded_value) in &component_def.configs_to_add.hardcoded {
+                    config_vars.insert(hardcoded_key.clone(), hardcoded_value.clone());
                 }
+
+                if component_def.configs_to_add.contract_address {
+                    config_vars.insert(
+                        "contract_address".to_string(),
+                        format!("{:#x}", submission_contract),
+                    );
+                }
+
+                let component = deploy_component(sources, component_def, config_vars, env_vars);
+
+                Ok(Submit::Aggregator {
+                    url: url.clone(),
+                    component: Box::new(component),
+                })
             }
-        }
+        },
     }
 }
 
