@@ -60,7 +60,7 @@ pub enum ServiceManagerQueryMessages {
 
     /// Get the service URI
     #[returns(String)]
-    WavsServiceUri,
+    WavsServiceUri {},
 
     /// Get the latest operator address for a given signing key address
     #[returns(Option<AddrEvm>)]
