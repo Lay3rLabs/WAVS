@@ -1018,7 +1018,6 @@ mod test {
 
             let state = HttpState::new_with_engine(config).unwrap();
 
-            // Upload SimpleAggregator component to storage
             let digest = state
                 .aggregator_engine
                 .as_ref()
