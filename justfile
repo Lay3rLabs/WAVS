@@ -114,7 +114,17 @@ cosmwasm-build:
     fi
     cp ./artifacts/*.wasm {{COSMWASM_OUT_DIR}}
 
-# on-chain integration test
+test-ci:
+    just test-types-all-features
+    just test-workspace
+
+test-types-all-features:
+    cd packages/types && cargo test-all-features -- --locked -- --nocapture
+
+test-workspace:
+    cargo test --workspace --all-features --locked -- --nocapture
+
+# Just for local debugging
 test-wavs-e2e:
     RUST_LOG=debug,alloy_rpc=off,alloy_provider=off,wasmtime=off,cranelift=off,hyper_util=off cargo test -p layer-tests 
 

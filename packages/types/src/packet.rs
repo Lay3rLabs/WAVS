@@ -136,6 +136,16 @@ impl Packet {
 #[serde(transparent)]
 pub struct EventId([u8; 20]);
 
+impl EventId {
+    pub fn new(bytes: [u8; 20]) -> Self {
+        Self(bytes)
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 20] {
+        &self.0
+    }
+}
+
 impl From<FixedBytes<20>> for EventId {
     fn from(value: FixedBytes<20>) -> Self {
         Self(value.0)
@@ -144,6 +154,34 @@ impl From<FixedBytes<20>> for EventId {
 
 impl From<EventId> for FixedBytes<20> {
     fn from(value: EventId) -> Self {
+        FixedBytes(value.0)
+    }
+}
+
+#[derive(
+    Serialize, Deserialize, Clone, Eq, PartialEq, Debug, Hash, bincode::Decode, bincode::Encode,
+)]
+#[serde(transparent)]
+pub struct Ordering([u8; 12]);
+
+impl Ordering {
+    pub fn new(bytes: [u8; 12]) -> Self {
+        Self(bytes)
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 12] {
+        &self.0
+    }
+}
+
+impl From<FixedBytes<12>> for Ordering {
+    fn from(value: FixedBytes<12>) -> Self {
+        Self(value.0)
+    }
+}
+
+impl From<Ordering> for FixedBytes<12> {
+    fn from(value: Ordering) -> Self {
         FixedBytes(value.0)
     }
 }

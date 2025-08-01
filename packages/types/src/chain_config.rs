@@ -1,4 +1,4 @@
-use layer_climb::prelude::*;
+use layer_climb_config::{AddrKind, ChainConfig, ChainId};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

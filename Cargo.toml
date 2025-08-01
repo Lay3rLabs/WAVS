@@ -105,9 +105,10 @@ alloy-signer = "1.0.19"
 alloy-signer-local = { version = "1.0.19", features = ["mnemonic"] }
 alloy-network = "1.0.19"
 alloy-rpc-types-eth = "1.0.19"
-layer-climb = "0.5.1"
-layer-climb-address = "0.5.1"
-layer-climb-cli = "0.5.1"
+layer-climb = "0.6.0"
+layer-climb-address = "0.6.0"
+layer-climb-config = "0.6.0"
+layer-climb-cli = "0.6.0"
 
 # Cosmos-specific dependencies
 cosmwasm-schema = "3.0.1"
