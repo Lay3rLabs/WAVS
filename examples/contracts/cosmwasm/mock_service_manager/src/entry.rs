@@ -49,8 +49,7 @@ pub fn execute(
             operator,
             signing_key,
         } => {
-            // Logic to set the signing key for the operator
-            // This is a placeholder as the actual logic will depend on your application requirements
+            // TODO: This is a placeholder as the actual logic will depend on your application requirements
             state::OPERATOR_SIGNING_KEY_ADDRS.save(
                 deps.storage,
                 operator.as_bytes(),
@@ -76,13 +75,19 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<QueryResponse> {
                 signature_data,
             } => {
                 // TODO: real validation logic
-                if signature_data.signatures.is_empty() {
-                    to_json_binary(&WavsValidateResult::Err(
-                        WavsValidateError::InvalidSignatureLength,
-                    ))
-                } else {
-                    to_json_binary(&WavsValidateResult::Ok)
+                for signer in &signature_data.signers {
+                    let _operator_addr = match state::OPERATOR_SIGNING_KEY_ADDRS
+                        .load(deps.storage, signer.as_bytes())
+                    {
+                        Ok(addr) => addr,
+                        Err(_) => {
+                            return to_json_binary(&WavsValidateResult::Err(
+                                WavsValidateError::InvalidSignature,
+                            ));
+                        }
+                    };
                 }
+                to_json_binary(&WavsValidateResult::Ok)
             }
             ServiceManagerQueryMessages::WavsServiceUri {} => {
                 to_json_binary(&state::SERVICE_URI.load(deps.storage)?)
