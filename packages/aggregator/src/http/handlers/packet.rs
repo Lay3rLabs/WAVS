@@ -583,11 +583,6 @@ mod test {
             .deploy_simple_service_handler(service_manager.address())
             .await;
 
-        let fixed_second_service_handler = deps
-            .contracts
-            .deploy_simple_service_handler(service_manager.address())
-            .await;
-
         // Make sure we properly collect errors without actually erroring out
         let service = deps
             .create_service(
@@ -919,7 +914,6 @@ mod test {
             chain_name,
             workflow_id,
             service_manager_address,
-            service_handler_addresses,
             wavs_types::Submit::Aggregator {
                 url: "http://localhost:8080".to_string(),
                 component: Box::new(component),
@@ -932,7 +926,6 @@ mod test {
         chain_name: ChainName,
         workflow_id: WorkflowID,
         service_manager_address: Address,
-        service_handler_addresses: Vec<Address>,
         submit: wavs_types::Submit,
     ) -> wavs_types::Service {
         let mut workflows = BTreeMap::new();
