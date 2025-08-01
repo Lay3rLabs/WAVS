@@ -213,7 +213,7 @@ impl From<component_service::Submit> for wavs_types::Submit {
                 component,
             }) => wavs_types::Submit::Aggregator {
                 url,
-                component: component.try_into().unwrap(),
+                component: Box::new(component.try_into().unwrap()),
             },
         }
     }

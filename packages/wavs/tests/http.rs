@@ -92,7 +92,9 @@ fn http_save_service() {
         ComponentSource::Digest(ComponentDigest::hash([1, 2, 3])),
         wavs_types::Submit::Aggregator {
             url: "http://example.com/aggregator".to_string(),
-            component: Component::new(ComponentSource::Digest(ComponentDigest::hash([1, 2, 3]))),
+            component: Box::new(Component::new(ComponentSource::Digest(
+                ComponentDigest::hash([1, 2, 3]),
+            ))),
         },
         wavs_types::ServiceManager::Evm {
             chain_name: "evm".try_into().unwrap(),

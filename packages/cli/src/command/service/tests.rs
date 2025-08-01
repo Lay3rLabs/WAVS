@@ -849,7 +849,7 @@ async fn test_service_validation() {
 
     let submit = Submit::Aggregator {
         url: "https://api.example.com/aggregator".to_string(),
-        component: component.clone(),
+        component: Box::new(component.clone()),
     };
 
     // Create service manager
@@ -1141,7 +1141,7 @@ async fn test_service_validation() {
                 component: ComponentJson::Component(component.clone()),
                 submit: SubmitJson::Submit(Submit::Aggregator {
                     url: "not-a-valid-url".to_string(),
-                    component: component.clone(),
+                    component: Box::new(component.clone()),
                 }),
             },
         );

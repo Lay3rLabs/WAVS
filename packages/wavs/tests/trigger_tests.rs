@@ -231,9 +231,9 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
                 },
                 submit: Submit::Aggregator {
                     url: "http://example.com/aggregator".to_string(),
-                    component: Component::new(ComponentSource::Digest(ComponentDigest::hash([
-                        1, 2, 3,
-                    ]))),
+                    component: Box::new(Component::new(ComponentSource::Digest(
+                        ComponentDigest::hash([1, 2, 3]),
+                    ))),
                 },
             },
         )]

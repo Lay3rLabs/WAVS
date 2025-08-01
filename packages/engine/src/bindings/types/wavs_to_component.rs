@@ -228,7 +228,7 @@ impl From<wavs_types::Submit> for component_service::Submit {
             wavs_types::Submit::Aggregator { url, component } => {
                 component_service::Submit::Aggregator(component_service::AggregatorSubmit {
                     url,
-                    component: component.into(),
+                    component: (*component).into(),
                 })
             }
         }

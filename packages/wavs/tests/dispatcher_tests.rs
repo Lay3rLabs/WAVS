@@ -54,7 +54,7 @@ fn dispatcher_pipeline() {
                 trigger: mock_cosmos_event_trigger(),
                 submit: Submit::Aggregator {
                     url: "http://example.com/aggregator".to_string(),
-                    component: Component::new(ComponentSource::Digest(digest)),
+                    component: Box::new(Component::new(ComponentSource::Digest(digest))),
                 },
             },
         )]

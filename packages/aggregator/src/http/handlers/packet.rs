@@ -922,7 +922,7 @@ mod test {
             service_handler_addresses,
             wavs_types::Submit::Aggregator {
                 url: "http://localhost:8080".to_string(),
-                component,
+                component: Box::new(component),
             },
         )
         .await

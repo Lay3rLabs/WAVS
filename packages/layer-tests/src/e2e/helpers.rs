@@ -321,7 +321,7 @@ pub async fn create_submit_from_config(
 
                     Ok(Submit::Aggregator {
                         url: url.clone(),
-                        component,
+                        component: Box::new(component),
                     })
                 }
             }

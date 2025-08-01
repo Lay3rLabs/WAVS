@@ -329,7 +329,7 @@ pub enum Submit {
         /// The aggregator endpoint
         url: String,
         /// component dynamically determines the destination
-        component: Component,
+        component: Box<Component>,
     },
 }
 
