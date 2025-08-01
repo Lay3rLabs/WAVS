@@ -12,6 +12,8 @@ members = [
   "examples/components/_types",
   "examples/components/kv-store",
   "examples/contracts/cosmwasm/simple",
+  "examples/contracts/cosmwasm/mock_service_handler",
+  "examples/contracts/cosmwasm/mock_service_manager",
 ]
 resolver = "2"
 
