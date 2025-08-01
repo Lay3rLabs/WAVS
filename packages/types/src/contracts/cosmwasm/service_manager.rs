@@ -40,28 +40,34 @@ use crate::contracts::cosmwasm::service_handler::{WavsEnvelope, WavsSignatureDat
 /// without needing to know your full `QueryMsg` or `ExecuteMsg` types
 #[cw_serde]
 pub enum ServiceManagerExecuteMessages {
+    /// Set the service URI for the WAVS service manager
     WavsSetServiceUri { service_uri: String },
 }
 
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum ServiceManagerQueryMessages {
+    /// Get the given operator's current weight
     #[returns(Uint256)]
     WavsOperatorWeight { address: AddrEvm },
 
+    /// Validate a signed envelope
     #[returns(WavsValidateResult)]
     WavsValidate {
         envelope: WavsEnvelope,
         signature_data: WavsSignatureData,
     },
 
+    /// Get the service URI
     #[returns(String)]
     WavsServiceUri,
 
+    /// Get the latest operator address for a given signing key address
     #[returns(Option<AddrEvm>)]
     WavsLatestOperatorForSigningKey { signing_key_addr: AddrEvm },
 }
 
+/// The result of validating a signed envelope
 #[cw_serde]
 pub enum WavsValidateResult {
     Ok,
@@ -78,18 +84,60 @@ impl WavsValidateResult {
     }
 }
 
+/// Emit this event when the service URI is updated
+pub struct WavsServiceUriUpdatedEvent {
+    pub service_uri: String,
+}
+impl WavsServiceUriUpdatedEvent {
+    pub const EVENT_TYPE: &'static str = "wavs-service-uri-updated";
+}
+
+/// Emit this event when the quorum threshold is updated
+pub struct WavsQuorumThresholdUpdatedEvent {
+    pub numerator: Uint256,
+    pub denominator: Uint256,
+}
+
+impl WavsQuorumThresholdUpdatedEvent {
+    pub const EVENT_TYPE: &'static str = "wavs-quorum-threshold-updated";
+}
+
+impl From<WavsServiceUriUpdatedEvent> for cosmwasm_std::Event {
+    fn from(src: WavsServiceUriUpdatedEvent) -> Self {
+        cosmwasm_std::Event::new(WavsServiceUriUpdatedEvent::EVENT_TYPE)
+            .add_attribute("service-uri", src.service_uri)
+    }
+}
+
+impl From<WavsQuorumThresholdUpdatedEvent> for cosmwasm_std::Event {
+    fn from(src: WavsQuorumThresholdUpdatedEvent) -> Self {
+        cosmwasm_std::Event::new(WavsQuorumThresholdUpdatedEvent::EVENT_TYPE)
+            .add_attribute("numerator", src.numerator.to_string())
+            .add_attribute("denominator", src.denominator.to_string())
+    }
+}
+
+/// The possible errors that can occur during the validation of a signed envelope
 #[cw_serde]
+#[derive(thiserror::Error)]
 pub enum WavsValidateError {
+    #[error("Invalid signature length")]
     InvalidSignatureLength,
+    #[error("Invalid signature block")]
     InvalidSignatureBlock,
+    #[error("Invalid signature order")]
     InvalidSignatureOrder,
+    #[error("Invalid signature")]
     InvalidSignature,
+    #[error("Insufficient quorum: zero signers")]
     InsufficientQuorumZero,
+    #[error("Insufficient quorum: signer weight {signer_weight} is below threshold {threshold_weight} of total weight {total_weight}")]
     InsufficientQuorum {
         signer_weight: Uint256,
         threshold_weight: Uint256,
         total_weight: Uint256,
     },
+    #[error("Invalid quorum parameters")]
     InvalidQuorumParameters,
 }
 
