@@ -49,7 +49,7 @@ pub enum ServiceManagerExecuteMessages {
 pub enum ServiceManagerQueryMessages {
     /// Get the given operator's current weight
     #[returns(Uint256)]
-    WavsOperatorWeight { address: AddrEvm },
+    WavsOperatorWeight { operator_address: AddrEvm },
 
     /// Validate a signed envelope
     #[returns(WavsValidateResult)]
