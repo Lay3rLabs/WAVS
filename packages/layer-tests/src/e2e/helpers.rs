@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainName, Component, DeploymentResult, Permissions, Service,
-    ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowDeploymentResult, WorkflowID,
+    ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowDeploymentResult,
 };
 
 use crate::{
@@ -51,7 +51,6 @@ pub async fn create_service_for_test(
         manager: service_manager,
     };
 
-    let workflows: BTreeMap<WorkflowID, Workflow> = BTreeMap::new();
     let mut submission_handlers = BTreeMap::new();
 
     tracing::info!(
