@@ -1,6 +1,6 @@
 use cosmwasm_std::{
     entry_point, to_json_binary, Deps, DepsMut, Empty, Env, MessageInfo, QueryResponse, Response,
-    StdResult, Uint256,
+    StdResult,
 };
 use cw2::set_contract_version;
 use layer_climb_address::AddrEvm;
@@ -48,6 +48,7 @@ pub fn execute(
         ExecuteMsg::SetSigningKey {
             operator,
             signing_key,
+            weight,
         } => {
             // TODO: This is a placeholder as the actual logic will depend on your application requirements
             state::OPERATOR_SIGNING_KEY_ADDRS.save(
@@ -55,6 +56,7 @@ pub fn execute(
                 operator.as_bytes(),
                 &signing_key.as_bytes(),
             )?;
+            state::OPERATOR_WEIGHTS.save(deps.storage, operator.as_bytes(), &weight)?;
             Ok(Response::default())
         }
     }
