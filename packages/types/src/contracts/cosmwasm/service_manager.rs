@@ -118,14 +118,17 @@ impl TryFrom<cosmwasm_std::Event> for WavsServiceUriUpdatedEvent {
     type Error = cosmwasm_std::StdError;
 
     fn try_from(event: cosmwasm_std::Event) -> Result<Self, Self::Error> {
+        if event.ty != Self::EVENT_TYPE {
+            return Err(cosmwasm_std::StdError::msg("Invalid event type"));
+        }
         let service_uri = event
             .attributes
             .iter()
-            .find(|attr| attr.key == WavsServiceUriUpdatedEvent::EVENT_ATTR_KEY_SERVICE_URI)
+            .find(|attr| attr.key == Self::EVENT_ATTR_KEY_SERVICE_URI)
             .map(|attr| attr.value.clone())
             .ok_or_else(|| cosmwasm_std::StdError::msg("Missing service URI attribute"))?;
 
-        Ok(WavsServiceUriUpdatedEvent { service_uri })
+        Ok(Self { service_uri })
     }
 }
 
@@ -147,19 +150,23 @@ impl TryFrom<cosmwasm_std::Event> for WavsQuorumThresholdUpdatedEvent {
     type Error = cosmwasm_std::StdError;
 
     fn try_from(event: cosmwasm_std::Event) -> Result<Self, Self::Error> {
+        if event.ty != Self::EVENT_TYPE {
+            return Err(cosmwasm_std::StdError::msg("Invalid event type"));
+        }
+
         let mut numerator: Option<Uint256> = None;
         let mut denominator: Option<Uint256> = None;
 
         for attr in &event.attributes {
-            if attr.key == WavsQuorumThresholdUpdatedEvent::EVENT_ATTR_KEY_NUMERATOR {
+            if attr.key == Self::EVENT_ATTR_KEY_NUMERATOR {
                 numerator = Some(attr.value.parse()?);
-            } else if attr.key == WavsQuorumThresholdUpdatedEvent::EVENT_ATTR_KEY_DENOMINATOR {
+            } else if attr.key == Self::EVENT_ATTR_KEY_DENOMINATOR {
                 denominator = Some(attr.value.parse()?);
             }
         }
 
         match (numerator, denominator) {
-            (Some(numerator), Some(denominator)) => Ok(WavsQuorumThresholdUpdatedEvent {
+            (Some(numerator), Some(denominator)) => Ok(Self {
                 numerator,
                 denominator,
             }),
