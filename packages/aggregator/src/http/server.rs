@@ -41,10 +41,7 @@ pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
 pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
     tracing::info!("Creating HttpState with engine");
     let state = HttpState::new_with_engine(config.clone())?;
-    tracing::info!(
-        "HttpState created successfully with engine: {}",
-        state.aggregator_engine.is_some()
-    );
+    tracing::info!("HttpState created successfully with engine");
 
     // build our application with a single route
     let mut router = axum::Router::new()

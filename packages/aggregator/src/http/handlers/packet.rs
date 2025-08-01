@@ -136,11 +136,11 @@ impl AggregatorProcess<'_> {
             }
         };
 
-        let engine = state.aggregator_engine.as_ref().ok_or_else(|| {
-            AggregatorError::ComponentExecution("Aggregator engine not available".to_string())
-        })?;
-
-        let actions = match engine.execute_packet(component, packet).await {
+        let actions = match state
+            .aggregator_engine
+            .execute_packet(component, packet)
+            .await
+        {
             Ok(actions) => actions,
             Err(e) => {
                 return Ok(vec![AddPacketResponse::Error {
@@ -1034,8 +1034,6 @@ mod test {
 
             let digest = state
                 .aggregator_engine
-                .as_ref()
-                .unwrap()
                 .upload_component(COMPONENT_SIMPLE_AGGREGATOR_BYTES.to_vec())
                 .await
                 .unwrap();

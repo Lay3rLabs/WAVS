@@ -28,14 +28,11 @@ async fn inner_handle_upload(
     bytes: Bytes,
 ) -> HttpResult<UploadComponentResponse> {
     tracing::info!("Upload handler called with {} bytes", bytes.len());
-    tracing::info!("Engine available: {}", state.aggregator_engine.is_some());
-
-    let engine = state
-        .aggregator_engine
-        .ok_or_else(|| anyhow::anyhow!("Aggregator engine not available"))?;
-
     tracing::info!("Calling upload_component on engine");
-    let digest = engine.upload_component(bytes.to_vec()).await?;
+    let digest = state
+        .aggregator_engine
+        .upload_component(bytes.to_vec())
+        .await?;
     tracing::info!("Component uploaded successfully: {}", digest);
 
     Ok(UploadComponentResponse { digest })
