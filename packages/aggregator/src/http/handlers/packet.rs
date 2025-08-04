@@ -4,11 +4,7 @@ use axum::{extract::State, response::IntoResponse, Json};
 use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
-    aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
-    IWavsServiceHandler::IWavsServiceHandlerInstance,
-    IWavsServiceManager::IWavsServiceManagerInstance,
-    Packet, ServiceManagerError,
+    aggregator::{AddPacketRequest, AddPacketResponse}, signer::EnvelopeSigner, Aggregator, EnvelopeSignature, EvmContractSubmission, IWavsServiceHandler::IWavsServiceHandlerInstance, IWavsServiceManager::IWavsServiceManagerInstance, Packet, ServiceManagerError
 };
 
 use crate::{

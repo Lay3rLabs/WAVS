@@ -10,8 +10,10 @@ license.workspace = true
 publish = true
 
 [features]
-default = ["solidity-rpc", "cosmwasm"]
-solidity-rpc = []
+default = ["all"]
+all = ["solidity-rpc", "cosmwasm", "signer"]
+signer = ["dep:alloy-signer", "dep:alloy-signer-local"]
+solidity-rpc = ["dep:alloy-contract", "dep:alloy-provider"]
 cosmwasm = ["dep:cosmwasm-schema"]
 
 [dependencies]
@@ -32,13 +34,13 @@ alloy-rpc-types-eth = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-macro = { workspace = true }
 alloy-sol-types = { workspace = true }
-alloy-signer-local = { workspace = true }
-alloy-provider = { workspace = true }
-alloy-signer = { workspace = true }
-alloy-contract = { workspace = true }
 async-trait = { workspace = true }
 utoipa = { workspace = true }
 semver = { workspace = true }
+alloy-contract = { workspace = true, optional = true }
+alloy-provider = { workspace = true, optional = true }
+alloy-signer = { workspace = true, optional = true }
+alloy-signer-local = { workspace = true, optional = true }
 cosmwasm-schema = { workspace = true, optional = true }
 
 [dev-dependencies]

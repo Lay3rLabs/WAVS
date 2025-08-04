@@ -90,7 +90,7 @@ impl EvmSigningClient {
 mod test {
     use alloy_primitives::FixedBytes;
     use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
-    use wavs_types::{Envelope, EnvelopeExt};
+    use wavs_types::{signer::EnvelopeSigner, Envelope};
 
     #[tokio::test]
     async fn signature_validation() {
