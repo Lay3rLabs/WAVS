@@ -5,10 +5,11 @@ edition = "2021"
 license = "Apache-2.0"
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
 [dependencies]
-wavs-types ={ workspace = true }
+# The workspace `wavs-types` has features, we need to disable them, overriding with `worksace = true` doesn't work
+wavs-types = { path = "../../../../packages/types", default-features = false, features = ["cosmwasm"] }
 layer-climb-address = { workspace = true }
 cosmwasm-std = {workspace = true}
 anyhow = {workspace = true} 

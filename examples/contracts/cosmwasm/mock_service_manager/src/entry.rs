@@ -5,8 +5,8 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 use layer_climb_address::AddrEvm;
 use wavs_types::contracts::cosmwasm::service_manager::{
-    ServiceManagerExecuteMessages, ServiceManagerQueryMessages, WavsServiceUriUpdatedEvent,
-    WavsValidateError, WavsValidateResult,
+    error::WavsValidateError, event::WavsServiceUriUpdatedEvent, ServiceManagerExecuteMessages,
+    ServiceManagerQueryMessages, WavsValidateResult,
 };
 
 use crate::{
