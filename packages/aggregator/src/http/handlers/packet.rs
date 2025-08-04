@@ -5,7 +5,8 @@ use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
+    signer::EnvelopeSigner,
+    Aggregator, EnvelopeSignature, EvmContractSubmission,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
     Packet, ServiceManagerError,

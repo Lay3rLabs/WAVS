@@ -5,7 +5,10 @@ use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
 use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
 use alloy_sol_types::sol;
 
-use crate::{Envelope, EnvelopeExt, EnvelopeSignature, IWavsServiceManager, ServiceManagerError};
+use crate::{
+    signer::EnvelopeSigner, Envelope, EnvelopeExt, EnvelopeSignature, IWavsServiceManager,
+    ServiceManagerError,
+};
 
 // Define the simple service manager contract for testing
 sol!(
