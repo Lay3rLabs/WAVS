@@ -2,7 +2,7 @@
 log_level = ["info", "wavs=debug"]
 
 [layer-tests]
-wavs_concurrency = false
+wavs_concurrency = true
 middleware_concurrency = false
 # Run all tests
 mode = "all"
