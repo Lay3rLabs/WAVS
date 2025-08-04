@@ -1,8 +1,6 @@
 use alloy_provider::{Provider, RootProvider};
 use anyhow::Result;
-use layer_climb::{prelude::Address,
-    querier::QueryClient as CosmosQueryClient,
-};
+use layer_climb::{prelude::Address, querier::QueryClient as CosmosQueryClient};
 use reqwest::Client;
 use std::collections::HashMap;
 use wavs_types::{

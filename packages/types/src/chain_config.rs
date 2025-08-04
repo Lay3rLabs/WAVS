@@ -1,5 +1,5 @@
-use layer_climb_config::{ChainConfig, ChainId};
 use layer_climb_address::AddrKind;
+use layer_climb_config::{ChainConfig, ChainId};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

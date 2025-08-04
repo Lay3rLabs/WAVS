@@ -17,7 +17,9 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::{
-    aggregator::{AddPacketRequest, AddPacketResponse}, signer::EnvelopeSigner, Envelope, Packet, ServiceID, SigningKeyResponse, Submit, WorkflowID
+    aggregator::{AddPacketRequest, AddPacketResponse},
+    signer::EnvelopeSigner,
+    Envelope, Packet, ServiceID, SigningKeyResponse, Submit, WorkflowID,
 };
 
 #[derive(Clone)]

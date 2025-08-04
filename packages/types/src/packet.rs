@@ -55,7 +55,6 @@ impl EnvelopeExt for Envelope {
     }
 }
 
-
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum EnvelopeSignature {

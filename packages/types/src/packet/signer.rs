@@ -21,7 +21,6 @@ pub trait EnvelopeSigner: EnvelopeExt {
     ) -> std::result::Result<SignatureData, EnvelopeError>;
 }
 
-
 impl EnvelopeSigner for Envelope {
     fn signature_data(
         &self,
