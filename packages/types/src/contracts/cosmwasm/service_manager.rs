@@ -22,6 +22,7 @@ use crate::contracts::cosmwasm::{
 /// use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerExecuteMessages;
 ///
 /// #[cw_serde]
+/// #[schemaifier(mute_warnings)]
 /// enum QueryMsg {
 ///     MyCustomMessage {
 ///         my_field: String,
@@ -32,6 +33,7 @@ use crate::contracts::cosmwasm::{
 /// }
 ///
 /// #[cw_serde]
+/// #[schemaifier(mute_warnings)]
 /// enum ExecuteMsg {
 ///     MyCustomMessage {
 ///         my_field: String,
@@ -109,6 +111,7 @@ mod tests {
     use super::*;
 
     #[cw_serde]
+    #[schemaifier(mute_warnings)]
     enum ExampleServiceManagerExecuteMsg {
         MyCustomMessage {
             my_field: String,
@@ -118,6 +121,7 @@ mod tests {
     }
 
     #[cw_serde]
+    #[schemaifier(mute_warnings)]
     enum ExampleServiceManagerQueryMsg {
         MyCustomMessage {
             my_field: String,

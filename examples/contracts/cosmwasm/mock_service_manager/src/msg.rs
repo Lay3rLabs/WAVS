@@ -6,16 +6,19 @@ use wavs_types::contracts::cosmwasm::service_manager::{
 };
 
 #[cw_serde]
+#[schemaifier(mute_warnings)]
 pub enum ExecuteMsg {
-    Wavs(ServiceManagerExecuteMessages),
     SetSigningKey {
         operator: AddrEvm,
         signing_key: AddrEvm,
         weight: Uint256,
     },
+    #[serde(untagged)]
+    Wavs(ServiceManagerExecuteMessages),
 }
 
 #[cw_serde]
+#[schemaifier(mute_warnings)]
 pub enum QueryMsg {
     #[serde(untagged)]
     Wavs(ServiceManagerQueryMessages),

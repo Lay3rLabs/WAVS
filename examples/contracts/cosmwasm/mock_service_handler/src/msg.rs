@@ -7,6 +7,7 @@ pub struct InstantiateMsg {
 }
 
 #[cw_serde]
+#[schemaifier(mute_warnings)]
 pub enum ExecuteMsg {
     #[serde(untagged)]
     Wavs(ServiceHandlerExecuteMessages),
