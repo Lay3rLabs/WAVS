@@ -141,10 +141,12 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     fn load_component(&self, component: &Component) -> AggregatorResult<WasmComponent> {
         let digest = component.source.digest().clone();
 
-        if let Some(cached_component) = self.memory_cache.write().unwrap().get(&digest) {
+        // First try to peek (doesn't update LRU) with a read lock
+        if let Some(cached_component) = self.memory_cache.read().unwrap().peek(&digest) {
             return Ok(cached_component.clone());
         }
 
+        // If not found, acquire write lock to load and cache
         let component_bytes = self.storage.get_data(&digest.clone().into())?;
         let wasm_component = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 

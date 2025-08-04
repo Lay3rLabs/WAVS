@@ -187,7 +187,7 @@ impl AggregatorProcess<'_> {
         action: AggregatorAction,
         signer: Address,
     ) -> AggregatorResult<AddPacketResponse> {
-        let queue = match state.get_packet_queue(&queue_id)? {
+        let queue = match state.get_packet_queue(&queue_id).await? {
             PacketQueue::Alive(queue) => {
                 process_aggregator_actions(&state, &packet, queue, signer, vec![action.clone()])
                     .await?
@@ -201,7 +201,9 @@ impl AggregatorProcess<'_> {
             }
             AggregatorAction::Timer(_) => {
                 let count = queue.len();
-                state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
+                state
+                    .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
+                    .await?;
                 Ok(AddPacketResponse::Aggregated { count })
             }
         }
@@ -257,7 +259,7 @@ impl AggregatorProcess<'_> {
                 )
                 .await
             }
-            Err(err) => Self::handle_validation_error(state, queue_id, queue, err),
+            Err(err) => Self::handle_validation_error(state, queue_id, queue, err).await,
         }
     }
 
@@ -287,7 +289,9 @@ impl AggregatorProcess<'_> {
             tx_receipt.transaction_hash
         );
 
-        state.save_packet_queue(queue_id, PacketQueue::Burned)?;
+        state
+            .save_packet_queue(queue_id, PacketQueue::Burned)
+            .await?;
         tracing::info!("Packet queue burned after successful submission");
 
         Ok(AddPacketResponse::Sent {
@@ -296,7 +300,7 @@ impl AggregatorProcess<'_> {
         })
     }
 
-    fn handle_validation_error(
+    async fn handle_validation_error(
         state: &HttpState,
         queue_id: &PacketQueueId,
         queue: Vec<QueuedPacket>,
@@ -305,7 +309,9 @@ impl AggregatorProcess<'_> {
         match err.as_decoded_interface_error::<ServiceManagerError>() {
             Some(ServiceManagerError::InsufficientQuorum(_)) => {
                 let count = queue.len();
-                state.save_packet_queue(queue_id, PacketQueue::Alive(queue))?;
+                state
+                    .save_packet_queue(queue_id, PacketQueue::Alive(queue))
+                    .await?;
                 Ok(AddPacketResponse::Aggregated { count })
             }
             Some(err) => Err(AggregatorError::ServiceManagerValidateKnown(err)),
