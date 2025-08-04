@@ -1,7 +1,6 @@
 use alloy_provider::{Provider, RootProvider};
 use anyhow::Result;
-use layer_climb::{
-    prelude::{Address, ConfigAddressExt},
+use layer_climb::{prelude::Address,
     querier::QueryClient as CosmosQueryClient,
 };
 use reqwest::Client;
