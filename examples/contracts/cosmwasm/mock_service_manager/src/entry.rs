@@ -3,7 +3,6 @@ use cosmwasm_std::{
     StdResult,
 };
 use cw2::set_contract_version;
-use layer_climb_address::AddrEvm;
 use wavs_types::contracts::cosmwasm::service_manager::{
     error::WavsValidateError, event::WavsServiceUriUpdatedEvent, ServiceManagerExecuteMessages,
     ServiceManagerQueryMessages, WavsValidateResult,
@@ -51,12 +50,8 @@ pub fn execute(
             weight,
         } => {
             // TODO: This is a placeholder as the actual logic will depend on your application requirements
-            state::OPERATOR_SIGNING_KEY_ADDRS.save(
-                deps.storage,
-                operator.as_bytes(),
-                &signing_key.as_bytes(),
-            )?;
-            state::OPERATOR_WEIGHTS.save(deps.storage, operator.as_bytes(), &weight)?;
+            state::OPERATOR_SIGNING_KEY_ADDRS.save(deps.storage, &operator, &signing_key)?;
+            state::OPERATOR_WEIGHTS.save(deps.storage, &operator, &weight)?;
             Ok(Response::default())
         }
     }
@@ -68,9 +63,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<QueryResponse> {
         QueryMsg::Wavs(msg) => match msg {
             ServiceManagerQueryMessages::WavsOperatorWeight { operator_address } => {
                 // TODO: query stake registry etc.
-                to_json_binary(
-                    &state::OPERATOR_WEIGHTS.load(deps.storage, operator_address.as_bytes())?,
-                )
+                to_json_binary(&state::OPERATOR_WEIGHTS.load(deps.storage, &operator_address)?)
             }
             ServiceManagerQueryMessages::WavsValidate {
                 envelope: _,
@@ -78,16 +71,15 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<QueryResponse> {
             } => {
                 // TODO: real validation logic
                 for signer in &signature_data.signers {
-                    let _operator_addr = match state::OPERATOR_SIGNING_KEY_ADDRS
-                        .load(deps.storage, signer.as_bytes())
-                    {
-                        Ok(addr) => addr,
-                        Err(_) => {
-                            return to_json_binary(&WavsValidateResult::Err(
-                                WavsValidateError::InvalidSignature,
-                            ));
-                        }
-                    };
+                    let _operator_addr =
+                        match state::OPERATOR_SIGNING_KEY_ADDRS.load(deps.storage, signer) {
+                            Ok(addr) => addr,
+                            Err(_) => {
+                                return to_json_binary(&WavsValidateResult::Err(
+                                    WavsValidateError::InvalidSignature,
+                                ));
+                            }
+                        };
                 }
                 to_json_binary(&WavsValidateResult::Ok)
             }
@@ -95,15 +87,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<QueryResponse> {
                 to_json_binary(&state::SERVICE_URI.load(deps.storage)?)
             }
             ServiceManagerQueryMessages::WavsLatestOperatorForSigningKey { signing_key_addr } => {
-                match state::OPERATOR_SIGNING_KEY_ADDRS
-                    .load(deps.storage, signing_key_addr.as_bytes())
-                {
-                    Ok(addr_bytes) => {
-                        let addr = AddrEvm::new(addr_bytes);
-                        to_json_binary(&addr)
-                    }
-                    Err(_) => to_json_binary(&Option::<AddrEvm>::None),
-                }
+                to_json_binary(
+                    &state::OPERATOR_SIGNING_KEY_ADDRS.may_load(deps.storage, &signing_key_addr)?,
+                )
             }
         },
     }
