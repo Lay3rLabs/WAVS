@@ -24,3 +24,27 @@ pub enum WavsValidateError {
     #[error("Invalid quorum parameters")]
     InvalidQuorumParameters,
 }
+
+#[cw_serde]
+#[derive(thiserror::Error)]
+pub enum WavsEventError {
+    #[error("Unexpected event type: expected [{expected}], found [{found}]")]
+    EventType { expected: String, found: String },
+    #[error("Missing attribute [{attr_key}] in event [{event_type}]")]
+    MissingAttribute {
+        event_type: String,
+        attr_key: String,
+    },
+    #[error("Missing attributes [{attr_keys:?}] in event [{event_type}]")]
+    MissingAttributes {
+        event_type: String,
+        attr_keys: Vec<String>,
+    },
+    #[error("Unable to parse attribute key: [{attr_key}] value: [{attr_value}] in event [{event_type}]: {err}")]
+    ParseAttribute {
+        event_type: String,
+        attr_key: String,
+        attr_value: String,
+        err: String,
+    },
+}
