@@ -52,17 +52,15 @@ pub fn execute(
             } => {
                 let contract_addr = state::SERVICE_MANAGER.load(deps.storage)?;
 
-                let resp: WavsValidateResult = deps.querier.query_wasm_smart(
-                    contract_addr,
-                    &ServiceManagerQueryMessages::WavsValidate {
-                        envelope,
-                        signature_data,
-                    },
-                )?;
-
-                if let WavsValidateResult::Err(err) = resp {
-                    return Err(cosmwasm_std::StdError::from(err));
-                }
+                deps.querier
+                    .query_wasm_smart::<WavsValidateResult>(
+                        contract_addr,
+                        &ServiceManagerQueryMessages::WavsValidate {
+                            envelope,
+                            signature_data,
+                        },
+                    )?
+                    .into_std()?;
             }
         },
     }

@@ -2,7 +2,7 @@ pub mod error;
 pub mod event;
 
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::Uint256;
+use cosmwasm_std::{StdResult, Uint256};
 use layer_climb_address::AddrEvm;
 
 use crate::contracts::cosmwasm::{
@@ -74,6 +74,7 @@ pub enum ServiceManagerQueryMessages {
 }
 
 /// The result of validating a signed envelope
+// TODO: make `Try` once it's stable: https://doc.rust-lang.org/std/ops/trait.Try.html
 #[cw_serde]
 pub enum WavsValidateResult {
     Ok,
@@ -87,6 +88,19 @@ impl WavsValidateResult {
 
     pub fn is_err(&self) -> bool {
         matches!(self, WavsValidateResult::Err(_))
+    }
+
+    pub fn into_std(self) -> StdResult<()> {
+        self.into()
+    }
+}
+
+impl From<WavsValidateResult> for StdResult<()> {
+    fn from(result: WavsValidateResult) -> Self {
+        match result {
+            WavsValidateResult::Ok => Ok(()),
+            WavsValidateResult::Err(err) => Err(err.into()),
+        }
     }
 }
 
