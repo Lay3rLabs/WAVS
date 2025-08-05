@@ -53,15 +53,15 @@ impl ComponentDefinition {
         self
     }
 
-    pub fn with_config_contract_address(mut self) -> Self {
-        self.configs_to_add.contract_address = true;
+    pub fn with_config_service_handler(mut self) -> Self {
+        self.configs_to_add.service_handler = true;
         self
     }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct ComponentConfigsToAdd {
-    pub contract_address: bool,
+    pub service_handler: bool,
     pub hardcoded: HashMap<String, String>,
 }
 

@@ -783,10 +783,10 @@ mod test {
         component
             .config
             .insert("chain_name".to_string(), chain_name.to_string());
-        // SimpleAggregator needs the submission contract address
+        // SimpleAggregator needs the service handler address
         if !service_handler_addresses.is_empty() {
             component.config.insert(
-                "contract_address".to_string(),
+                "service_handler".to_string(),
                 service_handler_addresses[0].to_string(),
             );
         }

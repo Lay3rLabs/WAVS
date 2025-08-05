@@ -300,9 +300,9 @@ pub async fn create_submit_from_config(
                     config_vars.insert(hardcoded_key.clone(), hardcoded_value.clone());
                 }
 
-                if component_def.configs_to_add.contract_address {
+                if component_def.configs_to_add.service_handler {
                     config_vars.insert(
-                        "contract_address".to_string(),
+                        "service_handler".to_string(),
                         format!("{:#x}", submission_contract),
                     );
                 }

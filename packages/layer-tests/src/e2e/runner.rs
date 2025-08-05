@@ -37,12 +37,12 @@ pub struct Runner {
     report: TestReport,
 }
 
-/// Extract contract address from an aggregator submit configuration
-fn extract_aggregator_contract_address(submit: &Submit) -> Option<alloy_primitives::Address> {
+/// Extract service handler address from an aggregator submit configuration
+fn extract_aggregator_service_handler(submit: &Submit) -> Option<alloy_primitives::Address> {
     match submit {
         Submit::Aggregator { component, .. } => component
             .config
-            .get("contract_address")
+            .get("service_handler")
             .and_then(|addr_str| addr_str.parse::<alloy_primitives::Address>().ok()),
         _ => None,
     }
@@ -134,7 +134,7 @@ impl Runner {
                                 .workflows
                                 .get(&workflow_id)
                                 .and_then(|workflow| {
-                                    extract_aggregator_contract_address(&workflow.submit)
+                                    extract_aggregator_service_handler(&workflow.submit)
                                 });
 
                             if let Some(address) = submission_address {
