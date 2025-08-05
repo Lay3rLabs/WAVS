@@ -114,10 +114,12 @@ impl Runner {
                 tracing::warn!("Running service changes for group {}", group);
                 let mut services_to_change = Vec::new();
                 while let Some((service, change_service)) = futures.next().await {
-                    // update our local copy of the service while preserving submission handlers
-                    let mut service_deployment = all_services.get(&service.name).cloned().unwrap();
+                    // update our local copy of the service and handle changes
+                    let service_deployment = all_services
+                        .get_mut(&service.name)
+                        .expect("Service should exist in all_services");
+
                     service_deployment.service = service.clone();
-                    all_services.insert(service.name.clone(), service_deployment);
 
                     // and the definition so that tests know what to look for
                     match change_service {
@@ -127,10 +129,6 @@ impl Runner {
                         } => {
                             // When a workflow is added, it includes a new submission contract
                             // Extract it from the service's workflow that was just added
-                            let service_deployment = all_services
-                                .get_mut(&service.name)
-                                .expect("Service should exist in all_services");
-
                             let submission_address = service_deployment
                                 .service
                                 .workflows
