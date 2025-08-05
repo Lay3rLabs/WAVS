@@ -37,6 +37,17 @@ pub struct Runner {
     report: TestReport,
 }
 
+/// Extract contract address from an aggregator submit configuration
+fn extract_aggregator_contract_address(submit: &Submit) -> Option<alloy_primitives::Address> {
+    match submit {
+        Submit::Aggregator { component, .. } => component
+            .config
+            .get("contract_address")
+            .and_then(|addr_str| addr_str.parse::<alloy_primitives::Address>().ok()),
+        _ => None,
+    }
+}
+
 impl Runner {
     pub fn new(
         clients: Clients,
@@ -116,25 +127,22 @@ impl Runner {
                         } => {
                             // When a workflow is added, it includes a new submission contract
                             // Extract it from the service's workflow that was just added
-                            let deployment_result = all_services.get_mut(&service.name).unwrap();
-                            if let Some(service_workflow) =
-                                deployment_result.service.workflows.get(&workflow_id)
-                            {
-                                if let Submit::Aggregator { component, .. } =
-                                    &service_workflow.submit
-                                {
-                                    if let Some(contract_address_str) =
-                                        component.config.get("contract_address")
-                                    {
-                                        if let Ok(address) = contract_address_str
-                                            .parse::<alloy_primitives::Address>()
-                                        {
-                                            deployment_result
-                                                .submission_handlers
-                                                .insert(workflow_id.clone(), address);
-                                        }
-                                    }
-                                }
+                            let deployment_result = all_services
+                                .get_mut(&service.name)
+                                .expect("Service should exist in all_services");
+
+                            let submission_address = deployment_result
+                                .service
+                                .workflows
+                                .get(&workflow_id)
+                                .and_then(|workflow| {
+                                    extract_aggregator_contract_address(&workflow.submit)
+                                });
+
+                            if let Some(address) = submission_address {
+                                deployment_result
+                                    .submission_handlers
+                                    .insert(workflow_id.clone(), address);
                             }
 
                             group_tests
