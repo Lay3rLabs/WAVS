@@ -7,9 +7,11 @@ use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::w
 use uuid::Uuid;
 
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, DeploymentResult, Permissions, Service,
-    ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowDeploymentResult,
+    AllowedHostPermission, ByteArray, ChainName, Component, Permissions, Service, ServiceManager,
+    ServiceStatus, Submit, Trigger, Workflow,
 };
+
+use crate::deployment::{ServiceDeployment, WorkflowDeployment};
 
 use crate::{
     e2e::{
@@ -40,7 +42,7 @@ pub async fn create_service_for_test(
     component_sources: &ComponentSources,
     service_manager: ServiceManager,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
-) -> DeploymentResult {
+) -> ServiceDeployment {
     tracing::info!("Deploying service for test: {}", test.name);
 
     // No need to load the actual service, it was a placeholder
@@ -76,7 +78,7 @@ pub async fn create_service_for_test(
         submission_handlers.insert(workflow_id.clone(), deployment_result.submission_handler);
     }
 
-    DeploymentResult {
+    ServiceDeployment {
         service,
         submission_handlers,
     }
@@ -118,7 +120,7 @@ async fn deploy_workflow(
     clients: &Clients,
     component_sources: &ComponentSources,
     cosmos_trigger_code_map: CosmosTriggerCodeMap,
-) -> WorkflowDeploymentResult {
+) -> WorkflowDeployment {
     let component = deploy_component(
         component_sources,
         &workflow_definition.component,
@@ -158,7 +160,7 @@ async fn deploy_workflow(
     .await;
 
     // Create service workflows
-    WorkflowDeploymentResult {
+    WorkflowDeployment {
         workflow: Workflow {
             trigger: trigger.clone(), // Clone for possible use in multi-trigger service
             component,
@@ -299,9 +301,9 @@ pub async fn create_submit_from_config(
                     config_vars.insert(hardcoded_key.clone(), hardcoded_value.clone());
                 }
 
-                if component_def.configs_to_add.contract_address {
+                if component_def.configs_to_add.service_handler {
                     config_vars.insert(
-                        "contract_address".to_string(),
+                        "service_handler".to_string(),
                         format!("{:#x}", submission_contract),
                     );
                 }
