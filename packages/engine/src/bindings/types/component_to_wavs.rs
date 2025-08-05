@@ -211,16 +211,9 @@ impl From<component_service::Submit> for wavs_types::Submit {
             component_service::Submit::Aggregator(component_service::AggregatorSubmit {
                 url,
                 component,
-                evm_contracts,
             }) => wavs_types::Submit::Aggregator {
                 url,
-                component: component.map(|c| Box::new(c.try_into().unwrap())),
-                evm_contracts: evm_contracts.map(|contracts| {
-                    contracts
-                        .into_iter()
-                        .map(|c| c.try_into().unwrap())
-                        .collect()
-                }),
+                component: Box::new(component.try_into().unwrap()),
             },
         }
     }

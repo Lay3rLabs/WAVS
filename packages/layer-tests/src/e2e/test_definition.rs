@@ -53,15 +53,15 @@ impl ComponentDefinition {
         self
     }
 
-    pub fn with_config_contract_address(mut self) -> Self {
-        self.configs_to_add.contract_address = true;
+    pub fn with_config_service_handler(mut self) -> Self {
+        self.configs_to_add.service_handler = true;
         self
     }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct ComponentConfigsToAdd {
-    pub contract_address: bool,
+    pub service_handler: bool,
     pub hardcoded: HashMap<String, String>,
 }
 
@@ -98,9 +98,6 @@ pub struct WorkflowDefinition {
 
 #[derive(Clone, Debug)]
 pub enum AggregatorDefinition {
-    NewEvmAggregatorSubmit {
-        chain_name: ChainName,
-    },
     ComponentBasedAggregator {
         component: ComponentDefinition,
         chain_name: ChainName,
@@ -153,7 +150,7 @@ pub enum EvmTriggerDefinition {
 pub enum SubmitDefinition {
     Aggregator {
         url: String,
-        aggregators: Vec<AggregatorDefinition>,
+        aggregator: AggregatorDefinition,
     },
 }
 
@@ -372,10 +369,7 @@ impl WorkflowBuilder {
         let submit = self.submit.expect("Submit not set");
         let expected_output = self.expected_output.expect("Expected output not set");
 
-        let SubmitDefinition::Aggregator { aggregators, .. } = &submit;
-        if aggregators.is_empty() {
-            panic!("No aggregators set when submit is aggregator")
-        }
+        let SubmitDefinition::Aggregator { .. } = &submit;
 
         WorkflowDefinition {
             component,

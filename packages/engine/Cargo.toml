@@ -25,9 +25,9 @@ tracing-subscriber = { workspace = true }
 redb = { workspace = true }
 
 [dev-dependencies]
-utils = { workspace = true, features = ["test-utils"] }
-tempfile = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+utils = { workspace = true, features = ["test-utils"] }
+tempfile = { workspace = true }
 alloy-sol-types = { workspace = true }
 example-types = { workspace = true }

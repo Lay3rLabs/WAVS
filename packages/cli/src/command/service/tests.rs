@@ -9,6 +9,7 @@ use layer_climb::prelude::{ChainConfig, ChainId};
 use layer_climb::querier::QueryClient as CosmosQueryClient;
 use tempfile::tempdir;
 use utils::init_tracing_tests;
+use wavs_types::Submit;
 
 #[test]
 fn test_service_init() {
@@ -818,182 +819,6 @@ async fn test_workflow_trigger_operations() {
     }
 }
 
-#[test]
-fn test_workflow_submit_operations() {
-    // Create a temporary directory and file
-    let temp_dir = tempdir().unwrap();
-    let file_path = temp_dir.path().join("workflow_submit_test.json");
-
-    // Initialize a service
-    init_service(&file_path, "Test Service".to_string()).unwrap();
-
-    // Add a workflow
-    let workflow_id = WorkflowID::new("workflow-123").unwrap();
-    add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
-
-    // Initial workflow should have None submit (default when created)
-    let service_initial: ServiceJson =
-        serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-    let initial_workflow = service_initial.workflows.get(&workflow_id).unwrap();
-
-    // Handle SubmitJson wrapper
-    if let SubmitJson::Json(json) = &initial_workflow.submit {
-        assert!(matches!(json, Json::Unset));
-    } else {
-        panic!("Expected Json::Unset");
-    }
-
-    // Test setting Aggregator submit
-    let aggregator_url = "https://api.example.com/aggregator".to_string();
-    let evm_address = address!("0x00000000219ab540356cBB839Cbe05303d7705Fa");
-    let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
-    let max_gas = Some(1000000u64);
-
-    let aggregator_result = set_aggregator_submit(
-        &file_path,
-        workflow_id.clone(),
-        aggregator_url.clone(),
-        evm_chain.clone(),
-        evm_address,
-        max_gas,
-    )
-    .unwrap();
-
-    // Verify aggregator submit result
-    assert_eq!(aggregator_result.workflow_id, workflow_id);
-    if let Submit::Aggregator { url, .. } = &aggregator_result.submit {
-        assert_eq!(url, &aggregator_url);
-    } else {
-        panic!("Expected Aggregator submit");
-    }
-
-    // Verify the service was updated with aggregator submit
-    let service_after_aggregator: ServiceJson =
-        serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-    let aggregator_workflow = service_after_aggregator
-        .workflows
-        .get(&workflow_id)
-        .unwrap();
-
-    // Handle SubmitJson wrapper
-    let aggregators = match &aggregator_workflow.submit {
-        SubmitJson::Submit(Submit::Aggregator {
-            url,
-            evm_contracts: Some(contracts),
-            ..
-        }) => {
-            assert_eq!(url, &aggregator_url);
-            contracts
-        }
-        _ => panic!("Expected Aggregator submit with evm_contracts"),
-    };
-
-    let evm = &aggregators[0];
-    assert_eq!(evm.chain_name, evm_chain);
-    assert_eq!(evm.address, evm_address);
-    assert_eq!(evm.max_gas, max_gas);
-
-    // Test updating with null max_gas
-    let _ = set_aggregator_submit(
-        &file_path,
-        workflow_id.clone(),
-        aggregator_url.clone(),
-        evm_chain.clone(),
-        evm_address,
-        None,
-    )
-    .unwrap();
-
-    let service_after_aggregator: ServiceJson =
-        serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-    let aggregator_workflow = service_after_aggregator
-        .workflows
-        .get(&workflow_id)
-        .unwrap();
-    let aggregator = match &aggregator_workflow.submit {
-        SubmitJson::Submit(Submit::Aggregator {
-            evm_contracts: Some(contracts),
-            ..
-        }) => contracts,
-        _ => panic!("Expected Aggregator submit with evm_contracts"),
-    };
-
-    let evm = &aggregator[0];
-    assert_eq!(evm.chain_name, evm_chain);
-    assert_eq!(evm.address, evm_address);
-    assert_eq!(evm.max_gas, None);
-
-    // Test error handling for invalid URL
-    let invalid_url = "not-a-valid-url".to_string();
-    let invalid_url_result = set_aggregator_submit(
-        &file_path,
-        workflow_id.clone(),
-        invalid_url,
-        evm_chain.clone(),
-        evm_address,
-        None,
-    );
-    assert!(invalid_url_result.is_err());
-    let invalid_url_error = invalid_url_result.unwrap_err().to_string();
-    assert!(invalid_url_error.contains("Invalid URL format"));
-
-    // Test add_aggregator_submit function
-    let second_address = address!("0x1111111111111111111111111111111111111111");
-    let second_chain = ChainName::from_str("base").unwrap();
-    let second_max_gas = Some(2000000u64);
-
-    let add_result = add_aggregator_submit(
-        &file_path,
-        workflow_id.clone(),
-        aggregator_url.clone(),
-        second_chain.clone(),
-        second_address,
-        second_max_gas,
-    )
-    .unwrap();
-
-    // Verify add_aggregator_submit result
-    assert_eq!(add_result.workflow_id, workflow_id);
-    assert_eq!(add_result.aggregator_submits.len(), 2);
-
-    // Verify the service now has two aggregators
-    let service_with_two_aggregators: ServiceJson =
-        serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
-    let workflow_with_two = service_with_two_aggregators
-        .workflows
-        .get(&workflow_id)
-        .unwrap();
-    let two_aggregators = match &workflow_with_two.submit {
-        SubmitJson::Submit(Submit::Aggregator {
-            evm_contracts: Some(contracts),
-            ..
-        }) => contracts,
-        _ => panic!("Expected Aggregator submit with evm_contracts"),
-    };
-
-    assert_eq!(two_aggregators.len(), 2);
-
-    // Check second aggregator was added
-    let second_evm = &two_aggregators[1];
-    assert_eq!(second_evm.chain_name, second_chain);
-    assert_eq!(second_evm.address, second_address);
-    assert_eq!(second_evm.max_gas, second_max_gas);
-
-    // Test error handling for add_aggregator_submit with non-existent workflow
-    let non_existent_workflow = WorkflowID::new("non-existent").unwrap();
-    let non_existent_result = add_aggregator_submit(
-        &file_path,
-        non_existent_workflow,
-        aggregator_url.clone(),
-        evm_chain,
-        evm_address,
-        None,
-    );
-    assert!(non_existent_result.is_err());
-    let non_existent_error = non_existent_result.unwrap_err().to_string();
-    assert!(non_existent_error.contains("Workflow with ID 'non-existent' not found"));
-}
-
 #[tokio::test]
 async fn test_service_validation() {
     // Create a temporary directory for test files
@@ -1022,16 +847,9 @@ async fn test_service_validation() {
         event_hash: wavs_types::ByteArray::new([1u8; 32]),
     };
 
-    let aggregator = EvmContractSubmission {
-        address: evm_address,
-        chain_name: evm_chain.clone(),
-        max_gas: Some(1000000u64),
-    };
-
     let submit = Submit::Aggregator {
         url: "https://api.example.com/aggregator".to_string(),
-        component: None,
-        evm_contracts: Some(vec![aggregator]),
+        component: Box::new(component.clone()),
     };
 
     // Create service manager
@@ -1276,52 +1094,6 @@ async fn test_service_validation() {
         );
     }
 
-    // Test zero max_gas in aggregator
-    {
-        let mut workflows = BTreeMap::new();
-
-        workflows.insert(
-            workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(component.clone()),
-                submit: SubmitJson::Submit(Submit::Aggregator {
-                    url: "https://api.example.com/aggregator".to_string(),
-                    component: None,
-                    evm_contracts: Some(vec![EvmContractSubmission {
-                        address: evm_address,
-                        chain_name: evm_chain.clone(),
-                        max_gas: Some(0u64), // Zero gas
-                    }]),
-                }),
-            },
-        );
-
-        let zero_gas_service = ServiceJson {
-            name: "Test Service".to_string(),
-            workflows,
-            status: ServiceStatus::Active,
-            manager: manager.clone(),
-        };
-
-        let file_path = temp_dir.path().join("zero_max_gas.json");
-        let service_json = serde_json::to_string_pretty(&zero_gas_service).unwrap();
-        std::fs::write(&file_path, service_json).unwrap();
-
-        let result = validate_service(&file_path, None).await.unwrap();
-        assert!(
-            !result.errors.is_empty(),
-            "Zero max_gas service should have validation errors"
-        );
-        assert!(
-            result
-                .errors
-                .iter()
-                .any(|error| error.contains("max_gas of zero")),
-            "Validation should catch zero max_gas"
-        );
-    }
-
     // Test unset submit
     {
         let mut workflows = BTreeMap::new();
@@ -1362,12 +1134,6 @@ async fn test_service_validation() {
     // Test invalid URL in Aggregator submit
     {
         let mut workflows = BTreeMap::new();
-        let aggregators = vec![EvmContractSubmission {
-            address: evm_address,
-            chain_name: evm_chain.clone(),
-            max_gas: Some(1000000u64),
-        }];
-
         workflows.insert(
             workflow_id.clone(),
             WorkflowJson {
@@ -1375,8 +1141,7 @@ async fn test_service_validation() {
                 component: ComponentJson::Component(component.clone()),
                 submit: SubmitJson::Submit(Submit::Aggregator {
                     url: "not-a-valid-url".to_string(),
-                    component: None,
-                    evm_contracts: Some(aggregators),
+                    component: Box::new(component.clone()),
                 }),
             },
         );
@@ -1440,45 +1205,6 @@ async fn test_service_validation() {
                 .iter()
                 .any(|error| error.contains("unset service manager")),
             "Validation should catch unset service manager"
-        );
-    }
-
-    // Test submit with aggregator but no aggregator defined
-    {
-        let mut workflows = BTreeMap::new();
-        workflows.insert(
-            workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(component.clone()),
-                submit: SubmitJson::Submit(Submit::Aggregator {
-                    url: "https://example.com".to_string(),
-                    component: None,
-                    evm_contracts: None,
-                }),
-            },
-        );
-
-        let no_aggregator_service = ServiceJson {
-            name: "Test Service".to_string(),
-            workflows,
-            status: ServiceStatus::Active,
-            manager: manager.clone(),
-        };
-
-        let file_path = temp_dir.path().join("no_aggregator.json");
-        let service_json = serde_json::to_string_pretty(&no_aggregator_service).unwrap();
-        std::fs::write(&file_path, service_json).unwrap();
-
-        let result = validate_service(&file_path, None).await.unwrap();
-        assert!(
-            !result.errors.is_empty(),
-            "No aggregator service should have validation errors"
-        );
-        assert!(
-            result.errors.iter().any(|error| error
-                .contains("submits with aggregator, but no aggregator contracts are defined")),
-            "Validation should catch submit with aggregator but no aggregator defined"
         );
     }
 }

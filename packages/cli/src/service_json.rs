@@ -3,7 +3,8 @@ use std::{collections::BTreeMap, num::NonZeroU64, str::FromStr};
 use serde::{Deserialize, Serialize};
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
-    Component, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowID,
+    Component, ComponentSource, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger,
+    WorkflowID,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -147,9 +148,7 @@ impl ServiceJson {
                 SubmitJson::Submit(Submit::None) => {
                     // None submit type is always valid
                 }
-                SubmitJson::Submit(Submit::Aggregator {
-                    url, evm_contracts, ..
-                }) => {
+                SubmitJson::Submit(Submit::Aggregator { url, component, .. }) => {
                     if reqwest::Url::parse(url).is_err() {
                         errors.push(format!(
                             "Workflow '{}' has an invalid URL: {}",
@@ -157,26 +156,17 @@ impl ServiceJson {
                         ));
                     }
 
-                    // validate aggregator is defined
-                    if evm_contracts.as_ref().is_none_or(|c| c.is_empty()) {
-                        errors.push(format!(
-                            "Workflow '{}' submits with aggregator, but no aggregator contracts are defined",
-                            workflow_id
-                        ));
-                    }
-
-                    // Check if max_gas is reasonable if specified
-                    if let Some(contracts) = evm_contracts {
-                        for evm_contract_submission in contracts {
-                            if let Some(max_gas) = evm_contract_submission.max_gas {
-                                if max_gas == 0 {
-                                    errors.push(format!(
-                                        "Workflow aggregator '{}' has max_gas of zero, which will prevent transactions",
-                                        workflow_id
-                                    ));
-                                }
+                    match &component.source {
+                        ComponentSource::Digest(_digest) => {}
+                        ComponentSource::Download { url, digest: _ } => {
+                            if reqwest::Url::parse(url).is_err() {
+                                errors.push(format!(
+                                    "Workflow '{}' has an aggregator component with invalid download URL: {}",
+                                    workflow_id, url
+                                ));
                             }
                         }
+                        ComponentSource::Registry { registry: _ } => {}
                     }
                 }
             }

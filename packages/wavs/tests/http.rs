@@ -13,7 +13,7 @@ use wavs_systems::{
     http::{map_response, TestHttpApp},
     mock_trigger_manager::mock_evm_event_trigger,
 };
-use wavs_types::{ChainName, ComponentDigest, ComponentSource, UploadComponentResponse};
+use wavs_types::{ChainName, Component, ComponentDigest, ComponentSource, UploadComponentResponse};
 
 #[test]
 fn http_not_found() {
@@ -92,8 +92,9 @@ fn http_save_service() {
         ComponentSource::Digest(ComponentDigest::hash([1, 2, 3])),
         wavs_types::Submit::Aggregator {
             url: "http://example.com/aggregator".to_string(),
-            component: None,
-            evm_contracts: None,
+            component: Box::new(Component::new(ComponentSource::Digest(
+                ComponentDigest::hash([1, 2, 3]),
+            ))),
         },
         wavs_types::ServiceManager::Evm {
             chain_name: "evm".try_into().unwrap(),

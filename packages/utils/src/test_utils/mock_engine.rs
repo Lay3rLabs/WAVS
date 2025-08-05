@@ -9,3 +9,6 @@ pub static COMPONENT_KV_STORE_BYTES: &[u8] =
 
 pub static COMPONENT_PERMISSIONS_BYTES: &[u8] =
     include_bytes!("../../../../examples/build/components/permissions.wasm");
+
+pub static COMPONENT_SIMPLE_AGGREGATOR_BYTES: &[u8] =
+    include_bytes!("../../../../examples/build/components/simple_aggregator.wasm");

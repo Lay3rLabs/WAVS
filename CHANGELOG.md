@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+### Changed
+
+- Deprecate old variant Submit::Aggregator with evm_contracts; Aggregator component is required now
+
 ## [v0.5.1]
 
 ### Added

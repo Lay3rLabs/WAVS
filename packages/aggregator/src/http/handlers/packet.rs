@@ -6,7 +6,7 @@ use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Aggregator, ChainName, EnvelopeExt, EnvelopeSignature, EvmContractSubmission,
+    ChainName, EnvelopeExt, EnvelopeSignature,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
     Packet, ServiceManagerError,
@@ -55,7 +55,6 @@ async fn process_packet(
     if !state.service_registered(&packet.service.id()) {
         return Err(AggregatorError::MissingService(packet.service.id()));
     }
-    let event_id = packet.event_id();
 
     tracing::info!(
         "Processing packet for service: {}, workflow: {}",
@@ -65,33 +64,7 @@ async fn process_packet(
 
     let workflow = &packet.service.workflows[&packet.workflow_id];
 
-    let aggregators = match &workflow.submit {
-        wavs_types::Submit::Aggregator {
-            evm_contracts: Some(contracts),
-            ..
-        } => contracts
-            .iter()
-            .map(|c| wavs_types::Aggregator::Evm(c.clone()))
-            .collect::<Vec<_>>(),
-        wavs_types::Submit::Aggregator {
-            component: Some(_),
-            evm_contracts: None,
-            ..
-        } => {
-            // TODO: Refactor this
-            // Aggregator component is returning the actual submission data, this is never used
-            vec![wavs_types::Aggregator::Evm(
-                wavs_types::EvmContractSubmission {
-                    chain_name: "component-only".parse().unwrap(),
-                    address: alloy_primitives::Address::ZERO,
-                    max_gas: None,
-                },
-            )]
-        }
-        _ => Vec::new(),
-    };
-
-    if aggregators.is_empty() {
+    if !matches!(workflow.submit, wavs_types::Submit::Aggregator { .. }) {
         return Err(AggregatorError::MissingWorkflow {
             workflow_id: packet.workflow_id.clone(),
             service_id: packet.service.id(),
@@ -121,192 +94,135 @@ async fn process_packet(
     };
     tracing::debug!("Packet signer address: {:?}", signer);
 
-    let mut responses: Vec<AddPacketResponse> = Vec::new();
-
-    for (aggregator_index, aggregator) in aggregators.iter().enumerate() {
-        let resp = AggregatorProcess {
-            state: &state,
-            async_tx: state.queue_transaction.clone(),
-            aggregator,
-            queue_id: PacketQueueId {
-                event_id: event_id.clone(),
-                aggregator_index,
-            },
-            packet,
-            signer,
-        }
-        .run()
-        .await;
-
-        match resp {
-            Ok(resp) => {
-                responses.push(resp);
-            }
-            Err(e) => {
-                responses.push(AddPacketResponse::Error {
-                    reason: format!("{:?}", e),
-                });
-            }
-        }
+    AggregatorProcess {
+        state: &state,
+        async_tx: state.queue_transaction.clone(),
+        packet,
+        signer,
     }
-
-    if responses.len() != aggregators.len() {
-        return Err(AggregatorError::UnexpectedResponsesLength {
-            responses: responses.len(),
-            aggregators: aggregators.len(),
-        });
-    }
-
-    Ok(responses)
+    .run()
+    .await
 }
 
 struct AggregatorProcess<'a> {
     state: &'a HttpState,
     async_tx: AsyncTransaction<PacketQueueId>,
-    aggregator: &'a Aggregator,
-    queue_id: PacketQueueId,
     packet: &'a Packet,
     signer: Address,
 }
 
 impl AggregatorProcess<'_> {
-    #[instrument(level = "debug", skip(self), fields(queue_id = ?self.queue_id, signer = ?self.signer))]
-    async fn run(self) -> AggregatorResult<AddPacketResponse> {
+    #[instrument(level = "debug", skip(self), fields(signer = ?self.signer))]
+    async fn run(self) -> AggregatorResult<Vec<AddPacketResponse>> {
         let Self {
             state,
             async_tx,
-            aggregator,
-            queue_id,
             packet,
             signer,
         } = self;
 
-        match aggregator {
-            Aggregator::Evm(EvmContractSubmission {
-                chain_name: _,
-                address: _,
-                max_gas,
-            }) => {
-                // execute the logic within a transaction, keyed by queue_id
-                // other queue ids can run concurrently, but this makes sure that
-                // we aren't validating a queue that was updated from another request coming in
-                async_tx
-                    .run(queue_id.clone(), move || async move {
-                        let queue = match state.get_packet_queue(&queue_id)? {
-                            PacketQueue::Alive(queue) => {
-                                if let (Some(engine), wavs_types::Submit::Aggregator { component: Some(component), evm_contracts, .. }) =
-                                    (&state.aggregator_engine, &packet.service.workflows[&packet.workflow_id].submit)
-                                {
-                                    match engine.execute_packet(component, packet).await {
-                                        Ok(actions) => {
-                                            let updated_queue = process_aggregator_actions(state, packet, queue, signer, actions).await?;
-                                            // If this is a component-only workflow, just batch the packet
-                                            if evm_contracts.is_none() {
-                                                return Ok(AddPacketResponse::Aggregated { count: updated_queue.len() });
-                                            }
-                                            updated_queue
-                                        },
-                                        Err(e) => {
-                                            tracing::error!("Custom aggregator component failed: {}", e);
-                                            return Err(AggregatorError::ComponentExecution(e.to_string()));
-                                        }
-                                    }
-                                } else {
-                                    add_packet_to_queue(packet, queue, signer)?
-                                }
-                            }
-                            PacketQueue::Burned => {
-                                return Ok(AddPacketResponse::Burned);
-                            }
-                        };
+        let event_id = packet.event_id();
 
-                        let (chain_name, address) = match aggregator {
-                            Aggregator::Evm(EvmContractSubmission { chain_name, address, .. }) => {
-                                (chain_name, address)
-                            }
-                        };
-                        let service_manager = get_submission_service_manager(state, chain_name, *address).await?;
+        let component = match &packet.service.workflows[&packet.workflow_id].submit {
+            wavs_types::Submit::Aggregator { component, .. } => component,
+            _ => {
+                return Ok(vec![AddPacketResponse::Error {
+                    reason: format!(
+                        "MissingWorkflow: workflow_id: {}, service_id: {}",
+                        packet.workflow_id,
+                        packet.service.id()
+                    ),
+                }])
+            }
+        };
 
-                        // TODO: anvil specific (blockheight -1)? InvalidReferenceBlock(). ECDSA logic error / fixed in BLS?
-                        let block_height_minus_one = service_manager
-                            .provider()
-                            .get_block_number()
-                            .await
-                            .map_err(|e| AggregatorError::BlockNumber(e.into()))? - 1;
+        let actions = match state
+            .aggregator_engine
+            .execute_packet(component, packet)
+            .await
+        {
+            Ok(actions) => actions,
+            Err(e) => {
+                return Ok(vec![AddPacketResponse::Error {
+                    reason: format!("ComponentExecution: {}", e),
+                }])
+            }
+        };
 
-                        let signatures: Vec<EnvelopeSignature> = queue
-                            .iter()
-                            .map(|queued| queued.packet.signature.clone())
-                            .collect();
+        if actions.is_empty() {
+            return Ok(vec![]);
+        }
 
-                        let signature_data = packet
-                            .envelope
-                            .signature_data(signatures, block_height_minus_one)?;
+        let mut responses = Vec::new();
 
-                        let result = service_manager
-                            .validate(
-                                packet.envelope.clone().into(),
-                                signature_data.clone().into(),
-                            )
-                            .call()
-                            .await;
+        for action in actions {
+            let queue_id = PacketQueueId {
+                event_id: event_id.clone(),
+                aggregator_action: crate::compat::from_engine_action(action.clone()),
+            };
 
+            // execute the logic within a transaction, keyed by queue_id
+            // other queue ids can run concurrently, but this makes sure that
+            // we lock this queue_id against changes from other requests coming in while we process it
+            let result = async_tx
+                .run(queue_id.clone(), {
+                    let state = state.clone();
+                    let packet = packet.clone();
+                    move || Self::process_action(state, packet, queue_id, action, signer)
+                })
+                .await;
 
-                        match result {
-                            Ok(_) => {
-                                let client = state.get_evm_client(chain_name).await?;
-                                tracing::info!(
-                                    "Sending aggregated packet to chain: {}, address: {:?}, block_height: {}",
-                                    chain_name,
-                                    address,
-                                    block_height_minus_one
-                                );
-                                let tx_receipt = client
-                                    .send_envelope_signatures(
-                                        packet.envelope.clone(),
-                                        signature_data.clone(),
-                                        *address,
-                                        *max_gas,
-                                    )
-                                    .await?;
-                                tracing::info!(
-                                    "Transaction sent successfully: {:?}",
-                                    tx_receipt.transaction_hash
-                                );
+            match result {
+                Ok(response) => responses.push(response),
+                Err(e) => responses.push(AddPacketResponse::Error {
+                    reason: format!("{:?}", e),
+                }),
+            }
+        }
 
-                                state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
-                                tracing::info!("Packet queue burned after successful submission");
+        Ok(responses)
+    }
 
-                                Ok(AddPacketResponse::Sent {
-                                    tx_receipt: Box::new(tx_receipt),
-                                    count: queue.len(),
-                                })
-                            },
-                            Err(err) => {
-                                match err.as_decoded_interface_error::<ServiceManagerError>() {
-                                    Some(ServiceManagerError::InsufficientQuorum(_)) => {
-                                        // insufficient quorum means we just keep aggregating
-                                        state.save_packet_queue(
-                                            &queue_id,
-                                            PacketQueue::Alive(queue.clone()),
-                                        )?;
+    async fn process_action(
+        state: HttpState,
+        packet: Packet,
+        queue_id: PacketQueueId,
+        action: AggregatorAction,
+        signer: Address,
+    ) -> AggregatorResult<AddPacketResponse> {
+        let queue = match state.get_packet_queue(&queue_id)? {
+            PacketQueue::Alive(queue) => add_packet_to_queue(&packet, queue, signer)?,
+            PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
+        };
 
-                                        Ok(AddPacketResponse::Aggregated { count: queue.len() })
-                                    },
-                                    Some(err) => {
-                                        Err(AggregatorError::ServiceManagerValidateKnown(err))
-                                    }
-                                    None => {
-                                        match err.as_revert_data() {
-                                            Some(raw) => Err(AggregatorError::ServiceManagerValidateAnyRevert(raw.to_string())),
-                                            None => Err(AggregatorError::ServiceManagerValidateUnknown(err))
-                                        }
-                                    }
-                                }
-                            }
+        match &action {
+            AggregatorAction::Submit(submit_action) => {
+                match handle_custom_submit(&state, &packet, &queue, submit_action.clone()).await {
+                    Ok(tx_receipt) => {
+                        state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
+                        Ok(AddPacketResponse::Sent {
+                            tx_receipt: Box::new(tx_receipt),
+                            count: queue.len(),
+                        })
+                    }
+                    Err(e) => {
+                        if let AggregatorError::ServiceManagerValidateKnown(
+                            ServiceManagerError::InsufficientQuorum(_),
+                        ) = &e
+                        {
+                            let count = queue.len();
+                            state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
+                            Ok(AddPacketResponse::Aggregated { count })
+                        } else {
+                            Err(e)
                         }
-                    })
-                    .await
+                    }
+                }
+            }
+            AggregatorAction::Timer(_) => {
+                let count = queue.len();
+                state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
+                Ok(AddPacketResponse::Aggregated { count })
             }
         }
     }
@@ -338,70 +254,6 @@ async fn get_submission_service_manager(
     ))
 }
 
-async fn process_aggregator_actions(
-    state: &HttpState,
-    packet: &Packet,
-    mut queue: Vec<QueuedPacket>,
-    signer: Address,
-    actions: Vec<AggregatorAction>,
-) -> AggregatorResult<Vec<QueuedPacket>> {
-    tracing::info!(
-        "Custom aggregator component returned {} actions",
-        actions.len()
-    );
-
-    for queued_packet in queue.iter_mut() {
-        // if the signer is the same as the one in the queue, we can just update it
-        // this effectively allows re-trying failed aggregation
-        if signer == queued_packet.signer {
-            *queued_packet = QueuedPacket {
-                packet: packet.clone(),
-                signer,
-            };
-            return Ok(queue);
-        }
-    }
-
-    queue.push(QueuedPacket {
-        packet: packet.clone(),
-        signer,
-    });
-
-    if actions.is_empty() {
-        tracing::debug!("Component returned no actions");
-    } else {
-        for action in actions {
-            match action {
-                AggregatorAction::Submit(submit_action) => {
-                    tracing::info!(
-                        "Component requested submit to chain: {}, contract: {:?}",
-                        submit_action.chain_name,
-                        submit_action.contract_address
-                    );
-
-                    match handle_custom_submit(state, packet, &queue, submit_action).await {
-                        Ok(_) => {
-                            tracing::info!("Custom submit completed successfully");
-                        }
-                        Err(e) => {
-                            tracing::error!("Custom submit failed: {}", e);
-                        }
-                    }
-                }
-                AggregatorAction::Timer(timer_action) => {
-                    tracing::info!(
-                        "Component requested timer callback in {} seconds",
-                        timer_action.delay
-                    );
-                    todo!("Implement timer scheduling system");
-                }
-            }
-        }
-    }
-
-    Ok(queue)
-}
-
 async fn handle_custom_submit(
     state: &HttpState,
     packet: &Packet,
@@ -411,18 +263,8 @@ async fn handle_custom_submit(
     let chain_name = ChainName::new(submit_action.chain_name)?;
     let contract_address = Address::from_slice(&submit_action.contract_address.raw_bytes);
 
-    let client = state.get_evm_client(&chain_name).await?;
-
-    let service_handler =
-        IWavsServiceHandlerInstance::new(contract_address, client.provider.clone());
-    let service_manager_address = service_handler
-        .getServiceManager()
-        .call()
-        .await
-        .map_err(AggregatorError::ServiceManagerLookup)?;
-
     let service_manager =
-        IWavsServiceManagerInstance::new(service_manager_address, client.provider.clone());
+        get_submission_service_manager(state, &chain_name, contract_address).await?;
 
     let block_height_minus_one = service_manager
         .provider()
@@ -440,8 +282,6 @@ async fn handle_custom_submit(
         .envelope
         .signature_data(signatures, block_height_minus_one)?;
 
-    let service_manager =
-        get_submission_service_manager(state, &chain_name, contract_address).await?;
     let result = service_manager
         .validate(
             packet.envelope.clone().into(),
@@ -454,29 +294,22 @@ async fn handle_custom_submit(
         Ok(_) => {
             tracing::info!("Service manager validation passed for custom submit");
         }
-        Err(err) => {
-            match err.as_decoded_interface_error::<ServiceManagerError>() {
-                Some(ServiceManagerError::InsufficientQuorum(quorum_err)) => {
-                    // insufficient quorum - in custom submit this is an error, not "keep aggregating"
-                    return Err(AggregatorError::ServiceManagerValidateKnown(
-                        ServiceManagerError::InsufficientQuorum(quorum_err),
-                    ));
-                }
-                Some(err) => {
-                    return Err(AggregatorError::ServiceManagerValidateKnown(err));
-                }
-                None => match err.as_revert_data() {
-                    Some(raw) => {
-                        return Err(AggregatorError::ServiceManagerValidateAnyRevert(
-                            raw.to_string(),
-                        ))
-                    }
-                    None => return Err(AggregatorError::ServiceManagerValidateUnknown(err)),
-                },
+        Err(err) => match err.as_decoded_interface_error::<ServiceManagerError>() {
+            Some(err) => {
+                return Err(AggregatorError::ServiceManagerValidateKnown(err));
             }
-        }
+            None => match err.as_revert_data() {
+                Some(raw) => {
+                    return Err(AggregatorError::ServiceManagerValidateAnyRevert(
+                        raw.to_string(),
+                    ))
+                }
+                None => return Err(AggregatorError::ServiceManagerValidateUnknown(err)),
+            },
+        },
     }
 
+    let client = state.get_evm_client(&chain_name).await?;
     let tx_receipt = client
         .send_envelope_signatures(
             packet.envelope.clone(),
@@ -546,12 +379,13 @@ mod test {
         filesystem::workspace_path,
         test_utils::{
             middleware::{AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig},
+            mock_engine::COMPONENT_SIMPLE_AGGREGATOR_BYTES,
             mock_service_manager::MockServiceManager,
             test_contracts::TestContractDeps,
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{ChainName, Service, WorkflowID};
+    use wavs_types::{ChainName, ComponentDigest, Service, WorkflowID};
 
     #[test]
     fn packet_validation() {
@@ -633,17 +467,12 @@ mod test {
             .deploy_simple_service_handler(service_manager.address())
             .await;
 
-        let fixed_second_service_handler = deps
-            .contracts
-            .deploy_simple_service_handler(service_manager.address())
-            .await;
-
         // Make sure we properly collect errors without actually erroring out
-        let mut service = deps
+        let service = deps
             .create_service(
                 "workflow-1".parse().unwrap(),
                 service_manager.address(),
-                vec![*service_handler.address(), Address::ZERO],
+                vec![*service_handler.address()],
             )
             .await;
         deps.state.register_service(&service.id()).unwrap();
@@ -662,30 +491,31 @@ mod test {
         }
 
         for (signer_index, final_results) in all_results.into_iter().enumerate() {
-            for (agg_index, result) in final_results.into_iter().enumerate() {
-                match (signer_index, agg_index) {
-                    // invalid chain errors
-                    (_, 1) => {
-                        assert!(matches!(result, AddPacketResponse::Error { .. }));
-                    }
-                    // first signer on valid chain is just aggregating
-                    (0, 0) => {
-                        assert!(matches!(
-                            result,
-                            AddPacketResponse::Aggregated { count: 1, .. }
-                        ));
-                    }
-                    // second signer on valid chain sends
-                    (1, 0) => {
-                        assert!(matches!(result, AddPacketResponse::Sent { count: 2, .. }));
-                    }
-                    _ => {
-                        panic!(
-                            "Unexpected result for signer {} and aggregator {}: {:?}",
-                            signer_index, agg_index, result
-                        );
-                    }
+            assert_eq!(
+                final_results.len(),
+                1,
+                "Should have exactly one response per packet"
+            );
+            let result = &final_results[0];
+
+            match signer_index {
+                // first signer is just aggregating
+                0 => {
+                    assert!(
+                        matches!(result, AddPacketResponse::Aggregated { count: 1, .. }),
+                        "First signer expected Aggregated {{ count: 1 }}, got {:?}",
+                        result
+                    );
                 }
+                // second signer sends (reaches threshold)
+                1 => {
+                    assert!(matches!(result, AddPacketResponse::Sent { count: 2, .. }));
+                }
+                // subsequent signers should see it's already sent (burned)
+                n if n >= 2 => {
+                    assert!(matches!(result, AddPacketResponse::Burned));
+                }
+                _ => {}
             }
         }
 
@@ -704,41 +534,20 @@ mod test {
         }
 
         for (signer_index, final_results) in all_results.into_iter().enumerate() {
-            for (agg_index, result) in final_results.into_iter().enumerate() {
-                match (signer_index, agg_index) {
-                    // valid chain is burned
-                    (_, 0) => {
-                        assert!(matches!(result, AddPacketResponse::Burned));
-                    }
-                    // invalid chain errors
-                    (_, 1) => {
-                        assert!(matches!(result, AddPacketResponse::Error { .. }));
-                    }
-                    _ => {
-                        panic!(
-                            "Unexpected result for signer {} and aggregator {}: {:?}",
-                            signer_index, agg_index, result
-                        );
-                    }
-                }
-            }
-        }
+            assert_eq!(
+                final_results.len(),
+                1,
+                "Should have exactly one response per packet"
+            );
+            let result = &final_results[0];
 
-        // now let's change reality, make the second aggregator valid
-        // we should get essentially the same as previous attempt, but second aggregator should succeed
-
-        if let wavs_types::Submit::Aggregator {
-            evm_contracts: Some(ref mut contracts),
-            ..
-        } = &mut service.workflows.iter_mut().next().unwrap().1.submit
-        {
-            if let Some(contract) = contracts.get_mut(1) {
-                *contract = wavs_types::EvmContractSubmission {
-                    chain_name: deps.contracts.chain_name.clone(),
-                    address: *fixed_second_service_handler.address(),
-                    max_gas: None,
-                };
-            }
+            // All packets should be burned since the envelope was already sent
+            assert!(
+                matches!(result, AddPacketResponse::Burned),
+                "Signer {} expected Burned, got {:?}",
+                signer_index,
+                result
+            );
         }
 
         let mut all_results = Vec::new();
@@ -970,6 +779,38 @@ mod test {
         workflow_id: WorkflowID,
         service_manager_address: Address,
         service_handler_addresses: Vec<Address>,
+        aggregator_digest: ComponentDigest,
+    ) -> wavs_types::Service {
+        let mut component =
+            wavs_types::Component::new(wavs_types::ComponentSource::Digest(aggregator_digest));
+        component
+            .config
+            .insert("chain_name".to_string(), chain_name.to_string());
+        // SimpleAggregator needs the service handler address
+        if !service_handler_addresses.is_empty() {
+            component.config.insert(
+                "service_handler".to_string(),
+                service_handler_addresses[0].to_string(),
+            );
+        }
+
+        mock_service_with_submit(
+            chain_name,
+            workflow_id,
+            service_manager_address,
+            wavs_types::Submit::Aggregator {
+                url: "http://localhost:8080".to_string(),
+                component: Box::new(component),
+            },
+        )
+        .await
+    }
+
+    async fn mock_service_with_submit(
+        chain_name: ChainName,
+        workflow_id: WorkflowID,
+        service_manager_address: Address,
+        submit: wavs_types::Submit,
     ) -> wavs_types::Service {
         let mut workflows = BTreeMap::new();
         workflows.insert(
@@ -979,20 +820,7 @@ mod test {
                 component: wavs_types::Component::new(wavs_types::ComponentSource::Digest(
                     wavs_types::ComponentDigest::hash([0; 32]),
                 )),
-                submit: wavs_types::Submit::Aggregator {
-                    url: "http://dummy".to_string(),
-                    component: None,
-                    evm_contracts: Some(
-                        service_handler_addresses
-                            .into_iter()
-                            .map(|address| wavs_types::EvmContractSubmission {
-                                chain_name: chain_name.clone(),
-                                address,
-                                max_gas: None,
-                            })
-                            .collect(),
-                    ),
-                },
+                submit,
             },
         );
 
@@ -1010,6 +838,7 @@ mod test {
     struct TestDeps {
         contracts: TestContractDeps,
         state: HttpState,
+        simple_aggregator_digest: ComponentDigest,
     }
 
     impl TestDeps {
@@ -1042,11 +871,18 @@ mod test {
             config.credential =
                 Some("test test test test test test test test test test test junk".to_string());
 
-            let state = HttpState::new(config).unwrap();
+            let state = HttpState::new_with_engine(config).unwrap();
+
+            let digest = state
+                .aggregator_engine
+                .upload_component(COMPONENT_SIMPLE_AGGREGATOR_BYTES.to_vec())
+                .await
+                .unwrap();
 
             Self {
                 contracts: contract_deps,
                 state,
+                simple_aggregator_digest: digest,
             }
         }
 
@@ -1061,6 +897,7 @@ mod test {
                 workflow_id,
                 service_manager_address,
                 service_handler_addresses,
+                self.simple_aggregator_digest.clone(),
             )
             .await
         }

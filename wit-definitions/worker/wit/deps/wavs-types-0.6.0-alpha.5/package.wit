@@ -1,4 +1,4 @@
-package wavs:types@0.6.0-alpha.4;
+package wavs:types@0.6.0-alpha.5;
 
 interface chain {
   type chain-name = string;
@@ -187,16 +187,9 @@ interface service {
     manual,
   }
 
-  record evm-contract-submission {
-    chain-name: chain-name,
-    address: evm-address,
-    max-gas: option<u64>,
-  }
-
   record aggregator-submit {
     url: string,
-    component: option<component>,
-    evm-contracts: option<list<evm-contract-submission>>,
+    component: component,
   }
 
   /// Submit types
@@ -218,6 +211,12 @@ interface service {
     workflows: list<tuple<workflow-id, workflow>>,
     status: service-status,
     manager: service-manager,
+  }
+
+  record evm-contract-submission {
+    chain-name: chain-name,
+    address: evm-address,
+    max-gas: option<u64>,
   }
 
   /// Aggregator types

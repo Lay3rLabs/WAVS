@@ -1,17 +1,20 @@
 // src/e2e/test_runner.rs
 
+use crate::deployment::ServiceDeployment;
 use alloy_provider::Provider;
 use anyhow::{anyhow, Context};
 use futures::{stream::FuturesUnordered, StreamExt};
 use ordermap::OrderMap;
 use std::collections::HashMap;
 use std::sync::Arc;
-use wavs_types::{EvmContractSubmission, Service, Submit, Trigger, Workflow, WorkflowID};
+use wavs_types::{Submit, Trigger, Workflow, WorkflowID};
 
 use crate::e2e::helpers::change_service_for_test;
 use crate::e2e::report::TestReport;
 use crate::e2e::service_managers::ServiceManagers;
-use crate::e2e::test_definition::ChangeServiceDefinition;
+use crate::e2e::test_definition::{
+    AggregatorDefinition, ChangeServiceDefinition, SubmitDefinition,
+};
 use crate::e2e::test_registry::CosmosTriggerCodeMap;
 use crate::{
     e2e::{
@@ -35,6 +38,17 @@ pub struct Runner {
     report: TestReport,
 }
 
+/// Extract service handler address from an aggregator submit configuration
+fn extract_aggregator_service_handler(submit: &Submit) -> Option<alloy_primitives::Address> {
+    match submit {
+        Submit::Aggregator { component, .. } => component
+            .config
+            .get("service_handler")
+            .and_then(|addr_str| addr_str.parse::<alloy_primitives::Address>().ok()),
+        _ => None,
+    }
+}
+
 impl Runner {
     pub fn new(
         clients: Clients,
@@ -55,13 +69,13 @@ impl Runner {
     }
 
     /// Run all tests in the registry
-    pub async fn run_tests(&self, mut all_services: HashMap<String, Service>) {
+    pub async fn run_tests(&self, mut all_services: HashMap<String, ServiceDeployment>) {
         let test_groups = self.registry.list_all_grouped();
 
         for (group, mut group_tests) in test_groups {
             let services = group_tests
                 .iter()
-                .map(|test| all_services.get(&test.name).cloned().unwrap())
+                .map(|test| all_services.get(&test.name).cloned().unwrap().service)
                 .collect::<Vec<_>>();
 
             // This essentially deploys the services for the group
@@ -78,7 +92,7 @@ impl Runner {
             let mut futures = FuturesUnordered::new();
             for test in group_tests.iter() {
                 if let Some(change_service) = test.change_service.clone() {
-                    let service = all_services.get(&test.name).cloned().unwrap();
+                    let service = all_services.get(&test.name).cloned().unwrap().service;
                     futures.push(async move {
                         let mut service = service;
                         change_service_for_test(
@@ -101,8 +115,12 @@ impl Runner {
                 tracing::warn!("Running service changes for group {}", group);
                 let mut services_to_change = Vec::new();
                 while let Some((service, change_service)) = futures.next().await {
-                    // update our local copy of the service
-                    all_services.insert(service.name.clone(), service.clone());
+                    // update our local copy of the service and handle changes
+                    let service_deployment = all_services
+                        .get_mut(&service.name)
+                        .expect("Service should exist in all_services");
+
+                    service_deployment.service = service.clone();
 
                     // and the definition so that tests know what to look for
                     match change_service {
@@ -110,6 +128,22 @@ impl Runner {
                             workflow_id,
                             workflow,
                         } => {
+                            // When a workflow is added, it includes a new submission contract
+                            // Extract it from the service's workflow that was just added
+                            let submission_address = service_deployment
+                                .service
+                                .workflows
+                                .get(&workflow_id)
+                                .and_then(|workflow| {
+                                    extract_aggregator_service_handler(&workflow.submit)
+                                });
+
+                            if let Some(address) = submission_address {
+                                service_deployment
+                                    .submission_handlers
+                                    .insert(workflow_id.clone(), address);
+                            }
+
                             group_tests
                                 .iter_mut()
                                 .find(|test| test.name == service.name)
@@ -165,14 +199,14 @@ impl Runner {
     async fn execute_test(
         &self,
         test: &TestDefinition,
-        service: Service,
+        service_deployment: ServiceDeployment,
         clients: Arc<Clients>,
         component_sources: Arc<ComponentSources>,
         report: TestReport,
     ) {
         report.start_test(test.name.clone());
 
-        run_test(test, service, &clients, &component_sources)
+        run_test(test, service_deployment, &clients, &component_sources)
             .await
             .context(test.name.clone())
             .unwrap();
@@ -184,14 +218,14 @@ impl Runner {
 /// Run a single test
 async fn run_test(
     test: &TestDefinition,
-    service: Service,
+    service_deployment: ServiceDeployment,
     clients: &Clients,
     component_sources: &ComponentSources,
 ) -> anyhow::Result<()> {
     // Group workflows by trigger to handle multi-triggers
     let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowID, &Workflow)>> = OrderMap::new();
 
-    for (workflow_id, workflow) in service.workflows.iter() {
+    for (workflow_id, workflow) in service_deployment.service.workflows.iter() {
         trigger_groups
             .entry(&workflow.trigger)
             .or_default()
@@ -259,37 +293,39 @@ async fn run_test(
             ))?;
 
             let signed_data = match &workflow.submit {
-                Submit::Aggregator { evm_contracts, .. } => {
-                    let mut signed_data = vec![];
-                    let empty_vec = Vec::new();
-                    let contracts = evm_contracts.as_ref().unwrap_or(&empty_vec);
-                    for contract in contracts.iter() {
-                        let EvmContractSubmission {
-                            chain_name,
-                            address,
-                            ..
-                        } = contract;
+                Submit::Aggregator { .. } => {
+                    let workflow_def = test.workflows.get(workflow_id).ok_or_else(|| {
+                        anyhow!("Could not get workflow definition from id: {}", workflow_id)
+                    })?;
 
-                        let client = clients.get_evm_client(chain_name);
-                        let submit_start_block = client
-                            .provider
-                            .get_block_number()
-                            .await
-                            .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
+                    let SubmitDefinition::Aggregator { aggregator, .. } = &workflow_def.submit;
+                    let AggregatorDefinition::ComponentBasedAggregator { chain_name, .. } =
+                        aggregator;
 
-                        signed_data.push(
-                            wait_for_task_to_land(
-                                client,
-                                *address,
-                                trigger_id,
-                                submit_start_block,
-                                *timeout,
-                            )
-                            .await?,
-                        );
-                    }
+                    let client = clients.get_evm_client(chain_name);
+                    let submit_start_block = client
+                        .provider
+                        .get_block_number()
+                        .await
+                        .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
 
-                    signed_data
+                    let submission_contract = service_deployment
+                        .submission_handlers
+                        .get(workflow_id)
+                        .ok_or_else(|| {
+                            anyhow!("No submission contract found for workflow {}", workflow_id)
+                        })?;
+
+                    vec![
+                        wait_for_task_to_land(
+                            client,
+                            *submission_contract,
+                            trigger_id,
+                            submit_start_block,
+                            *timeout,
+                        )
+                        .await?,
+                    ]
                 }
                 Submit::None => unimplemented!("Submit::None is not implemented"),
             };
@@ -302,7 +338,7 @@ async fn run_test(
 
     clients
         .http_client
-        .delete_service(vec![service.manager])
+        .delete_service(vec![service_deployment.service.manager])
         .await?;
 
     Ok(())

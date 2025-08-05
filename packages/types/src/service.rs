@@ -317,11 +317,7 @@ pub enum Submit {
         /// The aggregator endpoint
         url: String,
         /// component dynamically determines the destination
-        // only non-optional for backwards-compatibility, once everything is working - becomes mandatory!
-        // Boxed in order to save memory (vs the None enum variant)
-        component: Option<Box<Component>>,
-        // temporary backwards-compatibility only!! so we can merge incremental PRs and keep tests passing
-        evm_contracts: Option<Vec<EvmContractSubmission>>,
+        component: Box<Component>,
     },
 }
 

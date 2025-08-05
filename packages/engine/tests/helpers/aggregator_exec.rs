@@ -37,7 +37,7 @@ pub async fn execute_aggregator_component(
         config: [
             ("chain_name".to_string(), "31337".to_string()),
             (
-                "contract_address".to_string(),
+                "service_handler".to_string(),
                 "0x0000000000000000000000000000000000000000".to_string(),
             ),
         ]

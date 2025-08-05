@@ -2,6 +2,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::result_large_err)]
 pub mod args;
+pub mod compat;
 pub mod config;
 pub mod engine;
 pub mod error;

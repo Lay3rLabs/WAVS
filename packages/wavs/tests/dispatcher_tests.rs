@@ -13,8 +13,8 @@ use utils::{
 use wavs::dispatcher::DispatcherCommand;
 use wavs::init_tracing_tests;
 use wavs_types::{
-    ChainName, Component, ComponentSource, EvmContractSubmission, Service, ServiceManager,
-    ServiceStatus, Submit, Workflow, WorkflowID,
+    ChainName, Component, ComponentSource, Service, ServiceManager, ServiceStatus, Submit,
+    Workflow, WorkflowID,
 };
 mod wavs_systems;
 use wavs_systems::{
@@ -50,16 +50,11 @@ fn dispatcher_pipeline() {
         workflows: [(
             workflow_id.clone(),
             Workflow {
-                component: Component::new(ComponentSource::Digest(digest)),
+                component: Component::new(ComponentSource::Digest(digest.clone())),
                 trigger: mock_cosmos_event_trigger(),
                 submit: Submit::Aggregator {
                     url: "http://example.com/aggregator".to_string(),
-                    component: None,
-                    evm_contracts: Some(vec![EvmContractSubmission {
-                        chain_name: chain_name.parse().unwrap(),
-                        address: rand_address_evm(),
-                        max_gas: None,
-                    }]),
+                    component: Box::new(Component::new(ComponentSource::Digest(digest))),
                 },
             },
         )]

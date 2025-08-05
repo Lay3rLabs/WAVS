@@ -3,16 +3,16 @@ log_level = ["info", "wavs=debug"]
 
 [layer-tests]
 wavs_concurrency = true
-middleware_concurrency = false 
+middleware_concurrency = false
 # Run all tests
 mode = "all"
 
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
-# mode = "all_eth"
+# mode = "all_cosmos"
 
 # Run a specific test
 # mode = {"isolated" = [
-#     {evm = "simple_aggregator"},
+#     {evm = "multi_trigger"},
 # ]}
 
 # Run a few specific tests

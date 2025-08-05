@@ -225,16 +225,12 @@ impl From<wavs_types::Submit> for component_service::Submit {
     fn from(src: wavs_types::Submit) -> Self {
         match src {
             wavs_types::Submit::None => component_service::Submit::None,
-            wavs_types::Submit::Aggregator {
-                url,
-                component,
-                evm_contracts,
-            } => component_service::Submit::Aggregator(component_service::AggregatorSubmit {
-                url,
-                component: component.map(|c| (*c).into()),
-                evm_contracts: evm_contracts
-                    .map(|contracts| contracts.into_iter().map(|c| c.into()).collect()),
-            }),
+            wavs_types::Submit::Aggregator { url, component } => {
+                component_service::Submit::Aggregator(component_service::AggregatorSubmit {
+                    url,
+                    component: (*component).into(),
+                })
+            }
         }
     }
 }

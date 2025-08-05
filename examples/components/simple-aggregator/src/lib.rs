@@ -13,12 +13,12 @@ impl Guest for Component {
     fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
         let chain_name =
             host::config_var("chain_name").ok_or("chain_name config variable is required")?;
-        let contract_address_str = host::config_var("contract_address")
-            .ok_or("contract_address config variable is required")?;
+        let service_handler_str = host::config_var("service_handler")
+            .ok_or("service_handler config variable is required")?;
 
-        let address: alloy_primitives::Address = contract_address_str
+        let address: alloy_primitives::Address = service_handler_str
             .parse()
-            .map_err(|e| format!("Failed to parse contract address: {e}"))?;
+            .map_err(|e| format!("Failed to parse service handler address: {e}"))?;
 
         let submit_action = SubmitAction {
             chain_name,
