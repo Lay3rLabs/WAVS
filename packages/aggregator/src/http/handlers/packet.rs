@@ -194,68 +194,26 @@ impl AggregatorProcess<'_> {
 
         match &action {
             AggregatorAction::Submit(submit_action) => {
-                let chain_name = ChainName::new(submit_action.chain_name.clone())?;
-                let address = alloy_primitives::Address::from_slice(
-                    &submit_action.contract_address.raw_bytes,
-                );
-                let service_manager =
-                    get_submission_service_manager(&state, &chain_name, address).await?;
-
-                let block_height_minus_one = service_manager
-                    .provider()
-                    .get_block_number()
-                    .await
-                    .map_err(|e| AggregatorError::BlockNumber(e.into()))?
-                    - 1;
-
-                let signatures: Vec<EnvelopeSignature> = queue
-                    .iter()
-                    .map(|queued| queued.packet.signature.clone())
-                    .collect();
-
-                let signature_data = packet
-                    .envelope
-                    .signature_data(signatures, block_height_minus_one)?;
-
-                let validation_result = service_manager
-                    .validate(
-                        packet.envelope.clone().into(),
-                        signature_data.clone().into(),
-                    )
-                    .call()
-                    .await;
-
-                match validation_result {
-                    Ok(_) => {
-                        match handle_custom_submit(&state, &packet, &queue, submit_action.clone())
-                            .await
-                        {
-                            Ok(tx_receipt) => {
-                                state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
-                                Ok(AddPacketResponse::Sent {
-                                    tx_receipt: Box::new(tx_receipt),
-                                    count: queue.len(),
-                                })
-                            }
-                            Err(e) => Err(e),
-                        }
+                match handle_custom_submit(&state, &packet, &queue, submit_action.clone()).await {
+                    Ok(tx_receipt) => {
+                        state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
+                        Ok(AddPacketResponse::Sent {
+                            tx_receipt: Box::new(tx_receipt),
+                            count: queue.len(),
+                        })
                     }
-                    Err(err) => match err.as_decoded_interface_error::<ServiceManagerError>() {
-                        // insufficient quorum - accumulate packets until quorum is reached
-                        Some(ServiceManagerError::InsufficientQuorum(_)) => {
+                    Err(e) => {
+                        if let AggregatorError::ServiceManagerValidateKnown(
+                            ServiceManagerError::InsufficientQuorum(_),
+                        ) = &e
+                        {
                             let count = queue.len();
                             state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
                             Ok(AddPacketResponse::Aggregated { count })
+                        } else {
+                            Err(e)
                         }
-                        Some(err) => Err(AggregatorError::ServiceManagerValidateKnown(err)),
-                        // the contract reverted but it's not recognized as IWavsServiceManagerError
-                        None => match err.as_revert_data() {
-                            Some(raw) => Err(AggregatorError::ServiceManagerValidateAnyRevert(
-                                raw.to_string(),
-                            )),
-                            None => Err(AggregatorError::ServiceManagerValidateUnknown(err)),
-                        },
-                    },
+                    }
                 }
             }
             AggregatorAction::Timer(_) => {
@@ -302,18 +260,8 @@ async fn handle_custom_submit(
     let chain_name = ChainName::new(submit_action.chain_name)?;
     let contract_address = Address::from_slice(&submit_action.contract_address.raw_bytes);
 
-    let client = state.get_evm_client(&chain_name).await?;
-
-    let service_handler =
-        IWavsServiceHandlerInstance::new(contract_address, client.provider.clone());
-    let service_manager_address = service_handler
-        .getServiceManager()
-        .call()
-        .await
-        .map_err(AggregatorError::ServiceManagerLookup)?;
-
     let service_manager =
-        IWavsServiceManagerInstance::new(service_manager_address, client.provider.clone());
+        get_submission_service_manager(state, &chain_name, contract_address).await?;
 
     let block_height_minus_one = service_manager
         .provider()
@@ -331,8 +279,6 @@ async fn handle_custom_submit(
         .envelope
         .signature_data(signatures, block_height_minus_one)?;
 
-    let service_manager =
-        get_submission_service_manager(state, &chain_name, contract_address).await?;
     let result = service_manager
         .validate(
             packet.envelope.clone().into(),
@@ -345,29 +291,22 @@ async fn handle_custom_submit(
         Ok(_) => {
             tracing::info!("Service manager validation passed for custom submit");
         }
-        Err(err) => {
-            match err.as_decoded_interface_error::<ServiceManagerError>() {
-                Some(ServiceManagerError::InsufficientQuorum(quorum_err)) => {
-                    // insufficient quorum - in custom submit this is an error, not "keep aggregating"
-                    return Err(AggregatorError::ServiceManagerValidateKnown(
-                        ServiceManagerError::InsufficientQuorum(quorum_err),
-                    ));
-                }
-                Some(err) => {
-                    return Err(AggregatorError::ServiceManagerValidateKnown(err));
-                }
-                None => match err.as_revert_data() {
-                    Some(raw) => {
-                        return Err(AggregatorError::ServiceManagerValidateAnyRevert(
-                            raw.to_string(),
-                        ))
-                    }
-                    None => return Err(AggregatorError::ServiceManagerValidateUnknown(err)),
-                },
+        Err(err) => match err.as_decoded_interface_error::<ServiceManagerError>() {
+            Some(err) => {
+                return Err(AggregatorError::ServiceManagerValidateKnown(err));
             }
-        }
+            None => match err.as_revert_data() {
+                Some(raw) => {
+                    return Err(AggregatorError::ServiceManagerValidateAnyRevert(
+                        raw.to_string(),
+                    ))
+                }
+                None => return Err(AggregatorError::ServiceManagerValidateUnknown(err)),
+            },
+        },
     }
 
+    let client = state.get_evm_client(&chain_name).await?;
     let tx_receipt = client
         .send_envelope_signatures(
             packet.envelope.clone(),
