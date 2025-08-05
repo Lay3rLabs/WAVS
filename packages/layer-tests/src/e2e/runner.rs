@@ -9,8 +9,9 @@ use std::sync::Arc;
 use std::time::Instant;
 use wavs_types::{EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID};
 
+use crate::e2e::config::Configs;
 use crate::e2e::helpers::change_service_for_test;
-use crate::e2e::test_registry::CosmosTriggerCodeMap;
+use crate::e2e::test_registry::CosmosContractCodeMap;
 use crate::{
     e2e::{
         clients::Clients, components::ComponentSources, helpers::deploy_service_for_test,
@@ -25,24 +26,27 @@ use super::test_definition::WorkflowDefinition;
 
 /// Simplified test runner that leverages services directly attached to test definitions
 pub struct Runner {
+    configs: Arc<Configs>,
     clients: Arc<Clients>,
     registry: Arc<TestRegistry>,
     component_sources: Arc<ComponentSources>,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosContractCodeMap,
 }
 
 impl Runner {
     pub fn new(
+        configs: Configs,
         clients: Clients,
         registry: TestRegistry,
         component_sources: ComponentSources,
-        cosmos_trigger_code_map: CosmosTriggerCodeMap,
+        cosmos_code_map: CosmosContractCodeMap,
     ) -> Self {
         Self {
+            configs: Arc::new(configs),
             clients: Arc::new(clients),
             registry: Arc::new(registry),
             component_sources: Arc::new(component_sources),
-            cosmos_trigger_code_map,
+            cosmos_code_map,
         }
     }
 
@@ -58,15 +62,10 @@ impl Runner {
                 let clients = self.clients.clone();
                 let component_sources = self.component_sources.clone();
                 let mut test = test.clone();
-                let cosmos_trigger_code_map = self.cosmos_trigger_code_map.clone();
+                let cosmos_code_map = self.cosmos_code_map.clone();
                 futures.push(async move {
-                    self.execute_test(
-                        &mut test,
-                        clients,
-                        component_sources,
-                        cosmos_trigger_code_map,
-                    )
-                    .await
+                    self.execute_test(&mut test, clients, component_sources, cosmos_code_map)
+                        .await
                 });
             }
 
@@ -80,15 +79,21 @@ impl Runner {
         test: &mut TestDefinition,
         clients: Arc<Clients>,
         component_sources: Arc<ComponentSources>,
-        cosmos_trigger_code_map: CosmosTriggerCodeMap,
+        cosmos_code_map: CosmosContractCodeMap,
     ) {
         let test_name = test.name.clone();
         let start_time = Instant::now();
 
-        run_test(test, &clients, &component_sources, cosmos_trigger_code_map)
-            .await
-            .context(test.name.clone())
-            .unwrap();
+        run_test(
+            &self.configs,
+            test,
+            &clients,
+            &component_sources,
+            cosmos_code_map,
+        )
+        .await
+        .context(test.name.clone())
+        .unwrap();
         let duration = start_time.elapsed();
         // This is a rough metric for debugging, since it can be interrupted by other async tasks
         tracing::info!(
@@ -101,17 +106,19 @@ impl Runner {
 
 /// Run a single test
 async fn run_test(
+    configs: &Configs,
     test: &mut TestDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosContractCodeMap,
 ) -> anyhow::Result<()> {
     let aggregator_registered_service_ids = Arc::new(std::sync::Mutex::new(HashSet::new()));
     let service = deploy_service_for_test(
+        configs,
         test,
         clients,
         component_sources,
-        cosmos_trigger_code_map.clone(),
+        cosmos_code_map.clone(),
         aggregator_registered_service_ids,
     )
     .await;
@@ -122,7 +129,7 @@ async fn run_test(
             &service,
             clients,
             component_sources,
-            cosmos_trigger_code_map,
+            cosmos_code_map,
         )
         .await;
     }

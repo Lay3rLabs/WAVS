@@ -24,12 +24,16 @@ use super::test_definition::{
 };
 use crate::e2e::components::ComponentSources;
 use crate::e2e::helpers::create_trigger_from_config;
-use crate::e2e::test_definition::{ChangeServiceDefinition, ExpectedOutputCallback};
+use crate::e2e::test_definition::{
+    ChangeServiceDefinition, CosmosContractDefinition, ExpectedOutputCallback,
+};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
-pub type CosmosTriggerCodeMap =
-    Arc<DashMap<CosmosTriggerDefinition, Arc<tokio::sync::Mutex<Option<u64>>>>>;
+#[derive(Clone)]
+pub struct CosmosContractCodeMap(
+    pub Arc<DashMap<CosmosContractDefinition, Arc<tokio::sync::Mutex<Option<u64>>>>>,
+);
 
 // Eventually we will have multiple aggregators to test against, but for now we use a single local aggregator
 const AGGREGATOR_ENDPOINT: &str = "http://127.0.0.1:8001";
@@ -95,7 +99,7 @@ impl TestRegistry {
         test_mode: crate::config::TestMode,
         chain_configs: &ChainConfigs,
         clients: &Clients,
-        cosmos_trigger_code_map: &CosmosTriggerCodeMap,
+        cosmos_code_map: &CosmosContractCodeMap,
     ) -> Self {
         // Convert TestMode to TestMatrix
         let matrix: TestMatrix = test_mode.into();
@@ -151,7 +155,7 @@ impl TestRegistry {
                             },
                         ),
                         clients,
-                        cosmos_trigger_code_map.clone(),
+                        cosmos_code_map.clone(),
                         None,
                     )
                     .await;
@@ -182,7 +186,7 @@ impl TestRegistry {
 
             match service {
                 CosmosService::EchoData => {
-                    registry.register_cosmos_echo_data_test(cosmos, evm, aggregator_endpoint);
+                    registry.register_cosmos_echo_data_test(cosmos, cosmos, aggregator_endpoint);
                 }
                 CosmosService::Square => {
                     registry.register_cosmos_square_test(cosmos, evm, aggregator_endpoint);
@@ -803,26 +807,27 @@ impl TestRegistry {
 
     fn register_cosmos_echo_data_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        trigger_chain: &ChainName,
+        submit_chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_echo_data")
                 .with_description("Tests the EchoData component on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_echo_data").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain_name: trigger_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
-                                chain_name: evm_chain.clone(),
+                            aggregators: vec![AggregatorDefinition::NewCosmosAggregatorSubmit {
+                                chain_name: submit_chain.clone(),
                             }],
                         })
                         .with_input_data(InputData::Text("on brink".to_string()))

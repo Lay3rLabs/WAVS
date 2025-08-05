@@ -158,7 +158,7 @@ impl TryFrom<wavs_types::Workflow> for component_service::Workflow {
         Ok(Self {
             trigger: src.trigger.try_into()?,
             component: src.component.into(),
-            submit: src.submit.into(),
+            submit: src.submit.try_into()?,
         })
     }
 }
@@ -217,21 +217,31 @@ impl From<wavs_types::Permissions> for component_service::Permissions {
     }
 }
 
-impl From<wavs_types::Submit> for component_service::Submit {
-    fn from(src: wavs_types::Submit) -> Self {
-        match src {
+impl TryFrom<wavs_types::Submit> for component_service::Submit {
+    type Error = anyhow::Error;
+    fn try_from(src: wavs_types::Submit) -> Result<Self, Self::Error> {
+        Ok(match src {
             wavs_types::Submit::None => component_service::Submit::None,
             wavs_types::Submit::Aggregator {
                 url,
                 component,
                 evm_contracts,
+                cosmos_contracts,
             } => component_service::Submit::Aggregator(component_service::AggregatorSubmit {
                 url,
                 component: component.map(|c| (*c).into()),
                 evm_contracts: evm_contracts
                     .map(|contracts| contracts.into_iter().map(|c| c.into()).collect()),
+                cosmos_contracts: cosmos_contracts
+                    .map(|contracts| {
+                        contracts
+                            .into_iter()
+                            .map(|c| c.try_into())
+                            .collect::<anyhow::Result<Vec<_>>>()
+                    })
+                    .transpose()?,
             }),
-        }
+        })
     }
 }
 
@@ -268,14 +278,13 @@ impl From<wavs_types::ServiceManager> for component_service::ServiceManager {
                 chain_name: chain_name.to_string(),
                 address: address.into(),
             }),
-        }
-    }
-}
-
-impl From<wavs_types::Aggregator> for component_service::Aggregator {
-    fn from(src: wavs_types::Aggregator) -> Self {
-        match src {
-            wavs_types::Aggregator::Evm(evm) => component_service::Aggregator::Evm(evm.into()),
+            wavs_types::ServiceManager::Cosmos {
+                chain_name,
+                address,
+            } => component_service::ServiceManager::Cosmos(component_service::CosmosManager {
+                chain_name: chain_name.to_string(),
+                address: address.try_into().unwrap(),
+            }),
         }
     }
 }
@@ -287,5 +296,17 @@ impl From<wavs_types::EvmContractSubmission> for component_service::EvmContractS
             address: src.address.into(),
             max_gas: src.max_gas,
         }
+    }
+}
+
+impl TryFrom<wavs_types::CosmosContractSubmission> for component_service::CosmosContractSubmission {
+    type Error = anyhow::Error;
+
+    fn try_from(src: wavs_types::CosmosContractSubmission) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_name: src.chain_name.to_string(),
+            address: src.address.try_into()?,
+            max_gas: src.max_gas,
+        })
     }
 }

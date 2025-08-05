@@ -1,7 +1,8 @@
-use alloy_primitives::{Address, U256};
+use alloy_primitives::U256;
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashSet},
     num::NonZero,
@@ -13,18 +14,19 @@ use uuid::Uuid;
 
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, EvmContractSubmission, Permissions,
-    Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit, Trigger,
-    Workflow,
+    AllowedHostPermission, AnyChainConfig, ByteArray, ChainName, Component,
+    CosmosContractSubmission, EvmContractSubmission, Permissions, Service, ServiceID,
+    ServiceManager, ServiceStatus, SigningKeyResponse, Submit, Trigger, Workflow,
 };
 
 use crate::{
     e2e::{
         clients::Clients,
         components::ComponentSources,
+        config::Configs,
         test_definition::{
-            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition, SubmitDefinition,
-            TestDefinition, TriggerDefinition,
+            AggregatorDefinition, ChangeServiceDefinition, ComponentDefinition,
+            CosmosContractDefinition, SubmitDefinition, TestDefinition, TriggerDefinition,
         },
         test_registry::TestRegistry,
     },
@@ -40,17 +42,18 @@ use super::{
     test_definition::{
         CosmosTriggerDefinition, EvmTriggerDefinition, ExpectedOutput, WorkflowDefinition,
     },
-    test_registry::CosmosTriggerCodeMap,
+    test_registry::CosmosContractCodeMap,
 };
 
 static SERVICE_UPDATE_TIMEOUT: Duration = Duration::from_secs(60 * 15);
 
 /// Helper function to deploy a service for a test
 pub async fn deploy_service_for_test(
+    configs: &Configs,
     test: &mut TestDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosContractCodeMap,
     aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<ServiceID>>>,
 ) -> Service {
     tracing::info!("Deploying service for test: {}", test.name);
@@ -64,18 +67,23 @@ pub async fn deploy_service_for_test(
         test.name,
         test.service_manager_chain
     );
-    let service_manager_address = deploy_service_manager(clients, &test.service_manager_chain)
-        .await
-        .unwrap();
+    let service_manager_address = deploy_service_manager(
+        configs,
+        clients,
+        &test.service_manager_chain,
+        &cosmos_code_map,
+    )
+    .await
+    .unwrap();
 
     for (workflow_id, workflow_definition) in test.workflows.iter_mut() {
         let workflow = deploy_workflow(
             &test.name,
             workflow_definition,
-            service_manager_address,
+            service_manager_address.clone(),
             clients,
             component_sources,
-            cosmos_trigger_code_map.clone(),
+            cosmos_code_map.clone(),
         )
         .await;
 
@@ -87,13 +95,18 @@ pub async fn deploy_service_for_test(
         name: test.name.clone(),
         workflows,
         status: ServiceStatus::Paused,
-        manager: ServiceManager::Evm {
-            chain_name: test.service_manager_chain.clone(),
-            address: service_manager_address,
+        manager: match &service_manager_address {
+            layer_climb::prelude::Address::Evm(address) => ServiceManager::Evm {
+                chain_name: test.service_manager_chain.clone(),
+                address: address.clone().into(),
+            },
+
+            layer_climb::prelude::Address::Cosmos { .. } => ServiceManager::Cosmos {
+                chain_name: test.service_manager_chain.clone(),
+                address: service_manager_address.clone(),
+            },
         },
     };
-
-    let submit_client = clients.get_evm_client(&test.service_manager_chain);
 
     tracing::info!("[{}] Deploying service: {}", test.name, service.id());
 
@@ -121,10 +134,18 @@ pub async fn deploy_service_for_test(
         &clients.cli_ctx,
         DeployServiceArgs {
             service: service.clone(),
-            set_service_url_args: Some(SetServiceUrlArgs {
-                provider: submit_client.provider.clone(),
-                service_url: service_url.clone(),
-            }),
+            set_service_url_args: match service_manager_address {
+                layer_climb::prelude::Address::Cosmos { .. } => None,
+                layer_climb::prelude::Address::Evm(_) => Some(SetServiceUrlArgs {
+                    provider: clients
+                        .evm_clients
+                        .get(&test.service_manager_chain)
+                        .unwrap()
+                        .provider
+                        .clone(),
+                    service_url: service_url.clone(),
+                }),
+            },
         },
     )
     .await
@@ -137,16 +158,29 @@ pub async fn deploy_service_for_test(
         .await
         .unwrap();
 
-    let service_manager =
-        SimpleServiceManager::new(service_manager_address, submit_client.provider.clone());
-    service_manager
-        .setOperatorWeight(evm_address.parse().unwrap(), U256::ONE)
-        .send()
-        .await
-        .unwrap()
-        .watch()
-        .await
-        .unwrap();
+    match &service_manager_address {
+        layer_climb::prelude::Address::Evm(service_manager_address) => {
+            let submit_client = clients
+                .evm_clients
+                .get(&test.service_manager_chain)
+                .unwrap();
+            let service_manager = SimpleServiceManager::new(
+                service_manager_address.clone().into(),
+                submit_client.provider.clone(),
+            );
+            service_manager
+                .setOperatorWeight(evm_address.parse().unwrap(), U256::ONE)
+                .send()
+                .await
+                .unwrap()
+                .watch()
+                .await
+                .unwrap();
+        }
+        layer_climb::prelude::Address::Cosmos { .. } => {
+            // TODO - set operator weight for cosmos
+        }
+    }
 
     // activate the service
     // requires:
@@ -161,14 +195,29 @@ pub async fn deploy_service_for_test(
         .await
         .unwrap();
 
-    service_manager
-        .setServiceURI(service_url)
-        .send()
-        .await
-        .unwrap()
-        .watch()
-        .await
-        .unwrap();
+    match service_manager_address {
+        layer_climb::prelude::Address::Evm(service_manager_address) => {
+            let submit_client = clients
+                .evm_clients
+                .get(&test.service_manager_chain)
+                .unwrap();
+            let service_manager = SimpleServiceManager::new(
+                service_manager_address.into(),
+                submit_client.provider.clone(),
+            );
+            service_manager
+                .setServiceURI(service_url)
+                .send()
+                .await
+                .unwrap()
+                .watch()
+                .await
+                .unwrap();
+        }
+        layer_climb::prelude::Address::Cosmos { .. } => {
+            // TODO - change URI for cosmos
+        }
+    }
 
     // wait until WAVS sees the new service
     clients
@@ -210,10 +259,10 @@ fn deploy_component(
 async fn deploy_workflow(
     test_name: &str,
     workflow_definition: &mut WorkflowDefinition,
-    service_manager_address: alloy_primitives::Address,
+    service_manager_address: layer_climb::prelude::Address,
     clients: &Clients,
     component_sources: &ComponentSources,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosContractCodeMap,
 ) -> Workflow {
     let component = deploy_component(component_sources, &workflow_definition.component);
 
@@ -222,15 +271,24 @@ async fn deploy_workflow(
     // Create the submit based on test configuration
     let chain_name = {
         let SubmitDefinition::Aggregator { aggregators, .. } = &workflow_definition.submit;
-        let Some(AggregatorDefinition::NewEvmAggregatorSubmit { chain_name }) = aggregators.first()
-        else {
-            panic!("Expected at least one NewEvmAggregatorSubmit aggregator, but found none");
-        };
-        chain_name
+        match aggregators.first() {
+            Some(AggregatorDefinition::NewEvmAggregatorSubmit { chain_name }) => chain_name.clone(),
+            Some(AggregatorDefinition::NewCosmosAggregatorSubmit { chain_name }) => {
+                chain_name.clone()
+            }
+            _ => {
+                panic!("Expected at least one aggregator for submission, but found none");
+            }
+        }
     };
-    let submission_contract = deploy_submit_contract(clients, chain_name, service_manager_address)
-        .await
-        .unwrap();
+    let submission_contract = deploy_submit_contract(
+        clients,
+        &chain_name,
+        service_manager_address,
+        &cosmos_code_map,
+    )
+    .await
+    .unwrap();
     let submit = create_submit_from_config(&workflow_definition.submit, &submission_contract)
         .await
         .unwrap();
@@ -240,7 +298,7 @@ async fn deploy_workflow(
     let trigger = create_trigger_from_config(
         workflow_definition.trigger.clone(),
         clients,
-        cosmos_trigger_code_map.clone(),
+        cosmos_code_map.clone(),
         Some(workflow_definition),
     )
     .await;
@@ -257,7 +315,7 @@ async fn deploy_workflow(
 pub async fn create_trigger_from_config(
     trigger_definition: TriggerDefinition,
     clients: &Clients,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosContractCodeMap,
     workflow_definition: Option<&mut WorkflowDefinition>,
 ) -> Trigger {
     match trigger_definition {
@@ -290,12 +348,9 @@ pub async fn create_trigger_from_config(
 
                     // Get the code ID with better error handling
                     tracing::info!("Getting cosmos code ID for chain {}", chain_name);
-                    let code_id = get_cosmos_code_id(
-                        clients,
-                        &cosmos_trigger_definition,
-                        cosmos_trigger_code_map,
-                    )
-                    .await;
+                    let code_id = cosmos_code_map
+                        .get_code_id(clients, &cosmos_trigger_definition.clone().into())
+                        .await;
 
                     tracing::info!("Using cosmos code ID: {} for chain {}", code_id, chain_name);
 
@@ -365,33 +420,45 @@ pub async fn create_trigger_from_config(
 /// Create a submit based on test configuration
 pub async fn create_submit_from_config(
     submit_config: &SubmitDefinition,
-    submission_contract: &Address,
+    submission_contract: &layer_climb::prelude::Address,
 ) -> Result<Submit> {
     match submit_config {
         SubmitDefinition::Aggregator { url, aggregators } => {
-            let evm_contracts = if aggregators.is_empty() {
-                None
-            } else {
-                Some(
-                    aggregators
-                        .iter()
-                        .map(|agg| match agg {
-                            AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
-                                EvmContractSubmission {
-                                    chain_name: chain_name.clone(),
-                                    address: *submission_contract,
-                                    max_gas: None,
-                                }
-                            }
-                        })
-                        .collect(),
-                )
-            };
+            let mut evm_contracts = Vec::new();
+            let mut cosmos_contracts = Vec::new();
+
+            for agg in aggregators {
+                match agg {
+                    AggregatorDefinition::NewEvmAggregatorSubmit { chain_name } => {
+                        evm_contracts.push(EvmContractSubmission {
+                            chain_name: chain_name.clone(),
+                            address: submission_contract.clone().try_into().unwrap(),
+                            max_gas: None,
+                        });
+                    }
+                    AggregatorDefinition::NewCosmosAggregatorSubmit { chain_name } => {
+                        cosmos_contracts.push(CosmosContractSubmission {
+                            chain_name: chain_name.clone(),
+                            address: submission_contract.clone(),
+                            max_gas: None,
+                        });
+                    }
+                }
+            }
 
             Ok(Submit::Aggregator {
                 url: url.clone(),
                 component: None,
-                evm_contracts,
+                evm_contracts: if evm_contracts.is_empty() {
+                    None
+                } else {
+                    Some(evm_contracts)
+                },
+                cosmos_contracts: if cosmos_contracts.is_empty() {
+                    None
+                } else {
+                    Some(cosmos_contracts)
+                },
             })
         }
     }
@@ -399,9 +466,23 @@ pub async fn create_submit_from_config(
 
 /// Deploy service manager contract
 pub async fn deploy_service_manager(
+    configs: &Configs,
     clients: &Clients,
     chain_name: &ChainName,
-) -> Result<alloy_primitives::Address> {
+    cosmos_code_map: &CosmosContractCodeMap,
+) -> Result<layer_climb::prelude::Address> {
+    match configs.chains.get_chain(chain_name).unwrap().unwrap() {
+        AnyChainConfig::Evm(_) => deploy_evm_service_manager(clients, chain_name).await,
+        AnyChainConfig::Cosmos(_) => {
+            deploy_cosmos_service_manager(clients, chain_name, cosmos_code_map).await
+        }
+    }
+}
+
+async fn deploy_evm_service_manager(
+    clients: &Clients,
+    chain_name: &ChainName,
+) -> Result<layer_climb::prelude::Address> {
     let evm_client = clients.get_evm_client(chain_name);
 
     tracing::info!("Deploying service manager on chain {}", chain_name);
@@ -430,15 +511,67 @@ pub async fn deploy_service_manager(
     let address = *service_manager.address();
     tracing::info!("Service manager deployed at address: {}", address);
 
-    Ok(address)
+    Ok(address.into())
+}
+
+async fn deploy_cosmos_service_manager(
+    clients: &Clients,
+    chain_name: &ChainName,
+    cosmos_code_map: &CosmosContractCodeMap,
+) -> Result<layer_climb::prelude::Address> {
+    let code_id = cosmos_code_map
+        .get_code_id(
+            clients,
+            &CosmosContractDefinition::ServiceManager {
+                chain_name: chain_name.clone(),
+            },
+        )
+        .await;
+
+    let client = clients.get_cosmos_client(chain_name).await;
+
+    let (addr, _) = client
+        .contract_instantiate(
+            None,
+            code_id,
+            "service manager",
+            &cosmwasm_std::Empty {},
+            Vec::new(),
+            None,
+        )
+        .await?;
+
+    Ok(addr)
 }
 
 /// Deploy submit contract and return its address
 pub async fn deploy_submit_contract(
     clients: &Clients,
     chain_name: &ChainName,
+    service_manager_address: layer_climb::prelude::Address,
+    cosmos_code_map: &CosmosContractCodeMap,
+) -> Result<layer_climb::prelude::Address> {
+    match service_manager_address {
+        layer_climb::prelude::Address::Cosmos { .. } => {
+            deploy_cosmos_submit_contract(
+                clients,
+                chain_name,
+                service_manager_address,
+                cosmos_code_map,
+            )
+            .await
+        }
+        layer_climb::prelude::Address::Evm(addr) => {
+            deploy_evm_submit_contract(clients, chain_name, addr.into()).await
+        }
+    }
+}
+
+pub async fn deploy_evm_submit_contract(
+    clients: &Clients,
+    chain_name: &ChainName,
     service_manager_address: alloy_primitives::Address,
-) -> Result<alloy_primitives::Address> {
+) -> Result<layer_climb::prelude::Address> {
     let evm_client = clients.get_evm_client(chain_name);
 
     tracing::info!(
@@ -457,71 +590,134 @@ pub async fn deploy_submit_contract(
     let address = *result.address();
     tracing::info!("Submit contract deployed at address: {}", address);
 
-    Ok(address)
+    Ok(address.into())
 }
 
-/// Deploy submit contract and create a Submit from it
-pub async fn get_cosmos_code_id(
+pub async fn deploy_cosmos_submit_contract(
     clients: &Clients,
-    cosmos_trigger_definition: &CosmosTriggerDefinition,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
-) -> u64 {
-    // Get or insert the entry
-    let entry = cosmos_trigger_code_map
-        .entry(cosmos_trigger_definition.clone())
-        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(None)))
-        .clone();
-
-    // Lock the entry
-    let mut guard = entry.lock().await;
-
-    // If already uploaded, return the result
-    if let Some(code_id) = *guard {
-        return code_id;
-    }
-
-    // Upload since not cached
-    let (chain_name, cosmos_bytecode) = match cosmos_trigger_definition {
-        CosmosTriggerDefinition::SimpleContractEvent { chain_name } => {
-            let wasm_path = workspace_path()
-                .join("examples")
-                .join("build")
-                .join("contracts")
-                .join("simple_example.wasm");
-
-            if !wasm_path.exists() {
-                panic!(
-                    "Cosmos contract WASM file not found at: {}",
-                    wasm_path.display()
-                );
-            }
-
-            (chain_name, tokio::fs::read(&wasm_path).await.unwrap())
-        }
-    };
-
-    tracing::info!(
-        "Uploading cosmos wasm byte code ({} bytes) to chain {}",
-        cosmos_bytecode.len(),
-        chain_name
-    );
+    chain_name: &ChainName,
+    service_manager_address: layer_climb::prelude::Address,
+    cosmos_code_map: &CosmosContractCodeMap,
+) -> Result<layer_climb::prelude::Address> {
+    let code_id = cosmos_code_map
+        .get_code_id(
+            clients,
+            &CosmosContractDefinition::ServiceHandler {
+                chain_name: chain_name.clone(),
+            },
+        )
+        .await;
 
     let client = clients.get_cosmos_client(chain_name).await;
 
-    let (code_id, _) = client
-        .contract_upload_file(cosmos_bytecode, None)
-        .await
-        .unwrap();
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(rename_all = "snake_case")]
+    pub struct InstantiateMsg {
+        pub service_manager: String,
+    }
 
-    tracing::info!(
-        "Successfully uploaded WASM bytecode to chain {}, code_id: {}",
-        chain_name,
+    let (addr, _) = client
+        .contract_instantiate(
+            None,
+            code_id,
+            "service handler",
+            &InstantiateMsg {
+                service_manager: service_manager_address.to_string(),
+            },
+            Vec::new(),
+            None,
+        )
+        .await?;
+
+    Ok(addr)
+}
+
+impl CosmosContractCodeMap {
+    /// Deploy submit contract and create a Submit from it
+    pub async fn get_code_id(
+        &self,
+        clients: &Clients,
+        cosmos_contract_definition: &CosmosContractDefinition,
+    ) -> u64 {
+        // Get or insert the entry
+        let entry = self
+            .0
+            .entry(cosmos_contract_definition.clone())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(None)))
+            .clone();
+
+        // Lock the entry
+        let mut guard = entry.lock().await;
+
+        // If already uploaded, return the result
+        if let Some(code_id) = *guard {
+            return code_id;
+        }
+
+        // Upload since not cached
+        let (chain_name, wasm_path) = {
+            match cosmos_contract_definition {
+                CosmosContractDefinition::Trigger(
+                    CosmosTriggerDefinition::SimpleContractEvent { chain_name },
+                ) => (
+                    chain_name,
+                    workspace_path()
+                        .join("examples")
+                        .join("build")
+                        .join("contracts")
+                        .join("simple_example.wasm"),
+                ),
+                CosmosContractDefinition::ServiceManager { chain_name } => (
+                    chain_name,
+                    workspace_path()
+                        .join("examples")
+                        .join("build")
+                        .join("contracts")
+                        .join("mock_service_manager.wasm"),
+                ),
+                CosmosContractDefinition::ServiceHandler { chain_name } => (
+                    chain_name,
+                    workspace_path()
+                        .join("examples")
+                        .join("build")
+                        .join("contracts")
+                        .join("mock_service_handler.wasm"),
+                ),
+            }
+        };
+
+        if !wasm_path.exists() {
+            panic!(
+                "Cosmos contract WASM file not found at: {}",
+                wasm_path.display()
+            );
+        }
+
+        let cosmos_bytecode = tokio::fs::read(&wasm_path).await.unwrap();
+
+        tracing::info!(
+            "Uploading cosmos wasm byte code ({} bytes) to chain {}",
+            cosmos_bytecode.len(),
+            chain_name
+        );
+
+        let client = clients.get_cosmos_client(chain_name).await;
+
+        let (code_id, _) = client
+            .contract_upload_file(cosmos_bytecode, None)
+            .await
+            .unwrap();
+
+        tracing::info!(
+            "Successfully uploaded WASM bytecode to chain {}, code_id: {}",
+            chain_name,
+            code_id
+        );
+
+        // Cache result and return
+        *guard = Some(code_id);
         code_id
-    );
-
-    // Cache result and return
-    *guard = Some(code_id);
-    code_id
+    }
 }
 
 pub async fn wait_for_task_to_land(
@@ -567,7 +763,7 @@ pub async fn change_service_for_test(
     old_service: &Service,
     clients: &Clients,
     component_sources: &ComponentSources,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosContractCodeMap,
 ) {
     let mut new_service = old_service.clone();
 
@@ -594,10 +790,10 @@ pub async fn change_service_for_test(
             let deployed_workflow = deploy_workflow(
                 workflow_id,
                 workflow,
-                new_service.manager.evm_address_unchecked(),
+                new_service.manager.address(),
                 clients,
                 component_sources,
-                cosmos_trigger_code_map,
+                cosmos_code_map,
             )
             .await;
 
@@ -607,28 +803,39 @@ pub async fn change_service_for_test(
         }
     }
 
-    let service_manager = match &old_service.manager {
-        ServiceManager::Evm {
-            chain_name,
-            address,
-        } => SimpleServiceManager::new(
-            *address,
-            clients.get_evm_client(chain_name).provider.clone(),
-        ),
-    };
-
     let url = DeployService::save_service(&clients.cli_ctx, &new_service)
         .await
         .unwrap();
 
-    service_manager
-        .setServiceURI(url)
-        .send()
-        .await
-        .unwrap()
-        .watch()
-        .await
-        .unwrap();
+    match &old_service.manager {
+        ServiceManager::Evm {
+            chain_name,
+            address,
+        } => {
+            let service_manager = SimpleServiceManager::new(
+                *address,
+                clients.get_evm_client(chain_name).provider.clone(),
+            );
+            service_manager
+                .setServiceURI(url)
+                .send()
+                .await
+                .unwrap()
+                .watch()
+                .await
+                .unwrap();
+        }
+
+        ServiceManager::Cosmos {
+            chain_name,
+            address,
+        } => {
+            // TODO - change URI for cosmos
+            tracing::warn!(
+                "Changing service URI for Cosmos is not implemented yet: {chain_name}, {address}"
+            );
+        }
+    };
 
     // wait until WAVS sees the new service
     clients

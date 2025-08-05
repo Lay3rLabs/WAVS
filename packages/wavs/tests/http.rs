@@ -94,6 +94,7 @@ fn http_save_service() {
             url: "http://example.com/aggregator".to_string(),
             component: None,
             evm_contracts: None,
+            cosmos_contracts: None,
         },
         wavs_types::ServiceManager::Evm {
             chain_name: "evm".try_into().unwrap(),

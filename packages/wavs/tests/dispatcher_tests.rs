@@ -60,6 +60,7 @@ fn dispatcher_pipeline() {
                         address: rand_address_evm(),
                         max_gas: None,
                     }]),
+                    cosmos_contracts: None,
                 },
             },
         )]

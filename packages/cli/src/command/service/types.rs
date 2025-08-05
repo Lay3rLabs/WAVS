@@ -5,8 +5,8 @@ use std::{
 };
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ChainName, ComponentDigest, EvmContractSubmission,
-    Permissions, ServiceStatus, Submit, Trigger, WorkflowID,
+    Aggregator, AllowedHostPermission, ChainName, ComponentDigest, CosmosContractSubmission,
+    EvmContractSubmission, Permissions, ServiceStatus, Submit, Trigger, WorkflowID,
 };
 
 use crate::service_json::ServiceJson;
@@ -258,6 +258,19 @@ impl std::fmt::Display for WorkflowSetSubmitAggregatorResult {
                             .map(|x| x.to_string())
                             .unwrap_or("default".to_string())
                     )?,
+                    Aggregator::Cosmos(CosmosContractSubmission {
+                        chain_name,
+                        address,
+                        max_gas,
+                    }) => writeln!(
+                        f,
+                        "    chain: {}, address: {}, max_gas: {}",
+                        chain_name,
+                        address,
+                        max_gas
+                            .map(|x| x.to_string())
+                            .unwrap_or("default".to_string())
+                    )?,
                 }
             }
         }
@@ -286,6 +299,19 @@ impl std::fmt::Display for WorkflowAddAggregatorResult {
         for submit in &self.aggregator_submits {
             match submit {
                 Aggregator::Evm(EvmContractSubmission {
+                    chain_name,
+                    address,
+                    max_gas,
+                }) => writeln!(
+                    f,
+                    "    chain: {}, address: {}, max_gas: {}",
+                    chain_name,
+                    address,
+                    max_gas
+                        .map(|x| x.to_string())
+                        .unwrap_or("default".to_string())
+                )?,
+                Aggregator::Cosmos(CosmosContractSubmission {
                     chain_name,
                     address,
                     max_gas,

@@ -26,7 +26,6 @@
 
 use alloy_provider::ProviderBuilder;
 use anyhow::Result;
-use layer_climb::prelude::Address;
 use std::ops::Bound;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -229,16 +228,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             ServiceManager::Evm {
                 chain_name,
                 address,
+            } => (chain_name, address.into()),
+            ServiceManager::Cosmos {
+                chain_name,
+                address,
             } => (chain_name, address),
         };
         let chain_configs = self.chain_configs.read().unwrap().clone();
-        let service = query_service_from_address(
-            chain_name,
-            address.into(),
-            &chain_configs,
-            &self.ipfs_gateway,
-        )
-        .await?;
+        let service =
+            query_service_from_address(chain_name, address, &chain_configs, &self.ipfs_gateway)
+                .await?;
 
         self.add_service_direct(service.clone()).await?;
 
@@ -367,7 +366,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
 async fn query_service_from_address(
     chain_name: ChainName,
-    address: Address,
+    address: layer_climb::prelude::Address,
     chain_configs: &ChainConfigs,
     ipfs_gateway: &str,
 ) -> Result<Service, DispatcherError> {

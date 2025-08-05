@@ -45,6 +45,11 @@ pub enum ServiceManager {
         #[schema(value_type = String)]
         address: alloy_primitives::Address,
     },
+    Cosmos {
+        chain_name: ChainName,
+        #[schema(value_type = String)]
+        address: layer_climb_address::Address,
+    },
 }
 
 impl From<&ServiceManager> for ServiceID {
@@ -60,6 +65,16 @@ impl From<&ServiceManager> for ServiceID {
                 bytes.extend_from_slice(address.as_slice());
                 ServiceID::hash(bytes)
             }
+            ServiceManager::Cosmos {
+                chain_name,
+                address,
+            } => {
+                let mut bytes = Vec::new();
+                bytes.extend_from_slice(b"cosmos");
+                bytes.extend_from_slice(chain_name.as_bytes());
+                bytes.extend_from_slice(address.as_bytes().as_ref());
+                ServiceID::hash(bytes)
+            }
         }
     }
 }
@@ -68,12 +83,23 @@ impl ServiceManager {
     pub fn chain_name(&self) -> &ChainName {
         match self {
             ServiceManager::Evm { chain_name, .. } => chain_name,
+            ServiceManager::Cosmos { chain_name, .. } => chain_name,
+        }
+    }
+
+    pub fn address(&self) -> layer_climb_address::Address {
+        match self {
+            ServiceManager::Evm { address, .. } => (*address).into(),
+            ServiceManager::Cosmos { address, .. } => address.clone(),
         }
     }
 
     pub fn evm_address_unchecked(&self) -> alloy_primitives::Address {
         match self {
             ServiceManager::Evm { address, .. } => *address,
+            ServiceManager::Cosmos { address, .. } => {
+                panic!("Tried to get EVM address from a Cosmos service manager: {address}",)
+            }
         }
     }
 }
@@ -307,6 +333,7 @@ pub enum Submit {
         component: Option<Box<Component>>,
         // temporary backwards-compatibility only!! so we can merge incremental PRs and keep tests passing
         evm_contracts: Option<Vec<EvmContractSubmission>>,
+        cosmos_contracts: Option<Vec<CosmosContractSubmission>>,
     },
 }
 
@@ -314,6 +341,7 @@ pub enum Submit {
 #[serde(rename_all = "snake_case")]
 pub enum Aggregator {
     Evm(EvmContractSubmission),
+    Cosmos(CosmosContractSubmission),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
@@ -333,6 +361,32 @@ impl EvmContractSubmission {
     pub fn new(
         chain_name: ChainName,
         address: alloy_primitives::Address,
+        max_gas: Option<u64>,
+    ) -> Self {
+        Self {
+            chain_name,
+            address,
+            max_gas,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct CosmosContractSubmission {
+    pub chain_name: ChainName,
+    /// Should be an WavsServiceHandler contract
+    pub address: layer_climb_address::Address,
+    /// max gas for the submission
+    /// with an aggregator, that will be for all the signed envelopes combined
+    /// without an aggregator, it's just the single signed envelope
+    pub max_gas: Option<u64>,
+}
+
+impl CosmosContractSubmission {
+    pub fn new(
+        chain_name: ChainName,
+        address: layer_climb_address::Address,
         max_gas: Option<u64>,
     ) -> Self {
         Self {

@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use utils::{
     config::{ChainConfigs, ConfigExt},
@@ -37,8 +35,11 @@ pub struct Config {
     /// All the available chains
     pub chains: ChainConfigs,
 
-    /// Mnemonic or private key of the signer (usually leave this as None in config file and cli args, rather override in env)
+    /// Mnemonic or private key of the transaction wallet for evm (usually leave this as None in config file and cli args, rather override in env)
     pub credential: Option<String>,
+
+    /// Mnemonic of the transaction wallet for cosmos (usually leave this as None in config file and cli args, rather override in env)
+    pub cosmos_mnemonic: Option<String>,
 
     /// The hd index of the mnemonic to sign with
     pub hd_index: Option<u32>,
@@ -61,6 +62,7 @@ impl Default for Config {
             data: PathBuf::from("/var/aggregator"),
             cors_allowed_origins: Vec::new(),
             credential: None,
+            cosmos_mnemonic: None,
             hd_index: None,
             jaeger: None,
             chains: ChainConfigs {
@@ -69,19 +71,6 @@ impl Default for Config {
             },
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
         }
-    }
-}
-
-impl Config {
-    pub fn signer(&self) -> Result<PrivateKeySigner> {
-        let mnemonic = self
-            .credential
-            .clone()
-            .ok_or(anyhow::anyhow!("missing credentials"))?;
-        let signer = MnemonicBuilder::<English>::default()
-            .phrase(mnemonic)
-            .build()?;
-        Ok(signer)
     }
 }
 

@@ -271,10 +271,10 @@ impl SubmissionManager {
 
         for response in responses {
             match response {
-                AddPacketResponse::Sent { tx_receipt, count } => {
+                AddPacketResponse::Sent { tx_hash, count } => {
                     tracing::info!(
                         "Successfully submitted to aggregator {}: tx_hash={}, payload_count={}, service_id={}",
-                        url, tx_receipt.transaction_hash, count, service_id
+                        url, tx_hash, count, service_id
                     );
                 }
                 AddPacketResponse::Aggregated { count } => {

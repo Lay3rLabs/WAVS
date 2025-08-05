@@ -199,6 +199,12 @@ impl TryFrom<component_service::ServiceManager> for wavs_types::ServiceManager {
                 chain_name: evm.chain_name.parse()?,
                 address: evm.address.into(),
             },
+            component_service::ServiceManager::Cosmos(cosmos) => {
+                wavs_types::ServiceManager::Cosmos {
+                    chain_name: cosmos.chain_name.parse()?,
+                    address: cosmos.address.into(),
+                }
+            }
         })
     }
 }
@@ -211,10 +217,17 @@ impl From<component_service::Submit> for wavs_types::Submit {
                 url,
                 component,
                 evm_contracts,
+                cosmos_contracts,
             }) => wavs_types::Submit::Aggregator {
                 url,
                 component: component.map(|c| Box::new(c.try_into().unwrap())),
                 evm_contracts: evm_contracts.map(|contracts| {
+                    contracts
+                        .into_iter()
+                        .map(|c| c.try_into().unwrap())
+                        .collect()
+                }),
+                cosmos_contracts: cosmos_contracts.map(|contracts| {
                     contracts
                         .into_iter()
                         .map(|c| c.try_into().unwrap())
@@ -225,20 +238,22 @@ impl From<component_service::Submit> for wavs_types::Submit {
     }
 }
 
-impl TryFrom<component_service::Aggregator> for wavs_types::Aggregator {
-    type Error = anyhow::Error;
-
-    fn try_from(src: component_service::Aggregator) -> Result<Self, Self::Error> {
-        Ok(match src {
-            component_service::Aggregator::Evm(evm) => wavs_types::Aggregator::Evm(evm.try_into()?),
-        })
-    }
-}
-
 impl TryFrom<component_service::EvmContractSubmission> for wavs_types::EvmContractSubmission {
     type Error = anyhow::Error;
 
     fn try_from(src: component_service::EvmContractSubmission) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_name: src.chain_name.parse()?,
+            address: src.address.into(),
+            max_gas: src.max_gas,
+        })
+    }
+}
+
+impl TryFrom<component_service::CosmosContractSubmission> for wavs_types::CosmosContractSubmission {
+    type Error = anyhow::Error;
+
+    fn try_from(src: component_service::CosmosContractSubmission) -> Result<Self, Self::Error> {
         Ok(Self {
             chain_name: src.chain_name.parse()?,
             address: src.address.into(),

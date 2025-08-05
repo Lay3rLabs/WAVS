@@ -11,7 +11,6 @@ mod test_registry;
 
 use components::ComponentSources;
 use config::Configs;
-use dashmap::DashMap;
 use handles::AppHandles;
 pub use matrix::*;
 use runner::Runner;
@@ -22,7 +21,7 @@ use utils::{
     telemetry::{setup_metrics, setup_tracing, Metrics},
 };
 
-use crate::{args::TestArgs, config::TestConfig, e2e::test_registry::CosmosTriggerCodeMap};
+use crate::{args::TestArgs, config::TestConfig, e2e::test_registry::CosmosContractCodeMap};
 
 pub fn run(args: TestArgs, ctx: AppContext) {
     let config: TestConfig = ConfigBuilder::new(args).build().unwrap();
@@ -74,7 +73,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
         let component_sources = ComponentSources::new(&configs, &clients.http_client).await;
 
-        let cosmos_trigger_code_map = CosmosTriggerCodeMap::new(DashMap::new());
+        let cosmos_trigger_code_map = CosmosContractCodeMap(Default::default());
 
         // Create test registry from test mode
         let registry = test_registry::TestRegistry::from_test_mode(
@@ -87,6 +86,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
         // Create and run the test runner (services will be deployed just-in-time)
         Runner::new(
+            configs,
             clients,
             registry,
             component_sources,

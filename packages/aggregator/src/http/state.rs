@@ -60,6 +60,7 @@ pub struct HttpState {
     pub queue_transaction: AsyncTransaction<PacketQueueId>,
     storage: RedbStorage,
     evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
+    cosmos_clients: Arc<RwLock<HashMap<ChainName, layer_climb::signing::SigningClient>>>,
 }
 
 // key is ServiceId
@@ -71,11 +72,13 @@ impl HttpState {
     pub fn new(config: Config) -> AggregatorResult<Self> {
         let storage = RedbStorage::new(config.data.join("db"))?;
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
+        let cosmos_clients = Arc::new(RwLock::new(HashMap::new()));
 
         Ok(Self {
             config,
             storage,
             evm_clients,
+            cosmos_clients,
             queue_transaction: AsyncTransaction::new(false),
         })
     }
@@ -120,6 +123,49 @@ impl HttpState {
             .insert(chain_name.clone(), evm_client.clone());
 
         Ok(evm_client)
+    }
+
+    #[instrument(level = "debug", skip(self), fields(chain_name = %chain_name))]
+    pub async fn get_cosmos_client(
+        &self,
+        chain_name: &ChainName,
+    ) -> AggregatorResult<layer_climb::signing::SigningClient> {
+        {
+            let lock = self.cosmos_clients.read().unwrap();
+
+            if let Some(client) = lock.get(chain_name) {
+                tracing::debug!("Using cached Cosmos client for chain: {}", chain_name);
+                return Ok(client.clone());
+            }
+        }
+
+        let chain_config = self
+            .config
+            .chains
+            .get_chain(chain_name)?
+            .ok_or(AggregatorError::ChainNotFound(chain_name.clone()))?;
+
+        let chain_config: layer_climb::prelude::ChainConfig = chain_config.try_into()?;
+
+        let mnemonic = self
+            .config
+            .cosmos_mnemonic
+            .clone()
+            .ok_or(AggregatorError::MissingCosmosCredential)?;
+
+        let signer = layer_climb::prelude::KeySigner::new_mnemonic_str(&mnemonic, None)
+            .map_err(AggregatorError::CorruptCosmosCredential)?;
+
+        let client = layer_climb::signing::SigningClient::new(chain_config, signer, None)
+            .await
+            .map_err(AggregatorError::CreateCosmosClient)?;
+
+        self.cosmos_clients
+            .write()
+            .unwrap()
+            .insert(chain_name.clone(), client.clone());
+
+        Ok(client)
     }
 
     pub fn get_packet_queue(&self, id: &PacketQueueId) -> AggregatorResult<PacketQueue> {
