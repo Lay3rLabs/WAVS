@@ -158,7 +158,7 @@ impl AggregatorProcess<'_> {
         for action in actions {
             let queue_id = PacketQueueId {
                 event_id: event_id.clone(),
-                aggregator_action: action.clone().into(),
+                aggregator_action: crate::compat::from_engine_action(action.clone()),
             };
 
             let result = async_tx

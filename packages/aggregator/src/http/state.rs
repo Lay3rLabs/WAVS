@@ -30,7 +30,7 @@ const PACKET_QUEUES: Table<&[u8], JSON<PacketQueue>> = Table::new("packet_queues
 )]
 pub struct PacketQueueId {
     pub event_id: EventId,
-    pub aggregator_action: crate::types::AggregatorAction,
+    pub aggregator_action: wavs_types::AggregatorAction,
 }
 
 impl PacketQueueId {

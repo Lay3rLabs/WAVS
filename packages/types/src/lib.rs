@@ -1,3 +1,4 @@
+mod aggregator_types;
 mod bytes;
 mod chain_config;
 mod http;
@@ -6,6 +7,7 @@ mod packet;
 mod service;
 mod solidity_types;
 mod timestamp;
+pub use aggregator_types::*;
 pub use bytes::*;
 pub use chain_config::*;
 pub use http::*;
