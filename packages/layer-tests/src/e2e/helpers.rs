@@ -7,10 +7,11 @@ use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::w
 use uuid::Uuid;
 
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, Permissions, Service,
-    ServiceDeployment, ServiceManager, ServiceStatus, Submit, Trigger, Workflow,
-    WorkflowDeployment,
+    AllowedHostPermission, ByteArray, ChainName, Component, Permissions, Service, ServiceManager,
+    ServiceStatus, Submit, Trigger, Workflow,
 };
+
+use crate::deployment::{ServiceDeployment, WorkflowDeployment};
 
 use crate::{
     e2e::{

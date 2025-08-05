@@ -6,6 +6,7 @@
 
 pub mod args;
 pub mod config;
+pub mod deployment;
 pub mod e2e;
 pub mod example_cosmos_client;
 pub mod example_evm_client;

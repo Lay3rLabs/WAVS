@@ -1,12 +1,13 @@
 // src/e2e/test_runner.rs
 
+use crate::deployment::ServiceDeployment;
 use alloy_provider::Provider;
 use anyhow::{anyhow, Context};
 use futures::{stream::FuturesUnordered, StreamExt};
 use ordermap::OrderMap;
 use std::collections::HashMap;
 use std::sync::Arc;
-use wavs_types::{ServiceDeployment, Submit, Trigger, Workflow, WorkflowID};
+use wavs_types::{Submit, Trigger, Workflow, WorkflowID};
 
 use crate::e2e::helpers::change_service_for_test;
 use crate::e2e::report::TestReport;
