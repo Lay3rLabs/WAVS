@@ -237,10 +237,7 @@ impl AggregatorProcess<'_> {
                                     count: queue.len(),
                                 })
                             }
-                            Err(e) => {
-                                state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
-                                Err(e)
-                            }
+                            Err(e) => Err(e),
                         }
                     }
                     Err(err) => match err.as_decoded_interface_error::<ServiceManagerError>() {
@@ -250,22 +247,13 @@ impl AggregatorProcess<'_> {
                             state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
                             Ok(AddPacketResponse::Aggregated { count })
                         }
-                        Some(err) => {
-                            state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
-                            Err(AggregatorError::ServiceManagerValidateKnown(err))
-                        }
+                        Some(err) => Err(AggregatorError::ServiceManagerValidateKnown(err)),
                         // the contract reverted but it's not recognized as IWavsServiceManagerError
                         None => match err.as_revert_data() {
-                            Some(raw) => {
-                                state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
-                                Err(AggregatorError::ServiceManagerValidateAnyRevert(
-                                    raw.to_string(),
-                                ))
-                            }
-                            None => {
-                                state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
-                                Err(AggregatorError::ServiceManagerValidateUnknown(err))
-                            }
+                            Some(raw) => Err(AggregatorError::ServiceManagerValidateAnyRevert(
+                                raw.to_string(),
+                            )),
+                            None => Err(AggregatorError::ServiceManagerValidateUnknown(err)),
                         },
                     },
                 }
