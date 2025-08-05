@@ -12,7 +12,7 @@ use std::{
 use utils::{evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
 
-use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs};
+use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
     AllowedHostPermission, AnyChainConfig, ByteArray, ChainName, Component,
     CosmosContractSubmission, EvmContractSubmission, Permissions, Service, ServiceID,
@@ -115,6 +115,40 @@ pub async fn deploy_service_for_test(
         .await
         .unwrap();
 
+    match &service_manager_address {
+        layer_climb::prelude::Address::Evm(service_manager_address) => {
+            let submit_client = clients
+                .evm_clients
+                .get(&test.service_manager_chain)
+                .unwrap();
+            let service_manager = SimpleServiceManager::new(
+                service_manager_address.clone().into(),
+                submit_client.provider.clone(),
+            );
+            service_manager
+                .setServiceURI(service_url.clone())
+                .send()
+                .await
+                .unwrap()
+                .watch()
+                .await
+                .unwrap();
+        }
+        layer_climb::prelude::Address::Cosmos { .. } => {
+            let client = clients.get_cosmos_client(&test.service_manager_chain).await;
+
+            client
+                .contract_execute(
+                    &service_manager_address,
+                    &wavs_types::contracts::cosmwasm::service_manager::ServiceManagerExecuteMessages::WavsSetServiceUri { service_uri: service_url },
+                    Vec::new(),
+                    None
+                )
+                .await
+                .unwrap();
+        }
+    }
+
     // First, register the service to the aggregator if needed
     for workflow in test.workflows.values() {
         if aggregator_registered_service_ids
@@ -134,18 +168,7 @@ pub async fn deploy_service_for_test(
         &clients.cli_ctx,
         DeployServiceArgs {
             service: service.clone(),
-            set_service_url_args: match service_manager_address {
-                layer_climb::prelude::Address::Cosmos { .. } => None,
-                layer_climb::prelude::Address::Evm(_) => Some(SetServiceUrlArgs {
-                    provider: clients
-                        .evm_clients
-                        .get(&test.service_manager_chain)
-                        .unwrap()
-                        .provider
-                        .clone(),
-                    service_url: service_url.clone(),
-                }),
-            },
+            set_service_url_args: None,
         },
     )
     .await
@@ -215,7 +238,17 @@ pub async fn deploy_service_for_test(
                 .unwrap();
         }
         layer_climb::prelude::Address::Cosmos { .. } => {
-            // TODO - change URI for cosmos
+            let client = clients.get_cosmos_client(&test.service_manager_chain).await;
+
+            client
+                .contract_execute(
+                    &service_manager_address,
+                    &wavs_types::contracts::cosmwasm::service_manager::ServiceManagerExecuteMessages::WavsSetServiceUri { service_uri: service_url },
+                    Vec::new(),
+                    None
+                )
+                .await
+                .unwrap();
         }
     }
 
