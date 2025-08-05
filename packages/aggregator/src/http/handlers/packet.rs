@@ -244,6 +244,7 @@ impl AggregatorProcess<'_> {
                         }
                     }
                     Err(err) => match err.as_decoded_interface_error::<ServiceManagerError>() {
+                        // insufficient quorum - accumulate packets until quorum is reached
                         Some(ServiceManagerError::InsufficientQuorum(_)) => {
                             let count = queue.len();
                             state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
@@ -253,6 +254,7 @@ impl AggregatorProcess<'_> {
                             state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
                             Err(AggregatorError::ServiceManagerValidateKnown(err))
                         }
+                        // the contract reverted but it's not recognized as IWavsServiceManagerError
                         None => match err.as_revert_data() {
                             Some(raw) => {
                                 state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
