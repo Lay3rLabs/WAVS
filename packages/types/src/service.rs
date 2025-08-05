@@ -106,7 +106,7 @@ impl Service {
 }
 
 #[derive(Clone, Debug)]
-pub struct DeploymentResult {
+pub struct ServiceDeployment {
     pub service: Service,
     pub submission_handlers: BTreeMap<WorkflowID, alloy_primitives::Address>,
 }
@@ -195,7 +195,7 @@ impl Workflow {
 }
 
 #[derive(Clone, Debug)]
-pub struct WorkflowDeploymentResult {
+pub struct WorkflowDeployment {
     pub workflow: Workflow,
     pub submission_handler: alloy_primitives::Address,
 }

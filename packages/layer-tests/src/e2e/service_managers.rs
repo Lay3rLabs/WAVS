@@ -10,7 +10,7 @@ use utils::test_utils::{
 };
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
-    ChainName, DeploymentResult, Service, ServiceID, ServiceManager, ServiceStatus,
+    ChainName, Service, ServiceDeployment, ServiceID, ServiceManager, ServiceStatus,
     SigningKeyResponse, Submit,
 };
 
@@ -244,7 +244,7 @@ impl ServiceManagers {
         clients: &Clients,
         component_sources: &ComponentSources,
         cosmos_trigger_code_map: CosmosTriggerCodeMap,
-    ) -> HashMap<String, DeploymentResult> {
+    ) -> HashMap<String, ServiceDeployment> {
         let mut futures = Vec::new();
 
         for test in registry.list_all() {
