@@ -12,6 +12,7 @@ use cosmwasm_schema::cw_serde;
 /// use wavs_types::contracts::cosmwasm::service_handler::ServiceHandlerExecuteMessages;
 ///
 /// #[cw_serde]
+/// #[schemaifier(mute_warnings)]
 /// enum ExecuteMsg {
 ///     MyCustomMessage {
 ///         my_field: String,
@@ -115,6 +116,7 @@ mod tests {
     use super::*;
 
     #[cw_serde]
+    #[schemaifier(mute_warnings)]
     enum ExampleServiceHandlerExecuteMsg {
         MyCustomMessage {
             my_field: String,

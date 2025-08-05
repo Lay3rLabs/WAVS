@@ -1,5 +1,5 @@
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::Uint256;
+use cosmwasm_std::{StdError, Uint256};
 
 /// The possible errors that can occur during the validation of a signed envelope
 #[cw_serde]
@@ -23,6 +23,17 @@ pub enum WavsValidateError {
     },
     #[error("Invalid quorum parameters")]
     InvalidQuorumParameters,
+}
+
+impl TryFrom<StdError> for WavsValidateError {
+    type Error = StdError;
+
+    fn try_from(err: StdError) -> Result<Self, Self::Error> {
+        match err.downcast_ref::<WavsValidateError>() {
+            Some(e) => Ok(e.clone()),
+            None => Err(StdError::msg("Error is not `WavsValidateError`")),
+        }
+    }
 }
 
 #[cw_serde]

@@ -2644,12 +2644,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cw-storage-macro"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b853a2f7d85f286d099ae5b28ae4025c475d31145bf426cc6d86ec92afd215c8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+]
+
+[[package]]
 name = "cw-storage-plus"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ffe14a1c713486ec9f07059afcce49a9cd68657aaf2e2a736cd3bbf487de8e2"
 dependencies = [
  "cosmwasm-std",
+ "cw-storage-macro",
  "schemars 0.8.22",
  "serde",
 ]
@@ -4523,9 +4535,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a8595f08cf00f1b8ce72dda3dff17a74b3e31aa2026911206beed305cecbc0e"
+checksum = "e61d27938f577acc9386b2dc0aaecba4ab0542c4542070effc6219dbee1b8cb4"
 dependencies = [
  "layer-climb-address",
  "layer-climb-config",
@@ -4536,24 +4548,27 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-address"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b34eedff2137c751f4f44acd5021e856b8c701b67d292cc70e11b5bbc4777c2"
+checksum = "bcbbb961b9a7861c494497322bc7889b08b118193278971a6a8ce77f39a39e8a"
 dependencies = [
  "alloy-primitives",
  "anyhow",
  "const-hex",
  "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus",
  "serde",
  "subtle-encoding",
  "tendermint",
+ "utoipa",
 ]
 
 [[package]]
 name = "layer-climb-cli"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12bbfd914106170da6058b75539a0cc85c7789e220a2e7273e46023184dfcec3"
+checksum = "4abf27e930066761ba3ebcef45c2a00c5aa57fdbee4e8febe5c854529ebb508b"
 dependencies = [
  "anyhow",
  "bip39",
@@ -4572,9 +4587,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-config"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccbe81ca3d9535c46a271b89ea0b333c95d9f34a45fac9963cccb027510058ad"
+checksum = "2d1b14034ec8304b5d0250616a4a0298ef6d472fea59bec6708a6e1618123629"
 dependencies = [
  "anyhow",
  "layer-climb-address",
@@ -4585,9 +4600,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-core"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e12b664a8d3f4f88365d1a9c3586122311c418ba2bb1d42aa9c6eac40bad4f9a"
+checksum = "d91f501e1bdc842e877adb87c35be871ba4341c7c6ddfdb7dd492f4bba3ea430"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4627,9 +4642,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-proto"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3b444454a24da2b2316c30e9bf773eb6ce07a0fb316bfda8eb865368207e524"
+checksum = "ed33713b0ead687827725456f48f3347016384be3c0dca6ca9daa2c9fa887909"
 dependencies = [
  "anyhow",
  "cosmos-sdk-proto",
@@ -4640,9 +4655,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-signer"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2185aceab7c0652db3d7b481c4b4c06fc6c05ba20448aa2848c381b61364e279"
+checksum = "543fa1f65097a2d181a41c170cbb9419db5fb815542db088f3188682708bbed3"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -5001,6 +5016,33 @@ dependencies = [
  "libc",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "mock-service-handler"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "const-hex",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus",
+ "cw2",
+ "wavs-types",
+]
+
+[[package]]
+name = "mock-service-manager"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "const-hex",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus",
+ "cw2",
+ "layer-climb-address",
+ "wavs-types",
 ]
 
 [[package]]

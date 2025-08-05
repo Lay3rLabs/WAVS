@@ -96,23 +96,31 @@ solidity-build CLEAN="":
     cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
 
 # compile cosmwasm example contracts
-cosmwasm-build:
+cosmwasm-build CONTRACT="*":
+    rm -rf ./artifacts/*.wasm
     rm -rf {{COSMWASM_OUT_DIR}}
     mkdir -p {{COSMWASM_OUT_DIR}}
-    @if [ "{{ARCH}}" = "arm64" ]; then \
-      docker run --rm \
-        -v "{{REPO_ROOT}}:/code" \
-        --mount type=volume,source="layer_wavs_cache",target=/target \
-        --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-        cosmwasm/optimizer-arm64:0.16.1 ./examples; \
-    else \
-      docker run --rm \
-        -v "{{REPO_ROOT}}:/code" \
-        --mount type=volume,source="layer_wavs_cache",target=/target \
-        --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-        cosmwasm/optimizer:0.16.1 ./examples; \
-    fi
+
+    @for C in examples/contracts/cosmwasm/{{CONTRACT}}/Cargo.toml; do \
+        just cosmwasm-build-inner $(dirname $C); \
+    done
+
     cp ./artifacts/*.wasm {{COSMWASM_OUT_DIR}}
+
+cosmwasm-build-inner CONTRACT_PATH:
+    @if [ "{{ARCH}}" = "arm64" ]; then \
+        docker run --rm \
+            -v "{{REPO_ROOT}}:/code" \
+            --mount type=volume,source="layer_wavs_cache",target=/target \
+            --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+            cosmwasm/optimizer-arm64:0.17.0 "{{CONTRACT_PATH}}"; \
+    else \
+        docker run --rm \
+            -v "{{REPO_ROOT}}:/code" \
+            --mount type=volume,source="layer_wavs_cache",target=/target \
+            --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+            cosmwasm/optimizer:0.17.0 "{{CONTRACT_PATH}}"; \
+    fi;
 
 test-ci:
     just test-types-all-features
