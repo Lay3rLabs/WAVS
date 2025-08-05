@@ -194,18 +194,78 @@ impl AggregatorProcess<'_> {
 
         match &action {
             AggregatorAction::Submit(submit_action) => {
-                match handle_custom_submit(&state, &packet, &queue, submit_action.clone()).await {
-                    Ok(tx_receipt) => {
-                        state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
-                        Ok(AddPacketResponse::Sent {
-                            tx_receipt: Box::new(tx_receipt),
-                            count: queue.len(),
-                        })
+                let chain_name = ChainName::new(submit_action.chain_name.clone())?;
+                let address = alloy_primitives::Address::from_slice(
+                    &submit_action.contract_address.raw_bytes,
+                );
+                let service_manager =
+                    get_submission_service_manager(&state, &chain_name, address).await?;
+
+                let block_height_minus_one = service_manager
+                    .provider()
+                    .get_block_number()
+                    .await
+                    .map_err(|e| AggregatorError::BlockNumber(e.into()))?
+                    - 1;
+
+                let signatures: Vec<EnvelopeSignature> = queue
+                    .iter()
+                    .map(|queued| queued.packet.signature.clone())
+                    .collect();
+
+                let signature_data = packet
+                    .envelope
+                    .signature_data(signatures, block_height_minus_one)?;
+
+                let validation_result = service_manager
+                    .validate(
+                        packet.envelope.clone().into(),
+                        signature_data.clone().into(),
+                    )
+                    .call()
+                    .await;
+
+                match validation_result {
+                    Ok(_) => {
+                        match handle_custom_submit(&state, &packet, &queue, submit_action.clone())
+                            .await
+                        {
+                            Ok(tx_receipt) => {
+                                state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
+                                Ok(AddPacketResponse::Sent {
+                                    tx_receipt: Box::new(tx_receipt),
+                                    count: queue.len(),
+                                })
+                            }
+                            Err(e) => {
+                                state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
+                                Err(e)
+                            }
+                        }
                     }
-                    Err(e) => {
-                        state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
-                        Err(e)
-                    }
+                    Err(err) => match err.as_decoded_interface_error::<ServiceManagerError>() {
+                        Some(ServiceManagerError::InsufficientQuorum(_)) => {
+                            let count = queue.len();
+                            state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
+                            Ok(AddPacketResponse::Aggregated { count })
+                        }
+                        Some(err) => {
+                            state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
+                            Err(AggregatorError::ServiceManagerValidateKnown(err))
+                        }
+                        None => match err.as_revert_data() {
+                            Some(raw) => {
+                                state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
+                                Err(AggregatorError::ServiceManagerValidateAnyRevert(
+                                    raw.to_string(),
+                                ))
+                            }
+                            None => {
+                                state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
+                                Err(AggregatorError::ServiceManagerValidateUnknown(err))
+                            }
+                        },
+                    },
                 }
             }
             AggregatorAction::Timer(_) => {
