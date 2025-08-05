@@ -161,6 +161,9 @@ impl AggregatorProcess<'_> {
                 aggregator_action: crate::compat::from_engine_action(action.clone()),
             };
 
+            // execute the logic within a transaction, keyed by queue_id
+            // other queue ids can run concurrently, but this makes sure that
+            // we lock this queue_id against changes from other requests coming in while we process it
             let result = async_tx
                 .run(queue_id.clone(), {
                     let state = state.clone();
