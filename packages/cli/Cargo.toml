@@ -13,6 +13,7 @@ publish = false
 wasm-pkg-client = { workspace = true }
 wavs-types = { workspace = true }
 wavs-engine = { workspace = true }
+wavs-aggregator = { workspace = true }
 utils = { workspace = true }
 cid = { workspace = true }
 clap = { workspace = true }

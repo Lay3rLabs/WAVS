@@ -94,6 +94,51 @@ pub enum Command {
         #[clap(flatten)]
         args: CliArgs,
     },
+
+    /// Execute aggregator components directly
+    ExecAggregator {
+        /// The aggregator entry point to execute
+        #[clap(value_enum)]
+        entry_point: AggregatorEntryPoint,
+
+        #[clap(flatten)]
+        args: CliArgs,
+
+        /// Path to aggregator config file (optional)
+        #[clap(long)]
+        aggregator_config: Option<PathBuf>,
+
+        /// Path to the WASI component (required for execute-packet, execute-timer, execute-submit)
+        #[clap(long)]
+        component: Option<String>,
+
+        /// The payload data for packet execution.
+        /// If preceded by a `@`, will be treated as a file path
+        /// If preceded by a `0x`, will be treated as hex-encoded
+        /// Otherwise will be treated as raw string bytes
+        #[clap(long)]
+        input: Option<String>,
+
+        /// Service ID (required for execute-packet, execute-timer, execute-submit)
+        #[clap(long)]
+        service_id: Option<String>,
+
+        /// Workflow ID (required for execute-packet, execute-timer, execute-submit)
+        #[clap(long)]
+        workflow_id: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, clap::ValueEnum, Serialize, Deserialize)]
+pub enum AggregatorEntryPoint {
+    /// Run the aggregator HTTP server
+    Server,
+    /// Execute a packet through the aggregator
+    ExecutePacket,
+    /// Execute a timer callback
+    ExecuteTimer,
+    /// Execute a submit callback
+    ExecuteSubmit,
 }
 
 /// Commands for managing services
@@ -301,6 +346,7 @@ impl Command {
             Self::UploadComponent { args, .. } => args,
             Self::Exec { args, .. } => args,
             Self::Service { args, .. } => args,
+            Self::ExecAggregator { args, .. } => args,
         };
 
         args.clone()
