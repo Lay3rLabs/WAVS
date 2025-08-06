@@ -7,5 +7,5 @@
 b6b66d9f7d330e5c7adfb66fd04b5842acb6342e5778b91c09aec50c94dc4fd6  ./examples/build/components/example_types.wasm
 1c2610f47305ebd5639cdeca65cb09254daafb2108360d1a05789b9f7e0bd079  ./examples/build/components/kv_store.wasm
 ccd713ae0f52e4c54bb77d07017eacd3d5f7100104c4aea95ac87edae25cb3d4  ./examples/build/components/permissions.wasm
-13c2c008a891c9078a01161bbd9ccd983da028dbf1662350b70bfdf313d53ea5  ./examples/build/components/simple_aggregator.wasm
+435c05c2ff41728ff5ddd3dae2811a4270f8d9a4d1562a60ba2dd36ef2a398da  ./examples/build/components/simple_aggregator.wasm
 363f720d8eac0ba56ff508fd72bafd1428c530ecc853fbb42fb2bc0deb7e1298  ./examples/build/components/square.wasm

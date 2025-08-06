@@ -1,11 +1,8 @@
 use anyhow::{Context, Result};
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use utils::{config::ConfigBuilder, service::fetch_service};
-use wavs_aggregator::config::Config as AggregatorConfig;
+use utils::service::fetch_service;
 use wavs_types::{
-    Component, ComponentDigest, ComponentSource, Envelope, EnvelopeSignature, Packet, Service,
-    ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    Component, ComponentSource, Envelope, EnvelopeSignature, Packet, Service, ServiceManager,
+    ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
 };
 
 use crate::{
@@ -18,12 +15,14 @@ pub struct ExecAggregator;
 
 pub struct ExecAggregatorArgs {
     pub entry_point: AggregatorEntryPoint,
-    pub aggregator_config: Option<PathBuf>,
+    pub aggregator_config: wavs_aggregator::config::Config,
     pub component: Option<String>,
     pub input: Option<String>,
     pub service_id: Option<String>,
     pub workflow_id: Option<String>,
     pub service_url: Option<String>,
+    pub chain_name: String,
+    pub service_handler: String,
 }
 
 impl ExecAggregator {
@@ -33,8 +32,6 @@ impl ExecAggregator {
     ) -> Result<ExecAggregatorResult> {
         match args.entry_point {
             AggregatorEntryPoint::ExecutePacket => Self::execute_packet(cli_config, args).await,
-            AggregatorEntryPoint::ExecuteTimer => Self::execute_timer(cli_config, args).await,
-            AggregatorEntryPoint::ExecuteSubmit => Self::execute_submit(cli_config, args).await,
         }
     }
 
@@ -54,16 +51,48 @@ impl ExecAggregator {
 
         tracing::info!("Executing packet with component: {}", component_path);
 
-        let aggregator_config = Self::load_aggregator_config(cli_config, args.aggregator_config)?;
+        let mut aggregator_config = args.aggregator_config;
+        aggregator_config.data = tempfile::tempdir()?.keep();
         let state = wavs_aggregator::http::state::HttpState::new(aggregator_config)?;
 
-        let component = Self::load_component(&component_path)?;
+        let wasm_bytes = read_component(&component_path)?;
+        let digest = state.aggregator_engine.upload_component(wasm_bytes).await?;
+        let component = Component {
+            source: ComponentSource::Digest(digest),
+            permissions: wavs_types::Permissions::default(),
+            fuel_limit: Some(u64::MAX),
+            time_limit_seconds: Some(10),
+            config: [
+                ("chain_name".to_string(), args.chain_name.clone()),
+                ("service_handler".to_string(), args.service_handler.clone()),
+            ]
+            .into_iter()
+            .collect(),
+            env_keys: Default::default(),
+        };
 
-        // Load service if URL provided, otherwise create a test service
         let service = if let Some(service_url) = args.service_url {
             fetch_service(&service_url, &cli_config.ipfs_gateway).await?
         } else {
-            Self::create_test_service(args.service_id, workflow_id.clone(), &component)?
+            Service {
+                name: args
+                    .service_id
+                    .unwrap_or_else(|| "test-aggregator-service".to_string()),
+                workflows: [(
+                    WorkflowID::new(workflow_id.clone())?,
+                    Workflow {
+                        trigger: Trigger::Manual,
+                        component: component.clone(),
+                        submit: Submit::None,
+                    },
+                )]
+                .into(),
+                status: ServiceStatus::Active,
+                manager: ServiceManager::Evm {
+                    chain_name: "evm".parse()?,
+                    address: alloy_primitives::Address::ZERO,
+                },
+            }
         };
 
         let packet = Self::create_packet(input, service, workflow_id)?;
@@ -74,147 +103,6 @@ impl ExecAggregator {
             .await?;
 
         Ok(ExecAggregatorResult::Packet { actions })
-    }
-
-    async fn execute_timer(
-        cli_config: &Config,
-        args: ExecAggregatorArgs,
-    ) -> Result<ExecAggregatorResult> {
-        let component_path = args
-            .component
-            .context("Component path is required for execute-timer")?;
-        let workflow_id = args
-            .workflow_id
-            .context("Workflow ID is required for execute-timer")?;
-
-        tracing::info!(
-            "Executing timer callback with component: {}",
-            component_path
-        );
-
-        let aggregator_config = Self::load_aggregator_config(cli_config, args.aggregator_config)?;
-        let state = wavs_aggregator::http::state::HttpState::new(aggregator_config)?;
-
-        let component = Self::load_component(&component_path)?;
-
-        // Load service if URL provided, otherwise create a test service
-        let service = if let Some(service_url) = args.service_url {
-            fetch_service(&service_url, &cli_config.ipfs_gateway).await?
-        } else {
-            Self::create_test_service(args.service_id, workflow_id.clone(), &component)?
-        };
-
-        let packet = Self::create_packet(args.input.unwrap_or_default(), service, workflow_id)?;
-
-        state
-            .aggregator_engine
-            .execute_timer_callback(&component, &packet)
-            .await?;
-
-        Ok(ExecAggregatorResult::Timer)
-    }
-
-    async fn execute_submit(
-        cli_config: &Config,
-        args: ExecAggregatorArgs,
-    ) -> Result<ExecAggregatorResult> {
-        let component_path = args
-            .component
-            .context("Component path is required for execute-submit")?;
-        let workflow_id = args
-            .workflow_id
-            .context("Workflow ID is required for execute-submit")?;
-
-        tracing::info!(
-            "Executing submit callback with component: {}",
-            component_path
-        );
-
-        let aggregator_config = Self::load_aggregator_config(cli_config, args.aggregator_config)?;
-        let state = wavs_aggregator::http::state::HttpState::new(aggregator_config)?;
-
-        let component = Self::load_component(&component_path)?;
-
-        // Load service if URL provided, otherwise create a test service
-        let service = if let Some(service_url) = args.service_url {
-            fetch_service(&service_url, &cli_config.ipfs_gateway).await?
-        } else {
-            Self::create_test_service(args.service_id, workflow_id.clone(), &component)?
-        };
-
-        let packet = Self::create_packet(args.input.unwrap_or_default(), service, workflow_id)?;
-
-        // Create a dummy transaction receipt as Result<AnyTxHash, String>
-        let tx_receipt: Result<
-            wavs_engine::bindings::aggregator::world::wavs::types::chain::AnyTxHash,
-            String,
-        > = Err("No transaction receipt for test".to_string());
-
-        state
-            .aggregator_engine
-            .execute_submit_callback(&component, &packet, tx_receipt)
-            .await?;
-
-        Ok(ExecAggregatorResult::Submit)
-    }
-
-    fn load_aggregator_config(
-        cli_config: &Config,
-        path: Option<PathBuf>,
-    ) -> Result<AggregatorConfig> {
-        if let Some(path) = path {
-            let args = wavs_aggregator::args::CliArgs {
-                home: Some(path.parent().unwrap().to_path_buf()),
-                ..Default::default()
-            };
-            ConfigBuilder::new(args).build()
-        } else {
-            // Use CLI config to build aggregator config with shared settings
-            let args = wavs_aggregator::args::CliArgs {
-                data: Some(cli_config.data.clone()),
-                log_level: cli_config.log_level.clone(),
-                ipfs_gateway: Some(cli_config.ipfs_gateway.clone()),
-                credential: cli_config.evm_credential.clone(),
-                ..Default::default()
-            };
-            ConfigBuilder::new(args).build()
-        }
-    }
-
-    fn load_component(path: &str) -> Result<Component> {
-        let bytes = read_component(path)
-            .with_context(|| format!("Failed to read component from {}", path))?;
-        let digest = ComponentDigest::hash(&bytes);
-        Ok(Component::new(ComponentSource::Digest(digest)))
-    }
-
-    fn create_test_service(
-        service_id: Option<String>,
-        workflow_id: String,
-        component: &Component,
-    ) -> Result<Service> {
-        let workflow_id = WorkflowID::new(workflow_id)?;
-        let service_name = service_id.unwrap_or_else(|| "ExecAggregatorService".to_string());
-
-        // Create a workflow with the provided component
-        let workflow = Workflow {
-            trigger: Trigger::Manual,
-            component: component.clone(),
-            submit: Submit::None,
-        };
-
-        let mut workflows = BTreeMap::new();
-        workflows.insert(workflow_id, workflow);
-
-        Ok(Service {
-            name: service_name,
-            status: ServiceStatus::Active,
-            manager: ServiceManager::Evm {
-                chain_name: "31337".try_into().unwrap(),
-                address: alloy_primitives::Address::ZERO,
-            },
-            workflows,
-        })
     }
 
     fn create_packet(data: String, service: Service, workflow_id_str: String) -> Result<Packet> {
@@ -242,8 +130,6 @@ pub enum ExecAggregatorResult {
     Packet {
         actions: Vec<wavs_aggregator::engine::AggregatorAction>,
     },
-    Timer,
-    Submit,
 }
 
 impl std::fmt::Display for ExecAggregatorResult {
@@ -257,8 +143,106 @@ impl std::fmt::Display for ExecAggregatorResult {
                 }
                 Ok(())
             }
-            ExecAggregatorResult::Timer => write!(f, "Timer callback executed successfully"),
-            ExecAggregatorResult::Submit => write!(f, "Submit callback executed successfully"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+    use utils::filesystem::workspace_path;
+
+    #[tokio::test]
+    async fn test_exec_aggregator_packet() {
+        let component_path = workspace_path()
+            .join("examples")
+            .join("build")
+            .join("components")
+            .join("simple_aggregator.wasm")
+            .to_string_lossy()
+            .to_string();
+
+        let args = ExecAggregatorArgs {
+            entry_point: AggregatorEntryPoint::ExecutePacket,
+            aggregator_config: wavs_aggregator::config::Config::default(),
+            component: Some(component_path),
+            input: Some("test data".to_string()),
+            service_id: Some("test-service".to_string()),
+            workflow_id: Some("test-workflow".to_string()),
+            service_url: None,
+            chain_name: "31337".to_string(),
+            service_handler: "0x0000000000000000000000000000000000000000".to_string(),
+        };
+
+        let result = ExecAggregator::run(&Config::default(), args).await.unwrap();
+
+        match result {
+            ExecAggregatorResult::Packet { actions } => {
+                assert_eq!(actions.len(), 1);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_exec_aggregator_with_hex_input() {
+        let component_path = workspace_path()
+            .join("examples")
+            .join("build")
+            .join("components")
+            .join("simple_aggregator.wasm")
+            .to_string_lossy()
+            .to_string();
+
+        let args = ExecAggregatorArgs {
+            entry_point: AggregatorEntryPoint::ExecutePacket,
+            aggregator_config: wavs_aggregator::config::Config::default(),
+            component: Some(component_path),
+            input: Some("0x68656C6C6F".to_string()), // "hello" in hex
+            service_id: Some("test-service".to_string()),
+            workflow_id: Some("test-workflow".to_string()),
+            service_url: None,
+            chain_name: "31337".to_string(),
+            service_handler: "0x0000000000000000000000000000000000000000".to_string(),
+        };
+
+        let result = ExecAggregator::run(&Config::default(), args).await.unwrap();
+
+        match result {
+            ExecAggregatorResult::Packet { .. } => {}
+        }
+    }
+
+    #[tokio::test]
+    async fn test_exec_aggregator_with_file_input() {
+        let component_path = workspace_path()
+            .join("examples")
+            .join("build")
+            .join("components")
+            .join("simple_aggregator.wasm")
+            .to_string_lossy()
+            .to_string();
+
+        let mut file = NamedTempFile::new().unwrap();
+        file.write_all(b"file content").unwrap();
+
+        let args = ExecAggregatorArgs {
+            entry_point: AggregatorEntryPoint::ExecutePacket,
+            aggregator_config: wavs_aggregator::config::Config::default(),
+            component: Some(component_path),
+            input: Some(format!("@{}", file.path().to_string_lossy())),
+            service_id: Some("test-service".to_string()),
+            workflow_id: Some("test-workflow".to_string()),
+            service_url: None,
+            chain_name: "31337".to_string(),
+            service_handler: "0x0000000000000000000000000000000000000000".to_string(),
+        };
+
+        let result = ExecAggregator::run(&Config::default(), args).await.unwrap();
+
+        match result {
+            ExecAggregatorResult::Packet { .. } => {}
         }
     }
 }

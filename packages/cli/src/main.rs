@@ -166,14 +166,20 @@ async fn main() {
             .unwrap(),
         Command::ExecAggregator {
             entry_point,
-            aggregator_config,
+            aggregator_args,
             component,
             input,
             service_id,
             workflow_id,
             service_url,
+            chain_name,
+            service_handler,
             args: _,
         } => {
+            let aggregator_config = utils::config::ConfigBuilder::new(aggregator_args)
+                .build()
+                .unwrap();
+
             let res = match ExecAggregator::run(
                 &ctx.config,
                 ExecAggregatorArgs {
@@ -184,6 +190,8 @@ async fn main() {
                     service_id,
                     workflow_id,
                     service_url,
+                    chain_name,
+                    service_handler,
                 },
             )
             .await

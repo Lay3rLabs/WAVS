@@ -104,11 +104,11 @@ pub enum Command {
         #[clap(flatten)]
         args: CliArgs,
 
-        /// Path to aggregator config file (optional)
-        #[clap(long)]
-        aggregator_config: Option<PathBuf>,
+        /// Aggregator-specific configuration arguments
+        #[clap(flatten)]
+        aggregator_args: wavs_aggregator::args::CliArgs,
 
-        /// Path to the WASI component (required for execute-packet, execute-timer, execute-submit)
+        /// Path to the WASI component (required for execute-packet)
         #[clap(long)]
         component: Option<String>,
 
@@ -119,17 +119,25 @@ pub enum Command {
         #[clap(long)]
         input: Option<String>,
 
-        /// Service ID (required for execute-packet, execute-timer, execute-submit)
+        /// Service ID (required for execute-packet)
         #[clap(long)]
         service_id: Option<String>,
 
-        /// Workflow ID (required for execute-packet, execute-timer, execute-submit)
+        /// Workflow ID (required for execute-packet)
         #[clap(long)]
         workflow_id: Option<String>,
 
         /// Service URL to load service definition from (optional)
         #[clap(long)]
         service_url: Option<String>,
+
+        /// Chain name for the aggregator component config
+        #[clap(long)]
+        chain_name: String,
+
+        /// Service handler address for the aggregator component config
+        #[clap(long)]
+        service_handler: String,
     },
 }
 
@@ -137,10 +145,6 @@ pub enum Command {
 pub enum AggregatorEntryPoint {
     /// Execute a packet through the aggregator
     ExecutePacket,
-    /// Execute a timer callback
-    ExecuteTimer,
-    /// Execute a submit callback
-    ExecuteSubmit,
 }
 
 /// Commands for managing services

@@ -31,7 +31,7 @@ impl Guest for Component {
     }
 
     fn handle_timer_callback(_packet: Packet) -> Result<Vec<AggregatorAction>, String> {
-        Err("No timers used".to_string())
+        Err("Not implemented yet".to_string())
     }
 
     fn handle_submit_callback(
