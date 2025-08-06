@@ -171,6 +171,7 @@ async fn main() {
             input,
             service_id,
             workflow_id,
+            service_url,
             args: _,
         } => {
             let res = match ExecAggregator::run(
@@ -182,6 +183,7 @@ async fn main() {
                     input,
                     service_id,
                     workflow_id,
+                    service_url,
                 },
             )
             .await

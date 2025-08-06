@@ -126,6 +126,10 @@ pub enum Command {
         /// Workflow ID (required for execute-packet, execute-timer, execute-submit)
         #[clap(long)]
         workflow_id: Option<String>,
+
+        /// Service URL to load service definition from (optional)
+        #[clap(long)]
+        service_url: Option<String>,
     },
 }
 
