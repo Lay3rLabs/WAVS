@@ -294,6 +294,10 @@ pub enum SubmitCommand {
         /// The maximum gas to use for the submission (optional)
         #[clap(long)]
         max_gas: Option<u64>,
+
+        /// Component configuration key-value pairs in format 'key=value'
+        #[clap(long, value_delimiter = ',')]
+        component_config: Option<Vec<String>>,
     },
     /// Add an aggregator submit for a workflow
     AddAggregator {
@@ -301,17 +305,9 @@ pub enum SubmitCommand {
         #[clap(long)]
         url: String,
 
-        /// The hexadecimal EVM address (e.g., "0x1234...")
-        #[clap(long)]
-        service_handler: alloy_primitives::Address,
-
-        /// The chain name (e.g., "ethereum-mainnet")
-        #[clap(long)]
-        chain_name: ChainName,
-
-        /// The maximum gas to use for the submission (optional)
-        #[clap(long)]
-        max_gas: Option<u64>,
+        /// Component management command for the aggregator
+        #[clap(subcommand)]
+        component: ComponentCommand,
     },
 }
 

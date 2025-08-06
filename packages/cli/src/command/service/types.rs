@@ -219,6 +219,16 @@ impl std::fmt::Display for WorkflowTriggerResult {
     }
 }
 
+/// Arguments for setting an aggregator submit
+pub struct SetAggregatorArgs {
+    pub aggregator_component_path: String,
+    pub url: String,
+    pub chain_name: ChainName,
+    pub address: alloy_primitives::Address,
+    pub max_gas: Option<u64>,
+    pub component_config: Option<Vec<String>>,
+}
+
 /// Result of updating a workflow's submit
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkflowSetSubmitAggregatorResult {

@@ -8,8 +8,8 @@ pub use types::{
     ChainType, ComponentConfigResult, ComponentEnvKeysResult, ComponentFuelLimitResult,
     ComponentPermissionsResult, ComponentSourceDigestResult, ComponentSourceRegistryResult,
     ComponentTimeLimitResult, EvmManagerResult, ServiceInitResult, ServiceValidationResult,
-    UpdateStatusResult, WorkflowAddAggregatorResult, WorkflowAddResult, WorkflowDeleteResult,
-    WorkflowSetSubmitAggregatorResult, WorkflowTriggerResult,
+    SetAggregatorArgs, UpdateStatusResult, WorkflowAddAggregatorResult, WorkflowAddResult,
+    WorkflowDeleteResult, WorkflowSetSubmitAggregatorResult, WorkflowTriggerResult,
 };
 pub use validate::{
     check_cosmos_contract_exists, check_evm_contract_exists, validate_contracts_exist,
@@ -169,32 +169,24 @@ pub async fn handle_service_command(
                     chain_name,
                     address,
                     max_gas,
+                    component_config,
                 } => {
                     let result = set_aggregator_submit(
                         &file,
                         id,
-                        aggregator_component,
-                        url,
-                        chain_name,
-                        address,
-                        max_gas,
+                        SetAggregatorArgs {
+                            aggregator_component_path: aggregator_component,
+                            url,
+                            chain_name,
+                            address,
+                            max_gas,
+                            component_config,
+                        },
                     )?;
                     display_result(ctx, result, json)?;
                 }
-                SubmitCommand::AddAggregator {
-                    url,
-                    chain_name,
-                    service_handler,
-                    max_gas,
-                } => {
-                    let result = add_aggregator_submit(
-                        &file,
-                        id,
-                        url,
-                        chain_name,
-                        service_handler,
-                        max_gas,
-                    )?;
+                SubmitCommand::AddAggregator { url, component } => {
+                    let result = add_aggregator_submit(&file, id, url, component)?;
                     display_result(ctx, result, json)?;
                 }
             },
@@ -1041,59 +1033,58 @@ pub async fn validate_service(
 pub fn set_aggregator_submit(
     file_path: &Path,
     workflow_id: WorkflowID,
-    aggregator_component_path: String,
-    url: String,
-    chain_name: ChainName,
-    address: alloy_primitives::Address,
-    max_gas: Option<u64>,
+    args: SetAggregatorArgs,
 ) -> Result<WorkflowSetSubmitAggregatorResult> {
-    // Validate the URL format
-    let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
+    let _ = reqwest::Url::parse(&args.url).context(format!("Invalid URL format: {}", args.url))?;
 
-    // Read the aggregator component
-    let wasm_bytes = std::fs::read(&aggregator_component_path).context(format!(
+    let wasm_bytes = std::fs::read(&args.aggregator_component_path).context(format!(
         "Failed to read aggregator component from: {}",
-        aggregator_component_path
+        args.aggregator_component_path
     ))?;
     let digest = ComponentDigest::hash(&wasm_bytes);
 
     modify_service_file(file_path, |mut service| {
-        // Check if the workflow exists
         let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
             anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
         })?;
 
-        // Create an aggregator component
+        // parse component config from CLI args
+        let mut config = BTreeMap::new();
+        if let Some(config_values) = args.component_config {
+            for value in config_values {
+                match value.split_once('=') {
+                    Some((key, val)) => {
+                        config.insert(key.to_string(), val.to_string());
+                    }
+                    None => {
+                        return Err(anyhow::anyhow!(
+                            "Invalid config format: '{}'. Expected 'key=value'",
+                            value
+                        ));
+                    }
+                }
+            }
+        }
+
         let aggregator_component = Component {
             source: ComponentSource::Digest(digest),
             permissions: Default::default(),
             fuel_limit: None,
             time_limit_seconds: None,
-            config: [
-                ("chain_name".to_string(), chain_name.to_string()),
-                ("address".to_string(), address.to_string()),
-                (
-                    "max_gas".to_string(),
-                    max_gas.map(|g| g.to_string()).unwrap_or_default(),
-                ),
-            ]
-            .into_iter()
-            .filter(|(_, v)| !v.is_empty())
-            .collect(),
+            config,
             env_keys: Default::default(),
         };
 
-        // Update the submit
         let submit = Submit::Aggregator {
-            url,
+            url: args.url,
             component: Box::new(aggregator_component),
         };
         workflow.submit = SubmitJson::Submit(submit.clone());
 
         let evm_contract = EvmContractSubmission {
-            chain_name,
-            address,
-            max_gas,
+            chain_name: args.chain_name,
+            address: args.address,
+            max_gas: args.max_gas,
         };
         let aggregator_submit = Aggregator::Evm(evm_contract);
 
@@ -1114,15 +1105,11 @@ pub fn add_aggregator_submit(
     file_path: &Path,
     workflow_id: WorkflowID,
     url: String,
-    chain_name: ChainName,
-    service_handler: alloy_primitives::Address,
-    max_gas: Option<u64>,
+    component_cmd: ComponentCommand,
 ) -> Result<WorkflowAddAggregatorResult> {
-    // Validate the URL format
     let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
 
     modify_service_file(file_path, |mut service| {
-        // Check if the workflow exists
         let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
             anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
         })?;
@@ -1137,21 +1124,103 @@ pub fn add_aggregator_submit(
         }
 
         if let SubmitJson::Submit(Submit::Aggregator { component, .. }) = &mut workflow.submit {
-            // Update the component config with the new aggregator details
-            component
-                .config
-                .insert("chain_name".to_string(), chain_name.to_string());
-            component
-                .config
-                .insert("service_handler".to_string(), service_handler.to_string());
+            match component_cmd {
+                ComponentCommand::SetSourceDigest { digest } => {
+                    component.source = ComponentSource::Digest(digest);
+                }
+                ComponentCommand::SetSourceRegistry { .. } => {
+                    return Err(anyhow::anyhow!(
+                        "SetSourceRegistry is not supported for aggregator submits. Use SetSourceDigest instead."
+                    ));
+                }
+                ComponentCommand::Permissions {
+                    http_hosts,
+                    file_system,
+                } => {
+                    if let Some(hosts) = http_hosts {
+                        component.permissions.allowed_http_hosts = if hosts.is_empty() {
+                            AllowedHostPermission::None
+                        } else if hosts.len() == 1 && hosts[0] == "*" {
+                            AllowedHostPermission::All
+                        } else {
+                            AllowedHostPermission::Only(hosts)
+                        };
+                    }
+                    if let Some(fs) = file_system {
+                        component.permissions.file_system = fs;
+                    }
+                }
+                ComponentCommand::FuelLimit { fuel } => {
+                    component.fuel_limit = fuel;
+                }
+                ComponentCommand::TimeLimit { seconds } => {
+                    component.time_limit_seconds = seconds;
+                }
+                ComponentCommand::Config { values } => {
+                    if let Some(values) = values {
+                        for value in values {
+                            match value.split_once('=') {
+                                Some((key, val)) => {
+                                    component.config.insert(key.to_string(), val.to_string());
+                                }
+                                None => {
+                                    return Err(anyhow::anyhow!(
+                                        "Invalid config format: '{}'. Expected 'key=value'",
+                                        value
+                                    ));
+                                }
+                            }
+                        }
+                    } else {
+                        component.config.clear();
+                    }
+                }
+                ComponentCommand::Env { values } => {
+                    if let Some(values) = values {
+                        for value in values {
+                            if !value.starts_with("WAVS_ENV") {
+                                return Err(anyhow::anyhow!(
+                                    "Env variable must start with 'WAVS_ENV': '{}'",
+                                    value
+                                ));
+                            }
+                            component.env_keys.insert(value);
+                        }
+                    } else {
+                        component.env_keys.clear();
+                    }
+                }
+            }
         }
 
-        let evm_contract = EvmContractSubmission {
-            chain_name,
-            address: service_handler,
-            max_gas,
-        };
-        let aggregator_submits = vec![Aggregator::Evm(evm_contract)];
+        // Try to extract aggregator submission details from component config
+        let mut aggregator_submits = vec![];
+
+        if let SubmitJson::Submit(Submit::Aggregator { component, .. }) = &workflow.submit {
+            let chain_name = component
+                .config
+                .get("chain_name")
+                .and_then(|s| s.parse::<ChainName>().ok());
+
+            let service_handler = component
+                .config
+                .get("service_handler")
+                .and_then(|s| s.parse::<alloy_primitives::Address>().ok());
+
+            if let (Some(chain_name), Some(address)) = (chain_name, service_handler) {
+                let max_gas = component
+                    .config
+                    .get("max_gas")
+                    .and_then(|s| s.parse::<u64>().ok());
+
+                let evm_contract = EvmContractSubmission {
+                    chain_name,
+                    address,
+                    max_gas,
+                };
+                aggregator_submits.push(Aggregator::Evm(evm_contract));
+            }
+        }
 
         Ok((
             service,
