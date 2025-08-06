@@ -135,8 +135,6 @@ pub enum Command {
 
 #[derive(Debug, Clone, clap::ValueEnum, Serialize, Deserialize)]
 pub enum AggregatorEntryPoint {
-    /// Run the aggregator HTTP server
-    Server,
     /// Execute a packet through the aggregator
     ExecutePacket,
     /// Execute a timer callback

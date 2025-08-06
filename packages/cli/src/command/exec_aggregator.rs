@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use utils::{config::ConfigBuilder, context::AppContext, service::fetch_service};
-use wavs_aggregator::{config::Config as AggregatorConfig, run_server};
+use utils::{config::ConfigBuilder, service::fetch_service};
+use wavs_aggregator::config::Config as AggregatorConfig;
 use wavs_types::{
     Component, ComponentDigest, ComponentSource, Envelope, EnvelopeSignature, Packet, Service,
     ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
@@ -32,33 +32,10 @@ impl ExecAggregator {
         args: ExecAggregatorArgs,
     ) -> Result<ExecAggregatorResult> {
         match args.entry_point {
-            AggregatorEntryPoint::Server => {
-                Self::run_server(cli_config, args.aggregator_config).await
-            }
             AggregatorEntryPoint::ExecutePacket => Self::execute_packet(cli_config, args).await,
             AggregatorEntryPoint::ExecuteTimer => Self::execute_timer(cli_config, args).await,
             AggregatorEntryPoint::ExecuteSubmit => Self::execute_submit(cli_config, args).await,
         }
-    }
-
-    async fn run_server(
-        cli_config: &Config,
-        aggregator_config_path: Option<PathBuf>,
-    ) -> Result<ExecAggregatorResult> {
-        tracing::info!("Starting aggregator server...");
-
-        let aggregator_config = Self::load_aggregator_config(cli_config, aggregator_config_path)?;
-        let ctx = AppContext::new();
-
-        let handle = std::thread::spawn(move || {
-            run_server(ctx, aggregator_config);
-        });
-
-        handle
-            .join()
-            .map_err(|e| anyhow::anyhow!("Server thread panicked: {:?}", e))?;
-
-        Ok(ExecAggregatorResult::Server)
     }
 
     async fn execute_packet(
@@ -262,7 +239,6 @@ impl ExecAggregator {
 }
 
 pub enum ExecAggregatorResult {
-    Server,
     Packet {
         actions: Vec<wavs_aggregator::engine::AggregatorAction>,
     },
@@ -273,7 +249,6 @@ pub enum ExecAggregatorResult {
 impl std::fmt::Display for ExecAggregatorResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExecAggregatorResult::Server => write!(f, "Aggregator server started"),
             ExecAggregatorResult::Packet { actions } => {
                 writeln!(f, "Packet execution completed")?;
                 writeln!(f, "Actions generated: {}", actions.len())?;
