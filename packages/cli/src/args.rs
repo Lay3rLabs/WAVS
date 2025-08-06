@@ -108,16 +108,9 @@ pub enum Command {
         #[clap(long)]
         component: String,
 
-        /// The payload data for packet execution.
-        /// If preceded by a `@`, will be treated as a file path
-        /// If preceded by a `0x`, will be treated as hex-encoded
-        /// Otherwise will be treated as raw string bytes
+        /// Path to the packet JSON file
         #[clap(long)]
-        input: String,
-
-        /// Service URL to load service definition from (optional, creates default service if not provided)
-        #[clap(long)]
-        service_url: Option<String>,
+        packet: String,
 
         /// Optional fuel limit for component execution
         #[clap(long)]

@@ -167,8 +167,7 @@ async fn main() {
         Command::ExecAggregator {
             aggregator_args,
             component,
-            input,
-            service_url,
+            packet,
             fuel_limit,
             time_limit,
             chain_name,
@@ -179,19 +178,15 @@ async fn main() {
                 .build()
                 .unwrap();
 
-            let res = match ExecAggregator::run(
-                &ctx.config,
-                ExecAggregatorArgs {
-                    aggregator_config,
-                    component,
-                    input,
-                    service_url,
-                    fuel_limit,
-                    time_limit,
-                    chain_name,
-                    service_handler,
-                },
-            )
+            let res = match ExecAggregator::run(ExecAggregatorArgs {
+                aggregator_config,
+                component,
+                packet,
+                fuel_limit,
+                time_limit,
+                chain_name,
+                service_handler,
+            })
             .await
             {
                 Ok(result) => result,

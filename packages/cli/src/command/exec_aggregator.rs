@@ -1,22 +1,14 @@
 use anyhow::Result;
-use utils::service::fetch_service;
-use wavs_types::{
-    AllowedHostPermission, Component, ComponentSource, Envelope, EnvelopeSignature, Packet,
-    Permissions, Service, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
-};
+use wavs_types::{AllowedHostPermission, Component, ComponentSource, Packet, Permissions};
 
-use crate::{
-    config::Config,
-    util::{read_component, ComponentInput},
-};
+use crate::util::read_component;
 
 pub struct ExecAggregator;
 
 pub struct ExecAggregatorArgs {
     pub aggregator_config: wavs_aggregator::config::Config,
     pub component: String,
-    pub input: String,
-    pub service_url: Option<String>,
+    pub packet: String,
     pub fuel_limit: Option<u64>,
     pub time_limit: Option<u64>,
     pub chain_name: String,
@@ -24,14 +16,14 @@ pub struct ExecAggregatorArgs {
 }
 
 impl ExecAggregator {
-    pub async fn run(
-        cli_config: &Config,
-        args: ExecAggregatorArgs,
-    ) -> Result<ExecAggregatorResult> {
+    pub async fn run(args: ExecAggregatorArgs) -> Result<ExecAggregatorResult> {
         let component_path = args.component;
-        let input = args.input;
+        let packet_path = args.packet;
 
-        tracing::info!("Executing packet with component: {}", component_path);
+        tracing::info!(
+            "Executing packet with aggregator component: {}",
+            component_path
+        );
 
         let mut aggregator_config = args.aggregator_config;
         aggregator_config.data = tempfile::tempdir()?.keep();
@@ -56,29 +48,9 @@ impl ExecAggregator {
             env_keys: Default::default(),
         };
 
-        let service = if let Some(service_url) = args.service_url {
-            fetch_service(&service_url, &cli_config.ipfs_gateway).await?
-        } else {
-            Service {
-                name: "Exec Aggregator Service".to_string(),
-                workflows: [(
-                    WorkflowID::default(),
-                    Workflow {
-                        trigger: Trigger::Manual,
-                        component: component.clone(),
-                        submit: Submit::None,
-                    },
-                )]
-                .into(),
-                status: ServiceStatus::Active,
-                manager: ServiceManager::Evm {
-                    chain_name: "exec".parse()?,
-                    address: alloy_primitives::Address::ZERO,
-                },
-            }
-        };
-
-        let packet = Self::create_packet(input, service)?;
+        // Read packet from file
+        let packet_json = std::fs::read_to_string(&packet_path)?;
+        let packet: Packet = serde_json::from_str(&packet_json)?;
 
         let actions = state
             .aggregator_engine
@@ -86,26 +58,6 @@ impl ExecAggregator {
             .await?;
 
         Ok(ExecAggregatorResult::Packet { actions })
-    }
-
-    fn create_packet(data: String, service: Service) -> Result<Packet> {
-        let workflow_id = WorkflowID::default();
-
-        let input = ComponentInput::new(data);
-        let packet_bytes = input.decode()?;
-
-        Ok(Packet {
-            service,
-            workflow_id,
-            envelope: Envelope {
-                eventId: [0u8; 20].into(),
-                ordering: [0u8; 12].into(),
-                payload: packet_bytes.into(),
-            },
-            signature: EnvelopeSignature::Secp256k1(
-                alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false),
-            ),
-        })
     }
 }
 
@@ -136,6 +88,64 @@ mod test {
     use std::io::Write;
     use tempfile::NamedTempFile;
     use utils::filesystem::workspace_path;
+    use wavs_types::{
+        Envelope, EnvelopeSignature, Service, ServiceManager, ServiceStatus, Submit, Trigger,
+        Workflow, WorkflowID,
+    };
+
+    fn create_test_packet(component_path: &str) -> Packet {
+        let wasm_bytes = read_component(component_path).unwrap();
+        let digest = wavs_types::ComponentDigest::hash(&wasm_bytes);
+
+        let service = Service {
+            name: "test-service".to_string(),
+            workflows: [(
+                WorkflowID::default(),
+                Workflow {
+                    trigger: Trigger::Manual,
+                    component: Component {
+                        source: ComponentSource::Digest(digest),
+                        permissions: Permissions {
+                            allowed_http_hosts: AllowedHostPermission::All,
+                            file_system: true,
+                        },
+                        fuel_limit: None,
+                        time_limit_seconds: None,
+                        config: [
+                            ("chain_name".to_string(), "31337".to_string()),
+                            (
+                                "service_handler".to_string(),
+                                "0x0000000000000000000000000000000000000000".to_string(),
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        env_keys: Default::default(),
+                    },
+                    submit: Submit::None,
+                },
+            )]
+            .into(),
+            status: ServiceStatus::Active,
+            manager: ServiceManager::Evm {
+                chain_name: "evm".parse().unwrap(),
+                address: alloy_primitives::Address::ZERO,
+            },
+        };
+
+        Packet {
+            service,
+            workflow_id: WorkflowID::default(),
+            envelope: Envelope {
+                eventId: [0u8; 20].into(),
+                ordering: [0u8; 12].into(),
+                payload: b"test data".to_vec().into(),
+            },
+            signature: EnvelopeSignature::Secp256k1(
+                alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false),
+            ),
+        }
+    }
 
     #[tokio::test]
     async fn test_exec_aggregator_packet() {
@@ -147,82 +157,29 @@ mod test {
             .to_string_lossy()
             .to_string();
 
+        // Create a test packet
+        let packet = create_test_packet(&component_path);
+        let mut packet_file = NamedTempFile::new().unwrap();
+        packet_file
+            .write_all(serde_json::to_string(&packet).unwrap().as_bytes())
+            .unwrap();
+
         let args = ExecAggregatorArgs {
             aggregator_config: wavs_aggregator::config::Config::default(),
             component: component_path,
-            input: "test data".to_string(),
-            service_url: None,
+            packet: packet_file.path().to_string_lossy().to_string(),
             fuel_limit: None,
             time_limit: None,
             chain_name: "31337".to_string(),
             service_handler: "0x0000000000000000000000000000000000000000".to_string(),
         };
 
-        let result = ExecAggregator::run(&Config::default(), args).await.unwrap();
+        let result = ExecAggregator::run(args).await.unwrap();
 
         match result {
             ExecAggregatorResult::Packet { actions } => {
                 assert_eq!(actions.len(), 1);
             }
-        }
-    }
-
-    #[tokio::test]
-    async fn test_exec_aggregator_with_hex_input() {
-        let component_path = workspace_path()
-            .join("examples")
-            .join("build")
-            .join("components")
-            .join("simple_aggregator.wasm")
-            .to_string_lossy()
-            .to_string();
-
-        let args = ExecAggregatorArgs {
-            aggregator_config: wavs_aggregator::config::Config::default(),
-            component: component_path,
-            input: "0x68656C6C6F".to_string(), // "hello" in hex
-            service_url: None,
-            fuel_limit: None,
-            time_limit: None,
-            chain_name: "31337".to_string(),
-            service_handler: "0x0000000000000000000000000000000000000000".to_string(),
-        };
-
-        let result = ExecAggregator::run(&Config::default(), args).await.unwrap();
-
-        match result {
-            ExecAggregatorResult::Packet { .. } => {}
-        }
-    }
-
-    #[tokio::test]
-    async fn test_exec_aggregator_with_file_input() {
-        let component_path = workspace_path()
-            .join("examples")
-            .join("build")
-            .join("components")
-            .join("simple_aggregator.wasm")
-            .to_string_lossy()
-            .to_string();
-
-        let mut file = NamedTempFile::new().unwrap();
-        file.write_all(b"file content").unwrap();
-
-        let args = ExecAggregatorArgs {
-            aggregator_config: wavs_aggregator::config::Config::default(),
-            component: component_path,
-            input: format!("@{}", file.path().to_string_lossy()),
-            service_url: None,
-            fuel_limit: None,
-            time_limit: None,
-            chain_name: "31337".to_string(),
-            service_handler: "0x0000000000000000000000000000000000000000".to_string(),
-        };
-
-        let result = ExecAggregator::run(&Config::default(), args).await.unwrap();
-
-        match result {
-            ExecAggregatorResult::Packet { .. } => {}
         }
     }
 }
