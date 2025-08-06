@@ -251,6 +251,13 @@ pub enum WorkflowCommand {
         #[clap(subcommand)]
         command: TriggerCommand,
     },
+    /// Operations on workflow submit
+    Submit {
+        #[clap(long)]
+        id: WorkflowID,
+        #[clap(subcommand)]
+        command: SubmitCommand,
+    },
 }
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
@@ -261,6 +268,50 @@ pub enum ManagerCommand {
         chain_name: ChainName,
         #[clap(long)]
         address: alloy_primitives::Address,
+    },
+}
+
+#[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
+pub enum SubmitCommand {
+    /// Set an aggregator submit for a workflow
+    SetAggregator {
+        /// Path to the aggregator component
+        #[clap(long)]
+        aggregator_component: String,
+
+        /// The URL of the aggregator
+        #[clap(long)]
+        url: String,
+
+        /// The hexadecimal EVM address (e.g., "0x1234...")
+        #[clap(long)]
+        address: alloy_primitives::Address,
+
+        /// The chain name (e.g., "ethereum-mainnet")
+        #[clap(long)]
+        chain_name: ChainName,
+
+        /// The maximum gas to use for the submission (optional)
+        #[clap(long)]
+        max_gas: Option<u64>,
+    },
+    /// Add an aggregator submit for a workflow
+    AddAggregator {
+        /// The URL of the aggregator
+        #[clap(long)]
+        url: String,
+
+        /// The hexadecimal EVM address (e.g., "0x1234...")
+        #[clap(long)]
+        address: alloy_primitives::Address,
+
+        /// The chain name (e.g., "ethereum-mainnet")
+        #[clap(long)]
+        chain_name: ChainName,
+
+        /// The maximum gas to use for the submission (optional)
+        #[clap(long)]
+        max_gas: Option<u64>,
     },
 }
 
