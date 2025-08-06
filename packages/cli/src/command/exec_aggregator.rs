@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use utils::service::fetch_service;
 use wavs_types::{
     Component, ComponentSource, Envelope, EnvelopeSignature, Packet, Service, ServiceManager,
@@ -14,10 +14,8 @@ pub struct ExecAggregator;
 
 pub struct ExecAggregatorArgs {
     pub aggregator_config: wavs_aggregator::config::Config,
-    pub component: Option<String>,
-    pub input: Option<String>,
-    pub service_id: Option<String>,
-    pub workflow_id: Option<String>,
+    pub component: String,
+    pub input: String,
     pub service_url: Option<String>,
     pub chain_name: String,
     pub service_handler: String,
@@ -28,15 +26,8 @@ impl ExecAggregator {
         cli_config: &Config,
         args: ExecAggregatorArgs,
     ) -> Result<ExecAggregatorResult> {
-        let component_path = args
-            .component
-            .context("Component path is required for execute-packet")?;
-        let input = args
-            .input
-            .context("Input data is required for execute-packet")?;
-        let workflow_id = args
-            .workflow_id
-            .context("Workflow ID is required for execute-packet")?;
+        let component_path = args.component;
+        let input = args.input;
 
         tracing::info!("Executing packet with component: {}", component_path);
 
@@ -64,11 +55,9 @@ impl ExecAggregator {
             fetch_service(&service_url, &cli_config.ipfs_gateway).await?
         } else {
             Service {
-                name: args
-                    .service_id
-                    .unwrap_or_else(|| "test-aggregator-service".to_string()),
+                name: "Exec Aggregator Service".to_string(),
                 workflows: [(
-                    WorkflowID::new(workflow_id.clone())?,
+                    WorkflowID::default(),
                     Workflow {
                         trigger: Trigger::Manual,
                         component: component.clone(),
@@ -78,13 +67,13 @@ impl ExecAggregator {
                 .into(),
                 status: ServiceStatus::Active,
                 manager: ServiceManager::Evm {
-                    chain_name: "evm".parse()?,
+                    chain_name: "exec".parse()?,
                     address: alloy_primitives::Address::ZERO,
                 },
             }
         };
 
-        let packet = Self::create_packet(input, service, workflow_id)?;
+        let packet = Self::create_packet(input, service)?;
 
         let actions = state
             .aggregator_engine
@@ -94,8 +83,8 @@ impl ExecAggregator {
         Ok(ExecAggregatorResult::Packet { actions })
     }
 
-    fn create_packet(data: String, service: Service, workflow_id_str: String) -> Result<Packet> {
-        let workflow_id = WorkflowID::new(workflow_id_str)?;
+    fn create_packet(data: String, service: Service) -> Result<Packet> {
+        let workflow_id = WorkflowID::default();
 
         let input = ComponentInput::new(data);
         let packet_bytes = input.decode()?;
@@ -155,10 +144,8 @@ mod test {
 
         let args = ExecAggregatorArgs {
             aggregator_config: wavs_aggregator::config::Config::default(),
-            component: Some(component_path),
-            input: Some("test data".to_string()),
-            service_id: Some("test-service".to_string()),
-            workflow_id: Some("test-workflow".to_string()),
+            component: component_path,
+            input: "test data".to_string(),
             service_url: None,
             chain_name: "31337".to_string(),
             service_handler: "0x0000000000000000000000000000000000000000".to_string(),
@@ -185,10 +172,8 @@ mod test {
 
         let args = ExecAggregatorArgs {
             aggregator_config: wavs_aggregator::config::Config::default(),
-            component: Some(component_path),
-            input: Some("0x68656C6C6F".to_string()), // "hello" in hex
-            service_id: Some("test-service".to_string()),
-            workflow_id: Some("test-workflow".to_string()),
+            component: component_path,
+            input: "0x68656C6C6F".to_string(), // "hello" in hex
             service_url: None,
             chain_name: "31337".to_string(),
             service_handler: "0x0000000000000000000000000000000000000000".to_string(),
@@ -216,10 +201,8 @@ mod test {
 
         let args = ExecAggregatorArgs {
             aggregator_config: wavs_aggregator::config::Config::default(),
-            component: Some(component_path),
-            input: Some(format!("@{}", file.path().to_string_lossy())),
-            service_id: Some("test-service".to_string()),
-            workflow_id: Some("test-workflow".to_string()),
+            component: component_path,
+            input: format!("@{}", file.path().to_string_lossy()),
             service_url: None,
             chain_name: "31337".to_string(),
             service_handler: "0x0000000000000000000000000000000000000000".to_string(),

@@ -104,26 +104,18 @@ pub enum Command {
         #[clap(flatten)]
         aggregator_args: wavs_aggregator::args::CliArgs,
 
-        /// Path to the WASI component (required for execute-packet)
+        /// Path to the WASI aggregator component
         #[clap(long)]
-        component: Option<String>,
+        component: String,
 
         /// The payload data for packet execution.
         /// If preceded by a `@`, will be treated as a file path
         /// If preceded by a `0x`, will be treated as hex-encoded
         /// Otherwise will be treated as raw string bytes
         #[clap(long)]
-        input: Option<String>,
+        input: String,
 
-        /// Service ID (required for execute-packet)
-        #[clap(long)]
-        service_id: Option<String>,
-
-        /// Workflow ID (required for execute-packet)
-        #[clap(long)]
-        workflow_id: Option<String>,
-
-        /// Service URL to load service definition from (optional)
+        /// Service URL to load service definition from (optional, creates default service if not provided)
         #[clap(long)]
         service_url: Option<String>,
 
