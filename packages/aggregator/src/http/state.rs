@@ -3,6 +3,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use deadpool::managed::Pool;
+use layer_climb::pool::{SigningClientPool, SigningClientPoolManager};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use utils::{
@@ -60,7 +62,7 @@ pub struct HttpState {
     pub queue_transaction: AsyncTransaction<PacketQueueId>,
     storage: RedbStorage,
     evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
-    cosmos_clients: Arc<RwLock<HashMap<ChainName, layer_climb::signing::SigningClient>>>,
+    cosmos_clients: Arc<tokio::sync::RwLock<HashMap<ChainName, SigningClientPool>>>,
 }
 
 // key is ServiceId
@@ -72,7 +74,7 @@ impl HttpState {
     pub fn new(config: Config) -> AggregatorResult<Self> {
         let storage = RedbStorage::new(config.data.join("db"))?;
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
-        let cosmos_clients = Arc::new(RwLock::new(HashMap::new()));
+        let cosmos_clients = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
 
         Ok(Self {
             config,
@@ -129,14 +131,17 @@ impl HttpState {
     pub async fn get_cosmos_client(
         &self,
         chain_name: &ChainName,
-    ) -> AggregatorResult<layer_climb::signing::SigningClient> {
-        {
-            let lock = self.cosmos_clients.read().unwrap();
+    ) -> AggregatorResult<deadpool::managed::Object<SigningClientPoolManager>> {
+        let pool = {
+            // be careful to drop this lock a.s.a.p.
+            // it's just a read, but around _every_ access, even after we've added a pool for the chain
+            let lock = self.cosmos_clients.read().await;
+            lock.get(chain_name).cloned()
+        };
 
-            if let Some(client) = lock.get(chain_name) {
-                tracing::debug!("Using cached Cosmos client for chain: {}", chain_name);
-                return Ok(client.clone());
-            }
+        if let Some(pool) = pool {
+            // this is actually the typical case, where we've added a pool for the chain
+            return pool.get().await.map_err(AggregatorError::Deadpool);
         }
 
         let chain_config = self
@@ -153,17 +158,20 @@ impl HttpState {
             .clone()
             .ok_or(AggregatorError::MissingCosmosCredential)?;
 
-        let signer = layer_climb::prelude::KeySigner::new_mnemonic_str(&mnemonic, None)
-            .map_err(AggregatorError::CorruptCosmosCredential)?;
+        let pool_manager =
+            SigningClientPoolManager::new_mnemonic(mnemonic, chain_config, None, None)
+                .with_minimum_balance(10_000, 1_000_000, None, None) // TODO, make this configurable
+                .await
+                .unwrap();
 
-        let client = layer_climb::signing::SigningClient::new(chain_config, signer, None)
-            .await
-            .map_err(AggregatorError::CreateCosmosClient)?;
+        let pool = SigningClientPool::new(Pool::builder(pool_manager).max_size(8).build().unwrap());
+
+        let client = pool.get().await.map_err(AggregatorError::Deadpool)?;
 
         self.cosmos_clients
             .write()
-            .unwrap()
-            .insert(chain_name.clone(), client.clone());
+            .await
+            .insert(chain_name.clone(), pool);
 
         Ok(client)
     }

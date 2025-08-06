@@ -76,11 +76,7 @@ impl Clients {
             };
 
             let pool_manager = SigningClientPoolManager::new_mnemonic(
-                cli_ctx
-                    .config
-                    .cosmos_mnemonic
-                    .clone()
-                    .expect("Expected a cosmos mnemonic"),
+                configs.mnemonics.cosmos_pool.clone(),
                 chain_config,
                 None,
                 None,

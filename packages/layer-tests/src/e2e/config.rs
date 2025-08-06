@@ -35,6 +35,7 @@ pub struct TestMnemonics {
     pub cli: String,
     pub wavs: String,
     pub aggregator: String,
+    pub cosmos_pool: String,
 }
 
 impl TestMnemonics {
@@ -51,7 +52,15 @@ impl TestMnemonics {
             aggregator:
                 "brain medal write network foam renew muscle mirror rather daring bike uniform"
                     .to_string(),
+            // 0x910B8d21FbE24f3F48d038DA0C6A12D070008c11
+            cosmos_pool:
+                "weasel shove collect grit welcome bless light gorilla drastic suit major crumble"
+                    .to_string(),
         }
+    }
+
+    pub fn all(&self) -> [&str; 4] {
+        [&self.cli, &self.wavs, &self.aggregator, &self.cosmos_pool]
     }
 
     pub async fn fund(&self, chain_configs: &ChainConfigs) {
@@ -61,7 +70,7 @@ impl TestMnemonics {
             let anvil_config = chain_config.signing_client_config(anvil_mnemonic).unwrap();
             let anvil_client = EvmSigningClient::new(anvil_config).await.unwrap();
 
-            for mnemonic in [&self.cli, &self.wavs, &self.aggregator] {
+            for mnemonic in self.all() {
                 let dest_addr = MnemonicBuilder::<English>::default()
                     .phrase(mnemonic)
                     .build()
@@ -168,6 +177,7 @@ impl From<TestConfig> for Configs {
 
         wavs_config.chains = chain_configs.clone();
         wavs_config.submission_mnemonic = Some(mnemonics.wavs.clone());
+        wavs_config.cosmos_submission_mnemonic = Some(mnemonics.wavs.clone());
 
         let mut aggregator_config: wavs_aggregator::config::Config =
             ConfigBuilder::new(wavs_aggregator::args::CliArgs {
@@ -182,6 +192,7 @@ impl From<TestConfig> for Configs {
 
         aggregator_config.chains = chain_configs.clone();
         aggregator_config.credential = Some(mnemonics.aggregator.clone());
+        aggregator_config.cosmos_mnemonic = Some(mnemonics.aggregator.clone());
 
         let cli_args = wavs_cli::args::CliArgs {
             data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
@@ -197,6 +208,7 @@ impl From<TestConfig> for Configs {
         cli_config.chains = chain_configs.clone();
         // some random mnemonic
         cli_config.evm_credential = Some(mnemonics.cli.clone());
+        cli_config.cosmos_mnemonic = Some(mnemonics.cli.clone());
 
         Self {
             matrix,

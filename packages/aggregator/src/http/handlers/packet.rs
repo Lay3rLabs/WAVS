@@ -1,7 +1,7 @@
 use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
 use axum::{extract::State, response::IntoResponse, Json};
-use layer_climb::prelude::AddrEvm;
+use layer_climb::{pool::SigningClientPoolManager, prelude::AddrEvm};
 use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
@@ -294,7 +294,7 @@ enum ServiceManagerClient {
     Evm(IWavsServiceManagerInstance<DynProvider>),
     Cosmos {
         service_manager_address: layer_climb::prelude::Address,
-        client: layer_climb::signing::SigningClient,
+        client: deadpool::managed::Object<SigningClientPoolManager>,
     },
 }
 

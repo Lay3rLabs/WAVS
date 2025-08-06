@@ -166,6 +166,9 @@ cfg-if = "1.0.1"
 # versioning
 semver = { version = "1.0.26", features = ["serde"] }
 
+# pool management
+deadpool = "0.12.2"
+
 # local
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }

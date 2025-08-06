@@ -9606,6 +9606,7 @@ dependencies = [
  "clap 4.5.40",
  "cosmwasm-std",
  "ctrlc",
+ "deadpool",
  "futures",
  "layer-climb",
  "serde",

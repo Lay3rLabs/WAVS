@@ -101,6 +101,9 @@ pub enum AggregatorError {
 
     #[error("service handler could not handle signed envelope: {0}")]
     CosmosHandleSignedEnvelope(anyhow::Error),
+
+    #[error("deadpool: {0:?}")]
+    Deadpool(deadpool::managed::PoolError<anyhow::Error>),
 }
 
 #[derive(Error, Debug)]
