@@ -66,45 +66,42 @@ async fn process_packet(
 
     let workflow = &packet.service.workflows[&packet.workflow_id];
     let mut aggregators = Vec::new();
-    match &workflow.submit {
-        wavs_types::Submit::Aggregator {
+    if let wavs_types::Submit::Aggregator {
             evm_contracts,
             cosmos_contracts,
             ..
-        } => {
-            if let Some(evm_contracts) = evm_contracts {
-                for evm_contract in evm_contracts.iter() {
-                    let EvmContractSubmission {
-                        chain_name,
-                        address,
-                        ..
-                    } = evm_contract;
+        } = &workflow.submit {
+        if let Some(evm_contracts) = evm_contracts {
+            for evm_contract in evm_contracts.iter() {
+                let EvmContractSubmission {
+                    chain_name,
+                    address,
+                    ..
+                } = evm_contract;
 
-                    aggregators.push(Aggregator::Evm(EvmContractSubmission {
-                        chain_name: chain_name.clone(),
-                        address: *address,
-                        max_gas: None, // TODO: handle max gas
-                    }));
-                }
-            }
-
-            if let Some(cosmos_contracts) = cosmos_contracts {
-                for cosmos_contract in cosmos_contracts.iter() {
-                    let CosmosContractSubmission {
-                        chain_name,
-                        address,
-                        ..
-                    } = cosmos_contract;
-
-                    aggregators.push(Aggregator::Cosmos(CosmosContractSubmission {
-                        chain_name: chain_name.clone(),
-                        address: address.clone(),
-                        max_gas: None, // TODO: handle max gas
-                    }));
-                }
+                aggregators.push(Aggregator::Evm(EvmContractSubmission {
+                    chain_name: chain_name.clone(),
+                    address: *address,
+                    max_gas: None, // TODO: handle max gas
+                }));
             }
         }
-        _ => {}
+
+        if let Some(cosmos_contracts) = cosmos_contracts {
+            for cosmos_contract in cosmos_contracts.iter() {
+                let CosmosContractSubmission {
+                    chain_name,
+                    address,
+                    ..
+                } = cosmos_contract;
+
+                aggregators.push(Aggregator::Cosmos(CosmosContractSubmission {
+                    chain_name: chain_name.clone(),
+                    address: address.clone(),
+                    max_gas: None, // TODO: handle max gas
+                }));
+            }
+        }
     }
 
     if aggregators.is_empty() {
@@ -127,10 +124,10 @@ async fn process_packet(
                 chain_name,
                 address,
             } => {
-                let client = state.get_evm_client(&chain_name).await?;
+                let client = state.get_evm_client(chain_name).await?;
 
                 let service_manager =
-                    IWavsServiceManagerInstance::new(address.clone(), client.provider);
+                    IWavsServiceManagerInstance::new(*address, client.provider);
                 service_manager
                     .getLatestOperatorForSigningKey(signing_key)
                     .call()
@@ -141,11 +138,11 @@ async fn process_packet(
                 chain_name,
                 address,
             } => {
-                let client = state.get_cosmos_client(&chain_name).await?;
+                let client = state.get_cosmos_client(chain_name).await?;
 
                 let resp = client.querier
                     .contract_smart::<Option<AddrEvm>, _>(
-                        &address,
+                        address,
                         &wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessages::WavsLatestOperatorForSigningKey {
                             signing_key_addr: signing_key.into(),
                         },
@@ -483,7 +480,7 @@ async fn get_submission_service_manager(
             let service_manager_address = client
                 .querier
                 .chain_config
-                .parse_address(&service_manager_address.to_string())
+                .parse_address(service_manager_address.as_ref())
                 .map_err(AggregatorError::CosmosServiceManagerLookup)?;
 
             Ok(ServiceManagerClient::Cosmos {
