@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use utils::{
-    config::ConfigBuilder,
-    context::AppContext,
-};
+use utils::{config::ConfigBuilder, context::AppContext};
 use wavs_aggregator::{config::Config as AggregatorConfig, init_tracing_tests, run_server};
-use wavs_types::{Component, ComponentDigest, ComponentSource, Envelope, EnvelopeSignature, Packet, Service, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID};
+use wavs_types::{
+    Component, ComponentDigest, ComponentSource, Envelope, EnvelopeSignature, Packet, Service,
+    ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+};
 
 use crate::{args::AggregatorEntryPoint, config::Config, util::ComponentInput};
 
@@ -27,7 +27,9 @@ impl ExecAggregator {
         args: ExecAggregatorArgs,
     ) -> Result<ExecAggregatorResult> {
         match args.entry_point {
-            AggregatorEntryPoint::Server => Self::run_server(cli_config, args.aggregator_config).await,
+            AggregatorEntryPoint::Server => {
+                Self::run_server(cli_config, args.aggregator_config).await
+            }
             AggregatorEntryPoint::ExecutePacket => Self::execute_packet(cli_config, args).await,
             AggregatorEntryPoint::ExecuteTimer => Self::execute_timer(cli_config, args).await,
             AggregatorEntryPoint::ExecuteSubmit => Self::execute_submit(cli_config, args).await,
@@ -60,10 +62,18 @@ impl ExecAggregator {
         cli_config: &Config,
         args: ExecAggregatorArgs,
     ) -> Result<ExecAggregatorResult> {
-        let component_path = args.component.context("Component path is required for execute-packet")?;
-        let input = args.input.context("Input data is required for execute-packet")?;
-        let service_id = args.service_id.context("Service ID is required for execute-packet")?;
-        let workflow_id = args.workflow_id.context("Workflow ID is required for execute-packet")?;
+        let component_path = args
+            .component
+            .context("Component path is required for execute-packet")?;
+        let input = args
+            .input
+            .context("Input data is required for execute-packet")?;
+        let service_id = args
+            .service_id
+            .context("Service ID is required for execute-packet")?;
+        let workflow_id = args
+            .workflow_id
+            .context("Workflow ID is required for execute-packet")?;
 
         tracing::info!("Executing packet with component: {}", component_path);
 
@@ -85,21 +95,26 @@ impl ExecAggregator {
         cli_config: &Config,
         args: ExecAggregatorArgs,
     ) -> Result<ExecAggregatorResult> {
-        let component_path = args.component.context("Component path is required for execute-timer")?;
-        let service_id = args.service_id.context("Service ID is required for execute-timer")?;
-        let workflow_id = args.workflow_id.context("Workflow ID is required for execute-timer")?;
+        let component_path = args
+            .component
+            .context("Component path is required for execute-timer")?;
+        let service_id = args
+            .service_id
+            .context("Service ID is required for execute-timer")?;
+        let workflow_id = args
+            .workflow_id
+            .context("Workflow ID is required for execute-timer")?;
 
-        tracing::info!("Executing timer callback with component: {}", component_path);
+        tracing::info!(
+            "Executing timer callback with component: {}",
+            component_path
+        );
 
         let aggregator_config = Self::load_aggregator_config(args.aggregator_config)?;
         let state = wavs_aggregator::http::state::HttpState::new(aggregator_config)?;
 
         let component = Self::load_component(&component_path)?;
-        let packet = Self::create_packet(
-            args.input.unwrap_or_default(),
-            service_id,
-            workflow_id,
-        )?;
+        let packet = Self::create_packet(args.input.unwrap_or_default(), service_id, workflow_id)?;
 
         state
             .aggregator_engine
@@ -113,24 +128,31 @@ impl ExecAggregator {
         cli_config: &Config,
         args: ExecAggregatorArgs,
     ) -> Result<ExecAggregatorResult> {
-        let component_path = args.component.context("Component path is required for execute-submit")?;
-        let service_id = args.service_id.context("Service ID is required for execute-submit")?;
-        let workflow_id = args.workflow_id.context("Workflow ID is required for execute-submit")?;
+        let component_path = args
+            .component
+            .context("Component path is required for execute-submit")?;
+        let service_id = args
+            .service_id
+            .context("Service ID is required for execute-submit")?;
+        let workflow_id = args
+            .workflow_id
+            .context("Workflow ID is required for execute-submit")?;
 
-        tracing::info!("Executing submit callback with component: {}", component_path);
+        tracing::info!(
+            "Executing submit callback with component: {}",
+            component_path
+        );
 
         let aggregator_config = Self::load_aggregator_config(args.aggregator_config)?;
         let state = wavs_aggregator::http::state::HttpState::new(aggregator_config)?;
 
         let component = Self::load_component(&component_path)?;
-        let packet = Self::create_packet(
-            args.input.unwrap_or_default(),
-            service_id,
-            workflow_id,
-        )?;
+        let packet = Self::create_packet(args.input.unwrap_or_default(), service_id, workflow_id)?;
         // Create a dummy transaction receipt as Result<AnyTxHash, String>
-        let tx_receipt: Result<wavs_engine::bindings::aggregator::world::wavs::types::chain::AnyTxHash, String> = 
-            Err("No transaction receipt for test".to_string());
+        let tx_receipt: Result<
+            wavs_engine::bindings::aggregator::world::wavs::types::chain::AnyTxHash,
+            String,
+        > = Err("No transaction receipt for test".to_string());
 
         state
             .aggregator_engine
@@ -159,7 +181,11 @@ impl ExecAggregator {
         Ok(Component::new(ComponentSource::Digest(digest)))
     }
 
-    fn create_packet(data: String, _service_id_str: String, workflow_id_str: String) -> Result<Packet> {
+    fn create_packet(
+        data: String,
+        _service_id_str: String,
+        workflow_id_str: String,
+    ) -> Result<Packet> {
         let workflow_id = WorkflowID::new(workflow_id_str)?;
 
         let input = ComponentInput::new(data);
@@ -188,11 +214,11 @@ impl ExecAggregator {
             workflow_id,
             envelope: Envelope {
                 eventId: [0u8; 20].into(),
-                ordering: [0u8; 12].into(), 
+                ordering: [0u8; 12].into(),
                 payload: packet_bytes.into(),
             },
             signature: EnvelopeSignature::Secp256k1(
-                alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false)
+                alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false),
             ),
         })
     }
@@ -200,7 +226,9 @@ impl ExecAggregator {
 
 pub enum ExecAggregatorResult {
     Server,
-    Packet { actions: Vec<wavs_aggregator::engine::AggregatorAction> },
+    Packet {
+        actions: Vec<wavs_aggregator::engine::AggregatorAction>,
+    },
     Timer,
     Submit,
 }
