@@ -1,8 +1,8 @@
 use anyhow::Result;
 use utils::service::fetch_service;
 use wavs_types::{
-    Component, ComponentSource, Envelope, EnvelopeSignature, Packet, Service, ServiceManager,
-    ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    AllowedHostPermission, Component, ComponentSource, Envelope, EnvelopeSignature, Packet,
+    Permissions, Service, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
 };
 
 use crate::{
@@ -17,6 +17,8 @@ pub struct ExecAggregatorArgs {
     pub component: String,
     pub input: String,
     pub service_url: Option<String>,
+    pub fuel_limit: Option<u64>,
+    pub time_limit: Option<u64>,
     pub chain_name: String,
     pub service_handler: String,
 }
@@ -39,9 +41,12 @@ impl ExecAggregator {
         let digest = state.aggregator_engine.upload_component(wasm_bytes).await?;
         let component = Component {
             source: ComponentSource::Digest(digest),
-            permissions: wavs_types::Permissions::default(),
-            fuel_limit: Some(u64::MAX),
-            time_limit_seconds: Some(10),
+            permissions: Permissions {
+                allowed_http_hosts: AllowedHostPermission::All,
+                file_system: true,
+            },
+            fuel_limit: args.fuel_limit,
+            time_limit_seconds: args.time_limit,
             config: [
                 ("chain_name".to_string(), args.chain_name.clone()),
                 ("service_handler".to_string(), args.service_handler.clone()),
@@ -147,6 +152,8 @@ mod test {
             component: component_path,
             input: "test data".to_string(),
             service_url: None,
+            fuel_limit: None,
+            time_limit: None,
             chain_name: "31337".to_string(),
             service_handler: "0x0000000000000000000000000000000000000000".to_string(),
         };
@@ -175,6 +182,8 @@ mod test {
             component: component_path,
             input: "0x68656C6C6F".to_string(), // "hello" in hex
             service_url: None,
+            fuel_limit: None,
+            time_limit: None,
             chain_name: "31337".to_string(),
             service_handler: "0x0000000000000000000000000000000000000000".to_string(),
         };
@@ -204,6 +213,8 @@ mod test {
             component: component_path,
             input: format!("@{}", file.path().to_string_lossy()),
             service_url: None,
+            fuel_limit: None,
+            time_limit: None,
             chain_name: "31337".to_string(),
             service_handler: "0x0000000000000000000000000000000000000000".to_string(),
         };

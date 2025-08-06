@@ -119,6 +119,14 @@ pub enum Command {
         #[clap(long)]
         service_url: Option<String>,
 
+        /// Optional fuel limit for component execution
+        #[clap(long)]
+        fuel_limit: Option<u64>,
+
+        /// Optional time limit (seconds) for component execution
+        #[clap(long)]
+        time_limit: Option<u64>,
+
         /// Chain name for the aggregator component config
         #[clap(long)]
         chain_name: String,
