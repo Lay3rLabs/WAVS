@@ -5,8 +5,8 @@ use std::{
 };
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ChainName, ComponentDigest, EvmContractSubmission,
-    Permissions, ServiceStatus, Submit, Trigger, WorkflowID,
+    Aggregator, ChainName, ComponentDigest, EvmContractSubmission, Permissions, ServiceStatus,
+    Submit, Trigger, WorkflowID,
 };
 
 use crate::service_json::ServiceJson;
@@ -31,73 +31,6 @@ impl std::fmt::Display for ServiceInitResult {
         writeln!(f, "Service JSON generated successfully!")?;
         writeln!(f, "  Name: {}", self.service.name)?;
         writeln!(f, "  File: {}", self.file_path.display())
-    }
-}
-
-/// Result of setting a component's source to a digest
-#[derive(Debug, Clone, Serialize)]
-pub struct ComponentSourceDigestResult {
-    /// The component digest
-    pub digest: ComponentDigest,
-    /// The file path where the updated service JSON was saved
-    pub file_path: PathBuf,
-}
-
-impl std::fmt::Display for ComponentSourceDigestResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Component source set to digest successfully!")?;
-        writeln!(f, "  Digest:       {}", self.digest)?;
-        writeln!(f, "  Updated:      {}", self.file_path.display())
-    }
-}
-
-/// Result of setting a component's source to a registry
-#[derive(Debug, Clone, Serialize)]
-pub struct ComponentSourceRegistryResult {
-    /// The domain
-    pub domain: String,
-    /// The package reference
-    pub package: PackageRef,
-    /// The component digest (retrieved from registry)
-    pub digest: ComponentDigest,
-    /// The version
-    pub version: Version,
-    /// The file path where the updated service JSON was saved
-    pub file_path: PathBuf,
-}
-
-impl std::fmt::Display for ComponentSourceRegistryResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Component source set to registry package successfully!")?;
-        writeln!(f, "  Domain:       {}", self.domain)?;
-        writeln!(f, "  Package:      {}", self.package)?;
-        writeln!(f, "  Version:      {}", self.version)?;
-        writeln!(f, "  Digest:       {}", self.digest)?;
-        writeln!(f, "  Updated:      {}", self.file_path.display())
-    }
-}
-
-/// Result of updating a component's environment variables
-#[derive(Debug, Clone, Serialize)]
-pub struct ComponentEnvKeysResult {
-    /// The updated environment variable keys
-    pub env_keys: BTreeSet<String>,
-    /// The file path where the updated service JSON was saved
-    pub file_path: PathBuf,
-}
-
-impl std::fmt::Display for ComponentEnvKeysResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Component environment variables updated successfully!")?;
-        if self.env_keys.is_empty() {
-            writeln!(f, "  Env Keys:    No environment variables")?;
-        } else {
-            writeln!(f, "  Env Keys:")?;
-            for key in &self.env_keys {
-                writeln!(f, "    {}", key)?;
-            }
-        }
-        writeln!(f, "  Updated:     {}", self.file_path.display())
     }
 }
 
@@ -219,16 +152,6 @@ impl std::fmt::Display for WorkflowTriggerResult {
     }
 }
 
-/// Arguments for setting an aggregator submit
-pub struct SetAggregatorArgs {
-    pub aggregator_component_path: String,
-    pub url: String,
-    pub chain_name: ChainName,
-    pub address: alloy_primitives::Address,
-    pub max_gas: Option<u64>,
-    pub component_config: Option<Vec<String>>,
-}
-
 /// Result of updating a workflow's submit
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkflowSetSubmitAggregatorResult {
@@ -272,6 +195,43 @@ impl std::fmt::Display for WorkflowSetSubmitAggregatorResult {
             }
         }
 
+        writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
+}
+
+/// Result of setting the submit to None
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkflowSetSubmitNoneResult {
+    /// The workflow id that was updated
+    pub workflow_id: WorkflowID,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+/// Result of setting an aggregator URL
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkflowSetAggregatorUrlResult {
+    /// The workflow id that was updated
+    pub workflow_id: WorkflowID,
+    /// The aggregator URL that was set
+    pub url: String,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for WorkflowSetSubmitNoneResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Workflow submit set to None successfully!")?;
+        writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
+        writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
+}
+
+impl std::fmt::Display for WorkflowSetAggregatorUrlResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Workflow aggregator URL set successfully!")?;
+        writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
+        writeln!(f, "  URL:         {}", self.url)?;
         writeln!(f, "  Updated:     {}", self.file_path.display())
     }
 }
@@ -378,109 +338,219 @@ impl std::fmt::Display for ServiceValidationResult {
     }
 }
 
-/// Result of updating a component's fuel limit
 #[derive(Debug, Clone, Serialize)]
-pub struct ComponentFuelLimitResult {
-    /// The updated fuel limit
-    pub fuel_limit: Option<u64>,
-    /// The file path where the updated service JSON was saved
-    pub file_path: PathBuf,
+pub enum ComponentContext {
+    Workflow { workflow_id: WorkflowID },
+    Aggregator { workflow_id: WorkflowID },
 }
 
-impl std::fmt::Display for ComponentFuelLimitResult {
+impl std::fmt::Display for ComponentContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Component fuel limit updated successfully!")?;
-        match self.fuel_limit {
-            Some(limit) => writeln!(f, "  Fuel Limit:   {}", limit)?,
-            None => writeln!(f, "  Fuel Limit:   No limit (removed)")?,
+        match self {
+            ComponentContext::Workflow { workflow_id } => {
+                write!(f, "Workflow Component (ID: {})", workflow_id)
+            }
+            ComponentContext::Aggregator { workflow_id } => {
+                write!(f, "Aggregator Component (Workflow ID: {})", workflow_id)
+            }
         }
-        writeln!(f, "  Updated:     {}", self.file_path.display())
     }
 }
 
-/// Result of updating a component's configuration
 #[derive(Debug, Clone, Serialize)]
-pub struct ComponentConfigResult {
-    /// The updated configuration
-    pub config: BTreeMap<String, String>,
-    /// The file path where the updated service JSON was saved
-    pub file_path: PathBuf,
+pub enum ComponentOperationResult {
+    SourceDigest {
+        context: ComponentContext,
+        digest: ComponentDigest,
+        file_path: PathBuf,
+    },
+    SourceRegistry {
+        context: ComponentContext,
+        domain: String,
+        package: PackageRef,
+        digest: ComponentDigest,
+        version: Version,
+        file_path: PathBuf,
+    },
+    Permissions {
+        context: ComponentContext,
+        permissions: Permissions,
+        file_path: PathBuf,
+    },
+    FuelLimit {
+        context: ComponentContext,
+        fuel_limit: Option<u64>,
+        file_path: PathBuf,
+    },
+    Config {
+        context: ComponentContext,
+        config: BTreeMap<String, String>,
+        file_path: PathBuf,
+    },
+    TimeLimit {
+        context: ComponentContext,
+        time_limit_seconds: Option<u64>,
+        file_path: PathBuf,
+    },
+    EnvKeys {
+        context: ComponentContext,
+        env_keys: BTreeSet<String>,
+        file_path: PathBuf,
+    },
 }
 
-impl std::fmt::Display for ComponentConfigResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Component configuration updated successfully!")?;
-        if self.config.is_empty() {
-            writeln!(f, "  Config:      No configuration items")?;
-        } else {
-            writeln!(f, "  Config:")?;
-            for (key, value) in &self.config {
-                writeln!(f, "    {} => {}", key, value)?;
-            }
+impl ComponentOperationResult {
+    /// Get the file path from any variant
+    pub fn file_path(&self) -> &std::path::PathBuf {
+        match self {
+            ComponentOperationResult::SourceDigest { file_path, .. } => file_path,
+            ComponentOperationResult::SourceRegistry { file_path, .. } => file_path,
+            ComponentOperationResult::Permissions { file_path, .. } => file_path,
+            ComponentOperationResult::FuelLimit { file_path, .. } => file_path,
+            ComponentOperationResult::Config { file_path, .. } => file_path,
+            ComponentOperationResult::TimeLimit { file_path, .. } => file_path,
+            ComponentOperationResult::EnvKeys { file_path, .. } => file_path,
         }
-        writeln!(f, "  Updated:     {}", self.file_path.display())
+    }
+
+    /// Get the workflow ID from any variant (extracts from context)
+    pub fn workflow_id(&self) -> &wavs_types::WorkflowID {
+        match self {
+            ComponentOperationResult::SourceDigest { context, .. } => match context {
+                ComponentContext::Workflow { workflow_id } => workflow_id,
+                ComponentContext::Aggregator { workflow_id } => workflow_id,
+            },
+            ComponentOperationResult::SourceRegistry { context, .. } => match context {
+                ComponentContext::Workflow { workflow_id } => workflow_id,
+                ComponentContext::Aggregator { workflow_id } => workflow_id,
+            },
+            ComponentOperationResult::Permissions { context, .. } => match context {
+                ComponentContext::Workflow { workflow_id } => workflow_id,
+                ComponentContext::Aggregator { workflow_id } => workflow_id,
+            },
+            ComponentOperationResult::FuelLimit { context, .. } => match context {
+                ComponentContext::Workflow { workflow_id } => workflow_id,
+                ComponentContext::Aggregator { workflow_id } => workflow_id,
+            },
+            ComponentOperationResult::Config { context, .. } => match context {
+                ComponentContext::Workflow { workflow_id } => workflow_id,
+                ComponentContext::Aggregator { workflow_id } => workflow_id,
+            },
+            ComponentOperationResult::TimeLimit { context, .. } => match context {
+                ComponentContext::Workflow { workflow_id } => workflow_id,
+                ComponentContext::Aggregator { workflow_id } => workflow_id,
+            },
+            ComponentOperationResult::EnvKeys { context, .. } => match context {
+                ComponentContext::Workflow { workflow_id } => workflow_id,
+                ComponentContext::Aggregator { workflow_id } => workflow_id,
+            },
+        }
     }
 }
 
-/// Result of updating a component's maximum execution time
-#[derive(Debug, Clone, Serialize)]
-pub struct ComponentTimeLimitResult {
-    /// The updated maximum execution time in seconds
-    pub time_limit_seconds: Option<u64>,
-    /// The file path where the updated service JSON was saved
-    pub file_path: PathBuf,
-}
-
-impl std::fmt::Display for ComponentTimeLimitResult {
+impl std::fmt::Display for ComponentOperationResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Component maximum execution time updated successfully!")?;
-        match self.time_limit_seconds {
-            Some(seconds) => writeln!(f, "  Max Execution Time: {} seconds", seconds)?,
-            None => writeln!(f, "  Max Execution Time: Default (no explicit limit)")?,
-        }
-        writeln!(f, "  Updated:     {}", self.file_path.display())
-    }
-}
-
-/// Result of updating component permissions
-#[derive(Debug, Clone, Serialize)]
-pub struct ComponentPermissionsResult {
-    /// The updated permissions
-    pub permissions: Permissions,
-    /// The file path where the updated service JSON was saved
-    pub file_path: PathBuf,
-}
-
-impl std::fmt::Display for ComponentPermissionsResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Component permissions updated successfully!")?;
-
-        // Display HTTP permissions
-        match &self.permissions.allowed_http_hosts {
-            AllowedHostPermission::All => {
-                writeln!(f, "  HTTP Hosts:   All allowed")?;
+        match self {
+            ComponentOperationResult::SourceDigest {
+                context,
+                digest,
+                file_path,
+            } => {
+                writeln!(f, "{} source set to digest successfully!", context)?;
+                writeln!(f, "  Digest:       {}", digest)?;
+                writeln!(f, "  Updated:      {}", file_path.display())
             }
-            AllowedHostPermission::None => {
-                writeln!(f, "  HTTP Hosts:   None allowed")?;
+
+            ComponentOperationResult::SourceRegistry {
+                context,
+                domain,
+                package,
+                version,
+                digest,
+                file_path,
+            } => {
+                writeln!(
+                    f,
+                    "{} source set to registry package successfully!",
+                    context
+                )?;
+                writeln!(f, "  Domain:       {}", domain)?;
+                writeln!(f, "  Package:      {}", package)?;
+                writeln!(f, "  Version:      {}", version)?;
+                writeln!(f, "  Digest:       {}", digest)?;
+                writeln!(f, "  Updated:      {}", file_path.display())
             }
-            AllowedHostPermission::Only(hosts) => {
-                writeln!(f, "  HTTP Hosts:   Only specific hosts allowed")?;
-                for host in hosts {
-                    writeln!(f, "    - {}", host)?;
+
+            ComponentOperationResult::Permissions {
+                context,
+                permissions,
+                file_path,
+            } => {
+                writeln!(f, "{} permissions updated successfully!", context)?;
+                writeln!(f, "  HTTP Hosts:   {:?}", permissions.allowed_http_hosts)?;
+                writeln!(f, "  File System:  {}", permissions.file_system)?;
+                writeln!(f, "  Updated:      {}", file_path.display())
+            }
+
+            ComponentOperationResult::FuelLimit {
+                context,
+                fuel_limit,
+                file_path,
+            } => {
+                writeln!(f, "{} fuel limit updated successfully!", context)?;
+                match fuel_limit {
+                    Some(limit) => writeln!(f, "  Fuel Limit:   {}", limit)?,
+                    None => writeln!(f, "  Fuel Limit:   No limit (removed)")?,
                 }
+                writeln!(f, "  Updated:      {}", file_path.display())
+            }
+
+            ComponentOperationResult::Config {
+                context,
+                config,
+                file_path,
+            } => {
+                writeln!(f, "{} configuration updated successfully!", context)?;
+                if config.is_empty() {
+                    writeln!(f, "  Config:       No configuration items")?;
+                } else {
+                    writeln!(f, "  Config:")?;
+                    for (key, value) in config {
+                        writeln!(f, "    {} => {}", key, value)?;
+                    }
+                }
+                writeln!(f, "  Updated:      {}", file_path.display())
+            }
+
+            ComponentOperationResult::TimeLimit {
+                context,
+                time_limit_seconds,
+                file_path,
+            } => {
+                writeln!(f, "{} time limit updated successfully!", context)?;
+                match time_limit_seconds {
+                    Some(seconds) => writeln!(f, "  Max Time:     {} seconds", seconds)?,
+                    None => writeln!(f, "  Max Time:     Default (no explicit limit)")?,
+                }
+                writeln!(f, "  Updated:      {}", file_path.display())
+            }
+
+            ComponentOperationResult::EnvKeys {
+                context,
+                env_keys,
+                file_path,
+            } => {
+                writeln!(f, "{} environment variables updated successfully!", context)?;
+                if env_keys.is_empty() {
+                    writeln!(f, "  Env Keys:     No environment variables")?;
+                } else {
+                    writeln!(f, "  Env Keys:")?;
+                    for key in env_keys {
+                        writeln!(f, "    {}", key)?;
+                    }
+                }
+                writeln!(f, "  Updated:      {}", file_path.display())
             }
         }
-
-        // Display file system permission
-        writeln!(
-            f,
-            "  File System: {}",
-            if self.permissions.file_system {
-                "Enabled"
-            } else {
-                "Disabled"
-            }
-        )?;
-        writeln!(f, "  Updated:     {}", self.file_path.display())
     }
 }
