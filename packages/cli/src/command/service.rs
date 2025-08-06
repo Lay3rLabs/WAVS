@@ -170,18 +170,31 @@ pub async fn handle_service_command(
                     address,
                     max_gas,
                 } => {
-                    let result =
-                        set_aggregator_submit(&file, id, aggregator_component, url, chain_name, address, max_gas)?;
+                    let result = set_aggregator_submit(
+                        &file,
+                        id,
+                        aggregator_component,
+                        url,
+                        chain_name,
+                        address,
+                        max_gas,
+                    )?;
                     display_result(ctx, result, json)?;
                 }
                 SubmitCommand::AddAggregator {
                     url,
                     chain_name,
-                    address,
+                    service_handler,
                     max_gas,
                 } => {
-                    let result =
-                        add_aggregator_submit(&file, id, url, chain_name, address, max_gas)?;
+                    let result = add_aggregator_submit(
+                        &file,
+                        id,
+                        url,
+                        chain_name,
+                        service_handler,
+                        max_gas,
+                    )?;
                     display_result(ctx, result, json)?;
                 }
             },
@@ -1038,8 +1051,10 @@ pub fn set_aggregator_submit(
     let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
 
     // Read the aggregator component
-    let wasm_bytes = std::fs::read(&aggregator_component_path)
-        .context(format!("Failed to read aggregator component from: {}", aggregator_component_path))?;
+    let wasm_bytes = std::fs::read(&aggregator_component_path).context(format!(
+        "Failed to read aggregator component from: {}",
+        aggregator_component_path
+    ))?;
     let digest = ComponentDigest::hash(&wasm_bytes);
 
     modify_service_file(file_path, |mut service| {
@@ -1048,7 +1063,7 @@ pub fn set_aggregator_submit(
             anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
         })?;
 
-        // Create an aggregator component that will determine submission dynamically
+        // Create an aggregator component
         let aggregator_component = Component {
             source: ComponentSource::Digest(digest),
             permissions: Default::default(),
@@ -1057,8 +1072,14 @@ pub fn set_aggregator_submit(
             config: [
                 ("chain_name".to_string(), chain_name.to_string()),
                 ("address".to_string(), address.to_string()),
-                ("max_gas".to_string(), max_gas.map(|g| g.to_string()).unwrap_or_default()),
-            ].into_iter().filter(|(_, v)| !v.is_empty()).collect(),
+                (
+                    "max_gas".to_string(),
+                    max_gas.map(|g| g.to_string()).unwrap_or_default(),
+                ),
+            ]
+            .into_iter()
+            .filter(|(_, v)| !v.is_empty())
+            .collect(),
             env_keys: Default::default(),
         };
 
@@ -1094,7 +1115,7 @@ pub fn add_aggregator_submit(
     workflow_id: WorkflowID,
     url: String,
     chain_name: ChainName,
-    address: alloy_primitives::Address,
+    service_handler: alloy_primitives::Address,
     max_gas: Option<u64>,
 ) -> Result<WorkflowAddAggregatorResult> {
     // Validate the URL format
@@ -1115,20 +1136,19 @@ pub fn add_aggregator_submit(
             );
         }
 
-        // For add operation, we need to update the existing aggregator component's config
-        // This is a simplified implementation - in practice you might want to handle multiple aggregators differently
         if let SubmitJson::Submit(Submit::Aggregator { component, .. }) = &mut workflow.submit {
             // Update the component config with the new aggregator details
-            component.config.insert("chain_name".to_string(), chain_name.to_string());
-            component.config.insert("address".to_string(), address.to_string());
-            if let Some(gas) = max_gas {
-                component.config.insert("max_gas".to_string(), gas.to_string());
-            }
+            component
+                .config
+                .insert("chain_name".to_string(), chain_name.to_string());
+            component
+                .config
+                .insert("service_handler".to_string(), service_handler.to_string());
         }
 
         let evm_contract = EvmContractSubmission {
             chain_name,
-            address,
+            address: service_handler,
             max_gas,
         };
         let aggregator_submits = vec![Aggregator::Evm(evm_contract)];

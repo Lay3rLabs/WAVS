@@ -157,7 +157,6 @@ mod test {
             .to_string_lossy()
             .to_string();
 
-        // Create a test packet
         let packet = create_test_packet(&component_path);
         let mut packet_file = NamedTempFile::new().unwrap();
         packet_file

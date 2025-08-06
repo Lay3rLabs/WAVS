@@ -303,7 +303,7 @@ pub enum SubmitCommand {
 
         /// The hexadecimal EVM address (e.g., "0x1234...")
         #[clap(long)]
-        address: alloy_primitives::Address,
+        service_handler: alloy_primitives::Address,
 
         /// The chain name (e.g., "ethereum-mainnet")
         #[clap(long)]
