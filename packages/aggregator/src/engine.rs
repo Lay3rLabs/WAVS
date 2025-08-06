@@ -3,7 +3,7 @@ use anyhow::Result;
 use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 use tracing::instrument;
 use utils::config::ChainConfigs;
@@ -32,7 +32,7 @@ const MIN_LRU_SIZE: usize = 10;
 pub struct AggregatorEngine<S: CAStorage> {
     wasm_engine: WTEngine,
     chain_configs: Arc<RwLock<ChainConfigs>>,
-    memory_cache: RwLock<LruCache<ComponentDigest, WasmComponent>>,
+    memory_cache: Mutex<LruCache<ComponentDigest, WasmComponent>>,
     app_data_dir: PathBuf,
     max_wasm_fuel: Option<u64>,
     max_execution_seconds: Option<u64>,
@@ -67,7 +67,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         Ok(Self {
             wasm_engine,
             chain_configs: Arc::new(RwLock::new(chain_configs)),
-            memory_cache: RwLock::new(LruCache::new(lru_size)),
+            memory_cache: Mutex::new(LruCache::new(lru_size)),
             app_data_dir,
             max_wasm_fuel,
             max_execution_seconds,
@@ -141,17 +141,21 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     fn load_component(&self, component: &Component) -> AggregatorResult<WasmComponent> {
         let digest = component.source.digest().clone();
 
-        // First try to peek (doesn't update LRU) with a read lock
-        if let Some(cached_component) = self.memory_cache.read().unwrap().peek(&digest) {
-            return Ok(cached_component.clone());
+        let cached_component = {
+            // put the lock in a scope so we're careful to drop it here
+            let mut lock = self.memory_cache.lock().unwrap();
+            lock.get(&digest).cloned()
+        };
+
+        if let Some(cached_component) = cached_component {
+            return Ok(cached_component);
         }
 
-        // If not found, acquire write lock to load and cache
         let component_bytes = self.storage.get_data(&digest.clone().into())?;
         let wasm_component = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 
         self.memory_cache
-            .write()
+            .lock()
             .unwrap()
             .put(digest, wasm_component.clone());
 
@@ -236,7 +240,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
 
         // store original wasm
         let digest = ComponentDigest::from(self.storage.set_data(&component_bytes)?.inner());
-        self.memory_cache.write().unwrap().put(digest.clone(), cm);
+        self.memory_cache.lock().unwrap().put(digest.clone(), cm);
 
         Ok(digest)
     }
