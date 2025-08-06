@@ -67,10 +67,11 @@ async fn process_packet(
     let workflow = &packet.service.workflows[&packet.workflow_id];
     let mut aggregators = Vec::new();
     if let wavs_types::Submit::Aggregator {
-            evm_contracts,
-            cosmos_contracts,
-            ..
-        } = &workflow.submit {
+        evm_contracts,
+        cosmos_contracts,
+        ..
+    } = &workflow.submit
+    {
         if let Some(evm_contracts) = evm_contracts {
             for evm_contract in evm_contracts.iter() {
                 let EvmContractSubmission {
@@ -126,8 +127,7 @@ async fn process_packet(
             } => {
                 let client = state.get_evm_client(chain_name).await?;
 
-                let service_manager =
-                    IWavsServiceManagerInstance::new(*address, client.provider);
+                let service_manager = IWavsServiceManagerInstance::new(*address, client.provider);
                 service_manager
                     .getLatestOperatorForSigningKey(signing_key)
                     .call()

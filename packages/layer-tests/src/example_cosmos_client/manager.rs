@@ -24,7 +24,7 @@ impl SimpleCosmosManagerClient {
         weight: u64,
     ) -> Result<()> {
         let msg = ExecuteMsg::SetSigningKey {
-            operator: operator.clone().into(),
+            operator: operator.into(),
             signing_key: operator.into(),
             weight: weight.into(),
         };
