@@ -180,9 +180,11 @@ impl HttpState {
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub fn service_registered(&self, service_id: &ServiceID) -> bool {
-        self.storage
-            .get(SERVICES, service_id.inner())
+    pub async fn service_registered(&self, service_id: ServiceID) -> bool {
+        let storage = self.storage.clone();
+
+        tokio::task::spawn_blocking(move || storage.get(SERVICES, service_id.inner()).ok())
+            .await
             .ok()
             .flatten()
             .is_some()

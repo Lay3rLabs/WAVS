@@ -52,7 +52,7 @@ async fn process_packet(
     state: HttpState,
     packet: &Packet,
 ) -> AggregatorResult<Vec<AddPacketResponse>> {
-    if !state.service_registered(&packet.service.id()) {
+    if !state.service_registered(packet.service.id()).await {
         return Err(AggregatorError::MissingService(packet.service.id()));
     }
 
