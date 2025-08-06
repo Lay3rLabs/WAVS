@@ -3,6 +3,7 @@ use cosmwasm_std::{
     StdResult,
 };
 use cw2::set_contract_version;
+use wavs_types::contracts::cosmwasm::service_handler::ServiceHandlerQueryMessages;
 use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessages;
 use wavs_types::contracts::cosmwasm::{
     service_handler::ServiceHandlerExecuteMessages, service_manager::WavsValidateResult,
@@ -56,11 +57,13 @@ pub fn execute(
                     .query_wasm_smart::<WavsValidateResult>(
                         contract_addr,
                         &ServiceManagerQueryMessages::WavsValidate {
-                            envelope,
-                            signature_data,
+                            envelope: envelope.clone(),
+                            signature_data: signature_data.clone(),
                         },
                     )?
                     .into_std()?;
+
+                state::save_envelope(deps.storage, envelope, signature_data)?;
             }
         },
     }
@@ -71,8 +74,18 @@ pub fn execute(
 #[entry_point]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<QueryResponse> {
     match msg {
-        QueryMsg::ServiceManagerAddr {} => {
-            to_json_binary(&state::SERVICE_MANAGER.load(deps.storage)?)
+        QueryMsg::Wavs(wavs) => match wavs {
+            ServiceHandlerQueryMessages::WavsServiceManager {} => {
+                to_json_binary(&state::SERVICE_MANAGER.load(deps.storage)?)
+            }
+        },
+
+        QueryMsg::TriggerValidated { trigger_id } => {
+            to_json_binary(&state::TRIGGER_DATA.has(deps.storage, trigger_id))
+        }
+
+        QueryMsg::SignedData { trigger_id } => {
+            to_json_binary(&state::TRIGGER_DATA.load(deps.storage, trigger_id)?)
         }
     }
 }

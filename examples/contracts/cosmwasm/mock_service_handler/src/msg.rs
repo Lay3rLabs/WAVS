@@ -1,5 +1,8 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use wavs_types::contracts::cosmwasm::service_handler::ServiceHandlerExecuteMessages;
+use cosmwasm_std::Uint64;
+use wavs_types::contracts::cosmwasm::service_handler::{
+    ServiceHandlerExecuteMessages, ServiceHandlerQueryMessages,
+};
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -15,7 +18,16 @@ pub enum ExecuteMsg {
 
 #[cw_serde]
 #[derive(QueryResponses)]
+#[schemaifier(mute_warnings)]
 pub enum QueryMsg {
-    #[returns(cosmwasm_std::Addr)]
-    ServiceManagerAddr {},
+    #[returns(bool)]
+    TriggerValidated { trigger_id: Uint64 },
+
+    /// Returns the abi-encoded `SignedData` for the given `trigger_id`
+    #[returns(cosmwasm_std::Binary)]
+    SignedData { trigger_id: Uint64 },
+
+    #[serde(untagged)]
+    #[returns(())]
+    Wavs(ServiceHandlerQueryMessages),
 }

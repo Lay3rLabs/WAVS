@@ -47,3 +47,5 @@ dashmap = { workspace = true }
 ordermap = "0.5.8"
 example-types = { workspace = true} 
 example-contract-cosmwasm-simple = { workspace = true } 
+example-contract-cosmwasm-service-handler = { workspace = true }
+example-contract-cosmwasm-service-manager = { workspace = true }

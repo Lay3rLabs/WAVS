@@ -1,6 +1,7 @@
 use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
 use axum::{extract::State, response::IntoResponse, Json};
+use layer_climb::prelude::AddrEvm;
 use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
@@ -10,7 +11,7 @@ use wavs_types::{
     Aggregator, CosmosContractSubmission, Envelope, EnvelopeSignature, EvmContractSubmission,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
-    Packet, ServiceManagerError, SignatureData,
+    Packet, ServiceManager, ServiceManagerError, SignatureData,
 };
 
 use crate::{
@@ -64,16 +65,47 @@ async fn process_packet(
     );
 
     let workflow = &packet.service.workflows[&packet.workflow_id];
-    let aggregators = match &workflow.submit {
+    let mut aggregators = Vec::new();
+    match &workflow.submit {
         wavs_types::Submit::Aggregator {
-            evm_contracts: Some(contracts),
+            evm_contracts,
+            cosmos_contracts,
             ..
-        } => contracts
-            .iter()
-            .map(|c| wavs_types::Aggregator::Evm(c.clone()))
-            .collect::<Vec<_>>(),
-        _ => Vec::new(),
-    };
+        } => {
+            if let Some(evm_contracts) = evm_contracts {
+                for evm_contract in evm_contracts.iter() {
+                    let EvmContractSubmission {
+                        chain_name,
+                        address,
+                        ..
+                    } = evm_contract;
+
+                    aggregators.push(Aggregator::Evm(EvmContractSubmission {
+                        chain_name: chain_name.clone(),
+                        address: *address,
+                        max_gas: None, // TODO: handle max gas
+                    }));
+                }
+            }
+
+            if let Some(cosmos_contracts) = cosmos_contracts {
+                for cosmos_contract in cosmos_contracts.iter() {
+                    let CosmosContractSubmission {
+                        chain_name,
+                        address,
+                        ..
+                    } = cosmos_contract;
+
+                    aggregators.push(Aggregator::Cosmos(CosmosContractSubmission {
+                        chain_name: chain_name.clone(),
+                        address: address.clone(),
+                        max_gas: None, // TODO: handle max gas
+                    }));
+                }
+            }
+        }
+        _ => {}
+    }
 
     if aggregators.is_empty() {
         return Err(AggregatorError::MissingWorkflow {
@@ -90,18 +122,41 @@ async fn process_packet(
     // but drop it after this scope so we don't confuse it with the service manager
     // that is used for the actual submission
     let signer = {
-        let service_manager_client = state
-            .get_evm_client(packet.service.manager.chain_name())
-            .await?;
-        let service_manager = IWavsServiceManagerInstance::new(
-            packet.service.manager.evm_address_unchecked(),
-            service_manager_client.provider,
-        );
-        service_manager
-            .getLatestOperatorForSigningKey(signing_key)
-            .call()
-            .await
-            .map_err(AggregatorError::OperatorKeyLookup)?
+        match &packet.service.manager {
+            ServiceManager::Evm {
+                chain_name,
+                address,
+            } => {
+                let client = state.get_evm_client(&chain_name).await?;
+
+                let service_manager =
+                    IWavsServiceManagerInstance::new(address.clone(), client.provider);
+                service_manager
+                    .getLatestOperatorForSigningKey(signing_key)
+                    .call()
+                    .await
+                    .map_err(AggregatorError::OperatorKeyLookupEvm)?
+            }
+            ServiceManager::Cosmos {
+                chain_name,
+                address,
+            } => {
+                let client = state.get_cosmos_client(&chain_name).await?;
+
+                let resp = client.querier
+                    .contract_smart::<Option<AddrEvm>, _>(
+                        &address,
+                        &wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessages::WavsLatestOperatorForSigningKey {
+                            signing_key_addr: signing_key.into(),
+                        },
+                    )
+                    .await
+                    .map_err(AggregatorError::OperatorKeyLookupCosmos)?
+                    .ok_or_else(|| AggregatorError::OperatorKeyLookupCosmos(anyhow::anyhow!("No operator found for signing key addr {signing_key}")))?;
+
+                resp.into()
+            }
+        }
     };
 
     tracing::debug!("Packet signer address: {:?}", signer);
@@ -421,14 +476,14 @@ async fn get_submission_service_manager(
         }) => {
             let client = state.get_cosmos_client(chain_name).await?;
 
-            let service_manager_address:String = client.querier.contract_smart(address, &wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessages::WavsServiceUri {  })
+            let service_manager_address:cosmwasm_std::Addr = client.querier.contract_smart(address, &wavs_types::contracts::cosmwasm::service_handler::ServiceHandlerQueryMessages::WavsServiceManager {  })
                 .await
                 .map_err(AggregatorError::CosmosServiceManagerLookup)?;
 
             let service_manager_address = client
                 .querier
                 .chain_config
-                .parse_address(&service_manager_address)
+                .parse_address(&service_manager_address.to_string())
                 .map_err(AggregatorError::CosmosServiceManagerLookup)?;
 
             Ok(ServiceManagerClient::Cosmos {

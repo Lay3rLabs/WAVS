@@ -7,10 +7,14 @@ use ordermap::OrderMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
-use wavs_types::{EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID};
+use wavs_types::{
+    CosmosContractSubmission, EvmContractSubmission, Submit, Trigger, Workflow, WorkflowID,
+};
 
 use crate::e2e::config::Configs;
-use crate::e2e::helpers::change_service_for_test;
+use crate::e2e::helpers::{
+    change_service_for_test, wait_for_task_to_land_cosmos, wait_for_task_to_land_evm,
+};
 use crate::e2e::test_registry::CosmosContractCodeMap;
 use crate::{
     e2e::{
@@ -21,7 +25,6 @@ use crate::{
     example_evm_client::{SimpleEvmTriggerClient, TriggerId},
 };
 
-use super::helpers::wait_for_task_to_land;
 use super::test_definition::WorkflowDefinition;
 
 /// Simplified test runner that leverages services directly attached to test definitions
@@ -205,7 +208,11 @@ async fn run_test(
             ))?;
 
             let signed_data = match &workflow.submit {
-                Submit::Aggregator { evm_contracts, .. } => {
+                Submit::Aggregator {
+                    evm_contracts,
+                    cosmos_contracts,
+                    ..
+                } => {
                     let mut signed_data = vec![];
                     let empty_vec = Vec::new();
                     let contracts = evm_contracts.as_ref().unwrap_or(&empty_vec);
@@ -224,11 +231,33 @@ async fn run_test(
                             .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
 
                         signed_data.push(
-                            wait_for_task_to_land(
+                            wait_for_task_to_land_evm(
                                 client,
                                 *address,
                                 trigger_id,
                                 submit_start_block,
+                                *timeout,
+                            )
+                            .await?,
+                        );
+                    }
+
+                    let empty_vec = Vec::new();
+                    let contracts = cosmos_contracts.as_ref().unwrap_or(&empty_vec);
+                    for contract in contracts.iter() {
+                        let CosmosContractSubmission {
+                            chain_name,
+                            address,
+                            ..
+                        } = contract;
+
+                        let client = clients.get_cosmos_client(chain_name).await;
+
+                        signed_data.push(
+                            wait_for_task_to_land_cosmos(
+                                client,
+                                address.clone(),
+                                trigger_id,
                                 *timeout,
                             )
                             .await?,

@@ -2,7 +2,7 @@ use alloy_primitives::U256;
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
-use serde::{Deserialize, Serialize};
+use layer_climb::pool::SigningClientPoolManager;
 use std::{
     collections::{BTreeMap, HashSet},
     num::NonZero,
@@ -30,7 +30,9 @@ use crate::{
         },
         test_registry::TestRegistry,
     },
-    example_cosmos_client::SimpleCosmosTriggerClient,
+    example_cosmos_client::{
+        SimpleCosmosManagerClient, SimpleCosmosSubmitClient, SimpleCosmosTriggerClient,
+    },
     example_evm_client::{
         example_service_manager::SimpleServiceManager, example_submit::ISimpleSubmit::SignedData,
         example_trigger::SimpleTrigger, SimpleEvmSubmitClient, TriggerId,
@@ -201,7 +203,14 @@ pub async fn deploy_service_for_test(
                 .unwrap();
         }
         layer_climb::prelude::Address::Cosmos { .. } => {
-            // TODO - set operator weight for cosmos
+            let submit_client = clients.get_cosmos_client(&test.service_manager_chain).await;
+            let manager_client =
+                SimpleCosmosManagerClient::new(submit_client, service_manager_address.clone());
+
+            manager_client
+                .set_operator_weight(evm_address.parse().unwrap(), 1u64)
+                .await
+                .unwrap();
         }
     }
 
@@ -641,28 +650,15 @@ pub async fn deploy_cosmos_submit_contract(
         )
         .await;
 
-    let client = clients.get_cosmos_client(chain_name).await;
+    let client = SimpleCosmosSubmitClient::new_code_id(
+        clients.get_cosmos_client(chain_name).await,
+        code_id,
+        &service_manager_address,
+        "service handler",
+    )
+    .await?;
 
-    #[derive(Serialize, Deserialize, Debug)]
-    #[serde(rename_all = "snake_case")]
-    pub struct InstantiateMsg {
-        pub service_manager: String,
-    }
-
-    let (addr, _) = client
-        .contract_instantiate(
-            None,
-            code_id,
-            "service handler",
-            &InstantiateMsg {
-                service_manager: service_manager_address.to_string(),
-            },
-            Vec::new(),
-            None,
-        )
-        .await?;
-
-    Ok(addr)
+    Ok(client.contract_address)
 }
 
 impl CosmosContractCodeMap {
@@ -753,7 +749,7 @@ impl CosmosContractCodeMap {
     }
 }
 
-pub async fn wait_for_task_to_land(
+pub async fn wait_for_task_to_land_evm(
     evm_submit_client: EvmSigningClient,
     address: alloy_primitives::Address,
     trigger_id: TriggerId,
@@ -778,6 +774,31 @@ pub async fn wait_for_task_to_land(
             if submit_client.trigger_validated(trigger_id).await {
                 return submit_client
                     .signed_data(trigger_id)
+                    .await
+                    .map_err(|e| anyhow!("Failed to get signed data: {e}"));
+            }
+
+            tracing::debug!("Waiting for task response on trigger {}", trigger_id);
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("Timeout when waiting for task to land"))?
+}
+
+pub async fn wait_for_task_to_land_cosmos(
+    client: deadpool::managed::Object<SigningClientPoolManager>,
+    address: layer_climb::prelude::Address,
+    trigger_id: TriggerId,
+    timeout: Duration,
+) -> Result<SignedData> {
+    let submit_client = SimpleCosmosSubmitClient::new(client, address);
+
+    tokio::time::timeout(timeout, async move {
+        loop {
+            if submit_client.trigger_validated(*trigger_id).await? {
+                return submit_client
+                    .signed_data(*trigger_id)
                     .await
                     .map_err(|e| anyhow!("Failed to get signed data: {e}"));
             }

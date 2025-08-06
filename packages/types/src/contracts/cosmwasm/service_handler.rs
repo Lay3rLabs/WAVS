@@ -1,15 +1,27 @@
 use alloy_sol_types::SolValue;
-use cosmwasm_schema::cw_serde;
+use cosmwasm_schema::{cw_serde, QueryResponses};
 
 /// To extend your contract so that it satisfies the `ServiceHandler` interface,  
-/// include these messages in your contract's `ExecuteMsg` enum
+/// include these messages in your contract's `QueryMsg` and `ExecuteMsg` enums
 /// with the `#[serde(untagged)]` attribute
 ///
 /// For example:
 ///
 /// ```rust
 /// use cosmwasm_schema::cw_serde;
+/// use wavs_types::contracts::cosmwasm::service_handler::ServiceHandlerQueryMessages;
 /// use wavs_types::contracts::cosmwasm::service_handler::ServiceHandlerExecuteMessages;
+///
+/// #[cw_serde]
+/// #[schemaifier(mute_warnings)]
+/// enum QueryMsg {
+///     MyCustomMessage {
+///         my_field: String,
+///     },
+///
+///     #[serde(untagged)]
+///     ServiceHandler(ServiceHandlerQueryMessages),
+/// }
 ///
 /// #[cw_serde]
 /// #[schemaifier(mute_warnings)]
@@ -24,13 +36,21 @@ use cosmwasm_schema::cw_serde;
 /// ```
 ///
 /// This allows WAVS to call your contract with the `ServiceHandler` messages,
-/// without needing to know your full `ExecuteMsg` type
+/// without needing to know your full `QueryMsg` or `ExecuteMsg` types
 #[cw_serde]
 pub enum ServiceHandlerExecuteMessages {
     WavsHandleSignedEnvelope {
         envelope: WavsEnvelope,
         signature_data: WavsSignatureData,
     },
+}
+
+#[cw_serde]
+#[derive(QueryResponses)]
+pub enum ServiceHandlerQueryMessages {
+    /// Get the service manager address
+    #[returns(cosmwasm_std::Addr)]
+    WavsServiceManager {},
 }
 
 /// The `Envelope` from the Solidity interface, ABI-encoded into raw bytes

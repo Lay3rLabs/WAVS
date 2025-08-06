@@ -53,9 +53,12 @@ impl HttpClient {
         save_service_args: Option<SetServiceUrlArgs>,
     ) -> Result<()> {
         if let Some(save_service) = save_service_args {
-            self.set_service_url(
+            self.set_service_url_evm(
                 save_service.provider,
-                service.manager.evm_address_unchecked(),
+                match service.manager {
+                    ServiceManager::Evm { address, .. } => address,
+                    _ => anyhow::bail!("Service manager is not EVM"),
+                },
                 save_service.service_url,
             )
             .await?;
@@ -88,7 +91,7 @@ impl HttpClient {
         Ok(())
     }
 
-    pub async fn set_service_url(
+    pub async fn set_service_url_evm(
         &self,
         provider: DynProvider,
         service_manager_address: alloy_primitives::Address,

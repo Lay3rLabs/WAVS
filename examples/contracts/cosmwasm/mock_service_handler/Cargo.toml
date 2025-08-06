@@ -5,7 +5,7 @@ edition = "2021"
 license = "Apache-2.0"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # The workspace `wavs-types` has features, we need to disable them, overriding with `worksace = true` doesn't work
@@ -16,3 +16,6 @@ cw-storage-plus = {workspace = true}
 cw2 = {workspace = true} 
 cosmwasm-schema = {workspace = true}
 const-hex = {workspace = true}
+alloy-sol-macro = {workspace = true}
+alloy-sol-types = {workspace = true}
+alloy-primitives = {workspace = true}

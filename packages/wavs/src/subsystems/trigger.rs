@@ -455,6 +455,29 @@ impl TriggerManager {
                 } => {
                     // extra scope in order to properly drop the locks
                     {
+                        let update_event = contract_events
+                            .iter()
+                            .find_map(|(address, event)| {
+                                wavs_types::contracts::cosmwasm::service_manager::event::WavsServiceUriUpdatedEvent::try_from(event).ok()
+                                    .map(|event| (address.clone(), event))
+                            });
+
+                        if let Some((address, event)) = update_event {
+                            // check if this is a service we're interested in
+                            if let Some(service_id) = self
+                                .lookup_maps
+                                .service_manager
+                                .read()
+                                .unwrap()
+                                .get_by_right(&address)
+                            {
+                                dispatcher_commands.push(DispatcherCommand::ChangeServiceUri {
+                                    service_id: service_id.clone(),
+                                    uri: event.service_uri,
+                                });
+                            }
+                        }
+
                         let triggers_by_contract_event_lock = self
                             .lookup_maps
                             .triggers_by_cosmos_contract_event

@@ -52,6 +52,15 @@ pub enum ServiceManager {
     },
 }
 
+impl From<&ServiceManager> for layer_climb_address::Address {
+    fn from(manager: &ServiceManager) -> Self {
+        match manager {
+            ServiceManager::Evm { address, .. } => (*address).into(),
+            ServiceManager::Cosmos { address, .. } => address.clone(),
+        }
+    }
+}
+
 impl From<&ServiceManager> for ServiceID {
     fn from(manager: &ServiceManager) -> Self {
         match manager {
@@ -91,15 +100,6 @@ impl ServiceManager {
         match self {
             ServiceManager::Evm { address, .. } => (*address).into(),
             ServiceManager::Cosmos { address, .. } => address.clone(),
-        }
-    }
-
-    pub fn evm_address_unchecked(&self) -> alloy_primitives::Address {
-        match self {
-            ServiceManager::Evm { address, .. } => *address,
-            ServiceManager::Cosmos { address, .. } => {
-                panic!("Tried to get EVM address from a Cosmos service manager: {address}",)
-            }
         }
     }
 }

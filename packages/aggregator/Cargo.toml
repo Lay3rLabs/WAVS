@@ -33,6 +33,7 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 bincode = { workspace = true }
 layer-climb = { workspace = true }
+cosmwasm-std = { workspace = true }
 
 [dev-dependencies]
 tempfile = {workspace = true}

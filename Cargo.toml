@@ -177,3 +177,5 @@ wavs-benchmark-common = { path = "packages/wavs/benches/common" }
 example-helpers = { path = "examples/components/_helpers" }
 example-types = { path = "examples/components/_types" }
 example-contract-cosmwasm-simple = { path = "examples/contracts/cosmwasm/simple", package = "simple-example" }
+example-contract-cosmwasm-service-handler = { path = "examples/contracts/cosmwasm/mock_service_handler", package = "mock-service-handler" }
+example-contract-cosmwasm-service-manager = { path = "examples/contracts/cosmwasm/mock_service_manager", package = "mock-service-manager" }
