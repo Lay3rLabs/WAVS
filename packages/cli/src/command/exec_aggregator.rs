@@ -6,7 +6,6 @@ use wavs_types::{
 };
 
 use crate::{
-    args::AggregatorEntryPoint,
     config::Config,
     util::{read_component, ComponentInput},
 };
@@ -14,7 +13,6 @@ use crate::{
 pub struct ExecAggregator;
 
 pub struct ExecAggregatorArgs {
-    pub entry_point: AggregatorEntryPoint,
     pub aggregator_config: wavs_aggregator::config::Config,
     pub component: Option<String>,
     pub input: Option<String>,
@@ -27,15 +25,6 @@ pub struct ExecAggregatorArgs {
 
 impl ExecAggregator {
     pub async fn run(
-        cli_config: &Config,
-        args: ExecAggregatorArgs,
-    ) -> Result<ExecAggregatorResult> {
-        match args.entry_point {
-            AggregatorEntryPoint::ExecutePacket => Self::execute_packet(cli_config, args).await,
-        }
-    }
-
-    async fn execute_packet(
         cli_config: &Config,
         args: ExecAggregatorArgs,
     ) -> Result<ExecAggregatorResult> {
@@ -165,7 +154,6 @@ mod test {
             .to_string();
 
         let args = ExecAggregatorArgs {
-            entry_point: AggregatorEntryPoint::ExecutePacket,
             aggregator_config: wavs_aggregator::config::Config::default(),
             component: Some(component_path),
             input: Some("test data".to_string()),
@@ -196,7 +184,6 @@ mod test {
             .to_string();
 
         let args = ExecAggregatorArgs {
-            entry_point: AggregatorEntryPoint::ExecutePacket,
             aggregator_config: wavs_aggregator::config::Config::default(),
             component: Some(component_path),
             input: Some("0x68656C6C6F".to_string()), // "hello" in hex
@@ -228,7 +215,6 @@ mod test {
         file.write_all(b"file content").unwrap();
 
         let args = ExecAggregatorArgs {
-            entry_point: AggregatorEntryPoint::ExecutePacket,
             aggregator_config: wavs_aggregator::config::Config::default(),
             component: Some(component_path),
             input: Some(format!("@{}", file.path().to_string_lossy())),

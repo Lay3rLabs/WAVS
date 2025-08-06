@@ -165,7 +165,6 @@ async fn main() {
             .await
             .unwrap(),
         Command::ExecAggregator {
-            entry_point,
             aggregator_args,
             component,
             input,
@@ -183,7 +182,6 @@ async fn main() {
             let res = match ExecAggregator::run(
                 &ctx.config,
                 ExecAggregatorArgs {
-                    entry_point,
                     aggregator_config,
                     component,
                     input,

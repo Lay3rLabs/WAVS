@@ -97,10 +97,6 @@ pub enum Command {
 
     /// Execute aggregator components directly
     ExecAggregator {
-        /// The aggregator entry point to execute
-        #[clap(value_enum)]
-        entry_point: AggregatorEntryPoint,
-
         #[clap(flatten)]
         args: CliArgs,
 
@@ -139,12 +135,6 @@ pub enum Command {
         #[clap(long)]
         service_handler: String,
     },
-}
-
-#[derive(Debug, Clone, clap::ValueEnum, Serialize, Deserialize)]
-pub enum AggregatorEntryPoint {
-    /// Execute a packet through the aggregator
-    ExecutePacket,
 }
 
 /// Commands for managing services
