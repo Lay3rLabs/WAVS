@@ -854,6 +854,7 @@ impl TestRegistry {
         self.register(
             TestBuilder::new("cosmos_square")
                 .with_description("Tests the Square component on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_square").unwrap(),
                     WorkflowBuilder::new()
@@ -886,6 +887,7 @@ impl TestRegistry {
         self.register(
             TestBuilder::new("cosmos_chain_trigger_lookup")
                 .with_description("Tests the ChainTriggerLookup component on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_chain_trigger_lookup").unwrap(),
                     WorkflowBuilder::new()
@@ -918,6 +920,7 @@ impl TestRegistry {
         self.register(
             TestBuilder::new("cosmos_cosmos_query")
                 .with_description("Tests the CosmosQuery component on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_cosmos_query").unwrap(),
                     WorkflowBuilder::new()
@@ -956,6 +959,7 @@ impl TestRegistry {
                 .with_description(
                     "Tests permissions for HTTP and file system access on Cosmos chain",
                 )
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_permissions").unwrap(),
                     WorkflowBuilder::new()
@@ -990,6 +994,7 @@ impl TestRegistry {
         self.register(
             TestBuilder::new("cosmos_block_interval")
                 .with_description("Tests the block interval trigger on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_block_interval").unwrap(),
                     WorkflowBuilder::new()
@@ -1029,6 +1034,7 @@ impl TestRegistry {
                 .with_description(
                     "Tests the block interval trigger with start/stop on a Cosmos chain",
                 )
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_block_interval_start_stop").unwrap(),
                     WorkflowBuilder::new()
@@ -1060,6 +1066,7 @@ impl TestRegistry {
         self.register(
             TestBuilder::new("cosmos_cron_interval")
                 .with_description("Tests the cron interval trigger on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_cron_interval").unwrap(),
                     WorkflowBuilder::new()
