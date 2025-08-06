@@ -155,12 +155,13 @@ impl HttpState {
         let storage = self.storage.clone();
         let id_bytes = id.to_bytes()?;
 
-        tokio::task::spawn_blocking(move || match storage.get(PACKET_QUEUES, &id_bytes)? {
-            Some(queue) => Ok(queue.value()),
-            None => Ok(PacketQueue::Alive(Vec::new())),
-        })
-        .await
-        .map_err(|e| AggregatorError::DatabaseOperation(e.to_string()))?
+        let packet = tokio::task::spawn_blocking(move || storage.get(PACKET_QUEUES, &id_bytes))
+            .await
+            .map_err(|e| AggregatorError::JoinError(e.to_string()))??;
+
+        Ok(packet
+            .map(|queue| queue.value())
+            .unwrap_or_else(|| PacketQueue::Alive(Vec::new())))
     }
 
     #[allow(clippy::result_large_err)]
@@ -174,7 +175,7 @@ impl HttpState {
 
         tokio::task::spawn_blocking(move || storage.set(PACKET_QUEUES, &id_bytes, &queue))
             .await
-            .map_err(|e| AggregatorError::DatabaseOperation(e.to_string()))?
+            .map_err(|e| AggregatorError::JoinError(e.to_string()))?
             .map_err(Into::into)
     }
 
