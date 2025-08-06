@@ -885,7 +885,7 @@ pub async fn change_service_for_test(
             address,
         } => {
             // TODO - change URI for cosmos
-            tracing::warn!(
+            panic!(
                 "Changing service URI for Cosmos is not implemented yet: {chain_name}, {address}"
             );
         }

@@ -275,5 +275,10 @@ async fn run_test(
         }
     }
 
+    clients
+        .http_client
+        .delete_service(vec![service.manager])
+        .await?;
+
     Ok(())
 }

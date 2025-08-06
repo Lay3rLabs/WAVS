@@ -455,26 +455,27 @@ impl TriggerManager {
                 } => {
                     // extra scope in order to properly drop the locks
                     {
-                        let update_event = contract_events
-                            .iter()
-                            .find_map(|(address, event)| {
-                                wavs_types::contracts::cosmwasm::service_manager::event::WavsServiceUriUpdatedEvent::try_from(event).ok()
-                                    .map(|event| (address.clone(), event))
-                            });
+                        for (address, event) in contract_events.iter() {
+                            tracing::warn!(
+                                "Processing Cosmos contract event: {:?} for address: {:?}",
+                                event,
+                                address
+                            );
 
-                        if let Some((address, event)) = update_event {
-                            // check if this is a service we're interested in
-                            if let Some(service_id) = self
-                                .lookup_maps
-                                .service_manager
-                                .read()
-                                .unwrap()
-                                .get_by_right(&address)
-                            {
-                                dispatcher_commands.push(DispatcherCommand::ChangeServiceUri {
-                                    service_id: service_id.clone(),
-                                    uri: event.service_uri,
-                                });
+                            if let Ok(event) = wavs_types::contracts::cosmwasm::service_manager::event::WavsServiceUriUpdatedEvent::try_from(event) {
+                                // check if this is a service we're interested in
+                                if let Some(service_id) = self
+                                    .lookup_maps
+                                    .service_manager
+                                    .read()
+                                    .unwrap()
+                                    .get_by_right(address)
+                                {
+                                    dispatcher_commands.push(DispatcherCommand::ChangeServiceUri {
+                                        service_id: service_id.clone(),
+                                        uri: event.service_uri,
+                                    });
+                                }
                             }
                         }
 
