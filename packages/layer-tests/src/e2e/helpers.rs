@@ -435,7 +435,7 @@ pub async fn create_trigger_from_config(
             } else if clients.cosmos_client_pools.contains_key(&chain_name) {
                 let client = clients.get_cosmos_client(&chain_name).await;
                 let current_block = client.querier.block_height().await.unwrap();
-                let block_delay = 12;
+                let block_delay = 20;
                 (current_block, block_delay)
             } else {
                 panic!("Chain is not configured: {}", chain_name)
