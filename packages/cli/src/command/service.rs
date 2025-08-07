@@ -1050,7 +1050,7 @@ pub async fn validate_service(
                             }
                         }
                         Some(AnyChainConfig::Evm(_)) => {
-                            let evm_client = ctx.new_evm_client(chain_name).await?;
+                            let evm_client = ctx.new_evm_client_read_only(chain_name).await?;
                             let block_height = evm_client.provider.get_block_number().await?;
                             if let Err(err) = validate_block_interval_config_on_chain(
                                 *start_block,
@@ -1117,7 +1117,7 @@ pub async fn validate_service(
                     }
                 }
                 ChainType::EVM => {
-                    if let Ok(client) = ctx.new_evm_client(chain_name).await {
+                    if let Ok(client) = ctx.new_evm_client_read_only(chain_name).await {
                         evm_providers.insert(chain_name.clone(), client.provider.root().clone());
                     }
                 }
