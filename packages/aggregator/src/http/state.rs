@@ -155,13 +155,14 @@ impl HttpState {
         let storage = self.storage.clone();
         let id_bytes = id.to_bytes()?;
 
-        let packet = tokio::task::spawn_blocking(move || storage.get(PACKET_QUEUES, &id_bytes))
-            .await
-            .map_err(|e| AggregatorError::JoinError(e.to_string()))??;
-
-        Ok(packet
-            .map(|queue| queue.value())
-            .unwrap_or_else(|| PacketQueue::Alive(Vec::new())))
+        tokio::task::spawn_blocking(move || {
+            Ok(storage
+                .get(PACKET_QUEUES, &id_bytes)?
+                .map(|queue| queue.value())
+                .unwrap_or_else(|| PacketQueue::Alive(Vec::new())))
+        })
+        .await
+        .map_err(|e| AggregatorError::JoinError(e.to_string()))?
     }
 
     #[allow(clippy::result_large_err)]
@@ -183,11 +184,16 @@ impl HttpState {
     pub async fn service_registered(&self, service_id: ServiceID) -> bool {
         let storage = self.storage.clone();
 
-        tokio::task::spawn_blocking(move || storage.get(SERVICES, service_id.inner()).ok())
-            .await
-            .ok()
-            .flatten()
-            .is_some()
+        tokio::task::spawn_blocking(move || {
+            storage
+                .get(SERVICES, service_id.inner())
+                .ok()
+                .flatten()
+                .is_some()
+        })
+        .await
+        .ok()
+        .unwrap_or(false)
     }
 
     #[instrument(level = "debug", skip(self))]
