@@ -24,12 +24,16 @@ use super::test_definition::{
 };
 use crate::e2e::components::ComponentSources;
 use crate::e2e::helpers::create_trigger_from_config;
-use crate::e2e::test_definition::{ChangeServiceDefinition, ExpectedOutputCallback};
+use crate::e2e::test_definition::{
+    ChangeServiceDefinition, CosmosContractDefinition, ExpectedOutputCallback,
+};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
-pub type CosmosTriggerCodeMap =
-    Arc<DashMap<CosmosTriggerDefinition, Arc<tokio::sync::Mutex<Option<u64>>>>>;
+#[derive(Clone)]
+pub struct CosmosContractCodeMap(
+    pub Arc<DashMap<CosmosContractDefinition, Arc<tokio::sync::Mutex<Option<u64>>>>>,
+);
 
 // Eventually we will have multiple aggregators to test against, but for now we use a single local aggregator
 const AGGREGATOR_ENDPOINT: &str = "http://127.0.0.1:8001";
@@ -95,7 +99,7 @@ impl TestRegistry {
         test_mode: crate::config::TestMode,
         chain_configs: &ChainConfigs,
         clients: &Clients,
-        cosmos_trigger_code_map: &CosmosTriggerCodeMap,
+        cosmos_code_map: &CosmosContractCodeMap,
     ) -> Self {
         // Convert TestMode to TestMatrix
         let matrix: TestMatrix = test_mode.into();
@@ -151,7 +155,7 @@ impl TestRegistry {
                             },
                         ),
                         clients,
-                        cosmos_trigger_code_map.clone(),
+                        cosmos_code_map.clone(),
                         None,
                     )
                     .await;
@@ -177,41 +181,48 @@ impl TestRegistry {
         // Process Cosmos services
         for service in &matrix.cosmos {
             let cosmos = chain_names.primary_cosmos().unwrap();
-            let evm = chain_names.primary_evm().unwrap();
             let aggregator_endpoint = AGGREGATOR_ENDPOINT;
 
             match service {
                 CosmosService::EchoData => {
-                    registry.register_cosmos_echo_data_test(cosmos, evm, aggregator_endpoint);
+                    registry.register_cosmos_echo_data_test(cosmos, cosmos, aggregator_endpoint);
                 }
                 CosmosService::Square => {
-                    registry.register_cosmos_square_test(cosmos, evm, aggregator_endpoint);
+                    registry.register_cosmos_square_test(cosmos, cosmos, aggregator_endpoint);
                 }
                 CosmosService::ChainTriggerLookup => {
                     registry.register_cosmos_chain_trigger_lookup_test(
                         cosmos,
-                        evm,
+                        cosmos,
                         aggregator_endpoint,
                     );
                 }
                 CosmosService::CosmosQuery => {
-                    registry.register_cosmos_cosmos_query_test(cosmos, evm, aggregator_endpoint);
+                    registry.register_cosmos_cosmos_query_test(cosmos, cosmos, aggregator_endpoint);
                 }
                 CosmosService::Permissions => {
-                    registry.register_cosmos_permissions_test(cosmos, evm, aggregator_endpoint);
+                    registry.register_cosmos_permissions_test(cosmos, cosmos, aggregator_endpoint);
                 }
                 CosmosService::BlockInterval => {
-                    registry.register_cosmos_block_interval_test(cosmos, evm, aggregator_endpoint);
+                    registry.register_cosmos_block_interval_test(
+                        cosmos,
+                        cosmos,
+                        aggregator_endpoint,
+                    );
                 }
                 CosmosService::BlockIntervalStartStop => {
                     registry.register_cosmos_block_interval_start_stop_test(
                         cosmos,
-                        evm,
+                        cosmos,
                         aggregator_endpoint,
                     );
                 }
                 CosmosService::CronInterval => {
-                    registry.register_cosmos_cron_interval_test(cosmos, evm, aggregator_endpoint);
+                    registry.register_cosmos_cron_interval_test(
+                        cosmos,
+                        cosmos,
+                        aggregator_endpoint,
+                    );
                 }
             }
         }
@@ -803,26 +814,27 @@ impl TestRegistry {
 
     fn register_cosmos_echo_data_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        trigger_chain: &ChainName,
+        submit_chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_echo_data")
                 .with_description("Tests the EchoData component on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_echo_data").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain_name: trigger_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
-                                chain_name: evm_chain.clone(),
+                            aggregators: vec![AggregatorDefinition::NewCosmosAggregatorSubmit {
+                                chain_name: submit_chain.clone(),
                             }],
                         })
                         .with_input_data(InputData::Text("on brink".to_string()))
@@ -835,26 +847,27 @@ impl TestRegistry {
 
     fn register_cosmos_square_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        trigger_chain: &ChainName,
+        submit_chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_square")
                 .with_description("Tests the Square component on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_square").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::Square.into())
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain_name: trigger_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
-                                chain_name: evm_chain.clone(),
+                            aggregators: vec![AggregatorDefinition::NewCosmosAggregatorSubmit {
+                                chain_name: submit_chain.clone(),
                             }],
                         })
                         .with_input_data(InputData::Square(SquareRequest { x: 3 }))
@@ -867,26 +880,27 @@ impl TestRegistry {
 
     fn register_cosmos_chain_trigger_lookup_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        trigger_chain: &ChainName,
+        submit_chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_chain_trigger_lookup")
                 .with_description("Tests the ChainTriggerLookup component on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_chain_trigger_lookup").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::ChainTriggerLookup.into())
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain_name: trigger_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
-                                chain_name: evm_chain.clone(),
+                            aggregators: vec![AggregatorDefinition::NewCosmosAggregatorSubmit {
+                                chain_name: submit_chain.clone(),
                             }],
                         })
                         .with_input_data(InputData::Text("nakamoto".to_string()))
@@ -899,30 +913,31 @@ impl TestRegistry {
 
     fn register_cosmos_cosmos_query_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        trigger_chain: &ChainName,
+        submit_chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_cosmos_query")
                 .with_description("Tests the CosmosQuery component on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_cosmos_query").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::CosmosQuery.into())
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain_name: trigger_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
-                                chain_name: evm_chain.clone(),
+                            aggregators: vec![AggregatorDefinition::NewCosmosAggregatorSubmit {
+                                chain_name: submit_chain.clone(),
                             }],
                         })
                         .with_input_data(InputData::CosmosQuery(CosmosQueryRequest::BlockHeight {
-                            chain_name: cosmos_chain.to_string(),
+                            chain_name: trigger_chain.to_string(),
                         }))
                         .with_expected_output(ExpectedOutput::StructureOnly(
                             OutputStructure::CosmosQueryResponse,
@@ -935,8 +950,8 @@ impl TestRegistry {
 
     fn register_cosmos_permissions_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        trigger_chain: &ChainName,
+        submit_chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
@@ -944,19 +959,20 @@ impl TestRegistry {
                 .with_description(
                     "Tests permissions for HTTP and file system access on Cosmos chain",
                 )
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_permissions").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::Permissions.into())
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain_name: trigger_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
-                                chain_name: evm_chain.clone(),
+                            aggregators: vec![AggregatorDefinition::NewCosmosAggregatorSubmit {
+                                chain_name: submit_chain.clone(),
                             }],
                         })
                         .with_input_data(InputData::Permissions(create_permissions_request()))
@@ -971,27 +987,28 @@ impl TestRegistry {
 
     fn register_cosmos_block_interval_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        trigger_chain: &ChainName,
+        submit_chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_block_interval")
                 .with_description("Tests the block interval trigger on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_block_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoBlockInterval.into())
                         .with_trigger(TriggerDefinition::Existing(Trigger::BlockInterval {
-                            chain_name: cosmos_chain.clone(),
+                            chain_name: trigger_chain.clone(),
                             n_blocks: NonZeroU32::new(10).unwrap(),
                             start_block: None,
                             end_block: None,
                         }))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
-                                chain_name: evm_chain.clone(),
+                            aggregators: vec![AggregatorDefinition::NewCosmosAggregatorSubmit {
+                                chain_name: submit_chain.clone(),
                             }],
                         })
                         .with_input_data(InputData::None)
@@ -1008,8 +1025,8 @@ impl TestRegistry {
 
     fn register_cosmos_block_interval_start_stop_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        trigger_chain: &ChainName,
+        submit_chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
@@ -1017,17 +1034,18 @@ impl TestRegistry {
                 .with_description(
                     "Tests the block interval trigger with start/stop on a Cosmos chain",
                 )
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_block_interval_start_stop").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoBlockInterval.into())
                         .with_trigger(TriggerDefinition::DeferredBlockIntervalTarget {
-                            chain_name: cosmos_chain.clone(),
+                            chain_name: trigger_chain.clone(),
                         })
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
-                                chain_name: evm_chain.clone(),
+                            aggregators: vec![AggregatorDefinition::NewCosmosAggregatorSubmit {
+                                chain_name: submit_chain.clone(),
                             }],
                         })
                         .with_input_data(InputData::None)
@@ -1041,13 +1059,14 @@ impl TestRegistry {
 
     fn register_cosmos_cron_interval_test(
         &mut self,
-        _cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        _trigger_chain: &ChainName,
+        submit_chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_cron_interval")
                 .with_description("Tests the cron interval trigger on Cosmos chain")
+                .with_service_manager_chain(submit_chain)
                 .add_workflow(
                     WorkflowID::new("cosmos_cron_interval").unwrap(),
                     WorkflowBuilder::new()
@@ -1059,8 +1078,8 @@ impl TestRegistry {
                         }))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
-                            aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
-                                chain_name: evm_chain.clone(),
+                            aggregators: vec![AggregatorDefinition::NewCosmosAggregatorSubmit {
+                                chain_name: submit_chain.clone(),
                             }],
                         })
                         .with_input_data(InputData::None)
@@ -1076,8 +1095,8 @@ impl TestRegistry {
 
     fn register_cosmos_to_evm_echo_data_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        trigger_chain: &ChainName,
+        submit_chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
@@ -1089,13 +1108,13 @@ impl TestRegistry {
                         .with_component(ComponentName::EchoData.into())
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain_name: trigger_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
                             aggregators: vec![AggregatorDefinition::NewEvmAggregatorSubmit {
-                                chain_name: evm_chain.clone(),
+                                chain_name: submit_chain.clone(),
                             }],
                         })
                         .with_input_data(InputData::Text("hello EVM world from cosmos".to_string()))

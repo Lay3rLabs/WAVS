@@ -28,7 +28,11 @@ pub async fn start_cosmos_stream(
                     for event in events.events_iter() {
                         if event.ty().starts_with("wasm-") {
                             let contract_address = event.attributes().find_map(|attr| {
-                                if attr.key() == "_contract_address" {
+                                if attr.key() == "_contract_address"
+                                    || attr.key() == "contract_address"
+                                    || attr.key() == "_contract_addr"
+                                    || attr.key() == "contract_addr"
+                                {
                                     query_client.chain_config.parse_address(attr.value()).ok()
                                 } else {
                                     None

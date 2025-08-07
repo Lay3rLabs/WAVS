@@ -11,14 +11,14 @@ publish = true
 
 [features]
 default = ["all"]
-all = ["solidity-rpc", "cosmwasm", "signer"]
+all = ["solidity-rpc", "cosmwasm", "signer", "clock"]
+clock = ["dep:chrono"]
 signer = ["dep:alloy-signer", "dep:alloy-signer-local"]
 solidity-rpc = ["dep:alloy-contract", "dep:alloy-provider"]
 cosmwasm = ["dep:cosmwasm-schema"]
 
 [dependencies]
 anyhow = { workspace = true }
-chrono = { workspace = true }
 serde = { workspace = true }
 wasm-pkg-common = { workspace = true }
 serde_json = { workspace = true }
@@ -37,6 +37,7 @@ alloy-sol-types = { workspace = true }
 async-trait = { workspace = true }
 utoipa = { workspace = true }
 semver = { workspace = true }
+chrono = { workspace = true, optional = true}
 alloy-contract = { workspace = true, optional = true }
 alloy-provider = { workspace = true, optional = true }
 alloy-signer = { workspace = true, optional = true }

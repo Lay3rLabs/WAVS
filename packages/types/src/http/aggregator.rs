@@ -1,4 +1,3 @@
-use alloy_rpc_types_eth::TransactionReceipt;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -12,18 +11,10 @@ pub struct AddPacketRequest {
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub enum AddPacketResponse {
-    Sent {
-        #[schema(value_type = Object)]
-        tx_receipt: Box<TransactionReceipt>,
-        count: usize,
-    },
+    Sent { tx_hash: String, count: usize },
     Burned,
-    Aggregated {
-        count: usize,
-    },
-    Error {
-        reason: String,
-    },
+    Aggregated { count: usize },
+    Error { reason: String },
 }
 
 // TODO: AUTH

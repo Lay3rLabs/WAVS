@@ -1032,6 +1032,7 @@ async fn test_service_validation() {
         url: "https://api.example.com/aggregator".to_string(),
         component: None,
         evm_contracts: Some(vec![aggregator]),
+        cosmos_contracts: None,
     };
 
     // Create service manager
@@ -1293,6 +1294,7 @@ async fn test_service_validation() {
                         chain_name: evm_chain.clone(),
                         max_gas: Some(0u64), // Zero gas
                     }]),
+                    cosmos_contracts: None,
                 }),
             },
         );
@@ -1377,6 +1379,7 @@ async fn test_service_validation() {
                     url: "not-a-valid-url".to_string(),
                     component: None,
                     evm_contracts: Some(aggregators),
+                    cosmos_contracts: None,
                 }),
             },
         );
@@ -1455,6 +1458,7 @@ async fn test_service_validation() {
                     url: "https://example.com".to_string(),
                     component: None,
                     evm_contracts: None,
+                    cosmos_contracts: None,
                 }),
             },
         );

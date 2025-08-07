@@ -140,6 +140,7 @@ pub struct WorkflowDefinition {
 #[derive(Clone, Debug)]
 pub enum AggregatorDefinition {
     NewEvmAggregatorSubmit { chain_name: ChainName },
+    NewCosmosAggregatorSubmit { chain_name: ChainName },
 }
 
 #[derive(Clone, Debug)]
@@ -179,6 +180,25 @@ pub enum TriggerDefinition {
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum CosmosTriggerDefinition {
     SimpleContractEvent { chain_name: ChainName },
+}
+
+impl From<CosmosTriggerDefinition> for CosmosContractDefinition {
+    fn from(def: CosmosTriggerDefinition) -> Self {
+        match def {
+            CosmosTriggerDefinition::SimpleContractEvent { chain_name } => {
+                CosmosContractDefinition::Trigger(CosmosTriggerDefinition::SimpleContractEvent {
+                    chain_name,
+                })
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum CosmosContractDefinition {
+    Trigger(CosmosTriggerDefinition),
+    ServiceManager { chain_name: ChainName },
+    ServiceHandler { chain_name: ChainName },
 }
 
 #[derive(Clone, Debug)]

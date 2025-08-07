@@ -1,19 +1,21 @@
 use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
 use axum::{extract::State, response::IntoResponse, Json};
+use layer_climb::{pool::SigningClientPoolManager, prelude::AddrEvm};
 use tracing::instrument;
 use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
+    contracts::cosmwasm::service_manager::{error::WavsValidateError, WavsValidateResult},
     signer::EnvelopeSigner,
-    Aggregator, EnvelopeSignature, EvmContractSubmission,
+    Aggregator, CosmosContractSubmission, Envelope, EnvelopeSignature, EvmContractSubmission,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
-    Packet, ServiceManagerError,
+    Packet, ServiceManager, ServiceManagerError, SignatureData,
 };
 
 use crate::{
-    error::{AggregatorError, AggregatorResult, PacketValidationError},
+    error::{AggregatorError, AggregatorResult, AnyChainError, PacketValidationError},
     http::{
         error::AnyError,
         state::{HttpState, PacketQueue, PacketQueueId, QueuedPacket},
@@ -63,16 +65,45 @@ async fn process_packet(
     );
 
     let workflow = &packet.service.workflows[&packet.workflow_id];
-    let aggregators = match &workflow.submit {
-        wavs_types::Submit::Aggregator {
-            evm_contracts: Some(contracts),
-            ..
-        } => contracts
-            .iter()
-            .map(|c| wavs_types::Aggregator::Evm(c.clone()))
-            .collect::<Vec<_>>(),
-        _ => Vec::new(),
-    };
+    let mut aggregators = Vec::new();
+    if let wavs_types::Submit::Aggregator {
+        evm_contracts,
+        cosmos_contracts,
+        ..
+    } = &workflow.submit
+    {
+        if let Some(evm_contracts) = evm_contracts {
+            for evm_contract in evm_contracts.iter() {
+                let EvmContractSubmission {
+                    chain_name,
+                    address,
+                    ..
+                } = evm_contract;
+
+                aggregators.push(Aggregator::Evm(EvmContractSubmission {
+                    chain_name: chain_name.clone(),
+                    address: *address,
+                    max_gas: None, // TODO: handle max gas
+                }));
+            }
+        }
+
+        if let Some(cosmos_contracts) = cosmos_contracts {
+            for cosmos_contract in cosmos_contracts.iter() {
+                let CosmosContractSubmission {
+                    chain_name,
+                    address,
+                    ..
+                } = cosmos_contract;
+
+                aggregators.push(Aggregator::Cosmos(CosmosContractSubmission {
+                    chain_name: chain_name.clone(),
+                    address: address.clone(),
+                    max_gas: None, // TODO: handle max gas
+                }));
+            }
+        }
+    }
 
     if aggregators.is_empty() {
         return Err(AggregatorError::MissingWorkflow {
@@ -89,18 +120,40 @@ async fn process_packet(
     // but drop it after this scope so we don't confuse it with the service manager
     // that is used for the actual submission
     let signer = {
-        let service_manager_client = state
-            .get_evm_client(packet.service.manager.chain_name())
-            .await?;
-        let service_manager = IWavsServiceManagerInstance::new(
-            packet.service.manager.evm_address_unchecked(),
-            service_manager_client.provider,
-        );
-        service_manager
-            .getLatestOperatorForSigningKey(signing_key)
-            .call()
-            .await
-            .map_err(AggregatorError::OperatorKeyLookup)?
+        match &packet.service.manager {
+            ServiceManager::Evm {
+                chain_name,
+                address,
+            } => {
+                let client = state.get_evm_client(chain_name).await?;
+
+                let service_manager = IWavsServiceManagerInstance::new(*address, client.provider);
+                service_manager
+                    .getLatestOperatorForSigningKey(signing_key)
+                    .call()
+                    .await
+                    .map_err(|e| AggregatorError::OperatorKeyLookup(AnyChainError::evm(e)))?
+            }
+            ServiceManager::Cosmos {
+                chain_name,
+                address,
+            } => {
+                let client = state.get_cosmos_client(chain_name).await?;
+
+                let resp = client.querier
+                    .contract_smart::<Option<AddrEvm>, _>(
+                        address,
+                        &wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessages::WavsLatestOperatorForSigningKey {
+                            signing_key_addr: signing_key.into(),
+                        },
+                    )
+                    .await
+                    .map_err(|e| AggregatorError::OperatorKeyLookup(AnyChainError::Cosmos(e)))?
+                    .ok_or_else(|| AggregatorError::OperatorKeyLookup(AnyChainError::Cosmos(anyhow::anyhow!("No operator found for signing key addr {signing_key}"))))?;
+
+                resp.into()
+            }
+        }
     };
 
     tracing::debug!("Packet signer address: {:?}", signer);
@@ -165,110 +218,219 @@ impl AggregatorProcess<'_> {
             signer,
         } = self;
 
-        match aggregator {
-            Aggregator::Evm(EvmContractSubmission {
-                chain_name,
-                address,
-                max_gas,
-            }) => {
-                // execute the logic within a transaction, keyed by queue_id
-                // other queue ids can run concurrently, but this makes sure that
-                // we aren't validating a queue that was updated from another request coming in
-                async_tx
-                    .run(queue_id.clone(), move || async move {
-                        let queue = match state.get_packet_queue(&queue_id)? {
-                            PacketQueue::Alive(queue) => {
-                                // this will also locally validate the packet
-                                add_packet_to_queue(packet, queue, signer)?
-                            }
-                            PacketQueue::Burned => {
-                                return Ok(AddPacketResponse::Burned);
-                            }
-                        };
+        // execute the logic within a transaction, keyed by queue_id
+        // other queue ids can run concurrently, but this makes sure that
+        // we aren't validating a queue that was updated from another request coming in
+        async_tx
+            .run(queue_id.clone(), move || async move {
+                let queue = match state.get_packet_queue(&queue_id)? {
+                    PacketQueue::Alive(queue) => {
+                        // this will also locally validate the packet
+                        add_packet_to_queue(packet, queue, signer)?
+                    }
+                    PacketQueue::Burned => {
+                        return Ok(AddPacketResponse::Burned);
+                    }
+                };
 
-                        let service_manager = get_submission_service_manager(state, aggregator).await?;
+                let service_manager = get_submission_service_manager(state, aggregator).await?;
 
-                        // TODO: anvil specific (blockheight -1)? InvalidReferenceBlock(). ECDSA logic error / fixed in BLS?
-                        let block_height_minus_one = service_manager
-                            .provider()
-                            .get_block_number()
-                            .await
-                            .map_err(|e| AggregatorError::BlockNumber(e.into()))? - 1;
+                // TODO: anvil specific (blockheight -1)? InvalidReferenceBlock(). ECDSA logic error / fixed in BLS?
+                let block_height_minus_one = service_manager.block_height_minus_one().await?;
 
-                        let signatures: Vec<EnvelopeSignature> = queue
-                            .iter()
-                            .map(|queued| queued.packet.signature.clone())
-                            .collect();
+                let signatures: Vec<EnvelopeSignature> = queue
+                    .iter()
+                    .map(|queued| queued.packet.signature.clone())
+                    .collect();
 
-                        let signature_data = packet
-                            .envelope
-                            .signature_data(signatures, block_height_minus_one)?;
+                let signature_data = packet
+                    .envelope
+                    .signature_data(signatures, block_height_minus_one)?;
 
-                        let result = service_manager
-                            .validate(
-                                packet.envelope.clone().into(),
-                                signature_data.clone().into(),
-                            )
-                            .call()
-                            .await;
+                let result = service_manager
+                    .validate(
+                        packet.envelope.clone(),
+                        signature_data.clone(),
+                    ).await?;
 
 
-                        match result {
-                            Ok(_) => {
-                                let client = state.get_evm_client(chain_name).await?;
-                                tracing::info!(
-                                    "Sending aggregated packet to chain: {}, address: {:?}, block_height: {}",
-                                    chain_name,
-                                    address,
-                                    block_height_minus_one
-                                );
-                                let tx_receipt = client
-                                    .send_envelope_signatures(
-                                        packet.envelope.clone(),
-                                        signature_data.clone(),
-                                        *address,
-                                        *max_gas,
-                                    )
-                                    .await?;
-                                tracing::info!(
-                                    "Transaction sent successfully: {:?}",
-                                    tx_receipt.transaction_hash
-                                );
+                match result {
+                    WavsValidateResult::Ok => {
 
-                                state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
-                                tracing::info!("Packet queue burned after successful submission");
+                        let tx_hash = submit_signed_envelope(state, aggregator, packet.envelope.clone(), signature_data.clone(), block_height_minus_one).await?;
 
-                                Ok(AddPacketResponse::Sent {
-                                    tx_receipt: Box::new(tx_receipt),
-                                    count: queue.len(),
-                                })
+                        tracing::info!(
+                            "Transaction sent successfully: {}", tx_hash
+                        );
+
+                        state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
+                        tracing::info!("Packet queue burned after successful submission");
+
+                        Ok(AddPacketResponse::Sent {
+                            tx_hash,
+                            count: queue.len(),
+                        })
+                    },
+                    WavsValidateResult::Err(WavsValidateError::InsufficientQuorum { signer_weight, threshold_weight, total_weight }) => {
+                        tracing::info!("Quorum not met, still aggregating: signer_weight: {}, threshold_weight: {}, total_weight: {}", signer_weight, threshold_weight, total_weight);
+                        // insufficient quorum means we just keep aggregating
+                        state.save_packet_queue(
+                            &queue_id,
+                            PacketQueue::Alive(queue.clone()),
+                        )?;
+
+                        Ok(AddPacketResponse::Aggregated { count: queue.len() })
+                    },
+                    WavsValidateResult::Err(err) => {
+                        Err(AggregatorError::ServiceManagerValidateWavs(err))
+                    }
+                }
+            })
+            .await
+    }
+}
+
+enum ServiceManagerClient {
+    Evm(IWavsServiceManagerInstance<DynProvider>),
+    Cosmos {
+        service_manager_address: layer_climb::prelude::Address,
+        client: deadpool::managed::Object<SigningClientPoolManager>,
+    },
+}
+
+impl ServiceManagerClient {
+    pub async fn block_height_minus_one(&self) -> AggregatorResult<u64> {
+        Ok(match self {
+            ServiceManagerClient::Evm(service_manager) => {
+                service_manager
+                    .provider()
+                    .get_block_number()
+                    .await
+                    .map_err(|e| AggregatorError::BlockNumber(e.into()))?
+                    - 1
+            }
+            ServiceManagerClient::Cosmos { client, .. } => {
+                client
+                    .querier
+                    .block_height()
+                    .await
+                    .map_err(AggregatorError::BlockNumber)?
+                    - 1
+            }
+        })
+    }
+
+    // Standardize on the cosmwasm result type because it's a bit easier to work with at the call site
+    pub async fn validate(
+        &self,
+        envelope: Envelope,
+        signature_data: SignatureData,
+    ) -> AggregatorResult<WavsValidateResult> {
+        match self {
+            ServiceManagerClient::Evm(instance) => {
+                let result = instance.validate(
+                    envelope.into(),
+                    signature_data.into(),
+                )
+                .call()
+                .await;
+
+                match result {
+                    Ok(_) => {
+                        Ok(WavsValidateResult::Ok)
+                    },
+                    Err(err) => {
+                        match err.as_decoded_interface_error::<ServiceManagerError>() {
+                            Some(ServiceManagerError::InsufficientQuorum(err)) => {
+                                Ok(WavsValidateResult::Err(WavsValidateError::InsufficientQuorum {
+                                    signer_weight: err.signerWeight.to_string().parse().unwrap(),
+                                    threshold_weight: err.thresholdWeight.to_string().parse().unwrap(),
+                                    total_weight: err.totalWeight.to_string().parse().unwrap(),
+                                }))
                             },
-                            Err(err) => {
-                                match err.as_decoded_interface_error::<ServiceManagerError>() {
-                                    Some(ServiceManagerError::InsufficientQuorum(_)) => {
-                                        // insufficient quorum means we just keep aggregating
-                                        state.save_packet_queue(
-                                            &queue_id,
-                                            PacketQueue::Alive(queue.clone()),
-                                        )?;
-
-                                        Ok(AddPacketResponse::Aggregated { count: queue.len() })
-                                    },
-                                    Some(err) => {
-                                        Err(AggregatorError::ServiceManagerValidateKnown(err))
-                                    }
-                                    None => {
-                                        match err.as_revert_data() {
-                                            Some(raw) => Err(AggregatorError::ServiceManagerValidateAnyRevert(raw.to_string())),
-                                            None => Err(AggregatorError::ServiceManagerValidateUnknown(err))
-                                        }
-                                    }
+                            Some(err) => {
+                                Err(AggregatorError::ServiceManagerValidateKnown(err))
+                            }
+                            None => {
+                                match err.as_revert_data() {
+                                    Some(raw) => Err(AggregatorError::ServiceManagerValidateAnyRevert(raw.to_string())),
+                                    None => Err(AggregatorError::ServiceManagerValidateUnknown(AnyChainError::Evm(err)))
                                 }
                             }
                         }
-                    })
+                    }
+                }
+            },
+            ServiceManagerClient::Cosmos { service_manager_address, client } => {
+                client.querier
+                    .contract_smart(
+                        service_manager_address,
+                        &wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessages::WavsValidate {
+                            envelope: envelope.into(),
+                            signature_data: signature_data.into(),
+                        },
+                    )
                     .await
-            }
+                    .map_err(|e| AggregatorError::ServiceManagerValidateUnknown(AnyChainError::Cosmos(e)))
+            },
+        }
+    }
+}
+
+async fn submit_signed_envelope(
+    state: &HttpState,
+    aggregator: &Aggregator,
+    envelope: Envelope,
+    signature_data: SignatureData,
+    block_height_minus_one: u64,
+) -> AggregatorResult<String> {
+    match aggregator {
+        Aggregator::Evm(EvmContractSubmission {
+            chain_name,
+            address,
+            max_gas,
+        }) => {
+            let client = state.get_evm_client(chain_name).await?;
+            tracing::info!(
+                "Sending aggregated packet to chain: {}, address: {:?}, block_height: {}",
+                chain_name,
+                address,
+                block_height_minus_one
+            );
+            let tx_receipt = client
+                .send_envelope_signatures(envelope, signature_data, *address, *max_gas)
+                .await?;
+
+            Ok(tx_receipt.transaction_hash.to_string())
+        }
+        Aggregator::Cosmos(CosmosContractSubmission {
+            chain_name,
+            address,
+            max_gas,
+        }) => {
+            let client = state.get_cosmos_client(chain_name).await?;
+            tracing::info!(
+                "Sending aggregated packet to chain: {}, address: {:?}, block_height: {}",
+                chain_name,
+                address,
+                block_height_minus_one
+            );
+            let msg = wavs_types::contracts::cosmwasm::service_handler::ServiceHandlerExecuteMessages::WavsHandleSignedEnvelope {
+                envelope: envelope.into(),
+                signature_data: signature_data.into(),
+            };
+            let tx_builder = max_gas.map(|max_gas| {
+                let mut tx_builder = client.tx_builder();
+                tx_builder.set_gas_units_or_simulate(Some(max_gas));
+                tx_builder
+            });
+
+            let tx_resp = client
+                .contract_execute(address, &msg, vec![], tx_builder)
+                .await
+                .map_err(AggregatorError::CosmosHandleSignedEnvelope)?;
+
+            Ok(tx_resp.txhash)
         }
     }
 }
@@ -276,7 +438,7 @@ impl AggregatorProcess<'_> {
 async fn get_submission_service_manager(
     state: &HttpState,
     aggregator: &Aggregator,
-) -> AggregatorResult<IWavsServiceManagerInstance<DynProvider>> {
+) -> AggregatorResult<ServiceManagerClient> {
     // we need to get the service manager from the perspective of the service handler
     // which may be different than the service manager where the operator is staked
     // e.g. in the case of operator sets that are mirrored across multiple chains
@@ -294,12 +456,37 @@ async fn get_submission_service_manager(
                 .getServiceManager()
                 .call()
                 .await
-                .map_err(AggregatorError::ServiceManagerLookup)?;
+                .map_err(|e| AggregatorError::ServiceManagerLookup(AnyChainError::Evm(e)))?;
 
-            Ok(IWavsServiceManagerInstance::new(
+            let instance = IWavsServiceManagerInstance::new(
                 service_manager_address,
                 service_handler_client.provider,
-            ))
+            );
+
+            Ok(ServiceManagerClient::Evm(instance))
+        }
+
+        Aggregator::Cosmos(CosmosContractSubmission {
+            chain_name,
+            address,
+            ..
+        }) => {
+            let client = state.get_cosmos_client(chain_name).await?;
+
+            let service_manager_address:cosmwasm_std::Addr = client.querier.contract_smart(address, &wavs_types::contracts::cosmwasm::service_handler::ServiceHandlerQueryMessages::WavsServiceManager {  })
+                .await
+                .map_err(|e| AggregatorError::ServiceManagerLookup(AnyChainError::Cosmos(e)))?;
+
+            let service_manager_address = client
+                .querier
+                .chain_config
+                .parse_address(service_manager_address.as_ref())
+                .map_err(|e| AggregatorError::ServiceManagerLookup(AnyChainError::Cosmos(e)))?;
+
+            Ok(ServiceManagerClient::Cosmos {
+                service_manager_address,
+                client,
+            })
         }
     }
 }
@@ -754,10 +941,7 @@ mod test {
                             panic!("Duplicate count: {}", count);
                         }
                     }
-                    AddPacketResponse::Sent {
-                        count,
-                        tx_receipt: _,
-                    } => {
+                    AddPacketResponse::Sent { count, tx_hash: _ } => {
                         // in serial mode, break when we get a sent packet
                         // and assert that it's what we expect
                         assert_eq!(count, NUM_THRESHOLD);
@@ -843,6 +1027,7 @@ mod test {
                             })
                             .collect(),
                     ),
+                    cosmos_contracts: None,
                 },
             },
         );

@@ -3,9 +3,9 @@ use std::time::Duration;
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use wavs_types::{
-    AddServiceRequest, ComponentDigest, GetServiceKeyRequest, GetServiceRequest,
-    IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceManager,
-    SigningKeyResponse, UploadComponentResponse,
+    AddServiceRequest, ComponentDigest, DeleteServicesRequest, GetServiceKeyRequest,
+    GetServiceRequest, IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse,
+    Service, ServiceManager, SigningKeyResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUrlArgs;
@@ -53,9 +53,12 @@ impl HttpClient {
         save_service_args: Option<SetServiceUrlArgs>,
     ) -> Result<()> {
         if let Some(save_service) = save_service_args {
-            self.set_service_url(
+            self.set_service_url_evm(
                 save_service.provider,
-                service.manager.evm_address_unchecked(),
+                match service.manager {
+                    ServiceManager::Evm { address, .. } => address,
+                    _ => anyhow::bail!("Service manager is not EVM"),
+                },
                 save_service.service_url,
             )
             .await?;
@@ -88,7 +91,7 @@ impl HttpClient {
         Ok(())
     }
 
-    pub async fn set_service_url(
+    pub async fn set_service_url_evm(
         &self,
         provider: DynProvider,
         service_manager_address: alloy_primitives::Address,
@@ -203,5 +206,31 @@ impl HttpClient {
             }
         })
         .await?
+    }
+
+    pub async fn delete_service(&self, service_managers: Vec<ServiceManager>) -> Result<()> {
+        let body: String = serde_json::to_string(&DeleteServicesRequest { service_managers })?;
+
+        let url = format!("{}/app", self.endpoint);
+        let response = self
+            .inner
+            .delete(&url)
+            .header("Content-Type", "application/json")
+            .body(body)
+            .send()
+            .await
+            .with_context(|| format!("Failed to send request to {}", url))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<Failed to read response body>".to_string());
+
+            anyhow::bail!("{} from {}: {}", status, url, error_text);
+        }
+
+        Ok(())
     }
 }

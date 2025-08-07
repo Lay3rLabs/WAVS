@@ -36,7 +36,7 @@ impl TryFrom<&cosmwasm_std::Event> for WavsServiceUriUpdatedEvent {
     type Error = WavsEventError;
 
     fn try_from(event: &cosmwasm_std::Event) -> Result<Self, Self::Error> {
-        if event.ty != Self::EVENT_TYPE {
+        if event.ty != Self::EVENT_TYPE && event.ty != format!("wasm-{}", Self::EVENT_TYPE) {
             return Err(WavsEventError::EventType {
                 expected: Self::EVENT_TYPE.to_string(),
                 found: event.ty.to_string(),
@@ -74,7 +74,7 @@ impl TryFrom<&cosmwasm_std::Event> for WavsQuorumThresholdUpdatedEvent {
     type Error = WavsEventError;
 
     fn try_from(event: &cosmwasm_std::Event) -> Result<Self, Self::Error> {
-        if event.ty != Self::EVENT_TYPE {
+        if event.ty != Self::EVENT_TYPE && event.ty != format!("wasm-{}", Self::EVENT_TYPE) {
             return Err(WavsEventError::EventType {
                 expected: Self::EVENT_TYPE.to_string(),
                 found: event.ty.to_string(),

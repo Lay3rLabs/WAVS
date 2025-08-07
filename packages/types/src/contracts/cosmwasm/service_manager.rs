@@ -2,7 +2,7 @@ pub mod error;
 pub mod event;
 
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::{StdResult, Uint256};
+use cosmwasm_std::StdResult;
 use layer_climb_address::AddrEvm;
 
 use crate::contracts::cosmwasm::{
@@ -56,7 +56,7 @@ pub enum ServiceManagerExecuteMessages {
 #[derive(QueryResponses)]
 pub enum ServiceManagerQueryMessages {
     /// Get the given operator's current weight
-    #[returns(Uint256)]
+    #[returns(cosmwasm_std::Uint256)]
     WavsOperatorWeight { operator_address: AddrEvm },
 
     /// Validate a signed envelope

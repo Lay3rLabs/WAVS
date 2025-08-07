@@ -854,6 +854,7 @@ pub fn set_aggregator_submit(
             url,
             component: None,
             evm_contracts: Some(vec![evm_contract.clone()]),
+            cosmos_contracts: None,
         };
         workflow.submit = SubmitJson::Submit(submit.clone());
 
@@ -1092,6 +1093,9 @@ pub async fn validate_service(
             match service_manager {
                 ServiceManager::Evm { chain_name, .. } => {
                     chains_to_validate.insert((chain_name.clone(), ChainType::EVM));
+                }
+                ServiceManager::Cosmos { chain_name, .. } => {
+                    chains_to_validate.insert((chain_name.clone(), ChainType::Cosmos));
                 }
             }
 

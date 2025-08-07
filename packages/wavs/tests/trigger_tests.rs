@@ -238,6 +238,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
                         address: rand_address_evm(),
                         max_gas: None,
                     }]),
+                    cosmos_contracts: None,
                 },
             },
         )]

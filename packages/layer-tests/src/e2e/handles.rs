@@ -28,7 +28,8 @@ impl AppHandles {
         }
 
         for chain_config in configs.chains.cosmos.values() {
-            let handle = CosmosInstance::spawn(ctx.clone(), configs, chain_config.clone());
+            let handle =
+                CosmosInstance::spawn(ctx.clone(), &configs.mnemonics, chain_config.clone());
 
             cosmos_chains.push(handle);
         }
