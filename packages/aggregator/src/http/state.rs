@@ -151,26 +151,40 @@ impl HttpState {
         Ok(evm_client)
     }
 
-    pub fn get_packet_queue(&self, id: &PacketQueueId) -> AggregatorResult<PacketQueue> {
-        match self.storage.get(PACKET_QUEUES, &id.to_bytes()?)? {
-            Some(queue) => Ok(queue.value()),
-            None => Ok(PacketQueue::Alive(Vec::new())),
-        }
+    pub async fn get_packet_queue(&self, id: &PacketQueueId) -> AggregatorResult<PacketQueue> {
+        let storage = self.storage.clone();
+        let id_bytes = id.to_bytes()?;
+
+        let packet = tokio::task::spawn_blocking(move || storage.get(PACKET_QUEUES, &id_bytes))
+            .await
+            .map_err(|e| AggregatorError::JoinError(e.to_string()))??;
+
+        Ok(packet
+            .map(|queue| queue.value())
+            .unwrap_or_else(|| PacketQueue::Alive(Vec::new())))
     }
 
     #[allow(clippy::result_large_err)]
-    pub fn save_packet_queue(
+    pub async fn save_packet_queue(
         &self,
         id: &PacketQueueId,
         queue: PacketQueue,
     ) -> AggregatorResult<()> {
-        Ok(self.storage.set(PACKET_QUEUES, &id.to_bytes()?, &queue)?)
+        let storage = self.storage.clone();
+        let id_bytes = id.to_bytes()?;
+
+        tokio::task::spawn_blocking(move || storage.set(PACKET_QUEUES, &id_bytes, &queue))
+            .await
+            .map_err(|e| AggregatorError::JoinError(e.to_string()))?
+            .map_err(Into::into)
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub fn service_registered(&self, service_id: &ServiceID) -> bool {
-        self.storage
-            .get(SERVICES, service_id.inner())
+    pub async fn service_registered(&self, service_id: ServiceID) -> bool {
+        let storage = self.storage.clone();
+
+        tokio::task::spawn_blocking(move || storage.get(SERVICES, service_id.inner()).ok())
+            .await
             .ok()
             .flatten()
             .is_some()

@@ -428,7 +428,7 @@ pub async fn wait_for_task_to_land(
                 .await
                 .map_err(|e| anyhow!("Failed to get block number: {e}"))?;
 
-            if current_block == submit_start_block {
+            if current_block <= submit_start_block {
                 submit_client.evm_client.provider.evm_mine(None).await?;
             }
 

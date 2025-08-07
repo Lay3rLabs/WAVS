@@ -27,6 +27,9 @@ pub enum AggregatorError {
     #[error("Chain Config: {0}")]
     ChainConfig(#[from] ChainConfigError),
 
+    #[error("Join: {0}")]
+    JoinError(String),
+
     #[error("Evm: {0}")]
     EvmClient(#[from] EvmClientError),
 
