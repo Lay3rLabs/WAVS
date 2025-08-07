@@ -440,6 +440,78 @@ mod test {
     }
 
     #[tokio::test]
+    async fn stress_test_storage_operations() {
+        let deps = TestDeps::new().await;
+        let state = deps.state;
+
+        const NUM_CONCURRENT: usize = 100;
+        const NUM_OPERATIONS_PER_TASK: usize = 20;
+
+        let mut service_ids = Vec::new();
+        for i in 0..NUM_CONCURRENT {
+            let manager = wavs_types::ServiceManager::Evm {
+                chain_name: "test-chain".parse().unwrap(),
+                address: alloy_primitives::Address::from([i as u8; 20]),
+            };
+            let service_id = wavs_types::ServiceID::from(&manager);
+            state.register_service(&service_id).unwrap();
+            service_ids.push(service_id);
+        }
+
+        let mut futures = FuturesUnordered::new();
+
+        for (task_id, service_id) in service_ids.iter().enumerate() {
+            futures.push({
+                let state = state.clone();
+                let service_id = service_id.clone();
+                async move {
+                    for op in 0..NUM_OPERATIONS_PER_TASK {
+                        let registered = state.service_registered(service_id.clone()).await;
+                        assert!(registered, "Service {} should be registered", task_id);
+
+                        let envelope = mock_envelope(task_id as u64, [op as u8, 0, 0]);
+                        let event_id = envelope.eventId.into();
+                        let queue_id = PacketQueueId {
+                            event_id,
+                            aggregator_action: wavs_types::AggregatorAction::Submit(
+                                wavs_types::SubmitAction {
+                                    chain_name: "test-chain".to_string(),
+                                    contract_address: vec![0u8; 20],
+                                },
+                            ),
+                        };
+
+                        let queue = state.get_packet_queue(&queue_id).await.unwrap();
+                        assert!(matches!(queue, PacketQueue::Alive(_)));
+
+                        let test_queue = PacketQueue::Alive(vec![]);
+                        state
+                            .save_packet_queue(&queue_id, test_queue)
+                            .await
+                            .unwrap();
+
+                        let retrieved = state.get_packet_queue(&queue_id).await.unwrap();
+                        assert!(matches!(retrieved, PacketQueue::Alive(_)));
+                    }
+
+                    task_id
+                }
+            });
+        }
+
+        let mut completed = Vec::new();
+        while let Some(task_id) = futures.next().await {
+            completed.push(task_id);
+        }
+
+        assert_eq!(completed.len(), NUM_CONCURRENT);
+        println!(
+            "Successfully completed {} concurrent tasks with {} operations each",
+            NUM_CONCURRENT, NUM_OPERATIONS_PER_TASK
+        );
+    }
+
+    #[tokio::test]
     async fn process_mixed_responses() {
         let deps = TestDeps::new().await;
 
