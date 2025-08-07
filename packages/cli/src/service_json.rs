@@ -145,6 +145,22 @@ impl ServiceJson {
                 SubmitJson::Json(_) => {
                     errors.push(format!("Workflow '{}' has an unset submit", workflow_id));
                 }
+                SubmitJson::AggregatorJson(aggregator_json) => match aggregator_json {
+                    AggregatorJson::Aggregator { url, component } => {
+                        if reqwest::Url::parse(url).is_err() {
+                            errors.push(format!(
+                                "Workflow '{}' has an invalid URL: {}",
+                                workflow_id, url
+                            ));
+                        }
+                        if component.is_unset() {
+                            errors.push(format!(
+                                "Workflow '{}' has an unset aggregator component",
+                                workflow_id
+                            ));
+                        }
+                    }
+                },
                 SubmitJson::Submit(Submit::None) => {
                     // None submit type is always valid
                 }
@@ -154,6 +170,26 @@ impl ServiceJson {
                             "Workflow '{}' has an invalid URL: {}",
                             workflow_id, url
                         ));
+                    }
+
+                    // Validate fuel limit
+                    if let Some(limit) = component.fuel_limit {
+                        if limit == 0 {
+                            errors.push(format!(
+                                "Workflow '{}' has an aggregator component with a fuel limit of zero, which will prevent execution",
+                                workflow_id
+                            ));
+                        }
+                    }
+
+                    // Validate env_keys have the correct prefix
+                    for key in &component.env_keys {
+                        if !key.starts_with(WAVS_ENV_PREFIX) {
+                            errors.push(format!(
+                                "Workflow '{}' has aggregator component environment variable '{}' that doesn't start with '{}'",
+                                workflow_id, key, WAVS_ENV_PREFIX
+                            ));
+                        }
                     }
 
                     match &component.source {
@@ -267,6 +303,16 @@ impl Default for TriggerJson {
 pub enum SubmitJson {
     Submit(Submit),
     Json(Json),
+    AggregatorJson(AggregatorJson),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AggregatorJson {
+    Aggregator {
+        url: String,
+        component: ComponentJson,
+    },
 }
 
 impl Default for SubmitJson {

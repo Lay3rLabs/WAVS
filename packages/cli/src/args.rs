@@ -275,37 +275,14 @@ pub enum ManagerCommand {
 pub enum SubmitCommand {
     /// Set an aggregator submit for a workflow
     SetAggregator {
-        /// Path to the aggregator component
-        #[clap(long)]
-        aggregator_component: String,
-
         /// The URL of the aggregator
         #[clap(long)]
         url: String,
-
-        /// The hexadecimal EVM address (e.g., "0x1234...")
-        #[clap(long)]
-        address: alloy_primitives::Address,
-
-        /// The chain name (e.g., "ethereum-mainnet")
-        #[clap(long)]
-        chain_name: ChainName,
-
-        /// The maximum gas to use for the submission (optional)
-        #[clap(long)]
-        max_gas: Option<u64>,
-
-        /// Component configuration key-value pairs in format 'key=value'
-        #[clap(long, value_delimiter = ',')]
-        component_config: Option<Vec<String>>,
     },
-    /// Add an aggregator submit for a workflow
-    AddAggregator {
-        /// The URL of the aggregator
-        #[clap(long)]
-        url: String,
-
-        /// Component management command for the aggregator
+    /// Set the submit to None for a workflow
+    SetNone {},
+    /// Commands for the aggregator component
+    Component {
         #[clap(subcommand)]
         component: ComponentCommand,
     },

@@ -9,6 +9,8 @@ use layer_climb::prelude::{ChainConfig, ChainId};
 use layer_climb::querier::QueryClient as CosmosQueryClient;
 use tempfile::tempdir;
 use utils::init_tracing_tests;
+use wasm_pkg_client::PackageRef;
+use wavs_types::ComponentDigest;
 use wavs_types::Submit;
 
 #[test]
@@ -52,8 +54,8 @@ fn test_service_init() {
     assert_eq!(auto_id_parsed.name, "Auto ID Service");
 }
 
-#[test]
-fn test_workflow_component_operations() {
+#[tokio::test]
+async fn test_workflow_component_operations() {
     // Create a temporary directory and file
     let temp_dir = tempdir().unwrap();
     let file_path = temp_dir.path().join("component_operations_test.json");
@@ -76,12 +78,24 @@ fn test_workflow_component_operations() {
     add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
     // Test adding first component using Digest source
-    let add_result =
-        set_component_source_digest(&file_path, workflow_id.clone(), test_digest.clone()).unwrap();
+    let add_result = update_workflow_component(
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::SetSourceDigest {
+            digest: test_digest.clone(),
+        },
+    )
+    .await
+    .unwrap();
 
     // Verify add result
-    assert_eq!(add_result.digest, test_digest);
-    assert_eq!(add_result.file_path, file_path);
+    match &add_result {
+        ComponentOperationResult::SourceDigest { digest, .. } => {
+            assert_eq!(*digest, test_digest);
+        }
+        _ => panic!("Expected SourceDigest result"),
+    }
+    assert_eq!(add_result.file_path(), &file_path);
 
     // Verify the file was modified by adding the component
     let service_after_add: ServiceJson =
@@ -97,28 +111,47 @@ fn test_workflow_component_operations() {
     let workflow_id_2 = WorkflowID::new("workflow-2").unwrap();
     add_workflow(&file_path, Some(workflow_id_2.clone())).unwrap();
 
-    let second_add_result =
-        set_component_source_digest(&file_path, workflow_id_2.clone(), test_digest.clone())
-            .unwrap();
+    let second_add_result = update_workflow_component(
+        &file_path,
+        workflow_id_2.clone(),
+        ComponentCommand::SetSourceDigest {
+            digest: test_digest.clone(),
+        },
+    )
+    .await
+    .unwrap();
 
     // Verify second add result
-    assert_eq!(second_add_result.digest, test_digest);
+    match &second_add_result {
+        ComponentOperationResult::SourceDigest { digest, .. } => {
+            assert_eq!(*digest, test_digest);
+        }
+        _ => panic!("Expected SourceDigest result"),
+    }
 
     // Test updating permissions - allow all HTTP hosts
-    let permissions_result = update_component_permissions(
+    let permissions_result = update_workflow_component(
         &file_path,
         workflow_id.clone(),
-        Some(vec!["*".to_string()]),
-        Some(true),
+        ComponentCommand::Permissions {
+            http_hosts: Some(vec!["*".to_string()]),
+            file_system: Some(true),
+        },
     )
+    .await
     .unwrap();
 
     // Verify permissions result
-    assert!(permissions_result.permissions.file_system);
-    assert!(matches!(
-        permissions_result.permissions.allowed_http_hosts,
-        AllowedHostPermission::All
-    ));
+    match &permissions_result {
+        ComponentOperationResult::Permissions { permissions, .. } => {
+            assert!(permissions.file_system);
+            assert!(matches!(
+                permissions.allowed_http_hosts,
+                AllowedHostPermission::All
+            ));
+        }
+        _ => panic!("Expected Permissions result"),
+    }
 
     // Verify the service was updated with new permissions
     let service_after_permissions: ServiceJson =
@@ -138,23 +171,29 @@ fn test_workflow_component_operations() {
 
     // Test updating to specific HTTP hosts
     let specific_hosts = vec!["example.com".to_string(), "api.example.com".to_string()];
-    let specific_hosts_result = update_component_permissions(
+    let specific_hosts_result = update_workflow_component(
         &file_path,
         workflow_id_2.clone(),
-        Some(specific_hosts.clone()),
-        None,
+        ComponentCommand::Permissions {
+            http_hosts: Some(specific_hosts.clone()),
+            file_system: None,
+        },
     )
+    .await
     .unwrap();
 
     // Verify specific hosts result
-    if let AllowedHostPermission::Only(hosts) =
-        &specific_hosts_result.permissions.allowed_http_hosts
-    {
-        assert_eq!(hosts.len(), 2);
-        assert!(hosts.contains(&"example.com".to_string()));
-        assert!(hosts.contains(&"api.example.com".to_string()));
-    } else {
-        panic!("Expected AllowedHostPermission::Only");
+    match &specific_hosts_result {
+        ComponentOperationResult::Permissions { permissions, .. } => {
+            if let AllowedHostPermission::Only(hosts) = &permissions.allowed_http_hosts {
+                assert_eq!(hosts.len(), 2);
+                assert!(hosts.contains(&"example.com".to_string()));
+                assert!(hosts.contains(&"api.example.com".to_string()));
+            } else {
+                panic!("Expected AllowedHostPermission::Only");
+            }
+        }
+        _ => panic!("Expected Permissions result"),
     }
 
     // Verify the service was updated with specific hosts
@@ -177,14 +216,27 @@ fn test_workflow_component_operations() {
     }
 
     // Test updating to no HTTP hosts
-    let no_hosts_result =
-        update_component_permissions(&file_path, workflow_id.clone(), Some(vec![]), None).unwrap();
+    let no_hosts_result = update_workflow_component(
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::Permissions {
+            http_hosts: Some(vec![]),
+            file_system: None,
+        },
+    )
+    .await
+    .unwrap();
 
     // Verify no hosts result
-    assert!(matches!(
-        no_hosts_result.permissions.allowed_http_hosts,
-        AllowedHostPermission::None
-    ));
+    match &no_hosts_result {
+        ComponentOperationResult::Permissions { permissions, .. } => {
+            assert!(matches!(
+                permissions.allowed_http_hosts,
+                AllowedHostPermission::None
+            ));
+        }
+        _ => panic!("Expected Permissions result"),
+    }
 
     // Verify the service was updated with no hosts permission
     let service_after_no_hosts: ServiceJson =
@@ -204,12 +256,15 @@ fn test_workflow_component_operations() {
 
     // Test error handling for permissions update with non-existent component
     let non_existent_id = WorkflowID::new("does-not-exist").unwrap();
-    let error_permissions = update_component_permissions(
+    let error_permissions = update_workflow_component(
         &file_path,
         non_existent_id.clone(),
-        Some(vec!["*".to_string()]),
-        None,
-    );
+        ComponentCommand::Permissions {
+            http_hosts: Some(vec!["*".to_string()]),
+            file_system: None,
+        },
+    )
+    .await;
 
     // Verify error for permissions update
     assert!(error_permissions.is_err());
@@ -222,12 +277,23 @@ fn test_workflow_component_operations() {
     let workflow_id_3 = WorkflowID::new("workflow-3").unwrap();
     add_workflow(&file_path, Some(workflow_id_3.clone())).unwrap();
 
-    let third_add_result =
-        set_component_source_digest(&file_path, workflow_id_3.clone(), test_digest.clone())
-            .unwrap();
+    let third_add_result = update_workflow_component(
+        &file_path,
+        workflow_id_3.clone(),
+        ComponentCommand::SetSourceDigest {
+            digest: test_digest.clone(),
+        },
+    )
+    .await
+    .unwrap();
 
     // Verify third add result
-    assert_eq!(third_add_result.digest, test_digest);
+    match &third_add_result {
+        ComponentOperationResult::SourceDigest { digest, .. } => {
+            assert_eq!(*digest, test_digest);
+        }
+        _ => panic!("Expected SourceDigest result"),
+    }
 
     // Verify the third component was added
     let service_after_third_add: ServiceJson =
@@ -241,12 +307,27 @@ fn test_workflow_component_operations() {
 
     // Test setting a specific fuel limit
     let fuel_limit = 50000u64;
-    let fuel_limit_result =
-        update_component_fuel_limit(&file_path, workflow_id.clone(), Some(fuel_limit)).unwrap();
+    let fuel_limit_result = update_workflow_component(
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::FuelLimit {
+            fuel: Some(fuel_limit),
+        },
+    )
+    .await
+    .unwrap();
 
     // Verify fuel limit result
-    assert_eq!(fuel_limit_result.fuel_limit, Some(fuel_limit));
-    assert_eq!(fuel_limit_result.file_path, file_path);
+    match &fuel_limit_result {
+        ComponentOperationResult::FuelLimit {
+            fuel_limit: result_fuel_limit,
+            ..
+        } => {
+            assert_eq!(*result_fuel_limit, Some(fuel_limit));
+        }
+        _ => panic!("Expected FuelLimit result"),
+    }
+    assert_eq!(fuel_limit_result.file_path(), &file_path);
 
     // Verify the service was updated with the fuel limit
     let service_after_fuel_limit: ServiceJson =
@@ -261,12 +342,22 @@ fn test_workflow_component_operations() {
     assert_eq!(component_with_fuel_limit.fuel_limit, Some(fuel_limit));
 
     // Test removing a fuel limit (setting to None)
-    let no_fuel_limit_result =
-        update_component_fuel_limit(&file_path, workflow_id.clone(), None).unwrap();
+    let no_fuel_limit_result = update_workflow_component(
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::FuelLimit { fuel: None },
+    )
+    .await
+    .unwrap();
 
     // Verify no fuel limit result
-    assert_eq!(no_fuel_limit_result.fuel_limit, None);
-    assert_eq!(no_fuel_limit_result.file_path, file_path);
+    match &no_fuel_limit_result {
+        ComponentOperationResult::FuelLimit { fuel_limit, .. } => {
+            assert_eq!(*fuel_limit, None);
+        }
+        _ => panic!("Expected FuelLimit result"),
+    }
+    assert_eq!(no_fuel_limit_result.file_path(), &file_path);
 
     // Verify the service was updated with no fuel limit
     let service_after_no_fuel: ServiceJson =
@@ -286,25 +377,27 @@ fn test_workflow_component_operations() {
         "timeout=30".to_string(),
         "debug=true".to_string(),
     ];
-    let config_result =
-        update_component_config(&file_path, workflow_id.clone(), Some(config_values.clone()))
-            .unwrap();
+    let config_result = update_workflow_component(
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::Config {
+            values: Some(config_values.clone()),
+        },
+    )
+    .await
+    .unwrap();
 
     // Verify config result
-    assert_eq!(config_result.config.len(), 3);
-    assert!(config_result
-        .config
-        .iter()
-        .any(|(k, v)| k == "api_key" && v == "123456"));
-    assert!(config_result
-        .config
-        .iter()
-        .any(|(k, v)| k == "timeout" && v == "30"));
-    assert!(config_result
-        .config
-        .iter()
-        .any(|(k, v)| k == "debug" && v == "true"));
-    assert_eq!(config_result.file_path, file_path);
+    match &config_result {
+        ComponentOperationResult::Config { config, .. } => {
+            assert_eq!(config.len(), 3);
+            assert!(config.iter().any(|(k, v)| k == "api_key" && v == "123456"));
+            assert!(config.iter().any(|(k, v)| k == "timeout" && v == "30"));
+            assert!(config.iter().any(|(k, v)| k == "debug" && v == "true"));
+        }
+        _ => panic!("Expected Config result"),
+    }
+    assert_eq!(config_result.file_path(), &file_path);
 
     // Verify the service was updated with the config
     let service_after_config: ServiceJson =
@@ -331,12 +424,22 @@ fn test_workflow_component_operations() {
         .any(|(k, v)| k == "debug" && v == "true"));
 
     // Test clearing configuration (set to None)
-    let clear_config_result =
-        update_component_config(&file_path, workflow_id.clone(), None).unwrap();
+    let clear_config_result = update_workflow_component(
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::Config { values: None },
+    )
+    .await
+    .unwrap();
 
     // Verify clear config result
-    assert_eq!(clear_config_result.config.len(), 0);
-    assert_eq!(clear_config_result.file_path, file_path);
+    match &clear_config_result {
+        ComponentOperationResult::Config { config, .. } => {
+            assert_eq!(config.len(), 0);
+        }
+        _ => panic!("Expected Config result"),
+    }
+    assert_eq!(clear_config_result.file_path(), &file_path);
 
     // Verify the service was updated with empty config
     let service_after_clear_config: ServiceJson =
@@ -352,8 +455,14 @@ fn test_workflow_component_operations() {
 
     // Test with invalid config format
     let invalid_config = vec!["invalid_format".to_string()];
-    let invalid_config_result =
-        update_component_config(&file_path, workflow_id.clone(), Some(invalid_config));
+    let invalid_config_result = update_workflow_component(
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::Config {
+            values: Some(invalid_config),
+        },
+    )
+    .await;
 
     // Verify it returns an error for invalid format
     assert!(invalid_config_result.is_err());
@@ -368,14 +477,26 @@ fn test_workflow_component_operations() {
         "WAVS_ENV_DATABASE_URL".to_string(),
     ];
 
-    let env_result =
-        update_component_env_keys(&file_path, workflow_id.clone(), Some(env_keys.clone())).unwrap();
+    let env_result = update_workflow_component(
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::Env {
+            values: Some(env_keys.clone()),
+        },
+    )
+    .await
+    .unwrap();
 
     // Verify env result
-    assert_eq!(env_result.env_keys.len(), 3);
-    assert!(env_result.env_keys.contains("WAVS_ENV_API_KEY"));
-    assert!(env_result.env_keys.contains("WAVS_ENV_SECRET_TOKEN"));
-    assert!(env_result.env_keys.contains("WAVS_ENV_DATABASE_URL"));
+    match &env_result {
+        ComponentOperationResult::EnvKeys { env_keys, .. } => {
+            assert_eq!(env_keys.len(), 3);
+            assert!(env_keys.contains("WAVS_ENV_API_KEY"));
+            assert!(env_keys.contains("WAVS_ENV_SECRET_TOKEN"));
+            assert!(env_keys.contains("WAVS_ENV_DATABASE_URL"));
+        }
+        _ => panic!("Expected EnvKeys result"),
+    }
 
     // Verify the service was updated with env keys
     let service_after_env: ServiceJson =
@@ -400,8 +521,14 @@ fn test_workflow_component_operations() {
     // Test validation of env keys
     let invalid_env_keys = vec!["WAVS_ENV_VALID".to_string(), "INVALID_PREFIX".to_string()];
 
-    let invalid_result =
-        update_component_env_keys(&file_path, workflow_id.clone(), Some(invalid_env_keys));
+    let invalid_result = update_workflow_component(
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::Env {
+            values: Some(invalid_env_keys),
+        },
+    )
+    .await;
 
     // Verify it returns an error for invalid prefix
     assert!(invalid_result.is_err());
@@ -409,21 +536,44 @@ fn test_workflow_component_operations() {
     assert!(error_msg.contains("must start with 'WAVS_ENV'"));
 
     // Test clearing env keys
-    let clear_env_result =
-        update_component_env_keys(&file_path, workflow_id.clone(), None).unwrap();
+    let clear_env_result = update_workflow_component(
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::Env { values: None },
+    )
+    .await
+    .unwrap();
 
     // Verify clear result
-    assert_eq!(clear_env_result.env_keys.len(), 0);
+    match &clear_env_result {
+        ComponentOperationResult::EnvKeys { env_keys, .. } => {
+            assert_eq!(env_keys.len(), 0);
+        }
+        _ => panic!("Expected EnvKeys result"),
+    }
 
     // Test setting a specific max execution time
     let max_exec_time = 120u64;
-    let max_exec_result =
-        update_component_time_limit_seconds(&file_path, workflow_id_2.clone(), Some(max_exec_time))
-            .unwrap();
+    let max_exec_result = update_workflow_component(
+        &file_path,
+        workflow_id_2.clone(),
+        ComponentCommand::TimeLimit {
+            seconds: Some(max_exec_time),
+        },
+    )
+    .await
+    .unwrap();
 
     // Verify max exec time result
-    assert_eq!(max_exec_result.time_limit_seconds, Some(max_exec_time));
-    assert_eq!(max_exec_result.file_path, file_path);
+    match &max_exec_result {
+        ComponentOperationResult::TimeLimit {
+            time_limit_seconds, ..
+        } => {
+            assert_eq!(*time_limit_seconds, Some(max_exec_time));
+        }
+        _ => panic!("Expected TimeLimit result"),
+    }
+    assert_eq!(max_exec_result.file_path(), &file_path);
 
     // Verify the service was updated with max exec time
     let service_after_max_exec: ServiceJson =
@@ -441,12 +591,24 @@ fn test_workflow_component_operations() {
     );
 
     // Test removing max exec time (setting to None)
-    let no_max_exec_result =
-        update_component_time_limit_seconds(&file_path, workflow_id_2.clone(), None).unwrap();
+    let no_max_exec_result = update_workflow_component(
+        &file_path,
+        workflow_id_2.clone(),
+        ComponentCommand::TimeLimit { seconds: None },
+    )
+    .await
+    .unwrap();
 
     // Verify no max exec time result
-    assert_eq!(no_max_exec_result.time_limit_seconds, None);
-    assert_eq!(no_max_exec_result.file_path, file_path);
+    match &no_max_exec_result {
+        ComponentOperationResult::TimeLimit {
+            time_limit_seconds, ..
+        } => {
+            assert_eq!(*time_limit_seconds, None);
+        }
+        _ => panic!("Expected TimeLimit result"),
+    }
+    assert_eq!(no_max_exec_result.file_path(), &file_path);
 
     // Verify the service was updated with no max exec time
     let service_after_no_max_exec: ServiceJson =
@@ -1229,13 +1391,15 @@ async fn test_set_component_source_registry() {
     // Use wa.dev as the registry domain (WAVS default)
     let registry_domain = "wa.dev".to_string();
 
-    // Call the function to set the component source
-    let result = set_component_source_registry(
+    // Call the unified function to set the component source
+    let result = update_workflow_component(
         &file_path,
         workflow_id.clone(),
-        None, // Use default domain
-        package.clone(),
-        None, // Use latest version
+        ComponentCommand::SetSourceRegistry {
+            domain: None, // Use default domain
+            package: package.clone(),
+            version: None, // Use latest version
+        },
     )
     .await;
 
@@ -1249,12 +1413,23 @@ async fn test_set_component_source_registry() {
     let result = result.unwrap();
 
     // Basic validation of the result
-    assert_eq!(result.package, package);
-    assert_eq!(result.domain, registry_domain);
-    assert!(
-        !result.digest.to_string().is_empty(),
-        "Digest should not be empty"
-    );
+    match &result {
+        ComponentOperationResult::SourceRegistry {
+            domain,
+            package: result_package,
+            ..
+        } => {
+            assert_eq!(*domain, registry_domain);
+            assert_eq!(*result_package, package);
+        }
+        _ => panic!("Expected SourceRegistry result"),
+    }
+    match &result {
+        ComponentOperationResult::SourceRegistry { digest, .. } => {
+            assert!(!digest.to_string().is_empty(), "Digest should not be empty");
+        }
+        _ => panic!("Expected SourceRegistry result"),
+    }
 
     // Verify the service was updated with the registry source
     let service_json = std::fs::read_to_string(&file_path).unwrap();
@@ -1269,10 +1444,15 @@ async fn test_set_component_source_registry() {
                 !registry.digest.to_string().is_empty(),
                 "Digest in registry should not be empty"
             );
-            assert_eq!(
-                registry.digest, result.digest,
-                "Digest in service file should match result digest"
-            );
+            match &result {
+                ComponentOperationResult::SourceRegistry { digest, .. } => {
+                    assert_eq!(
+                        registry.digest, *digest,
+                        "Digest in service file should match result digest"
+                    );
+                }
+                _ => panic!("Expected SourceRegistry result"),
+            }
             // We used defaults here
             assert!(registry.version.is_none());
             assert!(registry.domain.is_none());
@@ -1282,4 +1462,258 @@ async fn test_set_component_source_registry() {
     } else {
         panic!("Expected Component");
     }
+}
+
+#[test]
+fn test_set_aggregator_submit() {
+    init_tracing_tests();
+    let temp_dir = tempdir().unwrap();
+    let file_path = temp_dir.path().join("test_service.json");
+
+    // Initialize service and add workflow
+    init_service(&file_path, "Test Service".to_string()).unwrap();
+    let workflow_result = add_workflow(&file_path, None).unwrap();
+    let workflow_id = workflow_result.workflow_id;
+
+    // Set aggregator submit
+    let test_url = "https://example.com/aggregator";
+    let result =
+        set_aggregator_submit(&file_path, workflow_id.clone(), test_url.to_string()).unwrap();
+
+    // Verify result
+    assert_eq!(result.workflow_id, workflow_id);
+    assert_eq!(result.url, test_url);
+
+    // Verify the service file was updated
+    let service_json = std::fs::read_to_string(&file_path).unwrap();
+    let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+    let workflow = service.workflows.get(&workflow_id).unwrap();
+
+    // Should create AggregatorJson with unset component
+    match &workflow.submit {
+        SubmitJson::AggregatorJson(AggregatorJson::Aggregator { url, component }) => {
+            assert_eq!(url, test_url);
+            assert!(component.is_unset());
+        }
+        _ => panic!("Expected AggregatorJson variant"),
+    }
+}
+
+#[test]
+fn test_set_none_submit() {
+    init_tracing_tests();
+    let temp_dir = tempdir().unwrap();
+    let file_path = temp_dir.path().join("test_service.json");
+
+    // Initialize service and add workflow
+    init_service(&file_path, "Test Service".to_string()).unwrap();
+    let workflow_result = add_workflow(&file_path, None).unwrap();
+    let workflow_id = workflow_result.workflow_id;
+
+    // Set none submit
+    let result = set_none_submit(&file_path, workflow_id.clone()).unwrap();
+
+    // Verify result
+    assert_eq!(result.workflow_id, workflow_id);
+
+    // Verify the service file was updated
+    let service_json = std::fs::read_to_string(&file_path).unwrap();
+    let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+    let workflow = service.workflows.get(&workflow_id).unwrap();
+
+    // Should be Submit::None
+    match &workflow.submit {
+        SubmitJson::Submit(Submit::None) => {
+            // Expected
+        }
+        _ => panic!("Expected Submit::None variant"),
+    }
+}
+
+#[tokio::test]
+async fn test_modify_aggregator_component() {
+    init_tracing_tests();
+    let temp_dir = tempdir().unwrap();
+    let file_path = temp_dir.path().join("test_service.json");
+
+    // Initialize service and add workflow
+    init_service(&file_path, "Test Service".to_string()).unwrap();
+    let workflow_result = add_workflow(&file_path, None).unwrap();
+    let workflow_id = workflow_result.workflow_id;
+
+    // First set aggregator submit
+    let test_url = "https://example.com/aggregator";
+    set_aggregator_submit(&file_path, workflow_id.clone(), test_url.to_string()).unwrap();
+
+    // Create test digest
+    let test_digest = ComponentDigest::hash(b"test_component");
+
+    // Test setting source digest on AggregatorJson
+    let set_digest_cmd = ComponentCommand::SetSourceDigest {
+        digest: test_digest.clone(),
+    };
+    let result = modify_aggregator_component(&file_path, workflow_id.clone(), set_digest_cmd)
+        .await
+        .unwrap();
+
+    // Verify result
+    assert_eq!(result.file_path(), &file_path);
+
+    // Verify the component was created and set
+    let service_json = std::fs::read_to_string(&file_path).unwrap();
+    let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+    let workflow = service.workflows.get(&workflow_id).unwrap();
+
+    match &workflow.submit {
+        SubmitJson::AggregatorJson(AggregatorJson::Aggregator { url, component }) => {
+            assert_eq!(url, test_url);
+            assert!(component.is_set());
+            if let ComponentJson::Component(comp) = component {
+                match &comp.source {
+                    ComponentSource::Digest(digest) => {
+                        assert_eq!(*digest, test_digest);
+                    }
+                    _ => panic!("Expected Digest source"),
+                }
+            }
+        }
+        SubmitJson::Submit(Submit::Aggregator { url, component }) => {
+            // This might be matched first due to enum ordering
+            assert_eq!(*url, test_url);
+            match &component.source {
+                ComponentSource::Digest(digest) => {
+                    assert_eq!(*digest, test_digest);
+                }
+                _ => panic!("Expected Digest source"),
+            }
+        }
+        _ => panic!("Expected AggregatorJson or Submit::Aggregator variant"),
+    }
+
+    // Test modifying permissions on existing component
+    let permissions_cmd = ComponentCommand::Permissions {
+        http_hosts: Some(vec!["*".to_string()]),
+        file_system: None,
+    };
+    modify_aggregator_component(&file_path, workflow_id.clone(), permissions_cmd)
+        .await
+        .unwrap();
+
+    // Verify permissions were updated
+    let service_json = std::fs::read_to_string(&file_path).unwrap();
+    let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+    let workflow = service.workflows.get(&workflow_id).unwrap();
+
+    match &workflow.submit {
+        SubmitJson::AggregatorJson(AggregatorJson::Aggregator { component, .. }) => {
+            if let ComponentJson::Component(comp) = component {
+                assert_eq!(
+                    comp.permissions.allowed_http_hosts,
+                    AllowedHostPermission::All
+                );
+            }
+        }
+        SubmitJson::Submit(Submit::Aggregator { component, .. }) => {
+            // This might be matched first due to enum ordering
+            assert_eq!(
+                component.permissions.allowed_http_hosts,
+                AllowedHostPermission::All
+            );
+        }
+        _ => panic!("Expected AggregatorJson or Submit::Aggregator variant"),
+    }
+}
+
+#[test]
+fn test_aggregator_validation() {
+    init_tracing_tests();
+
+    // Test case 1: Valid aggregator with proper fuel limit
+    let mut service = ServiceJson {
+        name: "Test Service".to_string(),
+        workflows: std::collections::BTreeMap::new(),
+        status: ServiceStatus::Active,
+        manager: ServiceManagerJson::Json(Json::Unset),
+    };
+
+    let workflow_id = WorkflowID::default();
+    let test_digest = ComponentDigest::hash(b"test");
+    let component = Component::new(ComponentSource::Digest(test_digest));
+
+    let workflow = WorkflowJson {
+        trigger: TriggerJson::Json(Json::Unset),
+        component: ComponentJson::Component(Component::new(ComponentSource::Digest(
+            ComponentDigest::hash(b"workflow_component"),
+        ))),
+        submit: SubmitJson::Submit(Submit::Aggregator {
+            url: "https://valid-url.com".to_string(),
+            component: Box::new(component.clone()),
+        }),
+    };
+
+    service.workflows.insert(workflow_id.clone(), workflow);
+
+    let errors = service.validate();
+    let submit_errors: Vec<_> = errors.iter().filter(|e| e.contains("aggregator")).collect();
+    assert_eq!(
+        submit_errors.len(),
+        0,
+        "Should have no aggregator validation errors"
+    );
+
+    // Test case 2: Invalid fuel limit (zero)
+    let mut invalid_component = component.clone();
+    invalid_component.fuel_limit = Some(0);
+
+    let invalid_workflow = WorkflowJson {
+        trigger: TriggerJson::Json(Json::Unset),
+        component: ComponentJson::Component(Component::new(ComponentSource::Digest(
+            ComponentDigest::hash(b"workflow_component"),
+        ))),
+        submit: SubmitJson::Submit(Submit::Aggregator {
+            url: "https://valid-url.com".to_string(),
+            component: Box::new(invalid_component),
+        }),
+    };
+
+    service
+        .workflows
+        .insert(workflow_id.clone(), invalid_workflow);
+
+    let errors = service.validate();
+    let fuel_errors: Vec<_> = errors
+        .iter()
+        .filter(|e| e.contains("fuel limit of zero"))
+        .collect();
+    assert_eq!(
+        fuel_errors.len(),
+        1,
+        "Should have fuel limit validation error"
+    );
+
+    // Test case 3: Invalid env key prefix
+    let mut invalid_env_component = component.clone();
+    invalid_env_component
+        .env_keys
+        .insert("INVALID_PREFIX_KEY".to_string());
+
+    let invalid_env_workflow = WorkflowJson {
+        trigger: TriggerJson::Json(Json::Unset),
+        component: ComponentJson::Component(Component::new(ComponentSource::Digest(
+            ComponentDigest::hash(b"workflow_component"),
+        ))),
+        submit: SubmitJson::Submit(Submit::Aggregator {
+            url: "https://valid-url.com".to_string(),
+            component: Box::new(invalid_env_component),
+        }),
+    };
+
+    service.workflows.insert(workflow_id, invalid_env_workflow);
+
+    let errors = service.validate();
+    let env_errors: Vec<_> = errors
+        .iter()
+        .filter(|e| e.contains("doesn't start with"))
+        .collect();
+    assert_eq!(env_errors.len(), 1, "Should have env key validation error");
 }
