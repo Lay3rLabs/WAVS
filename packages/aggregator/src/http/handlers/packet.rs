@@ -429,17 +429,17 @@ mod test {
         add_packet_to_queue(&packet_3, queue, signer_2.address()).unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn process_many_packets_serial() {
         process_many_packets(false).await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn process_many_packets_concurrent() {
         process_many_packets(true).await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn stress_test_storage_operations() {
         let deps = TestDeps::new().await;
         let state = deps.state;
@@ -511,7 +511,7 @@ mod test {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn process_mixed_responses() {
         let deps = TestDeps::new().await;
 
@@ -670,7 +670,7 @@ mod test {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn first_packet_sent() {
         let deps = TestDeps::new().await;
 
