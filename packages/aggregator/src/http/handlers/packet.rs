@@ -15,7 +15,7 @@ use wavs_types::{
 };
 
 use crate::{
-    error::{AggregatorError, AggregatorResult, PacketValidationError},
+    error::{AggregatorError, AggregatorResult, AnyChainError, PacketValidationError},
     http::{
         error::AnyError,
         state::{HttpState, PacketQueue, PacketQueueId, QueuedPacket},
@@ -132,7 +132,7 @@ async fn process_packet(
                     .getLatestOperatorForSigningKey(signing_key)
                     .call()
                     .await
-                    .map_err(AggregatorError::OperatorKeyLookupEvm)?
+                    .map_err(|e| AggregatorError::OperatorKeyLookup(AnyChainError::evm(e)))?
             }
             ServiceManager::Cosmos {
                 chain_name,
@@ -148,8 +148,8 @@ async fn process_packet(
                         },
                     )
                     .await
-                    .map_err(AggregatorError::OperatorKeyLookupCosmos)?
-                    .ok_or_else(|| AggregatorError::OperatorKeyLookupCosmos(anyhow::anyhow!("No operator found for signing key addr {signing_key}")))?;
+                    .map_err(|e| AggregatorError::OperatorKeyLookup(AnyChainError::Cosmos(e)))?
+                    .ok_or_else(|| AggregatorError::OperatorKeyLookup(AnyChainError::Cosmos(anyhow::anyhow!("No operator found for signing key addr {signing_key}"))))?;
 
                 resp.into()
             }
@@ -354,7 +354,7 @@ impl ServiceManagerClient {
                             None => {
                                 match err.as_revert_data() {
                                     Some(raw) => Err(AggregatorError::ServiceManagerValidateAnyRevert(raw.to_string())),
-                                    None => Err(AggregatorError::ServiceManagerValidateUnknownEvm(err))
+                                    None => Err(AggregatorError::ServiceManagerValidateUnknown(AnyChainError::Evm(err)))
                                 }
                             }
                         }
@@ -371,7 +371,7 @@ impl ServiceManagerClient {
                         },
                     )
                     .await
-                    .map_err(AggregatorError::ServiceManagerValidateUnknownCosmos)
+                    .map_err(|e| AggregatorError::ServiceManagerValidateUnknown(AnyChainError::Cosmos(e)))
             },
         }
     }
@@ -456,7 +456,7 @@ async fn get_submission_service_manager(
                 .getServiceManager()
                 .call()
                 .await
-                .map_err(AggregatorError::EvmServiceManagerLookup)?;
+                .map_err(|e| AggregatorError::ServiceManagerLookup(AnyChainError::Evm(e)))?;
 
             let instance = IWavsServiceManagerInstance::new(
                 service_manager_address,
@@ -475,13 +475,13 @@ async fn get_submission_service_manager(
 
             let service_manager_address:cosmwasm_std::Addr = client.querier.contract_smart(address, &wavs_types::contracts::cosmwasm::service_handler::ServiceHandlerQueryMessages::WavsServiceManager {  })
                 .await
-                .map_err(AggregatorError::CosmosServiceManagerLookup)?;
+                .map_err(|e| AggregatorError::ServiceManagerLookup(AnyChainError::Cosmos(e)))?;
 
             let service_manager_address = client
                 .querier
                 .chain_config
                 .parse_address(service_manager_address.as_ref())
-                .map_err(AggregatorError::CosmosServiceManagerLookup)?;
+                .map_err(|e| AggregatorError::ServiceManagerLookup(AnyChainError::Cosmos(e)))?;
 
             Ok(ServiceManagerClient::Cosmos {
                 service_manager_address,

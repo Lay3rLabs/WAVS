@@ -40,10 +40,7 @@ pub enum AggregatorError {
     ServiceManagerValidateAnyRevert(String),
 
     #[error("Service manager validate(): {0:?}")]
-    ServiceManagerValidateUnknownEvm(alloy_contract::Error),
-
-    #[error("Service manager validate(): {0:?}")]
-    ServiceManagerValidateUnknownCosmos(anyhow::Error),
+    ServiceManagerValidateUnknown(AnyChainError),
 
     #[error("Service manager validate(): {0:?}")]
     ServiceManagerValidateWavs(WavsValidateError),
@@ -82,16 +79,10 @@ pub enum AggregatorError {
     FetchService(anyhow::Error),
 
     #[error("Unable to look up operator key from signing key: {0:?}")]
-    OperatorKeyLookupEvm(alloy_contract::Error),
+    OperatorKeyLookup(AnyChainError),
 
-    #[error("Unable to look up operator key from signing key: {0:?}")]
-    OperatorKeyLookupCosmos(anyhow::Error),
-
-    #[error("Unable to look up service manager from evm service handler: {0:?}")]
-    EvmServiceManagerLookup(alloy_contract::Error),
-
-    #[error("Unable to look up service manager from cosmos service handler: {0:?}")]
-    CosmosServiceManagerLookup(anyhow::Error),
+    #[error("Unable to look up service manager from service handler: {0:?}")]
+    ServiceManagerLookup(AnyChainError),
 
     #[error("Service already registered: {0}")]
     RepeatService(ServiceID),
@@ -110,4 +101,21 @@ pub enum AggregatorError {
 pub enum PacketValidationError {
     #[error("Unexpected envelope difference")]
     EnvelopeDiff,
+}
+
+#[derive(Debug)]
+pub enum AnyChainError {
+    Evm(alloy_contract::Error),
+    Cosmos(anyhow::Error),
+}
+
+// intentionaly not with From since anyhow::Error can come from evm too
+impl AnyChainError {
+    pub fn evm(e: alloy_contract::Error) -> Self {
+        AnyChainError::Evm(e)
+    }
+
+    pub fn cosmos(e: anyhow::Error) -> Self {
+        AnyChainError::Cosmos(e)
+    }
 }
