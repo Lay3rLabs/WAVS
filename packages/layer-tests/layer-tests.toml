@@ -8,11 +8,11 @@ middleware_concurrency = false
 mode = "all"
 
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
-# mode = "all_cosmos"
+# mode = "all_eth"
 
 # Run a specific test
 # mode = {"isolated" = [
-#     {evm = "multi_trigger"},
+#     {evm = "chain_trigger_lookup"},
 # ]}
 
 # Run a few specific tests

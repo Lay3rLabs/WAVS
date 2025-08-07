@@ -52,7 +52,7 @@ async fn process_packet(
     state: HttpState,
     packet: &Packet,
 ) -> AggregatorResult<Vec<AddPacketResponse>> {
-    if !state.service_registered(&packet.service.id()) {
+    if !state.service_registered(packet.service.id()).await {
         return Err(AggregatorError::MissingService(packet.service.id()));
     }
 
@@ -190,7 +190,7 @@ impl AggregatorProcess<'_> {
         action: AggregatorAction,
         signer: Address,
     ) -> AggregatorResult<AddPacketResponse> {
-        let queue = match state.get_packet_queue(&queue_id)? {
+        let queue = match state.get_packet_queue(&queue_id).await? {
             PacketQueue::Alive(queue) => add_packet_to_queue(&packet, queue, signer)?,
             PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
         };
@@ -199,7 +199,9 @@ impl AggregatorProcess<'_> {
             AggregatorAction::Submit(submit_action) => {
                 match handle_custom_submit(&state, &packet, &queue, submit_action.clone()).await {
                     Ok(tx_receipt) => {
-                        state.save_packet_queue(&queue_id, PacketQueue::Burned)?;
+                        state
+                            .save_packet_queue(&queue_id, PacketQueue::Burned)
+                            .await?;
                         Ok(AddPacketResponse::Sent {
                             tx_receipt: Box::new(tx_receipt),
                             count: queue.len(),
@@ -211,7 +213,9 @@ impl AggregatorProcess<'_> {
                         ) = &e
                         {
                             let count = queue.len();
-                            state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
+                            state
+                                .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
+                                .await?;
                             Ok(AddPacketResponse::Aggregated { count })
                         } else {
                             Err(e)
@@ -221,7 +225,9 @@ impl AggregatorProcess<'_> {
             }
             AggregatorAction::Timer(_) => {
                 let count = queue.len();
-                state.save_packet_queue(&queue_id, PacketQueue::Alive(queue))?;
+                state
+                    .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
+                    .await?;
                 Ok(AddPacketResponse::Aggregated { count })
             }
         }
