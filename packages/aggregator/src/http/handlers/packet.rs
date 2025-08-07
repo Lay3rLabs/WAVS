@@ -384,6 +384,7 @@ mod test {
         config::{ConfigBuilder, EvmChainConfig},
         filesystem::workspace_path,
         test_utils::{
+            address::rand_address_evm,
             middleware::{AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig},
             mock_engine::COMPONENT_SIMPLE_AGGREGATOR_BYTES,
             mock_service_manager::MockServiceManager,
@@ -444,14 +445,14 @@ mod test {
         let deps = TestDeps::new().await;
         let state = deps.state;
 
-        const NUM_CONCURRENT: usize = 100;
-        const NUM_OPERATIONS_PER_TASK: usize = 20;
+        const NUM_CONCURRENT: usize = 300;
+        const NUM_OPERATIONS_PER_TASK: usize = 3;
 
         let mut service_ids = Vec::new();
-        for i in 0..NUM_CONCURRENT {
+        for _ in 0..NUM_CONCURRENT {
             let manager = wavs_types::ServiceManager::Evm {
                 chain_name: "test-chain".parse().unwrap(),
-                address: alloy_primitives::Address::from([i as u8; 20]),
+                address: rand_address_evm(),
             };
             let service_id = wavs_types::ServiceID::from(&manager);
             state.register_service(&service_id).unwrap();

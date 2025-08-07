@@ -155,7 +155,9 @@ impl HttpState {
         let storage = self.storage.clone();
         let id_bytes = id.to_bytes()?;
 
-        let packet = tokio::task::block_in_place(move || storage.get(PACKET_QUEUES, &id_bytes))?;
+        let packet = tokio::task::spawn_blocking(move || storage.get(PACKET_QUEUES, &id_bytes))
+            .await
+            .map_err(|e| AggregatorError::JoinError(e.to_string()))??;
 
         Ok(packet
             .map(|queue| queue.value())
@@ -171,7 +173,9 @@ impl HttpState {
         let storage = self.storage.clone();
         let id_bytes = id.to_bytes()?;
 
-        tokio::task::block_in_place(move || storage.set(PACKET_QUEUES, &id_bytes, &queue))
+        tokio::task::spawn_blocking(move || storage.set(PACKET_QUEUES, &id_bytes, &queue))
+            .await
+            .map_err(|e| AggregatorError::JoinError(e.to_string()))?
             .map_err(Into::into)
     }
 
@@ -179,7 +183,10 @@ impl HttpState {
     pub async fn service_registered(&self, service_id: ServiceID) -> bool {
         let storage = self.storage.clone();
 
-        tokio::task::block_in_place(move || storage.get(SERVICES, service_id.inner()).ok())
+        tokio::task::spawn_blocking(move || storage.get(SERVICES, service_id.inner()).ok())
+            .await
+            .ok()
+            .flatten()
             .is_some()
     }
 
