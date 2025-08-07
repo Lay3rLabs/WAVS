@@ -12,6 +12,7 @@ members = [
   "examples/components/_types",
   "examples/components/kv-store",
   "examples/components/simple-aggregator",
+  "examples/components/timer-aggregator",
   "examples/contracts/cosmwasm/simple",
 ]
 resolver = "2"
