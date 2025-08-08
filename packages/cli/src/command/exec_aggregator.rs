@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::time::Instant;
+use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
     AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
     EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, Submit,
@@ -91,6 +92,11 @@ impl ExecAggregator {
             })
             .collect::<BTreeMap<_, _>>();
 
+        let env_keys = std::env::vars()
+            .map(|(key, _)| key)
+            .filter(|key| key.starts_with(WAVS_ENV_PREFIX))
+            .collect();
+
         let component = Component {
             source: ComponentSource::Digest(digest.clone()),
             permissions: Permissions {
@@ -100,7 +106,7 @@ impl ExecAggregator {
             fuel_limit: args.fuel_limit,
             time_limit_seconds: args.time_limit,
             config,
-            env_keys: Default::default(),
+            env_keys,
         };
 
         // Read packet from file or create a dummy one
