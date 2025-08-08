@@ -108,9 +108,9 @@ pub enum Command {
         #[clap(long)]
         component: String,
 
-        /// Path to the packet JSON file
+        /// Optional path to the packet JSON file (creates dummy packet if not provided)
         #[clap(long)]
-        packet: String,
+        packet: Option<String>,
 
         /// Optional fuel limit for component execution
         #[clap(long)]

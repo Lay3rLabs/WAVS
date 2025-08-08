@@ -1,14 +1,58 @@
 use anyhow::Result;
-use wavs_types::{AllowedHostPermission, Component, ComponentSource, Packet, Permissions};
+use wavs_types::{
+    AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
+    EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, Submit,
+    Trigger, Workflow, WorkflowID,
+};
 
 use crate::util::read_component;
+
+fn create_dummy_packet(digest: ComponentDigest) -> Packet {
+    let service = Service {
+        name: "dummy-service".to_string(),
+        workflows: [(
+            WorkflowID::default(),
+            Workflow {
+                trigger: Trigger::Manual,
+                component: Component {
+                    source: ComponentSource::Digest(digest),
+                    permissions: Permissions::default(),
+                    fuel_limit: None,
+                    time_limit_seconds: None,
+                    config: Default::default(),
+                    env_keys: Default::default(),
+                },
+                submit: Submit::None,
+            },
+        )]
+        .into(),
+        status: ServiceStatus::Active,
+        manager: ServiceManager::Evm {
+            chain_name: "dummy".parse().unwrap(),
+            address: alloy_primitives::Address::ZERO,
+        },
+    };
+
+    Packet {
+        envelope: Envelope {
+            eventId: [0u8; 20].into(),
+            ordering: [0u8; 12].into(),
+            payload: vec![].into(),
+        },
+        workflow_id: WorkflowID::default(),
+        service,
+        signature: EnvelopeSignature::Secp256k1(
+            alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false),
+        ),
+    }
+}
 
 pub struct ExecAggregator;
 
 pub struct ExecAggregatorArgs {
     pub aggregator_config: wavs_aggregator::config::Config,
     pub component: String,
-    pub packet: String,
+    pub packet: Option<String>,
     pub fuel_limit: Option<u64>,
     pub time_limit: Option<u64>,
     pub chain_name: String,
@@ -18,7 +62,6 @@ pub struct ExecAggregatorArgs {
 impl ExecAggregator {
     pub async fn run(args: ExecAggregatorArgs) -> Result<ExecAggregatorResult> {
         let component_path = args.component;
-        let packet_path = args.packet;
 
         tracing::info!(
             "Executing packet with aggregator component: {}",
@@ -32,7 +75,7 @@ impl ExecAggregator {
         let wasm_bytes = read_component(&component_path)?;
         let digest = state.aggregator_engine.upload_component(wasm_bytes).await?;
         let component = Component {
-            source: ComponentSource::Digest(digest),
+            source: ComponentSource::Digest(digest.clone()),
             permissions: Permissions {
                 allowed_http_hosts: AllowedHostPermission::All,
                 file_system: true,
@@ -48,9 +91,13 @@ impl ExecAggregator {
             env_keys: Default::default(),
         };
 
-        // Read packet from file
-        let packet_json = std::fs::read_to_string(&packet_path)?;
-        let packet: Packet = serde_json::from_str(&packet_json)?;
+        // Read packet from file or create a dummy one
+        let packet = if let Some(packet_path) = args.packet {
+            let packet_json = std::fs::read_to_string(&packet_path)?;
+            serde_json::from_str(&packet_json)?
+        } else {
+            create_dummy_packet(digest)
+        };
 
         let actions = state
             .aggregator_engine
@@ -166,7 +213,36 @@ mod test {
         let args = ExecAggregatorArgs {
             aggregator_config: wavs_aggregator::config::Config::default(),
             component: component_path,
-            packet: packet_file.path().to_string_lossy().to_string(),
+            packet: Some(packet_file.path().to_string_lossy().to_string()),
+            fuel_limit: None,
+            time_limit: None,
+            chain_name: "31337".to_string(),
+            service_handler: "0x0000000000000000000000000000000000000000".to_string(),
+        };
+
+        let result = ExecAggregator::run(args).await.unwrap();
+
+        match result {
+            ExecAggregatorResult::Packet { actions } => {
+                assert_eq!(actions.len(), 1);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_exec_aggregator_without_packet() {
+        let component_path = workspace_path()
+            .join("examples")
+            .join("build")
+            .join("components")
+            .join("simple_aggregator.wasm")
+            .to_string_lossy()
+            .to_string();
+
+        let args = ExecAggregatorArgs {
+            aggregator_config: wavs_aggregator::config::Config::default(),
+            component: component_path,
+            packet: None,
             fuel_limit: None,
             time_limit: None,
             chain_name: "31337".to_string(),
