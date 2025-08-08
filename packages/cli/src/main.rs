@@ -12,6 +12,7 @@ use wavs_cli::{
     args::Command,
     command::{
         deploy_service::{DeployService, DeployServiceArgs},
+        exec_aggregator::{ExecAggregator, ExecAggregatorArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
         service::handle_service_command,
         upload_component::{UploadComponent, UploadComponentArgs},
@@ -163,5 +164,37 @@ async fn main() {
         } => handle_service_command(&ctx, file, ctx.json, command)
             .await
             .unwrap(),
+        Command::ExecAggregator {
+            aggregator_args,
+            component,
+            packet,
+            fuel_limit,
+            time_limit,
+            config,
+            args: _,
+        } => {
+            let aggregator_config = utils::config::ConfigBuilder::new(aggregator_args)
+                .build()
+                .unwrap();
+
+            let res = match ExecAggregator::run(ExecAggregatorArgs {
+                aggregator_config,
+                component,
+                packet,
+                fuel_limit,
+                time_limit,
+                config,
+            })
+            .await
+            {
+                Ok(result) => result,
+                Err(e) => {
+                    eprintln!("Failed to execute aggregator: {e}");
+                    std::process::exit(1);
+                }
+            };
+
+            ctx.handle_display_result(res);
+        }
     }
 }

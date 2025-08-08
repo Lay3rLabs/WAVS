@@ -5,11 +5,10 @@ mod validate;
 mod tests;
 
 pub use types::{
-    ChainType, ComponentConfigResult, ComponentEnvKeysResult, ComponentFuelLimitResult,
-    ComponentPermissionsResult, ComponentSourceDigestResult, ComponentSourceRegistryResult,
-    ComponentTimeLimitResult, EvmManagerResult, ServiceInitResult, ServiceValidationResult,
-    UpdateStatusResult, WorkflowAddAggregatorResult, WorkflowAddResult, WorkflowDeleteResult,
-    WorkflowSetSubmitAggregatorResult, WorkflowTriggerResult,
+    ChainType, ComponentContext, ComponentOperationResult, EvmManagerResult, ServiceInitResult,
+    ServiceValidationResult, UpdateStatusResult, WorkflowAddAggregatorResult, WorkflowAddResult,
+    WorkflowDeleteResult, WorkflowSetAggregatorUrlResult, WorkflowSetSubmitAggregatorResult,
+    WorkflowSetSubmitNoneResult, WorkflowTriggerResult,
 };
 pub use validate::{
     check_cosmos_contract_exists, check_evm_contract_exists, validate_contracts_exist,
@@ -33,19 +32,21 @@ use utils::{
     wkg::WkgClient,
 };
 use uuid::Uuid;
-use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentDigest,
-    ComponentSource, Registry, ServiceManager, ServiceStatus, Timestamp, Trigger, WorkflowID,
+    Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Registry,
+    ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowID,
 };
 
 use crate::{
-    args::{ComponentCommand, ManagerCommand, ServiceCommand, TriggerCommand, WorkflowCommand},
+    args::{
+        ComponentCommand, ManagerCommand, ServiceCommand, SubmitCommand, TriggerCommand,
+        WorkflowCommand,
+    },
     context::CliContext,
     service_json::{
         validate_block_interval_config, validate_block_interval_config_on_chain,
-        validate_cron_config, ComponentJson, ServiceJson, ServiceManagerJson, SubmitJson,
-        TriggerJson, WorkflowJson,
+        validate_cron_config, AggregatorJson, ComponentJson, ServiceJson, ServiceManagerJson,
+        SubmitJson, TriggerJson, WorkflowJson,
     },
 };
 
@@ -70,44 +71,10 @@ pub async fn handle_service_command(
                 let result = delete_workflow(&file, id)?;
                 display_result(ctx, result, json)?;
             }
-            WorkflowCommand::Component { id, command } => match command {
-                ComponentCommand::SetSourceDigest { digest } => {
-                    let result = set_component_source_digest(&file, id, digest)?;
-                    display_result(ctx, result, json)?;
-                }
-                ComponentCommand::SetSourceRegistry {
-                    domain,
-                    package,
-                    version,
-                } => {
-                    let result =
-                        set_component_source_registry(&file, id, domain, package, version).await?;
-                    display_result(ctx, result, json)?;
-                }
-                ComponentCommand::Permissions {
-                    http_hosts,
-                    file_system,
-                } => {
-                    let result = update_component_permissions(&file, id, http_hosts, file_system)?;
-                    display_result(ctx, result, json)?;
-                }
-                ComponentCommand::FuelLimit { fuel } => {
-                    let result = update_component_fuel_limit(&file, id, fuel)?;
-                    display_result(ctx, result, json)?;
-                }
-                ComponentCommand::Config { values } => {
-                    let result = update_component_config(&file, id, values)?;
-                    display_result(ctx, result, json)?;
-                }
-                ComponentCommand::TimeLimit { seconds } => {
-                    let result = update_component_time_limit_seconds(&file, id, seconds)?;
-                    display_result(ctx, result, json)?;
-                }
-                ComponentCommand::Env { values } => {
-                    let result = update_component_env_keys(&file, id, values)?;
-                    display_result(ctx, result, json)?;
-                }
-            },
+            WorkflowCommand::Component { id, command } => {
+                let result = update_workflow_component(&file, id, command).await?;
+                display_result(ctx, result, json)?;
+            }
             WorkflowCommand::Trigger { id, command } => match command {
                 TriggerCommand::SetCosmos {
                     address,
@@ -155,6 +122,20 @@ pub async fn handle_service_command(
                     end_time,
                 } => {
                     let result = set_cron_trigger(&file, id, schedule, start_time, end_time)?;
+                    display_result(ctx, result, json)?;
+                }
+            },
+            WorkflowCommand::Submit { id, command } => match command {
+                SubmitCommand::SetAggregator { url } => {
+                    let result = set_aggregator_submit(&file, id, url)?;
+                    display_result(ctx, result, json)?;
+                }
+                SubmitCommand::SetNone {} => {
+                    let result = set_none_submit(&file, id)?;
+                    display_result(ctx, result, json)?;
+                }
+                SubmitCommand::Component { component } => {
+                    let result = modify_aggregator_component(&file, id, component).await?;
                     display_result(ctx, result, json)?;
                 }
             },
@@ -230,6 +211,267 @@ where
     Ok(result)
 }
 
+enum ComponentTarget<'a> {
+    Direct(&'a mut Component),
+    Json(&'a mut ComponentJson),
+}
+
+/// Helper to get mutable Component reference, handling Submit::Aggregator case separately
+fn get_target_component<'a>(
+    workflow: &'a mut WorkflowJson,
+    context: &ComponentContext,
+) -> Result<ComponentTarget<'a>> {
+    match context {
+        ComponentContext::Workflow { .. } => Ok(ComponentTarget::Json(&mut workflow.component)),
+        ComponentContext::Aggregator { .. } => match &mut workflow.submit {
+            SubmitJson::Submit(Submit::Aggregator { component, .. }) => Ok(ComponentTarget::Direct(component)),
+            SubmitJson::AggregatorJson(AggregatorJson::Aggregator { component, .. }) => Ok(ComponentTarget::Json(component)),
+            _ => anyhow::bail!("Cannot modify aggregator component when the workflow's submit is not set to aggregator"),
+        },
+    }
+}
+
+fn get_component_from_target(target: ComponentTarget<'_>) -> Result<&mut Component> {
+    match target {
+        ComponentTarget::Direct(component) => Ok(component),
+        ComponentTarget::Json(component_json) => component_json
+            .as_component_mut()
+            .ok_or_else(|| anyhow::anyhow!("Component is unset. Set the component source first.")),
+    }
+}
+
+fn build_component_result(
+    component: &Component,
+    context: &ComponentContext,
+    command: &ComponentCommand,
+    file_path: &Path,
+) -> Result<ComponentOperationResult> {
+    let result = match command {
+        ComponentCommand::Permissions { .. } => ComponentOperationResult::Permissions {
+            context: context.clone(),
+            permissions: component.permissions.clone(),
+            file_path: file_path.to_path_buf(),
+        },
+        ComponentCommand::FuelLimit { .. } => ComponentOperationResult::FuelLimit {
+            context: context.clone(),
+            fuel_limit: component.fuel_limit,
+            file_path: file_path.to_path_buf(),
+        },
+        ComponentCommand::Config { .. } => ComponentOperationResult::Config {
+            context: context.clone(),
+            config: component.config.clone(),
+            file_path: file_path.to_path_buf(),
+        },
+        ComponentCommand::TimeLimit { .. } => ComponentOperationResult::TimeLimit {
+            context: context.clone(),
+            time_limit_seconds: component.time_limit_seconds,
+            file_path: file_path.to_path_buf(),
+        },
+        ComponentCommand::Env { .. } => ComponentOperationResult::EnvKeys {
+            context: context.clone(),
+            env_keys: component.env_keys.clone(),
+            file_path: file_path.to_path_buf(),
+        },
+        ComponentCommand::SetSourceDigest { .. } | ComponentCommand::SetSourceRegistry { .. } => {
+            unreachable!("Source commands should be handled separately")
+        }
+    };
+    Ok(result)
+}
+
+/// Unified component operation handler for both workflow and aggregator components
+pub async fn update_component(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    context: ComponentContext,
+    command: ComponentCommand,
+) -> Result<ComponentOperationResult> {
+    // Handle async command separately for use in modify_service_file
+    if let ComponentCommand::SetSourceRegistry {
+        domain,
+        package,
+        version,
+    } = &command
+    {
+        let resolved_domain = domain.clone().unwrap_or("wa.dev".to_string());
+        let wkg_client = WkgClient::new(resolved_domain.clone())?;
+        let (digest, resolved_version) = wkg_client
+            .get_digest(domain.clone(), package, version.as_ref())
+            .await?;
+
+        let registry = Registry {
+            digest: digest.clone(),
+            domain: domain.clone(),
+            version: version.clone(),
+            package: package.clone(),
+        };
+
+        modify_service_file(file_path, |mut service| {
+            let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+                anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+            })?;
+
+            match get_target_component(workflow, &context)? {
+                ComponentTarget::Direct(component) => {
+                    component.source = ComponentSource::Registry { registry };
+                }
+                ComponentTarget::Json(component_json) => {
+                    let source = ComponentSource::Registry { registry };
+                    let new_component = Component::new(source);
+                    *component_json = ComponentJson::Component(new_component);
+                }
+            }
+
+            Ok((service, ()))
+        })?;
+
+        return Ok(ComponentOperationResult::SourceRegistry {
+            context,
+            domain: resolved_domain,
+            package: package.clone(),
+            digest,
+            version: resolved_version,
+            file_path: file_path.to_path_buf(),
+        });
+    }
+
+    // Handle all other commands
+    modify_service_file(file_path, |mut service| {
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        let target = get_target_component(workflow, &context)?;
+        let result = execute_sync_command(target, &command, &context, file_path)?;
+
+        Ok((service, result))
+    })
+}
+
+/// Execute synchronous component commands
+fn execute_sync_command(
+    target: ComponentTarget<'_>,
+    command: &ComponentCommand,
+    context: &ComponentContext,
+    file_path: &Path,
+) -> Result<ComponentOperationResult> {
+    match command {
+        ComponentCommand::SetSourceDigest { digest } => {
+            // Handle source setting directly
+            match target {
+                ComponentTarget::Direct(component) => {
+                    component.source = ComponentSource::Digest(digest.clone());
+                }
+                ComponentTarget::Json(component_json) => {
+                    if component_json.is_unset() {
+                        let new_component = Component::new(ComponentSource::Digest(digest.clone()));
+                        *component_json = ComponentJson::new(new_component);
+                    } else if let Some(component) = component_json.as_component_mut() {
+                        component.source = ComponentSource::Digest(digest.clone());
+                    }
+                }
+            }
+            Ok(ComponentOperationResult::SourceDigest {
+                context: context.clone(),
+                digest: digest.clone(),
+                file_path: file_path.to_path_buf(),
+            })
+        }
+        other_command => {
+            let component = get_component_from_target(target)?;
+            apply_component_command(component, other_command.clone())?;
+            build_component_result(component, context, other_command, file_path)
+        }
+    }
+}
+
+/// Apply a component command to a mutable component reference
+fn apply_component_command(component: &mut Component, command: ComponentCommand) -> Result<()> {
+    match command {
+        ComponentCommand::SetSourceDigest { .. } | ComponentCommand::SetSourceRegistry { .. } => {
+            unreachable!("This should be handled in caller")
+        }
+        ComponentCommand::Permissions {
+            http_hosts,
+            file_system,
+        } => {
+            if let Some(mut hosts) = http_hosts {
+                hosts = hosts
+                    .into_iter()
+                    .map(|host| host.trim().to_string())
+                    .filter(|host| !host.is_empty())
+                    .collect();
+
+                component.permissions.allowed_http_hosts = if hosts.is_empty() {
+                    AllowedHostPermission::None
+                } else if hosts.len() == 1 && hosts[0] == "*" {
+                    AllowedHostPermission::All
+                } else {
+                    AllowedHostPermission::Only(hosts)
+                };
+            }
+            if let Some(fs_perm) = file_system {
+                component.permissions.file_system = fs_perm;
+            }
+        }
+        ComponentCommand::FuelLimit { fuel } => {
+            component.fuel_limit = fuel;
+        }
+        ComponentCommand::TimeLimit { seconds } => {
+            component.time_limit_seconds = seconds;
+        }
+        ComponentCommand::Config { values } => {
+            if let Some(values) = values {
+                let mut config_pairs = BTreeMap::new();
+                for value in values {
+                    match value.split_once('=') {
+                        Some((key, value)) => {
+                            let key = key.trim().to_string();
+                            let value = value.trim().to_string();
+                            if key.is_empty() {
+                                return Err(anyhow!("Empty key in config value: '{}'", value));
+                            }
+                            config_pairs.insert(key, value);
+                        }
+                        None => {
+                            return Err(anyhow!(
+                                "Invalid config format: '{}'. Expected 'key=value'",
+                                value
+                            ));
+                        }
+                    }
+                }
+                component.config = config_pairs;
+            } else {
+                component.config.clear();
+            }
+        }
+        ComponentCommand::Env { values } => {
+            if let Some(values) = values {
+                let mut validated_env_keys = BTreeSet::new();
+                for key in values {
+                    let key = key.trim().to_string();
+                    if key.is_empty() {
+                        continue;
+                    }
+                    if !key.starts_with(WAVS_ENV_PREFIX) {
+                        return Err(anyhow!(
+                            "Environment variable '{}' must start with '{}'",
+                            key,
+                            WAVS_ENV_PREFIX
+                        ));
+                    }
+                    validated_env_keys.insert(key);
+                }
+                component.env_keys = validated_env_keys;
+            } else {
+                component.env_keys.clear();
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Run the service initialization
 pub fn init_service(file_path: &Path, name: String) -> Result<ServiceInitResult> {
     // Create the service
@@ -257,87 +499,6 @@ pub fn init_service(file_path: &Path, name: String) -> Result<ServiceInitResult>
     Ok(ServiceInitResult {
         service,
         file_path: file_path.to_path_buf(),
-    })
-}
-
-/// Set the component source to a digest
-pub fn set_component_source_digest(
-    file_path: &Path,
-    workflow_id: WorkflowID,
-    digest: ComponentDigest,
-) -> Result<ComponentSourceDigestResult> {
-    modify_service_file(file_path, |mut service| {
-        // Create a new component entry
-        let component = Component::new(ComponentSource::Digest(digest.clone()));
-        let component = ComponentJson::new(component);
-
-        // Add the component to the service
-        service
-            .workflows
-            .get_mut(&workflow_id)
-            .context(format!("No workflow id {workflow_id}"))?
-            .component = component;
-
-        Ok((
-            service,
-            ComponentSourceDigestResult {
-                digest,
-                file_path: file_path.to_path_buf(),
-            },
-        ))
-    })
-}
-
-/// Set the component source to a registry package
-pub async fn set_component_source_registry(
-    file_path: &Path,
-    workflow_id: WorkflowID,
-    domain: Option<String>,
-    package: PackageRef,
-    version: Option<Version>,
-) -> Result<ComponentSourceRegistryResult> {
-    let resolved_domain = domain.clone().unwrap_or("wa.dev".to_string());
-
-    // Create a WkgClient using the registry domain
-    let wkg_client = WkgClient::new(resolved_domain.clone())?;
-
-    // Get the digest from the registry
-    let (digest, resolved_version) = wkg_client
-        .get_digest(domain.clone(), &package, version.as_ref())
-        .await?;
-
-    modify_service_file(file_path, |mut service| {
-        // Get the workflow
-        let workflow = service
-            .workflows
-            .get_mut(&workflow_id)
-            .context(format!("No workflow id {workflow_id}"))?;
-
-        // Create the Registry struct
-        let registry = Registry {
-            digest: digest.clone(),
-            domain: domain.clone(),
-            version,
-            package: package.clone(),
-        };
-
-        // Create the component source
-        let source = ComponentSource::Registry { registry };
-
-        // Set the component in the workflow
-        let component = Component::new(source);
-        workflow.component = ComponentJson::Component(component);
-
-        Ok((
-            service,
-            ComponentSourceRegistryResult {
-                domain: resolved_domain,
-                package,
-                version: resolved_version,
-                digest,
-                file_path: file_path.to_path_buf(),
-            },
-        ))
     })
 }
 
@@ -551,253 +712,18 @@ pub fn set_cron_trigger(
     })
 }
 
-/// Update component permissions
-pub fn update_component_permissions(
+/// Update workflow component using unified logic
+pub async fn update_workflow_component(
     file_path: &Path,
     workflow_id: WorkflowID,
-    http_hosts: Option<Vec<String>>,
-    file_system: Option<bool>,
-) -> Result<ComponentPermissionsResult> {
-    modify_service_file(file_path, |mut service| {
-        // Check if the component exists
-        let component = service
-            .workflows
-            .get_mut(&workflow_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
-            })?
-            .component
-            .as_component_mut()
-            .ok_or_else(|| {
-                anyhow::anyhow!("Workflow with ID '{}' has unset component", workflow_id)
-            })?;
+    command: ComponentCommand,
+) -> Result<ComponentOperationResult> {
+    use crate::command::service::types::ComponentContext;
 
-        // Update HTTP permissions if specified
-        if let Some(mut hosts) = http_hosts {
-            // Sanitize inputs by trimming whitespace and removing empty strings
-            hosts = hosts
-                .into_iter()
-                .map(|host| host.trim().to_string())
-                .filter(|host| !host.is_empty())
-                .collect();
-
-            if hosts.is_empty() {
-                // Empty list means no hosts allowed
-                component.permissions.allowed_http_hosts = AllowedHostPermission::None;
-            } else if hosts.len() == 1 && hosts[0] == "*" {
-                // ["*"] means all hosts allowed
-                component.permissions.allowed_http_hosts = AllowedHostPermission::All;
-            } else {
-                // List of specific hosts
-                component.permissions.allowed_http_hosts = AllowedHostPermission::Only(hosts);
-            }
-        }
-
-        // Update file system permission if specified
-        if let Some(fs_perm) = file_system {
-            component.permissions.file_system = fs_perm;
-        }
-
-        // Clone the updated permissions for the result
-        let updated_permissions = component.permissions.clone();
-
-        Ok((
-            service,
-            ComponentPermissionsResult {
-                permissions: updated_permissions,
-                file_path: file_path.to_path_buf(),
-            },
-        ))
-    })
-}
-
-/// Update a component's fuel limit
-pub fn update_component_fuel_limit(
-    file_path: &Path,
-    workflow_id: WorkflowID,
-    fuel_limit: Option<u64>,
-) -> Result<ComponentFuelLimitResult> {
-    modify_service_file(file_path, |mut service| {
-        // Check if the component exists
-        let component = service
-            .workflows
-            .get_mut(&workflow_id)
-            .context(format!("No workflow id {workflow_id}"))?
-            .component
-            .as_component_mut()
-            .context(format!(
-                "Workflow with ID '{}' has unset component",
-                workflow_id
-            ))?;
-
-        // Update the fuel limit
-        component.fuel_limit = fuel_limit;
-
-        Ok((
-            service,
-            ComponentFuelLimitResult {
-                fuel_limit,
-                file_path: file_path.to_path_buf(),
-            },
-        ))
-    })
-}
-
-/// Update a component's configuration
-pub fn update_component_config(
-    file_path: &Path,
-    workflow_id: WorkflowID,
-    values: Option<Vec<String>>,
-) -> Result<ComponentConfigResult> {
-    modify_service_file(file_path, |mut service| {
-        // First find the workflow and get a reference to it
-        let workflow = service
-            .workflows
-            .get_mut(&workflow_id)
-            .context(format!("No workflow id {workflow_id}"))?;
-
-        // Now get a reference to the component
-        let component = workflow.component.as_component_mut().context(format!(
-            "Workflow with ID '{}' has unset component",
-            workflow_id
-        ))?;
-
-        if let Some(values) = values {
-            // If values provided, parse config values from 'key=value' format
-            let mut config_pairs = BTreeMap::new();
-
-            for value in values {
-                match value.split_once('=') {
-                    Some((key, value)) => {
-                        // Trim whitespace and validate
-                        let key = key.trim().to_string();
-                        let value = value.trim().to_string();
-
-                        if key.is_empty() {
-                            return Err(anyhow::anyhow!("Empty key in config value: '{}'", value));
-                        }
-
-                        config_pairs.insert(key, value);
-                    }
-                    None => {
-                        return Err(anyhow::anyhow!(
-                            "Invalid config format: '{}'. Expected 'key=value'",
-                            value
-                        ));
-                    }
-                }
-            }
-
-            // Replace existing config with new values
-            component.config = config_pairs;
-        } else {
-            // If no values provided, clear all config
-            component.config.clear();
-        }
-
-        // Clone the updated config for the result
-        let updated_config = component.config.clone();
-
-        Ok((
-            service,
-            ComponentConfigResult {
-                config: updated_config,
-                file_path: file_path.to_path_buf(),
-            },
-        ))
-    })
-}
-
-/// Update a component's maximum execution time
-pub fn update_component_time_limit_seconds(
-    file_path: &Path,
-    workflow_id: WorkflowID,
-    seconds: Option<u64>,
-) -> Result<ComponentTimeLimitResult> {
-    modify_service_file(file_path, |mut service| {
-        // First find the workflow and get a reference to it
-        let workflow = service
-            .workflows
-            .get_mut(&workflow_id)
-            .context(format!("No workflow id {workflow_id}"))?;
-
-        // Now get a reference to the component
-        let component = workflow.component.as_component_mut().context(format!(
-            "Workflow with ID '{}' has unset component",
-            workflow_id
-        ))?;
-
-        // Update the maximum execution time
-        component.time_limit_seconds = seconds;
-
-        Ok((
-            service,
-            ComponentTimeLimitResult {
-                time_limit_seconds: seconds,
-                file_path: file_path.to_path_buf(),
-            },
-        ))
-    })
-}
-
-/// Update a component's environment variable keys
-pub fn update_component_env_keys(
-    file_path: &Path,
-    workflow_id: WorkflowID,
-    values: Option<Vec<String>>,
-) -> Result<ComponentEnvKeysResult> {
-    modify_service_file(file_path, |mut service| {
-        // First find the workflow and get a reference to it
-        let workflow = service
-            .workflows
-            .get_mut(&workflow_id)
-            .context(format!("No workflow id {workflow_id}"))?;
-
-        // Now get a reference to the component
-        let component = workflow.component.as_component_mut().context(format!(
-            "Workflow with ID '{}' has unset component",
-            workflow_id
-        ))?;
-
-        if let Some(values) = values {
-            // Validate each environment variable to ensure it has the required prefix
-            let mut validated_env_keys = BTreeSet::new();
-            for key in values {
-                let key = key.trim().to_string();
-
-                if key.is_empty() {
-                    continue; // Skip empty keys
-                }
-
-                if !key.starts_with(WAVS_ENV_PREFIX) {
-                    return Err(anyhow::anyhow!(
-                        "Environment variable '{}' must start with '{}'",
-                        key,
-                        WAVS_ENV_PREFIX
-                    ));
-                }
-
-                validated_env_keys.insert(key);
-            }
-
-            // Replace existing env keys with new values
-            component.env_keys = validated_env_keys;
-        } else {
-            // If no values provided, clear all env keys
-            component.env_keys.clear();
-        }
-
-        // Clone the updated env keys for the result
-        let updated_env_keys = component.env_keys.clone();
-
-        Ok((
-            service,
-            ComponentEnvKeysResult {
-                env_keys: updated_env_keys,
-                file_path: file_path.to_path_buf(),
-            },
-        ))
-    })
+    let context = ComponentContext::Workflow {
+        workflow_id: workflow_id.clone(),
+    };
+    update_component(file_path, workflow_id, context, command).await
 }
 
 /// Set an EVM manager for the service
@@ -995,4 +921,68 @@ pub async fn validate_service(
         service_name: service.name,
         errors,
     })
+}
+
+/// Set an Aggregator submit for a workflow
+pub fn set_aggregator_submit(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    url: String,
+) -> Result<WorkflowSetAggregatorUrlResult> {
+    let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
+
+    modify_service_file(file_path, |mut service| {
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        workflow.submit = SubmitJson::AggregatorJson(AggregatorJson::Aggregator {
+            url: url.clone(),
+            component: ComponentJson::new_unset(),
+        });
+
+        Ok((
+            service,
+            WorkflowSetAggregatorUrlResult {
+                workflow_id,
+                url,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+/// Set the submit to None for a workflow
+pub fn set_none_submit(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+) -> Result<WorkflowSetSubmitNoneResult> {
+    modify_service_file(file_path, |mut service| {
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        let submit = Submit::None;
+        workflow.submit = SubmitJson::Submit(submit);
+
+        Ok((
+            service,
+            WorkflowSetSubmitNoneResult {
+                workflow_id,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+/// Modify an aggregator component using unified logic
+pub async fn modify_aggregator_component(
+    file_path: &Path,
+    workflow_id: WorkflowID,
+    component_cmd: ComponentCommand,
+) -> Result<ComponentOperationResult> {
+    let context = ComponentContext::Aggregator {
+        workflow_id: workflow_id.clone(),
+    };
+    update_component(file_path, workflow_id, context, component_cmd).await
 }
