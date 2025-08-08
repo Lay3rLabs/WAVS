@@ -263,6 +263,13 @@ mod test {
         match result {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
+                match &actions[0] {
+                    wavs_aggregator::engine::AggregatorAction::Submit(submit) => {
+                        assert_eq!(submit.chain_name, "31337");
+                        assert_eq!(submit.contract_address.raw_bytes, vec![0u8; 20]);
+                    }
+                    _ => panic!("Expected Submit action, got {:?}", actions[0]),
+                }
             }
         }
     }
@@ -294,6 +301,13 @@ mod test {
         match result {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
+                match &actions[0] {
+                    wavs_aggregator::engine::AggregatorAction::Submit(submit) => {
+                        assert_eq!(submit.chain_name, "31337");
+                        assert_eq!(submit.contract_address.raw_bytes, vec![0u8; 20]);
+                    }
+                    _ => panic!("Expected Submit action, got {:?}", actions[0]),
+                }
             }
         }
     }
