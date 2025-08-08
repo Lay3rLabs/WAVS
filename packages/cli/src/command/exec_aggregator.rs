@@ -72,10 +72,14 @@ impl ExecAggregator {
 
         let mut aggregator_config = args.aggregator_config;
         aggregator_config.data = tempfile::tempdir()?.keep();
+        let data_dir = aggregator_config.data.clone();
         let state = wavs_aggregator::http::state::HttpState::new(aggregator_config)?;
 
         let wasm_bytes = read_component(&component_path)?;
-        let digest = state.aggregator_engine.upload_component(wasm_bytes).await?;
+        let digest = state
+            .aggregator_engine
+            .upload_component(wasm_bytes.clone())
+            .await?;
 
         let config = args
             .config
@@ -117,14 +121,42 @@ impl ExecAggregator {
             create_dummy_packet(digest)
         };
 
-        let start_time = Instant::now();
-        let actions = state
-            .aggregator_engine
-            .execute_packet(&component, &packet)
-            .await?;
-        let time_elapsed = start_time.elapsed().as_millis();
+        let mut wt_config = wasmtime::Config::new();
+        wt_config.wasm_component_model(true);
+        wt_config.async_support(true);
+        wt_config.consume_fuel(true);
+        let engine = wasmtime::Engine::new(&wt_config)?;
 
-        let fuel_used = 0;
+        let mut instance_deps = wavs_engine::worlds::aggregator::instance::AggregatorInstanceDepsBuilder {
+            component: wasmtime::component::Component::new(&engine, &wasm_bytes)?,
+            aggregator_component: component.clone(),
+            service: packet.service.clone(),
+            workflow_id: packet.workflow_id.clone(),
+            engine: &engine,
+            data_dir: &data_dir,
+            chain_configs: &Default::default(),
+            log: |_service_id, _workflow_id, _digest, level, message| match level {
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Error => tracing::error!("{}", message),
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Warn => tracing::warn!("{}", message),
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Info => tracing::info!("{}", message),
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Debug => tracing::debug!("{}", message),
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Trace => tracing::trace!("{}", message),
+            },
+            max_wasm_fuel: component.fuel_limit,
+            max_execution_seconds: component.time_limit_seconds,
+            keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
+                utils::storage::db::RedbStorage::new(tempfile::tempdir()?.keep())?,
+                packet.service.id().to_string(),
+            ),
+        }
+        .build()?;
+
+        let initial_fuel = instance_deps.store.get_fuel()?;
+        let start_time = Instant::now();
+        let actions =
+            wavs_engine::worlds::aggregator::execute::execute(&mut instance_deps, &packet).await?;
+        let fuel_used = initial_fuel - instance_deps.store.get_fuel()?;
+        let time_elapsed = start_time.elapsed().as_millis();
 
         Ok(ExecAggregatorResult::Packet {
             actions,
