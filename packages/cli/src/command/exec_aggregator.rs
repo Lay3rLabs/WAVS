@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::collections::BTreeMap;
+use std::time::Instant;
 use wavs_types::{
     AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
     EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, Submit,
@@ -110,26 +111,44 @@ impl ExecAggregator {
             create_dummy_packet(digest)
         };
 
+        let start_time = Instant::now();
         let actions = state
             .aggregator_engine
             .execute_packet(&component, &packet)
             .await?;
+        let time_elapsed = start_time.elapsed().as_millis();
 
-        Ok(ExecAggregatorResult::Packet { actions })
+        let fuel_used = 0;
+
+        Ok(ExecAggregatorResult::Packet {
+            actions,
+            fuel_used,
+            time_elapsed,
+        })
     }
 }
 
 pub enum ExecAggregatorResult {
     Packet {
         actions: Vec<wavs_aggregator::engine::AggregatorAction>,
+        fuel_used: u64,
+        time_elapsed: u128,
     },
 }
 
 impl std::fmt::Display for ExecAggregatorResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExecAggregatorResult::Packet { actions } => {
-                writeln!(f, "Packet execution completed")?;
+            ExecAggregatorResult::Packet {
+                actions,
+                fuel_used,
+                time_elapsed,
+            } => {
+                write!(f, "Fuel used: \n{}", fuel_used)?;
+                if *time_elapsed > 0 {
+                    write!(f, "\n\nTime elapsed (ms): \n{}", time_elapsed)?;
+                }
+                writeln!(f, "\n\nPacket execution completed")?;
                 writeln!(f, "Actions generated: {}", actions.len())?;
                 for (i, action) in actions.iter().enumerate() {
                     writeln!(f, "  Action {}: {:?}", i + 1, action)?;
@@ -236,7 +255,7 @@ mod test {
         let result = ExecAggregator::run(args).await.unwrap();
 
         match result {
-            ExecAggregatorResult::Packet { actions } => {
+            ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
             }
         }
@@ -267,7 +286,7 @@ mod test {
         let result = ExecAggregator::run(args).await.unwrap();
 
         match result {
-            ExecAggregatorResult::Packet { actions } => {
+            ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
             }
         }
