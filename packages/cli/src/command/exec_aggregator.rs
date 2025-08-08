@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::collections::BTreeMap;
 use wavs_types::{
     AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
     EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, Submit,
@@ -55,8 +56,7 @@ pub struct ExecAggregatorArgs {
     pub packet: Option<String>,
     pub fuel_limit: Option<u64>,
     pub time_limit: Option<u64>,
-    pub chain_name: String,
-    pub service_handler: String,
+    pub config: Option<Vec<String>>,
 }
 
 impl ExecAggregator {
@@ -74,6 +74,22 @@ impl ExecAggregator {
 
         let wasm_bytes = read_component(&component_path)?;
         let digest = state.aggregator_engine.upload_component(wasm_bytes).await?;
+
+        let config = args
+            .config
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|kv| {
+                let parts: Vec<&str> = kv.splitn(2, '=').collect();
+                if parts.len() == 2 {
+                    Some((parts[0].to_string(), parts[1].to_string()))
+                } else {
+                    tracing::warn!("Invalid config format: {}, expected key=value", kv);
+                    None
+                }
+            })
+            .collect::<BTreeMap<_, _>>();
+
         let component = Component {
             source: ComponentSource::Digest(digest.clone()),
             permissions: Permissions {
@@ -82,12 +98,7 @@ impl ExecAggregator {
             },
             fuel_limit: args.fuel_limit,
             time_limit_seconds: args.time_limit,
-            config: [
-                ("chain_name".to_string(), args.chain_name.clone()),
-                ("service_handler".to_string(), args.service_handler.clone()),
-            ]
-            .into_iter()
-            .collect(),
+            config,
             env_keys: Default::default(),
         };
 
@@ -216,8 +227,10 @@ mod test {
             packet: Some(packet_file.path().to_string_lossy().to_string()),
             fuel_limit: None,
             time_limit: None,
-            chain_name: "31337".to_string(),
-            service_handler: "0x0000000000000000000000000000000000000000".to_string(),
+            config: Some(vec![
+                "chain_name=31337".to_string(),
+                "service_handler=0x0000000000000000000000000000000000000000".to_string(),
+            ]),
         };
 
         let result = ExecAggregator::run(args).await.unwrap();
@@ -245,8 +258,10 @@ mod test {
             packet: None,
             fuel_limit: None,
             time_limit: None,
-            chain_name: "31337".to_string(),
-            service_handler: "0x0000000000000000000000000000000000000000".to_string(),
+            config: Some(vec![
+                "chain_name=31337".to_string(),
+                "service_handler=0x0000000000000000000000000000000000000000".to_string(),
+            ]),
         };
 
         let result = ExecAggregator::run(args).await.unwrap();

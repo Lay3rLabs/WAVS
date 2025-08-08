@@ -170,8 +170,7 @@ async fn main() {
             packet,
             fuel_limit,
             time_limit,
-            chain_name,
-            service_handler,
+            config,
             args: _,
         } => {
             let aggregator_config = utils::config::ConfigBuilder::new(aggregator_args)
@@ -184,8 +183,7 @@ async fn main() {
                 packet,
                 fuel_limit,
                 time_limit,
-                chain_name,
-                service_handler,
+                config,
             })
             .await
             {

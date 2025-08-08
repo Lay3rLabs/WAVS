@@ -120,13 +120,10 @@ pub enum Command {
         #[clap(long)]
         time_limit: Option<u64>,
 
-        /// Chain name for the aggregator component config
-        #[clap(long)]
-        chain_name: String,
-
-        /// Service handler address for the aggregator component config
-        #[clap(long)]
-        service_handler: String,
+        /// Configuration key-value pairs for the component in format 'key=value'
+        /// Example: --config chain_name=31337,service_handler=0x1234...
+        #[clap(long, value_delimiter = ',')]
+        config: Option<Vec<String>>,
     },
 }
 
