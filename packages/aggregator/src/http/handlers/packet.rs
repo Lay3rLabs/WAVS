@@ -225,6 +225,11 @@ async fn process_action(
             }
         }
         AggregatorAction::Timer(timer_action) => {
+            let count = queue.len();
+            state
+                .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
+                .await?;
+
             let delay_seconds = timer_action.delay;
             tracing::info!("Starting timer for {} seconds", delay_seconds);
 
@@ -236,7 +241,10 @@ async fn process_action(
                 delay_seconds,
             ));
 
-            todo!(); //Ok(AddPacketResponse::Aggregated { count })
+            Ok(AddPacketResponse::TimerStarted {
+                count,
+                delay_seconds,
+            })
         }
     }
 }
@@ -890,6 +898,16 @@ mod test {
                         assert_eq!(count - 1, index);
                         break;
                     }
+                    AddPacketResponse::TimerStarted {
+                        count,
+                        delay_seconds: _,
+                    } => {
+                        // treat similar to Aggregated for test purposes
+                        let mut seen_count = seen_count.lock().unwrap();
+                        if !seen_count.insert(count) {
+                            panic!("Duplicate count: {}", count);
+                        }
+                    }
                     AddPacketResponse::Error { reason } => {
                         panic!("{}", reason);
                     }
@@ -912,13 +930,15 @@ mod test {
                     let state = deps.state.clone();
                     let seen_count = seen_count.clone();
                     async move {
-                        if let AddPacketResponse::Aggregated { count } =
-                            process_packet(state, &packet).await.unwrap().pop().unwrap()
-                        {
-                            let mut seen_count = seen_count.lock().unwrap();
-                            if !seen_count.insert(count) {
-                                panic!("Duplicate count: {}", count);
+                        match process_packet(state, &packet).await.unwrap().pop().unwrap() {
+                            AddPacketResponse::Aggregated { count }
+                            | AddPacketResponse::TimerStarted { count, .. } => {
+                                let mut seen_count = seen_count.lock().unwrap();
+                                if !seen_count.insert(count) {
+                                    panic!("Duplicate count: {}", count);
+                                }
                             }
+                            _ => {}
                         }
                     }
                 });

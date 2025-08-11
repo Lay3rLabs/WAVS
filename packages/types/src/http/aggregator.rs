@@ -21,6 +21,10 @@ pub enum AddPacketResponse {
     Aggregated {
         count: usize,
     },
+    TimerStarted {
+        count: usize,
+        delay_seconds: u64,
+    },
     Error {
         reason: String,
     },
