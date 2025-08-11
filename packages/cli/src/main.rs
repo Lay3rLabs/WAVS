@@ -128,10 +128,10 @@ async fn main() {
             let config = config
                 .into_iter()
                 .filter_map(|pair| {
-                    let mut parts = pair.splitn(2, '=');
-                    match (parts.next(), parts.next()) {
-                        (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
-                        _ => None, // skip malformed entries
+                    if let Some((key, value)) = pair.split_once('=') {
+                        Some((key.to_string(), value.to_string()))
+                    } else {
+                        None // skip malformed entries
                     }
                 })
                 .collect();

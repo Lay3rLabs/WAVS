@@ -86,9 +86,8 @@ impl ExecAggregator {
             .unwrap_or_default()
             .into_iter()
             .filter_map(|kv| {
-                let parts: Vec<&str> = kv.splitn(2, '=').collect();
-                if parts.len() == 2 {
-                    Some((parts[0].to_string(), parts[1].to_string()))
+                if let Some((key, value)) = kv.split_once('=') {
+                    Some((key.to_string(), value.to_string()))
                 } else {
                     tracing::warn!("Invalid config format: {}, expected key=value", kv);
                     None

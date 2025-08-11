@@ -77,8 +77,8 @@ pub enum Command {
         #[clap(long)]
         time_limit: Option<u64>,
 
-        /// Component config in KEY=VALUE format, comma-separated: --config a=1,b=2
-        #[clap(long, value_delimiter = ',')]
+        /// Component config in KEY=VALUE format: --config a=1 --config b=2
+        #[clap(long)]
         config: Vec<String>,
     },
 
