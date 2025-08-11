@@ -168,7 +168,7 @@ impl AggregatorProcess<'_> {
                 .run(queue_id.clone(), {
                     let state = state.clone();
                     let packet = packet.clone();
-                    move || Self::process_action(state, packet, queue_id, action, signer)
+                    move || process_action(state, packet, queue_id, action, signer)
                 })
                 .await;
 
@@ -182,66 +182,61 @@ impl AggregatorProcess<'_> {
 
         Ok(responses)
     }
+}
 
-    async fn process_action(
-        state: HttpState,
-        packet: Packet,
-        queue_id: PacketQueueId,
-        action: AggregatorAction,
-        signer: Address,
-    ) -> AggregatorResult<AddPacketResponse> {
-        let queue = match state.get_packet_queue(&queue_id).await? {
-            PacketQueue::Alive(queue) => add_packet_to_queue(&packet, queue, signer)?,
-            PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
-        };
+async fn process_action(
+    state: HttpState,
+    packet: Packet,
+    queue_id: PacketQueueId,
+    action: AggregatorAction,
+    signer: Address,
+) -> AggregatorResult<AddPacketResponse> {
+    let queue = match state.get_packet_queue(&queue_id).await? {
+        PacketQueue::Alive(queue) => add_packet_to_queue(&packet, queue, signer)?,
+        PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
+    };
 
-        match &action {
-            AggregatorAction::Submit(submit_action) => {
-                match handle_custom_submit(&state, &packet, &queue, submit_action.clone()).await {
-                    Ok(tx_receipt) => {
+    match &action {
+        AggregatorAction::Submit(submit_action) => {
+            match handle_custom_submit(&state, &packet, &queue, submit_action.clone()).await {
+                Ok(tx_receipt) => {
+                    state
+                        .save_packet_queue(&queue_id, PacketQueue::Burned)
+                        .await?;
+                    Ok(AddPacketResponse::Sent {
+                        tx_receipt: Box::new(tx_receipt),
+                        count: queue.len(),
+                    })
+                }
+                Err(e) => {
+                    if let AggregatorError::ServiceManagerValidateKnown(
+                        ServiceManagerError::InsufficientQuorum(_),
+                    ) = &e
+                    {
+                        let count = queue.len();
                         state
-                            .save_packet_queue(&queue_id, PacketQueue::Burned)
+                            .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
                             .await?;
-                        Ok(AddPacketResponse::Sent {
-                            tx_receipt: Box::new(tx_receipt),
-                            count: queue.len(),
-                        })
-                    }
-                    Err(e) => {
-                        if let AggregatorError::ServiceManagerValidateKnown(
-                            ServiceManagerError::InsufficientQuorum(_),
-                        ) = &e
-                        {
-                            let count = queue.len();
-                            state
-                                .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
-                                .await?;
-                            Ok(AddPacketResponse::Aggregated { count })
-                        } else {
-                            Err(e)
-                        }
+                        Ok(AddPacketResponse::Aggregated { count })
+                    } else {
+                        Err(e)
                     }
                 }
             }
-            AggregatorAction::Timer(timer_action) => {
-                let count = queue.len();
-                state
-                    .save_packet_queue(&queue_id, PacketQueue::Alive(queue.clone()))
-                    .await?;
+        }
+        AggregatorAction::Timer(timer_action) => {
+            let delay_seconds = timer_action.delay;
+            tracing::info!("Starting timer for {} seconds", delay_seconds);
 
-                let delay_seconds = timer_action.delay;
-                tracing::info!("Starting timer for {} seconds", delay_seconds);
+            tokio::spawn(handle_timer_callback(
+                state.clone(),
+                packet.clone(),
+                queue_id.clone(),
+                signer,
+                delay_seconds,
+            ));
 
-                tokio::spawn(handle_timer_callback(
-                    state.clone(),
-                    packet.clone(),
-                    queue_id.clone(),
-                    signer,
-                    delay_seconds,
-                ));
-
-                Ok(AddPacketResponse::Aggregated { count })
-            }
+            todo!(); //Ok(AddPacketResponse::Aggregated { count })
         }
     }
 }
@@ -382,17 +377,17 @@ fn handle_timer_callback(
         };
 
         for callback_action in callback_actions {
-            // call process_action without the async transaction wrapper
-            // Timer callbacks don't need locking since they're separated by time
-            // and the risk of race conditions is minimal
-            let result = AggregatorProcess::process_action(
-                state.clone(),
-                packet.clone(),
-                queue_id.clone(),
-                callback_action,
-                signer,
-            )
-            .await;
+            let result = state
+                .queue_transaction
+                .clone()
+                .run(queue_id.clone(), {
+                    let state = state.clone();
+                    let packet = packet.clone();
+                    let queue_id = queue_id.clone();
+                    let action = callback_action.clone();
+                    move || process_action(state, packet, queue_id, action, signer)
+                })
+                .await;
 
             if let Err(e) = result {
                 tracing::error!("Timer callback action processing failed: {:?}", e);
