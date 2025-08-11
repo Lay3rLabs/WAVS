@@ -165,7 +165,6 @@ async fn main() {
             .await
             .unwrap(),
         Command::ExecAggregator {
-            aggregator_args,
             component,
             packet,
             fuel_limit,
@@ -173,18 +172,29 @@ async fn main() {
             config,
             args: _,
         } => {
-            let aggregator_config = utils::config::ConfigBuilder::new(aggregator_args)
-                .build()
-                .unwrap();
+            // Process config similar to exec command
+            let config = config
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|pair| {
+                    if let Some((key, value)) = pair.split_once('=') {
+                        Some((key.to_string(), value.to_string()))
+                    } else {
+                        None // skip malformed entries
+                    }
+                })
+                .collect();
 
-            let res = match ExecAggregator::run(ExecAggregatorArgs {
-                aggregator_config,
-                component,
-                packet,
-                fuel_limit,
-                time_limit,
-                config,
-            })
+            let res = match ExecAggregator::run(
+                &ctx.config,
+                ExecAggregatorArgs {
+                    component,
+                    packet,
+                    fuel_limit,
+                    time_limit,
+                    config,
+                },
+            )
             .await
             {
                 Ok(result) => result,

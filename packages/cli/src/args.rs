@@ -100,10 +100,6 @@ pub enum Command {
         #[clap(flatten)]
         args: CliArgs,
 
-        /// Aggregator-specific configuration arguments
-        #[clap(flatten)]
-        aggregator_args: wavs_aggregator::args::CliArgs,
-
         /// Path to the WASI aggregator component
         #[clap(long)]
         component: String,
@@ -449,3 +445,6 @@ impl CliEnvExt for CliArgs {
         self.dotenv.clone()
     }
 }
+
+#[cfg(test)]
+mod tests;
