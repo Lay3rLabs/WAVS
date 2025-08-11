@@ -9,4 +9,4 @@ b6b66d9f7d330e5c7adfb66fd04b5842acb6342e5778b91c09aec50c94dc4fd6  ./examples/bui
 ccd713ae0f52e4c54bb77d07017eacd3d5f7100104c4aea95ac87edae25cb3d4  ./examples/build/components/permissions.wasm
 435c05c2ff41728ff5ddd3dae2811a4270f8d9a4d1562a60ba2dd36ef2a398da  ./examples/build/components/simple_aggregator.wasm
 363f720d8eac0ba56ff508fd72bafd1428c530ecc853fbb42fb2bc0deb7e1298  ./examples/build/components/square.wasm
-5cce0203818280ab11cae055bf8afd4fd78fd7d66efef256e5b164a2cc8dd3a7  ./examples/build/components/timer_aggregator.wasm
+01bb481e52635d62a9930593030081cddbf64a1f42443fb0c5adefdcc4fbb006  ./examples/build/components/timer_aggregator.wasm

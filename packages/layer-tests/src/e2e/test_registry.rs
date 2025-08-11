@@ -178,6 +178,9 @@ impl TestRegistry {
                 EvmService::SimpleAggregator => {
                     registry.register_evm_simple_aggregator_test(chain, aggregator_endpoint);
                 }
+                EvmService::TimerAggregator => {
+                    registry.register_evm_timer_aggregator_test(chain, aggregator_endpoint);
+                }
             }
         }
 
@@ -365,6 +368,43 @@ impl TestRegistry {
                             aggregator: AggregatorDefinition::ComponentBasedAggregator {
                                 component: ComponentDefinition::from(
                                     ComponentName::SimpleAggregator,
+                                )
+                                .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_service_handler(),
+                                // for deploying the submission contract that the aggregator will use
+                                chain_name: chain.clone(),
+                            },
+                        })
+                        .with_input_data(InputData::Text("test packet".to_string()))
+                        .with_expected_output(ExpectedOutput::Text("test packet".to_string()))
+                        .build(),
+                )
+                .build(),
+        )
+    }
+
+    fn register_evm_timer_aggregator_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
+        self.register(
+            TestBuilder::new("evm_timer_aggregator")
+                .with_description("Tests the TimerAggregator component with delayed submission")
+                .add_workflow(
+                    WorkflowID::new("timer_aggregator").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_component(ComponentName::EchoData.into())
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain_name: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                            aggregator: AggregatorDefinition::ComponentBasedAggregator {
+                                component: ComponentDefinition::from(
+                                    ComponentName::TimerAggregator,
                                 )
                                 .with_config_hardcoded("chain_name".to_string(), chain.to_string())
                                 .with_config_service_handler(),

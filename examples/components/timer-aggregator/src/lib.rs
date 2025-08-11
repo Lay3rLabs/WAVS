@@ -11,7 +11,7 @@ struct Component;
 
 impl Guest for Component {
     fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
-        let timer_action = TimerAction { delay: 30 };
+        let timer_action = TimerAction { delay: 5 };
         Ok(vec![AggregatorAction::Timer(timer_action)])
     }
 
