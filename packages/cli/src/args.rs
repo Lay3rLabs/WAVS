@@ -94,6 +94,37 @@ pub enum Command {
         #[clap(flatten)]
         args: CliArgs,
     },
+
+    /// Execute aggregator components directly
+    ExecAggregator {
+        #[clap(flatten)]
+        args: CliArgs,
+
+        /// Aggregator-specific configuration arguments
+        #[clap(flatten)]
+        aggregator_args: wavs_aggregator::args::CliArgs,
+
+        /// Path to the WASI aggregator component
+        #[clap(long)]
+        component: String,
+
+        /// Optional path to the packet JSON file (creates dummy packet if not provided)
+        #[clap(long)]
+        packet: Option<String>,
+
+        /// Optional fuel limit for component execution
+        #[clap(long)]
+        fuel_limit: Option<u64>,
+
+        /// Optional time limit (seconds) for component execution
+        #[clap(long)]
+        time_limit: Option<u64>,
+
+        /// Configuration key-value pairs for the component in format 'key=value'
+        /// Example: --config chain_name=31337,service_handler=0x1234...
+        #[clap(long, value_delimiter = ',')]
+        config: Option<Vec<String>>,
+    },
 }
 
 /// Commands for managing services
@@ -217,6 +248,13 @@ pub enum WorkflowCommand {
         #[clap(subcommand)]
         command: TriggerCommand,
     },
+    /// Operations on workflow submit
+    Submit {
+        #[clap(long)]
+        id: WorkflowID,
+        #[clap(subcommand)]
+        command: SubmitCommand,
+    },
 }
 
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
@@ -227,6 +265,23 @@ pub enum ManagerCommand {
         chain_name: ChainName,
         #[clap(long)]
         address: alloy_primitives::Address,
+    },
+}
+
+#[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
+pub enum SubmitCommand {
+    /// Set an aggregator submit for a workflow
+    SetAggregator {
+        /// The URL of the aggregator
+        #[clap(long)]
+        url: String,
+    },
+    /// Set the submit to None for a workflow
+    SetNone {},
+    /// Commands for the aggregator component
+    Component {
+        #[clap(subcommand)]
+        component: ComponentCommand,
     },
 }
 
@@ -301,6 +356,7 @@ impl Command {
             Self::UploadComponent { args, .. } => args,
             Self::Exec { args, .. } => args,
             Self::Service { args, .. } => args,
+            Self::ExecAggregator { args, .. } => args,
         };
 
         args.clone()

@@ -9632,6 +9632,7 @@ dependencies = [
  "uuid",
  "wasm-pkg-client",
  "wasmtime",
+ "wavs-aggregator",
  "wavs-engine",
  "wavs-types",
 ]

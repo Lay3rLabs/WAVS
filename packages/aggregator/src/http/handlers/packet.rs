@@ -380,14 +380,17 @@ mod test {
         sync::{Arc, Mutex},
     };
 
+    use alloy_primitives::Address;
+    use alloy_provider::DynProvider;
     use utils::{
         config::{ConfigBuilder, EvmChainConfig},
         filesystem::workspace_path,
         test_utils::{
+            address::rand_address_evm,
             middleware::{AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig},
             mock_engine::COMPONENT_SIMPLE_AGGREGATOR_BYTES,
             mock_service_manager::MockServiceManager,
-            test_contracts::TestContractDeps,
+            test_contracts::{SimpleServiceHandlerInstance, TestContractDeps},
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
@@ -429,20 +432,144 @@ mod test {
         add_packet_to_queue(&packet_3, queue, signer_2.address()).unwrap();
     }
 
-    #[tokio::test]
-    async fn process_many_packets_serial() {
-        process_many_packets(false).await;
-    }
+    #[tokio::test(flavor = "multi_thread")]
+    async fn all_middleware_tests() {
+        let middleware_instance = MiddlewareInstance::new().await.unwrap();
 
-    #[tokio::test]
-    async fn process_many_packets_concurrent() {
-        process_many_packets(true).await;
-    }
-
-    #[tokio::test]
-    async fn process_mixed_responses() {
         let deps = TestDeps::new().await;
+        // deploy all service manager serially
+        let sm_many1 =
+            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+                .await
+                .unwrap();
+        let sm_many2 =
+            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+                .await
+                .unwrap();
+        let sm_mixed =
+            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+                .await
+                .unwrap();
+        let sm_first =
+            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+                .await
+                .unwrap();
 
+        // and all service handlers
+        let sh_many1 = deps
+            .contracts
+            .deploy_simple_service_handler(sm_many1.address())
+            .await;
+        let sh_many2 = deps
+            .contracts
+            .deploy_simple_service_handler(sm_many2.address())
+            .await;
+        let sh_mixed = deps
+            .contracts
+            .deploy_simple_service_handler(sm_mixed.address())
+            .await;
+        let sh_first = deps
+            .contracts
+            .deploy_simple_service_handler(sm_first.address())
+            .await;
+
+        tokio::join!(
+            async {
+                println!("Running process_many_packets_serial...");
+                process_many_packets(false, deps.clone(), sm_many1, sh_many1).await;
+            },
+            async {
+                println!("Running process_many_packets_concurrent...");
+                process_many_packets(true, deps.clone(), sm_many2, sh_many2).await;
+            },
+            async {
+                println!("Running process_mixed_responses...");
+                process_mixed_responses(deps.clone(), sm_mixed, sh_mixed).await;
+            },
+            async {
+                println!("Running first_packet_sent...");
+                first_packet_sent(deps.clone(), sm_first, sh_first).await;
+            }
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn stress_test_storage_operations() {
+        let deps = TestDeps::new().await;
+        let state = deps.state;
+
+        const NUM_CONCURRENT: usize = 300;
+        const NUM_OPERATIONS_PER_TASK: usize = 3;
+
+        let mut service_ids = Vec::new();
+        for _ in 0..NUM_CONCURRENT {
+            let manager = wavs_types::ServiceManager::Evm {
+                chain_name: "test-chain".parse().unwrap(),
+                address: rand_address_evm(),
+            };
+            let service_id = wavs_types::ServiceID::from(&manager);
+            state.register_service(&service_id).unwrap();
+            service_ids.push(service_id);
+        }
+
+        let mut futures = FuturesUnordered::new();
+
+        for (task_id, service_id) in service_ids.iter().enumerate() {
+            futures.push({
+                let state = state.clone();
+                let service_id = service_id.clone();
+                async move {
+                    for op in 0..NUM_OPERATIONS_PER_TASK {
+                        let registered = state.service_registered(service_id.clone()).await;
+                        assert!(registered, "Service {} should be registered", task_id);
+
+                        let envelope = mock_envelope(task_id as u64, [op as u8, 0, 0]);
+                        let event_id = envelope.eventId.into();
+                        let queue_id = PacketQueueId {
+                            event_id,
+                            aggregator_action: wavs_types::AggregatorAction::Submit(
+                                wavs_types::SubmitAction {
+                                    chain_name: "test-chain".to_string(),
+                                    contract_address: vec![0u8; 20],
+                                },
+                            ),
+                        };
+
+                        let queue = state.get_packet_queue(&queue_id).await.unwrap();
+                        assert!(matches!(queue, PacketQueue::Alive(_)));
+
+                        let test_queue = PacketQueue::Alive(vec![]);
+                        state
+                            .save_packet_queue(&queue_id, test_queue)
+                            .await
+                            .unwrap();
+
+                        let retrieved = state.get_packet_queue(&queue_id).await.unwrap();
+                        assert!(matches!(retrieved, PacketQueue::Alive(_)));
+                    }
+
+                    task_id
+                }
+            });
+        }
+
+        let mut completed = Vec::new();
+        while let Some(task_id) = futures.next().await {
+            completed.push(task_id);
+        }
+
+        assert_eq!(completed.len(), NUM_CONCURRENT);
+        println!(
+            "Successfully completed {} concurrent tasks with {} operations each",
+            NUM_CONCURRENT, NUM_OPERATIONS_PER_TASK
+        );
+    }
+
+    async fn process_mixed_responses(
+        deps: TestDeps,
+        service_manager: MockServiceManager,
+        service_handler: SimpleServiceHandlerInstance<DynProvider>,
+    ) {
         const NUM_SIGNERS: usize = 3;
         const NUM_THRESHOLD: usize = 2;
 
@@ -452,12 +579,6 @@ mod test {
             .iter()
             .map(|signer| AvsOperator::new(signer.address(), signer.address()))
             .collect::<Vec<_>>();
-
-        let middleware_instance = MiddlewareInstance::new().await.unwrap();
-        let service_manager =
-            MockServiceManager::new(middleware_instance, deps.contracts.client.clone())
-                .await
-                .unwrap();
         service_manager
             .configure(&MiddlewareServiceManagerConfig::new(
                 &avs_operators,
@@ -467,11 +588,6 @@ mod test {
             .unwrap();
 
         let envelope = mock_envelope(1, [1, 2, 3]);
-
-        let service_handler = deps
-            .contracts
-            .deploy_simple_service_handler(service_manager.address())
-            .await;
 
         // Make sure we properly collect errors without actually erroring out
         let service = deps
@@ -598,29 +714,19 @@ mod test {
         }
     }
 
-    #[tokio::test]
-    async fn first_packet_sent() {
-        let deps = TestDeps::new().await;
-
+    async fn first_packet_sent(
+        deps: TestDeps,
+        service_manager: MockServiceManager,
+        service_handler: SimpleServiceHandlerInstance<DynProvider>,
+    ) {
         // Configure the service with a threshold of 1 (first packet sends immediately)
         let signer = mock_signer();
 
         let avs_operators = vec![AvsOperator::new(signer.address(), signer.address())];
-
-        let middleware_instance = MiddlewareInstance::new().await.unwrap();
-        let service_manager =
-            MockServiceManager::new(middleware_instance, deps.contracts.client.clone())
-                .await
-                .unwrap();
         service_manager
             .configure(&MiddlewareServiceManagerConfig::new(&avs_operators, 1u64))
             .await
             .unwrap();
-
-        let service_handler = deps
-            .contracts
-            .deploy_simple_service_handler(service_manager.address())
-            .await;
 
         let envelope = mock_envelope(1, [1, 2, 3]);
         let service = deps
@@ -655,9 +761,12 @@ mod test {
         assert!(matches!(responses[0], AddPacketResponse::Burned));
     }
 
-    async fn process_many_packets(concurrent: bool) {
-        let deps = TestDeps::new().await;
-
+    async fn process_many_packets(
+        concurrent: bool,
+        deps: TestDeps,
+        service_manager: MockServiceManager,
+        service_handler: SimpleServiceHandlerInstance<DynProvider>,
+    ) {
         const NUM_SIGNERS: usize = 20;
         const NUM_THRESHOLD: usize = NUM_SIGNERS / 2 + 1;
 
@@ -667,12 +776,6 @@ mod test {
             .iter()
             .map(|signer| AvsOperator::new(signer.address(), signer.address()))
             .collect::<Vec<_>>();
-
-        let middleware_instance = MiddlewareInstance::new().await.unwrap();
-        let service_manager =
-            MockServiceManager::new(middleware_instance, deps.contracts.client.clone())
-                .await
-                .unwrap();
         service_manager
             .configure(&MiddlewareServiceManagerConfig::new(
                 &avs_operators,
@@ -681,10 +784,6 @@ mod test {
             .await
             .unwrap();
 
-        let service_handler = deps
-            .contracts
-            .deploy_simple_service_handler(service_manager.address())
-            .await;
         let service = deps
             .create_service(
                 "workflow-1".parse().unwrap(),
@@ -841,15 +940,16 @@ mod test {
         }
     }
 
+    #[derive(Clone)]
     struct TestDeps {
-        contracts: TestContractDeps,
+        contracts: Arc<TestContractDeps>,
         state: HttpState,
         simple_aggregator_digest: ComponentDigest,
     }
 
     impl TestDeps {
         async fn new() -> Self {
-            let contract_deps = TestContractDeps::new().await;
+            let contract_deps = Arc::new(TestContractDeps::new().await);
 
             let data_dir = tempfile::tempdir().unwrap();
             let mut config: Config = ConfigBuilder::new(CliArgs {
