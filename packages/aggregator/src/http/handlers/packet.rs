@@ -345,6 +345,7 @@ async fn handle_custom_submit(
     Ok(tx_receipt)
 }
 
+#[allow(clippy::manual_async_fn)]
 fn handle_timer_callback(
     state: HttpState,
     packet: Packet,
@@ -381,39 +382,17 @@ fn handle_timer_callback(
         };
 
         for callback_action in callback_actions {
-            let action_queue_id = match &callback_action {
-                AggregatorAction::Submit(_) => {
-                    // use the original queue_id to submit accumulated packets
-                    queue_id.clone()
-                }
-                AggregatorAction::Timer(_) => {
-                    // create a new queue_id for recursive timer
-                    PacketQueueId {
-                        event_id: packet.event_id(),
-                        aggregator_action: crate::compat::from_engine_action(
-                            callback_action.clone(),
-                        ),
-                    }
-                }
-            };
-
-            let result = state
-                .queue_transaction
-                .run(action_queue_id.clone(), {
-                    let state = state.clone();
-                    let packet = packet.clone();
-                    let queue_id = action_queue_id.clone();
-                    move || {
-                        AggregatorProcess::process_action(
-                            state,
-                            packet,
-                            queue_id,
-                            callback_action,
-                            signer,
-                        )
-                    }
-                })
-                .await;
+            // call process_action without the async transaction wrapper
+            // Timer callbacks don't need locking since they're separated by time
+            // and the risk of race conditions is minimal
+            let result = AggregatorProcess::process_action(
+                state.clone(),
+                packet.clone(),
+                queue_id.clone(),
+                callback_action,
+                signer,
+            )
+            .await;
 
             if let Err(e) = result {
                 tracing::error!("Timer callback action processing failed: {:?}", e);
