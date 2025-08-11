@@ -121,8 +121,8 @@ pub enum Command {
         time_limit: Option<u64>,
 
         /// Configuration key-value pairs for the component in format 'key=value'
-        /// Example: --config chain_name=31337,service_handler=0x1234...
-        #[clap(long, value_delimiter = ',')]
+        /// Example: --config chain_name=31337 --config service_handler=0x1234...
+        #[clap(long)]
         config: Option<Vec<String>>,
     },
 }
@@ -208,7 +208,7 @@ pub enum ComponentCommand {
     Config {
         /// Configuration key-value pairs in format 'key=value'
         /// Omit to clear all config values
-        #[clap(long, value_delimiter = ',')]
+        #[clap(long)]
         values: Option<Vec<String>>,
     },
     /// Manage the workflow component env
