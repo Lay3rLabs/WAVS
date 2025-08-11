@@ -223,11 +223,23 @@ impl AggregatorProcess<'_> {
                     }
                 }
             }
-            AggregatorAction::Timer(_) => {
+            AggregatorAction::Timer(timer_action) => {
                 let count = queue.len();
                 state
-                    .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
+                    .save_packet_queue(&queue_id, PacketQueue::Alive(queue.clone()))
                     .await?;
+
+                let delay_seconds = timer_action.delay;
+                tracing::info!("Starting timer for {} seconds", delay_seconds);
+
+                tokio::spawn(handle_timer_callback(
+                    state.clone(),
+                    packet.clone(),
+                    queue_id.clone(),
+                    signer,
+                    delay_seconds,
+                ));
+
                 Ok(AddPacketResponse::Aggregated { count })
             }
         }
@@ -331,6 +343,83 @@ async fn handle_custom_submit(
     );
 
     Ok(tx_receipt)
+}
+
+fn handle_timer_callback(
+    state: HttpState,
+    packet: Packet,
+    queue_id: PacketQueueId,
+    signer: Address,
+    delay_seconds: u64,
+) -> impl std::future::Future<Output = ()> + Send + 'static {
+    async move {
+        tokio::time::sleep(tokio::time::Duration::from_secs(delay_seconds)).await;
+
+        tracing::info!(
+            "Timer expired after {} seconds, executing callback",
+            delay_seconds
+        );
+
+        let component = match &packet.service.workflows[&packet.workflow_id].submit {
+            wavs_types::Submit::Aggregator { component, .. } => component,
+            _ => {
+                tracing::error!("Failed to get aggregator component from workflow");
+                return;
+            }
+        };
+
+        let callback_actions = match state
+            .aggregator_engine
+            .execute_timer_callback(component, &packet)
+            .await
+        {
+            Ok(actions) => actions,
+            Err(e) => {
+                tracing::error!("Timer callback execution failed: {}", e);
+                return;
+            }
+        };
+
+        for callback_action in callback_actions {
+            let action_queue_id = match &callback_action {
+                AggregatorAction::Submit(_) => {
+                    // use the original queue_id to submit accumulated packets
+                    queue_id.clone()
+                }
+                AggregatorAction::Timer(_) => {
+                    // create a new queue_id for recursive timer
+                    PacketQueueId {
+                        event_id: packet.event_id(),
+                        aggregator_action: crate::compat::from_engine_action(
+                            callback_action.clone(),
+                        ),
+                    }
+                }
+            };
+
+            let result = state
+                .queue_transaction
+                .run(action_queue_id.clone(), {
+                    let state = state.clone();
+                    let packet = packet.clone();
+                    let queue_id = action_queue_id.clone();
+                    move || {
+                        AggregatorProcess::process_action(
+                            state,
+                            packet,
+                            queue_id,
+                            callback_action,
+                            signer,
+                        )
+                    }
+                })
+                .await;
+
+            if let Err(e) = result {
+                tracing::error!("Timer callback action processing failed: {:?}", e);
+            }
+        }
+    }
 }
 
 fn add_packet_to_queue(

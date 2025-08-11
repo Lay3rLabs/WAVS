@@ -27,6 +27,7 @@ pub enum ComponentName {
     EchoBlockInterval,
     EchoCronInterval,
     SimpleAggregator,
+    TimerAggregator,
 }
 
 impl ComponentName {
@@ -41,6 +42,7 @@ impl ComponentName {
             ComponentName::EchoBlockInterval => "echo_block_interval",
             ComponentName::EchoCronInterval => "echo_cron_interval",
             ComponentName::SimpleAggregator => "simple_aggregator",
+            ComponentName::TimerAggregator => "timer_aggregator",
         }
     }
 }
@@ -73,8 +75,9 @@ impl ComponentSources {
             .flatten()
             .collect();
 
-        // Always include SimpleAggregator as it's needed for all tests
+        // Always include aggregator components as they're needed for tests
         component_names.insert(ComponentName::SimpleAggregator);
+        component_names.insert(ComponentName::TimerAggregator);
 
         let mut futures = FuturesUnordered::new();
 
@@ -117,7 +120,7 @@ async fn get_component_source(
         let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
 
         let digest = match name {
-            ComponentName::SimpleAggregator => {
+            ComponentName::SimpleAggregator | ComponentName::TimerAggregator => {
                 // Aggregator components go to aggregator server
                 aggregator_client
                     .upload_component(wasm_bytes.to_vec())
