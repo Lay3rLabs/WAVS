@@ -183,9 +183,9 @@ pub enum ComponentCommand {
         /// HTTP hosts allowed for access:
         /// Use --http-hosts '' to disallow all hosts
         /// Use --http-hosts '*' to allow all hosts
-        /// Use --http-hosts 'host1,host2,...' to allow specific hosts
+        /// Use --http-hosts 'host1' --http-hosts 'host2' ... to allow specific hosts
         /// Omit to leave HTTP permissions unchanged
-        #[clap(long, value_delimiter = ',')]
+        #[clap(long)]
         http_hosts: Option<Vec<String>>,
 
         /// Enable file system access
@@ -214,7 +214,7 @@ pub enum ComponentCommand {
     /// Manage the workflow component env
     Env {
         /// Env values staring with 'WAVS_ENV'
-        #[clap(long, value_delimiter = ',')]
+        #[clap(long)]
         values: Option<Vec<String>>,
     },
 }
@@ -392,9 +392,9 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dotenv: Option<PathBuf>,
 
-    /// Log level in the format of comma-separated tracing directives.
+    /// Log level
     /// Default is "info"
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(deserialize_with = "deserialize_vec_string")]
     pub log_level: Vec<String>,
