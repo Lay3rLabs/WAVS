@@ -17,7 +17,7 @@ use crate::{
     error::{AggregatorError, AggregatorResult, PacketValidationError},
     http::{
         error::AnyError,
-        state::{HttpState, PacketQueue, PacketQueueId, QueuedPacket},
+        state::{HttpState, PacketQueueId, QueuedPacket, QuorumQueue},
     },
 };
 
@@ -202,16 +202,16 @@ async fn process_action(
                     let packet = packet.clone();
                     let submit_action = submit_action.clone();
                     move || async move {
-                        let queue = match state.get_packet_queue(&queue_id).await? {
-                            PacketQueue::Alive(queue) => {
-                                add_packet_to_queue(&packet, queue, signer)?
+                        let queue = match state.get_quorum_queue(&queue_id).await? {
+                            QuorumQueue::Active(queue) => {
+                                add_packet_to_quorum_queue(&packet, queue, signer)?
                             }
-                            PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
+                            QuorumQueue::Submitted => return Ok(AddPacketResponse::Burned),
                         };
                         match handle_custom_submit(&state, &packet, &queue, submit_action).await {
                             Ok(tx_receipt) => {
                                 state
-                                    .save_packet_queue(&queue_id, PacketQueue::Burned)
+                                    .save_quorum_queue(&queue_id, QuorumQueue::Submitted)
                                     .await?;
                                 Ok(AddPacketResponse::Sent {
                                     tx_receipt: Box::new(tx_receipt),
@@ -225,7 +225,7 @@ async fn process_action(
                                 {
                                     let count = queue.len();
                                     state
-                                        .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
+                                        .save_quorum_queue(&queue_id, QuorumQueue::Active(queue))
                                         .await?;
                                     Ok(AddPacketResponse::Aggregated { count })
                                 } else {
@@ -410,7 +410,7 @@ fn handle_timer_callback(
     }
 }
 
-fn add_packet_to_queue(
+fn add_packet_to_quorum_queue(
     packet: &Packet,
     mut queue: Vec<QueuedPacket>,
     signer: Address,
@@ -489,11 +489,12 @@ mod test {
         assert_eq!(derived_signer_1_address, signer_1.address());
 
         // empty queue is okay
-        let queue = add_packet_to_queue(&packet_1, Vec::new(), signer_1.address()).unwrap();
+        let queue = add_packet_to_quorum_queue(&packet_1, Vec::new(), signer_1.address()).unwrap();
 
         // succeeds, replaces the packet for the signer
         let packet_2 = mock_packet(&signer_1, &envelope_1, "workflow-1".parse().unwrap());
-        let queue = add_packet_to_queue(&packet_2, queue.clone(), signer_1.address()).unwrap();
+        let queue =
+            add_packet_to_quorum_queue(&packet_2, queue.clone(), signer_1.address()).unwrap();
         assert_eq!(queue.len(), 1);
         assert_eq!(
             queue[0].packet.signature.as_bytes(),
@@ -502,11 +503,11 @@ mod test {
 
         // "fails" (expectedly) because the envelope is different
         let packet_3 = mock_packet(&signer_2, &envelope_2, "workflow-1".parse().unwrap());
-        add_packet_to_queue(&packet_3, queue.clone(), signer_2.address()).unwrap_err();
+        add_packet_to_quorum_queue(&packet_3, queue.clone(), signer_2.address()).unwrap_err();
 
         // passes because the signer is different but envelope is the same
         let packet_3 = mock_packet(&signer_2, &envelope_1, "workflow-1".parse().unwrap());
-        add_packet_to_queue(&packet_3, queue, signer_2.address()).unwrap();
+        add_packet_to_quorum_queue(&packet_3, queue, signer_2.address()).unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -612,17 +613,17 @@ mod test {
                             ),
                         };
 
-                        let queue = state.get_packet_queue(&queue_id).await.unwrap();
-                        assert!(matches!(queue, PacketQueue::Alive(_)));
+                        let queue = state.get_quorum_queue(&queue_id).await.unwrap();
+                        assert!(matches!(queue, QuorumQueue::Active(_)));
 
-                        let test_queue = PacketQueue::Alive(vec![]);
+                        let test_queue = QuorumQueue::Active(vec![]);
                         state
-                            .save_packet_queue(&queue_id, test_queue)
+                            .save_quorum_queue(&queue_id, test_queue)
                             .await
                             .unwrap();
 
-                        let retrieved = state.get_packet_queue(&queue_id).await.unwrap();
-                        assert!(matches!(retrieved, PacketQueue::Alive(_)));
+                        let retrieved = state.get_quorum_queue(&queue_id).await.unwrap();
+                        assert!(matches!(retrieved, QuorumQueue::Active(_)));
                     }
 
                     task_id
