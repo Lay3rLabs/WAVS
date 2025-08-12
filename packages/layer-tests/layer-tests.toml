@@ -12,7 +12,7 @@ mode = "all"
 
 # Run a specific test
 # mode = {"isolated" = [
-#     {evm = "chain_trigger_lookup"},
+#     {evm = "timer_aggregator"},
 # ]}
 
 # Run a few specific tests

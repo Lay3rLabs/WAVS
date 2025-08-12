@@ -7901,6 +7901,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "timer-aggregator"
+version = "0.5.2"
+dependencies = [
+ "alloy-primitives",
+ "wit-bindgen",
+]
+
+[[package]]
 name = "tint"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

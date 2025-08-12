@@ -168,7 +168,7 @@ impl AggregatorProcess<'_> {
                 .run(queue_id.clone(), {
                     let state = state.clone();
                     let packet = packet.clone();
-                    move || Self::process_action(state, packet, queue_id, action, signer)
+                    move || process_action(state, packet, queue_id, action, signer)
                 })
                 .await;
 
@@ -182,54 +182,61 @@ impl AggregatorProcess<'_> {
 
         Ok(responses)
     }
+}
 
-    async fn process_action(
-        state: HttpState,
-        packet: Packet,
-        queue_id: PacketQueueId,
-        action: AggregatorAction,
-        signer: Address,
-    ) -> AggregatorResult<AddPacketResponse> {
-        let queue = match state.get_packet_queue(&queue_id).await? {
-            PacketQueue::Alive(queue) => add_packet_to_queue(&packet, queue, signer)?,
-            PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
-        };
-
-        match &action {
-            AggregatorAction::Submit(submit_action) => {
-                match handle_custom_submit(&state, &packet, &queue, submit_action.clone()).await {
-                    Ok(tx_receipt) => {
+async fn process_action(
+    state: HttpState,
+    packet: Packet,
+    queue_id: PacketQueueId,
+    action: AggregatorAction,
+    signer: Address,
+) -> AggregatorResult<AddPacketResponse> {
+    match &action {
+        AggregatorAction::Submit(submit_action) => {
+            let queue = match state.get_packet_queue(&queue_id).await? {
+                PacketQueue::Alive(queue) => add_packet_to_queue(&packet, queue, signer)?,
+                PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
+            };
+            match handle_custom_submit(&state, &packet, &queue, submit_action.clone()).await {
+                Ok(tx_receipt) => {
+                    state
+                        .save_packet_queue(&queue_id, PacketQueue::Burned)
+                        .await?;
+                    Ok(AddPacketResponse::Sent {
+                        tx_receipt: Box::new(tx_receipt),
+                        count: queue.len(),
+                    })
+                }
+                Err(e) => {
+                    if let AggregatorError::ServiceManagerValidateKnown(
+                        ServiceManagerError::InsufficientQuorum(_),
+                    ) = &e
+                    {
+                        let count = queue.len();
                         state
-                            .save_packet_queue(&queue_id, PacketQueue::Burned)
+                            .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
                             .await?;
-                        Ok(AddPacketResponse::Sent {
-                            tx_receipt: Box::new(tx_receipt),
-                            count: queue.len(),
-                        })
-                    }
-                    Err(e) => {
-                        if let AggregatorError::ServiceManagerValidateKnown(
-                            ServiceManagerError::InsufficientQuorum(_),
-                        ) = &e
-                        {
-                            let count = queue.len();
-                            state
-                                .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
-                                .await?;
-                            Ok(AddPacketResponse::Aggregated { count })
-                        } else {
-                            Err(e)
-                        }
+                        Ok(AddPacketResponse::Aggregated { count })
+                    } else {
+                        Err(e)
                     }
                 }
             }
-            AggregatorAction::Timer(_) => {
-                let count = queue.len();
-                state
-                    .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
-                    .await?;
-                Ok(AddPacketResponse::Aggregated { count })
-            }
+        }
+        AggregatorAction::Timer(timer_action) => {
+            let delay_seconds = timer_action.delay;
+            tracing::info!("Starting timer for {} seconds", delay_seconds);
+
+            // Spawn timer callback as background task to avoid holding the async transaction lock
+            tokio::spawn(handle_timer_callback(
+                state.clone(),
+                packet.clone(),
+                queue_id.clone(),
+                signer,
+                delay_seconds,
+            ));
+
+            Ok(AddPacketResponse::TimerStarted { delay_seconds })
         }
     }
 }
@@ -331,6 +338,62 @@ async fn handle_custom_submit(
     );
 
     Ok(tx_receipt)
+}
+
+#[allow(clippy::manual_async_fn)]
+fn handle_timer_callback(
+    state: HttpState,
+    packet: Packet,
+    queue_id: PacketQueueId,
+    signer: Address,
+    delay_seconds: u64,
+) -> impl std::future::Future<Output = ()> + Send + 'static {
+    async move {
+        tokio::time::sleep(tokio::time::Duration::from_secs(delay_seconds)).await;
+
+        tracing::info!(
+            "Timer expired after {} seconds, executing callback",
+            delay_seconds
+        );
+
+        let component = match &packet.service.workflows[&packet.workflow_id].submit {
+            wavs_types::Submit::Aggregator { component, .. } => component,
+            _ => {
+                tracing::error!("Failed to get aggregator component from workflow");
+                return;
+            }
+        };
+
+        let callback_actions = match state
+            .aggregator_engine
+            .execute_timer_callback(component, &packet)
+            .await
+        {
+            Ok(actions) => actions,
+            Err(e) => {
+                tracing::error!("Timer callback execution failed: {}", e);
+                return;
+            }
+        };
+
+        for callback_action in callback_actions {
+            let result = state
+                .queue_transaction
+                .clone()
+                .run(queue_id.clone(), {
+                    let state = state.clone();
+                    let packet = packet.clone();
+                    let queue_id = queue_id.clone();
+                    let action = callback_action.clone();
+                    move || process_action(state, packet, queue_id, action, signer)
+                })
+                .await;
+
+            if let Err(e) = result {
+                tracing::error!("Timer callback action processing failed: {:?}", e);
+            }
+        }
+    }
 }
 
 fn add_packet_to_queue(
@@ -827,6 +890,7 @@ mod test {
                         assert_eq!(count - 1, index);
                         break;
                     }
+                    AddPacketResponse::TimerStarted { delay_seconds: _ } => {}
                     AddPacketResponse::Error { reason } => {
                         panic!("{}", reason);
                     }
@@ -849,13 +913,16 @@ mod test {
                     let state = deps.state.clone();
                     let seen_count = seen_count.clone();
                     async move {
-                        if let AddPacketResponse::Aggregated { count } =
-                            process_packet(state, &packet).await.unwrap().pop().unwrap()
-                        {
-                            let mut seen_count = seen_count.lock().unwrap();
-                            if !seen_count.insert(count) {
-                                panic!("Duplicate count: {}", count);
+                        match process_packet(state, &packet).await.unwrap().pop().unwrap() {
+                            AddPacketResponse::Aggregated { count } => {
+                                let mut seen_count = seen_count.lock().unwrap();
+                                if !seen_count.insert(count) {
+                                    panic!("Duplicate count: {}", count);
+                                }
                             }
+                            AddPacketResponse::Sent { .. } => {}
+                            AddPacketResponse::TimerStarted { .. } => {}
+                            other => panic!("Unexpected response: {:?}", other),
                         }
                     }
                 });

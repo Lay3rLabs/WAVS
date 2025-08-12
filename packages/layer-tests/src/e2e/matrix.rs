@@ -32,6 +32,7 @@ pub enum EvmService {
     CronInterval,
     EmptyToEchoData,
     SimpleAggregator,
+    TimerAggregator,
 }
 
 #[derive(
@@ -143,6 +144,7 @@ impl From<EvmService> for Vec<ComponentName> {
             EvmService::CronInterval => vec![ComponentName::EchoCronInterval],
             EvmService::EmptyToEchoData => vec![ComponentName::EchoData],
             EvmService::SimpleAggregator => vec![ComponentName::EchoData],
+            EvmService::TimerAggregator => vec![ComponentName::EchoData],
         }
     }
 }

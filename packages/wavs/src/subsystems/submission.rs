@@ -302,7 +302,13 @@ impl SubmissionManager {
                         count
                     );
                 }
-
+                AddPacketResponse::TimerStarted { delay_seconds } => {
+                    tracing::info!(
+                        "Timer started for service_id={}: delay={}s",
+                        service_id,
+                        delay_seconds
+                    );
+                }
                 AddPacketResponse::Error { reason } => {
                     tracing::error!(
                         "Aggregator errored for service_id={}: {}",
@@ -310,7 +316,6 @@ impl SubmissionManager {
                         reason
                     );
                 }
-
                 AddPacketResponse::Burned => {
                     tracing::info!("Aggregator queue burned for service_id={}", service_id);
                 }
