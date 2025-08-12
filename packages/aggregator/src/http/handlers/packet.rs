@@ -228,6 +228,7 @@ async fn process_action(
             let delay_seconds = timer_action.delay;
             tracing::info!("Starting timer for {} seconds", delay_seconds);
 
+            // Spawn timer callback as background task to avoid holding the async transaction lock
             tokio::spawn(handle_timer_callback(
                 state.clone(),
                 packet.clone(),
