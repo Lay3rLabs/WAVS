@@ -33,9 +33,9 @@ pub async fn health_check_chains_query<'a>(
 }
 
 async fn check_evm_chain_health_query(
-    chain_name: &ChainName,
+    chain_name: &'_ ChainName,
     config: EvmChainConfig,
-) -> Result<()> {
+) -> Result<'_, ()> {
     let endpoint = config
         .query_client_endpoint()
         .map_err(|e| HealthCheckError::EvmClientError(chain_name, e))?;
@@ -81,9 +81,9 @@ async fn check_evm_chain_health_query(
 }
 
 async fn check_cosmos_chain_health_query(
-    chain_name: &ChainName,
+    chain_name: &'_ ChainName,
     config: CosmosChainConfig,
-) -> Result<()> {
+) -> Result<'_, ()> {
     let client = layer_climb::querier::QueryClient::new(config.to_chain_config(), None)
         .await
         .map_err(|e| HealthCheckError::CosmosCreateClient(chain_name, e))?;

@@ -29,9 +29,9 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub port: Option<u32>,
 
-    /// Log level in the format of comma-separated tracing directives.
+    /// Log level
     /// See example config file for more info
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(deserialize_with = "deserialize_vec_string")]
     pub log_level: Vec<String>,
@@ -50,7 +50,7 @@ pub struct CliArgs {
 
     /// The allowed cors origins
     /// See example config file for more info
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(deserialize_with = "deserialize_vec_string")]
     pub cors_allowed_origins: Vec<String>,

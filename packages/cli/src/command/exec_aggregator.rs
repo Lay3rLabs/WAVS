@@ -53,25 +53,36 @@ fn create_dummy_packet(digest: ComponentDigest) -> Packet {
 pub struct ExecAggregator;
 
 pub struct ExecAggregatorArgs {
-    pub aggregator_config: wavs_aggregator::config::Config,
     pub component: String,
     pub packet: Option<String>,
     pub fuel_limit: Option<u64>,
     pub time_limit: Option<u64>,
-    pub config: Option<Vec<String>>,
+    pub config: BTreeMap<String, String>,
 }
 
 impl ExecAggregator {
-    pub async fn run(args: ExecAggregatorArgs) -> Result<ExecAggregatorResult> {
-        let component_path = args.component;
+    pub async fn run(
+        cli_config: &crate::config::Config,
+        ExecAggregatorArgs {
+            component,
+            packet,
+            fuel_limit,
+            time_limit,
+            config,
+        }: ExecAggregatorArgs,
+    ) -> Result<ExecAggregatorResult> {
+        let component_path = component;
 
         tracing::info!(
             "Executing packet with aggregator component: {}",
             component_path
         );
 
-        let mut aggregator_config = args.aggregator_config;
-        aggregator_config.data = tempfile::tempdir()?.keep();
+        // Create a minimal aggregator config from CLI config (similar to how exec component works)
+        let aggregator_config = wavs_aggregator::config::Config {
+            data: tempfile::tempdir()?.keep(),
+            ..Default::default()
+        };
         let data_dir = aggregator_config.data.clone();
         let state = wavs_aggregator::http::state::HttpState::new(aggregator_config)?;
 
@@ -80,21 +91,6 @@ impl ExecAggregator {
             .aggregator_engine
             .upload_component(wasm_bytes.clone())
             .await?;
-
-        let config = args
-            .config
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|kv| {
-                let parts: Vec<&str> = kv.splitn(2, '=').collect();
-                if parts.len() == 2 {
-                    Some((parts[0].to_string(), parts[1].to_string()))
-                } else {
-                    tracing::warn!("Invalid config format: {}, expected key=value", kv);
-                    None
-                }
-            })
-            .collect::<BTreeMap<_, _>>();
 
         let env_keys = std::env::vars()
             .map(|(key, _)| key)
@@ -107,14 +103,14 @@ impl ExecAggregator {
                 allowed_http_hosts: AllowedHostPermission::All,
                 file_system: true,
             },
-            fuel_limit: args.fuel_limit,
-            time_limit_seconds: args.time_limit,
+            fuel_limit,
+            time_limit_seconds: time_limit,
             config,
             env_keys,
         };
 
         // Read packet from file or create a dummy one
-        let packet = if let Some(packet_path) = args.packet {
+        let packet = if let Some(packet_path) = packet {
             let packet_json = std::fs::read_to_string(&packet_path)?;
             serde_json::from_str(&packet_json)?
         } else {
@@ -134,7 +130,7 @@ impl ExecAggregator {
             workflow_id: packet.workflow_id.clone(),
             engine: &engine,
             data_dir: &data_dir,
-            chain_configs: &Default::default(),
+            chain_configs: &cli_config.chains,
             log: |_service_id, _workflow_id, _digest, level, message| match level {
                 wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Error => tracing::error!("{}", message),
                 wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Warn => tracing::warn!("{}", message),
@@ -278,19 +274,27 @@ mod test {
             .write_all(serde_json::to_string(&packet).unwrap().as_bytes())
             .unwrap();
 
+        let config = [
+            ("chain_name".to_string(), "31337".to_string()),
+            (
+                "service_handler".to_string(),
+                "0x0000000000000000000000000000000000000000".to_string(),
+            ),
+        ]
+        .into_iter()
+        .collect();
+
         let args = ExecAggregatorArgs {
-            aggregator_config: wavs_aggregator::config::Config::default(),
             component: component_path,
             packet: Some(packet_file.path().to_string_lossy().to_string()),
             fuel_limit: None,
             time_limit: None,
-            config: Some(vec![
-                "chain_name=31337".to_string(),
-                "service_handler=0x0000000000000000000000000000000000000000".to_string(),
-            ]),
+            config,
         };
 
-        let result = ExecAggregator::run(args).await.unwrap();
+        let result = ExecAggregator::run(&crate::config::Config::default(), args)
+            .await
+            .unwrap();
 
         match result {
             ExecAggregatorResult::Packet { actions, .. } => {
@@ -316,19 +320,27 @@ mod test {
             .to_string_lossy()
             .to_string();
 
+        let config = [
+            ("chain_name".to_string(), "31337".to_string()),
+            (
+                "service_handler".to_string(),
+                "0x0000000000000000000000000000000000000000".to_string(),
+            ),
+        ]
+        .into_iter()
+        .collect();
+
         let args = ExecAggregatorArgs {
-            aggregator_config: wavs_aggregator::config::Config::default(),
             component: component_path,
             packet: None,
             fuel_limit: None,
             time_limit: None,
-            config: Some(vec![
-                "chain_name=31337".to_string(),
-                "service_handler=0x0000000000000000000000000000000000000000".to_string(),
-            ]),
+            config,
         };
 
-        let result = ExecAggregator::run(args).await.unwrap();
+        let result = ExecAggregator::run(&crate::config::Config::default(), args)
+            .await
+            .unwrap();
 
         match result {
             ExecAggregatorResult::Packet { actions, .. } => {
