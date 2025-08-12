@@ -161,16 +161,15 @@ impl AggregatorProcess<'_> {
                 aggregator_action: crate::compat::from_engine_action(action.clone()),
             };
 
-            // execute the logic within a transaction, keyed by queue_id
-            // other queue ids can run concurrently, but this makes sure that
-            // we lock this queue_id against changes from other requests coming in while we process it
-            let result = async_tx
-                .run(queue_id.clone(), {
-                    let state = state.clone();
-                    let packet = packet.clone();
-                    move || process_action(state, packet, queue_id, action, signer)
-                })
-                .await;
+            let result = process_action(
+                state.clone(),
+                packet.clone(),
+                queue_id,
+                action,
+                signer,
+                async_tx.clone(),
+            )
+            .await;
 
             match result {
                 Ok(response) => responses.push(response),
@@ -190,38 +189,53 @@ async fn process_action(
     queue_id: PacketQueueId,
     action: AggregatorAction,
     signer: Address,
+    async_tx: AsyncTransaction<PacketQueueId>,
 ) -> AggregatorResult<AddPacketResponse> {
     match &action {
         AggregatorAction::Submit(submit_action) => {
-            let queue = match state.get_packet_queue(&queue_id).await? {
-                PacketQueue::Alive(queue) => add_packet_to_queue(&packet, queue, signer)?,
-                PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
-            };
-            match handle_custom_submit(&state, &packet, &queue, submit_action.clone()).await {
-                Ok(tx_receipt) => {
-                    state
-                        .save_packet_queue(&queue_id, PacketQueue::Burned)
-                        .await?;
-                    Ok(AddPacketResponse::Sent {
-                        tx_receipt: Box::new(tx_receipt),
-                        count: queue.len(),
-                    })
-                }
-                Err(e) => {
-                    if let AggregatorError::ServiceManagerValidateKnown(
-                        ServiceManagerError::InsufficientQuorum(_),
-                    ) = &e
-                    {
-                        let count = queue.len();
-                        state
-                            .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
-                            .await?;
-                        Ok(AddPacketResponse::Aggregated { count })
-                    } else {
-                        Err(e)
+            // execute the logic within a transaction, keyed by queue_id
+            // other queue ids can run concurrently, but this makes sure that
+            // we lock this queue_id against changes from other requests coming in while we process it
+            async_tx
+                .run(queue_id.clone(), {
+                    let state = state.clone();
+                    let packet = packet.clone();
+                    let submit_action = submit_action.clone();
+                    move || async move {
+                        let queue = match state.get_packet_queue(&queue_id).await? {
+                            PacketQueue::Alive(queue) => {
+                                add_packet_to_queue(&packet, queue, signer)?
+                            }
+                            PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
+                        };
+                        match handle_custom_submit(&state, &packet, &queue, submit_action).await {
+                            Ok(tx_receipt) => {
+                                state
+                                    .save_packet_queue(&queue_id, PacketQueue::Burned)
+                                    .await?;
+                                Ok(AddPacketResponse::Sent {
+                                    tx_receipt: Box::new(tx_receipt),
+                                    count: queue.len(),
+                                })
+                            }
+                            Err(e) => {
+                                if let AggregatorError::ServiceManagerValidateKnown(
+                                    ServiceManagerError::InsufficientQuorum(_),
+                                ) = &e
+                                {
+                                    let count = queue.len();
+                                    state
+                                        .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
+                                        .await?;
+                                    Ok(AddPacketResponse::Aggregated { count })
+                                } else {
+                                    Err(e)
+                                }
+                            }
+                        }
                     }
-                }
-            }
+                })
+                .await
         }
         AggregatorAction::Timer(timer_action) => {
             let delay_seconds = timer_action.delay;
@@ -234,6 +248,7 @@ async fn process_action(
                 queue_id.clone(),
                 signer,
                 delay_seconds,
+                async_tx.clone(),
             ));
 
             Ok(AddPacketResponse::TimerStarted { delay_seconds })
@@ -347,6 +362,7 @@ fn handle_timer_callback(
     queue_id: PacketQueueId,
     signer: Address,
     delay_seconds: u64,
+    async_tx: AsyncTransaction<PacketQueueId>,
 ) -> impl std::future::Future<Output = ()> + Send + 'static {
     async move {
         tokio::time::sleep(tokio::time::Duration::from_secs(delay_seconds)).await;
@@ -377,17 +393,15 @@ fn handle_timer_callback(
         };
 
         for callback_action in callback_actions {
-            let result = state
-                .queue_transaction
-                .clone()
-                .run(queue_id.clone(), {
-                    let state = state.clone();
-                    let packet = packet.clone();
-                    let queue_id = queue_id.clone();
-                    let action = callback_action.clone();
-                    move || process_action(state, packet, queue_id, action, signer)
-                })
-                .await;
+            let result = process_action(
+                state.clone(),
+                packet.clone(),
+                queue_id.clone(),
+                callback_action.clone(),
+                signer,
+                async_tx.clone(),
+            )
+            .await;
 
             if let Err(e) = result {
                 tracing::error!("Timer callback action processing failed: {:?}", e);
