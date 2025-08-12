@@ -3,7 +3,6 @@ use alloy_provider::{DynProvider, Provider};
 use alloy_rpc_types_eth::TransactionReceipt;
 use axum::{extract::State, response::IntoResponse, Json};
 use tracing::instrument;
-use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
     ChainName, EnvelopeExt, EnvelopeSignature,
@@ -96,7 +95,6 @@ async fn process_packet(
 
     AggregatorProcess {
         state: &state,
-        async_tx: state.queue_transaction.clone(),
         packet,
         signer,
     }
@@ -106,7 +104,6 @@ async fn process_packet(
 
 struct AggregatorProcess<'a> {
     state: &'a HttpState,
-    async_tx: AsyncTransaction<PacketQueueId>,
     packet: &'a Packet,
     signer: Address,
 }
@@ -116,7 +113,6 @@ impl AggregatorProcess<'_> {
     async fn run(self) -> AggregatorResult<Vec<AddPacketResponse>> {
         let Self {
             state,
-            async_tx,
             packet,
             signer,
         } = self;
@@ -161,15 +157,8 @@ impl AggregatorProcess<'_> {
                 aggregator_action: crate::compat::from_engine_action(action.clone()),
             };
 
-            let result = process_action(
-                state.clone(),
-                packet.clone(),
-                queue_id,
-                action,
-                signer,
-                async_tx.clone(),
-            )
-            .await;
+            let result =
+                process_action(state.clone(), packet.clone(), queue_id, action, signer).await;
 
             match result {
                 Ok(response) => responses.push(response),
@@ -189,14 +178,14 @@ async fn process_action(
     queue_id: PacketQueueId,
     action: AggregatorAction,
     signer: Address,
-    async_tx: AsyncTransaction<PacketQueueId>,
 ) -> AggregatorResult<AddPacketResponse> {
     match &action {
         AggregatorAction::Submit(submit_action) => {
             // execute the logic within a transaction, keyed by queue_id
             // other queue ids can run concurrently, but this makes sure that
             // we lock this queue_id against changes from other requests coming in while we process it
-            async_tx
+            state
+                .queue_transaction
                 .run(queue_id.clone(), {
                     let state = state.clone();
                     let packet = packet.clone();
@@ -248,7 +237,6 @@ async fn process_action(
                 queue_id.clone(),
                 signer,
                 delay_seconds,
-                async_tx.clone(),
             ));
 
             Ok(AddPacketResponse::TimerStarted { delay_seconds })
@@ -362,7 +350,6 @@ fn handle_timer_callback(
     queue_id: PacketQueueId,
     signer: Address,
     delay_seconds: u64,
-    async_tx: AsyncTransaction<PacketQueueId>,
 ) -> impl std::future::Future<Output = ()> + Send + 'static {
     async move {
         tokio::time::sleep(tokio::time::Duration::from_secs(delay_seconds)).await;
@@ -399,7 +386,6 @@ fn handle_timer_callback(
                 queue_id.clone(),
                 callback_action.clone(),
                 signer,
-                async_tx.clone(),
             )
             .await;
 
