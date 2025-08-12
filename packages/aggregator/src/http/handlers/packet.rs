@@ -914,13 +914,16 @@ mod test {
                     let state = deps.state.clone();
                     let seen_count = seen_count.clone();
                     async move {
-                        if let AddPacketResponse::Aggregated { count } =
-                            process_packet(state, &packet).await.unwrap().pop().unwrap()
-                        {
-                            let mut seen_count = seen_count.lock().unwrap();
-                            if !seen_count.insert(count) {
-                                panic!("Duplicate count: {}", count);
+                        match process_packet(state, &packet).await.unwrap().pop().unwrap() {
+                            AddPacketResponse::Aggregated { count } => {
+                                let mut seen_count = seen_count.lock().unwrap();
+                                if !seen_count.insert(count) {
+                                    panic!("Duplicate count: {}", count);
+                                }
                             }
+                            AddPacketResponse::Sent { .. } => {}
+                            AddPacketResponse::TimerStarted { .. } => {}
+                            other => panic!("Unexpected response: {:?}", other),
                         }
                     }
                 });

@@ -302,14 +302,10 @@ impl SubmissionManager {
                         count
                     );
                 }
-                AddPacketResponse::TimerStarted {
-                    count,
-                    delay_seconds,
-                } => {
+                AddPacketResponse::TimerStarted { delay_seconds } => {
                     tracing::info!(
-                        "Timer started for service_id={}: current_payload_count={}, delay={}s",
+                        "Timer started for service_id={}: delay={}s",
                         service_id,
-                        count,
                         delay_seconds
                     );
                 }
