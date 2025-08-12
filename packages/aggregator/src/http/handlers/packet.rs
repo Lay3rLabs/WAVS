@@ -191,13 +191,12 @@ async fn process_action(
     action: AggregatorAction,
     signer: Address,
 ) -> AggregatorResult<AddPacketResponse> {
-    let queue = match state.get_packet_queue(&queue_id).await? {
-        PacketQueue::Alive(queue) => add_packet_to_queue(&packet, queue, signer)?,
-        PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
-    };
-
     match &action {
         AggregatorAction::Submit(submit_action) => {
+            let queue = match state.get_packet_queue(&queue_id).await? {
+                PacketQueue::Alive(queue) => add_packet_to_queue(&packet, queue, signer)?,
+                PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
+            };
             match handle_custom_submit(&state, &packet, &queue, submit_action.clone()).await {
                 Ok(tx_receipt) => {
                     state
