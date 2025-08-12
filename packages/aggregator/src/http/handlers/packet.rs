@@ -16,7 +16,7 @@ use crate::{
     error::{AggregatorError, AggregatorResult, PacketValidationError},
     http::{
         error::AnyError,
-        state::{HttpState, PacketQueueId, QueuedPacket, QuorumQueue},
+        state::{HttpState, QueuedPacket, QuorumQueue, QuorumQueueId},
     },
 };
 
@@ -152,7 +152,7 @@ impl AggregatorProcess<'_> {
         let mut responses = Vec::new();
 
         for action in actions {
-            let queue_id = PacketQueueId {
+            let queue_id = QuorumQueueId {
                 event_id: event_id.clone(),
                 aggregator_action: crate::compat::from_engine_action(action.clone()),
             };
@@ -175,7 +175,7 @@ impl AggregatorProcess<'_> {
 async fn process_action(
     state: HttpState,
     packet: Packet,
-    queue_id: PacketQueueId,
+    queue_id: QuorumQueueId,
     action: AggregatorAction,
     signer: Address,
 ) -> AggregatorResult<AddPacketResponse> {
@@ -195,12 +195,12 @@ async fn process_action(
                             QuorumQueue::Active(queue) => {
                                 add_packet_to_quorum_queue(&packet, queue, signer)?
                             }
-                            QuorumQueue::Submitted => return Ok(AddPacketResponse::Burned),
+                            QuorumQueue::Burned => return Ok(AddPacketResponse::Burned),
                         };
                         match handle_custom_submit(&state, &packet, &queue, submit_action).await {
                             Ok(tx_receipt) => {
                                 state
-                                    .save_quorum_queue(&queue_id, QuorumQueue::Submitted)
+                                    .save_quorum_queue(&queue_id, QuorumQueue::Burned)
                                     .await?;
                                 Ok(AddPacketResponse::Sent {
                                     tx_receipt: Box::new(tx_receipt),
@@ -347,7 +347,7 @@ async fn handle_custom_submit(
 fn handle_timer_callback(
     state: HttpState,
     packet: Packet,
-    queue_id: PacketQueueId,
+    queue_id: QuorumQueueId,
     signer: Address,
     delay_seconds: u64,
 ) -> impl std::future::Future<Output = ()> + Send + 'static {
@@ -589,7 +589,7 @@ mod test {
 
                         let envelope = mock_envelope(task_id as u64, [op as u8, 0, 0]);
                         let event_id = envelope.eventId.into();
-                        let queue_id = PacketQueueId {
+                        let queue_id = QuorumQueueId {
                             event_id,
                             aggregator_action: wavs_types::AggregatorAction::Submit(
                                 wavs_types::SubmitAction {
