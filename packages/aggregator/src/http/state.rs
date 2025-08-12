@@ -22,18 +22,18 @@ use crate::{
     error::{AggregatorError, AggregatorResult},
 };
 
-// key is PacketQueueId
-const PACKET_QUEUES: Table<&[u8], JSON<PacketQueue>> = Table::new("packet_queues");
+// key is QuorumQueueId
+const QUORUM_QUEUES: Table<&[u8], JSON<QuorumQueue>> = Table::new("quorum_queues");
 
 #[derive(
     Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq, bincode::Decode, bincode::Encode,
 )]
-pub struct PacketQueueId {
+pub struct QuorumQueueId {
     pub event_id: EventId,
     pub aggregator_action: wavs_types::AggregatorAction,
 }
 
-impl PacketQueueId {
+impl QuorumQueueId {
     pub fn to_bytes(&self) -> AggregatorResult<Vec<u8>> {
         Ok(bincode::encode_to_vec(self, bincode::config::standard())?)
     }
@@ -45,9 +45,9 @@ impl PacketQueueId {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
-pub enum PacketQueue {
+pub enum QuorumQueue {
     Burned,
-    Alive(Vec<QueuedPacket>),
+    Active(Vec<QueuedPacket>),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -61,7 +61,7 @@ pub struct QueuedPacket {
 #[derive(Clone)]
 pub struct HttpState {
     pub config: Config,
-    pub queue_transaction: AsyncTransaction<PacketQueueId>,
+    pub queue_transaction: AsyncTransaction<QuorumQueueId>,
     storage: RedbStorage,
     evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
     pub aggregator_engine: Arc<AggregatorEngine<FileStorage>>,
@@ -151,30 +151,30 @@ impl HttpState {
         Ok(evm_client)
     }
 
-    pub async fn get_packet_queue(&self, id: &PacketQueueId) -> AggregatorResult<PacketQueue> {
+    pub async fn get_quorum_queue(&self, id: &QuorumQueueId) -> AggregatorResult<QuorumQueue> {
         let storage = self.storage.clone();
         let id_bytes = id.to_bytes()?;
 
         tokio::task::spawn_blocking(move || {
             Ok(storage
-                .get(PACKET_QUEUES, &id_bytes)?
+                .get(QUORUM_QUEUES, &id_bytes)?
                 .map(|queue| queue.value())
-                .unwrap_or_else(|| PacketQueue::Alive(Vec::new())))
+                .unwrap_or_else(|| QuorumQueue::Active(Vec::new())))
         })
         .await
         .map_err(|e| AggregatorError::JoinError(e.to_string()))?
     }
 
     #[allow(clippy::result_large_err)]
-    pub async fn save_packet_queue(
+    pub async fn save_quorum_queue(
         &self,
-        id: &PacketQueueId,
-        queue: PacketQueue,
+        id: &QuorumQueueId,
+        queue: QuorumQueue,
     ) -> AggregatorResult<()> {
         let storage = self.storage.clone();
         let id_bytes = id.to_bytes()?;
 
-        tokio::task::spawn_blocking(move || storage.set(PACKET_QUEUES, &id_bytes, &queue))
+        tokio::task::spawn_blocking(move || storage.set(QUORUM_QUEUES, &id_bytes, &queue))
             .await
             .map_err(|e| AggregatorError::JoinError(e.to_string()))?
             .map_err(Into::into)

@@ -3,7 +3,6 @@ use alloy_provider::{DynProvider, Provider};
 use alloy_rpc_types_eth::TransactionReceipt;
 use axum::{extract::State, response::IntoResponse, Json};
 use tracing::instrument;
-use utils::async_transaction::AsyncTransaction;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
     ChainName, EnvelopeExt, EnvelopeSignature,
@@ -17,7 +16,7 @@ use crate::{
     error::{AggregatorError, AggregatorResult, PacketValidationError},
     http::{
         error::AnyError,
-        state::{HttpState, PacketQueue, PacketQueueId, QueuedPacket},
+        state::{HttpState, QueuedPacket, QuorumQueue, QuorumQueueId},
     },
 };
 
@@ -96,7 +95,6 @@ async fn process_packet(
 
     AggregatorProcess {
         state: &state,
-        async_tx: state.queue_transaction.clone(),
         packet,
         signer,
     }
@@ -106,7 +104,6 @@ async fn process_packet(
 
 struct AggregatorProcess<'a> {
     state: &'a HttpState,
-    async_tx: AsyncTransaction<PacketQueueId>,
     packet: &'a Packet,
     signer: Address,
 }
@@ -116,7 +113,6 @@ impl AggregatorProcess<'_> {
     async fn run(self) -> AggregatorResult<Vec<AddPacketResponse>> {
         let Self {
             state,
-            async_tx,
             packet,
             signer,
         } = self;
@@ -156,21 +152,13 @@ impl AggregatorProcess<'_> {
         let mut responses = Vec::new();
 
         for action in actions {
-            let queue_id = PacketQueueId {
+            let queue_id = QuorumQueueId {
                 event_id: event_id.clone(),
                 aggregator_action: crate::compat::from_engine_action(action.clone()),
             };
 
-            // execute the logic within a transaction, keyed by queue_id
-            // other queue ids can run concurrently, but this makes sure that
-            // we lock this queue_id against changes from other requests coming in while we process it
-            let result = async_tx
-                .run(queue_id.clone(), {
-                    let state = state.clone();
-                    let packet = packet.clone();
-                    move || process_action(state, packet, queue_id, action, signer)
-                })
-                .await;
+            let result =
+                process_action(state.clone(), packet.clone(), queue_id, action, signer).await;
 
             match result {
                 Ok(response) => responses.push(response),
@@ -187,41 +175,56 @@ impl AggregatorProcess<'_> {
 async fn process_action(
     state: HttpState,
     packet: Packet,
-    queue_id: PacketQueueId,
+    queue_id: QuorumQueueId,
     action: AggregatorAction,
     signer: Address,
 ) -> AggregatorResult<AddPacketResponse> {
     match &action {
         AggregatorAction::Submit(submit_action) => {
-            let queue = match state.get_packet_queue(&queue_id).await? {
-                PacketQueue::Alive(queue) => add_packet_to_queue(&packet, queue, signer)?,
-                PacketQueue::Burned => return Ok(AddPacketResponse::Burned),
-            };
-            match handle_custom_submit(&state, &packet, &queue, submit_action.clone()).await {
-                Ok(tx_receipt) => {
-                    state
-                        .save_packet_queue(&queue_id, PacketQueue::Burned)
-                        .await?;
-                    Ok(AddPacketResponse::Sent {
-                        tx_receipt: Box::new(tx_receipt),
-                        count: queue.len(),
-                    })
-                }
-                Err(e) => {
-                    if let AggregatorError::ServiceManagerValidateKnown(
-                        ServiceManagerError::InsufficientQuorum(_),
-                    ) = &e
-                    {
-                        let count = queue.len();
-                        state
-                            .save_packet_queue(&queue_id, PacketQueue::Alive(queue))
-                            .await?;
-                        Ok(AddPacketResponse::Aggregated { count })
-                    } else {
-                        Err(e)
+            // execute the logic within a transaction, keyed by queue_id
+            // other queue ids can run concurrently, but this makes sure that
+            // we lock this queue_id against changes from other requests coming in while we process it
+            state
+                .queue_transaction
+                .run(queue_id.clone(), {
+                    let state = state.clone();
+                    let packet = packet.clone();
+                    let submit_action = submit_action.clone();
+                    move || async move {
+                        let queue = match state.get_quorum_queue(&queue_id).await? {
+                            QuorumQueue::Active(queue) => {
+                                add_packet_to_quorum_queue(&packet, queue, signer)?
+                            }
+                            QuorumQueue::Burned => return Ok(AddPacketResponse::Burned),
+                        };
+                        match handle_custom_submit(&state, &packet, &queue, submit_action).await {
+                            Ok(tx_receipt) => {
+                                state
+                                    .save_quorum_queue(&queue_id, QuorumQueue::Burned)
+                                    .await?;
+                                Ok(AddPacketResponse::Sent {
+                                    tx_receipt: Box::new(tx_receipt),
+                                    count: queue.len(),
+                                })
+                            }
+                            Err(e) => {
+                                if let AggregatorError::ServiceManagerValidateKnown(
+                                    ServiceManagerError::InsufficientQuorum(_),
+                                ) = &e
+                                {
+                                    let count = queue.len();
+                                    state
+                                        .save_quorum_queue(&queue_id, QuorumQueue::Active(queue))
+                                        .await?;
+                                    Ok(AddPacketResponse::Aggregated { count })
+                                } else {
+                                    Err(e)
+                                }
+                            }
+                        }
                     }
-                }
-            }
+                })
+                .await
         }
         AggregatorAction::Timer(timer_action) => {
             let delay_seconds = timer_action.delay;
@@ -344,7 +347,7 @@ async fn handle_custom_submit(
 fn handle_timer_callback(
     state: HttpState,
     packet: Packet,
-    queue_id: PacketQueueId,
+    queue_id: QuorumQueueId,
     signer: Address,
     delay_seconds: u64,
 ) -> impl std::future::Future<Output = ()> + Send + 'static {
@@ -377,17 +380,14 @@ fn handle_timer_callback(
         };
 
         for callback_action in callback_actions {
-            let result = state
-                .queue_transaction
-                .clone()
-                .run(queue_id.clone(), {
-                    let state = state.clone();
-                    let packet = packet.clone();
-                    let queue_id = queue_id.clone();
-                    let action = callback_action.clone();
-                    move || process_action(state, packet, queue_id, action, signer)
-                })
-                .await;
+            let result = process_action(
+                state.clone(),
+                packet.clone(),
+                queue_id.clone(),
+                callback_action.clone(),
+                signer,
+            )
+            .await;
 
             if let Err(e) = result {
                 tracing::error!("Timer callback action processing failed: {:?}", e);
@@ -396,7 +396,7 @@ fn handle_timer_callback(
     }
 }
 
-fn add_packet_to_queue(
+fn add_packet_to_quorum_queue(
     packet: &Packet,
     mut queue: Vec<QueuedPacket>,
     signer: Address,
@@ -475,11 +475,12 @@ mod test {
         assert_eq!(derived_signer_1_address, signer_1.address());
 
         // empty queue is okay
-        let queue = add_packet_to_queue(&packet_1, Vec::new(), signer_1.address()).unwrap();
+        let queue = add_packet_to_quorum_queue(&packet_1, Vec::new(), signer_1.address()).unwrap();
 
         // succeeds, replaces the packet for the signer
         let packet_2 = mock_packet(&signer_1, &envelope_1, "workflow-1".parse().unwrap());
-        let queue = add_packet_to_queue(&packet_2, queue.clone(), signer_1.address()).unwrap();
+        let queue =
+            add_packet_to_quorum_queue(&packet_2, queue.clone(), signer_1.address()).unwrap();
         assert_eq!(queue.len(), 1);
         assert_eq!(
             queue[0].packet.signature.as_bytes(),
@@ -488,11 +489,11 @@ mod test {
 
         // "fails" (expectedly) because the envelope is different
         let packet_3 = mock_packet(&signer_2, &envelope_2, "workflow-1".parse().unwrap());
-        add_packet_to_queue(&packet_3, queue.clone(), signer_2.address()).unwrap_err();
+        add_packet_to_quorum_queue(&packet_3, queue.clone(), signer_2.address()).unwrap_err();
 
         // passes because the signer is different but envelope is the same
         let packet_3 = mock_packet(&signer_2, &envelope_1, "workflow-1".parse().unwrap());
-        add_packet_to_queue(&packet_3, queue, signer_2.address()).unwrap();
+        add_packet_to_quorum_queue(&packet_3, queue, signer_2.address()).unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -588,7 +589,7 @@ mod test {
 
                         let envelope = mock_envelope(task_id as u64, [op as u8, 0, 0]);
                         let event_id = envelope.eventId.into();
-                        let queue_id = PacketQueueId {
+                        let queue_id = QuorumQueueId {
                             event_id,
                             aggregator_action: wavs_types::AggregatorAction::Submit(
                                 wavs_types::SubmitAction {
@@ -598,17 +599,17 @@ mod test {
                             ),
                         };
 
-                        let queue = state.get_packet_queue(&queue_id).await.unwrap();
-                        assert!(matches!(queue, PacketQueue::Alive(_)));
+                        let queue = state.get_quorum_queue(&queue_id).await.unwrap();
+                        assert!(matches!(queue, QuorumQueue::Active(_)));
 
-                        let test_queue = PacketQueue::Alive(vec![]);
+                        let test_queue = QuorumQueue::Active(vec![]);
                         state
-                            .save_packet_queue(&queue_id, test_queue)
+                            .save_quorum_queue(&queue_id, test_queue)
                             .await
                             .unwrap();
 
-                        let retrieved = state.get_packet_queue(&queue_id).await.unwrap();
-                        assert!(matches!(retrieved, PacketQueue::Alive(_)));
+                        let retrieved = state.get_quorum_queue(&queue_id).await.unwrap();
+                        assert!(matches!(retrieved, QuorumQueue::Active(_)));
                     }
 
                     task_id
