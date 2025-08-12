@@ -22,7 +22,6 @@ pub enum AddPacketResponse {
         count: usize,
     },
     TimerStarted {
-        count: usize,
         delay_seconds: u64,
     },
     Error {
