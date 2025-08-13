@@ -227,8 +227,8 @@ async fn process_action(
                 .await
         }
         AggregatorAction::Timer(timer_action) => {
-            let delay_seconds = timer_action.delay.secs;
-            tracing::info!("Starting timer for {} seconds", delay_seconds);
+            let delay: wavs_types::Duration = timer_action.delay.into();
+            tracing::info!("Starting timer for {} seconds", delay.secs);
 
             // Spawn timer callback as background task to avoid holding the async transaction lock
             tokio::spawn(handle_timer_callback(
@@ -236,10 +236,12 @@ async fn process_action(
                 packet.clone(),
                 queue_id.clone(),
                 signer,
-                delay_seconds,
+                delay,
             ));
 
-            Ok(AddPacketResponse::TimerStarted { delay_seconds })
+            Ok(AddPacketResponse::TimerStarted {
+                delay_seconds: delay.secs,
+            })
         }
     }
 }
@@ -349,14 +351,14 @@ fn handle_timer_callback(
     packet: Packet,
     queue_id: QuorumQueueId,
     signer: Address,
-    delay_seconds: u64,
+    delay: wavs_types::Duration,
 ) -> impl std::future::Future<Output = ()> + Send + 'static {
     async move {
-        tokio::time::sleep(tokio::time::Duration::from_secs(delay_seconds)).await;
+        tokio::time::sleep(delay.into()).await;
 
         tracing::info!(
             "Timer expired after {} seconds, executing callback",
-            delay_seconds
+            delay.secs
         );
 
         let component = match &packet.service.workflows[&packet.workflow_id].submit {

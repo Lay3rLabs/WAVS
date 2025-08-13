@@ -5,6 +5,7 @@ use utoipa::ToSchema;
     Serialize,
     Deserialize,
     Clone,
+    Copy,
     Debug,
     PartialEq,
     Eq,
@@ -15,4 +16,16 @@ use utoipa::ToSchema;
 )]
 pub struct Duration {
     pub secs: u64,
+}
+
+impl From<Duration> for std::time::Duration {
+    fn from(d: Duration) -> Self {
+        std::time::Duration::from_secs(d.secs)
+    }
+}
+
+impl From<std::time::Duration> for Duration {
+    fn from(d: std::time::Duration) -> Self {
+        Duration { secs: d.as_secs() }
+    }
 }

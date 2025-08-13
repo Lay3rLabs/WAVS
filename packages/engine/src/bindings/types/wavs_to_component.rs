@@ -1,7 +1,3 @@
-use wavs_types::{
-    AggregatorAction, Duration, Envelope, EnvelopeSignature, Packet, SubmitAction, TimerAction,
-};
-
 use crate::{
     bindings::aggregator::world::wavs::{
         aggregator::aggregator as aggregator_types, types::chain as aggregator_chain,
@@ -412,10 +408,10 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
 
 // aggregator
 
-impl TryFrom<Packet> for aggregator_types::Packet {
+impl TryFrom<wavs_types::Packet> for aggregator_types::Packet {
     type Error = anyhow::Error;
 
-    fn try_from(packet: Packet) -> Result<Self, Self::Error> {
+    fn try_from(packet: wavs_types::Packet) -> Result<Self, Self::Error> {
         Ok(aggregator_types::Packet {
             service: packet.service.try_into()?,
             workflow_id: packet.workflow_id.to_string(),
@@ -487,8 +483,8 @@ impl From<alloy_primitives::Address> for aggregator_chain::EvmAddress {
     }
 }
 
-impl From<Envelope> for aggregator_types::Envelope {
-    fn from(envelope: Envelope) -> Self {
+impl From<wavs_types::Envelope> for aggregator_types::Envelope {
+    fn from(envelope: wavs_types::Envelope) -> Self {
         aggregator_types::Envelope {
             event_id: envelope.eventId.to_vec(),
             ordering: envelope.ordering.to_vec(),
@@ -497,14 +493,16 @@ impl From<Envelope> for aggregator_types::Envelope {
     }
 }
 
-impl From<EnvelopeSignature> for aggregator_types::EnvelopeSignature {
-    fn from(signature: EnvelopeSignature) -> Self {
+impl From<wavs_types::EnvelopeSignature> for aggregator_types::EnvelopeSignature {
+    fn from(signature: wavs_types::EnvelopeSignature) -> Self {
         match signature {
-            EnvelopeSignature::Secp256k1(sig) => aggregator_types::EnvelopeSignature::Secp256k1(
-                aggregator_types::Secp256k1Signature {
-                    signature_data: sig.as_bytes().to_vec(),
-                },
-            ),
+            wavs_types::EnvelopeSignature::Secp256k1(sig) => {
+                aggregator_types::EnvelopeSignature::Secp256k1(
+                    aggregator_types::Secp256k1Signature {
+                        signature_data: sig.as_bytes().to_vec(),
+                    },
+                )
+            }
         }
     }
 }
@@ -684,26 +682,26 @@ impl From<wavs_types::Timestamp> for aggregator_core::Timestamp {
     }
 }
 
-impl From<Duration> for aggregator_core::Duration {
-    fn from(duration: Duration) -> Self {
+impl From<wavs_types::Duration> for aggregator_core::Duration {
+    fn from(duration: wavs_types::Duration) -> Self {
         aggregator_core::Duration {
             secs: duration.secs,
         }
     }
 }
 
-impl From<aggregator_core::Duration> for Duration {
+impl From<aggregator_core::Duration> for wavs_types::Duration {
     fn from(duration: aggregator_core::Duration) -> Self {
-        Duration {
+        wavs_types::Duration {
             secs: duration.secs,
         }
     }
 }
 
-impl From<AggregatorAction> for aggregator_types::AggregatorAction {
-    fn from(action: AggregatorAction) -> Self {
+impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
+    fn from(action: wavs_types::AggregatorAction) -> Self {
         match action {
-            AggregatorAction::Submit(submit) => {
+            wavs_types::AggregatorAction::Submit(submit) => {
                 aggregator_types::AggregatorAction::Submit(aggregator_types::SubmitAction {
                     chain_name: submit.chain_name,
                     contract_address: aggregator_chain::EvmAddress {
@@ -711,7 +709,7 @@ impl From<AggregatorAction> for aggregator_types::AggregatorAction {
                     },
                 })
             }
-            AggregatorAction::Timer(timer) => {
+            wavs_types::AggregatorAction::Timer(timer) => {
                 aggregator_types::AggregatorAction::Timer(aggregator_types::TimerAction {
                     delay: timer.delay.into(),
                 })
@@ -720,17 +718,17 @@ impl From<AggregatorAction> for aggregator_types::AggregatorAction {
     }
 }
 
-impl From<aggregator_types::AggregatorAction> for AggregatorAction {
+impl From<aggregator_types::AggregatorAction> for wavs_types::AggregatorAction {
     fn from(action: aggregator_types::AggregatorAction) -> Self {
         match action {
             aggregator_types::AggregatorAction::Submit(submit) => {
-                AggregatorAction::Submit(SubmitAction {
+                wavs_types::AggregatorAction::Submit(wavs_types::SubmitAction {
                     chain_name: submit.chain_name,
                     contract_address: submit.contract_address.raw_bytes,
                 })
             }
             aggregator_types::AggregatorAction::Timer(timer) => {
-                AggregatorAction::Timer(TimerAction {
+                wavs_types::AggregatorAction::Timer(wavs_types::TimerAction {
                     delay: timer.delay.into(),
                 })
             }
