@@ -4,8 +4,8 @@ use tempfile::{tempdir, TempDir};
 use utils::{config::ChainConfigs, filesystem::workspace_path, storage::db::RedbStorage};
 use wasmtime::{component::Component, Engine as WTEngine};
 use wavs_engine::{
-    worlds::worker::component::HostComponentLogger,
-    worlds::worker::instance::{InstanceDeps, InstanceDepsBuilder},
+    worlds::operator::component::HostComponentLogger,
+    worlds::operator::instance::{InstanceDeps, InstanceDepsBuilder},
 };
 use wavs_types::{
     AllowedHostPermission, ComponentDigest, Service, TriggerAction, TriggerConfig, TriggerData,

@@ -1,8 +1,8 @@
-package wavs:aggregator@0.6.0-alpha.6;
+package wavs:aggregator@0.6.0-alpha.8;
 
-use wavs:types/core@0.6.0-alpha.6 as core-types;
-use wavs:types/service@0.6.0-alpha.6 as service-types;
-use wavs:types/chain@0.6.0-alpha.6 as chain-types;
+use wavs:types/core@0.6.0-alpha.8 as core-types;
+use wavs:types/service@0.6.0-alpha.8 as service-types;
+use wavs:types/chain@0.6.0-alpha.8 as chain-types;
 
 interface aggregator {
     use core-types.{duration};
@@ -59,6 +59,7 @@ world aggregator-world {
     import host: interface {
         use chain-types.{evm-chain-config, cosmos-chain-config};
         use core-types.{log-level};
+        use service-types.{service-and-workflow-id, workflow-and-workflow-id};
 
         get-evm-chain-config: func(chain-name: string) -> option<evm-chain-config>;
         get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
@@ -66,6 +67,12 @@ world aggregator-world {
         config-var: func(key: string) -> option<string>;
 
         log: func(level: log-level, message: string);
+
+        // gets the service and workflow id that called this component
+        get-service: func() -> service-and-workflow-id;
+
+        // convenience function to get the workflow without having to walk service.workflows
+        get-workflow: func() -> workflow-and-workflow-id;
     }
 
     use aggregator.{packet, aggregator-action};

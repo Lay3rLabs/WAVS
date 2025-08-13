@@ -174,7 +174,7 @@ download-wit branch="main":
     cp -r temp_clone/wavs-wasi/wit-definitions/* wit-definitions/
 
     # Fetch deps
-    cd wit-definitions/worker && wkg wit fetch
+    cd wit-definitions/operator && wkg wit fetch
     cd wit-definitions/aggregator && wkg wit fetch
     cd wit-definitions/types && wkg wit fetch
 

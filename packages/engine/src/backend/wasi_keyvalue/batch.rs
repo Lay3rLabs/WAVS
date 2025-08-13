@@ -5,7 +5,7 @@ use super::{
     context::KeyValueState,
     store::KV_STORE_TABLE,
 };
-use crate::bindings::worker::world::wasi::keyvalue::batch;
+use crate::bindings::operator::world::wasi::keyvalue::batch;
 
 pub type BatchResult<T> = std::result::Result<T, batch::Error>;
 

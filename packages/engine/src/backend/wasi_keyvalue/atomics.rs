@@ -5,7 +5,7 @@ use super::{
     bucket_keys::{Key, KeyValueBucket},
     context::KeyValueState,
 };
-use crate::bindings::worker::world::wasi::keyvalue::atomics;
+use crate::bindings::operator::world::wasi::keyvalue::atomics;
 
 pub type AtomicsResult<T> = std::result::Result<T, atomics::Error>;
 pub type CasResult<T> = std::result::Result<T, atomics::CasError>;

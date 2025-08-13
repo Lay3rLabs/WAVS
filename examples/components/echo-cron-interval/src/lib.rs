@@ -1,5 +1,5 @@
 use example_helpers::bindings::world::{
-    wavs::worker::{
+    wavs::operator::{
         input::{TriggerAction, TriggerData},
         output::WasmResponse,
     },

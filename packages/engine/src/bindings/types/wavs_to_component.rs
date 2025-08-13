@@ -3,11 +3,11 @@ use crate::{
         aggregator::aggregator as aggregator_types, types::chain as aggregator_chain,
         types::core as aggregator_core, types::service as aggregator_service,
     },
-    bindings::worker::world::wavs::types::chain as component_chain,
-    bindings::worker::world::wavs::types::core as component_core,
-    bindings::worker::world::wavs::types::service as component_service,
-    bindings::worker::world::wavs::worker::input as component_input,
-    bindings::worker::world::wavs::worker::output as component_output,
+    bindings::operator::world::wavs::operator::input as component_input,
+    bindings::operator::world::wavs::operator::output as component_output,
+    bindings::operator::world::wavs::types::chain as component_chain,
+    bindings::operator::world::wavs::types::core as component_core,
+    bindings::operator::world::wavs::types::service as component_service,
 };
 
 impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
@@ -105,7 +105,7 @@ impl From<alloy_primitives::Address> for component_chain::EvmAddress {
 }
 
 impl From<utils::config::CosmosChainConfig>
-    for crate::bindings::worker::world::host::CosmosChainConfig
+    for crate::bindings::operator::world::host::CosmosChainConfig
 {
     fn from(config: utils::config::CosmosChainConfig) -> Self {
         Self {
@@ -120,7 +120,9 @@ impl From<utils::config::CosmosChainConfig>
     }
 }
 
-impl From<utils::config::EvmChainConfig> for crate::bindings::worker::world::host::EvmChainConfig {
+impl From<utils::config::EvmChainConfig>
+    for crate::bindings::operator::world::host::EvmChainConfig
+{
     fn from(config: utils::config::EvmChainConfig) -> Self {
         Self {
             chain_id: config.chain_id,
