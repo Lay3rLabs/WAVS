@@ -154,7 +154,7 @@ impl AggregatorProcess<'_> {
         for action in actions {
             let queue_id = QuorumQueueId {
                 event_id: event_id.clone(),
-                aggregator_action: crate::compat::from_engine_action(action.clone()),
+                aggregator_action: action.clone().into(),
             };
 
             let result =

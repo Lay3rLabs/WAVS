@@ -2,7 +2,9 @@ use crate::bindings::aggregator::world::wavs::{
     aggregator::aggregator as aggregator_types, types::chain as aggregator_chain,
     types::core as aggregator_core, types::service as aggregator_service,
 };
-use wavs_types::{Envelope, EnvelopeSignature, Packet};
+use wavs_types::{
+    AggregatorAction, Duration, Envelope, EnvelopeSignature, Packet, SubmitAction, TimerAction,
+};
 
 impl TryFrom<Packet> for aggregator_types::Packet {
     type Error = anyhow::Error;
@@ -272,6 +274,60 @@ impl From<wavs_types::Timestamp> for aggregator_core::Timestamp {
     fn from(timestamp: wavs_types::Timestamp) -> Self {
         aggregator_core::Timestamp {
             nanos: timestamp.as_nanos(),
+        }
+    }
+}
+
+impl From<Duration> for aggregator_core::Duration {
+    fn from(duration: Duration) -> Self {
+        aggregator_core::Duration {
+            secs: duration.secs,
+        }
+    }
+}
+
+impl From<aggregator_core::Duration> for Duration {
+    fn from(duration: aggregator_core::Duration) -> Self {
+        Duration {
+            secs: duration.secs,
+        }
+    }
+}
+
+impl From<AggregatorAction> for aggregator_types::AggregatorAction {
+    fn from(action: AggregatorAction) -> Self {
+        match action {
+            AggregatorAction::Submit(submit) => {
+                aggregator_types::AggregatorAction::Submit(aggregator_types::SubmitAction {
+                    chain_name: submit.chain_name,
+                    contract_address: aggregator_chain::EvmAddress {
+                        raw_bytes: submit.contract_address,
+                    },
+                })
+            }
+            AggregatorAction::Timer(timer) => {
+                aggregator_types::AggregatorAction::Timer(aggregator_types::TimerAction {
+                    delay: timer.delay.into(),
+                })
+            }
+        }
+    }
+}
+
+impl From<aggregator_types::AggregatorAction> for AggregatorAction {
+    fn from(action: aggregator_types::AggregatorAction) -> Self {
+        match action {
+            aggregator_types::AggregatorAction::Submit(submit) => {
+                AggregatorAction::Submit(SubmitAction {
+                    chain_name: submit.chain_name,
+                    contract_address: submit.contract_address.raw_bytes,
+                })
+            }
+            aggregator_types::AggregatorAction::Timer(timer) => {
+                AggregatorAction::Timer(TimerAction {
+                    delay: timer.delay.into(),
+                })
+            }
         }
     }
 }
