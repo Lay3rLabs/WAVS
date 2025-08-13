@@ -8,9 +8,9 @@ pub fn from_engine_action(action: crate::engine::AggregatorAction) -> Aggregator
             chain_name: submit.chain_name,
             contract_address: submit.contract_address.raw_bytes,
         }),
-        crate::engine::AggregatorAction::Timer(timer) => {
-            AggregatorAction::Timer(TimerAction { delay: timer.delay })
-        }
+        crate::engine::AggregatorAction::Timer(timer) => AggregatorAction::Timer(TimerAction {
+            delay: timer.delay.secs,
+        }),
     }
 }
 
@@ -27,7 +27,9 @@ pub fn to_engine_action(action: AggregatorAction) -> crate::engine::AggregatorAc
         }
         AggregatorAction::Timer(timer) => crate::engine::AggregatorAction::Timer(
             wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::TimerAction {
-                delay: timer.delay,
+                delay: wavs_engine::bindings::aggregator::world::wavs::types::core::Duration {
+                    secs: timer.delay,
+                },
             },
         ),
     }

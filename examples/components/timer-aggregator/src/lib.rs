@@ -4,6 +4,7 @@ use world::{
     host,
     wavs::aggregator::aggregator::{AggregatorAction, Packet, SubmitAction, TimerAction},
     wavs::types::chain::{AnyTxHash, EvmAddress},
+    wavs::types::core::Duration,
     Guest,
 };
 
@@ -11,7 +12,9 @@ struct Component;
 
 impl Guest for Component {
     fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
-        let timer_action = TimerAction { delay: 5 };
+        let timer_action = TimerAction {
+            delay: Duration { secs: 5 },
+        };
         Ok(vec![AggregatorAction::Timer(timer_action)])
     }
 

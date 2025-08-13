@@ -227,7 +227,7 @@ async fn process_action(
                 .await
         }
         AggregatorAction::Timer(timer_action) => {
-            let delay_seconds = timer_action.delay;
+            let delay_seconds = timer_action.delay.secs;
             tracing::info!("Starting timer for {} seconds", delay_seconds);
 
             // Spawn timer callback as background task to avoid holding the async transaction lock
