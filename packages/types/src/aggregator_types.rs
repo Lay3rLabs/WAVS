@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::Duration;
+
 #[derive(
     Serialize,
     Deserialize,
@@ -31,7 +33,7 @@ pub struct SubmitAction {
     ToSchema,
 )]
 pub struct TimerAction {
-    pub delay: u64,
+    pub delay: Duration,
 }
 
 #[derive(
