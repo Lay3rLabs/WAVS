@@ -5,6 +5,10 @@ interface core {
     nanos: u64
   }
 
+  record duration {
+    secs: u64
+  }
+
   variant log-level {
       error,
       warn,

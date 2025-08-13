@@ -1,4 +1,4 @@
-package wavs:types@0.6.0-alpha.5;
+package wavs:types@0.6.0-alpha.6;
 
 interface chain {
   type chain-name = string;
@@ -75,6 +75,10 @@ interface core {
 
   record timestamp {
     nanos: u64,
+  }
+
+  record duration {
+    secs: u64,
   }
 
   variant log-level {
