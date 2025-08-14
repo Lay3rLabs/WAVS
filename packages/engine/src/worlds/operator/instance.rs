@@ -59,7 +59,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         // create linker
         let mut linker = Linker::new(engine);
-        crate::bindings::worker::world::host::add_to_linker::<_, HasSelf<_>>(
+        crate::bindings::operator::world::host::add_to_linker::<_, HasSelf<_>>(
             &mut linker,
             |state| state,
         )

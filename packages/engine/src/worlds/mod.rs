@@ -1,2 +1,2 @@
 pub mod aggregator;
-pub mod worker;
+pub mod operator;

@@ -4,7 +4,7 @@ use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_types::{ComponentDigest, Service, ServiceID, WorkflowID};
 
 use crate::backend::wasi_keyvalue::context::KeyValueCtx;
-use crate::bindings::worker::world::host::LogLevel;
+use crate::bindings::operator::world::host::LogLevel;
 
 // TODO: revisit this an understand it.
 // Copied blindly from old code

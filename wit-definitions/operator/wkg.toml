@@ -1,6 +1,6 @@
 [metadata]
 author = "Lay3r Labs Team"
-description = "WAVS WASI Worker"
+description = "WAVS WASI Operator"
 license = "MIT"
 homepage = "https://www.wavs.xyz/"
 repository = "https://github.com/Lay3rLabs/wavs-wasi"

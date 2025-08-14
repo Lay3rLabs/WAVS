@@ -2,10 +2,10 @@ use utils::storage::db::RedbStorage;
 use wasmtime::component::HasData;
 use wasmtime_wasi::ResourceTable;
 
-use crate::bindings::worker::world::wasi::keyvalue::{atomics, batch, store};
+use crate::bindings::operator::world::wasi::keyvalue::{atomics, batch, store};
 use crate::{
     utils::error::EngineError, worlds::aggregator::AggregatorHostComponent,
-    worlds::worker::component::HostComponent,
+    worlds::operator::component::HostComponent,
 };
 
 pub trait KeyValueCtxProvider {

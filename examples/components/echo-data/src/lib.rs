@@ -1,6 +1,6 @@
 use example_helpers::bindings::world::{
     host,
-    wavs::worker::{
+    wavs::operator::{
         input::{TriggerAction, TriggerData},
         output::WasmResponse,
     },

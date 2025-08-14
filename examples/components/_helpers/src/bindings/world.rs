@@ -4,7 +4,7 @@
 
 wit_bindgen::generate!({
     world: "wavs-world",
-    path: "../../../wit-definitions/worker/wit",
+    path: "../../../wit-definitions/operator/wit",
     pub_export_macro: true,
     generate_all,
     //async: true,

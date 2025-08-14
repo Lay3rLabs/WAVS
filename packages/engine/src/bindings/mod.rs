@@ -1,3 +1,3 @@
 pub mod aggregator;
+pub mod operator;
 pub mod types;
-pub mod worker;

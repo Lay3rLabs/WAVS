@@ -3,7 +3,7 @@ use wasmtime::component::Resource;
 
 use super::bucket_keys::{Key, KeyPrefix, KeyValueBucket};
 use super::context::KeyValueState;
-use crate::bindings::worker::world::wasi::keyvalue::store::{self, KeyResponse};
+use crate::bindings::operator::world::wasi::keyvalue::store::{self, KeyResponse};
 use redb::ReadableTable;
 
 pub type StoreResult<T> = std::result::Result<T, store::Error>;

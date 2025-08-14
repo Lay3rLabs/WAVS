@@ -1,11 +1,11 @@
 use example_helpers::bindings::world::{
     host,
     wavs::{
+        operator::{input::TriggerAction, output::WasmResponse},
         types::{
             core::LogLevel,
             service::{ComponentSource, ServiceAndWorkflowId},
         },
-        worker::{input::TriggerAction, output::WasmResponse},
     },
     Guest,
 };

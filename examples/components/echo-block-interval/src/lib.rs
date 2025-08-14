@@ -2,11 +2,11 @@ use anyhow::Result;
 use example_helpers::bindings::world::{
     wasi::keyvalue::{atomics, store},
     wavs::{
-        types::service::TriggerBlockInterval,
-        worker::{
+        operator::{
             input::{Trigger, TriggerAction, TriggerData, TriggerDataBlockInterval},
             output::WasmResponse,
         },
+        types::service::TriggerBlockInterval,
     },
     Guest,
 };

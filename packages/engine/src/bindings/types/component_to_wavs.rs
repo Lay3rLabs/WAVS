@@ -3,10 +3,10 @@ use std::{collections::BTreeMap, str::FromStr};
 use wavs_types::WorkflowID;
 
 use crate::{
-    bindings::worker::world::wavs::types::chain as component_chain,
-    bindings::worker::world::wavs::types::core as component_core,
-    bindings::worker::world::wavs::types::service as component_service,
-    bindings::worker::world::wavs::worker::output as component_output,
+    bindings::operator::world::wavs::operator::output as component_output,
+    bindings::operator::world::wavs::types::chain as component_chain,
+    bindings::operator::world::wavs::types::core as component_core,
+    bindings::operator::world::wavs::types::service as component_service,
 };
 
 impl TryFrom<component_service::Trigger> for wavs_types::Trigger {

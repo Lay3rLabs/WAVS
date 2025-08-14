@@ -10,7 +10,7 @@ use utils::telemetry::EngineMetrics;
 use utils::wkg::WkgClient;
 use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
-    backend::wasi_keyvalue::context::KeyValueCtx, worlds::worker::instance::InstanceDepsBuilder,
+    backend::wasi_keyvalue::context::KeyValueCtx, worlds::operator::instance::InstanceDepsBuilder,
 };
 use wavs_types::{
     ComponentDigest, ComponentSource, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
@@ -158,7 +158,7 @@ impl<S: CAStorage> WasmEngine<S> {
             service_id: &ServiceID,
             workflow_id: &WorkflowID,
             digest: &ComponentDigest,
-            level: wavs_engine::bindings::worker::world::host::LogLevel,
+            level: wavs_engine::bindings::operator::world::host::LogLevel,
             message: String,
         ) {
             let span = span!(
@@ -170,19 +170,19 @@ impl<S: CAStorage> WasmEngine<S> {
             );
 
             match level {
-                wavs_engine::bindings::worker::world::host::LogLevel::Error => {
+                wavs_engine::bindings::operator::world::host::LogLevel::Error => {
                     event!(parent: &span, tracing::Level::ERROR, "{}", message)
                 }
-                wavs_engine::bindings::worker::world::host::LogLevel::Warn => {
+                wavs_engine::bindings::operator::world::host::LogLevel::Warn => {
                     event!(parent: &span, tracing::Level::WARN, "{}", message)
                 }
-                wavs_engine::bindings::worker::world::host::LogLevel::Info => {
+                wavs_engine::bindings::operator::world::host::LogLevel::Info => {
                     event!(parent: &span, tracing::Level::INFO, "{}", message)
                 }
-                wavs_engine::bindings::worker::world::host::LogLevel::Debug => {
+                wavs_engine::bindings::operator::world::host::LogLevel::Debug => {
                     event!(parent: &span, tracing::Level::DEBUG, "{}", message)
                 }
-                wavs_engine::bindings::worker::world::host::LogLevel::Trace => {
+                wavs_engine::bindings::operator::world::host::LogLevel::Trace => {
                     event!(parent: &span, tracing::Level::TRACE, "{}", message)
                 }
             }
@@ -223,7 +223,7 @@ impl<S: CAStorage> WasmEngine<S> {
         .build()?;
 
         self.block_on_run(async move {
-            wavs_engine::worlds::worker::execute::execute(&mut instance_deps, trigger_action)
+            wavs_engine::worlds::operator::execute::execute(&mut instance_deps, trigger_action)
                 .await
                 .map_err(|e| e.into())
         })

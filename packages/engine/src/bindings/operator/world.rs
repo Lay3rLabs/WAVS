@@ -4,7 +4,7 @@ use wasmtime::component::bindgen;
 
 bindgen!({
     world: "wavs-world",
-    path: "../../wit-definitions/worker/wit",
+    path: "../../wit-definitions/operator/wit",
     async: {
         only_imports: []
     },
