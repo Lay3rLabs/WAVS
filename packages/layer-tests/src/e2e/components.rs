@@ -75,10 +75,6 @@ impl ComponentSources {
             .flatten()
             .collect();
 
-        // Always include aggregator components as they're needed for tests
-        component_names.insert(ComponentName::SimpleAggregator);
-        component_names.insert(ComponentName::TimerAggregator);
-
         let mut futures = FuturesUnordered::new();
 
         for component_name in component_names {
