@@ -181,6 +181,12 @@ impl TestRegistry {
                 EvmService::TimerAggregator => {
                     registry.register_evm_timer_aggregator_test(chain, aggregator_endpoint);
                 }
+                EvmService::MultipleServicesWithDifferentAggregators => {
+                    registry.register_evm_multiple_services_with_different_aggregators_test(
+                        chain,
+                        aggregator_endpoint,
+                    );
+                }
             }
         }
 
@@ -414,6 +420,70 @@ impl TestRegistry {
                         })
                         .with_input_data(InputData::Text("test packet".to_string()))
                         .with_expected_output(ExpectedOutput::Text("test packet".to_string()))
+                        .build(),
+                )
+                .build(),
+        )
+    }
+
+    fn register_evm_multiple_services_with_different_aggregators_test(
+        &mut self,
+        chain: &ChainName,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
+        self.register(
+            TestBuilder::new("evm_multiple_services_with_different_aggregators")
+                .with_description("Tests multiple services, each with a different aggregator")
+                // First service with SimpleAggregator
+                .add_workflow(
+                    WorkflowID::new("service_with_simple_aggregator").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_component(ComponentName::EchoData.into())
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain_name: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                            aggregator: AggregatorDefinition::ComponentBasedAggregator {
+                                component: ComponentDefinition::from(
+                                    ComponentName::SimpleAggregator,
+                                )
+                                .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_service_handler(),
+                                chain_name: chain.clone(),
+                            },
+                        })
+                        .with_input_data(InputData::Text("simple aggregator data".to_string()))
+                        .with_expected_output(ExpectedOutput::Text(
+                            "simple aggregator data".to_string(),
+                        ))
+                        .build(),
+                )
+                // Second service with TimerAggregator
+                .add_workflow(
+                    WorkflowID::new("service_with_timer_aggregator").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_component(ComponentName::Square.into())
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain_name: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                            aggregator: AggregatorDefinition::ComponentBasedAggregator {
+                                component: ComponentDefinition::from(
+                                    ComponentName::TimerAggregator,
+                                )
+                                .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_service_handler(),
+                                chain_name: chain.clone(),
+                            },
+                        })
+                        .with_input_data(InputData::Square(SquareRequest { x: 7 }))
+                        .with_expected_output(ExpectedOutput::Square(SquareResponse { y: 49 }))
                         .build(),
                 )
                 .build(),
