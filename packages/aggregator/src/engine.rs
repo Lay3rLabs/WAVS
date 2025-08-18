@@ -22,10 +22,11 @@ use wavs_engine::{
     },
 };
 
+use utils::wkg::WkgClient;
 pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
     AggregatorAction, SubmitAction,
 };
-use wavs_types::{Component, ComponentDigest, Packet};
+use wavs_types::{Component, ComponentDigest, ComponentSource, Packet};
 
 const MIN_LRU_SIZE: usize = 10;
 
@@ -130,7 +131,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     ) -> AggregatorResult<Vec<AggregatorAction>> {
         tracing::info!("Processing packet with custom aggregator component");
 
-        let wasm_component = self.load_component(component)?;
+        let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
         wavs_engine::worlds::aggregator::execute::execute(&mut instance_deps, packet)
@@ -138,7 +139,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             .map_err(Into::into)
     }
 
-    fn load_component(&self, component: &Component) -> AggregatorResult<WasmComponent> {
+    async fn load_component(&self, component: &Component) -> AggregatorResult<WasmComponent> {
         let digest = component.source.digest().clone();
 
         let cached_component = {
@@ -151,7 +152,25 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             return Ok(cached_component);
         }
 
-        let component_bytes = self.storage.get_data(&digest.clone().into())?;
+        // Try to get from storage first, if not found, fetch and store
+        let component_bytes = match self.storage.get_data(&digest.clone().into()) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                // Component not in storage, fetch from source and store it
+                match &component.source {
+                    ComponentSource::Registry { registry } => {
+                        let client = WkgClient::new(
+                            registry.domain.clone().unwrap_or("wa.dev".to_string()),
+                        )?;
+                        let bytes = client.fetch(registry).await?;
+                        self.storage.set_data(&bytes)?;
+                        bytes
+                    }
+                    _ => return Err(e.into()),
+                }
+            }
+        };
+
         let wasm_component = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
 
         self.memory_cache
@@ -170,7 +189,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     ) -> AggregatorResult<Vec<AggregatorAction>> {
         tracing::info!("Handling timer callback with custom aggregator component");
 
-        let wasm_component = self.load_component(component)?;
+        let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
         let wit_packet = packet.clone().try_into()?;
@@ -204,7 +223,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     ) -> AggregatorResult<()> {
         tracing::info!("Handling submit callback with custom aggregator component");
 
-        let wasm_component = self.load_component(component)?;
+        let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
         let wit_packet = packet.clone().try_into()?;
