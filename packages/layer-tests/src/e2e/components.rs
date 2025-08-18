@@ -51,7 +51,7 @@ impl ComponentSources {
     pub async fn new(
         configs: &Configs,
         http_client: &HttpClient,
-        aggregator_client: &HttpClient,
+        aggregator_clients: &[HttpClient],
     ) -> Self {
         let mut component_names: HashSet<ComponentName> = configs
             .matrix
@@ -84,7 +84,7 @@ impl ComponentSources {
         for component_name in component_names {
             futures.push(get_component_source(
                 http_client,
-                aggregator_client,
+                aggregator_clients,
                 component_name,
                 configs.registry,
             ));
@@ -102,7 +102,7 @@ impl ComponentSources {
 
 async fn get_component_source(
     http_client: &HttpClient,
-    aggregator_client: &HttpClient,
+    aggregator_clients: &[HttpClient],
     name: ComponentName,
     registry: bool,
 ) -> (ComponentName, ComponentSource) {
