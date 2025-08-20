@@ -159,10 +159,17 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
                 // Component not in storage, fetch from source and store it
                 match &component.source {
                     ComponentSource::Registry { registry } => {
+                        tracing::warn!("Component {} not found in storage ({}), attempting to fetch from registry...", 
+                            digest, e);
                         let client = WkgClient::new(
                             registry.domain.clone().unwrap_or("wa.dev".to_string()),
                         )?;
-                        let bytes = client.fetch(registry).await?;
+                        let bytes = client.fetch(registry).await.map_err(|e| {
+                            AggregatorError::ComponentLoad(format!(
+                                "Failed to fetch component from registry {:?}: {}",
+                                registry, e
+                            ))
+                        })?;
                         self.storage.set_data(&bytes)?;
                         bytes
                     }

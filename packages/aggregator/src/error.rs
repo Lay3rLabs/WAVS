@@ -90,6 +90,9 @@ pub enum AggregatorError {
     #[error("Component execution failed: {0}")]
     ComponentExecution(String),
 
+    #[error("Component loading failed: {0}")]
+    ComponentLoad(String),
+
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
