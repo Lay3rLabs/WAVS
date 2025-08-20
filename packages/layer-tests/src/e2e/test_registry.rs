@@ -275,6 +275,7 @@ impl TestRegistry {
                     WorkflowID::new("echo_data").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -304,6 +305,7 @@ impl TestRegistry {
                     WorkflowID::new("echo_data_secondary").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: secondary_chain.clone(),
@@ -364,6 +366,7 @@ impl TestRegistry {
                     WorkflowID::new("simple_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -401,6 +404,7 @@ impl TestRegistry {
                     WorkflowID::new("timer_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
+                        .with_aggregator(ComponentName::TimerAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -439,6 +443,7 @@ impl TestRegistry {
                     WorkflowID::new("service_with_simple_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -466,6 +471,7 @@ impl TestRegistry {
                     WorkflowID::new("service_with_timer_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::Square.into())
+                        .with_aggregator(ComponentName::TimerAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -502,6 +508,7 @@ impl TestRegistry {
                     WorkflowID::new("square").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::Square.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -531,6 +538,7 @@ impl TestRegistry {
                     WorkflowID::new("chain_trigger_lookup").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::ChainTriggerLookup.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -561,6 +569,7 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_query").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::CosmosQuery.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: evm_chain.clone(),
@@ -594,6 +603,7 @@ impl TestRegistry {
                     WorkflowID::new("permissions").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::Permissions.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -625,6 +635,7 @@ impl TestRegistry {
                     WorkflowID::new("counter_first").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::KvStore.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -646,6 +657,7 @@ impl TestRegistry {
                     WorkflowID::new("counter_second").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::KvStore.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -680,6 +692,7 @@ impl TestRegistry {
                     WorkflowID::new("square_workflow").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::Square.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -697,6 +710,7 @@ impl TestRegistry {
                     WorkflowID::new("echo_workflow").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoData.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -728,6 +742,7 @@ impl TestRegistry {
                     workflow_id.clone(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::Square.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
                                 chain_name: chain.clone(),
@@ -808,6 +823,7 @@ impl TestRegistry {
                     WorkflowID::new("block_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoBlockInterval.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::BlockInterval {
                             chain_name: chain.clone(),
                             start_stop: false,
@@ -841,6 +857,7 @@ impl TestRegistry {
                     WorkflowID::new("evm_block_interval_start_stop").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoBlockInterval.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::BlockInterval {
                             chain_name: chain.clone(),
                             start_stop: true,
@@ -872,6 +889,7 @@ impl TestRegistry {
                     WorkflowID::new("cron_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoCronInterval.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::Existing(Trigger::Cron {
                             schedule: "*/5 * * * * *".to_string(),
                             start_time: None,
@@ -935,6 +953,7 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_square").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::Square.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
                                 chain_name: cosmos_chain.clone(),
@@ -965,6 +984,7 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_chain_trigger_lookup").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::ChainTriggerLookup.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
                                 chain_name: cosmos_chain.clone(),
@@ -995,6 +1015,7 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_cosmos_query").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::CosmosQuery.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
                                 chain_name: cosmos_chain.clone(),
@@ -1031,6 +1052,7 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_permissions").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::Permissions.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
                                 chain_name: cosmos_chain.clone(),
@@ -1063,6 +1085,7 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_block_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoBlockInterval.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::BlockInterval {
                             chain_name: cosmos_chain.clone(),
                             start_stop: false,
@@ -1097,6 +1120,7 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_block_interval_start_stop").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoBlockInterval.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::BlockInterval {
                             chain_name: cosmos_chain.clone(),
                             start_stop: true,
@@ -1129,6 +1153,7 @@ impl TestRegistry {
                     WorkflowID::new("cosmos_cron_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_component(ComponentName::EchoCronInterval.into())
+                        .with_aggregator(ComponentName::SimpleAggregator)
                         .with_trigger(TriggerDefinition::Existing(Trigger::Cron {
                             schedule: "*/5 * * * * *".to_string(),
                             start_time: None,

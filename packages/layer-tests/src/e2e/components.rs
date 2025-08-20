@@ -50,6 +50,7 @@ impl ComponentName {
 impl ComponentSources {
     pub async fn new(
         configs: &Configs,
+        registry: &super::test_registry::TestRegistry,
         http_client: &HttpClient,
         aggregator_clients: &[HttpClient],
     ) -> Self {
@@ -74,6 +75,15 @@ impl ComponentSources {
             )
             .flatten()
             .collect();
+
+        // Collect aggregator components from all test workflows
+        for test in registry.list_all() {
+            for workflow in test.workflows.values() {
+                for aggregator in &workflow.aggregators {
+                    component_names.insert(*aggregator);
+                }
+            }
+        }
 
         let mut futures = FuturesUnordered::new();
 
@@ -117,11 +127,24 @@ async fn get_component_source(
 
         let digest = match name {
             ComponentName::SimpleAggregator | ComponentName::TimerAggregator => {
-                // Aggregator components go to aggregator server
-                aggregator_client
-                    .upload_component(wasm_bytes.to_vec())
-                    .await
-                    .unwrap()
+                // Upload aggregator components to ALL aggregator servers
+                // This ensures the component is available on any aggregator endpoint
+                let mut digest = None;
+                for aggregator_client in aggregator_clients {
+                    let uploaded_digest = aggregator_client
+                        .upload_component(wasm_bytes.to_vec())
+                        .await
+                        .unwrap();
+                    
+                    // Verify all aggregators return the same digest
+                    if let Some(existing_digest) = &digest {
+                        assert_eq!(existing_digest, &uploaded_digest, 
+                            "Different aggregators returned different digests for the same component");
+                    } else {
+                        digest = Some(uploaded_digest);
+                    }
+                }
+                digest.expect("No aggregator clients available")
             }
             _ => {
                 // Regular components go to WAVS server
