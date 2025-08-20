@@ -37,6 +37,7 @@ pub struct TestMnemonics {
     pub cli: String,
     pub wavs: String,
     pub aggregator: String,
+    pub aggregator_2: String,
 }
 
 impl TestMnemonics {
@@ -53,6 +54,10 @@ impl TestMnemonics {
             aggregator:
                 "brain medal write network foam renew muscle mirror rather daring bike uniform"
                     .to_string(),
+            // Different mnemonic for second aggregator to avoid nonce conflicts
+            aggregator_2:
+                "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat"
+                    .to_string(),
         }
     }
 
@@ -63,7 +68,7 @@ impl TestMnemonics {
             let anvil_config = chain_config.signing_client_config(anvil_mnemonic).unwrap();
             let anvil_client = EvmSigningClient::new(anvil_config).await.unwrap();
 
-            for mnemonic in [&self.cli, &self.wavs, &self.aggregator] {
+            for mnemonic in [&self.cli, &self.wavs, &self.aggregator, &self.aggregator_2] {
                 let dest_addr = MnemonicBuilder::<English>::default()
                     .phrase(mnemonic)
                     .build()
@@ -178,6 +183,7 @@ impl From<TestConfig> for Configs {
         let mut aggregator_config_2 = aggregator_config.clone();
         aggregator_config_2.port = 8002;
         aggregator_config_2.data = tempfile::tempdir().unwrap().path().to_path_buf();
+        aggregator_config_2.credential = Some(mnemonics.aggregator_2.clone());
 
         let cli_args = wavs_cli::args::CliArgs {
             data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
