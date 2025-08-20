@@ -158,6 +158,7 @@ impl From<TestConfig> for Configs {
         wavs_config.chains = chain_configs.clone();
         wavs_config.submission_mnemonic = Some(mnemonics.wavs.clone());
 
+        // Create first aggregator config (default port 8001)
         let mut aggregator_config: wavs_aggregator::config::Config =
             ConfigBuilder::new(wavs_aggregator::args::CliArgs {
                 data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
@@ -171,6 +172,12 @@ impl From<TestConfig> for Configs {
 
         aggregator_config.chains = chain_configs.clone();
         aggregator_config.credential = Some(mnemonics.aggregator.clone());
+
+        // Create second aggregator config (port 8002)
+        // It is used only in few tests, but we need to spin it beforehand
+        let mut aggregator_config_2 = aggregator_config.clone();
+        aggregator_config_2.port = 8002;
+        aggregator_config_2.data = tempfile::tempdir().unwrap().path().to_path_buf();
 
         let cli_args = wavs_cli::args::CliArgs {
             data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
@@ -192,7 +199,7 @@ impl From<TestConfig> for Configs {
             registry: test_config.registry.map_or_else(|| false, |t| t),
             cli: cli_config,
             cli_args,
-            aggregators: vec![aggregator_config],
+            aggregators: vec![aggregator_config, aggregator_config_2],
             wavs: wavs_config,
             chains: chain_configs,
             mnemonics,

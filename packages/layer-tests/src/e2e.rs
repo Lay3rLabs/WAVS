@@ -145,8 +145,13 @@ async fn _run(configs: Configs, mode: TestMode, middleware_instance: MiddlewareI
         .await;
 
     // upload components
-    let component_sources =
-        ComponentSources::new(&configs, &clients.http_client, &clients.aggregator_client).await;
+    let component_sources = ComponentSources::new(
+        &configs,
+        &registry,
+        &clients.http_client,
+        &clients.aggregator_clients,
+    )
+    .await;
 
     // create the real services (deploy contracts etc.)
 

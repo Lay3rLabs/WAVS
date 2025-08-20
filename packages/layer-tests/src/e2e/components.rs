@@ -135,10 +135,10 @@ async fn get_component_source(
                         .upload_component(wasm_bytes.to_vec())
                         .await
                         .unwrap();
-                    
+
                     // Verify all aggregators return the same digest
                     if let Some(existing_digest) = &digest {
-                        assert_eq!(existing_digest, &uploaded_digest, 
+                        assert_eq!(existing_digest, &uploaded_digest,
                             "Different aggregators returned different digests for the same component");
                     } else {
                         digest = Some(uploaded_digest);

@@ -31,8 +31,9 @@ use crate::e2e::test_definition::{
 pub type CosmosTriggerCodeMap =
     Arc<DashMap<CosmosTriggerDefinition, Arc<tokio::sync::Mutex<Option<u64>>>>>;
 
-// Eventually we will have multiple aggregators to test against, but for now we use a single local aggregator
 const AGGREGATOR_ENDPOINT: &str = "http://127.0.0.1:8001";
+// second aggregator is used only in few cases
+const AGGREGATOR_ENDPOINT_2: &str = "http://127.0.0.1:8002";
 
 /// Registry for managing test definitions and their deployed services
 #[derive(Default)]
@@ -185,6 +186,7 @@ impl TestRegistry {
                     registry.register_evm_multiple_services_with_different_aggregators_test(
                         chain,
                         aggregator_endpoint,
+                        AGGREGATOR_ENDPOINT_2,
                     );
                 }
             }
@@ -433,12 +435,13 @@ impl TestRegistry {
     fn register_evm_multiple_services_with_different_aggregators_test(
         &mut self,
         chain: &ChainName,
-        aggregator_endpoint: &str,
+        aggregator_endpoint_1: &str,
+        aggregator_endpoint_2: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_multiple_services_with_different_aggregators")
                 .with_description("Tests multiple services, each with a different aggregator")
-                // First service with SimpleAggregator
+                // First service with SimpleAggregator on first endpoint
                 .add_workflow(
                     WorkflowID::new("service_with_simple_aggregator").unwrap(),
                     WorkflowBuilder::new()
@@ -450,7 +453,7 @@ impl TestRegistry {
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
-                            url: aggregator_endpoint.to_string(),
+                            url: aggregator_endpoint_1.to_string(),
                             aggregator: AggregatorDefinition::ComponentBasedAggregator {
                                 component: ComponentDefinition::from(
                                     ComponentName::SimpleAggregator,
@@ -466,7 +469,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
-                // Second service with TimerAggregator
+                // Second service with TimerAggregator on second endpoint
                 .add_workflow(
                     WorkflowID::new("service_with_timer_aggregator").unwrap(),
                     WorkflowBuilder::new()
@@ -478,7 +481,7 @@ impl TestRegistry {
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
-                            url: aggregator_endpoint.to_string(),
+                            url: aggregator_endpoint_2.to_string(),
                             aggregator: AggregatorDefinition::ComponentBasedAggregator {
                                 component: ComponentDefinition::from(
                                     ComponentName::TimerAggregator,
