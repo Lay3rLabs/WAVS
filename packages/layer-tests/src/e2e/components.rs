@@ -1,15 +1,15 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
 };
 
+use super::{config::Configs, test_definition::SubmitDefinition, test_registry::TestRegistry};
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::filesystem::workspace_path;
 use wasm_pkg_common::package::PackageRef;
+use wavs_aggregator::config::Config as AggregatorConfig;
 use wavs_cli::clients::HttpClient;
 use wavs_types::{ComponentDigest, ComponentSource, Registry};
-
-use super::config::Configs;
 
 #[derive(Clone, Debug, Default)]
 pub struct ComponentSources {
@@ -50,9 +50,10 @@ impl ComponentName {
 impl ComponentSources {
     pub async fn new(
         configs: &Configs,
-        registry: &super::test_registry::TestRegistry,
+        registry: &TestRegistry,
         http_client: &HttpClient,
         aggregator_clients: &[HttpClient],
+        aggregator_configs: &[AggregatorConfig],
     ) -> Self {
         let mut component_names: HashSet<ComponentName> = configs
             .matrix
@@ -76,10 +77,17 @@ impl ComponentSources {
             .flatten()
             .collect();
 
-        // Collect aggregator components from all test workflows
+        // Collect which aggregator components need to go to which aggregator endpoint
+        let mut aggregator_components_by_endpoint: HashMap<String, HashSet<ComponentName>> =
+            HashMap::new();
         for test in registry.list_all() {
             for workflow in test.workflows.values() {
+                let SubmitDefinition::Aggregator { url, .. } = &workflow.submit;
                 for aggregator in &workflow.aggregators {
+                    aggregator_components_by_endpoint
+                        .entry(url.clone())
+                        .or_default()
+                        .insert(*aggregator);
                     component_names.insert(*aggregator);
                 }
             }
@@ -91,8 +99,10 @@ impl ComponentSources {
             futures.push(get_component_source(
                 http_client,
                 aggregator_clients,
+                aggregator_configs,
                 component_name,
                 configs.registry,
+                &aggregator_components_by_endpoint,
             ));
         }
 
@@ -109,8 +119,10 @@ impl ComponentSources {
 async fn get_component_source(
     http_client: &HttpClient,
     aggregator_clients: &[HttpClient],
+    aggregator_configs: &[AggregatorConfig],
     name: ComponentName,
     registry: bool,
+    aggregator_components_by_endpoint: &HashMap<String, HashSet<ComponentName>>,
 ) -> (ComponentName, ComponentSource) {
     if !registry {
         let wasm_filename = name.as_str();
@@ -127,21 +139,25 @@ async fn get_component_source(
 
         let digest = match name {
             ComponentName::SimpleAggregator | ComponentName::TimerAggregator => {
-                // Upload aggregator components to ALL aggregator servers
-                // This ensures the component is available on any aggregator endpoint
                 let mut digest = None;
-                for aggregator_client in aggregator_clients {
-                    let uploaded_digest = aggregator_client
-                        .upload_component(wasm_bytes.to_vec())
-                        .await
-                        .unwrap();
 
-                    // Verify all aggregators return the same digest
-                    if let Some(existing_digest) = &digest {
-                        assert_eq!(existing_digest, &uploaded_digest,
-                            "Different aggregators returned different digests for the same component");
-                    } else {
-                        digest = Some(uploaded_digest);
+                // Upload to each aggregator that has this component specified
+                for (client, config) in aggregator_clients.iter().zip(aggregator_configs.iter()) {
+                    let endpoint_url = format!("http://{}:{}", config.host, config.port);
+
+                    if let Some(components) = aggregator_components_by_endpoint.get(&endpoint_url) {
+                        if components.contains(&name) {
+                            tracing::info!("Uploading {} to {}", name.as_str(), endpoint_url);
+                            let uploaded_digest =
+                                client.upload_component(wasm_bytes.to_vec()).await.unwrap();
+
+                            if let Some(existing_digest) = &digest {
+                                assert_eq!(existing_digest, &uploaded_digest,
+                                    "Different aggregators returned different digests for the same component");
+                            } else {
+                                digest = Some(uploaded_digest);
+                            }
+                        }
                     }
                 }
                 digest.expect("No aggregator clients available")

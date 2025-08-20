@@ -150,6 +150,7 @@ async fn _run(configs: Configs, mode: TestMode, middleware_instance: MiddlewareI
         &registry,
         &clients.http_client,
         &clients.aggregator_clients,
+        &configs.aggregators,
     )
     .await;
 
