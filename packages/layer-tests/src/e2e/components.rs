@@ -17,7 +17,14 @@ pub struct ComponentSources {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ComponentType {
+    Operator,
+    Aggregator,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ComponentName {
+    // Operator components
     ChainTriggerLookup,
     CosmosQuery,
     KvStore,
@@ -26,6 +33,7 @@ pub enum ComponentName {
     Square,
     EchoBlockInterval,
     EchoCronInterval,
+    // Aggregator components
     SimpleAggregator,
     TimerAggregator,
 }
@@ -44,6 +52,23 @@ impl ComponentName {
             ComponentName::SimpleAggregator => "simple_aggregator",
             ComponentName::TimerAggregator => "timer_aggregator",
         }
+    }
+
+    pub fn component_type(&self) -> ComponentType {
+        match self {
+            ComponentName::SimpleAggregator | ComponentName::TimerAggregator => {
+                ComponentType::Aggregator
+            }
+            _ => ComponentType::Operator,
+        }
+    }
+
+    pub fn is_aggregator(&self) -> bool {
+        self.component_type() == ComponentType::Aggregator
+    }
+
+    pub fn is_operator(&self) -> bool {
+        self.component_type() == ComponentType::Operator
     }
 }
 
@@ -137,38 +162,35 @@ async fn get_component_source(
 
         let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
 
-        let digest = match name {
-            ComponentName::SimpleAggregator | ComponentName::TimerAggregator => {
-                let mut digest = None;
+        let digest = if name.is_aggregator() {
+            let mut digest = None;
 
-                // Upload to each aggregator that has this component specified
-                for (client, config) in aggregator_clients.iter().zip(aggregator_configs.iter()) {
-                    let endpoint_url = format!("http://{}:{}", config.host, config.port);
+            // Upload to each aggregator that has this component specified
+            for (client, config) in aggregator_clients.iter().zip(aggregator_configs.iter()) {
+                let endpoint_url = format!("http://{}:{}", config.host, config.port);
 
-                    if let Some(components) = aggregator_components_by_endpoint.get(&endpoint_url) {
-                        if components.contains(&name) {
-                            tracing::info!("Uploading {} to {}", name.as_str(), endpoint_url);
-                            let uploaded_digest =
-                                client.upload_component(wasm_bytes.to_vec()).await.unwrap();
+                if let Some(components) = aggregator_components_by_endpoint.get(&endpoint_url) {
+                    if components.contains(&name) {
+                        tracing::info!("Uploading {} to {}", name.as_str(), endpoint_url);
+                        let uploaded_digest =
+                            client.upload_component(wasm_bytes.to_vec()).await.unwrap();
 
-                            if let Some(existing_digest) = &digest {
-                                assert_eq!(existing_digest, &uploaded_digest,
-                                    "Different aggregators returned different digests for the same component");
-                            } else {
-                                digest = Some(uploaded_digest);
-                            }
+                        if let Some(existing_digest) = &digest {
+                            assert_eq!(existing_digest, &uploaded_digest,
+                                "Different aggregators returned different digests for the same component");
+                        } else {
+                            digest = Some(uploaded_digest);
                         }
                     }
                 }
-                digest.expect("No aggregator clients available")
             }
-            _ => {
-                // Regular components go to WAVS server
-                http_client
-                    .upload_component(wasm_bytes.to_vec())
-                    .await
-                    .unwrap()
-            }
+            digest.expect("No aggregator clients available")
+        } else {
+            // Operator components go to WAVS server
+            http_client
+                .upload_component(wasm_bytes.to_vec())
+                .await
+                .unwrap()
         };
         (name, ComponentSource::Digest(digest))
     } else {
