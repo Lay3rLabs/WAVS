@@ -94,6 +94,9 @@ pub struct WorkflowDefinition {
 
     /// The timeout for workflow to receive signed data
     pub timeout: Duration,
+
+    /// Aggregator components needed for this workflow
+    pub aggregators: Vec<ComponentName>,
 }
 
 #[derive(Clone, Debug)]
@@ -302,6 +305,7 @@ pub struct WorkflowBuilder {
     input_data: InputData,
     expected_output: Option<ExpectedOutput>,
     timeout: Option<Duration>,
+    aggregators: Vec<ComponentName>,
 }
 
 impl WorkflowBuilder {
@@ -362,6 +366,12 @@ impl WorkflowBuilder {
         self
     }
 
+    /// Add an aggregator component for this workflow
+    pub fn with_aggregator(mut self, aggregator: ComponentName) -> Self {
+        self.aggregators.push(aggregator);
+        self
+    }
+
     /// Build the workflow definition
     pub fn build(self) -> WorkflowDefinition {
         let component = self.component.expect("Component not set");
@@ -378,6 +388,7 @@ impl WorkflowBuilder {
             input_data: self.input_data,
             expected_output,
             timeout: self.timeout.unwrap_or(Duration::from_secs(30)),
+            aggregators: self.aggregators,
         }
     }
 }

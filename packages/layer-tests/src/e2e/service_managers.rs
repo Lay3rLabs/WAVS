@@ -27,7 +27,7 @@ use crate::e2e::{
 pub struct ServiceManagers {
     configs: Arc<Configs>,
     lookup: Arc<HashMap<String, (MockServiceManager, ChainName)>>,
-    aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<ServiceID>>>,
+    aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<(ServiceID, String)>>>,
 }
 
 impl ServiceManagers {
@@ -285,13 +285,15 @@ impl ServiceManagers {
 
             // register the service to the aggregator if needed
             for workflow in service.workflows.values() {
-                if self
-                    .aggregator_registered_service_ids
-                    .lock()
-                    .unwrap()
-                    .insert(service.id())
-                {
-                    if let Submit::Aggregator { url, .. } = &workflow.submit {
+                if let Submit::Aggregator { url, .. } = &workflow.submit {
+                    // Track registrations per (service_id, aggregator_url) pair
+                    // This ensures a service is registered to ALL aggregators it needs
+                    if self
+                        .aggregator_registered_service_ids
+                        .lock()
+                        .unwrap()
+                        .insert((service.id(), url.clone()))
+                    {
                         TestRegistry::register_to_aggregator(url, &service)
                             .await
                             .unwrap();
