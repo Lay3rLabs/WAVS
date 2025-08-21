@@ -33,6 +33,7 @@ pub enum EvmService {
     EmptyToEchoData,
     SimpleAggregator,
     TimerAggregator,
+    MultipleServicesWithDifferentAggregators,
 }
 
 #[derive(
@@ -145,6 +146,9 @@ impl From<EvmService> for Vec<ComponentName> {
             EvmService::EmptyToEchoData => vec![ComponentName::EchoData],
             EvmService::SimpleAggregator => vec![ComponentName::EchoData],
             EvmService::TimerAggregator => vec![ComponentName::EchoData],
+            EvmService::MultipleServicesWithDifferentAggregators => {
+                vec![ComponentName::EchoData, ComponentName::Square]
+            }
         }
     }
 }
