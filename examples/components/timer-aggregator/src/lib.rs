@@ -12,8 +12,17 @@ struct Component;
 
 impl Guest for Component {
     fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
+        let timer_delay_secs_str = host::config_var("timer_delay_secs")
+            .ok_or("timer_delay_secs config variable is required")?;
+
+        let timer_delay_secs: u64 = timer_delay_secs_str
+            .parse()
+            .map_err(|e| format!("Failed to parse timer_delay_secs: {e}"))?;
+
         let timer_action = TimerAction {
-            delay: Duration { secs: 5 },
+            delay: Duration {
+                secs: timer_delay_secs,
+            },
         };
         Ok(vec![AggregatorAction::Timer(timer_action)])
     }

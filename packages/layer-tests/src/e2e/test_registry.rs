@@ -417,6 +417,10 @@ impl TestRegistry {
                                     ComponentName::TimerAggregator,
                                 )
                                 .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_hardcoded(
+                                    "timer_delay_secs".to_string(),
+                                    "3".to_string(),
+                                )
                                 .with_config_service_handler(),
                                 // for deploying the submission contract that the aggregator will use
                                 chain_name: chain.clone(),
@@ -485,6 +489,10 @@ impl TestRegistry {
                                     ComponentName::TimerAggregator,
                                 )
                                 .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_hardcoded(
+                                    "timer_delay_secs".to_string(),
+                                    "3".to_string(),
+                                )
                                 .with_config_service_handler(),
                                 chain_name: chain.clone(),
                             },
