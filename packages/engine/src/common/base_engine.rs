@@ -70,6 +70,7 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
 
     pub fn start_epoch_thread(&self) {
         let engine = self.wasm_engine.clone();
+        // just run forever, ticking forward till the end of time (or however long this node is up)
         std::thread::spawn(move || loop {
             engine.increment_epoch();
             std::thread::sleep(Duration::from_secs(1));
@@ -146,15 +147,20 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
     }
 
     pub fn store_component_bytes(&self, bytes: &[u8]) -> Result<ComponentDigest, EngineError> {
+        // compile component (validate it is proper wasm)
         let component =
             WasmComponent::new(&self.wasm_engine, bytes).map_err(EngineError::Compile)?;
 
+        // store original wasm
         let digest = ComponentDigest::from(
             self.storage
                 .set_data(bytes)
                 .map_err(|e| EngineError::StorageError(format!("Failed to store bytes: {}", e)))?
                 .inner(),
         );
+
+        // // TODO: write precompiled wasm (huge optimization on restart)
+        // tokio::fs::write(self.path_for_precompiled_wasm(digest), cm.serialize()?).await?;
 
         self.memory_cache
             .lock()
