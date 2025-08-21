@@ -67,7 +67,7 @@ impl TestMnemonics {
             aggregator:
                 "brain medal write network foam renew muscle mirror rather daring bike uniform"
                     .to_string(),
-            // Different mnemonic for second aggregator to avoid nonce conflicts
+            // 0x5E661B79FE2D3F6cE70F5AAC07d8Cd9AF2161630
             aggregator_2:
                 "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat"
                     .to_string(),

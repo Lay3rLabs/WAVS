@@ -1,32 +1,35 @@
-use crate::error::{AggregatorError, AggregatorResult};
-use anyhow::Result;
-use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
+
+use anyhow::Result;
+use lru::LruCache;
 use tracing::instrument;
+use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
+
 use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
 use utils::storage::CAStorage;
-use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
-use wavs_engine::{
-    backend::wasi_keyvalue::context::KeyValueCtx,
-    bindings::aggregator::world::{
-        wavs::types::{chain::AnyTxHash, core::LogLevel},
-        AggregatorWorld,
-    },
-    worlds::aggregator::instance::{
-        AggregatorInstanceDeps as InstanceDeps,
-        AggregatorInstanceDepsBuilder as InstanceDepsBuilder,
-    },
-};
-
 use utils::wkg::WkgClient;
+
 pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
     AggregatorAction, SubmitAction,
 };
+use wavs_engine::{
+    backend::wasi_keyvalue::context::KeyValueCtx,
+    bindings::aggregator::world::wavs::types::{chain::AnyTxHash, core::LogLevel},
+    worlds::aggregator::{
+        execute::{execute_packet, execute_submit_callback, execute_timer_callback},
+        instance::{
+            AggregatorInstanceDeps as InstanceDeps,
+            AggregatorInstanceDepsBuilder as InstanceDepsBuilder,
+        },
+    },
+};
 use wavs_types::{Component, ComponentDigest, ComponentSource, Packet};
+
+use crate::error::{AggregatorError, AggregatorResult};
 
 const MIN_LRU_SIZE: usize = 10;
 
@@ -134,7 +137,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
-        wavs_engine::worlds::aggregator::execute::execute(&mut instance_deps, packet)
+        execute_packet(&mut instance_deps, packet)
             .await
             .map_err(Into::into)
     }
@@ -199,26 +202,9 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
-        let wit_packet = packet.clone().try_into()?;
-
-        let aggregator_world = AggregatorWorld::instantiate_async(
-            &mut instance_deps.store,
-            &instance_deps.component,
-            &instance_deps.linker,
-        )
-        .await?;
-
-        let result = aggregator_world
-            .call_handle_timer_callback(&mut instance_deps.store, &wit_packet)
-            .await?;
-
-        match result {
-            Ok(actions) => Ok(actions),
-            Err(error) => Err(AggregatorError::ComponentExecution(format!(
-                "Timer callback execution failed: {}",
-                error
-            ))),
-        }
+        execute_timer_callback(&mut instance_deps, packet)
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
@@ -233,28 +219,9 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
-        let wit_packet = packet.clone().try_into()?;
-
-        let wit_tx_result = tx_result.as_ref().map_err(|e| e.as_str());
-
-        let aggregator_world = AggregatorWorld::instantiate_async(
-            &mut instance_deps.store,
-            &instance_deps.component,
-            &instance_deps.linker,
-        )
-        .await?;
-
-        let result = aggregator_world
-            .call_handle_submit_callback(&mut instance_deps.store, &wit_packet, wit_tx_result)
-            .await?;
-
-        match result {
-            Ok(_) => Ok(()),
-            Err(error) => Err(AggregatorError::ComponentExecution(format!(
-                "Submit callback execution failed: {}",
-                error
-            ))),
-        }
+        execute_submit_callback(&mut instance_deps, packet, tx_result)
+            .await
+            .map_err(Into::into)
     }
 
     pub async fn upload_component(

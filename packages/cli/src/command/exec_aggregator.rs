@@ -150,7 +150,8 @@ impl ExecAggregator {
         let initial_fuel = instance_deps.store.get_fuel()?;
         let start_time = Instant::now();
         let actions =
-            wavs_engine::worlds::aggregator::execute::execute(&mut instance_deps, &packet).await?;
+            wavs_engine::worlds::aggregator::execute::execute_packet(&mut instance_deps, &packet)
+                .await?;
         let fuel_used = initial_fuel - instance_deps.store.get_fuel()?;
         let time_elapsed = start_time.elapsed().as_millis();
 
