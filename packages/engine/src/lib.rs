@@ -3,5 +3,6 @@
 
 pub mod backend;
 pub mod bindings;
+pub mod common;
 pub mod utils;
 pub mod worlds;

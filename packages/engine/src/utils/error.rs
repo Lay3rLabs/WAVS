@@ -1,5 +1,5 @@
 use thiserror::Error;
-use wavs_types::{ServiceID, WorkflowID};
+use wavs_types::{ComponentDigest, ServiceID, WorkflowID};
 
 #[derive(Error, Debug)]
 pub enum EngineError {
@@ -35,4 +35,16 @@ pub enum EngineError {
 
     #[error("Unable to add to linker: {0}")]
     AddToLinker(wasmtime::Error),
+
+    #[error("Compile error: {0}")]
+    Compile(anyhow::Error),
+
+    #[error("Storage error: {0}")]
+    StorageError(String),
+
+    #[error("IO error: {0}")]
+    IO(String),
+
+    #[error("Unknown digest: {0}")]
+    UnknownDigest(ComponentDigest),
 }

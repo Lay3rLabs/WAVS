@@ -1,17 +1,12 @@
-use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
+use std::sync::Arc;
 
 use anyhow::Result;
-use lru::LruCache;
 use tracing::instrument;
-use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
 
 use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
 use utils::storage::CAStorage;
-use utils::wkg::WkgClient;
 
 pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
     AggregatorAction, SubmitAction,
@@ -19,6 +14,7 @@ pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     bindings::aggregator::world::wavs::types::{chain::AnyTxHash, core::LogLevel},
+    common::base_engine::{BaseEngine, BaseEngineConfig},
     worlds::aggregator::{
         execute::{execute_packet, execute_submit_callback, execute_timer_callback},
         instance::{
@@ -27,21 +23,12 @@ use wavs_engine::{
         },
     },
 };
-use wavs_types::{Component, ComponentDigest, ComponentSource, Packet};
+use wavs_types::{Component, ComponentDigest, Packet};
 
 use crate::error::{AggregatorError, AggregatorResult};
 
-const MIN_LRU_SIZE: usize = 10;
-
 pub struct AggregatorEngine<S: CAStorage> {
-    wasm_engine: WTEngine,
-    chain_configs: Arc<RwLock<ChainConfigs>>,
-    memory_cache: Mutex<LruCache<ComponentDigest, WasmComponent>>,
-    app_data_dir: PathBuf,
-    max_wasm_fuel: Option<u64>,
-    max_execution_seconds: Option<u64>,
-    db: RedbStorage,
-    storage: Arc<S>,
+    engine: BaseEngine<S>,
 }
 
 impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
@@ -54,40 +41,21 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         db: RedbStorage,
         storage: Arc<S>,
     ) -> AggregatorResult<Self> {
-        let mut config = WTConfig::new();
-        config.wasm_component_model(true);
-        config.async_support(true);
-        config.consume_fuel(true);
-        config.epoch_interruption(true);
-        let wasm_engine = WTEngine::new(&config)?;
-
-        let lru_size =
-            NonZeroUsize::new(lru_size).unwrap_or(NonZeroUsize::new(MIN_LRU_SIZE).unwrap());
-        let app_data_dir = app_data_dir.into();
-        if !app_data_dir.is_dir() {
-            std::fs::create_dir_all(&app_data_dir)?;
-        }
-
-        Ok(Self {
-            wasm_engine,
-            chain_configs: Arc::new(RwLock::new(chain_configs)),
-            memory_cache: Mutex::new(LruCache::new(lru_size)),
-            app_data_dir,
+        let config = BaseEngineConfig {
+            app_data_dir: app_data_dir.into(),
+            chain_configs,
+            lru_size,
             max_wasm_fuel,
             max_execution_seconds,
-            db,
-            storage,
-        })
+        };
+
+        let engine = BaseEngine::new(config, db, storage)?;
+
+        Ok(Self { engine })
     }
 
     pub fn start(&self) -> AggregatorResult<()> {
-        let engine = self.wasm_engine.clone();
-
-        std::thread::spawn(move || loop {
-            engine.increment_epoch();
-            std::thread::sleep(Duration::from_secs(1));
-        });
-
+        self.engine.start_epoch_thread();
         Ok(())
     }
 
@@ -96,21 +64,17 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         &self,
         component: &Component,
         packet: &Packet,
-        wasm_component: WasmComponent,
+        wasm_component: wasmtime::component::Component,
     ) -> AggregatorResult<InstanceDeps> {
-        let chain_configs = self
-            .chain_configs
-            .read()
-            .map_err(|e| anyhow::anyhow!("Chain configs lock poisoned: {}", e))?
-            .clone();
+        let chain_configs = self.engine.get_chain_configs()?;
 
         InstanceDepsBuilder {
             component: wasm_component,
             aggregator_component: component.clone(),
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
-            engine: &self.wasm_engine,
-            data_dir: &self.app_data_dir,
+            engine: &self.engine.wasm_engine,
+            data_dir: &self.engine.app_data_dir,
             chain_configs: &chain_configs,
             log: |_service_id, _workflow_id, _digest, level, message| match level {
                 LogLevel::Error => tracing::error!("{}", message),
@@ -119,9 +83,11 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
                 LogLevel::Debug => tracing::debug!("{}", message),
                 LogLevel::Trace => tracing::trace!("{}", message),
             },
-            max_wasm_fuel: component.fuel_limit.or(self.max_wasm_fuel),
-            max_execution_seconds: component.time_limit_seconds.or(self.max_execution_seconds),
-            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), packet.service.id().to_string()),
+            max_wasm_fuel: component.fuel_limit.or(self.engine.max_wasm_fuel),
+            max_execution_seconds: component
+                .time_limit_seconds
+                .or(self.engine.max_execution_seconds),
+            keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), packet.service.id().to_string()),
         }
         .build()
         .map_err(Into::into)
@@ -142,53 +108,14 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             .map_err(Into::into)
     }
 
-    async fn load_component(&self, component: &Component) -> AggregatorResult<WasmComponent> {
-        let digest = component.source.digest().clone();
-
-        let cached_component = {
-            // put the lock in a scope so we're careful to drop it here
-            let mut lock = self.memory_cache.lock().unwrap();
-            lock.get(&digest).cloned()
-        };
-
-        if let Some(cached_component) = cached_component {
-            return Ok(cached_component);
-        }
-
-        // Try to get from storage first, if not found, fetch and store
-        let component_bytes = match self.storage.get_data(&digest.clone().into()) {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                // Component not in storage, fetch from source and store it
-                match &component.source {
-                    ComponentSource::Registry { registry } => {
-                        tracing::warn!("Component {} not found in storage ({}), attempting to fetch from registry...", 
-                            digest, e);
-                        let client = WkgClient::new(
-                            registry.domain.clone().unwrap_or("wa.dev".to_string()),
-                        )?;
-                        let bytes = client.fetch(registry).await.map_err(|e| {
-                            AggregatorError::ComponentLoad(format!(
-                                "Failed to fetch component from registry {:?}: {}",
-                                registry, e
-                            ))
-                        })?;
-                        self.storage.set_data(&bytes)?;
-                        bytes
-                    }
-                    _ => return Err(e.into()),
-                }
-            }
-        };
-
-        let wasm_component = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
-
-        self.memory_cache
-            .lock()
-            .unwrap()
-            .put(digest, wasm_component.clone());
-
-        Ok(wasm_component)
+    async fn load_component(
+        &self,
+        component: &Component,
+    ) -> AggregatorResult<wasmtime::component::Component> {
+        self.engine
+            .load_component_from_source(&component.source)
+            .await
+            .map_err(|e| AggregatorError::ComponentLoad(format!("Failed to load component: {}", e)))
     }
 
     #[instrument(level = "debug", skip(self, packet), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
@@ -228,13 +155,8 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         &self,
         component_bytes: Vec<u8>,
     ) -> AggregatorResult<ComponentDigest> {
-        // compile component (validate it is proper wasm)
-        let cm = WasmComponent::new(&self.wasm_engine, &component_bytes)?;
-
-        // store original wasm
-        let digest = ComponentDigest::from(self.storage.set_data(&component_bytes)?.inner());
-        self.memory_cache.lock().unwrap().put(digest.clone(), cm);
-
-        Ok(digest)
+        self.engine
+            .store_component_bytes(&component_bytes)
+            .map_err(Into::into)
     }
 }
