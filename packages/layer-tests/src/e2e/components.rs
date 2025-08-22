@@ -17,14 +17,7 @@ pub struct ComponentSources {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ComponentType {
-    Operator,
-    Aggregator,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum ComponentName {
-    // Operator components
+pub enum OperatorComponent {
     ChainTriggerLookup,
     CosmosQuery,
     KvStore,
@@ -33,42 +26,58 @@ pub enum ComponentName {
     Square,
     EchoBlockInterval,
     EchoCronInterval,
-    // Aggregator components
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum AggregatorComponent {
     SimpleAggregator,
     TimerAggregator,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum ComponentName {
+    Operator(OperatorComponent),
+    Aggregator(AggregatorComponent),
+}
+
+impl OperatorComponent {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OperatorComponent::ChainTriggerLookup => "chain_trigger_lookup",
+            OperatorComponent::CosmosQuery => "cosmos_query",
+            OperatorComponent::KvStore => "kv_store",
+            OperatorComponent::EchoData => "echo_data",
+            OperatorComponent::Permissions => "permissions",
+            OperatorComponent::Square => "square",
+            OperatorComponent::EchoBlockInterval => "echo_block_interval",
+            OperatorComponent::EchoCronInterval => "echo_cron_interval",
+        }
+    }
+}
+
+impl AggregatorComponent {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AggregatorComponent::SimpleAggregator => "simple_aggregator",
+            AggregatorComponent::TimerAggregator => "timer_aggregator",
+        }
+    }
 }
 
 impl ComponentName {
     pub fn as_str(&self) -> &'static str {
         match self {
-            ComponentName::ChainTriggerLookup => "chain_trigger_lookup",
-            ComponentName::CosmosQuery => "cosmos_query",
-            ComponentName::KvStore => "kv_store",
-            ComponentName::EchoData => "echo_data",
-            ComponentName::Permissions => "permissions",
-            ComponentName::Square => "square",
-            ComponentName::EchoBlockInterval => "echo_block_interval",
-            ComponentName::EchoCronInterval => "echo_cron_interval",
-            ComponentName::SimpleAggregator => "simple_aggregator",
-            ComponentName::TimerAggregator => "timer_aggregator",
-        }
-    }
-
-    pub fn component_type(&self) -> ComponentType {
-        match self {
-            ComponentName::SimpleAggregator | ComponentName::TimerAggregator => {
-                ComponentType::Aggregator
-            }
-            _ => ComponentType::Operator,
+            ComponentName::Operator(op) => op.as_str(),
+            ComponentName::Aggregator(agg) => agg.as_str(),
         }
     }
 
     pub fn is_aggregator(&self) -> bool {
-        self.component_type() == ComponentType::Aggregator
+        matches!(self, ComponentName::Aggregator(_))
     }
 
     pub fn is_operator(&self) -> bool {
-        self.component_type() == ComponentType::Operator
+        matches!(self, ComponentName::Operator(_))
     }
 }
 
