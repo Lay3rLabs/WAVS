@@ -10,7 +10,9 @@ use example_types::{
 use regex::Regex;
 use wavs_types::{ChainName, Trigger, WorkflowID};
 
-use crate::e2e::components::{ComponentName, ComponentSources};
+use crate::e2e::components::{
+    AggregatorComponent, ComponentName, ComponentSources, OperatorComponent,
+};
 
 use super::config::DEFAULT_CHAIN_ID;
 
@@ -314,12 +316,14 @@ impl WorkflowBuilder {
         Self::default()
     }
 
-    /// Set the component to use
-    pub fn with_component(mut self, component: ComponentDefinition) -> Self {
+    /// Set the operator component to use
+    pub fn with_operator_component(mut self, component: OperatorComponent) -> Self {
         if self.component.is_some() {
             panic!("Component already set");
         }
-        self.component = Some(component);
+        self.component = Some(ComponentDefinition::from(ComponentName::Operator(
+            component,
+        )));
         self
     }
 
@@ -367,8 +371,8 @@ impl WorkflowBuilder {
     }
 
     /// Add an aggregator component for this workflow
-    pub fn with_aggregator(mut self, aggregator: ComponentName) -> Self {
-        self.aggregators.push(aggregator);
+    pub fn with_aggregator_component(mut self, aggregator: AggregatorComponent) -> Self {
+        self.aggregators.push(ComponentName::Aggregator(aggregator));
         self
     }
 
