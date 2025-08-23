@@ -103,7 +103,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
-        execute_packet(&mut instance_deps, packet)
+        wavs_engine::worlds::aggregator::execute::execute_packet(&mut instance_deps, packet)
             .await
             .map_err(Into::into)
     }
@@ -129,7 +129,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
-        execute_timer_callback(&mut instance_deps, packet)
+        wavs_engine::worlds::aggregator::execute::execute_timer_callback(&mut instance_deps, packet)
             .await
             .map_err(Into::into)
     }
@@ -146,7 +146,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
-        execute_submit_callback(&mut instance_deps, packet, tx_result)
+        wavs_engine::worlds::aggregator::execute::execute_submit_callback(&mut instance_deps, packet, tx_result)
             .await
             .map_err(Into::into)
     }
