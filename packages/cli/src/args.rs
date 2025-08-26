@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     num::{NonZeroU32, NonZeroU64},
     path::PathBuf,
 };
@@ -14,14 +13,6 @@ use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{ChainName, ComponentDigest, ServiceStatus, Timestamp, WorkflowID};
 
 use crate::config::Config;
-
-/// Parse a single KEY=VALUE string into a tuple for config arguments
-fn parse_key_val(s: &str) -> Result<(String, String), String> {
-    match s.split_once('=') {
-        Some((key, value)) => Ok((key.to_string(), value.to_string())),
-        None => Err(format!("invalid KEY=VALUE format: '{}'", s)),
-    }
-}
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -87,8 +78,8 @@ pub enum Command {
         time_limit: Option<u64>,
 
         /// Component config in KEY=VALUE format: --config a=1 --config b=2
-        #[clap(long = "config", value_parser = parse_key_val, action = clap::ArgAction::Append)]
-        config: HashMap<String, String>,
+        #[clap(long, value_delimiter = None)]
+        config: Vec<String>,
     },
 
     /// Service management commands
@@ -127,8 +118,8 @@ pub enum Command {
 
         /// Configuration key-value pairs for the component in format 'key=value'
         /// Example: --config chain_name=31337 --config service_handler=0x1234...
-        #[clap(long = "config", value_parser = parse_key_val, action = clap::ArgAction::Append)]
-        config: Option<HashMap<String, String>>,
+        #[clap(long, value_delimiter = None)]
+        config: Option<Vec<String>>,
     },
 }
 
