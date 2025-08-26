@@ -15,12 +15,9 @@ use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     bindings::aggregator::world::wavs::types::{chain::AnyTxHash, core::LogLevel},
     common::base_engine::{BaseEngine, BaseEngineConfig},
-    worlds::aggregator::{
-        execute::{execute_packet, execute_submit_callback, execute_timer_callback},
-        instance::{
-            AggregatorInstanceDeps as InstanceDeps,
-            AggregatorInstanceDepsBuilder as InstanceDepsBuilder,
-        },
+    worlds::aggregator::instance::{
+        AggregatorInstanceDeps as InstanceDeps,
+        AggregatorInstanceDepsBuilder as InstanceDepsBuilder,
     },
 };
 use wavs_types::{Component, ComponentDigest, Packet};
@@ -146,9 +143,13 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
-        wavs_engine::worlds::aggregator::execute::execute_submit_callback(&mut instance_deps, packet, tx_result)
-            .await
-            .map_err(Into::into)
+        wavs_engine::worlds::aggregator::execute::execute_submit_callback(
+            &mut instance_deps,
+            packet,
+            tx_result,
+        )
+        .await
+        .map_err(Into::into)
     }
 
     pub async fn upload_component(
