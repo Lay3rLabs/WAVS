@@ -131,7 +131,7 @@ async fn main() {
                     if let Some((key, value)) = pair.split_once('=') {
                         Some((key.to_string(), value.to_string()))
                     } else {
-                        None // skip malformed entries
+                        None
                     }
                 })
                 .collect();
@@ -172,7 +172,6 @@ async fn main() {
             config,
             args: _,
         } => {
-            // Process config similar to exec command
             let config = config
                 .unwrap_or_default()
                 .into_iter()
@@ -180,7 +179,7 @@ async fn main() {
                     if let Some((key, value)) = pair.split_once('=') {
                         Some((key.to_string(), value.to_string()))
                     } else {
-                        None // skip malformed entries
+                        None
                     }
                 })
                 .collect();

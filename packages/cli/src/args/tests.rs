@@ -297,6 +297,102 @@ fn test_exec_aggregator_with_shared_args() {
 }
 
 #[test]
+fn test_complex_json_config_values() {
+    // Test that complex JSON structures can be passed without comma delimiter issues
+    let test_cases = vec![
+        (
+            vec![
+                "test",
+                "exec",
+                "--component",
+                "test.wasm",
+                "--input",
+                "test",
+                "--config",
+                r#"resolver_config={"coin_market_cap_id":1,"threshold":1.0}"#,
+            ],
+            r#"resolver_config={"coin_market_cap_id":1,"threshold":1.0}"#,
+        ),
+        (
+            vec![
+                "test",
+                "exec",
+                "--component",
+                "test.wasm",
+                "--input",
+                "test",
+                "--config",
+                r#"chain_names=["local-1","local-2","mainnet"]"#,
+            ],
+            r#"chain_names=["local-1","local-2","mainnet"]"#,
+        ),
+        (
+            vec![
+                "test",
+                "exec-aggregator",
+                "--component",
+                "aggregator.wasm",
+                "--config",
+                r#"service_handlers=[{"chain":"local","address":"0x1111"},{"chain":"mainnet","address":"0x2222"}]"#,
+            ],
+            r#"service_handlers=[{"chain":"local","address":"0x1111"},{"chain":"mainnet","address":"0x2222"}]"#,
+        ),
+    ];
+
+    for (args, expected_config) in test_cases {
+        let result = Command::try_parse_from(args.clone());
+        assert!(
+            result.is_ok(),
+            "Failed to parse command with complex JSON config: {:?}",
+            args
+        );
+
+        match result.unwrap() {
+            Command::Exec { config, .. } => {
+                assert_eq!(config.len(), 1);
+                assert_eq!(config[0], expected_config);
+            }
+            Command::ExecAggregator { config, .. } => {
+                let config = config.unwrap();
+                assert_eq!(config.len(), 1);
+                assert_eq!(config[0], expected_config);
+            }
+            _ => panic!("Unexpected command type"),
+        }
+    }
+}
+
+#[test]
+fn test_multiple_complex_configs() {
+    // Test multiple complex configs can be passed together
+    let args = vec![
+        "test",
+        "exec",
+        "--component",
+        "test.wasm",
+        "--input",
+        "test",
+        "--config",
+        r#"resolver_config={"coin_market_cap_id":1,"threshold":1.0}"#,
+        "--config",
+        r#"chain_names=["local-1","local-2"]"#,
+        "--config",
+        "simple_key=simple_value",
+        "--config",
+        r#"nested_object={"level1":{"level2":{"value":42}}}"#,
+    ];
+
+    let config = parse_command_config(args).unwrap();
+    assert_eq!(config.len(), 4);
+    assert!(
+        config.contains(&r#"resolver_config={"coin_market_cap_id":1,"threshold":1.0}"#.to_string())
+    );
+    assert!(config.contains(&r#"chain_names=["local-1","local-2"]"#.to_string()));
+    assert!(config.contains(&"simple_key=simple_value".to_string()));
+    assert!(config.contains(&r#"nested_object={"level1":{"level2":{"value":42}}}"#.to_string()));
+}
+
+#[test]
 fn test_config_formats() {
     // Test general config formats
     let general_configs = vec![
