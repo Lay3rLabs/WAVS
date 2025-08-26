@@ -125,16 +125,7 @@ async fn main() {
             config,
             args: _,
         } => {
-            let config = config
-                .into_iter()
-                .filter_map(|pair| {
-                    if let Some((key, value)) = pair.split_once('=') {
-                        Some((key.to_string(), value.to_string()))
-                    } else {
-                        None // skip malformed entries
-                    }
-                })
-                .collect();
+            let config = config.into_iter().collect();
 
             let res = match ExecComponent::run(
                 &ctx.config,
@@ -172,18 +163,7 @@ async fn main() {
             config,
             args: _,
         } => {
-            // Process config similar to exec command
-            let config = config
-                .unwrap_or_default()
-                .into_iter()
-                .filter_map(|pair| {
-                    if let Some((key, value)) = pair.split_once('=') {
-                        Some((key.to_string(), value.to_string()))
-                    } else {
-                        None // skip malformed entries
-                    }
-                })
-                .collect();
+            let config = config.unwrap_or_default().into_iter().collect();
 
             let res = match ExecAggregator::run(
                 &ctx.config,
