@@ -35,7 +35,7 @@ impl<S: CAStorage> Clone for EngineManager<S> {
     }
 }
 
-impl<S: CAStorage> EngineManager<S> {
+impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
     pub fn new(engine: WasmEngine<S>, thread_count: usize, services: Services) -> Self {
         Self {
             engine: Arc::new(engine),

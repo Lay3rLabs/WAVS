@@ -9646,6 +9646,7 @@ dependencies = [
  "anyhow",
  "example-types",
  "layer-climb",
+ "lru 0.16.0",
  "redb",
  "serde",
  "serde_json",

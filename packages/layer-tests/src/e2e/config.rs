@@ -12,6 +12,19 @@ use crate::config::TestConfig;
 
 use super::matrix::TestMatrix;
 
+// Aggregator endpoint configuration
+pub const AGGREGATOR_HOST: &str = "127.0.0.1";
+pub const AGGREGATOR_PORT_1: u32 = 8001;
+pub const AGGREGATOR_PORT_2: u32 = 8002;
+
+pub fn aggregator_endpoint_1() -> String {
+    format!("http://{}:{}", AGGREGATOR_HOST, AGGREGATOR_PORT_1)
+}
+
+pub fn aggregator_endpoint_2() -> String {
+    format!("http://{}:{}", AGGREGATOR_HOST, AGGREGATOR_PORT_2)
+}
+
 pub const DEFAULT_CHAIN_ID: u64 = 31337;
 pub const CRON_INTERVAL_DATA: &str = "cron-interval data";
 // we can go down to 1 for small groups of tests, but it currently causes a long wait in the test runner
@@ -54,7 +67,7 @@ impl TestMnemonics {
             aggregator:
                 "brain medal write network foam renew muscle mirror rather daring bike uniform"
                     .to_string(),
-            // Different mnemonic for second aggregator to avoid nonce conflicts
+            // 0x5E661B79FE2D3F6cE70F5AAC07d8Cd9AF2161630
             aggregator_2:
                 "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat"
                     .to_string(),
@@ -178,10 +191,10 @@ impl From<TestConfig> for Configs {
         aggregator_config.chains = chain_configs.clone();
         aggregator_config.credential = Some(mnemonics.aggregator.clone());
 
-        // Create second aggregator config (port 8002)
+        // Create second aggregator config
         // It is used only in few tests, but we need to spin it beforehand
         let mut aggregator_config_2 = aggregator_config.clone();
-        aggregator_config_2.port = 8002;
+        aggregator_config_2.port = AGGREGATOR_PORT_2;
         aggregator_config_2.data = tempfile::tempdir().unwrap().path().to_path_buf();
         aggregator_config_2.credential = Some(mnemonics.aggregator_2.clone());
 

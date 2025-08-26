@@ -31,9 +31,7 @@ use crate::e2e::test_definition::{
 pub type CosmosTriggerCodeMap =
     Arc<DashMap<CosmosTriggerDefinition, Arc<tokio::sync::Mutex<Option<u64>>>>>;
 
-const AGGREGATOR_ENDPOINT: &str = "http://127.0.0.1:8001";
-// second aggregator is used only in few cases
-const AGGREGATOR_ENDPOINT_2: &str = "http://127.0.0.1:8002";
+use super::config::{aggregator_endpoint_1, aggregator_endpoint_2};
 
 /// Registry for managing test definitions and their deployed services
 #[derive(Default)]
@@ -113,7 +111,7 @@ impl TestRegistry {
         // Process EVM services
         for service in &matrix.evm {
             let chain = chain_names.primary_evm().unwrap();
-            let aggregator_endpoint = AGGREGATOR_ENDPOINT;
+            let aggregator_endpoint = &aggregator_endpoint_1();
 
             match service {
                 EvmService::EchoData => {
@@ -186,7 +184,7 @@ impl TestRegistry {
                     registry.register_evm_multiple_services_with_different_aggregators_test(
                         chain,
                         aggregator_endpoint,
-                        AGGREGATOR_ENDPOINT_2,
+                        &aggregator_endpoint_2(),
                     );
                 }
             }
@@ -196,7 +194,7 @@ impl TestRegistry {
         for service in &matrix.cosmos {
             let cosmos = chain_names.primary_cosmos().unwrap();
             let evm = chain_names.primary_evm().unwrap();
-            let aggregator_endpoint = AGGREGATOR_ENDPOINT;
+            let aggregator_endpoint = &aggregator_endpoint_1();
 
             match service {
                 CosmosService::EchoData => {
@@ -238,7 +236,7 @@ impl TestRegistry {
         for service in &matrix.cross_chain {
             let cosmos = chain_names.primary_cosmos().unwrap();
             let evm = chain_names.primary_evm().unwrap();
-            let aggregator_endpoint = AGGREGATOR_ENDPOINT;
+            let aggregator_endpoint = &aggregator_endpoint_1();
 
             match service {
                 CrossChainService::CosmosToEvmEchoData => {
@@ -421,6 +419,10 @@ impl TestRegistry {
                                     AggregatorComponent::TimerAggregator,
                                 ))
                                 .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_hardcoded(
+                                    "timer_delay_secs".to_string(),
+                                    "3".to_string(),
+                                )
                                 .with_config_service_handler(),
                                 // for deploying the submission contract that the aggregator will use
                                 chain_name: chain.clone(),
@@ -489,6 +491,10 @@ impl TestRegistry {
                                     AggregatorComponent::TimerAggregator,
                                 ))
                                 .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_hardcoded(
+                                    "timer_delay_secs".to_string(),
+                                    "3".to_string(),
+                                )
                                 .with_config_service_handler(),
                                 chain_name: chain.clone(),
                             },

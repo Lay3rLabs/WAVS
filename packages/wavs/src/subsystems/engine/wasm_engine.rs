@@ -1,38 +1,28 @@
-use lru::LruCache;
-use std::num::NonZeroUsize;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::path::Path;
+use std::sync::Arc;
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
 use utils::telemetry::EngineMetrics;
-use utils::wkg::WkgClient;
-use wasmtime::{component::Component, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
-    backend::wasi_keyvalue::context::KeyValueCtx, worlds::operator::instance::InstanceDepsBuilder,
+    backend::wasi_keyvalue::context::KeyValueCtx,
+    common::base_engine::{BaseEngine, BaseEngineConfig},
+    worlds::operator::instance::InstanceDepsBuilder,
 };
 use wavs_types::{
     ComponentDigest, ComponentSource, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
 };
 
-use utils::storage::{CAStorage, CAStorageError};
+use utils::storage::CAStorage;
 
 use super::error::EngineError;
 
 pub struct WasmEngine<S: CAStorage> {
-    chain_configs: Arc<RwLock<ChainConfigs>>,
-    wasm_storage: S,
-    wasm_engine: WTEngine,
-    memory_cache: RwLock<LruCache<ComponentDigest, Component>>,
-    app_data_dir: PathBuf,
-    max_wasm_fuel: Option<u64>,
-    max_execution_seconds: Option<u64>,
+    engine: BaseEngine<S>,
     metrics: EngineMetrics,
-    db: RedbStorage,
 }
 
-impl<S: CAStorage> WasmEngine<S> {
+impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
     /// Create a new Wasm Engine manager.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -45,61 +35,28 @@ impl<S: CAStorage> WasmEngine<S> {
         metrics: EngineMetrics,
         db: RedbStorage,
     ) -> Self {
-        let mut config = WTConfig::new();
-        config.wasm_component_model(true);
-        config.async_support(true);
-        config.consume_fuel(true);
-        config.epoch_interruption(true);
-        let wasm_engine = WTEngine::new(&config).unwrap();
-
-        let lru_size = NonZeroUsize::new(lru_size).unwrap();
-
-        let app_data_dir = app_data_dir.as_ref().to_path_buf();
-
-        if !app_data_dir.is_dir() {
-            std::fs::create_dir(&app_data_dir).unwrap();
-        }
-
-        Self {
-            wasm_storage,
-            wasm_engine,
-            memory_cache: RwLock::new(LruCache::new(lru_size)),
-            app_data_dir,
-            chain_configs: Arc::new(RwLock::new(chain_configs)),
-            max_execution_seconds,
+        let config = BaseEngineConfig {
+            app_data_dir: app_data_dir.as_ref().to_path_buf(),
+            chain_configs,
+            lru_size,
             max_wasm_fuel,
-            metrics,
-            db,
-        }
+            max_execution_seconds,
+        };
+
+        let engine = BaseEngine::new(config, db, Arc::new(wasm_storage)).unwrap();
+
+        Self { engine, metrics }
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     pub fn start(&self) -> Result<(), EngineError> {
-        let engine = self.wasm_engine.clone();
-
-        // just run forever, ticking forward till the end of time (or however long this node is up)
-        std::thread::spawn(move || loop {
-            engine.increment_epoch();
-            std::thread::sleep(Duration::from_secs(1));
-        });
-
+        self.engine.start_epoch_thread();
         Ok(())
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     pub fn store_component_bytes(&self, bytecode: &[u8]) -> Result<ComponentDigest, EngineError> {
-        // compile component (validate it is proper wasm)
-        let cm = Component::new(&self.wasm_engine, bytecode).map_err(EngineError::Compile)?;
-
-        // store original wasm
-        let digest: ComponentDigest = self.wasm_storage.set_data(bytecode)?.inner().into();
-
-        // // TODO: write precompiled wasm (huge optimization on restart)
-        // tokio::fs::write(self.path_for_precompiled_wasm(digest), cm.serialize()?).await?;
-
-        self.memory_cache.write().unwrap().put(digest.clone(), cm);
-
-        Ok(digest)
+        Ok(self.engine.store_component_bytes(bytecode)?)
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
@@ -113,20 +70,19 @@ impl<S: CAStorage> WasmEngine<S> {
             ComponentSource::Download { .. } => todo!(),
             ComponentSource::Registry { registry } => {
                 if !(self
-                    .wasm_storage
+                    .engine
+                    .storage
                     .data_exists(&registry.digest.clone().into())?)
                 {
                     // Fetches package from registry and validates it has the expected digest
-                    let client =
-                        WkgClient::new(registry.domain.clone().unwrap_or("wa.dev".to_string()))?;
-                    let bytes = client.fetch(registry).await?;
-                    self.store_component_bytes(&bytes)
+                    let _component = self.engine.load_component_from_source(source).await?;
+                    Ok(registry.digest.clone())
                 } else {
                     Ok(registry.digest.clone())
                 }
             }
             ComponentSource::Digest(digest) => {
-                if self.wasm_storage.data_exists(&digest.clone().into())? {
+                if self.engine.storage.data_exists(&digest.clone().into())? {
                     Ok(digest.clone())
                 } else {
                     self.metrics.increment_total_errors("unknown digest");
@@ -139,8 +95,9 @@ impl<S: CAStorage> WasmEngine<S> {
     // TODO: paginate this
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
     pub fn list_digests(&self) -> Result<Vec<ComponentDigest>, EngineError> {
-        let digests: Result<Vec<_>, CAStorageError> = self
-            .wasm_storage
+        let digests: Result<Vec<_>, _> = self
+            .engine
+            .storage
             .digests()?
             .map(|d| d.map(|d| ComponentDigest::from(d.inner())))
             .collect();
@@ -199,26 +156,24 @@ impl<S: CAStorage> WasmEngine<S> {
             })?;
 
         let digest = workflow.component.source.digest().clone();
+        let chain_configs = self.engine.get_chain_configs()?;
+
+        let component = self.block_on_run(async { self.engine.load_component(&digest).await })?;
 
         let mut instance_deps = InstanceDepsBuilder {
-            keyvalue_ctx: KeyValueCtx::new(self.db.clone(), service.id().to_string()),
+            keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
-            component: match self.memory_cache.write().unwrap().get(&digest) {
-                Some(cm) => cm.clone(),
-                None => {
-                    let bytes = self.wasm_storage.get_data(&digest.into())?;
-                    Component::new(&self.wasm_engine, &bytes).map_err(EngineError::Compile)?
-                }
-            },
-            engine: &self.wasm_engine,
+            component,
+            engine: &self.engine.wasm_engine,
             data_dir: self
+                .engine
                 .app_data_dir
                 .join(trigger_action.config.service_id.to_string()),
-            chain_configs: &self.chain_configs.read().unwrap(),
+            chain_configs: &chain_configs,
             log,
-            max_execution_seconds: self.max_execution_seconds,
-            max_wasm_fuel: self.max_wasm_fuel,
+            max_execution_seconds: self.engine.max_execution_seconds,
+            max_wasm_fuel: self.engine.max_wasm_fuel,
         }
         .build()?;
 
@@ -231,7 +186,7 @@ impl<S: CAStorage> WasmEngine<S> {
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine", service_id = %service_id))]
     pub fn remove_storage(&self, service_id: &ServiceID) {
-        let dir_path = self.app_data_dir.join(service_id.to_string());
+        let dir_path = self.engine.app_data_dir.join(service_id.to_string());
 
         if dir_path.exists() {
             match std::fs::remove_dir_all(&dir_path) {
