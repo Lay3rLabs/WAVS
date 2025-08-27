@@ -164,7 +164,14 @@ impl EngineMetrics {
             fuel_consumption: meter
                 .u64_histogram(format!("{}.fuel_consumption", Self::NAMESPACE))
                 .with_description("Fuel consumed per WASM execution")
-                .with_boundaries(vec![1000.0, 10000.0, 100000.0, 1000000.0, 10000000.0, 100000000.0])
+                .with_boundaries(vec![
+                    1000.0,
+                    10000.0,
+                    100000.0,
+                    1000000.0,
+                    10000000.0,
+                    100000000.0,
+                ])
                 .build(),
             executions_success: meter
                 .u64_counter(format!("{}.executions_success", Self::NAMESPACE))
@@ -182,15 +189,22 @@ impl EngineMetrics {
             .add(1, &[KeyValue::new("error", error.to_owned())]);
     }
 
-    pub fn record_execution(&self, duration: f64, fuel: u64, service_id: &str, workflow_id: &str, success: bool) {
+    pub fn record_execution(
+        &self,
+        duration: f64,
+        fuel: u64,
+        service_id: &str,
+        workflow_id: &str,
+        success: bool,
+    ) {
         let labels = &[
             KeyValue::new("service_id", service_id.to_owned()),
             KeyValue::new("workflow_id", workflow_id.to_owned()),
         ];
-        
+
         self.execution_duration.record(duration, labels);
         self.fuel_consumption.record(fuel, labels);
-        
+
         if success {
             self.executions_success.add(1, labels);
         } else {
@@ -237,6 +251,9 @@ impl Default for DispatcherMetrics {
 pub struct SubmissionMetrics {
     pub total_messages_processed: Counter<u64>,
     pub total_errors: Counter<u64>,
+    pub submission_latency: Histogram<f64>, // Time from WASM completion to chain submission
+    pub submissions_success: Counter<u64>,
+    pub submissions_failed: Counter<u64>,
 }
 
 impl SubmissionMetrics {
@@ -252,6 +269,19 @@ impl SubmissionMetrics {
                 .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
                 .with_description("Total number of errors encountered")
                 .build(),
+            submission_latency: meter
+                .f64_histogram(format!("{}.submission_latency_seconds", Self::NAMESPACE))
+                .with_description("Time from WASM completion to chain submission")
+                .with_boundaries(vec![0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0])
+                .build(),
+            submissions_success: meter
+                .u64_counter(format!("{}.submissions_success", Self::NAMESPACE))
+                .with_description("Successful chain submissions")
+                .build(),
+            submissions_failed: meter
+                .u64_counter(format!("{}.submissions_failed", Self::NAMESPACE))
+                .with_description("Failed chain submissions")
+                .build(),
         }
     }
 
@@ -263,6 +293,18 @@ impl SubmissionMetrics {
     pub fn increment_total_errors(&self, error: &str) {
         self.total_errors
             .add(1, &[KeyValue::new("error", error.to_owned())]);
+    }
+
+    pub fn record_submission(&self, latency: f64, chain: &str, success: bool) {
+        let labels = &[KeyValue::new("chain", chain.to_owned())];
+
+        self.submission_latency.record(latency, labels);
+
+        if success {
+            self.submissions_success.add(1, labels);
+        } else {
+            self.submissions_failed.add(1, labels);
+        }
     }
 }
 
