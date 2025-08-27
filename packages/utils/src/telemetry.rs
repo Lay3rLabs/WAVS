@@ -316,6 +316,7 @@ impl SubmissionMetrics {
 #[derive(Clone, Debug)]
 pub struct TriggerMetrics {
     pub total_errors: Counter<u64>,
+    pub triggers_fired: Counter<u64>,
 }
 
 impl TriggerMetrics {
@@ -327,11 +328,25 @@ impl TriggerMetrics {
                 .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
                 .with_description("Total number of errors encountered")
                 .build(),
+            triggers_fired: meter
+                .u64_counter(format!("{}.triggers_fired", Self::NAMESPACE))
+                .with_description("Total triggers fired")
+                .build(),
         }
     }
 
     pub fn increment_total_errors(&self, error: &str) {
         self.total_errors
             .add(1, &[KeyValue::new("error", error.to_owned())]);
+    }
+
+    pub fn record_trigger_fired(&self, chain: &str, trigger_type: &str) {
+        self.triggers_fired.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_owned()),
+                KeyValue::new("type", trigger_type.to_owned()),
+            ],
+        );
     }
 }
