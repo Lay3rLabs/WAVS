@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
@@ -177,11 +178,38 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         }
         .build()?;
 
-        self.block_on_run(async move {
+        let initial_fuel = instance_deps.store.get_fuel().unwrap_or(0);
+        let start_time = Instant::now();
+
+        let result = self.block_on_run(async move {
             wavs_engine::worlds::operator::execute::execute(&mut instance_deps, trigger_action)
                 .await
-                .map_err(|e| e.into())
-        })
+        });
+
+        let duration = start_time.elapsed().as_secs_f64();
+        let fuel_consumed = initial_fuel.saturating_sub(
+            instance_deps.store.get_fuel().unwrap_or(0)
+        );
+        let success = result.is_ok();
+
+        self.metrics.record_execution(
+            duration,
+            fuel_consumed,
+            &service.id().to_string(),
+            &trigger_action.config.workflow_id.to_string(),
+            success
+        );
+
+        tracing::info!(
+            service_id = %service.id(),
+            workflow_id = %trigger_action.config.workflow_id,
+            duration_seconds = duration,
+            fuel_consumed = fuel_consumed,
+            success = success,
+            "WASM execution completed"
+        );
+
+        result.map_err(|e| e.into())
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine", service_id = %service_id))]

@@ -1,4 +1,4 @@
-use opentelemetry::metrics::{Counter, Gauge, Meter, UpDownCounter};
+use opentelemetry::metrics::{Counter, Gauge, Histogram, Meter, UpDownCounter};
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
 use opentelemetry_otlp::{Protocol, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::{
@@ -137,6 +137,10 @@ impl WavsMetrics {
 pub struct EngineMetrics {
     pub total_threads: Counter<u64>,
     pub total_errors: Counter<u64>,
+    pub execution_duration: Histogram<f64>,
+    pub fuel_consumption: Histogram<u64>,
+    pub executions_success: Counter<u64>,
+    pub executions_failed: Counter<u64>,
 }
 
 impl EngineMetrics {
@@ -152,12 +156,46 @@ impl EngineMetrics {
                 .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
                 .with_description("Total number of errors encountered")
                 .build(),
+            execution_duration: meter
+                .f64_histogram(format!("{}.execution_duration_seconds", Self::NAMESPACE))
+                .with_description("WASM execution duration in seconds")
+                .with_boundaries(vec![0.001, 0.01, 0.1, 0.5, 1.0, 5.0, 10.0])
+                .build(),
+            fuel_consumption: meter
+                .u64_histogram(format!("{}.fuel_consumption", Self::NAMESPACE))
+                .with_description("Fuel consumed per WASM execution")
+                .with_boundaries(vec![1000.0, 10000.0, 100000.0, 1000000.0, 10000000.0, 100000000.0])
+                .build(),
+            executions_success: meter
+                .u64_counter(format!("{}.executions_success", Self::NAMESPACE))
+                .with_description("Successful WASM executions")
+                .build(),
+            executions_failed: meter
+                .u64_counter(format!("{}.executions_failed", Self::NAMESPACE))
+                .with_description("Failed WASM executions")
+                .build(),
         }
     }
 
     pub fn increment_total_errors(&self, error: &str) {
         self.total_errors
             .add(1, &[KeyValue::new("error", error.to_owned())]);
+    }
+
+    pub fn record_execution(&self, duration: f64, fuel: u64, service_id: &str, workflow_id: &str, success: bool) {
+        let labels = &[
+            KeyValue::new("service_id", service_id.to_owned()),
+            KeyValue::new("workflow_id", workflow_id.to_owned()),
+        ];
+        
+        self.execution_duration.record(duration, labels);
+        self.fuel_consumption.record(fuel, labels);
+        
+        if success {
+            self.executions_success.add(1, labels);
+        } else {
+            self.executions_failed.add(1, labels);
+        }
     }
 }
 
