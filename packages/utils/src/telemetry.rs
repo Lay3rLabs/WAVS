@@ -217,6 +217,7 @@ impl EngineMetrics {
 pub struct DispatcherMetrics {
     pub messages_in_channel: Gauge<u64>,
     pub total_errors: Counter<u64>,
+    pub dropped_messages: Counter<u64>,
 }
 
 impl DispatcherMetrics {
@@ -231,6 +232,10 @@ impl DispatcherMetrics {
             total_errors: meter
                 .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
                 .with_description("Total number of errors encountered")
+                .build(),
+            dropped_messages: meter
+                .u64_counter(format!("{}.dropped_messages", Self::NAMESPACE))
+                .with_description("Messages dropped due to queue overflow")
                 .build(),
         }
     }
