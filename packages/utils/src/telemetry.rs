@@ -217,7 +217,7 @@ impl EngineMetrics {
 pub struct DispatcherMetrics {
     pub messages_in_channel: Gauge<u64>,
     pub total_errors: Counter<u64>,
-    pub dropped_messages: Counter<u64>,
+    pub channel_closed_errors: Counter<u64>, // Tracks when send fails because receiver is dropped
 }
 
 impl DispatcherMetrics {
@@ -233,9 +233,9 @@ impl DispatcherMetrics {
                 .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
                 .with_description("Total number of errors encountered")
                 .build(),
-            dropped_messages: meter
-                .u64_counter(format!("{}.dropped_messages", Self::NAMESPACE))
-                .with_description("Messages dropped due to queue overflow")
+            channel_closed_errors: meter
+                .u64_counter(format!("{}.channel_closed_errors", Self::NAMESPACE))
+                .with_description("Send failures due to receiver being dropped")
                 .build(),
         }
     }

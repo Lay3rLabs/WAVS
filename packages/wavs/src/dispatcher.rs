@@ -174,8 +174,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                     };
                     if let Err(err) = work_sender.blocking_send((action, service)) {
                         tracing::error!("Error sending work to engine: {:?}", err);
+                        // blocking_send only fails if the receiver has been dropped (channel closed)
                         self.metrics
-                            .dropped_messages
+                            .channel_closed_errors
                             .add(1, &[opentelemetry::KeyValue::new("channel", "engine_work")]);
                     }
                 }
