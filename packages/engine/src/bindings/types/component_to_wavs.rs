@@ -42,6 +42,13 @@ impl TryFrom<component_service::Trigger> for wavs_types::Trigger {
                 start_time: source.start_time.map(Into::into),
                 end_time: source.end_time.map(Into::into),
             },
+            component_service::Trigger::SvmProgramEvent(source) => {
+                wavs_types::Trigger::SvmProgramEvent {
+                    program_id: source.program_id.base58_addr,
+                    chain_name: source.chain_name.parse()?,
+                    event_pattern: source.event_pattern,
+                }
+            }
         })
     }
 }

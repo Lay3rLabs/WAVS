@@ -6,7 +6,7 @@ interface service {
     type semver-version = string;
 
     use core.{digest, timestamp};
-    use chain.{chain-name, evm-address, cosmos-address};
+    use chain.{chain-name, evm-address, cosmos-address, svm-address};
 
     // Service types
     record service {
@@ -29,7 +29,6 @@ interface service {
         chain-name: chain-name,
         address: evm-address,
     }
-
 
     // Workflow types
     record workflow {
@@ -82,6 +81,7 @@ interface service {
     variant trigger {
         evm-contract-event(trigger-evm-contract-event),
         cosmos-contract-event(trigger-cosmos-contract-event),
+        svm-program-event(trigger-svm-program-event),
         block-interval(trigger-block-interval),
         cron(trigger-cron),
         manual
@@ -110,6 +110,15 @@ interface service {
         schedule: string,
         start-time: option<timestamp>,
         end-time: option<timestamp>
+    }
+
+    record trigger-svm-program-event {
+        /// The program ID to monitor for events
+        program-id: svm-address,
+        /// The name of the chain where the program is deployed
+        chain-name: chain-name,
+        /// Optional regex pattern to match specific event formats
+        event-pattern: option<string>
     }
 
 

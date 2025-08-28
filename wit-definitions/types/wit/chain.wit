@@ -62,4 +62,16 @@ interface chain {
         ws-endpoint: option<string>,
         http-endpoint: option<string>,
     }
+
+    record svm-address {
+        // Base58 encoded public key (Solana address)
+        base58-addr: string,
+    }
+
+    record svm-chain-config {
+        chain-id: string,
+        rpc-endpoint: option<string>,
+        ws-endpoint: option<string>,
+        commitment: option<string>,
+    }
 }
