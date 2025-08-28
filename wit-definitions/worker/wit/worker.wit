@@ -7,7 +7,7 @@ use wavs:types/chain@0.6.0-alpha.4 as chain-types;
 interface input {
     use core-types.{timestamp};
     use service-types.{service-id, workflow-id, trigger};
-    use chain-types.{chain-name, evm-address, evm-event-log, cosmos-address, cosmos-event};
+    use chain-types.{chain-name, evm-address, evm-event-log, cosmos-address, cosmos-event, svm-address};
 
     record trigger-action {
         config: trigger-config,
@@ -23,6 +23,7 @@ interface input {
     variant trigger-data {
         evm-contract-event(trigger-data-evm-contract-event),
         cosmos-contract-event(trigger-data-cosmos-contract-event),
+        svm-program-event(trigger-data-svm-program-event),
         block-interval(trigger-data-block-interval),
         cron(trigger-data-cron),
         raw(list<u8>)
@@ -49,6 +50,16 @@ interface input {
     record trigger-data-cron {
         trigger-time: timestamp
     }
+
+    record trigger-data-svm-program-event {
+        program-id: svm-address,
+        chain-name: chain-name,
+        signature: string,
+        slot: u64,
+        logs: list<string>,
+        event-type: option<string>,
+        event-data: option<string>
+    }
 }
 
 interface output {
@@ -70,12 +81,13 @@ world wavs-world {
     include wasi:keyvalue/imports@0.2.0-draft2;
 
     import host: interface {
-        use chain-types.{evm-chain-config, cosmos-chain-config};
+        use chain-types.{evm-chain-config, cosmos-chain-config, svm-chain-config};
         use service-types.{service-and-workflow-id, workflow-and-workflow-id};
         use core-types.{log-level};
 
         get-evm-chain-config: func(chain-name: string) -> option<evm-chain-config>;
         get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
+        get-svm-chain-config: func(chain-name: string) -> option<svm-chain-config>;
 
         config-var: func(key: string) -> option<string>;
 

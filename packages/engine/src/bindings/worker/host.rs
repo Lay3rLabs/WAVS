@@ -31,6 +31,19 @@ impl super::world::host::Host for HostComponent {
             .map(|config| config.into())
     }
 
+    fn get_svm_chain_config(
+        &mut self,
+        chain_name: String,
+    ) -> Option<super::world::host::SvmChainConfig> {
+        let chain_name = ChainName::new(chain_name).ok()?;
+
+        self.chain_configs
+            .svm
+            .get(&chain_name)
+            .cloned()
+            .map(|config| config.into())
+    }
+
     fn get_service(&mut self) -> ServiceAndWorkflowId {
         ServiceAndWorkflowId {
             service: self.service.clone().try_into().unwrap(),

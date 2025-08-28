@@ -139,6 +139,17 @@ impl From<utils::config::EvmChainConfig> for crate::bindings::worker::world::hos
     }
 }
 
+impl From<utils::config::SvmChainConfig> for crate::bindings::worker::world::host::SvmChainConfig {
+    fn from(config: utils::config::SvmChainConfig) -> Self {
+        Self {
+            chain_id: config.cluster.clone(),
+            rpc_endpoint: None,  // SvmChainConfig doesn't have rpc_endpoint, only ws_endpoint
+            ws_endpoint: Some(config.ws_endpoint.clone()),
+            commitment: config.commitment.clone(),
+        }
+    }
+}
+
 impl From<wavs_types::Timestamp> for component_core::Timestamp {
     fn from(src: wavs_types::Timestamp) -> Self {
         component_core::Timestamp {
@@ -422,13 +433,21 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                 success,
                 logs,
                 parsed_event,
-            } => {
-                // TODO: Add proper SVM trigger data component binding
-                // For now, convert to raw data as placeholder
-                let raw_data = format!("SVM Program Event (temp as TriggerData::Raw, FIXME): {} on {} (slot: {}, success: {})",
-                    program_id, chain_name, slot, success);
-                Ok(component_input::TriggerData::Raw(raw_data.into_bytes()))
-            },
+            } => Ok(component_input::TriggerData::SvmProgramEvent(
+                component_input::TriggerDataSvmProgramEvent {
+                    chain_name: chain_name.to_string(),
+                    program_id: component_chain::SvmAddress { 
+                        base58_addr: program_id.to_string() 
+                    },
+                    signature: signature.to_string(),
+                    slot,
+                    logs,
+                    event_type: parsed_event.as_ref().and_then(|e| Some(e.event_type.clone())),
+                    event_data: parsed_event.as_ref().and_then(|e| {
+                        Some(format!("{:?}", e.data))  // Use Debug formatting instead of serde_json
+                    }),
+                },
+            )),
             wavs_types::TriggerData::Raw(data) => Ok(component_input::TriggerData::Raw(data)),
         }
     }
