@@ -285,6 +285,25 @@ impl TriggerData {
     pub fn new_raw(data: impl AsRef<[u8]>) -> Self {
         TriggerData::Raw(data.as_ref().to_vec())
     }
+
+    pub fn trigger_type(&self) -> &str {
+        match self {
+            TriggerData::CosmosContractEvent { .. } => "cosmos_contract_event",
+            TriggerData::EvmContractEvent { .. } => "evm_contract_event",
+            TriggerData::BlockInterval { .. } => "block_interval",
+            TriggerData::Cron { .. } => "cron",
+            TriggerData::Raw(_) => "manual",
+        }
+    }
+
+    pub fn chain_name(&self) -> &str {
+        match self {
+            TriggerData::CosmosContractEvent { chain_name, .. }
+            | TriggerData::EvmContractEvent { chain_name, .. }
+            | TriggerData::BlockInterval { chain_name, .. } => chain_name.as_ref(),
+            TriggerData::Cron { .. } | TriggerData::Raw(_) => "none",
+        }
+    }
 }
 
 /// A bundle of the trigger and the associated data needed to take action on it

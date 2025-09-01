@@ -268,6 +268,8 @@ impl SubmissionManager {
         packet: Packet,
     ) -> Result<(), SubmissionError> {
         let service_id = packet.service.id();
+        let start_time = std::time::Instant::now();
+
         let response = self
             .http_client
             .post(format!("{url}/packet"))
@@ -278,6 +280,8 @@ impl SubmissionManager {
             .map_err(SubmissionError::Reqwest)?;
 
         if !response.status().is_success() {
+            let latency = start_time.elapsed().as_secs_f64();
+            self.metrics.record_submission(latency, "aggregator", false);
             return Err(SubmissionError::Aggregator(format!(
                 "error hitting {url} response: {:?}",
                 response
@@ -324,6 +328,9 @@ impl SubmissionManager {
             self.metrics
                 .increment_total_processed_messages("to_aggregator");
         }
+
+        let latency = start_time.elapsed().as_secs_f64();
+        self.metrics.record_submission(latency, "aggregator", true);
 
         Ok(())
     }

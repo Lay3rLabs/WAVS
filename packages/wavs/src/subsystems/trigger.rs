@@ -192,6 +192,9 @@ impl TriggerManager {
                         "Sending trigger action for workflow {}",
                         action.config.workflow_id,
                     );
+
+                    self.metrics
+                        .record_trigger_fired(action.data.chain_name(), action.data.trigger_type());
                 }
                 DispatcherCommand::ChangeServiceUri { service_id, uri } => {
                     tracing_service_info!(

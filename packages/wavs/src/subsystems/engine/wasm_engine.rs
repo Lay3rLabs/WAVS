@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
@@ -160,6 +161,9 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
 
         let component = self.block_on_run(async { self.engine.load_component(&digest).await })?;
 
+        let service_id = service.id();
+        let workflow_id = trigger_action.config.workflow_id.clone();
+
         let mut instance_deps = InstanceDepsBuilder {
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
             service,
@@ -177,11 +181,38 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         }
         .build()?;
 
-        self.block_on_run(async move {
-            wavs_engine::worlds::operator::execute::execute(&mut instance_deps, trigger_action)
-                .await
-                .map_err(|e| e.into())
-        })
+        let initial_fuel = instance_deps.store.get_fuel().unwrap_or(0);
+        let start_time = Instant::now();
+
+        let (result, final_fuel) = self.block_on_run(async move {
+            let result =
+                wavs_engine::worlds::operator::execute::execute(&mut instance_deps, trigger_action)
+                    .await;
+            let final_fuel = instance_deps.store.get_fuel().unwrap_or(0);
+            (result, final_fuel)
+        });
+
+        let duration = start_time.elapsed().as_secs_f64();
+        let fuel_consumed = initial_fuel.saturating_sub(final_fuel);
+
+        self.metrics.record_execution(
+            duration,
+            fuel_consumed,
+            &service_id.to_string(),
+            workflow_id.as_ref(),
+            result.is_ok(),
+        );
+
+        tracing::info!(
+            service_id = %service_id,
+            workflow_id = %workflow_id,
+            duration_seconds = duration,
+            fuel_consumed = fuel_consumed,
+            success = result.is_ok(),
+            "WASM execution completed"
+        );
+
+        result.map_err(|e| e.into())
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine", service_id = %service_id))]
