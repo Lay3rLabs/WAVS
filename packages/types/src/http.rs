@@ -21,11 +21,6 @@ pub struct AddServiceRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
-pub struct GetServiceRequest {
-    pub service_manager: ServiceManager,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct GetServiceKeyRequest {
     pub service_manager: ServiceManager,
 }
