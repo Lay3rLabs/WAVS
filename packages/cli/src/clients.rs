@@ -165,12 +165,15 @@ impl HttpClient {
     }
 
     pub async fn get_service_from_node(&self, chain_name: &str, address: &str) -> Result<Service> {
-        let url = format!(
-            "{}/service?chain_name={}&address={}",
-            self.endpoint, chain_name, address
-        );
+        let url = format!("{}/service", self.endpoint);
 
-        let text = self.inner.get(&url).send().await?.text().await?;
+        let text = self.inner
+            .get(&url)
+            .query(&[("chain_name", chain_name), ("address", address)])
+            .send()
+            .await?
+            .text()
+            .await?;
 
         match serde_json::from_str(&text) {
             Ok(service) => Ok(service),
