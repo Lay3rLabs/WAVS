@@ -4,8 +4,8 @@ use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use wavs_types::{
     AddServiceRequest, ComponentDigest, DeleteServicesRequest, GetServiceKeyRequest,
-    GetServiceRequest, IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse,
-    Service, ServiceManager, SigningKeyResponse, UploadComponentResponse,
+    IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceManager,
+    SigningKeyResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUrlArgs;
@@ -85,7 +85,13 @@ impl HttpClient {
             anyhow::bail!("{} from {}: {}", status, url, error_text);
         }
 
-        let service = self.get_service_from_node(service_manager).await?;
+        let (chain_name, address) = match &service_manager {
+            ServiceManager::Evm {
+                chain_name,
+                address,
+            } => (chain_name.as_ref(), address.to_string()),
+        };
+        let service = self.get_service_from_node(chain_name, &address).await?;
 
         Ok(service)
     }
@@ -158,19 +164,13 @@ impl HttpClient {
         }
     }
 
-    pub async fn get_service_from_node(&self, service_manager: ServiceManager) -> Result<Service> {
-        let body = serde_json::to_string(&GetServiceRequest { service_manager })?;
+    pub async fn get_service_from_node(&self, chain_name: &str, address: &str) -> Result<Service> {
+        let url = format!(
+            "{}/service?chain_name={}&address={}",
+            self.endpoint, chain_name, address
+        );
 
-        let url = format!("{}/service", self.endpoint);
-        let text = self
-            .inner
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .body(body)
-            .send()
-            .await?
-            .text()
-            .await?;
+        let text = self.inner.get(&url).send().await?.text().await?;
 
         match serde_json::from_str(&text) {
             Ok(service) => Ok(service),
@@ -193,8 +193,13 @@ impl HttpClient {
             loop {
                 tracing::warn!("Waiting for service update: {}", service.id());
 
-                if let Ok(current_service) =
-                    self.get_service_from_node(service.manager.clone()).await
+                let (chain_name, address) = match &service.manager {
+                    ServiceManager::Evm {
+                        chain_name,
+                        address,
+                    } => (chain_name.as_ref(), address.to_string()),
+                };
+                if let Ok(current_service) = self.get_service_from_node(chain_name, &address).await
                 {
                     if current_service.hash()? == service_hash {
                         break Ok(());
