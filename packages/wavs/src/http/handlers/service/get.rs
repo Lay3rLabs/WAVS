@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use crate::http::{error::HttpResult, state::HttpState};
+use crate::http::{
+    error::{AnyError, HttpResult},
+    state::HttpState,
+};
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
@@ -34,18 +37,22 @@ pub async fn handle_get_service(
     State(state): State<HttpState>,
     Query(params): Query<GetServiceParams>,
 ) -> impl IntoResponse {
-    let result = async move {
-        let chain_name = ChainName::new(params.chain_name)?;
-        let address = params.address.parse::<alloy_primitives::Address>()?;
-        let service_manager = ServiceManager::Evm {
-            chain_name,
-            address,
-        };
-        get_service_inner(&state, service_manager).await
-    }
-    .await;
+    let chain_name = match ChainName::new(params.chain_name) {
+        Ok(name) => name,
+        Err(e) => return AnyError::from(e).into_response(),
+    };
 
-    match result {
+    let address = match params.address.parse::<alloy_primitives::Address>() {
+        Ok(addr) => addr,
+        Err(e) => return AnyError::from(e).into_response(),
+    };
+
+    let service_manager = ServiceManager::Evm {
+        chain_name,
+        address,
+    };
+
+    match get_service_inner(&state, service_manager).await {
         Ok(resp) => Json(resp).into_response(),
         Err(e) => e.into_response(),
     }
