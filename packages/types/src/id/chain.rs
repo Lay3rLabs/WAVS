@@ -274,3 +274,61 @@ pub enum ChainKeyError {
     #[error("Invalid id component")]
     InvalidId,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_valid_chain_ids() {
+        assert!(ChainKey::new("eip155:1").is_ok());
+        assert!(ChainKey::new("cosmos:cosmoshub-4").is_ok());
+        assert!(ChainKey::new("polkadot:b0a8d493285c2df73290dfb7e61f870f").is_ok());
+        assert!(ChainKey::new("abc:X_Y-Z123").is_ok());
+        assert!(ChainKey::new("abc-123:ABC_xyz-123").is_ok());
+    }
+    
+    #[test]
+    fn test_invalid_chain_ids() {
+        // Invalid format
+        assert!(ChainKey::new("no-colon").is_err());
+        assert!(ChainKey::new("too:many:colons").is_err());
+        assert!(ChainKey::new(":empty-namespace").is_err());
+        assert!(ChainKey::new("empty-id:").is_err());
+        
+        // Invalid namespace
+        assert!(ChainKey::new("thisiswaytoolongtobeavalidnamespace:ref").is_err()); // too long
+        assert!(ChainKey::new("ABC:ref").is_err()); // uppercase not allowed
+        assert!(ChainKey::new("ab_c:ref").is_err()); // underscore not allowed in namespace
+        assert!(ChainKey::new("ab.c:ref").is_err()); // dot not allowed
+        
+        // Invalid id
+        assert!(ChainKey::new("abc:").is_err()); // empty reference
+        assert!(ChainKey::new("abc:this-is-way-too-long-to-be-a-valid-idt").is_err()); // too long (33 chars)
+        assert!(ChainKey::new("abc:id.with.dots").is_err()); // dots not allowed
+        assert!(ChainKey::new("abc:id@123").is_err()); // @ not allowed
+        assert!(ChainKey::new("abc:id space").is_err()); // space not allowed
+    }
+    
+    #[test]
+    fn test_accessors() {
+        let chain_key = ChainKey::new("eip155:1").unwrap();
+        assert_eq!(chain_key.to_string(), "eip155:1");
+        assert_eq!(chain_key.namespace.as_str(), "eip155");
+        assert_eq!(chain_key.id.as_str(), "1");
+    }
+    
+    #[test]
+    fn test_edge_cases() {
+        // Minimum valid lengths
+        assert!(ChainKey::new("abc:x").is_ok());
+        
+        // Maximum valid lengths
+        assert!(ChainKey::new("abcd1234:ABCD1234_abcd1234-ABCD1234").is_ok());
+        
+        // Case sensitivity is preserved
+        let chain_key = ChainKey::new("eip155:MyChain_123").unwrap();
+        assert_eq!(chain_key.id.as_str(), "MyChain_123");
+    }
+}
+
