@@ -19,8 +19,8 @@ use wavs::{
     subsystems::engine::wasm_engine::WasmEngine,
 };
 use wavs_types::{
-    ComponentSource, DeleteServicesRequest, IDError, ListServicesResponse, Service, ServiceID,
-    ServiceManager, Submit, WorkflowID,
+    ComponentSource, DeleteServicesRequest, IDError, ListServicesResponse, Service, ServiceId,
+    ServiceManager, Submit, WorkflowId,
 };
 
 use super::mock_trigger_manager::{mock_evm_event_trigger, mock_real_trigger_action};
@@ -105,8 +105,8 @@ impl MockE2ETestRunner {
     #[instrument(level = "debug", skip(self))]
     pub async fn send_trigger(
         &self,
-        service_id: ServiceID,
-        workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
+        service_id: ServiceId,
+        workflow_id: impl TryInto<WorkflowId, Error = IDError> + std::fmt::Debug,
         contract_address: &layer_climb::prelude::Address,
         data: &(impl Serialize + std::fmt::Debug),
         chain_id: impl ToString + std::fmt::Debug,
@@ -149,7 +149,7 @@ impl MockE2ETestRunner {
         &self,
         name: Option<String>,
         component_source: ComponentSource,
-    ) -> ServiceID {
+    ) -> ServiceId {
         // but we can create a service via http router
         let trigger = mock_evm_event_trigger();
 

@@ -7,7 +7,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use ordermap::OrderMap;
 use std::collections::HashMap;
 use std::sync::Arc;
-use wavs_types::{Submit, Trigger, Workflow, WorkflowID};
+use wavs_types::{Submit, Trigger, Workflow, WorkflowId};
 
 use crate::e2e::helpers::change_service_for_test;
 use crate::e2e::report::TestReport;
@@ -223,7 +223,7 @@ async fn run_test(
     component_sources: &ComponentSources,
 ) -> anyhow::Result<()> {
     // Group workflows by trigger to handle multi-triggers
-    let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowID, &Workflow)>> = OrderMap::new();
+    let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowId, &Workflow)>> = OrderMap::new();
 
     for (workflow_id, workflow) in service_deployment.service.workflows.iter() {
         trigger_groups

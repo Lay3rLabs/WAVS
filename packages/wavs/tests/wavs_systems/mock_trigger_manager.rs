@@ -12,12 +12,12 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use utils::context::AppContext;
 use wavs_types::{
-    ChainName, IDError, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
+    ChainName, IDError, ServiceId, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowId,
 };
 
 pub fn mock_real_trigger_action(
-    service_id: ServiceID,
-    workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
+    service_id: ServiceId,
+    workflow_id: impl TryInto<WorkflowId, Error = IDError> + std::fmt::Debug,
     contract_address: &layer_climb::prelude::Address,
     data: &(impl Serialize + std::fmt::Debug),
     chain_name: impl ToString + std::fmt::Debug,
@@ -78,8 +78,8 @@ pub fn mock_real_trigger_action(
 }
 
 pub fn mock_evm_event_trigger_config(
-    service_id: ServiceID,
-    workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+    service_id: ServiceId,
+    workflow_id: impl TryInto<WorkflowId, Error = IDError>,
 ) -> TriggerConfig {
     TriggerConfig::evm_contract_event(
         service_id,
@@ -92,8 +92,8 @@ pub fn mock_evm_event_trigger_config(
 }
 
 pub fn mock_cosmos_event_trigger_config(
-    service_id: ServiceID,
-    workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+    service_id: ServiceId,
+    workflow_id: impl TryInto<WorkflowId, Error = IDError>,
 ) -> TriggerConfig {
     TriggerConfig::cosmos_contract_event(
         service_id,
@@ -184,14 +184,14 @@ impl MockTriggerManagerVec {
 
     fn start_error(&self) -> Result<(), TriggerError> {
         match self.error_on_start {
-            true => Err(TriggerError::NoSuchService(ServiceID::hash("cant-start"))),
+            true => Err(TriggerError::NoSuchService(ServiceId::hash("cant-start"))),
             false => Ok(()),
         }
     }
 
     fn store_error(&self) -> Result<(), TriggerError> {
         match self.error_on_store {
-            true => Err(TriggerError::NoSuchService(ServiceID::hash("cant-store"))),
+            true => Err(TriggerError::NoSuchService(ServiceId::hash("cant-store"))),
             false => Ok(()),
         }
     }
@@ -226,8 +226,8 @@ impl MockTriggerManagerVec {
 
     pub fn remove_trigger(
         &self,
-        service_id: ServiceID,
-        workflow_id: WorkflowID,
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
     ) -> Result<(), TriggerError> {
         self.store_error()?;
 
@@ -238,7 +238,7 @@ impl MockTriggerManagerVec {
         Ok(())
     }
 
-    pub fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
+    pub fn remove_service(&self, service_id: ServiceId) -> Result<(), TriggerError> {
         self.store_error()?;
 
         self.triggers
@@ -249,7 +249,7 @@ impl MockTriggerManagerVec {
         Ok(())
     }
 
-    pub fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
+    pub fn list_triggers(&self, service_id: ServiceId) -> Result<Vec<TriggerConfig>, TriggerError> {
         self.store_error()?;
 
         self.triggers
@@ -273,11 +273,11 @@ mod tests {
     fn mock_trigger_sends() {
         let actions = vec![
             TriggerAction {
-                config: mock_evm_event_trigger_config(ServiceID::hash("service1"), "workflow1"),
+                config: mock_evm_event_trigger_config(ServiceId::hash("service1"), "workflow1"),
                 data: TriggerData::new_raw(b"foobar"),
             },
             TriggerAction {
-                config: mock_evm_event_trigger_config(ServiceID::hash("service2"), "workflow2"),
+                config: mock_evm_event_trigger_config(ServiceId::hash("service2"), "workflow2"),
                 data: TriggerData::new_raw(b"zoomba"),
             },
         ];
@@ -295,7 +295,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = mock_evm_event_trigger_config(ServiceID::hash("abcd"), "abcd");
+        let data = mock_evm_event_trigger_config(ServiceId::hash("abcd"), "abcd");
         triggers.add_trigger(data).unwrap();
     }
 
@@ -306,7 +306,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = mock_evm_event_trigger_config(ServiceID::hash("abcd"), "abcd");
+        let data = mock_evm_event_trigger_config(ServiceId::hash("abcd"), "abcd");
         triggers.add_trigger(data).unwrap_err();
     }
 }

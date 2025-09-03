@@ -1,6 +1,6 @@
 pub mod aggregator;
 use super::Service;
-use crate::{AnyChainConfig, ChainName, ComponentDigest, ServiceDigest, ServiceID, ServiceManager};
+use crate::{AnyChainConfig, ChainKey, ComponentDigest, ServiceDigest, ServiceId, ServiceManager};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -27,8 +27,8 @@ pub struct GetServiceKeyRequest {
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct AddChainRequest {
-    pub chain_name: ChainName,
-    pub chain_config: AnyChainConfig,
+    pub key: ChainKey,
+    pub config: AnyChainConfig,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -39,7 +39,7 @@ pub struct DeleteServicesRequest {
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ListServicesResponse {
     pub services: Vec<Service>,
-    pub service_ids: Vec<ServiceID>,
+    pub service_ids: Vec<ServiceId>,
     pub component_digests: Vec<ComponentDigest>,
 }
 

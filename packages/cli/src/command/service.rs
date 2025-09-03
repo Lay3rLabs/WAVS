@@ -34,7 +34,7 @@ use utils::{
 use uuid::Uuid;
 use wavs_types::{
     Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Registry,
-    ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowID,
+    ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowId,
 };
 
 use crate::{
@@ -282,7 +282,7 @@ fn build_component_result(
 /// Unified component operation handler for both workflow and aggregator components
 pub async fn update_component(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     context: ComponentContext,
     command: ComponentCommand,
 ) -> Result<ComponentOperationResult> {
@@ -503,12 +503,12 @@ pub fn init_service(file_path: &Path, name: String) -> Result<ServiceInitResult>
 }
 
 /// Add a workflow to a service
-pub fn add_workflow(file_path: &Path, id: Option<WorkflowID>) -> Result<WorkflowAddResult> {
+pub fn add_workflow(file_path: &Path, id: Option<WorkflowId>) -> Result<WorkflowAddResult> {
     modify_service_file(file_path, |mut service| {
         // Generate workflow ID if not provided
         let workflow_id = match id {
             Some(id) => id,
-            None => WorkflowID::new(Uuid::now_v7().as_hyphenated().to_string())?,
+            None => WorkflowId::new(Uuid::now_v7().as_hyphenated().to_string())?,
         };
 
         // Create default trigger, component, and submit
@@ -537,7 +537,7 @@ pub fn add_workflow(file_path: &Path, id: Option<WorkflowID>) -> Result<Workflow
 }
 
 /// Delete a workflow from a service
-pub fn delete_workflow(file_path: &Path, workflow_id: WorkflowID) -> Result<WorkflowDeleteResult> {
+pub fn delete_workflow(file_path: &Path, workflow_id: WorkflowId) -> Result<WorkflowDeleteResult> {
     modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
         if !service.workflows.contains_key(&workflow_id) {
@@ -564,7 +564,7 @@ pub fn delete_workflow(file_path: &Path, workflow_id: WorkflowID) -> Result<Work
 pub fn set_cosmos_trigger(
     query_client: CosmosQueryClient,
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     address_str: String,
     chain_name: ChainName,
     event_type: String,
@@ -600,7 +600,7 @@ pub fn set_cosmos_trigger(
 /// Set an EVM contract event trigger for a workflow
 pub fn set_evm_trigger(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     address: alloy_primitives::Address,
     chain_name: ChainName,
     event_hash_str: String,
@@ -648,7 +648,7 @@ pub fn set_evm_trigger(
 
 pub fn set_block_interval_trigger(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     chain_name: ChainName,
     n_blocks: NonZeroU32,
     start_block: Option<NonZeroU64>,
@@ -682,7 +682,7 @@ pub fn set_block_interval_trigger(
 
 pub fn set_cron_trigger(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     schedule: cron::Schedule,
     start_time: Option<Timestamp>,
     end_time: Option<Timestamp>,
@@ -715,7 +715,7 @@ pub fn set_cron_trigger(
 /// Update workflow component using unified logic
 pub async fn update_workflow_component(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     command: ComponentCommand,
 ) -> Result<ComponentOperationResult> {
     use crate::command::service::types::ComponentContext;
@@ -784,7 +784,7 @@ pub async fn validate_service(
         let mut chains_to_validate = HashSet::new();
         let mut triggers = Vec::new();
         let mut submits = Vec::new();
-        let aggregators: Vec<(&WorkflowID, Aggregator)> = Vec::new();
+        let aggregators: Vec<(&WorkflowId, Aggregator)> = Vec::new();
 
         for (workflow_id, workflow) in &service.workflows {
             if let TriggerJson::Trigger(trigger) = &workflow.trigger {
@@ -926,7 +926,7 @@ pub async fn validate_service(
 /// Set an Aggregator submit for a workflow
 pub fn set_aggregator_submit(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     url: String,
 ) -> Result<WorkflowSetAggregatorUrlResult> {
     let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
@@ -955,7 +955,7 @@ pub fn set_aggregator_submit(
 /// Set the submit to None for a workflow
 pub fn set_none_submit(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
 ) -> Result<WorkflowSetSubmitNoneResult> {
     modify_service_file(file_path, |mut service| {
         let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
@@ -978,7 +978,7 @@ pub fn set_none_submit(
 /// Modify an aggregator component using unified logic
 pub async fn modify_aggregator_component(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     component_cmd: ComponentCommand,
 ) -> Result<ComponentOperationResult> {
     let context = ComponentContext::Aggregator {

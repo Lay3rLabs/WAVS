@@ -6,7 +6,7 @@ use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx, bindings::operator::world::host::LogLevel,
     utils::error::EngineError, worlds::operator::instance::InstanceDepsBuilder,
 };
-use wavs_types::{ComponentDigest, ServiceID, WorkflowID};
+use wavs_types::{ComponentDigest, ServiceId, WorkflowId};
 
 use crate::helpers::service::{make_service, make_trigger_action};
 
@@ -80,8 +80,8 @@ pub async fn try_execute_component<D: DeserializeOwned>(
 
 #[allow(dead_code)]
 fn log_wasi(
-    service_id: &ServiceID,
-    workflow_id: &WorkflowID,
+    service_id: &ServiceId,
+    workflow_id: &WorkflowId,
     digest: &ComponentDigest,
     level: LogLevel,
     message: String,

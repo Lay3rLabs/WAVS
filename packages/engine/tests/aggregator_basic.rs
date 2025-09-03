@@ -4,7 +4,7 @@ use crate::helpers::aggregator_exec::execute_aggregator_component;
 use utils::init_tracing_tests;
 use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::AggregatorAction;
 use wavs_types::{
-    Envelope, EnvelopeSignature, Packet, Service, ServiceManager, ServiceStatus, WorkflowID,
+    Envelope, EnvelopeSignature, Packet, Service, ServiceManager, ServiceStatus, WorkflowId,
 };
 
 const COMPONENT_SIMPLE_AGGREGATOR_BYTES: &[u8] =
@@ -24,7 +24,7 @@ async fn basic_aggregator_execution() {
                 address: [0u8; 20].into(),
             },
         },
-        workflow_id: WorkflowID::new("test-workflow").unwrap(),
+        workflow_id: WorkflowId::new("test-workflow").unwrap(),
         envelope: Envelope {
             eventId: [0u8; 20].into(),
             ordering: [0u8; 12].into(),

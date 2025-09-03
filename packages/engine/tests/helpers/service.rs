@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 use wavs_types::{
     AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, Service, Submit, Trigger,
-    TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowID,
+    TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowId,
 };
 
 #[allow(dead_code)]
 pub fn make_trigger_action(
     service: &Service,
-    workflow_id: Option<WorkflowID>,
+    workflow_id: Option<WorkflowId>,
     input_data: Vec<u8>,
 ) -> TriggerAction {
     TriggerAction {
@@ -22,7 +22,7 @@ pub fn make_trigger_action(
 }
 
 pub fn make_service(wasm_digest: ComponentDigest) -> Service {
-    let workflow_id = WorkflowID::new("workflow-1").unwrap();
+    let workflow_id = WorkflowId::new("workflow-1").unwrap();
 
     let workflow = Workflow {
         trigger: Trigger::Manual,

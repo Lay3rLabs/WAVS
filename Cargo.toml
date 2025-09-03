@@ -161,6 +161,7 @@ uuid = { version = "1.17.0", features = ["v7", "serde"] }
 
 # utilis
 cfg-if = "1.0.1"
+regex = "1.11.2"
 
 # versioning
 semver = { version = "1.0.26", features = ["serde"] }

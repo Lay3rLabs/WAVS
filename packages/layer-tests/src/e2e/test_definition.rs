@@ -8,7 +8,7 @@ use example_types::{
     PermissionsResponse, SquareRequest, SquareResponse,
 };
 use regex::Regex;
-use wavs_types::{ChainName, Trigger, WorkflowID};
+use wavs_types::{ChainName, Trigger, WorkflowId};
 
 use crate::e2e::components::{
     AggregatorComponent, ComponentName, ComponentSources, OperatorComponent,
@@ -26,7 +26,7 @@ pub struct TestDefinition {
     pub description: Option<String>,
 
     /// The workflows of this test
-    pub workflows: BTreeMap<WorkflowID, WorkflowDefinition>,
+    pub workflows: BTreeMap<WorkflowId, WorkflowDefinition>,
 
     /// If a service changes, set it here
     /// the change will be applied after service deployment
@@ -112,11 +112,11 @@ pub enum AggregatorDefinition {
 #[derive(Clone, Debug)]
 pub enum ChangeServiceDefinition {
     Component {
-        workflow_id: WorkflowID,
+        workflow_id: WorkflowId,
         component: ComponentDefinition,
     },
     AddWorkflow {
-        workflow_id: WorkflowID,
+        workflow_id: WorkflowId,
         workflow: WorkflowDefinition,
     },
     // TODO: status etc.
@@ -270,7 +270,7 @@ impl TestBuilder {
     }
 
     /// Add a workflow
-    pub fn add_workflow(mut self, workflow_id: WorkflowID, workflow: WorkflowDefinition) -> Self {
+    pub fn add_workflow(mut self, workflow_id: WorkflowId, workflow: WorkflowDefinition) -> Self {
         if self.definition.workflows.contains_key(&workflow_id) {
             panic!("Workflow id {} is already in use", workflow_id)
         }

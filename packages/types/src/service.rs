@@ -9,7 +9,7 @@ use wasm_pkg_common::package::PackageRef;
 
 use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
 
-use super::{ChainName, ServiceID, WorkflowID};
+use super::{ChainKey, ServiceId, WorkflowId};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -18,7 +18,7 @@ pub struct Service {
     pub name: String,
 
     /// We support multiple workflows in one service with unique service-scoped IDs.
-    pub workflows: BTreeMap<WorkflowID, Workflow>,
+    pub workflows: BTreeMap<WorkflowId, Workflow>,
 
     pub status: ServiceStatus,
 
@@ -32,8 +32,8 @@ impl Service {
         Ok(ServiceDigest::hash(&service_bytes))
     }
 
-    pub fn id(&self) -> ServiceID {
-        ServiceID::from(&self.manager)
+    pub fn id(&self) -> ServiceId {
+        ServiceId::from(&self.manager)
     }
 }
 
@@ -41,33 +41,33 @@ impl Service {
 #[serde(rename_all = "snake_case")]
 pub enum ServiceManager {
     Evm {
-        chain_name: ChainName,
+        chain: ChainKey,
         #[schema(value_type = String)]
         address: alloy_primitives::Address,
     },
 }
 
-impl From<&ServiceManager> for ServiceID {
+impl From<&ServiceManager> for ServiceId {
     fn from(manager: &ServiceManager) -> Self {
         match manager {
             ServiceManager::Evm {
-                chain_name,
+                chain,
                 address,
             } => {
                 let mut bytes = Vec::new();
                 bytes.extend_from_slice(b"evm");
-                bytes.extend_from_slice(chain_name.as_bytes());
+                bytes.extend_from_slice(chain.to_string().as_bytes());
                 bytes.extend_from_slice(address.as_slice());
-                ServiceID::hash(bytes)
+                ServiceId::hash(bytes)
             }
         }
     }
 }
 
 impl ServiceManager {
-    pub fn chain_name(&self) -> &ChainName {
+    pub fn chain(&self) -> &ChainKey {
         match self {
-            ServiceManager::Evm { chain_name, .. } => chain_name,
+            ServiceManager::Evm { chain, .. } => chain,
         }
     }
 
@@ -86,7 +86,7 @@ impl Service {
         submit: Submit,
         manager: ServiceManager,
     ) -> Self {
-        let workflow_id = WorkflowID::default();
+        let workflow_id = WorkflowId::default();
 
         let workflow = Workflow {
             trigger,
@@ -196,18 +196,18 @@ pub enum Trigger {
     CosmosContractEvent {
         #[schema(value_type = Object)] // TODO: update this in layer-climb
         address: layer_climb_address::Address,
-        chain_name: ChainName,
+        chain: ChainKey,
         event_type: String,
     },
     EvmContractEvent {
         #[schema(value_type = String)]
         address: alloy_primitives::Address,
-        chain_name: ChainName,
+        chain: ChainKey,
         event_hash: ByteArray<32>,
     },
     BlockInterval {
-        /// The name of the chain to use for the block interval
-        chain_name: ChainName,
+        /// The chain to use for the block interval
+        chain: ChainKey,
         /// Number of blocks to wait between each execution
         #[schema(value_type = u32)]
         n_blocks: NonZeroU32,
@@ -236,8 +236,8 @@ pub enum TriggerData {
     CosmosContractEvent {
         /// The address of the contract that emitted the event
         contract_address: layer_climb_address::Address,
-        /// The name of the chain where the event was emitted
-        chain_name: ChainName,
+        /// The chain where the event was emitted
+        chain: ChainKey,
         /// The data that was emitted by the contract
         event: cosmwasm_std::Event,
         /// The block height where the event was emitted
@@ -246,8 +246,8 @@ pub enum TriggerData {
         event_index: u64,
     },
     EvmContractEvent {
-        /// The name of the chain where the event was emitted
-        chain_name: ChainName,
+        /// The chain where the event was emitted
+        chain: ChainKey,
         /// The address of the contract that emitted the event
         contract_address: alloy_primitives::Address,
         /// The log data
@@ -269,8 +269,8 @@ pub enum TriggerData {
         removed: bool,
     },
     BlockInterval {
-        /// The name of the chain where the blocks are checked
-        chain_name: ChainName,
+        /// The chain where the blocks are checked
+        chain: ChainKey,
         /// The block height where the event was emitted
         block_height: u64,
     },
@@ -296,12 +296,12 @@ impl TriggerData {
         }
     }
 
-    pub fn chain_name(&self) -> &str {
+    pub fn chain(&self) -> Option<&ChainKey> {
         match self {
-            TriggerData::CosmosContractEvent { chain_name, .. }
-            | TriggerData::EvmContractEvent { chain_name, .. }
-            | TriggerData::BlockInterval { chain_name, .. } => chain_name.as_ref(),
-            TriggerData::Cron { .. } | TriggerData::Raw(_) => "none",
+            TriggerData::CosmosContractEvent { chain, .. }
+            | TriggerData::EvmContractEvent { chain, .. }
+            | TriggerData::BlockInterval { chain, .. } => Some(&chain),
+            TriggerData::Cron { .. } | TriggerData::Raw(_) => None,
         }
     }
 }
@@ -321,8 +321,8 @@ pub struct TriggerAction {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 // Trigger with metadata so it can be identified in relation to services and workflows
 pub struct TriggerConfig {
-    pub service_id: ServiceID,
-    pub workflow_id: WorkflowID,
+    pub service_id: ServiceId,
+    pub workflow_id: WorkflowId,
     pub trigger: Trigger,
 }
 
@@ -349,7 +349,7 @@ pub enum Aggregator {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct EvmContractSubmission {
-    pub chain_name: ChainName,
+    pub chain: ChainKey,
     /// Should be an IWavsServiceHandler contract
     #[schema(value_type = String)]
     pub address: alloy_primitives::Address,
@@ -361,12 +361,12 @@ pub struct EvmContractSubmission {
 
 impl EvmContractSubmission {
     pub fn new(
-        chain_name: ChainName,
+        chain: ChainKey,
         address: alloy_primitives::Address,
         max_gas: Option<u64>,
     ) -> Self {
         Self {
-            chain_name,
+            chain,
             address,
             max_gas,
         }
@@ -445,7 +445,7 @@ mod test_ext {
         num::NonZeroU32,
     };
 
-    use crate::{id::ChainName, ByteArray, ComponentSource, IDError, ServiceID, WorkflowID};
+    use crate::{ByteArray, ChainKey, ChainKeyError, ComponentSource, ServiceId, WorkflowId, WorkflowIdError};
 
     use super::{Component, Trigger, TriggerConfig};
 
@@ -465,23 +465,23 @@ mod test_ext {
     impl Trigger {
         pub fn cosmos_contract_event(
             address: layer_climb_address::Address,
-            chain_name: impl Into<ChainName>,
+            chain: impl TryInto<ChainKey, Error = ChainKeyError>,
             event_type: impl ToString,
         ) -> Self {
             Trigger::CosmosContractEvent {
                 address,
-                chain_name: chain_name.into(),
+                chain: chain.try_into().unwrap(),
                 event_type: event_type.to_string(),
             }
         }
         pub fn evm_contract_event(
             address: alloy_primitives::Address,
-            chain_name: impl Into<ChainName>,
+            chain: impl TryInto<ChainKey, Error = ChainKeyError>,
             event_hash: ByteArray<32>,
         ) -> Self {
             Trigger::EvmContractEvent {
                 address,
-                chain_name: chain_name.into(),
+                chain: chain.try_into().unwrap(),
                 event_hash,
             }
         }
@@ -489,61 +489,61 @@ mod test_ext {
 
     impl TriggerConfig {
         pub fn cosmos_contract_event(
-            service_id: ServiceID,
-            workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+            service_id: ServiceId,
+            workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
             contract_address: layer_climb_address::Address,
-            chain_name: impl Into<ChainName>,
+            chain: impl TryInto<ChainKey, Error = ChainKeyError>,
             event_type: impl ToString,
-        ) -> Result<Self, IDError> {
-            Ok(Self {
+        ) -> Self {
+            Self {
                 service_id,
-                workflow_id: workflow_id.try_into()?,
-                trigger: Trigger::cosmos_contract_event(contract_address, chain_name, event_type),
-            })
+                workflow_id: workflow_id.try_into().unwrap(),
+                trigger: Trigger::cosmos_contract_event(contract_address, chain, event_type),
+            }
         }
 
         pub fn evm_contract_event(
-            service_id: ServiceID,
-            workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+            service_id: ServiceId,
+            workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
             contract_address: alloy_primitives::Address,
-            chain_name: impl Into<ChainName>,
+            chain: impl TryInto<ChainKey, Error = ChainKeyError>,
             event_hash: ByteArray<32>,
-        ) -> Result<Self, IDError> {
-            Ok(Self {
+        ) -> Self {
+            Self {
                 service_id,
-                workflow_id: workflow_id.try_into()?,
-                trigger: Trigger::evm_contract_event(contract_address, chain_name, event_hash),
-            })
+                workflow_id: workflow_id.try_into().unwrap(),
+                trigger: Trigger::evm_contract_event(contract_address, chain, event_hash),
+            }
         }
 
         pub fn block_interval_event(
-            service_id: ServiceID,
-            workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-            chain_name: impl Into<ChainName>,
+            service_id: ServiceId,
+            workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
+            chain: impl TryInto<ChainKey, Error = ChainKeyError>,
             n_blocks: NonZeroU32,
-        ) -> Result<Self, IDError> {
-            Ok(Self {
+        ) -> Self {
+            Self {
                 service_id,
-                workflow_id: workflow_id.try_into()?,
+                workflow_id: workflow_id.try_into().unwrap(),
                 trigger: Trigger::BlockInterval {
-                    chain_name: chain_name.into(),
+                    chain: chain.try_into().unwrap(),
                     n_blocks,
                     start_block: None,
                     end_block: None,
                 },
-            })
+            }
         }
 
         #[cfg(test)]
         pub fn manual(
-            service_id: ServiceID,
-            workflow_id: impl TryInto<WorkflowID, Error = IDError>,
-        ) -> Result<Self, IDError> {
-            Ok(Self {
+            service_id: ServiceId,
+            workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
+        ) -> Self {
+            Self {
                 service_id,
-                workflow_id: workflow_id.try_into()?,
+                workflow_id: workflow_id.try_into().unwrap(),
                 trigger: Trigger::Manual,
-            })
+            }
         }
     }
 }

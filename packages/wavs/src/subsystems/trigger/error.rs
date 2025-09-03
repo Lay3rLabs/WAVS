@@ -1,7 +1,7 @@
 use thiserror::Error;
 use tokio::sync::mpsc::error::SendError;
 use utils::error::EvmClientError;
-use wavs_types::{ByteArray, ChainName, ServiceID, WorkflowID};
+use wavs_types::{ByteArray, ChainName, ServiceId, WorkflowId};
 
 use crate::{
     dispatcher::DispatcherCommand,
@@ -19,11 +19,11 @@ pub enum TriggerError {
     #[error("parse avs payload: {0}")]
     ParseAvsPayload(anyhow::Error),
     #[error("Cannot find service: {0}")]
-    NoSuchService(ServiceID),
+    NoSuchService(ServiceId),
     #[error("Cannot find chain: {0}")]
     NoSuchChain(ChainName),
     #[error("Cannot find workflow: {0} / {1}")]
-    NoSuchWorkflow(ServiceID, WorkflowID),
+    NoSuchWorkflow(ServiceId, WorkflowId),
     #[error("Cannot find trigger data: {0}")]
     NoSuchTriggerData(usize),
     #[error("Unable to parse trigger data: {0}")]
@@ -35,9 +35,9 @@ pub enum TriggerError {
     #[error("Cannot find block interval trigger: {0} / {1}")]
     NoSuchBlockIntervalTrigger(ChainName, u32),
     #[error("Service exists, cannot register again: {0}")]
-    ServiceAlreadyExists(ServiceID),
+    ServiceAlreadyExists(ServiceId),
     #[error("Workflow exists, cannot register again: {0} / {1}")]
-    WorkflowAlreadyExists(ServiceID, WorkflowID),
+    WorkflowAlreadyExists(ServiceId, WorkflowId),
     #[error("Cron scheduling error: {expression} / {reason}")]
     Cron { expression: String, reason: String },
     #[error("Interval start time cannot be after end time")]

@@ -1,5 +1,5 @@
 use thiserror::Error;
-use wavs_types::{ComponentDigest, ServiceID, WorkflowID};
+use wavs_types::{ComponentDigest, ServiceId, WorkflowId};
 
 #[derive(Error, Debug)]
 pub enum EngineError {
@@ -14,8 +14,8 @@ pub enum EngineError {
 
     #[error("Workflow {workflow_id} not found for service {service_id}")]
     WorkflowNotFound {
-        service_id: ServiceID,
-        workflow_id: WorkflowID,
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
     },
 
     #[error{"Unable to get component input: {0}"}]
@@ -28,10 +28,10 @@ pub enum EngineError {
     Store(anyhow::Error),
 
     #[error("Max fuel consumed by WasmEngine for service: {0}, workflow: {1}")]
-    OutOfFuel(ServiceID, WorkflowID),
+    OutOfFuel(ServiceId, WorkflowId),
 
     #[error("Time limit exceeded by WasmEngine for service: {0}, workflow: {1}")]
-    OutOfTime(ServiceID, WorkflowID),
+    OutOfTime(ServiceId, WorkflowId),
 
     #[error("Unable to add to linker: {0}")]
     AddToLinker(wasmtime::Error),

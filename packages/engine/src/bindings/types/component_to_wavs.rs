@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, str::FromStr};
 
-use wavs_types::WorkflowID;
+use wavs_types::WorkflowId;
 
 use crate::{
     bindings::operator::world::wavs::operator::output as component_output,
@@ -85,11 +85,11 @@ impl TryFrom<component_service::Service> for wavs_types::Service {
                 .workflows
                 .into_iter()
                 .map(|(workflow_id, workflow)| {
-                    let workflow_id: WorkflowID = workflow_id.parse()?;
+                    let workflow_id: WorkflowId = workflow_id.parse()?;
                     let workflow: wavs_types::Workflow = workflow.try_into()?;
                     Ok((workflow_id, workflow))
                 })
-                .collect::<anyhow::Result<BTreeMap<WorkflowID, wavs_types::Workflow>>>()?,
+                .collect::<anyhow::Result<BTreeMap<WorkflowId, wavs_types::Workflow>>>()?,
             status: src.status.into(),
             manager: src.manager.try_into()?,
         })

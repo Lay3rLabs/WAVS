@@ -2,7 +2,7 @@ use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{ChainName, IDError};
+use crate::{ChainKey, ChainKeyError, ChainKeyId, ChainKeyNamespace};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ChainConfigError {
@@ -10,15 +10,19 @@ pub enum ChainConfigError {
     ExpectedEvmChain,
     #[error("Expected Cosmos chain")]
     ExpectedCosmosChain,
-    #[error("Duplicate chain name for {0}")]
-    DuplicateChainName(ChainName),
-    #[error("Invalid chain name: {0}")]
-    InvalidChainName(#[from] IDError),
+    #[error("Invalid chain: {0}")]
+    InvalidChainKey(#[from] ChainKeyError),
+    #[error("Chain already exists: {0}")]
+    DuplicateChain(ChainKey),
+    #[error("Namespace for cosmos chain must be {cosmos} or {dev}, got {0}", cosmos=ChainKeyNamespace::COSMOS, dev=ChainKeyNamespace::DEV)]
+    InvalidNamespaceForCosmos(ChainKeyNamespace),
+    #[error("Namespace for cosmos chain must be {evm} or {dev}, got {0}", evm=ChainKeyNamespace::EVM, dev=ChainKeyNamespace::DEV)]
+    InvalidNamespaceForEvm(ChainKeyNamespace),
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct CosmosChainConfig {
-    pub chain_id: String,
+    pub chain_id: ChainKeyId,
     pub bech32_prefix: String,
     pub rpc_endpoint: Option<String>,
     pub grpc_endpoint: Option<String>,
@@ -29,7 +33,7 @@ pub struct CosmosChainConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct EvmChainConfig {
-    pub chain_id: String,
+    pub chain_id: ChainKeyId,
     pub ws_endpoint: Option<String>,
     pub http_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
@@ -41,6 +45,15 @@ pub struct EvmChainConfig {
 pub enum AnyChainConfig {
     Cosmos(CosmosChainConfig),
     Evm(EvmChainConfig),
+}
+
+impl AnyChainConfig {
+    pub fn chain_id(&self) -> &ChainKeyId {
+        match self {
+            AnyChainConfig::Cosmos(config) => &config.chain_id,
+            AnyChainConfig::Evm(config) => &config.chain_id,
+        }
+    }
 }
 
 impl From<CosmosChainConfig> for AnyChainConfig {
@@ -80,7 +93,7 @@ impl TryFrom<AnyChainConfig> for EvmChainConfig {
 impl From<CosmosChainConfig> for ChainConfig {
     fn from(config: CosmosChainConfig) -> Self {
         Self {
-            chain_id: ChainId::new(config.chain_id),
+            chain_id: layer_climb::prelude::ChainId::new(config.chain_id),
             rpc_endpoint: config.rpc_endpoint,
             grpc_endpoint: config.grpc_endpoint,
             grpc_web_endpoint: None,
@@ -98,7 +111,7 @@ impl TryFrom<ChainConfig> for CosmosChainConfig {
 
     fn try_from(config: ChainConfig) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain_id: config.chain_id.to_string(),
+            chain_id: config.chain_id.as_str().parse()?,
             bech32_prefix: match config.address_kind {
                 AddrKind::Cosmos { prefix } => prefix,
                 _ => return Err(ChainConfigError::ExpectedCosmosChain),

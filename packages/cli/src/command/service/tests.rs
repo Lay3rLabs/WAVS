@@ -74,7 +74,7 @@ async fn test_workflow_component_operations() {
     assert_eq!(init_result.file_path, file_path);
 
     // Need to have a valid workflow before we can work on its component
-    let workflow_id = WorkflowID::new("workflow-1").unwrap();
+    let workflow_id = WorkflowId::new("workflow-1").unwrap();
     add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
     // Test adding first component using Digest source
@@ -108,7 +108,7 @@ async fn test_workflow_component_operations() {
         .is_set());
 
     // Test adding second component with Digest source
-    let workflow_id_2 = WorkflowID::new("workflow-2").unwrap();
+    let workflow_id_2 = WorkflowId::new("workflow-2").unwrap();
     add_workflow(&file_path, Some(workflow_id_2.clone())).unwrap();
 
     let second_add_result = update_workflow_component(
@@ -255,7 +255,7 @@ async fn test_workflow_component_operations() {
     ));
 
     // Test error handling for permissions update with non-existent component
-    let non_existent_id = WorkflowID::new("does-not-exist").unwrap();
+    let non_existent_id = WorkflowId::new("does-not-exist").unwrap();
     let error_permissions = update_workflow_component(
         &file_path,
         non_existent_id.clone(),
@@ -274,7 +274,7 @@ async fn test_workflow_component_operations() {
 
     // Test adding third component with Digest source
     // Need to have a valid workflow before we can work on its component
-    let workflow_id_3 = WorkflowID::new("workflow-3").unwrap();
+    let workflow_id_3 = WorkflowId::new("workflow-3").unwrap();
     add_workflow(&file_path, Some(workflow_id_3.clone())).unwrap();
 
     let third_add_result = update_workflow_component(
@@ -633,7 +633,7 @@ fn test_workflow_operations() {
     init_service(&file_path, "Test Service".to_string()).unwrap();
 
     // Test adding a workflow with specific ID
-    let workflow_id = WorkflowID::new("workflow-123").unwrap();
+    let workflow_id = WorkflowId::new("workflow-123").unwrap();
     let add_result = add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
     // Verify add result
@@ -690,7 +690,7 @@ fn test_workflow_operations() {
     assert_eq!(service_after_delete.workflows.len(), 1); // One workflow remaining
 
     // Test error handling for non-existent workflow
-    let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
+    let non_existent_workflow = WorkflowId::new("does-not-exist").unwrap();
     let workflow_error = delete_workflow(&file_path, non_existent_workflow.clone());
 
     // Verify it returns an error with appropriate message
@@ -732,7 +732,7 @@ async fn test_workflow_trigger_operations() {
     init_service(&file_path, "Test Service".to_string()).unwrap();
 
     // Add a workflow
-    let workflow_id = WorkflowID::new("workflow-123").unwrap();
+    let workflow_id = WorkflowId::new("workflow-123").unwrap();
     add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
     // Initial workflow should have manual trigger (default when created)
@@ -891,7 +891,7 @@ async fn test_workflow_trigger_operations() {
     }
 
     // Test error handling for non-existent workflow
-    let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
+    let non_existent_workflow = WorkflowId::new("does-not-exist").unwrap();
     let trigger_error = set_evm_trigger(
         &file_path,
         non_existent_workflow.clone(),
@@ -987,7 +987,7 @@ async fn test_service_validation() {
     let temp_dir = tempdir().unwrap();
 
     // Create common test objects
-    let workflow_id = WorkflowID::new("workflow-123").unwrap();
+    let workflow_id = WorkflowId::new("workflow-123").unwrap();
     let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
     let evm_address = alloy_primitives::Address::parse_checksummed(
         "0x00000000219ab540356cBB839Cbe05303d7705Fa",
@@ -1065,7 +1065,7 @@ async fn test_service_validation() {
         );
 
         // Add invalid workflow with unset component
-        let invalid_workflow_id = WorkflowID::new("invalid-workflow").unwrap();
+        let invalid_workflow_id = WorkflowId::new("invalid-workflow").unwrap();
         workflows.insert(
             invalid_workflow_id.clone(),
             WorkflowJson {
@@ -1382,7 +1382,7 @@ async fn test_set_component_source_registry() {
     init_service(&file_path, "Test Service".to_string()).unwrap();
 
     // Add a workflow
-    let workflow_id = WorkflowID::new("workflow-123").unwrap();
+    let workflow_id = WorkflowId::new("workflow-123").unwrap();
     add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
     // Test setting a component source to a registry
@@ -1636,7 +1636,7 @@ fn test_aggregator_validation() {
         manager: ServiceManagerJson::Json(Json::Unset),
     };
 
-    let workflow_id = WorkflowID::default();
+    let workflow_id = WorkflowId::default();
     let test_digest = ComponentDigest::hash(b"test");
     let component = Component::new(ComponentSource::Digest(test_digest));
 

@@ -14,7 +14,7 @@ use utils::{
         fs::FileStorage,
     },
 };
-use wavs_types::{ChainName, EventId, Packet, ServiceID};
+use wavs_types::{ChainName, EventId, Packet, ServiceId};
 
 use crate::{
     config::Config,
@@ -181,7 +181,7 @@ impl HttpState {
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub async fn service_registered(&self, service_id: ServiceID) -> bool {
+    pub async fn service_registered(&self, service_id: ServiceId) -> bool {
         let storage = self.storage.clone();
 
         tokio::task::spawn_blocking(move || {
@@ -198,7 +198,7 @@ impl HttpState {
 
     #[instrument(level = "debug", skip(self))]
     #[allow(clippy::result_large_err)]
-    pub fn register_service(&self, service_id: &ServiceID) -> AggregatorResult<()> {
+    pub fn register_service(&self, service_id: &ServiceId) -> AggregatorResult<()> {
         if self.storage.get(SERVICES, service_id.inner())?.is_none() {
             tracing::info!("Registering aggregator for service {}", service_id);
 

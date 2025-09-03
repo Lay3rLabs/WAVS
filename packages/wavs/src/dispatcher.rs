@@ -39,7 +39,7 @@ use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{ChainConfigError, ComponentDigest, ServiceManager};
-use wavs_types::{ChainName, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction};
+use wavs_types::{ChainName, IDError, Service, ServiceId, SigningKeyResponse, TriggerAction};
 
 use crate::config::Config;
 use crate::services::{Services, ServicesError};
@@ -73,7 +73,7 @@ pub struct Dispatcher<S: CAStorage> {
 #[allow(clippy::large_enum_variant)]
 pub enum DispatcherCommand {
     Trigger(TriggerAction),
-    ChangeServiceUri { service_id: ServiceID, uri: String },
+    ChangeServiceUri { service_id: ServiceId, uri: String },
 }
 
 impl Dispatcher<FileStorage> {
@@ -287,7 +287,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    pub fn remove_service(&self, id: ServiceID) -> Result<(), DispatcherError> {
+    pub fn remove_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
         self.services.remove(&id)?;
         self.engine_manager.engine.remove_storage(&id);
         self.trigger_manager.remove_service(id.clone())?;
@@ -310,7 +310,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub fn get_service_key(
         &self,
-        service_id: ServiceID,
+        service_id: ServiceId,
     ) -> Result<SigningKeyResponse, DispatcherError> {
         Ok(self.submission_manager.get_service_key(service_id)?)
     }
@@ -318,7 +318,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     async fn change_service(
         &self,
-        service_id: ServiceID,
+        service_id: ServiceId,
         url_str: String,
     ) -> Result<(), DispatcherError> {
         let service = fetch_service(&url_str, &self.ipfs_gateway).await?;
@@ -438,7 +438,7 @@ fn add_service_to_managers(
 #[derive(Error, Debug)]
 pub enum DispatcherError {
     #[error("Service {0} already registered")]
-    ServiceRegistered(ServiceID),
+    ServiceRegistered(ServiceId),
 
     #[error("{0:?}")]
     UnknownService(#[from] ServicesError),
@@ -490,7 +490,7 @@ pub enum DispatcherError {
 
     #[error("Service change: id mismatch, from {old_id} to {new_id}")]
     ChangeIdMismatch {
-        old_id: ServiceID,
-        new_id: ServiceID,
+        old_id: ServiceId,
+        new_id: ServiceId,
     },
 }

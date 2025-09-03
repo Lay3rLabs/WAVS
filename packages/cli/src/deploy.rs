@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};
-use wavs_types::{ChainName, Service, ServiceID, Submit, Trigger, WorkflowID};
+use wavs_types::{ChainName, Service, ServiceId, Submit, Trigger, WorkflowId};
 
 use crate::config::Config;
 
@@ -14,7 +14,7 @@ pub trait CommandDeployResult: Display {
 #[serde(default)]
 pub struct Deployment {
     pub evm_service_managers: BTreeMap<ChainName, Vec<alloy_primitives::Address>>,
-    pub services: BTreeMap<ServiceID, Service>,
+    pub services: BTreeMap<ServiceId, Service>,
 }
 
 impl Deployment {
@@ -57,8 +57,8 @@ impl Deployment {
 
     pub fn get_trigger(
         &self,
-        service_id: &ServiceID,
-        workflow_id: Option<&WorkflowID>,
+        service_id: &ServiceId,
+        workflow_id: Option<&WorkflowId>,
     ) -> Option<Trigger> {
         let service = self.services.get(service_id)?;
         let workflow = match workflow_id {
@@ -71,8 +71,8 @@ impl Deployment {
 
     pub fn get_submit(
         &self,
-        service_id: &ServiceID,
-        workflow_id: Option<&WorkflowID>,
+        service_id: &ServiceId,
+        workflow_id: Option<&WorkflowId>,
     ) -> Option<Submit> {
         let service = self.services.get(service_id)?;
         let workflow = match workflow_id {

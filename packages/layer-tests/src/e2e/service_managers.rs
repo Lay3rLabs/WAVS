@@ -10,7 +10,7 @@ use utils::test_utils::{
 };
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
-    ChainName, Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit,
+    ChainName, Service, ServiceId, ServiceManager, ServiceStatus, SigningKeyResponse, Submit,
 };
 
 use crate::deployment::ServiceDeployment;
@@ -27,7 +27,7 @@ use crate::e2e::{
 pub struct ServiceManagers {
     configs: Arc<Configs>,
     lookup: Arc<HashMap<String, (MockServiceManager, ChainName)>>,
-    aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<(ServiceID, String)>>>,
+    aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<(ServiceId, String)>>>,
 }
 
 impl ServiceManagers {

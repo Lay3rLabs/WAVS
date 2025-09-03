@@ -459,7 +459,7 @@ mod test {
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{ChainName, ComponentDigest, Service, WorkflowID};
+    use wavs_types::{ChainName, ComponentDigest, Service, WorkflowId};
 
     #[test]
     fn packet_validation() {
@@ -573,7 +573,7 @@ mod test {
                 chain_name: "test-chain".parse().unwrap(),
                 address: rand_address_evm(),
             };
-            let service_id = wavs_types::ServiceID::from(&manager);
+            let service_id = wavs_types::ServiceId::from(&manager);
             state.register_service(&service_id).unwrap();
             service_ids.push(service_id);
         }
@@ -951,7 +951,7 @@ mod test {
 
     async fn mock_service(
         chain_name: ChainName,
-        workflow_id: WorkflowID,
+        workflow_id: WorkflowId,
         service_manager_address: Address,
         service_handler_addresses: Vec<Address>,
         aggregator_digest: ComponentDigest,
@@ -983,7 +983,7 @@ mod test {
 
     async fn mock_service_with_submit(
         chain_name: ChainName,
-        workflow_id: WorkflowID,
+        workflow_id: WorkflowId,
         service_manager_address: Address,
         submit: wavs_types::Submit,
     ) -> wavs_types::Service {
@@ -1064,7 +1064,7 @@ mod test {
 
         pub async fn create_service(
             &self,
-            workflow_id: WorkflowID,
+            workflow_id: WorkflowId,
             service_manager_address: Address,
             service_handler_addresses: Vec<Address>,
         ) -> Service {

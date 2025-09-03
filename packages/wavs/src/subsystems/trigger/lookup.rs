@@ -5,7 +5,7 @@ use std::{
 
 use bimap::BiMap;
 use utils::telemetry::TriggerMetrics;
-use wavs_types::{ByteArray, ChainName, ServiceID, Trigger, TriggerConfig, WorkflowID};
+use wavs_types::{ByteArray, ChainName, ServiceId, Trigger, TriggerConfig, WorkflowId};
 
 use crate::{
     services::Services,
@@ -30,13 +30,13 @@ pub struct LookupMaps {
     pub triggers_by_evm_contract_event: Arc<
         RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
-    // ServiceID <-> ServiceManager address
-    pub service_manager: Arc<RwLock<BiMap<ServiceID, layer_climb::prelude::Address>>>,
+    // ServiceId <-> ServiceManager address
+    pub service_manager: Arc<RwLock<BiMap<ServiceId, layer_climb::prelude::Address>>>,
     /// Efficient block schedulers (one per chain) for block interval triggers
     pub block_schedulers: BlockSchedulers,
     /// lookup id by service id -> workflow id
     pub triggers_by_service_workflow:
-        Arc<RwLock<BTreeMap<ServiceID, BTreeMap<WorkflowID, LookupId>>>>,
+        Arc<RwLock<BTreeMap<ServiceId, BTreeMap<WorkflowId, LookupId>>>>,
     /// latest lookup_id
     pub lookup_id: Arc<AtomicUsize>,
     /// cron scheduler
@@ -201,8 +201,8 @@ impl LookupMaps {
 
     pub fn remove_workflow(
         &self,
-        service_id: ServiceID,
-        workflow_id: WorkflowID,
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
     ) -> Result<(), TriggerError> {
         let mut service_lock = self.triggers_by_service_workflow.write().unwrap();
 
@@ -277,7 +277,7 @@ impl LookupMaps {
         Ok(())
     }
 
-    pub fn remove_service(&self, service_id: wavs_types::ServiceID) -> Result<(), TriggerError> {
+    pub fn remove_service(&self, service_id: wavs_types::ServiceId) -> Result<(), TriggerError> {
         let mut trigger_configs = self.trigger_configs.write().unwrap();
         let mut triggers_by_evm_contract_event =
             self.triggers_by_evm_contract_event.write().unwrap();
@@ -371,7 +371,7 @@ impl LookupMaps {
 
     pub fn configs_for_service(
         &self,
-        service_id: ServiceID,
+        service_id: ServiceId,
     ) -> Result<Vec<TriggerConfig>, TriggerError> {
         let mut triggers = Vec::new();
 

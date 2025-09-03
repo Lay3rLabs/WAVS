@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 use wavs::subsystems::submission::{chain_message::ChainMessage, SubmissionManager};
-use wavs_types::{ChainName, Envelope, ServiceID, ServiceManager, Submit};
+use wavs_types::{ChainName, Envelope, ServiceId, ServiceManager, Submit};
 
 use utils::{
     context::AppContext, storage::db::RedbStorage, telemetry::SubmissionMetrics,
@@ -14,7 +14,7 @@ use wavs_systems::mock_submissions::{
     mock_event_id, mock_event_order, wait_for_submission_messages,
 };
 
-fn dummy_message(service_id: ServiceID, payload: &str) -> ChainMessage {
+fn dummy_message(service_id: ServiceId, payload: &str) -> ChainMessage {
     let workflow_id = {
         // whatever, just use the first 24 chars of the service ID
         let mut s = service_id.to_string();

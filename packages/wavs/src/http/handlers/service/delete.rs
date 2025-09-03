@@ -1,7 +1,7 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 
 use crate::http::{error::HttpResult, state::HttpState};
-use wavs_types::{DeleteServicesRequest, ServiceID, ServiceManager};
+use wavs_types::{DeleteServicesRequest, ServiceId, ServiceManager};
 
 #[utoipa::path(
     delete,
@@ -30,7 +30,7 @@ async fn delete_service_inner(
     service_managers: Vec<ServiceManager>,
 ) -> HttpResult<()> {
     for service_manager in service_managers {
-        let id = ServiceID::from(&service_manager);
+        let id = ServiceId::from(&service_manager);
         state.dispatcher.remove_service(id)?;
         state.metrics.decrement_registered_services();
     }

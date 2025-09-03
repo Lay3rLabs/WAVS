@@ -6,7 +6,7 @@ use std::{
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
     Aggregator, ChainName, ComponentDigest, EvmContractSubmission, Permissions, ServiceStatus,
-    Submit, Trigger, WorkflowID,
+    Submit, Trigger, WorkflowId,
 };
 
 use crate::service_json::ServiceJson;
@@ -38,7 +38,7 @@ impl std::fmt::Display for ServiceInitResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkflowAddResult {
     /// The workflow id
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
@@ -55,7 +55,7 @@ impl std::fmt::Display for WorkflowAddResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkflowDeleteResult {
     /// The workflow id that was deleted
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
@@ -72,7 +72,7 @@ impl std::fmt::Display for WorkflowDeleteResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkflowTriggerResult {
     /// The workflow id that was updated
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     /// The updated trigger type
     pub trigger: Trigger,
     /// The file path where the updated service JSON was saved
@@ -156,7 +156,7 @@ impl std::fmt::Display for WorkflowTriggerResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkflowSetSubmitAggregatorResult {
     /// The workflow id that was updated
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     /// The updated submit type
     pub submit: Submit,
     /// The aggregator submit
@@ -203,7 +203,7 @@ impl std::fmt::Display for WorkflowSetSubmitAggregatorResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkflowSetSubmitNoneResult {
     /// The workflow id that was updated
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     /// The file path where the updated service JSON was saved
     pub file_path: PathBuf,
 }
@@ -212,7 +212,7 @@ pub struct WorkflowSetSubmitNoneResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkflowSetAggregatorUrlResult {
     /// The workflow id that was updated
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     /// The aggregator URL that was set
     pub url: String,
     /// The file path where the updated service JSON was saved
@@ -240,7 +240,7 @@ impl std::fmt::Display for WorkflowSetAggregatorUrlResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkflowAddAggregatorResult {
     /// The workflow id that was updated
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     /// The updated submit type
     pub aggregator_submits: Vec<Aggregator>,
     /// The file path where the updated service JSON was saved
@@ -340,8 +340,8 @@ impl std::fmt::Display for ServiceValidationResult {
 
 #[derive(Debug, Clone, Serialize)]
 pub enum ComponentContext {
-    Workflow { workflow_id: WorkflowID },
-    Aggregator { workflow_id: WorkflowID },
+    Workflow { workflow_id: WorkflowId },
+    Aggregator { workflow_id: WorkflowId },
 }
 
 impl std::fmt::Display for ComponentContext {
@@ -414,7 +414,7 @@ impl ComponentOperationResult {
     }
 
     /// Get the workflow ID from any variant (extracts from context)
-    pub fn workflow_id(&self) -> &wavs_types::WorkflowID {
+    pub fn workflow_id(&self) -> &wavs_types::WorkflowId {
         match self {
             ComponentOperationResult::SourceDigest { context, .. } => match context {
                 ComponentContext::Workflow { workflow_id } => workflow_id,

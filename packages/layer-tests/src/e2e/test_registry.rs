@@ -8,7 +8,7 @@ use std::sync::Arc;
 use wavs_types::aggregator::RegisterServiceRequest;
 
 use utils::config::ChainConfigs;
-use wavs_types::{ChainName, Service, Trigger, WorkflowID};
+use wavs_types::{ChainName, Service, Trigger, WorkflowId};
 
 use super::chain_names::ChainNames;
 use super::clients::Clients;
@@ -274,7 +274,7 @@ impl TestRegistry {
             TestBuilder::new("evm_echo_data")
                 .with_description("Tests the EchoData component on the primary EVM chain")
                 .add_workflow(
-                    WorkflowID::new("echo_data").unwrap(),
+                    WorkflowId::new("echo_data").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -304,7 +304,7 @@ impl TestRegistry {
             TestBuilder::new("evm_echo_data_secondary_chain")
                 .with_description("Tests the EchoData component on the secondary EVM chain")
                 .add_workflow(
-                    WorkflowID::new("echo_data_secondary").unwrap(),
+                    WorkflowId::new("echo_data_secondary").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -336,7 +336,7 @@ impl TestRegistry {
                 .with_description("Tests going from empty service workflows to some")
                 .with_service_manager_chain(chain)
                 .with_change_service(ChangeServiceDefinition::AddWorkflow {
-                    workflow_id: WorkflowID::new("echo_data").unwrap(),
+                    workflow_id: WorkflowId::new("echo_data").unwrap(),
                     workflow: WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_trigger(TriggerDefinition::NewEvmContract(
@@ -365,7 +365,7 @@ impl TestRegistry {
             TestBuilder::new("evm_simple_aggregator")
                 .with_description("Tests the SimpleAggregator component-based aggregation")
                 .add_workflow(
-                    WorkflowID::new("simple_aggregator").unwrap(),
+                    WorkflowId::new("simple_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -403,7 +403,7 @@ impl TestRegistry {
             TestBuilder::new("evm_timer_aggregator")
                 .with_description("Tests the TimerAggregator component with delayed submission")
                 .add_workflow(
-                    WorkflowID::new("timer_aggregator").unwrap(),
+                    WorkflowId::new("timer_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::TimerAggregator)
@@ -447,7 +447,7 @@ impl TestRegistry {
                 .with_description("Tests multiple services, each with a different aggregator")
                 // First service with SimpleAggregator on first endpoint
                 .add_workflow(
-                    WorkflowID::new("service_with_simple_aggregator").unwrap(),
+                    WorkflowId::new("service_with_simple_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -475,7 +475,7 @@ impl TestRegistry {
                 )
                 // Second service with TimerAggregator on second endpoint
                 .add_workflow(
-                    WorkflowID::new("service_with_timer_aggregator").unwrap(),
+                    WorkflowId::new("service_with_timer_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Square)
                         .with_aggregator_component(AggregatorComponent::TimerAggregator)
@@ -516,7 +516,7 @@ impl TestRegistry {
             TestBuilder::new("evm_square")
                 .with_description("Tests the Square component on EVM chain")
                 .add_workflow(
-                    WorkflowID::new("square").unwrap(),
+                    WorkflowId::new("square").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Square)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -546,7 +546,7 @@ impl TestRegistry {
             TestBuilder::new("evm_chain_trigger_lookup")
                 .with_description("Tests the ChainTriggerLookup component on EVM chain")
                 .add_workflow(
-                    WorkflowID::new("chain_trigger_lookup").unwrap(),
+                    WorkflowId::new("chain_trigger_lookup").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::ChainTriggerLookup)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -577,7 +577,7 @@ impl TestRegistry {
             TestBuilder::new("evm_cosmos_query")
                 .with_description("Tests the CosmosQuery component from EVM to Cosmos")
                 .add_workflow(
-                    WorkflowID::new("cosmos_query").unwrap(),
+                    WorkflowId::new("cosmos_query").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::CosmosQuery)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -611,7 +611,7 @@ impl TestRegistry {
             TestBuilder::new("evm_permissions")
                 .with_description("Tests permissions for HTTP and file system access on EVM chain")
                 .add_workflow(
-                    WorkflowID::new("permissions").unwrap(),
+                    WorkflowId::new("permissions").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Permissions)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -643,7 +643,7 @@ impl TestRegistry {
                     "Tests counter component running twice to verify keyvalue persistence",
                 )
                 .add_workflow(
-                    WorkflowID::new("counter_first").unwrap(),
+                    WorkflowId::new("counter_first").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::KvStore)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -665,7 +665,7 @@ impl TestRegistry {
                         .build(),
                 )
                 .add_workflow(
-                    WorkflowID::new("counter_second").unwrap(),
+                    WorkflowId::new("counter_second").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::KvStore)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -700,7 +700,7 @@ impl TestRegistry {
             TestBuilder::new("evm_multi_workflow")
                 .with_description("Tests multiple workflows with different components on EVM chain")
                 .add_workflow(
-                    WorkflowID::new("square_workflow").unwrap(),
+                    WorkflowId::new("square_workflow").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Square)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -718,7 +718,7 @@ impl TestRegistry {
                         .build(),
                 )
                 .add_workflow(
-                    WorkflowID::new("echo_workflow").unwrap(),
+                    WorkflowId::new("echo_workflow").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -744,7 +744,7 @@ impl TestRegistry {
         chain: &ChainName,
         aggregator_endpoint: &str,
     ) -> &mut Self {
-        let workflow_id = WorkflowID::new("change_workflow").unwrap();
+        let workflow_id = WorkflowId::new("change_workflow").unwrap();
 
         self.register(
             TestBuilder::new("evm_change_workflow")
@@ -789,7 +789,7 @@ impl TestRegistry {
                     "Tests multiple services triggered by the same event on EVM chain",
                 )
                 .add_workflow(
-                    WorkflowID::new("evm_multi_trigger").unwrap(),
+                    WorkflowId::new("evm_multi_trigger").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_trigger(TriggerDefinition::Existing(trigger.clone()))
@@ -804,7 +804,7 @@ impl TestRegistry {
                         .build(),
                 )
                 .add_workflow(
-                    WorkflowID::new("evm_multi_trigger_2").unwrap(),
+                    WorkflowId::new("evm_multi_trigger_2").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_trigger(TriggerDefinition::Existing(trigger))
@@ -831,7 +831,7 @@ impl TestRegistry {
             TestBuilder::new("evm_block_interval")
                 .with_description("Tests the block interval trigger on EVM chain")
                 .add_workflow(
-                    WorkflowID::new("block_interval").unwrap(),
+                    WorkflowId::new("block_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoBlockInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -865,7 +865,7 @@ impl TestRegistry {
                     "Tests the block interval trigger with start/stop on an EVM chain",
                 )
                 .add_workflow(
-                    WorkflowID::new("evm_block_interval_start_stop").unwrap(),
+                    WorkflowId::new("evm_block_interval_start_stop").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoBlockInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -897,7 +897,7 @@ impl TestRegistry {
             TestBuilder::new("evm_cron_interval")
                 .with_description("Tests the cron interval trigger")
                 .add_workflow(
-                    WorkflowID::new("cron_interval").unwrap(),
+                    WorkflowId::new("cron_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoCronInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -931,7 +931,7 @@ impl TestRegistry {
             TestBuilder::new("cosmos_echo_data")
                 .with_description("Tests the EchoData component on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_echo_data").unwrap(),
+                    WorkflowId::new("cosmos_echo_data").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_trigger(TriggerDefinition::NewCosmosContract(
@@ -961,7 +961,7 @@ impl TestRegistry {
             TestBuilder::new("cosmos_square")
                 .with_description("Tests the Square component on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_square").unwrap(),
+                    WorkflowId::new("cosmos_square").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Square)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -992,7 +992,7 @@ impl TestRegistry {
             TestBuilder::new("cosmos_chain_trigger_lookup")
                 .with_description("Tests the ChainTriggerLookup component on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_chain_trigger_lookup").unwrap(),
+                    WorkflowId::new("cosmos_chain_trigger_lookup").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::ChainTriggerLookup)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -1023,7 +1023,7 @@ impl TestRegistry {
             TestBuilder::new("cosmos_cosmos_query")
                 .with_description("Tests the CosmosQuery component on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_cosmos_query").unwrap(),
+                    WorkflowId::new("cosmos_cosmos_query").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::CosmosQuery)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -1060,7 +1060,7 @@ impl TestRegistry {
                     "Tests permissions for HTTP and file system access on Cosmos chain",
                 )
                 .add_workflow(
-                    WorkflowID::new("cosmos_permissions").unwrap(),
+                    WorkflowId::new("cosmos_permissions").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Permissions)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -1093,7 +1093,7 @@ impl TestRegistry {
             TestBuilder::new("cosmos_block_interval")
                 .with_description("Tests the block interval trigger on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_block_interval").unwrap(),
+                    WorkflowId::new("cosmos_block_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoBlockInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -1128,7 +1128,7 @@ impl TestRegistry {
                     "Tests the block interval trigger with start/stop on a Cosmos chain",
                 )
                 .add_workflow(
-                    WorkflowID::new("cosmos_block_interval_start_stop").unwrap(),
+                    WorkflowId::new("cosmos_block_interval_start_stop").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoBlockInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -1161,7 +1161,7 @@ impl TestRegistry {
             TestBuilder::new("cosmos_cron_interval")
                 .with_description("Tests the cron interval trigger on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_cron_interval").unwrap(),
+                    WorkflowId::new("cosmos_cron_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoCronInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -1195,7 +1195,7 @@ impl TestRegistry {
             TestBuilder::new("cross_chain_cosmos_to_evm_echo_data")
                 .with_description("Tests the EchoData component from Cosmos to EVM")
                 .add_workflow(
-                    WorkflowID::new("cross_chain_echo_data").unwrap(),
+                    WorkflowId::new("cross_chain_echo_data").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_trigger(TriggerDefinition::NewCosmosContract(

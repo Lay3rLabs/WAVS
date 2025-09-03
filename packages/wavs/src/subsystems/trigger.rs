@@ -34,7 +34,7 @@ use utils::{
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
-    ByteArray, ChainName, IWavsServiceManager, ServiceID, TriggerAction, TriggerConfig, TriggerData,
+    ByteArray, ChainName, IWavsServiceManager, ServiceId, TriggerAction, TriggerConfig, TriggerData,
 };
 
 #[derive(Clone)]
@@ -134,7 +134,7 @@ impl TriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
+    pub fn remove_service(&self, service_id: ServiceId) -> Result<(), TriggerError> {
         self.lookup_maps.remove_service(service_id.clone())
     }
 

@@ -75,10 +75,10 @@ impl Setup {
                     trigger_manager
                         .get_lookup_maps()
                         .add_trigger(TriggerConfig {
-                            service_id: wavs_types::ServiceID::hash(format!(
+                            service_id: wavs_types::ServiceId::hash(format!(
                                 "wavs-benchmark-{trigger_id}"
                             )),
-                            workflow_id: wavs_types::WorkflowID::new(format!(
+                            workflow_id: wavs_types::WorkflowId::new(format!(
                                 "wavs-benchmark-{trigger_id}"
                             ))
                             .unwrap(),

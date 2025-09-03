@@ -10,7 +10,7 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use wavs_types::{ChainName, ServiceDigest, ServiceID, ServiceManager};
+use wavs_types::{ChainName, ServiceDigest, ServiceId, ServiceManager};
 
 #[derive(Deserialize)]
 pub struct GetServiceParams {
@@ -62,7 +62,7 @@ async fn get_service_inner(
     state: &HttpState,
     service_manager: ServiceManager,
 ) -> HttpResult<wavs_types::Service> {
-    Ok(state.load_service(&ServiceID::from(&service_manager))?)
+    Ok(state.load_service(&ServiceId::from(&service_manager))?)
 }
 
 #[utoipa::path(

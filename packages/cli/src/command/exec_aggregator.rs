@@ -5,7 +5,7 @@ use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
     AggregatorAction, AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
     EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, Submit,
-    Trigger, Workflow, WorkflowID,
+    Trigger, Workflow, WorkflowId,
 };
 
 use crate::util::read_component;
@@ -14,7 +14,7 @@ fn create_dummy_packet(digest: ComponentDigest) -> Packet {
     let service = Service {
         name: "dummy-service".to_string(),
         workflows: [(
-            WorkflowID::default(),
+            WorkflowId::default(),
             Workflow {
                 trigger: Trigger::Manual,
                 component: Component {
@@ -42,7 +42,7 @@ fn create_dummy_packet(digest: ComponentDigest) -> Packet {
             ordering: [0u8; 12].into(),
             payload: vec![].into(),
         },
-        workflow_id: WorkflowID::default(),
+        workflow_id: WorkflowId::default(),
         service,
         signature: EnvelopeSignature::Secp256k1(
             alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false),
@@ -203,7 +203,7 @@ mod test {
     use utils::filesystem::workspace_path;
     use wavs_types::{
         Envelope, EnvelopeSignature, Service, ServiceManager, ServiceStatus, Submit, Trigger,
-        Workflow, WorkflowID,
+        Workflow, WorkflowId,
     };
 
     fn create_test_packet(component_path: &str) -> Packet {
@@ -213,7 +213,7 @@ mod test {
         let service = Service {
             name: "test-service".to_string(),
             workflows: [(
-                WorkflowID::default(),
+                WorkflowId::default(),
                 Workflow {
                     trigger: Trigger::Manual,
                     component: Component {
@@ -248,7 +248,7 @@ mod test {
 
         Packet {
             service,
-            workflow_id: WorkflowID::default(),
+            workflow_id: WorkflowId::default(),
             envelope: Envelope {
                 eventId: [0u8; 20].into(),
                 ordering: [0u8; 12].into(),

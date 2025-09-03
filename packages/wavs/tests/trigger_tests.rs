@@ -2,8 +2,8 @@ use std::num::NonZero;
 
 use wavs::{config::Config, subsystems::trigger::TriggerManager};
 use wavs_types::{
-    ChainName, Component, ComponentDigest, ComponentSource, Service, ServiceID, ServiceManager,
-    ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow, WorkflowID,
+    ChainName, Component, ComponentDigest, ComponentSource, Service, ServiceId, ServiceManager,
+    ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow, WorkflowId,
 };
 
 use layer_climb::prelude::*;
@@ -58,11 +58,11 @@ fn core_trigger_lookups() {
     )
     .unwrap();
 
-    let service_id_1 = ServiceID::hash("service-1");
-    let workflow_id_1 = WorkflowID::new("workflow-1").unwrap();
+    let service_id_1 = ServiceId::hash("service-1");
+    let workflow_id_1 = WorkflowId::new("workflow-1").unwrap();
 
-    let service_id_2 = ServiceID::hash("service-2");
-    let workflow_id_2 = WorkflowID::new("workflow-2").unwrap();
+    let service_id_2 = ServiceId::hash("service-2");
+    let workflow_id_2 = WorkflowId::new("workflow-2").unwrap();
 
     let task_queue_addr_1_1 = rand_address_evm();
     let task_queue_addr_1_2 = rand_address_evm();
@@ -211,7 +211,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
     )
     .unwrap();
 
-    let workflow_id = WorkflowID::new("workflow-1").unwrap();
+    let workflow_id = WorkflowId::new("workflow-1").unwrap();
     let chain_name = ChainName::new("evm").unwrap();
 
     // set number of blocks to 1 to fire the trigger immediately
@@ -349,8 +349,8 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
     .unwrap();
 
     // Create service and workflow IDs
-    let service_id = ServiceID::hash("service-1");
-    let workflow_id = WorkflowID::new("workflow-1").unwrap();
+    let service_id = ServiceId::hash("service-1");
+    let workflow_id = WorkflowId::new("workflow-1").unwrap();
 
     // Set up the first trigger
     let trigger1 = TriggerConfig {
@@ -365,7 +365,7 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
     manager.get_lookup_maps().add_trigger(trigger1).unwrap();
 
     // Set up the second trigger
-    let service_id2 = ServiceID::hash("service-2");
+    let service_id2 = ServiceId::hash("service-2");
     let trigger2 = TriggerConfig {
         service_id: service_id2.clone(),
         workflow_id: workflow_id.clone(),
