@@ -115,7 +115,7 @@ pub async fn validate_contracts_exist(
         match trigger {
             Trigger::EvmContractEvent { address, chain, .. } => {
                 // Check if we have a provider for this chain
-                if let Some(provider) = evm_providers.get(&chain) {
+                if let Some(provider) = evm_providers.get(chain) {
                     // Only check each contract once per chain
                     let key = (address.to_string(), chain.to_string());
                     if let std::collections::hash_map::Entry::Vacant(e) =
@@ -144,7 +144,7 @@ pub async fn validate_contracts_exist(
             }
             Trigger::CosmosContractEvent { address, chain, .. } => {
                 // Check if we have a query client for this chain
-                if let Some(client) = cosmos_clients.get(&chain) {
+                if let Some(client) = cosmos_clients.get(chain) {
                     // Only check each contract once per chain
                     let key = (address.to_string(), chain.to_string());
                     if let std::collections::hash_map::Entry::Vacant(e) =
@@ -182,7 +182,7 @@ pub async fn validate_contracts_exist(
         match aggregator {
             Aggregator::Evm(EvmContractSubmission { chain, address, .. }) => {
                 // Check if we have a provider for this chain
-                if let Some(provider) = evm_providers.get(&chain) {
+                if let Some(provider) = evm_providers.get(chain) {
                     // Only check each contract once per chain
                     let key = (address.to_string(), chain.to_string());
                     if let std::collections::hash_map::Entry::Vacant(e) =
@@ -215,7 +215,7 @@ pub async fn validate_contracts_exist(
     if let Some(service_manager) = service_manager {
         match service_manager {
             ServiceManager::Evm { chain, address } => {
-                if let Some(provider) = evm_providers.get(&chain) {
+                if let Some(provider) = evm_providers.get(chain) {
                     let key = (address.to_string(), chain.to_string());
                     if let std::collections::hash_map::Entry::Vacant(e) =
                         checked_evm_contracts.entry(key)

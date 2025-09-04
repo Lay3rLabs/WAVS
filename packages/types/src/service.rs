@@ -297,7 +297,7 @@ impl TriggerData {
         match self {
             TriggerData::CosmosContractEvent { chain, .. }
             | TriggerData::EvmContractEvent { chain, .. }
-            | TriggerData::BlockInterval { chain, .. } => Some(&chain),
+            | TriggerData::BlockInterval { chain, .. } => Some(chain),
             TriggerData::Cron { .. } | TriggerData::Raw(_) => None,
         }
     }

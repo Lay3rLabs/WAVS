@@ -341,30 +341,28 @@ impl ChainConfigs {
     }
 
     pub fn dev_iter(&self) -> impl Iterator<Item = AnyChainConfig> + '_ {
-        self.dev.iter().filter_map(|(id, config)| match config {
-            DevChainConfigBuilder::Evm(c) => Some(AnyChainConfig::Evm(c.clone().build(id.clone()))),
-            DevChainConfigBuilder::Cosmos(c) => {
-                Some(AnyChainConfig::Cosmos(c.clone().build(id.clone())))
-            }
+        self.dev.iter().map(|(id, config)| match config {
+            DevChainConfigBuilder::Evm(c) => AnyChainConfig::Evm(c.clone().build(id.clone())),
+            DevChainConfigBuilder::Cosmos(c) => AnyChainConfig::Cosmos(c.clone().build(id.clone())),
         })
     }
 
     pub fn all_chain_keys(&self) -> Result<Vec<ChainKey>, anyhow::Error> {
         let mut keys = Vec::new();
 
-        for (id, _) in &self.evm {
+        for id in self.evm.keys() {
             keys.push(ChainKey {
                 namespace: ChainKeyNamespace::EVM.parse()?,
                 id: id.clone(),
             });
         }
-        for (id, _) in &self.cosmos {
+        for id in self.cosmos.keys() {
             keys.push(ChainKey {
                 namespace: ChainKeyNamespace::COSMOS.parse()?,
                 id: id.clone(),
             });
         }
-        for (id, _) in &self.dev {
+        for id in self.dev.keys() {
             keys.push(ChainKey {
                 namespace: ChainKeyNamespace::DEV.parse()?,
                 id: id.clone(),

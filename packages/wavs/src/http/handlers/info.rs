@@ -30,6 +30,6 @@ pub async fn inner_handle_info(_state: HttpState) -> HttpResult<InfoResponse> {
     // TODO: could do things like return operator as address for each configured chain
     // for now just return a placeholder message
     Ok(InfoResponse {
-        message: format!("Info here :P"),
+        message: "Info here :P".to_string(),
     })
 }

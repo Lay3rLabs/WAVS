@@ -11,9 +11,9 @@ use crate::{
 };
 use wavs_types::{AnyChainConfig, ChainKey};
 
-pub async fn health_check_chains_query<'a>(
+pub async fn health_check_chains_query(
     configs: &ChainConfigs,
-    keys: &'a [ChainKey],
+    keys: &[ChainKey],
 ) -> anyhow::Result<()> {
     for key in keys {
         let config = configs
