@@ -45,19 +45,19 @@ fn mock_e2e_trigger_flow() {
             runner
                 .send_trigger(
                     service_id.clone(),
-                    &WorkflowId::default(),
+                    WorkflowId::default().to_string().as_str(),
                     &task_queue_address.clone(),
                     &SquareRequest { x: 3 },
-                    "evm",
+                    "evm:anvil",
                 )
                 .await;
             runner
                 .send_trigger(
                     service_id,
-                    &WorkflowId::default(),
+                    WorkflowId::default().to_string().as_str(),
                     &task_queue_address,
                     &SquareRequest { x: 21 },
-                    "evm",
+                    "evm:anvil",
                 )
                 .await;
         }
@@ -189,10 +189,10 @@ fn mock_e2e_component_none() {
             runner
                 .send_trigger(
                     service_id,
-                    &WorkflowId::default(),
+                    WorkflowId::default().to_string().as_str(),
                     &task_queue_address.into(),
                     &SquareRequest { x: 3 },
-                    "evm",
+                    "evm:anvil",
                 )
                 .await;
         }

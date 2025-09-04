@@ -5,7 +5,8 @@ use utils::{
 };
 use wavs_engine::utils::error::EngineError;
 use wavs_types::{
-    ChainConfigError, ChainName, EnvelopeError, IDError, ServiceId, ServiceManagerError, WorkflowId,
+    ChainConfigError, ChainKey, ChainKeyError, EnvelopeError, ServiceId, ServiceManagerError,
+    WorkflowId, WorkflowIdError,
 };
 
 pub type AggregatorResult<T> = Result<T, AggregatorError>;
@@ -49,7 +50,7 @@ pub enum AggregatorError {
     ServiceManagerValidateUnknown(alloy_contract::Error),
 
     #[error("Chain not found: {0}")]
-    ChainNotFound(ChainName),
+    ChainNotFound(ChainKey),
 
     #[error("Missing EVM credential")]
     MissingEvmCredential,
@@ -105,8 +106,11 @@ pub enum AggregatorError {
     #[error("Storage error: {0}")]
     Storage(#[from] CAStorageError),
 
-    #[error("Invalid ID: {0}")]
-    InvalidId(#[from] IDError),
+    #[error("Invalid Workflow ID: {0}")]
+    InvalidWorkflowId(#[from] WorkflowIdError),
+
+    #[error("Invalid ChainKey: {0}")]
+    InvalidChainKey(#[from] ChainKeyError),
 }
 
 #[derive(Error, Debug)]

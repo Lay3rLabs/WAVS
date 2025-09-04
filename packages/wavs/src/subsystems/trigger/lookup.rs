@@ -5,7 +5,7 @@ use std::{
 
 use bimap::BiMap;
 use utils::telemetry::TriggerMetrics;
-use wavs_types::{ByteArray, ChainName, ServiceId, Trigger, TriggerConfig, WorkflowId};
+use wavs_types::{ByteArray, ChainKey, ServiceId, Trigger, TriggerConfig, WorkflowId};
 
 use crate::{
     services::Services,
@@ -25,10 +25,10 @@ pub struct LookupMaps {
     metrics: TriggerMetrics,
     /// lookup id by (chain name, contract event address, event type)
     pub triggers_by_cosmos_contract_event:
-        Arc<RwLock<HashMap<(ChainName, layer_climb::prelude::Address, String), HashSet<LookupId>>>>,
+        Arc<RwLock<HashMap<(ChainKey, layer_climb::prelude::Address, String), HashSet<LookupId>>>>,
     /// lookup id by (chain id, contract event address, event hash)
     pub triggers_by_evm_contract_event: Arc<
-        RwLock<HashMap<(ChainName, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
+        RwLock<HashMap<(ChainKey, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
     // ServiceId <-> ServiceManager address
     pub service_manager: Arc<RwLock<BiMap<ServiceId, layer_climb::prelude::Address>>>,
@@ -127,10 +127,10 @@ impl LookupMaps {
         match config.trigger.clone() {
             Trigger::EvmContractEvent {
                 address,
-                chain_name,
+                chain,
                 event_hash,
             } => {
-                let key = (chain_name.clone(), address, event_hash);
+                let key = (chain.clone(), address, event_hash);
                 self.triggers_by_evm_contract_event
                     .write()
                     .unwrap()
@@ -140,10 +140,10 @@ impl LookupMaps {
             }
             Trigger::CosmosContractEvent {
                 address,
-                chain_name,
+                chain,
                 event_type,
             } => {
-                let key = (chain_name.clone(), address.clone(), event_type.clone());
+                let key = (chain.clone(), address.clone(), event_type.clone());
                 self.triggers_by_cosmos_contract_event
                     .write()
                     .unwrap()
@@ -152,13 +152,13 @@ impl LookupMaps {
                     .insert(lookup_id);
             }
             Trigger::BlockInterval {
-                chain_name,
+                chain,
                 n_blocks,
                 start_block,
                 end_block,
             } => {
                 self.block_schedulers
-                    .entry(chain_name.clone())
+                    .entry(chain.clone())
                     .or_default()
                     .add_trigger(BlockIntervalState::new(
                         lookup_id,
@@ -228,35 +228,35 @@ impl LookupMaps {
             match trigger {
                 Trigger::EvmContractEvent {
                     address,
-                    chain_name,
+                    chain,
                     event_hash,
                 } => {
                     let mut lock = self.triggers_by_evm_contract_event.write().unwrap();
-                    if let Some(set) = lock.get_mut(&(chain_name.clone(), address, event_hash)) {
+                    if let Some(set) = lock.get_mut(&(chain.clone(), address, event_hash)) {
                         set.remove(&lookup_id);
                         if set.is_empty() {
-                            lock.remove(&(chain_name, address, event_hash));
+                            lock.remove(&(chain, address, event_hash));
                         }
                     }
                 }
                 Trigger::CosmosContractEvent {
                     address,
-                    chain_name,
+                    chain,
                     event_type,
                 } => {
                     let mut lock = self.triggers_by_cosmos_contract_event.write().unwrap();
                     if let Some(set) =
-                        lock.get_mut(&(chain_name.clone(), address.clone(), event_type.clone()))
+                        lock.get_mut(&(chain.clone(), address.clone(), event_type.clone()))
                     {
                         set.remove(&lookup_id);
                         if set.is_empty() {
-                            lock.remove(&(chain_name, address, event_type));
+                            lock.remove(&(chain, address, event_type));
                         }
                     }
                 }
-                Trigger::BlockInterval { chain_name, .. } => {
+                Trigger::BlockInterval { chain, .. } => {
                     // Remove from block scheduler
-                    if let Some(mut scheduler) = self.block_schedulers.get_mut(&chain_name) {
+                    if let Some(mut scheduler) = self.block_schedulers.get_mut(&chain) {
                         scheduler.remove_trigger(lookup_id);
                     }
                 }
@@ -302,18 +302,18 @@ impl LookupMaps {
                     match &config.trigger {
                         Trigger::EvmContractEvent {
                             address,
-                            chain_name,
+                            chain,
                             event_hash,
                         } => {
                             if let Some(set) = triggers_by_evm_contract_event.get_mut(&(
-                                chain_name.clone(),
+                                chain.clone(),
                                 *address,
                                 *event_hash,
                             )) {
                                 set.remove(lookup_id);
                                 if set.is_empty() {
                                     triggers_by_evm_contract_event.remove(&(
-                                        chain_name.clone(),
+                                        chain.clone(),
                                         *address,
                                         *event_hash,
                                     ));
@@ -322,27 +322,27 @@ impl LookupMaps {
                         }
                         Trigger::CosmosContractEvent {
                             address,
-                            chain_name,
+                            chain,
                             event_type,
                         } => {
                             if let Some(set) = triggers_by_cosmos_contract_event.get_mut(&(
-                                chain_name.clone(),
+                                chain.clone(),
                                 address.clone(),
                                 event_type.clone(),
                             )) {
                                 set.remove(lookup_id);
                                 if set.is_empty() {
                                     triggers_by_cosmos_contract_event.remove(&(
-                                        chain_name.clone(),
+                                        chain.clone(),
                                         address.clone(),
                                         event_type.clone(),
                                     ));
                                 }
                             }
                         }
-                        Trigger::BlockInterval { chain_name, .. } => {
+                        Trigger::BlockInterval { chain, .. } => {
                             // Remove from block scheduler
-                            if let Some(mut scheduler) = self.block_schedulers.get_mut(chain_name) {
+                            if let Some(mut scheduler) = self.block_schedulers.get_mut(chain) {
                                 scheduler.remove_trigger(*lookup_id);
                             }
                         }

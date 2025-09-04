@@ -73,7 +73,7 @@ impl EngineSetup {
             workflows: BTreeMap::from([(workflow_id.clone(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "exec".parse().unwrap(),
+                chain: "evm:exec".parse().unwrap(),
                 address: Default::default(),
             },
         };

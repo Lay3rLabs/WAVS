@@ -10,7 +10,7 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainName, ComponentDigest, ServiceStatus, Timestamp, WorkflowId};
+use wavs_types::{ChainKey, ComponentDigest, ServiceStatus, Timestamp, WorkflowId};
 
 use crate::config::Config;
 
@@ -268,7 +268,7 @@ pub enum ManagerCommand {
     /// Sets an EVM service manager
     SetEvm {
         #[clap(long)]
-        chain_name: ChainName,
+        chain: ChainKey,
         #[clap(long)]
         address: alloy_primitives::Address,
     },
@@ -299,9 +299,9 @@ pub enum TriggerCommand {
         #[clap(long)]
         address: String,
 
-        /// The chain name (e.g., "cosmoshub-4")
+        /// The chain (e.g., "cosmos:cosmoshub-4")
         #[clap(long)]
-        chain_name: ChainName,
+        chain: ChainKey,
 
         /// The event type to listen for
         #[clap(long)]
@@ -314,9 +314,9 @@ pub enum TriggerCommand {
         #[clap(long)]
         address: alloy_primitives::Address,
 
-        /// The chain name (e.g., "ethereum-mainnet")
+        /// The chain (e.g., "evm:1")
         #[clap(long)]
-        chain_name: ChainName,
+        chain: ChainKey,
 
         /// The event hash as a hex string (32 bytes)
         #[clap(long)]
@@ -326,7 +326,7 @@ pub enum TriggerCommand {
     /// Set a block interval trigger for a workflow
     SetBlockInterval {
         #[clap(long)]
-        chain_name: ChainName,
+        chain: ChainKey,
         #[clap(long)]
         n_blocks: NonZeroU32,
 

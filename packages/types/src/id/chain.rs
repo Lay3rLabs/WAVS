@@ -8,66 +8,27 @@ use utoipa::ToSchema;
 /// A `ChainKey` represents a blockchain network identifier, consisting of a namespace and a chain id.
 /// The namespace indicates the type of blockchain (e.g., "ethereum", "bitcoin"),
 /// while the id specifies the particular network within that namespace (e.g., "1", "cosmoshub").
-/// 
-/// Mostly follows the specification at https://chainagnostic.org/CAIPs/caip-2 
+///
+/// Mostly follows the specification at https://chainagnostic.org/CAIPs/caip-2
 /// but allows the namespace part to 1 to 32 characters instead of 3 to 8
 /// and changes the naming of chain_id -> chain_key, reference -> chain_id
 #[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    ToSchema,
-    bincode::Decode,
-    bincode::Encode,
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, ToSchema, bincode::Decode, bincode::Encode,
 )]
 pub struct ChainKey {
     pub namespace: ChainKeyNamespace,
     pub id: ChainKeyId,
 }
 
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    ToSchema,
-    bincode::Decode,
-    bincode::Encode,
-)]
-pub struct ChainKeyNamespace(String);
-
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    ToSchema,
-    bincode::Decode,
-    bincode::Encode,
-)]
-pub struct ChainKeyId(String);
-
 type ChainKeyResult<T> = Result<T, ChainKeyError>;
 
-static CHAIN_KEY_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^([-a-z0-9]{1,32}):([-_a-zA-Z0-9]{1,32})$").unwrap()
-});
+static CHAIN_KEY_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([-a-z0-9]{1,32}):([-_a-zA-Z0-9]{1,32})$").unwrap());
 
 static NAMESPACE_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[-a-z0-9]{1,32}$").unwrap());
 
-static ID_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[-_a-zA-Z0-9]{1,32}$").unwrap());
+static ID_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[-_a-zA-Z0-9]{1,32}$").unwrap());
 
 impl ChainKey {
     /// Validates without taking ownership - good for checking
@@ -143,10 +104,15 @@ impl From<ChainKey> for layer_climb::prelude::ChainId {
 // ----------------------------
 // ChainKeyNamespace
 // ----------------------------
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, ToSchema, bincode::Decode, bincode::Encode,
+)]
+pub struct ChainKeyNamespace(String);
+
 impl ChainKeyNamespace {
-    pub const EVM:&str = "evm";
-    pub const COSMOS:&str = "cosmos";
-    pub const DEV:&str = "dev";
+    pub const EVM: &str = "evm";
+    pub const COSMOS: &str = "cosmos";
+    pub const DEV: &str = "dev";
 
     pub fn new(s: impl Into<String>) -> ChainKeyResult<Self> {
         let s = s.into();
@@ -206,6 +172,11 @@ impl Serialize for ChainKeyNamespace {
 // ----------------------------
 // ChainKeyId
 // ----------------------------
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, ToSchema, bincode::Decode, bincode::Encode,
+)]
+pub struct ChainKeyId(String);
+
 impl ChainKeyId {
     pub fn new(s: impl Into<String>) -> ChainKeyResult<Self> {
         let s = s.into();
@@ -262,6 +233,12 @@ impl Serialize for ChainKeyId {
     }
 }
 
+impl From<ChainKeyId> for layer_climb::prelude::ChainId {
+    fn from(id: ChainKeyId) -> Self {
+        layer_climb::prelude::ChainId::new(id.into_inner())
+    }
+}
+
 // ----------------------------
 // Errors
 // ----------------------------
@@ -278,7 +255,7 @@ pub enum ChainKeyError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_valid_chain_ids() {
         assert!(ChainKey::new("eip155:1").is_ok());
@@ -287,7 +264,7 @@ mod tests {
         assert!(ChainKey::new("abc:X_Y-Z123").is_ok());
         assert!(ChainKey::new("abc-123:ABC_xyz-123").is_ok());
     }
-    
+
     #[test]
     fn test_invalid_chain_ids() {
         // Invalid format
@@ -295,13 +272,13 @@ mod tests {
         assert!(ChainKey::new("too:many:colons").is_err());
         assert!(ChainKey::new(":empty-namespace").is_err());
         assert!(ChainKey::new("empty-id:").is_err());
-        
+
         // Invalid namespace
         assert!(ChainKey::new("thisiswaytoolongtobeavalidnamespace:ref").is_err()); // too long
         assert!(ChainKey::new("ABC:ref").is_err()); // uppercase not allowed
         assert!(ChainKey::new("ab_c:ref").is_err()); // underscore not allowed in namespace
         assert!(ChainKey::new("ab.c:ref").is_err()); // dot not allowed
-        
+
         // Invalid id
         assert!(ChainKey::new("abc:").is_err()); // empty reference
         assert!(ChainKey::new("abc:this-is-way-too-long-to-be-a-valid-idt").is_err()); // too long (33 chars)
@@ -309,7 +286,7 @@ mod tests {
         assert!(ChainKey::new("abc:id@123").is_err()); // @ not allowed
         assert!(ChainKey::new("abc:id space").is_err()); // space not allowed
     }
-    
+
     #[test]
     fn test_accessors() {
         let chain_key = ChainKey::new("eip155:1").unwrap();
@@ -317,18 +294,17 @@ mod tests {
         assert_eq!(chain_key.namespace.as_str(), "eip155");
         assert_eq!(chain_key.id.as_str(), "1");
     }
-    
+
     #[test]
     fn test_edge_cases() {
         // Minimum valid lengths
         assert!(ChainKey::new("abc:x").is_ok());
-        
+
         // Maximum valid lengths
         assert!(ChainKey::new("abcd1234:ABCD1234_abcd1234-ABCD1234").is_ok());
-        
+
         // Case sensitivity is preserved
         let chain_key = ChainKey::new("eip155:MyChain_123").unwrap();
         assert_eq!(chain_key.id.as_str(), "MyChain_123");
     }
 }
-

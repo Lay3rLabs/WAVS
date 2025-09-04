@@ -165,4 +165,3 @@ pub enum WorkflowIdError {
     #[error("ID must be lowercase alphanumeric")]
     CharError,
 }
-

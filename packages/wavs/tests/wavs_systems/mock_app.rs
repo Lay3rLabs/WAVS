@@ -19,8 +19,8 @@ use wavs::{
     subsystems::engine::wasm_engine::WasmEngine,
 };
 use wavs_types::{
-    ComponentSource, DeleteServicesRequest, IDError, ListServicesResponse, Service, ServiceId,
-    ServiceManager, Submit, WorkflowId,
+    ChainKey, ChainKeyError, ComponentSource, DeleteServicesRequest, ListServicesResponse, Service,
+    ServiceId, ServiceManager, Submit, WorkflowId, WorkflowIdError,
 };
 
 use super::mock_trigger_manager::{mock_evm_event_trigger, mock_real_trigger_action};
@@ -106,10 +106,10 @@ impl MockE2ETestRunner {
     pub async fn send_trigger(
         &self,
         service_id: ServiceId,
-        workflow_id: impl TryInto<WorkflowId, Error = IDError> + std::fmt::Debug,
+        workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError> + std::fmt::Debug,
         contract_address: &layer_climb::prelude::Address,
         data: &(impl Serialize + std::fmt::Debug),
-        chain_id: impl ToString + std::fmt::Debug,
+        chain: impl TryInto<ChainKey, Error = ChainKeyError> + std::fmt::Debug + Clone,
     ) {
         self.dispatcher
             .trigger_manager
@@ -118,7 +118,7 @@ impl MockE2ETestRunner {
                 workflow_id,
                 contract_address,
                 data,
-                chain_id,
+                chain,
             ))])
             .await
             .unwrap();
@@ -161,7 +161,7 @@ impl MockE2ETestRunner {
             component_source,
             submit,
             ServiceManager::Evm {
-                chain_name: "evm".try_into().unwrap(),
+                chain: "evm:anvil".try_into().unwrap(),
                 address: rand_address_evm(),
             },
         );

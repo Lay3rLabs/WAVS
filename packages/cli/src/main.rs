@@ -19,21 +19,22 @@ use wavs_cli::{
     context::CliContext,
     util::{write_output_file, ComponentInput},
 };
-use wavs_types::ChainName;
+use wavs_types::ChainKeyId;
 
 // duplicated here instead of using the one in CliContext so
 // that we don't end up accidentally using the CliContext one in e2e tests
 pub(crate) async fn new_evm_client(
     ctx: &CliContext,
-    chain_name: &ChainName,
+    chain_id: ChainKeyId,
 ) -> Result<EvmSigningClient> {
     let chain_config = ctx
         .config
         .chains
         .evm
-        .get(chain_name)
-        .context(format!("chain {chain_name} not found"))?
-        .clone();
+        .get(&chain_id)
+        .context(format!("chain id {chain_id} not found"))?
+        .clone()
+        .build(chain_id);
 
     let client_config = chain_config.signing_client_config(
         ctx.config
@@ -82,7 +83,7 @@ async fn main() {
                 .unwrap();
 
             let set_service_url_args = if set_url {
-                let provider = new_evm_client(&ctx, service.manager.chain_name())
+                let provider = new_evm_client(&ctx, service.manager.chain().id.clone())
                     .await
                     .unwrap()
                     .provider;

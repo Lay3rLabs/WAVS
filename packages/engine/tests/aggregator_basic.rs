@@ -20,7 +20,7 @@ async fn basic_aggregator_execution() {
             workflows: Default::default(),
             status: ServiceStatus::Active,
             manager: ServiceManager::Evm {
-                chain_name: "31337".try_into().unwrap(),
+                chain: "evm:31337".try_into().unwrap(),
                 address: [0u8; 20].into(),
             },
         },

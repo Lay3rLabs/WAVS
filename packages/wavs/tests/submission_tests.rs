@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 use wavs::subsystems::submission::{chain_message::ChainMessage, SubmissionManager};
-use wavs_types::{ChainName, Envelope, ServiceId, ServiceManager, Submit};
+use wavs_types::{Envelope, ServiceId, ServiceManager, Submit};
 
 use utils::{
     context::AppContext, storage::db::RedbStorage, telemetry::SubmissionMetrics,
@@ -58,7 +58,7 @@ fn collect_messages_with_wait() {
         name: "serv1".to_string(),
         status: wavs_types::ServiceStatus::Active,
         manager: ServiceManager::Evm {
-            chain_name: ChainName::new("evm").unwrap(),
+            chain: "evm:anvil".parse().unwrap(),
             address: rand_address_evm(),
         },
         workflows: Default::default(),

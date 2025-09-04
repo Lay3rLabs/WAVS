@@ -14,7 +14,7 @@ use utils::{
         fs::FileStorage,
     },
 };
-use wavs_types::{ChainName, EventId, Packet, ServiceId};
+use wavs_types::{ChainKey, EventId, Packet, ServiceId};
 
 use crate::{
     config::Config,
@@ -63,7 +63,7 @@ pub struct HttpState {
     pub config: Config,
     pub queue_transaction: AsyncTransaction<QuorumQueueId>,
     storage: RedbStorage,
-    evm_clients: Arc<RwLock<HashMap<ChainName, EvmSigningClient>>>,
+    evm_clients: Arc<RwLock<HashMap<ChainKey, EvmSigningClient>>>,
     pub aggregator_engine: Arc<AggregatorEngine<FileStorage>>,
 }
 
@@ -109,16 +109,13 @@ impl HttpState {
         })
     }
 
-    #[instrument(level = "debug", skip(self), fields(chain_name = %chain_name))]
-    pub async fn get_evm_client(
-        &self,
-        chain_name: &ChainName,
-    ) -> AggregatorResult<EvmSigningClient> {
+    #[instrument(level = "debug", skip(self), fields(chain = %chain))]
+    pub async fn get_evm_client(&self, chain: &ChainKey) -> AggregatorResult<EvmSigningClient> {
         {
             let lock = self.evm_clients.read().unwrap();
 
-            if let Some(client) = lock.get(chain_name) {
-                tracing::debug!("Using cached EVM client for chain: {}", chain_name);
+            if let Some(client) = lock.get(chain) {
+                tracing::debug!("Using cached EVM client for chain: {chain}");
                 return Ok(client.clone());
             }
         }
@@ -126,8 +123,8 @@ impl HttpState {
         let chain_config = self
             .config
             .chains
-            .get_chain(chain_name)?
-            .ok_or(AggregatorError::ChainNotFound(chain_name.clone()))?;
+            .get_chain(chain)
+            .ok_or(AggregatorError::ChainNotFound(chain.clone()))?;
 
         let chain_config = EvmChainConfig::try_from(chain_config)?;
 
@@ -138,7 +135,7 @@ impl HttpState {
                 .ok_or(AggregatorError::MissingEvmCredential)?,
         )?;
 
-        tracing::info!("Creating new EVM client for chain: {}", chain_name);
+        tracing::info!("Creating new EVM client for chain: {}", chain);
         let evm_client = EvmSigningClient::new(client_config)
             .await
             .map_err(AggregatorError::CreateEvmClient)?;
@@ -146,7 +143,7 @@ impl HttpState {
         self.evm_clients
             .write()
             .unwrap()
-            .insert(chain_name.clone(), evm_client.clone());
+            .insert(chain.clone(), evm_client.clone());
 
         Ok(evm_client)
     }

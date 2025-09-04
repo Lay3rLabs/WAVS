@@ -16,7 +16,9 @@ pub async fn health_check_chains_query<'a>(
     keys: &'a [ChainKey],
 ) -> anyhow::Result<()> {
     for key in keys {
-        let config = configs.get_chain(key).context(format!("Failed to get config for chain key: {key}"))?;
+        let config = configs
+            .get_chain(key)
+            .context(format!("Failed to get config for chain key: {key}"))?;
 
         match config {
             AnyChainConfig::Evm(config) => {

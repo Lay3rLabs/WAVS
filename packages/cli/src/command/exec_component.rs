@@ -112,7 +112,7 @@ impl ExecComponent {
             workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "exec".parse().unwrap(),
+                chain: "evm:exec".parse().unwrap(),
                 address: Default::default(),
             },
         };

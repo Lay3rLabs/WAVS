@@ -1,5 +1,5 @@
 use axum::{extract::State, response::IntoResponse, Json};
-use wavs_types::{AddChainRequest, AnyChainConfig, ChainName};
+use wavs_types::{AddChainRequest, AnyChainConfig, ChainKeyNamespace};
 
 use crate::http::{error::HttpResult, state::HttpState};
 
@@ -20,7 +20,7 @@ pub async fn handle_add_chain(
     State(state): State<HttpState>,
     Json(request): Json<AddChainRequest>,
 ) -> impl IntoResponse {
-    match add_chain_inner(state, request.chain_name, request.chain_config).await {
+    match add_chain_inner(state, request.namespace, request.config).await {
         Ok(_) => axum::http::StatusCode::OK.into_response(),
         Err(e) => e.into_response(),
     }
@@ -28,14 +28,14 @@ pub async fn handle_add_chain(
 
 async fn add_chain_inner(
     state: HttpState,
-    chain_name: ChainName,
-    chain_config: AnyChainConfig,
+    namespace: ChainKeyNamespace,
+    config: AnyChainConfig,
 ) -> HttpResult<()> {
     state
         .dispatcher
         .chain_configs
         .write()
         .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
-        .add_chain(chain_name, chain_config)?;
+        .add_chain(namespace, config)?;
     Ok(())
 }

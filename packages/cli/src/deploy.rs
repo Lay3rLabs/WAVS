@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt::Display};
-use wavs_types::{ChainName, Service, ServiceId, Submit, Trigger, WorkflowId};
+use wavs_types::{ChainKey, Service, ServiceId, Submit, Trigger, WorkflowId};
 
 use crate::config::Config;
 
@@ -13,7 +13,7 @@ pub trait CommandDeployResult: Display {
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct Deployment {
-    pub evm_service_managers: BTreeMap<ChainName, Vec<alloy_primitives::Address>>,
+    pub evm_service_managers: BTreeMap<ChainKey, Vec<alloy_primitives::Address>>,
     pub services: BTreeMap<ServiceId, Service>,
 }
 

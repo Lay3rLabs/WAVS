@@ -45,7 +45,7 @@ pub fn make_service(wasm_digest: ComponentDigest) -> Service {
         workflows: BTreeMap::from([(workflow_id, workflow)]),
         status: wavs_types::ServiceStatus::Active,
         manager: wavs_types::ServiceManager::Evm {
-            chain_name: "noop".parse().unwrap(),
+            chain: "evm:noop".parse().unwrap(),
             address: Default::default(),
         },
     }

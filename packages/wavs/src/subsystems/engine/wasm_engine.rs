@@ -255,7 +255,7 @@ pub mod tests {
 
     use utils::{storage::memory::MemoryStorage, test_utils::address::rand_address_evm};
     use wavs_types::{
-        ChainName, ServiceId, Submit, Trigger, TriggerConfig, TriggerData, Workflow, WorkflowId,
+        ServiceId, Submit, Trigger, TriggerConfig, TriggerData, Workflow, WorkflowId,
     };
 
     use utils::test_utils::{
@@ -358,11 +358,7 @@ pub mod tests {
             .unwrap();
 
         let workflow = Workflow {
-            trigger: Trigger::evm_contract_event(
-                rand_address_evm(),
-                ChainName::new("evm").unwrap(),
-                rand_event_evm(),
-            ),
+            trigger: Trigger::evm_contract_event(rand_address_evm(), "evm:anvil", rand_event_evm()),
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
             submit: Submit::None,
         };
@@ -372,7 +368,7 @@ pub mod tests {
             workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -432,7 +428,7 @@ pub mod tests {
             workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -528,7 +524,7 @@ pub mod tests {
             workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -651,7 +647,7 @@ pub mod tests {
             workflows: BTreeMap::from([(WorkflowId::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -688,7 +684,7 @@ pub mod tests {
             workflows: BTreeMap::from([(WorkflowId::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -725,7 +721,7 @@ pub mod tests {
             workflows: BTreeMap::from([(WorkflowId::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -767,7 +763,7 @@ pub mod tests {
             workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };

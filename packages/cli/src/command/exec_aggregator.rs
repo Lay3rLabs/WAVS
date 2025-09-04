@@ -31,7 +31,7 @@ fn create_dummy_packet(digest: ComponentDigest) -> Packet {
         .into(),
         status: ServiceStatus::Active,
         manager: ServiceManager::Evm {
-            chain_name: "dummy".parse().unwrap(),
+            chain: "evm:dummy".parse().unwrap(),
             address: alloy_primitives::Address::ZERO,
         },
     };
@@ -241,7 +241,7 @@ mod test {
             .into(),
             status: ServiceStatus::Active,
             manager: ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: alloy_primitives::Address::ZERO,
             },
         };

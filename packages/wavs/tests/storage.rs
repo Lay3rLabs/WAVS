@@ -93,7 +93,7 @@ fn db_service_store() {
         workflows,
         status: ServiceStatus::Active,
         manager: ServiceManager::Evm {
-            chain_name: "evm".parse().unwrap(),
+            chain: "evm:anvil".parse().unwrap(),
             address: rand_address_evm(),
         },
     };

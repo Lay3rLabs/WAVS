@@ -12,15 +12,16 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use utils::context::AppContext;
 use wavs_types::{
-    ChainName, IDError, ServiceId, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowId,
+    ChainKey, ChainKeyError, ServiceId, Trigger, TriggerAction, TriggerConfig, TriggerData,
+    WorkflowId, WorkflowIdError,
 };
 
 pub fn mock_real_trigger_action(
     service_id: ServiceId,
-    workflow_id: impl TryInto<WorkflowId, Error = IDError> + std::fmt::Debug,
+    workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError> + std::fmt::Debug,
     contract_address: &layer_climb::prelude::Address,
     data: &(impl Serialize + std::fmt::Debug),
-    chain_name: impl ToString + std::fmt::Debug,
+    chain: impl TryInto<ChainKey, Error = ChainKeyError> + std::fmt::Debug + Clone,
 ) -> TriggerAction {
     let data = serde_json::to_vec(data).unwrap();
     match contract_address {
@@ -31,13 +32,12 @@ pub fn mock_real_trigger_action(
                     service_id,
                     workflow_id,
                     contract_address.clone().try_into().unwrap(),
-                    ChainName::new(chain_name.to_string()).unwrap(),
+                    chain.clone(),
                     event,
-                )
-                .unwrap(),
+                ),
                 data: TriggerData::EvmContractEvent {
                     contract_address: contract_address.clone().try_into().unwrap(),
-                    chain_name: ChainName::new(chain_name.to_string()).unwrap(),
+                    chain: chain.try_into().unwrap(),
                     // FIXME: this should be a proper EVM event, this is just a placeholder
                     log_data: LogData::new(vec![event.into_inner().into()], data.into()).unwrap(),
                     tx_hash: [0; 32].into(),
@@ -58,13 +58,12 @@ pub fn mock_real_trigger_action(
                     service_id,
                     workflow_id,
                     contract_address.clone(),
-                    ChainName::new(chain_name.to_string()).unwrap(),
+                    chain.clone(),
                     event.clone(),
-                )
-                .unwrap(),
+                ),
                 data: TriggerData::CosmosContractEvent {
                     contract_address: contract_address.clone(),
-                    chain_name: ChainName::new(chain_name.to_string()).unwrap(),
+                    chain: chain.try_into().unwrap(),
                     event: cosmwasm_std::Event::new("new-message").add_attributes(vec![
                         ("id", "1".to_string()),
                         ("data", const_hex::encode(data)),
@@ -79,52 +78,42 @@ pub fn mock_real_trigger_action(
 
 pub fn mock_evm_event_trigger_config(
     service_id: ServiceId,
-    workflow_id: impl TryInto<WorkflowId, Error = IDError>,
+    workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
 ) -> TriggerConfig {
     TriggerConfig::evm_contract_event(
         service_id,
         workflow_id,
         rand_address_evm(),
-        ChainName::new("evm").unwrap(),
+        "evm:anvil",
         rand_event_evm(),
     )
-    .unwrap()
 }
 
 pub fn mock_cosmos_event_trigger_config(
     service_id: ServiceId,
-    workflow_id: impl TryInto<WorkflowId, Error = IDError>,
+    workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
 ) -> TriggerConfig {
     TriggerConfig::cosmos_contract_event(
         service_id,
         workflow_id,
         rand_address_cosmos(),
-        ChainName::new("cosmos").unwrap(),
+        "cosmos:wasmd",
         rand_event_cosmos(),
     )
-    .unwrap()
 }
 
 pub fn mock_evm_event_trigger() -> Trigger {
-    Trigger::evm_contract_event(
-        rand_address_evm(),
-        ChainName::new("evm").unwrap(),
-        rand_event_evm(),
-    )
+    Trigger::evm_contract_event(rand_address_evm(), "evm:anvil", rand_event_evm())
 }
 
 pub fn mock_cosmos_event_trigger() -> Trigger {
-    Trigger::cosmos_contract_event(
-        rand_address_cosmos(),
-        ChainName::new("cosmos").unwrap(),
-        rand_event_cosmos(),
-    )
+    Trigger::cosmos_contract_event(rand_address_cosmos(), "cosmos:wasmd", rand_event_cosmos())
 }
 
 pub fn mock_cosmos_event_trigger_data(trigger_id: u64, data: impl AsRef<[u8]>) -> TriggerData {
     TriggerData::CosmosContractEvent {
         contract_address: rand_address_cosmos(),
-        chain_name: ChainName::new("layer").unwrap(),
+        chain: "cosmos:layer".parse().unwrap(),
         // matches example_cosmos_client::NewMessageEvent
         event: cosmwasm_std::Event::new("new-message")
             .add_attribute("id", trigger_id.to_string())

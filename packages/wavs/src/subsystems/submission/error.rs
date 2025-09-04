@@ -1,6 +1,6 @@
 use thiserror::Error;
 use utils::error::EvmClientError;
-use wavs_types::{ChainName, EnvelopeError, ServiceId};
+use wavs_types::{ChainKey, EnvelopeError, ServiceId};
 
 use crate::services::ServicesError;
 
@@ -27,7 +27,7 @@ pub enum SubmissionError {
     #[error("evm: {0}")]
     EVM(anyhow::Error),
     #[error("missing EVM chain for {0}")]
-    MissingEvmChain(ChainName),
+    MissingEvmChain(ChainKey),
     #[error("chain is not an EVM chain")]
     NotEvmChain,
     #[error("cross-chain submissions are not supported yet")]
@@ -53,7 +53,7 @@ pub enum SubmissionError {
     #[error("failed to create EVM signer for service {0}: {1:?}")]
     FailedToCreateEvmSigner(ServiceId, anyhow::Error),
     #[error("missing EVM signing client for chain {0}")]
-    MissingEvmSendingClient(ChainName),
+    MissingEvmSendingClient(ChainKey),
     #[error("envelope {0:?}")]
     Envelope(#[from] EnvelopeError),
     #[error("services {0:?}")]

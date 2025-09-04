@@ -5,7 +5,7 @@ use std::{
 };
 use wasm_pkg_client::{PackageRef, Version};
 use wavs_types::{
-    Aggregator, ChainName, ComponentDigest, EvmContractSubmission, Permissions, ServiceStatus,
+    Aggregator, ChainKey, ComponentDigest, EvmContractSubmission, Permissions, ServiceStatus,
     Submit, Trigger, WorkflowId,
 };
 
@@ -87,35 +87,35 @@ impl std::fmt::Display for WorkflowTriggerResult {
         match &self.trigger {
             Trigger::CosmosContractEvent {
                 address,
-                chain_name,
+                chain,
                 event_type,
             } => {
                 writeln!(f, "  Trigger Type: Cosmos Contract Event")?;
                 writeln!(f, "    Address:    {}", address)?;
-                writeln!(f, "    Chain:      {}", chain_name)?;
+                writeln!(f, "    Chain:      {}", chain)?;
                 writeln!(f, "    Event Type: {}", event_type)?;
             }
             Trigger::EvmContractEvent {
                 address,
-                chain_name,
+                chain,
                 event_hash,
             } => {
                 writeln!(f, "  Trigger Type: EVM Contract Event")?;
                 writeln!(f, "    Address:    {}", address)?;
-                writeln!(f, "    Chain:      {}", chain_name)?;
+                writeln!(f, "    Chain:      {}", chain)?;
                 writeln!(f, "    Event Hash: {}", event_hash)?;
             }
             Trigger::Manual => {
                 writeln!(f, "  Trigger Type: Manual")?;
             }
             Trigger::BlockInterval {
-                chain_name,
+                chain,
                 n_blocks,
                 start_block,
                 end_block,
             } => {
                 writeln!(f, "  Trigger Type: Block Interval")?;
-                writeln!(f, "    Chain:      {}", chain_name)?;
+                writeln!(f, "    Chain:      {}", chain)?;
                 writeln!(f, "    Interval:   {} blocks", n_blocks)?;
                 if let Some(start) = start_block {
                     writeln!(f, "    Start Block: {}", u64::from(*start))?;
@@ -179,13 +179,13 @@ impl std::fmt::Display for WorkflowSetSubmitAggregatorResult {
                 writeln!(f, "    Url:    {}", url)?;
                 match &self.aggregator_submit {
                     Aggregator::Evm(EvmContractSubmission {
-                        chain_name,
+                        chain,
                         address,
                         max_gas,
                     }) => writeln!(
                         f,
                         "    chain: {}, address: {}, max_gas: {}",
-                        chain_name,
+                        chain,
                         address,
                         max_gas
                             .map(|x| x.to_string())
@@ -256,13 +256,13 @@ impl std::fmt::Display for WorkflowAddAggregatorResult {
         for submit in &self.aggregator_submits {
             match submit {
                 Aggregator::Evm(EvmContractSubmission {
-                    chain_name,
+                    chain,
                     address,
                     max_gas,
                 }) => writeln!(
                     f,
                     "    chain: {}, address: {}, max_gas: {}",
-                    chain_name,
+                    chain,
                     address,
                     max_gas
                         .map(|x| x.to_string())
@@ -279,7 +279,7 @@ impl std::fmt::Display for WorkflowAddAggregatorResult {
 #[derive(Debug, Clone, Serialize)]
 pub struct EvmManagerResult {
     /// The EVM chain name
-    pub chain_name: ChainName,
+    pub chain: ChainKey,
     /// The EVM address
     pub address: alloy_primitives::Address,
     /// The file path where the updated service JSON was saved
@@ -290,7 +290,7 @@ impl std::fmt::Display for EvmManagerResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "EVM manager set successfully!")?;
         writeln!(f, "  Address:      {}", self.address)?;
-        writeln!(f, "  Chain:        {}", self.chain_name)?;
+        writeln!(f, "  Chain:        {}", self.chain)?;
         writeln!(f, "  Updated:      {}", self.file_path.display())
     }
 }

@@ -2,7 +2,7 @@ use futures::{Stream, StreamExt};
 use layer_climb::prelude::*;
 use std::pin::Pin;
 use utils::telemetry::TriggerMetrics;
-use wavs_types::ChainName;
+use wavs_types::ChainKey;
 
 use crate::subsystems::trigger::error::TriggerError;
 
@@ -10,7 +10,7 @@ use super::StreamTriggers;
 
 pub async fn start_cosmos_stream(
     query_client: QueryClient,
-    chain_name: ChainName,
+    chain: ChainKey,
     metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
@@ -57,7 +57,7 @@ pub async fn start_cosmos_stream(
                     }
 
                     Ok(StreamTriggers::Cosmos {
-                        chain_name: chain_name.clone(),
+                        chain: chain.clone(),
                         contract_events,
                         block_height: block_events.height,
                     })

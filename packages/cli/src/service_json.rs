@@ -77,7 +77,7 @@ impl ServiceJson {
                         }
                         Trigger::EvmContractEvent {
                             address,
-                            chain_name: _,
+                            chain: _,
                             event_hash,
                         } => {
                             // Validate EVM address format
@@ -119,7 +119,7 @@ impl ServiceJson {
                             }
                         }
                         Trigger::BlockInterval {
-                            chain_name: _,
+                            chain: _,
                             n_blocks: _,
                             start_block,
                             end_block,

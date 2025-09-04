@@ -10,11 +10,11 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use wavs_types::{ChainName, ServiceDigest, ServiceId, ServiceManager};
+use wavs_types::{ChainKey, ServiceDigest, ServiceId, ServiceManager};
 
 #[derive(Deserialize)]
 pub struct GetServiceParams {
-    pub chain_name: String,
+    pub chain: ChainKey,
     pub address: String,
 }
 
@@ -37,18 +37,13 @@ pub async fn handle_get_service(
     State(state): State<HttpState>,
     Query(params): Query<GetServiceParams>,
 ) -> impl IntoResponse {
-    let chain_name = match ChainName::new(params.chain_name) {
-        Ok(name) => name,
-        Err(e) => return AnyError::from(e).into_response(),
-    };
-
     let address = match params.address.parse::<alloy_primitives::Address>() {
         Ok(addr) => addr,
         Err(e) => return AnyError::from(e).into_response(),
     };
 
     let service_manager = ServiceManager::Evm {
-        chain_name,
+        chain: params.chain,
         address,
     };
 

@@ -13,8 +13,8 @@ use utils::{
 use wavs::dispatcher::DispatcherCommand;
 use wavs::init_tracing_tests;
 use wavs_types::{
-    ChainName, Component, ComponentSource, Service, ServiceManager, ServiceStatus, Submit,
-    Workflow, WorkflowId,
+    Component, ComponentSource, Service, ServiceManager, ServiceStatus, Submit, Workflow,
+    WorkflowId,
 };
 mod wavs_systems;
 use wavs_systems::{
@@ -32,7 +32,6 @@ fn dispatcher_pipeline() {
 
     // Prepare two actions to be squared
     let workflow_id = WorkflowId::new("workflow1").unwrap();
-    let chain_name = "cosmos".to_string();
 
     let ctx = AppContext::new();
     let dispatcher = Arc::new(MockE2ETestRunner::create_dispatcher(ctx.clone(), &data_dir));
@@ -61,7 +60,7 @@ fn dispatcher_pipeline() {
         .into(),
         status: ServiceStatus::Active,
         manager: ServiceManager::Evm {
-            chain_name: ChainName::new("evm").unwrap(),
+            chain: "evm:anvil".parse().unwrap(),
             address: rand_address_evm(),
         },
     };
@@ -70,17 +69,17 @@ fn dispatcher_pipeline() {
     let actions = vec![
         mock_real_trigger_action(
             service.id(),
-            &workflow_id,
+            workflow_id.to_string().as_str(),
             &contract_address,
             &SquareRequest::new(3),
-            &chain_name,
+            service.manager.chain().to_string().as_str(),
         ),
         mock_real_trigger_action(
             service.id(),
-            &workflow_id,
+            workflow_id.to_string().as_str(),
             &contract_address,
             &SquareRequest::new(21),
-            &chain_name,
+            service.manager.chain().to_string().as_str(),
         ),
     ];
 

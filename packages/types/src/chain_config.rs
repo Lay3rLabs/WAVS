@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 
 use crate::{ChainKey, ChainKeyError, ChainKeyId, ChainKeyNamespace};
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ChainConfigError {
     #[error("Expected EVM chain")]
     ExpectedEvmChain,
@@ -31,6 +31,21 @@ pub struct CosmosChainConfig {
     pub faucet_endpoint: Option<String>,
 }
 
+impl From<&CosmosChainConfig> for ChainKey {
+    fn from(config: &CosmosChainConfig) -> Self {
+        ChainKey {
+            id: config.chain_id.clone(),
+            namespace: ChainKeyNamespace::COSMOS.parse().unwrap(),
+        }
+    }
+}
+
+impl From<CosmosChainConfig> for ChainKey {
+    fn from(config: CosmosChainConfig) -> Self {
+        (&config).into()
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct EvmChainConfig {
     pub chain_id: ChainKeyId,
@@ -40,11 +55,41 @@ pub struct EvmChainConfig {
     pub poll_interval_ms: Option<u64>,
 }
 
+impl From<&EvmChainConfig> for ChainKey {
+    fn from(config: &EvmChainConfig) -> Self {
+        ChainKey {
+            id: config.chain_id.clone(),
+            namespace: ChainKeyNamespace::EVM.parse().unwrap(),
+        }
+    }
+}
+
+impl From<EvmChainConfig> for ChainKey {
+    fn from(config: EvmChainConfig) -> Self {
+        (&config).into()
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AnyChainConfig {
     Cosmos(CosmosChainConfig),
     Evm(EvmChainConfig),
+}
+
+impl From<&AnyChainConfig> for ChainKey {
+    fn from(config: &AnyChainConfig) -> Self {
+        match config {
+            AnyChainConfig::Cosmos(config) => config.into(),
+            AnyChainConfig::Evm(config) => config.into(),
+        }
+    }
+}
+
+impl From<AnyChainConfig> for ChainKey {
+    fn from(config: AnyChainConfig) -> Self {
+        (&config).into()
+    }
 }
 
 impl AnyChainConfig {

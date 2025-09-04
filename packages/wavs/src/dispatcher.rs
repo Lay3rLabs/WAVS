@@ -38,8 +38,8 @@ use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
-use wavs_types::{ChainConfigError, ComponentDigest, ServiceManager};
-use wavs_types::{ChainName, IDError, Service, ServiceId, SigningKeyResponse, TriggerAction};
+use wavs_types::{ChainConfigError, ChainKey, ComponentDigest, ServiceManager, WorkflowIdError};
+use wavs_types::{Service, ServiceId, SigningKeyResponse, TriggerAction};
 
 use crate::config::Config;
 use crate::services::{Services, ServicesError};
@@ -229,20 +229,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         &self,
         service_manager: ServiceManager,
     ) -> Result<Service, DispatcherError> {
-        let (chain_name, address) = match service_manager {
-            ServiceManager::Evm {
-                chain_name,
-                address,
-            } => (chain_name, address),
+        let (chain, address) = match service_manager {
+            ServiceManager::Evm { chain, address } => (chain, address),
         };
         let chain_configs = self.chain_configs.read().unwrap().clone();
-        let service = query_service_from_address(
-            chain_name,
-            address.into(),
-            &chain_configs,
-            &self.ipfs_gateway,
-        )
-        .await?;
+        let service =
+            query_service_from_address(chain, address.into(), &chain_configs, &self.ipfs_gateway)
+                .await?;
 
         self.add_service_direct(service.clone()).await?;
 
@@ -370,28 +363,22 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 }
 
 async fn query_service_from_address(
-    chain_name: ChainName,
+    chain: ChainKey,
     address: Address,
     chain_configs: &ChainConfigs,
     ipfs_gateway: &str,
 ) -> Result<Service, DispatcherError> {
     // Get the chain config
-    let chain = chain_configs.get_chain(&chain_name)?.ok_or_else(|| {
-        DispatcherError::Config(format!(
-            "Could not get chain config for chain {}",
-            chain_name
-        ))
+    let chain_config = chain_configs.get_chain(&chain).ok_or_else(|| {
+        DispatcherError::Config(format!("Could not get chain config for chain {chain}"))
     })?;
 
     // Handle different chain types
-    match chain {
+    match chain_config {
         AnyChainConfig::Evm(evm_config) => {
             // Get the HTTP endpoint, required for contract calls
             let http_endpoint = evm_config.http_endpoint.clone().ok_or_else(|| {
-                DispatcherError::Config(format!(
-                    "No HTTP endpoint configured for chain {}",
-                    chain_name
-                ))
+                DispatcherError::Config(format!("No HTTP endpoint configured for chain {chain}"))
             })?;
 
             // Create a provider using the HTTP endpoint
@@ -443,8 +430,8 @@ pub enum DispatcherError {
     #[error("{0:?}")]
     UnknownService(#[from] ServicesError),
 
-    #[error("Invalid ID: {0}")]
-    ID(#[from] IDError),
+    #[error("Invalid WorkflowId: {0}")]
+    ID(#[from] WorkflowIdError),
 
     #[error("DB: {0}")]
     DB(#[from] DBError),

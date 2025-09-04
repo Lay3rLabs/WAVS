@@ -50,10 +50,7 @@ pub enum ServiceManager {
 impl From<&ServiceManager> for ServiceId {
     fn from(manager: &ServiceManager) -> Self {
         match manager {
-            ServiceManager::Evm {
-                chain,
-                address,
-            } => {
+            ServiceManager::Evm { chain, address } => {
                 let mut bytes = Vec::new();
                 bytes.extend_from_slice(b"evm");
                 bytes.extend_from_slice(chain.to_string().as_bytes());
@@ -360,11 +357,7 @@ pub struct EvmContractSubmission {
 }
 
 impl EvmContractSubmission {
-    pub fn new(
-        chain: ChainKey,
-        address: alloy_primitives::Address,
-        max_gas: Option<u64>,
-    ) -> Self {
+    pub fn new(chain: ChainKey, address: alloy_primitives::Address, max_gas: Option<u64>) -> Self {
         Self {
             chain,
             address,
@@ -445,7 +438,9 @@ mod test_ext {
         num::NonZeroU32,
     };
 
-    use crate::{ByteArray, ChainKey, ChainKeyError, ComponentSource, ServiceId, WorkflowId, WorkflowIdError};
+    use crate::{
+        ByteArray, ChainKey, ChainKeyError, ComponentSource, ServiceId, WorkflowId, WorkflowIdError,
+    };
 
     use super::{Component, Trigger, TriggerConfig};
 
