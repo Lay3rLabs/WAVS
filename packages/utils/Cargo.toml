@@ -59,6 +59,7 @@ tracing-opentelemetry = { workspace = true }
 url = { workspace = true }
 cid = { workspace = true }
 reqwest = { workspace = true }
+axum = { workspace = true }
 tempfile = { workspace = true }
 alloy-contract = { workspace = true }
 rand = { workspace = true, optional = true }

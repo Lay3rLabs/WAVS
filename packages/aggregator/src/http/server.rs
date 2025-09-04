@@ -1,5 +1,8 @@
 use crate::{config::Config, http::handlers::handle_register_service, AppContext};
-use axum::routing::{get, post};
+use axum::{
+    middleware,
+    routing::{get, post},
+};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::instrument;
 use utoipa::OpenApi;
@@ -43,17 +46,30 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
     let state = HttpState::new_with_engine(config.clone())?;
     tracing::info!("HttpState created successfully with engine");
 
-    // build our application with a single route
-    let mut router = axum::Router::new()
+    // public routes
+    let public = axum::Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .route("/config", get(handle_config))
         .route("/info", get(handle_info))
+        .fallback(handle_not_found)
+        .with_state(state.clone());
+
+    // protected routes (POSTs)
+    let protected = axum::Router::new()
         .route("/packet", post(handle_packet))
         .route("/register-service", post(handle_register_service))
         .route("/upload", post(handle_upload))
-        .fallback(handle_not_found)
         .with_state(state);
+
+    // apply bearer auth to protected routes if configured
+    let mut router = public.merge(match &config.bearer_token {
+        Some(token) => protected.layer(middleware::from_fn_with_state(
+            (token.clone(), "aggregator".to_string()),
+            utils::http::auth::verify_bearer_with_realm,
+        )),
+        None => protected,
+    });
 
     if let Some(cors) = cors_layer(&config) {
         router = router.layer(cors);

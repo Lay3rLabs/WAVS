@@ -118,6 +118,10 @@ port = 8000
 # Prometheus endpoint to send metrics to
 # prometheus = "http://localhost:9090"
 
+# Optional bearer token to protect mutating HTTP endpoints
+# If set here or via env var `WAVS_BEARER_TOKEN`, POST/DELETE endpoints require `Authorization: Bearer <token>`
+# bearer_token = "change-me"
+
 # WAVS-specific chain overrides (if needed)
 # Example:
 # [wavs.chains.evm.local]
@@ -150,6 +154,10 @@ cors_allowed_origins = [
 
 # Jaeger collector to send trace data
 # jaeger = "http://localhost:4317"
+
+# Optional bearer token to protect mutating HTTP endpoints
+# If set here or via env var `WAVS_AGGREGATOR_BEARER_TOKEN`, POST endpoints require `Authorization: Bearer <token>`
+# bearer_token = "change-me"
 
 # Aggregator-specific chain overrides (if needed)
 # Example:

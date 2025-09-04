@@ -59,6 +59,10 @@ pub struct Config {
 
     /// The IPFS gateway URL used to access IPFS content over HTTP.
     pub ipfs_gateway: String,
+
+    /// Optional bearer token to protect mutating HTTP endpoints.
+    /// If None, endpoints remain unauthenticated.
+    pub bearer_token: Option<String>,
 }
 
 impl ConfigExt for Config {
@@ -94,6 +98,7 @@ impl Default for Config {
             jaeger: None,
             prometheus: None,
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
+            bearer_token: None,
         }
     }
 }

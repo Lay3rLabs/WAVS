@@ -90,6 +90,11 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub submission_poll_interval_ms: Option<u64>,
+
+    /// Optional bearer token to protect mutating HTTP endpoints
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bearer_token: Option<String>,
 }
 
 impl CliEnvExt for CliArgs {
