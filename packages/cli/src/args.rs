@@ -81,8 +81,8 @@ pub enum Command {
         #[clap(long)]
         config: Vec<String>,
 
-        /// Optional path to save the raw execution output payload
-        /// Writes only the returned bytes to file (no formatting)
+        /// Optional path to save the execution output as JSON
+        /// Writes the WASM response as formatted JSON to file
         #[clap(long = "output", short = 'o')]
         output_file: Option<PathBuf>,
     },
