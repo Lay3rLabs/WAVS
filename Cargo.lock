@@ -8538,6 +8538,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
+ "tower",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",

@@ -66,7 +66,7 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
     let mut router = public.merge(match &config.bearer_token {
         Some(token) => protected.layer(middleware::from_fn_with_state(
             (token.clone(), "aggregator".to_string()),
-            utils::http::auth::verify_bearer_with_realm,
+            utils::http::verify_bearer_with_realm,
         )),
         None => protected,
     });

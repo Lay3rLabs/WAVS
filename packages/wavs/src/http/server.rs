@@ -102,7 +102,7 @@ pub async fn make_router(
     let mut router = public.merge(match &config.bearer_token {
         Some(token) => protected.layer(middleware::from_fn_with_state(
             (token.clone(), "wavs".to_string()),
-            utils::http::auth::verify_bearer_with_realm,
+            utils::http::verify_bearer_with_realm,
         )),
         None => protected,
     });
