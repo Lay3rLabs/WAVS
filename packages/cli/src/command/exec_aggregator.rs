@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
-    AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
+    AggregatorAction, AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
     EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, Submit,
     Trigger, Workflow, WorkflowID,
 };
@@ -156,16 +156,17 @@ impl ExecAggregator {
         let time_elapsed = start_time.elapsed().as_millis();
 
         Ok(ExecAggregatorResult::Packet {
-            actions,
+            actions: actions.into_iter().map(|a| a.into()).collect(),
             fuel_used,
             time_elapsed,
         })
     }
 }
 
+#[derive(serde::Serialize)]
 pub enum ExecAggregatorResult {
     Packet {
-        actions: Vec<wavs_aggregator::engine::AggregatorAction>,
+        actions: Vec<AggregatorAction>,
         fuel_used: u64,
         time_elapsed: u128,
     },
@@ -301,9 +302,9 @@ mod test {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
                 match &actions[0] {
-                    wavs_aggregator::engine::AggregatorAction::Submit(submit) => {
+                    AggregatorAction::Submit(submit) => {
                         assert_eq!(submit.chain_name, "31337");
-                        assert_eq!(submit.contract_address.raw_bytes, vec![0u8; 20]);
+                        assert_eq!(submit.contract_address, vec![0u8; 20]);
                     }
                     _ => panic!("Expected Submit action, got {:?}", actions[0]),
                 }
@@ -347,9 +348,9 @@ mod test {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
                 match &actions[0] {
-                    wavs_aggregator::engine::AggregatorAction::Submit(submit) => {
+                    AggregatorAction::Submit(submit) => {
                         assert_eq!(submit.chain_name, "31337");
-                        assert_eq!(submit.contract_address.raw_bytes, vec![0u8; 20]);
+                        assert_eq!(submit.contract_address, vec![0u8; 20]);
                     }
                     _ => panic!("Expected Submit action, got {:?}", actions[0]),
                 }

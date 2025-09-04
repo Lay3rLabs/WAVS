@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 #[cfg(debug_assertions)]
 use utils::filesystem::workspace_path;
@@ -56,4 +57,27 @@ cfg_if::cfg_if! {
             Ok(std::fs::read(path)?)
         }
     }
+}
+
+/// Helper function to write serializable data to an output file
+pub fn write_output_file<T: Serialize>(data: &T, path: &PathBuf) -> Result<()> {
+    // Create parent directories if they don't exist
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                tracing::error!("Failed to create directory {}: {}", parent.display(), e);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    // Serialize and write to file
+    let json_output = serde_json::to_string(data)?;
+    if let Err(e) = std::fs::write(path, json_output) {
+        tracing::error!("Failed to write output to {}: {}", path.display(), e);
+        std::process::exit(1);
+    }
+
+    tracing::info!("Output written to {}", path.display());
+    Ok(())
 }
