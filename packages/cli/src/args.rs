@@ -85,6 +85,16 @@ pub enum Command {
         /// Writes the WASM response as formatted JSON to file
         #[clap(long = "output", short = 'o')]
         output_file: Option<PathBuf>,
+
+        /// Submit execution result to this chain via IWavsServiceHandler
+        /// Must be used together with --submit-handler
+        #[clap(long, requires = "submit_handler")]
+        submit_chain: Option<ChainName>,
+
+        /// Contract address of the IWavsServiceHandler to submit results to
+        /// Must be used together with --submit-chain
+        #[clap(long, requires = "submit_chain")]
+        submit_handler: Option<alloy_primitives::Address>,
     },
 
     /// Service management commands

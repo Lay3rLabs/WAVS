@@ -9613,6 +9613,7 @@ dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
  "alloy-provider",
+ "alloy-signer",
  "anyhow",
  "cfg-if",
  "cid",

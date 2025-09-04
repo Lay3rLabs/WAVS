@@ -1,3 +1,5 @@
+use alloy_primitives::FixedBytes;
+use alloy_signer::SignerSync;
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
@@ -19,7 +21,7 @@ use wavs_cli::{
     context::CliContext,
     util::{write_output_file, ComponentInput},
 };
-use wavs_types::ChainName;
+use wavs_types::{ChainName, Envelope, EnvelopeExt, IWavsServiceHandler};
 
 // duplicated here instead of using the one in CliContext so
 // that we don't end up accidentally using the CliContext one in e2e tests
@@ -123,6 +125,8 @@ async fn main() {
             time_limit,
             config,
             output_file,
+            submit_chain,
+            submit_handler,
             args: _,
         } => {
             let config = config
@@ -170,6 +174,81 @@ async fn main() {
                             path.display()
                         );
                     }
+                }
+            }
+
+            // If submit_chain is provided, submit the result to the chain
+            if let (Some(chain_name), Some(handler_address)) = (submit_chain, submit_handler) {
+                if let Some(wasm_response) = &res.wasm_response {
+                    tracing::info!(
+                        "Submitting result to chain {} at address {}",
+                        chain_name,
+                        handler_address
+                    );
+
+                    // Create envelope from WASM response
+                    let envelope = Envelope {
+                        payload: wasm_response.payload.clone().into(),
+                        eventId: FixedBytes::default(), // Mock event ID
+                        ordering: match wasm_response.ordering {
+                            Some(ordering) => {
+                                let mut bytes = [0u8; 12];
+                                bytes[..8].copy_from_slice(&ordering.to_le_bytes());
+                                FixedBytes(bytes)
+                            }
+                            None => FixedBytes::default(),
+                        },
+                    };
+
+                    // Get EVM client for the chain
+                    let evm_client = match new_evm_client(&ctx, &chain_name).await {
+                        Ok(client) => client,
+                        Err(e) => {
+                            tracing::error!("Failed to create EVM client: {}", e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    // Create signature using the EVM client's signer
+                    let signature = evm_client
+                        .signer
+                        .sign_hash_sync(&envelope.eip191_hash())
+                        .unwrap();
+
+                    // Create contract instance
+                    let contract =
+                        IWavsServiceHandler::new(handler_address, evm_client.provider.clone());
+
+                    // Prepare signature data
+                    let signature_data = IWavsServiceHandler::SignatureData {
+                        signers: vec![evm_client.signer.address()],
+                        signatures: vec![signature.as_bytes().into()],
+                        referenceBlock: 0, // Mock reference block
+                    };
+
+                    // Convert to contract types
+                    let contract_envelope = IWavsServiceHandler::Envelope {
+                        eventId: envelope.eventId,
+                        ordering: envelope.ordering,
+                        payload: envelope.payload,
+                    };
+
+                    // Submit to chain
+                    match contract
+                        .handleSignedEnvelope(contract_envelope, signature_data)
+                        .send()
+                        .await
+                    {
+                        Ok(tx) => {
+                            tracing::info!("Transaction submitted: {:?}", tx.tx_hash());
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to submit to chain: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                } else {
+                    tracing::warn!("No WASM response to submit to chain");
                 }
             }
 
