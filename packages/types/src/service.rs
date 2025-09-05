@@ -1,4 +1,4 @@
-use alloy_primitives::LogData;
+use alloy_primitives::{hex, LogData};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -432,6 +432,7 @@ pub enum AllowedHostPermission {
 #[serde(default, rename_all = "snake_case")]
 #[derive(Default)]
 pub struct WasmResponse {
+    #[serde(with = "hex")]
     pub payload: Vec<u8>,
     pub ordering: Option<u64>,
 }

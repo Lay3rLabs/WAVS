@@ -2,23 +2,22 @@ use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use utils::service::fetch_service;
 use utils::{
     config::{ConfigExt, EvmChainConfigExt},
     evm_client::EvmSigningClient,
+    service::fetch_service,
 };
-use wavs_cli::command::deploy_service::SetServiceUrlArgs;
 use wavs_cli::{
     args::Command,
     command::{
-        deploy_service::{DeployService, DeployServiceArgs},
+        deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs},
         exec_aggregator::{ExecAggregator, ExecAggregatorArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
         service::handle_service_command,
         upload_component::{UploadComponent, UploadComponentArgs},
     },
     context::CliContext,
-    util::ComponentInput,
+    util::{write_output_file, ComponentInput},
 };
 use wavs_types::ChainName;
 
@@ -123,6 +122,7 @@ async fn main() {
             fuel_limit,
             time_limit,
             config,
+            output_file,
             args: _,
         } => {
             let config = config
@@ -155,6 +155,24 @@ async fn main() {
                 }
             };
 
+            // If an output file was requested, write the wasm response as JSON
+            if let Some(path) = output_file {
+                match &res.wasm_response {
+                    Some(wasm_response) => {
+                        if let Err(e) = write_output_file(wasm_response, &path) {
+                            eprintln!("Failed to write component output: {e}");
+                            std::process::exit(1);
+                        }
+                    }
+                    None => {
+                        tracing::warn!(
+                            "No output payload produced by component to save to {}",
+                            path.display()
+                        );
+                    }
+                }
+            }
+
             ctx.handle_display_result(res);
         }
         Command::Service {
@@ -170,6 +188,7 @@ async fn main() {
             fuel_limit,
             time_limit,
             config,
+            output_file,
             args: _,
         } => {
             let config = config
@@ -202,6 +221,14 @@ async fn main() {
                     std::process::exit(1);
                 }
             };
+
+            // If an output file was requested, write the aggregator result as JSON
+            if let Some(path) = output_file {
+                if let Err(e) = write_output_file(&res, &path) {
+                    eprintln!("Failed to write aggregator output: {e}");
+                    std::process::exit(1);
+                }
+            }
 
             ctx.handle_display_result(res);
         }

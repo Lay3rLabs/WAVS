@@ -160,7 +160,7 @@ impl ExecComponent {
         {
             Ok(response) => response,
             Err(e) => {
-                eprintln!("Error executing component: {}", e);
+                tracing::error!("Error executing component: {}", e);
                 return Err(anyhow::anyhow!("Component execution failed: {}", e));
             }
         };

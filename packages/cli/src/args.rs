@@ -80,6 +80,11 @@ pub enum Command {
         /// Component config in KEY=VALUE format: --config a=1 --config b=2
         #[clap(long)]
         config: Vec<String>,
+
+        /// Optional path to save the execution output as JSON
+        /// Writes the WASM response as formatted JSON to file
+        #[clap(long = "output", short = 'o')]
+        output_file: Option<PathBuf>,
     },
 
     /// Service management commands
@@ -120,6 +125,11 @@ pub enum Command {
         /// Example: --config chain_name=31337 --config service_handler=0x1234...
         #[clap(long)]
         config: Option<Vec<String>>,
+
+        /// Optional path to save the raw execution output payload
+        /// Writes the aggregator result as JSON to file
+        #[clap(long = "output", short = 'o')]
+        output_file: Option<PathBuf>,
     },
 }
 
