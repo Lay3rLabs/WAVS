@@ -1,3 +1,4 @@
+use alloy_primitives::hex;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -17,6 +18,7 @@ use crate::Duration;
 )]
 pub struct SubmitAction {
     pub chain_name: String,
+    #[serde(with = "hex")]
     pub contract_address: Vec<u8>,
 }
 

@@ -72,7 +72,7 @@ pub fn write_output_file<T: Serialize>(data: &T, path: &PathBuf) -> Result<()> {
     }
 
     // Serialize and write to file
-    let json_output = serde_json::to_string(data)?;
+    let json_output = serde_json::to_string_pretty(data)?;
     if let Err(e) = std::fs::write(path, json_output) {
         tracing::error!("Failed to write output to {}: {}", path.display(), e);
         std::process::exit(1);
