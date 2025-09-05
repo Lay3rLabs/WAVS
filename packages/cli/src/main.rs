@@ -154,7 +154,7 @@ async fn main() {
             {
                 Ok(result) => result,
                 Err(e) => {
-                    tracing::error!("Failed to execute component: {e}");
+                    eprintln!("Failed to execute component: {e}");
                     std::process::exit(1);
                 }
             };
@@ -164,7 +164,7 @@ async fn main() {
                 match &res.wasm_response {
                     Some(wasm_response) => {
                         if let Err(e) = write_output_file(wasm_response, &path) {
-                            tracing::error!("Failed to write component output: {e}");
+                            eprintln!("Failed to write component output: {e}");
                             std::process::exit(1);
                         }
                     }
@@ -296,7 +296,7 @@ async fn main() {
             {
                 Ok(result) => result,
                 Err(e) => {
-                    tracing::error!("Failed to execute aggregator: {e}");
+                    eprintln!("Failed to execute aggregator: {e}");
                     std::process::exit(1);
                 }
             };
@@ -304,7 +304,7 @@ async fn main() {
             // If an output file was requested, write the aggregator result as JSON
             if let Some(path) = output_file {
                 if let Err(e) = write_output_file(&res, &path) {
-                    tracing::error!("Failed to write aggregator output: {e}");
+                    eprintln!("Failed to write aggregator output: {e}");
                     std::process::exit(1);
                 }
             }

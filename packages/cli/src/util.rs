@@ -60,21 +60,21 @@ cfg_if::cfg_if! {
 }
 
 /// Helper function to write serializable data to an output file
-pub fn write_output_file<T: Serialize>(data: &T, path: &PathBuf) -> Result<()> {
+pub fn write_output_file<T: Serialize>(data: &T, path: &Path) -> Result<()> {
     // Create parent directories if they don't exist
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
             if let Err(e) = std::fs::create_dir_all(parent) {
-                tracing::error!("Failed to create directory {}: {}", parent.display(), e);
+                eprintln!("Failed to create directory {}: {}", parent.display(), e);
                 std::process::exit(1);
             }
         }
     }
 
     // Serialize and write to file
-    let json_output = serde_json::to_string(data)?;
+    let json_output = serde_json::to_string_pretty(data)?;
     if let Err(e) = std::fs::write(path, json_output) {
-        tracing::error!("Failed to write output to {}: {}", path.display(), e);
+        eprintln!("Failed to write output to {}: {}", path.display(), e);
         std::process::exit(1);
     }
 
