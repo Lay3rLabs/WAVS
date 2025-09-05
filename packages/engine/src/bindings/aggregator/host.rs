@@ -1,4 +1,4 @@
-use wavs_types::ChainKeyId;
+use wavs_types::ChainKey;
 
 use crate::worlds::aggregator::AggregatorHostComponent;
 
@@ -9,28 +9,28 @@ use super::world::wavs::types::service::{ServiceAndWorkflowId, WorkflowAndWorkfl
 impl Host for AggregatorHostComponent {
     fn get_cosmos_chain_config(
         &mut self,
-        chain_id: String,
+        chain: String,
     ) -> Option<super::world::wavs::types::chain::CosmosChainConfig> {
-        let chain_id = ChainKeyId::new(chain_id).ok()?;
+        let chain = ChainKey::new(chain).ok()?;
 
         self.chain_configs
-            .cosmos
-            .get(&chain_id)
-            .cloned()
-            .map(|config| config.build(chain_id).into())
+            .get_chain(&chain)?
+            .to_cosmos_config()
+            .ok()
+            .map(Into::into)
     }
 
     fn get_evm_chain_config(
         &mut self,
-        chain_id: String,
+        chain: String,
     ) -> Option<super::world::wavs::types::chain::EvmChainConfig> {
-        let chain_id = ChainKeyId::new(chain_id).ok()?;
+        let chain = ChainKey::new(chain).ok()?;
 
         self.chain_configs
-            .evm
-            .get(&chain_id)
-            .cloned()
-            .map(|config| config.build(chain_id).into())
+            .get_chain(&chain)?
+            .to_evm_config()
+            .ok()
+            .map(Into::into)
     }
 
     fn config_var(&mut self, key: String) -> Option<String> {

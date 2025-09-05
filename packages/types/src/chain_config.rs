@@ -18,6 +18,13 @@ pub enum ChainConfigError {
     InvalidNamespaceForCosmos(ChainKeyNamespace),
     #[error("Namespace for cosmos chain must be {evm} or {dev}, got {0}", evm=ChainKeyNamespace::EVM, dev=ChainKeyNamespace::DEV)]
     InvalidNamespaceForEvm(ChainKeyNamespace),
+    #[error("Namespace must be one of {cosmos}, {evm}, or {dev}, got {0}", cosmos=ChainKeyNamespace::COSMOS, evm=ChainKeyNamespace::EVM, dev=ChainKeyNamespace::DEV)]
+    InvalidNamespace(ChainKeyNamespace),
+    #[error("Chain ID mismatch: expected {expected}, got {actual}")]
+    IdMismatch {
+        expected: ChainKeyId,
+        actual: ChainKeyId,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
@@ -71,7 +78,7 @@ impl From<EvmChainConfig> for ChainKey {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum AnyChainConfig {
     Cosmos(CosmosChainConfig),
     Evm(EvmChainConfig),

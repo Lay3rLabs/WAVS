@@ -1,4 +1,4 @@
-use wavs_types::ChainKeyId;
+use wavs_types::ChainKey;
 
 use crate::worlds::operator::component::HostComponent;
 
@@ -7,28 +7,28 @@ use super::world::host::{LogLevel, ServiceAndWorkflowId, WorkflowAndWorkflowId};
 impl super::world::host::Host for HostComponent {
     fn get_cosmos_chain_config(
         &mut self,
-        chain_id: String,
+        chain: String,
     ) -> Option<super::world::wavs::types::chain::CosmosChainConfig> {
-        let chain_id = ChainKeyId::new(chain_id).ok()?;
+        let chain = ChainKey::new(chain).ok()?;
 
         self.chain_configs
-            .cosmos
-            .get(&chain_id)
-            .cloned()
-            .map(|config| config.build(chain_id).into())
+            .get_chain(&chain)?
+            .to_cosmos_config()
+            .ok()
+            .map(Into::into)
     }
 
     fn get_evm_chain_config(
         &mut self,
-        chain_id: String,
+        chain: String,
     ) -> Option<super::world::wavs::types::chain::EvmChainConfig> {
-        let chain_id = ChainKeyId::new(chain_id).ok()?;
+        let chain = ChainKey::new(chain).ok()?;
 
         self.chain_configs
-            .evm
-            .get(&chain_id)
-            .cloned()
-            .map(|config| config.build(chain_id).into())
+            .get_chain(&chain)?
+            .to_evm_config()
+            .ok()
+            .map(Into::into)
     }
 
     fn get_service(&mut self) -> ServiceAndWorkflowId {

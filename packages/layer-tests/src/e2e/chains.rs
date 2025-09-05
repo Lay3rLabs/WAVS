@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use utils::config::ChainConfigs;
-use wavs_types::ChainKey;
+use wavs_types::{ChainKey, ChainKeyNamespace};
 
 /// Structure to hold the different chain keys for test configuration
 #[derive(Debug, Default, Clone)]
@@ -13,19 +13,8 @@ impl ChainKeys {
     /// Create a new ChainNames by categorizing chains from the config
     pub fn from_config(chain_configs: &ChainConfigs) -> Self {
         Self {
-            evm: chain_configs
-                .evm
-                .keys()
-                .cloned()
-                .map(|chain_id| format!("evm:{chain_id}").parse().unwrap())
-                .collect(),
-
-            cosmos: chain_configs
-                .cosmos
-                .keys()
-                .cloned()
-                .map(|chain_id| format!("cosmos:{chain_id}").parse().unwrap())
-                .collect(),
+            evm: chain_configs.chain_keys(ChainKeyNamespace::EVM.parse().unwrap()),
+            cosmos: chain_configs.chain_keys(ChainKeyNamespace::COSMOS.parse().unwrap()),
         }
     }
 

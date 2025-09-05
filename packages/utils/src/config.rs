@@ -251,7 +251,8 @@ pub struct ChainConfigs {
     /// EVM-style chains
     pub evm: BTreeMap<ChainKeyId, EvmChainConfigBuilder>,
     /// DEV-only chains
-    pub dev: BTreeMap<ChainKeyId, DevChainConfigBuilder>,
+    /// The key here can be different than the chain_id inside the config
+    pub dev: BTreeMap<ChainKeyId, AnyChainConfig>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
@@ -298,13 +299,6 @@ impl EvmChainConfigBuilder {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum DevChainConfigBuilder {
-    Evm(EvmChainConfigBuilder),
-    Cosmos(CosmosChainConfigBuilder),
-}
-
 impl ChainConfigs {
     pub fn get_chain(&self, key: &ChainKey) -> Option<AnyChainConfig> {
         match key.namespace.as_str() {
@@ -316,14 +310,7 @@ impl ChainConfigs {
                 .evm
                 .get(&key.id)
                 .map(|c| AnyChainConfig::Evm(c.clone().build(key.id.clone()))),
-            ChainKeyNamespace::DEV => self.dev.get(&key.id).map(|c| match c {
-                DevChainConfigBuilder::Evm(c) => {
-                    AnyChainConfig::Evm(c.clone().build(key.id.clone()))
-                }
-                DevChainConfigBuilder::Cosmos(c) => {
-                    AnyChainConfig::Cosmos(c.clone().build(key.id.clone()))
-                }
-            }),
+            ChainKeyNamespace::DEV => self.dev.get(&key.id).cloned(),
             _ => None,
         }
     }
@@ -341,10 +328,7 @@ impl ChainConfigs {
     }
 
     pub fn dev_iter(&self) -> impl Iterator<Item = AnyChainConfig> + '_ {
-        self.dev.iter().map(|(id, config)| match config {
-            DevChainConfigBuilder::Evm(c) => AnyChainConfig::Evm(c.clone().build(id.clone())),
-            DevChainConfigBuilder::Cosmos(c) => AnyChainConfig::Cosmos(c.clone().build(id.clone())),
-        })
+        self.dev.values().cloned()
     }
 
     pub fn all_chain_keys(&self) -> Result<Vec<ChainKey>, anyhow::Error> {
@@ -372,59 +356,89 @@ impl ChainConfigs {
         Ok(keys)
     }
 
+    pub fn chain_keys(&self, namespace: ChainKeyNamespace) -> Vec<ChainKey> {
+        match namespace.as_str() {
+            ChainKeyNamespace::COSMOS => self
+                .cosmos
+                .keys()
+                .map(|id| ChainKey {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                })
+                .collect(),
+            ChainKeyNamespace::EVM => self
+                .evm
+                .keys()
+                .map(|id| ChainKey {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                })
+                .collect(),
+            ChainKeyNamespace::DEV => self
+                .dev
+                .keys()
+                .map(|id| ChainKey {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
     pub fn add_chain(
         &mut self,
-        namespace: ChainKeyNamespace,
+        key: ChainKey,
         config: AnyChainConfig,
     ) -> Result<(), ChainConfigError> {
-        let chain_id = config.chain_id().clone();
-        let chain_key = ChainKey::new(format!("{}:{}", namespace, chain_id))?;
-
-        if self.get_chain(&chain_key).is_some() {
-            return Err(ChainConfigError::DuplicateChain(chain_key));
+        if self.get_chain(&key).is_some() {
+            return Err(ChainConfigError::DuplicateChain(key));
         }
 
-        match config {
-            AnyChainConfig::Cosmos(config) => {
-                let config = CosmosChainConfigBuilder {
-                    bech32_prefix: config.bech32_prefix,
-                    rpc_endpoint: config.rpc_endpoint,
-                    grpc_endpoint: config.grpc_endpoint,
-                    gas_price: config.gas_price,
-                    gas_denom: config.gas_denom,
-                    faucet_endpoint: config.faucet_endpoint,
-                };
-
-                match namespace.as_str() {
-                    ChainKeyNamespace::COSMOS => {
-                        self.cosmos.insert(chain_id, config);
-                    }
-                    ChainKeyNamespace::DEV => {
-                        self.dev
-                            .insert(chain_id, DevChainConfigBuilder::Cosmos(config));
-                    }
-                    _ => return Err(ChainConfigError::InvalidNamespaceForCosmos(namespace)),
-                }
+        match key.namespace.as_str() {
+            ChainKeyNamespace::DEV => {
+                self.dev.insert(key.id, config);
             }
-            AnyChainConfig::Evm(config) => {
-                let config = EvmChainConfigBuilder {
-                    ws_endpoint: config.ws_endpoint,
-                    http_endpoint: config.http_endpoint,
-                    faucet_endpoint: config.faucet_endpoint,
-                    poll_interval_ms: config.poll_interval_ms,
-                };
-                match namespace.as_str() {
-                    ChainKeyNamespace::EVM => {
-                        self.evm.insert(chain_id, config);
+            ChainKeyNamespace::EVM => match config {
+                AnyChainConfig::Evm(evm_config) => {
+                    if evm_config.chain_id != key.id {
+                        return Err(ChainConfigError::IdMismatch {
+                            expected: key.id,
+                            actual: evm_config.chain_id,
+                        });
                     }
-                    ChainKeyNamespace::DEV => {
-                        self.dev
-                            .insert(chain_id, DevChainConfigBuilder::Evm(config));
-                    }
-                    _ => return Err(ChainConfigError::InvalidNamespaceForEvm(namespace)),
+                    let evm_config = EvmChainConfigBuilder {
+                        ws_endpoint: evm_config.ws_endpoint,
+                        http_endpoint: evm_config.http_endpoint,
+                        faucet_endpoint: evm_config.faucet_endpoint,
+                        poll_interval_ms: evm_config.poll_interval_ms,
+                    };
+                    self.evm.insert(key.id, evm_config);
                 }
-            }
-        };
+                _ => return Err(ChainConfigError::InvalidNamespaceForEvm(key.namespace)),
+            },
+            ChainKeyNamespace::COSMOS => match config {
+                AnyChainConfig::Cosmos(cosmos_config) => {
+                    if cosmos_config.chain_id != key.id {
+                        return Err(ChainConfigError::IdMismatch {
+                            expected: key.id,
+                            actual: cosmos_config.chain_id,
+                        });
+                    }
+                    let cosmos_config = CosmosChainConfigBuilder {
+                        bech32_prefix: cosmos_config.bech32_prefix,
+                        rpc_endpoint: cosmos_config.rpc_endpoint,
+                        grpc_endpoint: cosmos_config.grpc_endpoint,
+                        gas_price: cosmos_config.gas_price,
+                        gas_denom: cosmos_config.gas_denom,
+                        faucet_endpoint: cosmos_config.faucet_endpoint,
+                    };
+                    self.cosmos.insert(key.id, cosmos_config);
+                }
+                _ => return Err(ChainConfigError::InvalidNamespaceForCosmos(key.namespace)),
+            },
+            _ => return Err(ChainConfigError::InvalidNamespace(key.namespace)),
+        }
 
         Ok(())
     }
@@ -998,16 +1012,19 @@ mod test {
 
             [dev.my-local-evm-1]
             type = "evm"
+            chain_id = "1"
             ws_endpoint = "ws://example-local-evm-1.com"
             http_endpoint = "http://example-local-evm-1.com"
 
             [dev.my-local-evm-2]
             type = "evm"
+            chain_id = "2"
             ws_endpoint = "ws://example-local-evm-2.com"
             http_endpoint = "http://example-local-evm-2.com"
 
             [dev.my-local-cosmos-1]
-            type="cosmos"
+            type = "cosmos"
+            chain_id = "wasmd"
             bech32_prefix = "wasmd"
             rpc_endpoint = "http://example-local-cosmos-1.com"
             grpc_endpoint = "https://example-local-cosmos-1.com"
@@ -1015,7 +1032,8 @@ mod test {
             gas_denom = "uwasm1"
 
             [dev.my-local-cosmos-2]
-            type="cosmos"
+            type = "cosmos"
+            chain_id = "wasmd"
             bech32_prefix = "wasmd"
             rpc_endpoint = "http://example-local-cosmos-2.com"
             grpc_endpoint = "https://example-local-cosmos-2.com"
@@ -1060,6 +1078,17 @@ mod test {
             "http://example-1.com"
         );
 
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("evm:1").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "1"
+        );
+
         // distinguish evm
         assert_eq!(
             chain_configs
@@ -1070,6 +1099,17 @@ mod test {
                 .http_endpoint
                 .unwrap(),
             "http://example-2.com"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("evm:2").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "2"
         );
 
         // load cosmos
@@ -1083,6 +1123,17 @@ mod test {
             "uslay"
         );
 
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("cosmos:layer").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "layer"
+        );
+
         // distinguish cosmos
         assert_eq!(
             chain_configs
@@ -1092,6 +1143,17 @@ mod test {
                 .unwrap()
                 .gas_denom,
             "untrn"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("cosmos:neutron").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "neutron"
         );
 
         // load dev evm
@@ -1106,6 +1168,17 @@ mod test {
             "http://example-local-evm-1.com"
         );
 
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-evm-1").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "1"
+        );
+
         // distinguish dev evm
         assert_eq!(
             chain_configs
@@ -1116,6 +1189,17 @@ mod test {
                 .http_endpoint
                 .unwrap(),
             "http://example-local-evm-2.com"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-evm-2").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "2"
         );
 
         // load dev cosmos
@@ -1129,6 +1213,17 @@ mod test {
             "uwasm1"
         );
 
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-cosmos-1").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "wasmd"
+        );
+
         // distinguish dev cosmos
         assert_eq!(
             chain_configs
@@ -1138,6 +1233,17 @@ mod test {
                 .unwrap()
                 .gas_denom,
             "uwasm2"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-cosmos-2").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "wasmd"
         );
 
         // fail to get eth dev as cosmos

@@ -1,8 +1,6 @@
 pub mod aggregator;
 use super::Service;
-use crate::{
-    AnyChainConfig, ChainKeyNamespace, ComponentDigest, ServiceDigest, ServiceId, ServiceManager,
-};
+use crate::{AnyChainConfig, ChainKey, ComponentDigest, ServiceDigest, ServiceId, ServiceManager};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -29,7 +27,7 @@ pub struct GetServiceKeyRequest {
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct AddChainRequest {
-    pub namespace: ChainKeyNamespace,
+    pub key: ChainKey,
     pub config: AnyChainConfig,
 }
 
