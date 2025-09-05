@@ -1,7 +1,9 @@
-package wavs:types@0.6.0-alpha.8;
+package wavs:types@0.6.0-alpha.9;
 
 interface chain {
-  type chain-name = string;
+  /// A string mostly following the caip-2 format of namespace:reference, e.g. "eip155:1" for Ethereum mainnet or "cosmos:cosmoshub-4" for Cosmos Hub
+  /// however, we allow up to 32 characters for the "namespace" part, and we call the "reference" part "chain-id" to confirm with popular usage
+  type chain-key = string;
 
   type evm-tx-hash = list<u8>;
 
@@ -92,7 +94,7 @@ interface core {
 
 interface service {
   use core.{digest, timestamp};
-  use chain.{chain-name, evm-address, cosmos-address};
+  use chain.{chain-key, evm-address, cosmos-address};
 
   /// Basic types
   type service-id = string;
@@ -109,7 +111,7 @@ interface service {
   }
 
   record evm-manager {
-    chain-name: chain-name,
+    chain: chain-key,
     address: evm-address,
   }
 
@@ -159,18 +161,18 @@ interface service {
 
   record trigger-evm-contract-event {
     address: evm-address,
-    chain-name: chain-name,
+    chain: chain-key,
     event-hash: list<u8>,
   }
 
   record trigger-cosmos-contract-event {
     address: cosmos-address,
-    chain-name: chain-name,
+    chain: chain-key,
     event-type: string,
   }
 
   record trigger-block-interval {
-    chain-name: chain-name,
+    chain: chain-key,
     n-blocks: u32,
     start-block: option<u64>,
     end-block: option<u64>,
@@ -218,7 +220,7 @@ interface service {
   }
 
   record evm-contract-submission {
-    chain-name: chain-name,
+    chain: chain-key,
     address: evm-address,
     max-gas: option<u64>,
   }

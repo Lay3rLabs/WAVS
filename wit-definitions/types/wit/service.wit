@@ -6,7 +6,7 @@ interface service {
     type semver-version = string;
 
     use core.{digest, timestamp};
-    use chain.{chain-name, evm-address, cosmos-address};
+    use chain.{chain-key, evm-address, cosmos-address};
 
     // Service types
     record service {
@@ -26,7 +26,7 @@ interface service {
     }
 
     record evm-manager {
-        chain-name: chain-name,
+        chain: chain-key,
         address: evm-address,
     }
 
@@ -89,18 +89,18 @@ interface service {
 
     record trigger-evm-contract-event {
         address: evm-address,
-        chain-name: chain-name,
+        chain: chain-key,
         event-hash: list<u8>
     }
 
     record trigger-cosmos-contract-event {
         address: cosmos-address,
-        chain-name: chain-name,
+        chain: chain-key,
         event-type: string
     }
 
     record trigger-block-interval {
-        chain-name: chain-name,
+        chain: chain-key,
         n-blocks: u32,
         start-block: option<u64>,
         end-block: option<u64>
@@ -130,7 +130,7 @@ interface service {
     }
 
     record evm-contract-submission {
-        chain-name: chain-name,
+        chain: chain-key,
         address: evm-address,
         max-gas: option<u64>,
     }

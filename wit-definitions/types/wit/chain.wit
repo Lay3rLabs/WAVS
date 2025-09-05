@@ -1,5 +1,7 @@
 interface chain {
-    type chain-name = string;
+    // A string mostly following the caip-2 format of namespace:reference, e.g. "eip155:1" for Ethereum mainnet or "cosmos:cosmoshub-4" for Cosmos Hub
+    // however, we allow up to 32 characters for the "namespace" part, and we call the "reference" part "chain-id" to confirm with popular usage
+    type chain-key = string;
     type evm-tx-hash = list<u8>; // 32 bytes, a keccak hash of an RLP encoded signed transaction
     type cosmos-tx-hash = string;
 
