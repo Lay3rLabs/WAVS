@@ -22,7 +22,7 @@ pub struct GetServiceParams {
     get,
     path = "/service",
     params(
-        ("chain_name" = String, Query, description = "Name of the chain"),
+        ("chain" = String, Query, description = "Name of the chain"),
         ("address" = String, Query, description = "Service contract address")
     ),
     responses(

@@ -42,7 +42,7 @@ async fn basic_aggregator_execution() {
     match &actions[0] {
         // currently hardcoded in the aggregator component
         AggregatorAction::Submit(submit_action) => {
-            assert_eq!(submit_action.chain_name, "31337");
+            assert_eq!(submit_action.chain, "evm:31337");
             assert_eq!(submit_action.contract_address.raw_bytes, vec![0u8; 20]);
         }
         _ => panic!("Expected Submit action, got {:?}", &actions[0]),

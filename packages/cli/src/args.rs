@@ -122,7 +122,7 @@ pub enum Command {
         time_limit: Option<u64>,
 
         /// Configuration key-value pairs for the component in format 'key=value'
-        /// Example: --config chain_name=31337 --config service_handler=0x1234...
+        /// Example: --config chain=evm:31337 --config service_handler=0x1234...
         #[clap(long)]
         config: Option<Vec<String>>,
 

@@ -276,7 +276,7 @@ async fn handle_custom_submit(
     queue: &[QueuedPacket],
     submit_action: SubmitAction,
 ) -> AggregatorResult<TransactionReceipt> {
-    let chain = ChainKey::new(submit_action.chain_name)?;
+    let chain = ChainKey::new(submit_action.chain)?;
     let contract_address = Address::from_slice(&submit_action.contract_address.raw_bytes);
 
     let service_manager = get_submission_service_manager(state, &chain, contract_address).await?;
@@ -592,7 +592,7 @@ mod test {
                             event_id,
                             aggregator_action: wavs_types::AggregatorAction::Submit(
                                 wavs_types::SubmitAction {
-                                    chain_name: "test-chain".to_string(),
+                                    chain: "evm:test-chain".to_string(),
                                     contract_address: vec![0u8; 20],
                                 },
                             ),
@@ -957,7 +957,7 @@ mod test {
             wavs_types::Component::new(wavs_types::ComponentSource::Digest(aggregator_digest));
         component
             .config
-            .insert("chain_name".to_string(), chain.to_string());
+            .insert("chain".to_string(), chain.to_string());
         // SimpleAggregator needs the service handler address
         if !service_handler_addresses.is_empty() {
             component.config.insert(

@@ -35,7 +35,7 @@ pub async fn execute_aggregator_component(
         fuel_limit: Some(u64::MAX),
         time_limit_seconds: Some(10),
         config: [
-            ("chain_name".to_string(), "31337".to_string()),
+            ("chain_name".to_string(), "evm:31337".to_string()),
             (
                 "service_handler".to_string(),
                 "0x0000000000000000000000000000000000000000".to_string(),

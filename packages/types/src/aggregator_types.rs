@@ -17,7 +17,7 @@ use crate::Duration;
     ToSchema,
 )]
 pub struct SubmitAction {
-    pub chain_name: String,
+    pub chain: String,
     #[serde(with = "hex")]
     pub contract_address: Vec<u8>,
 }

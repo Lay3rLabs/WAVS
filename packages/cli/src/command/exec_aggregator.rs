@@ -225,7 +225,7 @@ mod test {
                         fuel_limit: None,
                         time_limit_seconds: None,
                         config: [
-                            ("chain_name".to_string(), "31337".to_string()),
+                            ("chain".to_string(), "evm:31337".to_string()),
                             (
                                 "service_handler".to_string(),
                                 "0x0000000000000000000000000000000000000000".to_string(),
@@ -277,7 +277,7 @@ mod test {
             .unwrap();
 
         let config = [
-            ("chain_name".to_string(), "31337".to_string()),
+            ("chain".to_string(), "evm:31337".to_string()),
             (
                 "service_handler".to_string(),
                 "0x0000000000000000000000000000000000000000".to_string(),
@@ -302,9 +302,9 @@ mod test {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
                 match &actions[0] {
-                    AggregatorAction::Submit(submit) => {
-                        assert_eq!(submit.chain_name, "31337");
-                        assert_eq!(submit.contract_address, vec![0u8; 20]);
+                    wavs_aggregator::engine::AggregatorAction::Submit(submit) => {
+                        assert_eq!(submit.chain, "evm:31337");
+                        assert_eq!(submit.contract_address.raw_bytes, vec![0u8; 20]);
                     }
                     _ => panic!("Expected Submit action, got {:?}", actions[0]),
                 }
@@ -323,7 +323,7 @@ mod test {
             .to_string();
 
         let config = [
-            ("chain_name".to_string(), "31337".to_string()),
+            ("chain".to_string(), "evm:31337".to_string()),
             (
                 "service_handler".to_string(),
                 "0x0000000000000000000000000000000000000000".to_string(),
@@ -348,9 +348,9 @@ mod test {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
                 match &actions[0] {
-                    AggregatorAction::Submit(submit) => {
-                        assert_eq!(submit.chain_name, "31337");
-                        assert_eq!(submit.contract_address, vec![0u8; 20]);
+                    wavs_aggregator::engine::AggregatorAction::Submit(submit) => {
+                        assert_eq!(submit.chain, "evm:31337");
+                        assert_eq!(submit.contract_address.raw_bytes, vec![0u8; 20]);
                     }
                     _ => panic!("Expected Submit action, got {:?}", actions[0]),
                 }

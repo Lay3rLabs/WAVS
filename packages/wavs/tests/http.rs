@@ -255,7 +255,7 @@ fn test_add_chain_invalid_config() {
     let app = TestHttpApp::new();
 
     let request_body = serde_json::json!({
-        "chain_name": "test-chain",
+        "chain": "test-chain",
         "chain_config": {
             "invalid_type": {
                 "chain_id": "1337"

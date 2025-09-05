@@ -17,20 +17,20 @@ impl TryFrom<component_service::Trigger> for wavs_types::Trigger {
             component_service::Trigger::CosmosContractEvent(source) => {
                 wavs_types::Trigger::CosmosContractEvent {
                     address: source.address.into(),
-                    chain: source.chain_name.parse()?,
+                    chain: source.chain.parse()?,
                     event_type: source.event_type,
                 }
             }
             component_service::Trigger::EvmContractEvent(source) => {
                 wavs_types::Trigger::EvmContractEvent {
                     address: source.address.into(),
-                    chain: source.chain_name.parse()?,
+                    chain: source.chain.parse()?,
                     event_hash: source.event_hash.try_into()?,
                 }
             }
             component_service::Trigger::BlockInterval(source) => {
                 wavs_types::Trigger::BlockInterval {
-                    chain: source.chain_name.parse()?,
+                    chain: source.chain.parse()?,
                     n_blocks: source.n_blocks.try_into()?,
                     start_block: source.start_block.map(TryInto::try_into).transpose()?,
                     end_block: source.end_block.map(TryInto::try_into).transpose()?,
@@ -197,7 +197,7 @@ impl TryFrom<component_service::ServiceManager> for wavs_types::ServiceManager {
     fn try_from(src: component_service::ServiceManager) -> Result<Self, Self::Error> {
         Ok(match src {
             component_service::ServiceManager::Evm(evm) => wavs_types::ServiceManager::Evm {
-                chain: evm.chain_name.parse()?,
+                chain: evm.chain.parse()?,
                 address: evm.address.into(),
             },
         })
@@ -234,7 +234,7 @@ impl TryFrom<component_service::EvmContractSubmission> for wavs_types::EvmContra
 
     fn try_from(src: component_service::EvmContractSubmission) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain: src.chain_name.parse()?,
+            chain: src.chain.parse()?,
             address: src.address.into(),
             max_gas: src.max_gas,
         })
