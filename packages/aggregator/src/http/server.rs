@@ -16,6 +16,8 @@ use super::{
     state::HttpState,
 };
 
+const REALM: &str = "aggregator";
+
 // this is called from main
 #[instrument(level = "info", skip(ctx, config))]
 pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
@@ -65,7 +67,7 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
     // apply bearer auth to protected routes if configured
     let mut router = public.merge(match &config.bearer_token {
         Some(token) => protected.layer(middleware::from_fn_with_state(
-            (token.clone(), "aggregator".to_string()),
+            (token.clone(), REALM.to_string()),
             utils::http::verify_bearer_with_realm,
         )),
         None => protected,

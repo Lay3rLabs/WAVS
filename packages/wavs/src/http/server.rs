@@ -27,6 +27,8 @@ use super::{
     state::HttpState,
 };
 
+const REALM: &str = "wavs";
+
 // this is called from main, takes a file-based Dispatcher
 pub fn start(
     ctx: AppContext,
@@ -101,7 +103,7 @@ pub async fn make_router(
     // apply bearer auth to protected routes if configured
     let mut router = public.merge(match &config.bearer_token {
         Some(token) => protected.layer(middleware::from_fn_with_state(
-            (token.clone(), "wavs".to_string()),
+            (token.clone(), REALM.to_string()),
             utils::http::verify_bearer_with_realm,
         )),
         None => protected,
