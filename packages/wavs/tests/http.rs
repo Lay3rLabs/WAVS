@@ -182,11 +182,14 @@ fn create_test_cosmos_chain_config() -> AnyChainConfig {
 #[test]
 fn test_add_chain_evm_success() {
     let app = TestHttpApp::new();
-    let chain: ChainKey = "evm:test".try_into().unwrap();
+
     let chain_config = create_test_evm_chain_config();
+    let chain: ChainKey = format!("evm:{}", chain_config.chain_id().as_str())
+        .parse()
+        .unwrap();
 
     let request_body = serde_json::json!({
-        "namespace": chain.namespace,
+        "chain": chain,
         "config": chain_config
     });
 
@@ -208,11 +211,13 @@ fn test_add_chain_evm_success() {
 #[test]
 fn test_add_chain_cosmos_success() {
     let app = TestHttpApp::new();
-    let chain: ChainKey = "cosmos:test".try_into().unwrap();
     let chain_config = create_test_cosmos_chain_config();
+    let chain: ChainKey = format!("cosmos:{}", chain_config.chain_id().as_str())
+        .parse()
+        .unwrap();
 
     let request_body = serde_json::json!({
-        "namespace": chain.namespace,
+        "chain": chain,
         "config": chain_config
     });
 
@@ -281,12 +286,14 @@ fn test_add_chain_invalid_config() {
 #[test]
 fn test_add_chain_prevents_duplicates() {
     let app = TestHttpApp::new();
-    let chain: ChainKey = "evm:test-duplicate".try_into().unwrap();
     let chain_config = create_test_evm_chain_config();
+    let chain: ChainKey = format!("evm:{}", chain_config.chain_id().as_str())
+        .parse()
+        .unwrap();
 
     // add chain first time
     let add_request1 = serde_json::json!({
-        "namespace": chain.namespace,
+        "chain": chain,
         "config": chain_config
     });
 
@@ -310,7 +317,7 @@ fn test_add_chain_prevents_duplicates() {
 
     // Try to add same chain again - should fail
     let add_request2 = serde_json::json!({
-        "namespace": chain.namespace,
+        "chain": chain,
         "config": chain_config
     });
 

@@ -27,7 +27,7 @@ pub struct GetServiceKeyRequest {
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct AddChainRequest {
-    pub key: ChainKey,
+    pub chain: ChainKey,
     pub config: AnyChainConfig,
 }
 

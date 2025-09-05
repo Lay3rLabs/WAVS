@@ -20,7 +20,7 @@ pub async fn handle_add_chain(
     State(state): State<HttpState>,
     Json(request): Json<AddChainRequest>,
 ) -> impl IntoResponse {
-    match add_chain_inner(state, request.key, request.config).await {
+    match add_chain_inner(state, request.chain, request.config).await {
         Ok(_) => axum::http::StatusCode::OK.into_response(),
         Err(e) => e.into_response(),
     }
@@ -28,7 +28,7 @@ pub async fn handle_add_chain(
 
 async fn add_chain_inner(
     state: HttpState,
-    key: ChainKey,
+    chain: ChainKey,
     config: AnyChainConfig,
 ) -> HttpResult<()> {
     state
@@ -36,6 +36,6 @@ async fn add_chain_inner(
         .chain_configs
         .write()
         .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
-        .add_chain(key, config)?;
+        .add_chain(chain, config)?;
     Ok(())
 }
