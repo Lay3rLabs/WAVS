@@ -5,11 +5,18 @@ use axum::{
     middleware::Next,
     response::IntoResponse,
 };
+use axum_extra::{
+    headers::{authorization::Bearer, Authorization},
+    typed_header::TypedHeaderRejection,
+    TypedHeader,
+};
+use subtle::ConstantTimeEq;
 
 // Shared bearer token middleware with realm support
 // State is a tuple: (token, realm)
 pub async fn verify_bearer_with_realm(
     State((token, realm)): State<(String, String)>,
+    auth: Result<TypedHeader<Authorization<Bearer>>, TypedHeaderRejection>,
     req: Request,
     next: Next,
 ) -> impl IntoResponse {
@@ -27,28 +34,16 @@ pub async fn verify_bearer_with_realm(
             .unwrap()
     };
 
-    let header_val = match req.headers().get(header::AUTHORIZATION) {
-        Some(h) => h,
-        None => return unauthorized("invalid_request", "missing_authorization_header"),
-    };
-
-    let Ok(as_str) = header_val.to_str() else {
-        return unauthorized("invalid_request", "malformed_authorization_header");
-    };
-
-    // Parse scheme and credentials.
-    let mut parts = as_str.splitn(2, char::is_whitespace);
-    let scheme = parts.next().unwrap_or("");
-    let credentials = parts.next().unwrap_or("").trim();
-    if !scheme.eq_ignore_ascii_case("Bearer") {
-        return unauthorized("invalid_request", "unsupported_auth_scheme");
+    match auth {
+        Ok(TypedHeader(Authorization(bearer))) => {
+            if bearer.token().as_bytes().ct_eq(token.as_bytes()).into() {
+                next.run(req).await
+            } else {
+                unauthorized("invalid_token", "token_mismatch")
+            }
+        }
+        Err(_) => unauthorized("invalid_request", "invalid_authorization_header"),
     }
-
-    if credentials.as_bytes() != token.as_bytes() {
-        return unauthorized("invalid_token", "token_mismatch");
-    }
-
-    next.run(req).await
 }
 
 #[cfg(test)]
@@ -87,7 +82,7 @@ mod tests {
         let val = hdr.to_str().unwrap();
         assert!(val.contains("Bearer realm=\"testrealm\""));
         assert!(val.contains("error=\"invalid_request\""));
-        assert!(val.contains("error_description=\"missing_authorization_header\""));
+        assert!(val.contains("error_description=\"invalid_authorization_header\""));
     }
 
     #[tokio::test]
