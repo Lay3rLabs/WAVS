@@ -1,4 +1,5 @@
 use alloy_primitives::FixedBytes;
+use alloy_provider::Provider;
 use alloy_signer::SignerSync;
 use anyhow::Context;
 use anyhow::Result;
@@ -219,11 +220,20 @@ async fn main() {
                     let contract =
                         IWavsServiceHandler::new(handler_address, evm_client.provider.clone());
 
+                    // Get the latest block number for reference
+                    let latest_block = match evm_client.provider.get_block_number().await {
+                        Ok(block_num) => block_num,
+                        Err(e) => {
+                            tracing::error!("Failed to get latest block number: {}", e);
+                            std::process::exit(1);
+                        }
+                    };
+
                     // Prepare signature data
                     let signature_data = IWavsServiceHandler::SignatureData {
                         signers: vec![evm_client.signer.address()],
                         signatures: vec![signature.as_bytes().into()],
-                        referenceBlock: 0, // Mock reference block
+                        referenceBlock: latest_block as u32,
                     };
 
                     // Convert to contract types
