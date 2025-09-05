@@ -60,7 +60,7 @@ cfg_if::cfg_if! {
 }
 
 /// Helper function to write serializable data to an output file
-pub fn write_output_file<T: Serialize>(data: &T, path: &PathBuf) -> Result<()> {
+pub fn write_output_file<T: Serialize>(data: &T, path: &Path) -> Result<()> {
     // Create parent directories if they don't exist
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
