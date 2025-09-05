@@ -11,8 +11,7 @@ struct Component;
 
 impl Guest for Component {
     fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
-        let chain_name =
-            host::config_var("chain_name").ok_or("chain_name config variable is required")?;
+        let chain = host::config_var("chain").ok_or("chain config variable is required")?;
         let service_handler_str = host::config_var("service_handler")
             .ok_or("service_handler config variable is required")?;
 
@@ -21,7 +20,7 @@ impl Guest for Component {
             .map_err(|e| format!("Failed to parse service handler address: {e}"))?;
 
         let submit_action = SubmitAction {
-            chain_name,
+            chain,
             contract_address: EvmAddress {
                 raw_bytes: address.to_vec(),
             },
