@@ -65,7 +65,7 @@ pub fn write_output_file<T: Serialize>(data: &T, path: &PathBuf) -> Result<()> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
             if let Err(e) = std::fs::create_dir_all(parent) {
-                tracing::error!("Failed to create directory {}: {}", parent.display(), e);
+                eprintln!("Failed to create directory {}: {}", parent.display(), e);
                 std::process::exit(1);
             }
         }
@@ -74,7 +74,7 @@ pub fn write_output_file<T: Serialize>(data: &T, path: &PathBuf) -> Result<()> {
     // Serialize and write to file
     let json_output = serde_json::to_string_pretty(data)?;
     if let Err(e) = std::fs::write(path, json_output) {
-        tracing::error!("Failed to write output to {}: {}", path.display(), e);
+        eprintln!("Failed to write output to {}: {}", path.display(), e);
         std::process::exit(1);
     }
 
