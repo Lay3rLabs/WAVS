@@ -68,6 +68,8 @@ pub struct Dispatcher<S: CAStorage> {
     pub chain_configs: Arc<RwLock<ChainConfigs>>,
     pub metrics: DispatcherMetrics,
     pub ipfs_gateway: String,
+    pub debug_trigger_tx: Option<mpsc::Sender<DispatcherCommand>>,
+    debug_trigger_rx: Option<mpsc::Receiver<DispatcherCommand>>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -101,6 +103,13 @@ impl Dispatcher<FileStorage> {
         let submission_manager =
             SubmissionManager::new(config, metrics.submission, services.clone())?;
 
+        let (debug_trigger_tx, debug_trigger_rx) = if config.debug_endpoints_enabled {
+            let (tx, rx) = mpsc::channel(100);
+            (Some(tx), Some(rx))
+        } else {
+            (None, None)
+        };
+
         Ok(Self {
             trigger_manager,
             engine_manager,
@@ -109,6 +118,8 @@ impl Dispatcher<FileStorage> {
             chain_configs: Arc::new(RwLock::new(config.chains.clone())),
             metrics: metrics.dispatcher.clone(),
             ipfs_gateway: config.ipfs_gateway.clone(),
+            debug_trigger_tx,
+            debug_trigger_rx,
         })
     }
 }
