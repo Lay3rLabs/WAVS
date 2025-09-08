@@ -60,6 +60,10 @@ pub struct Config {
 
     /// Maximum execution time in seconds for WASM components (None for unlimited)
     pub max_execution_seconds: Option<u64>,
+
+    /// Optional bearer token to protect mutating HTTP endpoints.
+    /// If None, endpoints remain unauthenticated.
+    pub bearer_token: Option<String>,
 }
 
 /// Default values for the config struct
@@ -84,6 +88,7 @@ impl Default for Config {
             wasm_lru_size: DEFAULT_WASM_LRU_SIZE,
             max_wasm_fuel: None,
             max_execution_seconds: None,
+            bearer_token: None,
         }
     }
 }
