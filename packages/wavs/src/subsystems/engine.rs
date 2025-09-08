@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::storage::CAStorage;
 use wavs_types::{
-    ComponentDigest, Envelope, EventId, EventOrder, Service, TriggerAction, WorkflowID,
+    ComponentDigest, Envelope, EventId, EventOrder, Service, TriggerAction, WorkflowId,
 };
 
 use crate::services::Services;
@@ -76,7 +76,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
     pub async fn store_components_for_service(
         &self,
         service: &Service,
-    ) -> Result<HashMap<WorkflowID, ComponentDigest>, EngineError> {
+    ) -> Result<HashMap<WorkflowId, ComponentDigest>, EngineError> {
         let mut digests = HashMap::new();
 
         for (workflow_id, workflow) in service.workflows.iter() {

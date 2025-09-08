@@ -18,14 +18,14 @@ use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Envelope, EnvelopeExt, Packet, ServiceID, SigningKeyResponse, Submit, WorkflowID,
+    Envelope, EnvelopeExt, Packet, ServiceId, SigningKeyResponse, Submit, WorkflowId,
 };
 
 #[derive(Clone)]
 pub struct SubmissionManager {
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
-    evm_signers: Arc<RwLock<HashMap<ServiceID, SignerInfo>>>,
+    evm_signers: Arc<RwLock<HashMap<ServiceId, SignerInfo>>>,
     evm_mnemonic: Option<String>,
     evm_mnemonic_hd_index_count: Arc<AtomicU32>,
     metrics: SubmissionMetrics,
@@ -157,7 +157,7 @@ impl SubmissionManager {
     // if no hd_index is provided, it will be automatically assigned.
     pub fn add_service_key(
         &self,
-        service_id: ServiceID,
+        service_id: ServiceId,
         hd_index: Option<u32>,
     ) -> Result<(), SubmissionError> {
         let hd_index = hd_index.unwrap_or(
@@ -199,7 +199,7 @@ impl SubmissionManager {
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub fn get_service_key(
         &self,
-        service_id: ServiceID,
+        service_id: ServiceId,
     ) -> Result<SigningKeyResponse, SubmissionError> {
         let key = self
             .evm_signers
@@ -234,8 +234,8 @@ impl SubmissionManager {
 
     async fn make_packet(
         &self,
-        service_id: ServiceID,
-        workflow_id: WorkflowID,
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
         envelope: Envelope,
     ) -> Result<Packet, SubmissionError> {
         let evm_signer = {

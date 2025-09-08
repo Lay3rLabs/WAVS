@@ -12,7 +12,7 @@ use utils::{
 };
 mod wavs_systems;
 use wavs_systems::{mock_app::MockE2ETestRunner, mock_submissions::wait_for_submission_messages};
-use wavs_types::{ComponentSource, ServiceManager, WorkflowID};
+use wavs_types::{ComponentSource, ServiceManager, WorkflowId};
 
 #[test]
 fn mock_e2e_trigger_flow() {
@@ -45,19 +45,19 @@ fn mock_e2e_trigger_flow() {
             runner
                 .send_trigger(
                     service_id.clone(),
-                    &WorkflowID::default(),
+                    WorkflowId::default().to_string().as_str(),
                     &task_queue_address.clone(),
                     &SquareRequest { x: 3 },
-                    "evm",
+                    "evm:anvil",
                 )
                 .await;
             runner
                 .send_trigger(
                     service_id,
-                    &WorkflowID::default(),
+                    WorkflowId::default().to_string().as_str(),
                     &task_queue_address,
                     &SquareRequest { x: 21 },
-                    "evm",
+                    "evm:anvil",
                 )
                 .await;
         }
@@ -189,10 +189,10 @@ fn mock_e2e_component_none() {
             runner
                 .send_trigger(
                     service_id,
-                    &WorkflowID::default(),
+                    WorkflowId::default().to_string().as_str(),
                     &task_queue_address.into(),
                     &SquareRequest { x: 3 },
-                    "evm",
+                    "evm:anvil",
                 )
                 .await;
         }

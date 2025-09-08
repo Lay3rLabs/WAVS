@@ -5,7 +5,7 @@ use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
     AggregatorAction, AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
     EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, Submit,
-    Trigger, Workflow, WorkflowID,
+    Trigger, Workflow, WorkflowId,
 };
 
 use crate::util::read_component;
@@ -14,7 +14,7 @@ fn create_dummy_packet(digest: ComponentDigest) -> Packet {
     let service = Service {
         name: "dummy-service".to_string(),
         workflows: [(
-            WorkflowID::default(),
+            WorkflowId::default(),
             Workflow {
                 trigger: Trigger::Manual,
                 component: Component {
@@ -31,7 +31,7 @@ fn create_dummy_packet(digest: ComponentDigest) -> Packet {
         .into(),
         status: ServiceStatus::Active,
         manager: ServiceManager::Evm {
-            chain_name: "dummy".parse().unwrap(),
+            chain: "evm:dummy".parse().unwrap(),
             address: alloy_primitives::Address::ZERO,
         },
     };
@@ -42,7 +42,7 @@ fn create_dummy_packet(digest: ComponentDigest) -> Packet {
             ordering: [0u8; 12].into(),
             payload: vec![].into(),
         },
-        workflow_id: WorkflowID::default(),
+        workflow_id: WorkflowId::default(),
         service,
         signature: EnvelopeSignature::Secp256k1(
             alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false),
@@ -203,7 +203,7 @@ mod test {
     use utils::filesystem::workspace_path;
     use wavs_types::{
         Envelope, EnvelopeSignature, Service, ServiceManager, ServiceStatus, Submit, Trigger,
-        Workflow, WorkflowID,
+        Workflow, WorkflowId,
     };
 
     fn create_test_packet(component_path: &str) -> Packet {
@@ -213,7 +213,7 @@ mod test {
         let service = Service {
             name: "test-service".to_string(),
             workflows: [(
-                WorkflowID::default(),
+                WorkflowId::default(),
                 Workflow {
                     trigger: Trigger::Manual,
                     component: Component {
@@ -225,7 +225,7 @@ mod test {
                         fuel_limit: None,
                         time_limit_seconds: None,
                         config: [
-                            ("chain_name".to_string(), "31337".to_string()),
+                            ("chain".to_string(), "evm:31337".to_string()),
                             (
                                 "service_handler".to_string(),
                                 "0x0000000000000000000000000000000000000000".to_string(),
@@ -241,14 +241,14 @@ mod test {
             .into(),
             status: ServiceStatus::Active,
             manager: ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: alloy_primitives::Address::ZERO,
             },
         };
 
         Packet {
             service,
-            workflow_id: WorkflowID::default(),
+            workflow_id: WorkflowId::default(),
             envelope: Envelope {
                 eventId: [0u8; 20].into(),
                 ordering: [0u8; 12].into(),
@@ -277,7 +277,7 @@ mod test {
             .unwrap();
 
         let config = [
-            ("chain_name".to_string(), "31337".to_string()),
+            ("chain".to_string(), "evm:31337".to_string()),
             (
                 "service_handler".to_string(),
                 "0x0000000000000000000000000000000000000000".to_string(),
@@ -302,8 +302,8 @@ mod test {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
                 match &actions[0] {
-                    AggregatorAction::Submit(submit) => {
-                        assert_eq!(submit.chain_name, "31337");
+                    wavs_types::AggregatorAction::Submit(submit) => {
+                        assert_eq!(submit.chain, "evm:31337");
                         assert_eq!(submit.contract_address, vec![0u8; 20]);
                     }
                     _ => panic!("Expected Submit action, got {:?}", actions[0]),
@@ -323,7 +323,7 @@ mod test {
             .to_string();
 
         let config = [
-            ("chain_name".to_string(), "31337".to_string()),
+            ("chain".to_string(), "evm:31337".to_string()),
             (
                 "service_handler".to_string(),
                 "0x0000000000000000000000000000000000000000".to_string(),
@@ -348,8 +348,8 @@ mod test {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
                 match &actions[0] {
-                    AggregatorAction::Submit(submit) => {
-                        assert_eq!(submit.chain_name, "31337");
+                    wavs_types::AggregatorAction::Submit(submit) => {
+                        assert_eq!(submit.chain, "evm:31337");
                         assert_eq!(submit.contract_address, vec![0u8; 20]);
                     }
                     _ => panic!("Expected Submit action, got {:?}", actions[0]),

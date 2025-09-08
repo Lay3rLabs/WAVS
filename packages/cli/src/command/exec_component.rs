@@ -7,8 +7,8 @@ use wavs_engine::{
     bindings::operator::world::host::LogLevel, worlds::operator::instance::InstanceDepsBuilder,
 };
 use wavs_types::{
-    AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, ServiceID, Submit,
-    Trigger, TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow, WorkflowID,
+    AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, ServiceId, Submit,
+    Trigger, TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow, WorkflowId,
 };
 
 use crate::{
@@ -109,10 +109,10 @@ impl ExecComponent {
 
         let service = wavs_types::Service {
             name: "Exec Service".to_string(),
-            workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
+            workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "exec".parse().unwrap(),
+                chain: "evm:exec".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -120,7 +120,7 @@ impl ExecComponent {
         let trigger_action = TriggerAction {
             config: TriggerConfig {
                 service_id: service.id(),
-                workflow_id: WorkflowID::default(),
+                workflow_id: WorkflowId::default(),
                 trigger: Trigger::Manual,
             },
             data: TriggerData::Raw(input.decode().context(format!(
@@ -176,8 +176,8 @@ impl ExecComponent {
 }
 
 fn log_wasi(
-    service_id: &ServiceID,
-    workflow_id: &WorkflowID,
+    service_id: &ServiceId,
+    workflow_id: &WorkflowId,
     digest: &ComponentDigest,
     level: LogLevel,
     message: String,

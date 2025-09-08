@@ -5,7 +5,7 @@ use deadpool::managed::Pool;
 use layer_climb::pool::{SigningClientPool, SigningClientPoolManager};
 use utils::{config::EvmChainConfigExt, evm_client::EvmSigningClient};
 use wavs_cli::clients::HttpClient;
-use wavs_types::ChainName;
+use wavs_types::ChainKey;
 
 use super::config::Configs;
 
@@ -14,8 +14,8 @@ pub struct Clients {
     pub http_client: HttpClient,
     pub aggregator_clients: Vec<HttpClient>,
     pub cli_ctx: Arc<wavs_cli::context::CliContext>,
-    pub evm_clients: Arc<HashMap<ChainName, EvmSigningClient>>,
-    pub cosmos_client_pools: Arc<HashMap<ChainName, SigningClientPool>>,
+    pub evm_clients: Arc<HashMap<ChainKey, EvmSigningClient>>,
+    pub cosmos_client_pools: Arc<HashMap<ChainKey, SigningClientPool>>,
 }
 
 impl Clients {
@@ -68,21 +68,21 @@ impl Clients {
         let mut evm_clients = HashMap::new();
 
         // Create a client for each EVM chain
-        for (chain_name, chain_config) in &configs.chains.evm {
+        for chain_config in configs.chains.evm_iter() {
             let client_config = chain_config
                 .signing_client_config(cli_ctx.config.evm_credential.clone().unwrap())
                 .unwrap();
 
             let evm_client = EvmSigningClient::new(client_config).await.unwrap();
 
-            evm_clients.insert(chain_name.clone(), evm_client);
+            evm_clients.insert(chain_config.into(), evm_client);
         }
 
         let mut cosmos_client_pools = HashMap::new();
         // Create a client for each Cosmos chain
-        for (chain_name, chain_config) in &configs.chains.cosmos {
-            let chain_config = layer_climb::prelude::ChainConfig {
-                chain_id: layer_climb::prelude::ChainId::new(chain_config.chain_id.clone()),
+        for chain_config in configs.chains.cosmos_iter() {
+            let climb_chain_config = layer_climb::prelude::ChainConfig {
+                chain_id: chain_config.chain_id.clone().into(),
                 rpc_endpoint: chain_config.rpc_endpoint.clone(),
                 grpc_endpoint: chain_config.grpc_endpoint.clone(),
                 grpc_web_endpoint: None,
@@ -93,14 +93,17 @@ impl Clients {
                 },
             };
 
-            tracing::info!("Setting up Cosmos client pool for {}", chain_name);
+            tracing::info!(
+                "Setting up Cosmos client pool for {}",
+                chain_config.chain_id
+            );
             let pool_manager = SigningClientPoolManager::new_mnemonic(
                 cli_ctx
                     .config
                     .cosmos_mnemonic
                     .clone()
                     .expect("Expected a cosmos mnemonic"),
-                chain_config,
+                climb_chain_config,
                 None,
                 None,
             )
@@ -111,7 +114,7 @@ impl Clients {
             let pool =
                 SigningClientPool::new(Pool::builder(pool_manager).max_size(8).build().unwrap());
 
-            cosmos_client_pools.insert(chain_name.clone(), pool);
+            cosmos_client_pools.insert(chain_config.into(), pool);
         }
 
         Self {
@@ -123,16 +126,16 @@ impl Clients {
         }
     }
 
-    pub fn get_evm_client(&self, chain_name: &ChainName) -> EvmSigningClient {
-        self.evm_clients.get(chain_name).cloned().unwrap()
+    pub fn get_evm_client(&self, chain: &ChainKey) -> EvmSigningClient {
+        self.evm_clients.get(chain).cloned().unwrap()
     }
 
     pub async fn get_cosmos_client(
         &self,
-        chain_name: &ChainName,
+        chain: &ChainKey,
     ) -> deadpool::managed::Object<SigningClientPoolManager> {
         self.cosmos_client_pools
-            .get(chain_name)
+            .get(chain)
             .unwrap()
             .get()
             .await

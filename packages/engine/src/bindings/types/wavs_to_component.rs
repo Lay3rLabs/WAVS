@@ -17,34 +17,34 @@ impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
         Ok(match src {
             wavs_types::Trigger::CosmosContractEvent {
                 address,
-                chain_name,
+                chain,
                 event_type,
             } => component_service::Trigger::CosmosContractEvent(
                 component_service::TriggerCosmosContractEvent {
                     address: address.try_into()?,
-                    chain_name: chain_name.to_string(),
+                    chain: chain.to_string(),
                     event_type,
                 },
             ),
             wavs_types::Trigger::EvmContractEvent {
                 address,
-                chain_name,
+                chain,
                 event_hash,
             } => component_service::Trigger::EvmContractEvent(
                 component_service::TriggerEvmContractEvent {
                     address: address.into(),
-                    chain_name: chain_name.to_string(),
+                    chain: chain.to_string(),
                     event_hash: event_hash.as_slice().to_vec(),
                 },
             ),
             wavs_types::Trigger::BlockInterval {
-                chain_name,
+                chain,
                 n_blocks,
                 start_block,
                 end_block,
             } => {
                 component_service::Trigger::BlockInterval(component_service::TriggerBlockInterval {
-                    chain_name: chain_name.to_string(),
+                    chain: chain.to_string(),
                     n_blocks: n_blocks.into(),
                     start_block: start_block.map(Into::into),
                     end_block: end_block.map(Into::into),
@@ -125,7 +125,7 @@ impl From<utils::config::EvmChainConfig>
 {
     fn from(config: utils::config::EvmChainConfig) -> Self {
         Self {
-            chain_id: config.chain_id,
+            chain_id: config.chain_id.to_string(),
             ws_endpoint: config.ws_endpoint,
             http_endpoint: config.http_endpoint,
         }
@@ -267,13 +267,12 @@ impl From<wavs_types::ServiceStatus> for component_service::ServiceStatus {
 impl From<wavs_types::ServiceManager> for component_service::ServiceManager {
     fn from(src: wavs_types::ServiceManager) -> Self {
         match src {
-            wavs_types::ServiceManager::Evm {
-                chain_name,
-                address,
-            } => component_service::ServiceManager::Evm(component_service::EvmManager {
-                chain_name: chain_name.to_string(),
-                address: address.into(),
-            }),
+            wavs_types::ServiceManager::Evm { chain, address } => {
+                component_service::ServiceManager::Evm(component_service::EvmManager {
+                    chain: chain.to_string(),
+                    address: address.into(),
+                })
+            }
         }
     }
 }
@@ -289,7 +288,7 @@ impl From<wavs_types::Aggregator> for component_service::Aggregator {
 impl From<wavs_types::EvmContractSubmission> for component_service::EvmContractSubmission {
     fn from(src: wavs_types::EvmContractSubmission) -> Self {
         Self {
-            chain_name: src.chain_name.to_string(),
+            chain: src.chain.to_string(),
             address: src.address.into(),
             max_gas: src.max_gas,
         }
@@ -334,7 +333,7 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
     fn try_from(src: wavs_types::TriggerData) -> Result<Self, Self::Error> {
         match src {
             wavs_types::TriggerData::EvmContractEvent {
-                chain_name,
+                chain,
                 contract_address,
                 log_data,
                 tx_hash,
@@ -346,7 +345,7 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                 removed,
             } => Ok(component_input::TriggerData::EvmContractEvent(
                 component_input::TriggerDataEvmContractEvent {
-                    chain_name: chain_name.to_string(),
+                    chain: chain.to_string(),
                     log: component_input::EvmEventLog {
                         address: contract_address.into(),
                         data: component_chain::EvmEventLogData {
@@ -369,14 +368,14 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
             )),
             wavs_types::TriggerData::CosmosContractEvent {
                 contract_address,
-                chain_name,
+                chain,
                 event,
                 event_index,
                 block_height,
             } => Ok(component_input::TriggerData::CosmosContractEvent(
                 component_input::TriggerDataCosmosContractEvent {
                     contract_address: contract_address.try_into()?,
-                    chain_name: chain_name.to_string(),
+                    chain: chain.to_string(),
                     event: component_input::CosmosEvent {
                         ty: event.ty,
                         attributes: event
@@ -390,11 +389,11 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                 },
             )),
             wavs_types::TriggerData::BlockInterval {
-                chain_name,
+                chain,
                 block_height,
             } => Ok(component_input::TriggerData::BlockInterval(
                 component_input::TriggerDataBlockInterval {
-                    chain_name: chain_name.to_string(),
+                    chain: chain.to_string(),
                     block_height,
                 },
             )),
@@ -464,15 +463,14 @@ impl From<wavs_types::ServiceStatus> for aggregator_service::ServiceStatus {
 impl From<wavs_types::ServiceManager> for aggregator_service::ServiceManager {
     fn from(manager: wavs_types::ServiceManager) -> Self {
         match manager {
-            wavs_types::ServiceManager::Evm {
-                chain_name,
-                address,
-            } => aggregator_service::ServiceManager::Evm(aggregator_service::EvmManager {
-                chain_name: chain_name.to_string(),
-                address: aggregator_chain::EvmAddress {
-                    raw_bytes: address.to_vec(),
-                },
-            }),
+            wavs_types::ServiceManager::Evm { chain, address } => {
+                aggregator_service::ServiceManager::Evm(aggregator_service::EvmManager {
+                    chain: chain.to_string(),
+                    address: aggregator_chain::EvmAddress {
+                        raw_bytes: address.to_vec(),
+                    },
+                })
+            }
         }
     }
 }
@@ -596,7 +594,7 @@ impl From<wavs_types::Submit> for aggregator_service::Submit {
 impl From<wavs_types::EvmContractSubmission> for aggregator_service::EvmContractSubmission {
     fn from(submission: wavs_types::EvmContractSubmission) -> Self {
         aggregator_service::EvmContractSubmission {
-            chain_name: submission.chain_name.to_string(),
+            chain: submission.chain.to_string(),
             address: submission.address.into(),
             max_gas: submission.max_gas,
         }
@@ -611,34 +609,34 @@ impl TryFrom<wavs_types::Trigger> for aggregator_service::Trigger {
             wavs_types::Trigger::Manual => aggregator_service::Trigger::Manual,
             wavs_types::Trigger::EvmContractEvent {
                 address,
-                chain_name,
+                chain,
                 event_hash,
             } => aggregator_service::Trigger::EvmContractEvent(
                 aggregator_service::TriggerEvmContractEvent {
                     address: address.into(),
-                    chain_name: chain_name.to_string(),
+                    chain: chain.to_string(),
                     event_hash: event_hash.as_slice().to_vec(),
                 },
             ),
             wavs_types::Trigger::CosmosContractEvent {
                 address,
-                chain_name,
+                chain,
                 event_type,
             } => aggregator_service::Trigger::CosmosContractEvent(
                 aggregator_service::TriggerCosmosContractEvent {
                     address: address.try_into()?,
-                    chain_name: chain_name.to_string(),
+                    chain: chain.to_string(),
                     event_type,
                 },
             ),
             wavs_types::Trigger::BlockInterval {
-                chain_name,
+                chain,
                 n_blocks,
                 start_block,
                 end_block,
             } => aggregator_service::Trigger::BlockInterval(
                 aggregator_service::TriggerBlockInterval {
-                    chain_name: chain_name.to_string(),
+                    chain: chain.to_string(),
                     n_blocks: n_blocks.into(),
                     start_block: start_block.map(Into::into),
                     end_block: end_block.map(Into::into),
@@ -705,7 +703,7 @@ impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
         match action {
             wavs_types::AggregatorAction::Submit(submit) => {
                 aggregator_types::AggregatorAction::Submit(aggregator_types::SubmitAction {
-                    chain_name: submit.chain_name,
+                    chain: submit.chain,
                     contract_address: aggregator_chain::EvmAddress {
                         raw_bytes: submit.contract_address,
                     },
@@ -725,7 +723,7 @@ impl From<aggregator_types::AggregatorAction> for wavs_types::AggregatorAction {
         match action {
             aggregator_types::AggregatorAction::Submit(submit) => {
                 wavs_types::AggregatorAction::Submit(wavs_types::SubmitAction {
-                    chain_name: submit.chain_name,
+                    chain: submit.chain,
                     contract_address: submit.contract_address.raw_bytes,
                 })
             }
@@ -755,7 +753,7 @@ impl From<utils::config::CosmosChainConfig> for aggregator_chain::CosmosChainCon
 impl From<utils::config::EvmChainConfig> for aggregator_chain::EvmChainConfig {
     fn from(config: utils::config::EvmChainConfig) -> Self {
         Self {
-            chain_id: config.chain_id,
+            chain_id: config.chain_id.to_string(),
             ws_endpoint: config.ws_endpoint,
             http_endpoint: config.http_endpoint,
         }

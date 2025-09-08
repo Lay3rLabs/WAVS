@@ -122,18 +122,20 @@ cosmwasm-build-inner CONTRACT_PATH:
     fi;
 # on-chain integration test
 test-wavs-e2e:
-    RUST_LOG=debug,alloy_rpc=off,alloy_provider=off,wasmtime=off,cranelift=off,hyper_util=off cargo test -p layer-tests 
+    RUST_LOG=debug,alloy_rpc=off,alloy_provider=off,wasmtime=off,cranelift=off,hyper_util=off cargo test -p layer-tests
 
 update-submodules:
     git submodule update --init --recursive
 
 lint:
     cargo fmt --all -- --check
-    cargo fix --allow-dirty --allow-staged
-    just clippy
+    cargo clippy --workspace --all-targets -- -D warnings
 
-clippy:
-    cargo clippy --all-targets -- -D warnings
+lint-fix:
+    cargo fmt --all
+    cargo fix --workspace --all-targets --allow-dirty --allow-staged
+    cargo clippy --fix --workspace --all-targets --allow-dirty -- -D warnings
+    cargo check --workspace --all-targets
 
 # waiting on: https://github.com/casey/just/issues/626
 start-all:
@@ -201,7 +203,7 @@ download-solidity branch="dev":
     cp temp_clone/wavs-middleware/contracts/src/eigenlayer/ecdsa/interfaces/*.sol contracts/solidity/interfaces/
 
     # and, for examples - interfaces and mocks
-    cp temp_clone/wavs-middleware/contracts/src/eigenlayer/ecdsa/interfaces/*.sol examples/contracts/solidity/interfaces/ 
+    cp temp_clone/wavs-middleware/contracts/src/eigenlayer/ecdsa/interfaces/*.sol examples/contracts/solidity/interfaces/
     cp temp_clone/wavs-middleware/contracts/src/eigenlayer/ecdsa/mocks/*.sol examples/contracts/solidity/mocks/
 
     # Clean up

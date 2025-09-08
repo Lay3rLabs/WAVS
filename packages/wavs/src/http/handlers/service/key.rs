@@ -1,6 +1,6 @@
 use crate::http::{error::HttpResult, state::HttpState};
 use axum::{extract::State, response::IntoResponse, Json};
-use wavs_types::{GetServiceKeyRequest, ServiceID, ServiceManager, SigningKeyResponse};
+use wavs_types::{GetServiceKeyRequest, ServiceId, ServiceManager, SigningKeyResponse};
 
 #[utoipa::path(
     post,
@@ -30,5 +30,5 @@ async fn inner(
 ) -> HttpResult<SigningKeyResponse> {
     Ok(state
         .dispatcher
-        .get_service_key(ServiceID::from(&service_manager))?)
+        .get_service_key(ServiceId::from(&service_manager))?)
 }

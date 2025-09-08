@@ -9,7 +9,7 @@ use crate::{
     evm_client::{EvmEndpoint, EvmSigningClientConfig},
 };
 pub use wavs_types::AnyChainConfig;
-use wavs_types::{ChainConfigError, ChainName};
+use wavs_types::{ChainConfigError, ChainKey, ChainKeyId, ChainKeyNamespace};
 
 pub const WAVS_ENV_PREFIX: &str = "WAVS_ENV";
 
@@ -241,64 +241,203 @@ impl ConfigFilePath {
     }
 }
 
-// TODO - impl a custom Deserialize that ensures at *load-time* that keys are unique
-// currently we only get that guarantee when we call `get_chain()`
+/// Chains are identified by `ChainKey`, which is a combination of a namespace and id
+/// for now - we natively support 3 namespaces: cosmos, evm, and dev
 #[derive(Debug, Default, Deserialize, Serialize, Clone, ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub struct ChainConfigs {
     /// Cosmos-style chains (including Layer-SDK)
-    pub cosmos: BTreeMap<ChainName, CosmosChainConfig>,
+    pub cosmos: BTreeMap<ChainKeyId, CosmosChainConfigBuilder>,
     /// EVM-style chains
-    pub evm: BTreeMap<ChainName, EvmChainConfig>,
+    pub evm: BTreeMap<ChainKeyId, EvmChainConfigBuilder>,
+    /// DEV-only chains
+    /// The key here can be different than the chain_id inside the config
+    pub dev: BTreeMap<ChainKeyId, AnyChainConfig>,
 }
 
-impl From<ChainConfigs> for BTreeMap<ChainName, AnyChainConfig> {
-    fn from(configs: ChainConfigs) -> Self {
-        let mut map = BTreeMap::new();
-        for (name, config) in configs.cosmos {
-            map.insert(name, AnyChainConfig::Cosmos(config));
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+pub struct CosmosChainConfigBuilder {
+    pub bech32_prefix: String,
+    pub rpc_endpoint: Option<String>,
+    pub grpc_endpoint: Option<String>,
+    pub gas_price: f32,
+    pub gas_denom: String,
+    pub faucet_endpoint: Option<String>,
+}
+
+impl CosmosChainConfigBuilder {
+    pub fn build(self, id: ChainKeyId) -> CosmosChainConfig {
+        CosmosChainConfig {
+            chain_id: id,
+            bech32_prefix: self.bech32_prefix,
+            rpc_endpoint: self.rpc_endpoint,
+            grpc_endpoint: self.grpc_endpoint,
+            gas_price: self.gas_price,
+            gas_denom: self.gas_denom,
+            faucet_endpoint: self.faucet_endpoint,
         }
-        for (name, config) in configs.evm {
-            map.insert(name, AnyChainConfig::Evm(config));
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+pub struct EvmChainConfigBuilder {
+    pub ws_endpoint: Option<String>,
+    pub http_endpoint: Option<String>,
+    pub faucet_endpoint: Option<String>,
+    pub poll_interval_ms: Option<u64>,
+}
+
+impl EvmChainConfigBuilder {
+    pub fn build(self, id: ChainKeyId) -> EvmChainConfig {
+        EvmChainConfig {
+            chain_id: id,
+            ws_endpoint: self.ws_endpoint,
+            http_endpoint: self.http_endpoint,
+            faucet_endpoint: self.faucet_endpoint,
+            poll_interval_ms: self.poll_interval_ms,
         }
-        map
     }
 }
 
 impl ChainConfigs {
-    pub fn get_chain(
-        &self,
-        chain_name: &ChainName,
-    ) -> std::result::Result<Option<AnyChainConfig>, ChainConfigError> {
-        match (self.evm.get(chain_name), self.cosmos.get(chain_name)) {
-            (Some(_), Some(_)) => Err(ChainConfigError::DuplicateChainName(chain_name.clone())),
-            (Some(evm_chain_config), None) => {
-                Ok(Some(AnyChainConfig::Evm(evm_chain_config.clone())))
-            }
-            (None, Some(cosmos)) => Ok(Some(AnyChainConfig::Cosmos(cosmos.clone()))),
-            (None, None) => Ok(None),
+    pub fn get_chain(&self, key: &ChainKey) -> Option<AnyChainConfig> {
+        match key.namespace.as_str() {
+            ChainKeyNamespace::COSMOS => self
+                .cosmos
+                .get(&key.id)
+                .map(|c| AnyChainConfig::Cosmos(c.clone().build(key.id.clone()))),
+            ChainKeyNamespace::EVM => self
+                .evm
+                .get(&key.id)
+                .map(|c| AnyChainConfig::Evm(c.clone().build(key.id.clone()))),
+            ChainKeyNamespace::DEV => self.dev.get(&key.id).cloned(),
+            _ => None,
         }
     }
 
-    pub fn all_chain_names(&self) -> Vec<ChainName> {
-        self.evm.keys().chain(self.cosmos.keys()).cloned().collect()
+    pub fn cosmos_iter(&self) -> impl Iterator<Item = CosmosChainConfig> + '_ {
+        self.cosmos
+            .iter()
+            .map(|(id, config)| config.clone().build(id.clone()))
+    }
+
+    pub fn evm_iter(&self) -> impl Iterator<Item = EvmChainConfig> + '_ {
+        self.evm
+            .iter()
+            .map(|(id, config)| config.clone().build(id.clone()))
+    }
+
+    pub fn dev_iter(&self) -> impl Iterator<Item = AnyChainConfig> + '_ {
+        self.dev.values().cloned()
+    }
+
+    pub fn all_chain_keys(&self) -> Result<Vec<ChainKey>, anyhow::Error> {
+        let mut keys = Vec::new();
+
+        for id in self.evm.keys() {
+            keys.push(ChainKey {
+                namespace: ChainKeyNamespace::EVM.parse()?,
+                id: id.clone(),
+            });
+        }
+        for id in self.cosmos.keys() {
+            keys.push(ChainKey {
+                namespace: ChainKeyNamespace::COSMOS.parse()?,
+                id: id.clone(),
+            });
+        }
+        for id in self.dev.keys() {
+            keys.push(ChainKey {
+                namespace: ChainKeyNamespace::DEV.parse()?,
+                id: id.clone(),
+            });
+        }
+
+        Ok(keys)
+    }
+
+    pub fn chain_keys(&self, namespace: ChainKeyNamespace) -> Vec<ChainKey> {
+        match namespace.as_str() {
+            ChainKeyNamespace::COSMOS => self
+                .cosmos
+                .keys()
+                .map(|id| ChainKey {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                })
+                .collect(),
+            ChainKeyNamespace::EVM => self
+                .evm
+                .keys()
+                .map(|id| ChainKey {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                })
+                .collect(),
+            ChainKeyNamespace::DEV => self
+                .dev
+                .keys()
+                .map(|id| ChainKey {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
     }
 
     pub fn add_chain(
         &mut self,
-        chain_name: ChainName,
-        chain_config: AnyChainConfig,
+        key: ChainKey,
+        config: AnyChainConfig,
     ) -> Result<(), ChainConfigError> {
-        if self.get_chain(&chain_name)?.is_some() {
-            return Err(ChainConfigError::DuplicateChainName(chain_name.clone()));
+        if self.get_chain(&key).is_some() {
+            return Err(ChainConfigError::DuplicateChain(key));
         }
 
-        match chain_config {
-            AnyChainConfig::Evm(config) => {
-                self.evm.insert(chain_name, config);
+        match key.namespace.as_str() {
+            ChainKeyNamespace::DEV => {
+                self.dev.insert(key.id, config);
             }
-            AnyChainConfig::Cosmos(config) => {
-                self.cosmos.insert(chain_name, config);
-            }
+            ChainKeyNamespace::EVM => match config {
+                AnyChainConfig::Evm(evm_config) => {
+                    if evm_config.chain_id != key.id {
+                        return Err(ChainConfigError::IdMismatch {
+                            expected: key.id,
+                            actual: evm_config.chain_id,
+                        });
+                    }
+                    let evm_config = EvmChainConfigBuilder {
+                        ws_endpoint: evm_config.ws_endpoint,
+                        http_endpoint: evm_config.http_endpoint,
+                        faucet_endpoint: evm_config.faucet_endpoint,
+                        poll_interval_ms: evm_config.poll_interval_ms,
+                    };
+                    self.evm.insert(key.id, evm_config);
+                }
+                _ => return Err(ChainConfigError::InvalidNamespaceForEvm(key.namespace)),
+            },
+            ChainKeyNamespace::COSMOS => match config {
+                AnyChainConfig::Cosmos(cosmos_config) => {
+                    if cosmos_config.chain_id != key.id {
+                        return Err(ChainConfigError::IdMismatch {
+                            expected: key.id,
+                            actual: cosmos_config.chain_id,
+                        });
+                    }
+                    let cosmos_config = CosmosChainConfigBuilder {
+                        bech32_prefix: cosmos_config.bech32_prefix,
+                        rpc_endpoint: cosmos_config.rpc_endpoint,
+                        grpc_endpoint: cosmos_config.grpc_endpoint,
+                        gas_price: cosmos_config.gas_price,
+                        gas_denom: cosmos_config.gas_denom,
+                        faucet_endpoint: cosmos_config.faucet_endpoint,
+                    };
+                    self.cosmos.insert(key.id, cosmos_config);
+                }
+                _ => return Err(ChainConfigError::InvalidNamespaceForCosmos(key.namespace)),
+            },
+            _ => return Err(ChainConfigError::InvalidNamespace(key.namespace)),
         }
 
         Ok(())
@@ -353,13 +492,15 @@ impl EvmChainConfigExt for EvmChainConfig {
 
 #[cfg(test)]
 mod test {
-    use std::{path::PathBuf, sync::LazyLock};
+    use std::{collections::BTreeMap, path::PathBuf, sync::LazyLock};
 
     use serde::{Deserialize, Serialize};
-    use wavs_types::ChainName;
+    use wavs_types::{ChainConfigError, ChainKey};
 
     use crate::{
-        config::ConfigFilePath, filesystem::workspace_path, serde::deserialize_vec_string,
+        config::{ConfigFilePath, CosmosChainConfigBuilder, EvmChainConfigBuilder},
+        filesystem::workspace_path,
+        serde::deserialize_vec_string,
     };
 
     use super::{
@@ -601,40 +742,18 @@ mod test {
     fn chain_name_lookup() {
         let chain_configs = mock_chain_configs();
         let chain: CosmosChainConfig = chain_configs
-            .get_chain(&"cosmos".try_into().unwrap())
-            .unwrap()
+            .get_chain(&"cosmos:layer".try_into().unwrap())
             .unwrap()
             .try_into()
             .unwrap();
-        assert_eq!(chain.chain_id, "cosmos");
+        assert_eq!(chain.chain_id.as_str(), "layer");
 
         let chain: EvmChainConfig = chain_configs
-            .get_chain(&"evm".try_into().unwrap())
-            .unwrap()
+            .get_chain(&"evm:anvil".try_into().unwrap())
             .unwrap()
             .try_into()
             .unwrap();
-        assert_eq!(chain.chain_id, "evm");
-    }
-
-    #[test]
-    fn chain_name_lookup_fails_duplicate() {
-        let mut chain_configs = mock_chain_configs();
-
-        chain_configs.cosmos.insert(
-            "evm".try_into().unwrap(),
-            CosmosChainConfig {
-                chain_id: "evm".to_string(),
-                bech32_prefix: "evm".to_string(),
-                rpc_endpoint: Some("http://127.0.0.1:1317".to_string()),
-                grpc_endpoint: Some("http://127.0.0.1:9090".to_string()),
-                gas_price: 0.01,
-                gas_denom: "uatom".to_string(),
-                faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
-            },
-        );
-
-        assert!(chain_configs.get_chain(&"evm".try_into().unwrap()).is_err());
+        assert_eq!(chain.chain_id.as_str(), "anvil");
     }
 
     #[tokio::test]
@@ -694,7 +813,6 @@ mod test {
         let test_config = r#"
     # Global chain config
     [chains.evm.global_chain]
-    chain_id = "1000"
     ws_endpoint = "ws://global.example.com"
     http_endpoint = "http://global.example.com"
 
@@ -704,13 +822,11 @@ mod test {
 
     # Service1 specific chain override
     [service1.chains.evm.global_chain]
-    chain_id = "1000"
     ws_endpoint = "ws://service1.example.com"
     http_endpoint = "http://service1.example.com"
 
     # Service1 specific chain that doesn't exist in global
     [service1.chains.evm.service1_chain]
-    chain_id = "2000"
     ws_endpoint = "ws://service1-special.example.com"
     http_endpoint = "http://service1-special.example.com"
 
@@ -720,7 +836,6 @@ mod test {
 
     # Service2 specific chain override
     [service2.chains.evm.global_chain]
-    chain_id = "1000"
     ws_endpoint = "ws://service2.example.com"
     http_endpoint = "http://service2.example.com"
     "#;
@@ -742,18 +857,14 @@ mod test {
             .unwrap();
 
         // Define expected chain configurations
-        let global_chain_name: ChainName = "global_chain".try_into().unwrap();
-        let service1_chain_name: ChainName = "service1_chain".try_into().unwrap();
+        let global_chain_key: ChainKey = "evm:global_chain".try_into().unwrap();
+        let service1_chain_key: ChainKey = "evm:service1_chain".try_into().unwrap();
 
         // Test global chain with service1 overrides
-        let global_chain_config = service1_config
-            .chains
-            .get_chain(&global_chain_name)
-            .unwrap()
-            .unwrap();
+        let global_chain_config = service1_config.chains.get_chain(&global_chain_key).unwrap();
 
         if let crate::config::AnyChainConfig::Evm(evm_config) = global_chain_config {
-            assert_eq!(evm_config.chain_id, "1000");
+            assert_eq!(evm_config.chain_id.as_str(), "global_chain");
             // These should be overridden by service1
             assert_eq!(
                 evm_config.ws_endpoint.as_deref(),
@@ -770,12 +881,11 @@ mod test {
         // Test service1-specific chain
         let service1_chain_config = service1_config
             .chains
-            .get_chain(&service1_chain_name)
-            .unwrap()
+            .get_chain(&service1_chain_key)
             .unwrap();
 
         if let crate::config::AnyChainConfig::Evm(evm_config) = service1_chain_config {
-            assert_eq!(evm_config.chain_id, "2000");
+            assert_eq!(evm_config.chain_id.as_str(), "service1_chain");
             assert_eq!(
                 evm_config.ws_endpoint.as_deref(),
                 Some("ws://service1-special.example.com")
@@ -848,14 +958,10 @@ mod test {
         let service2_config: Service2Config = ConfigBuilder::new(service2_cli_env).build().unwrap();
 
         // Test global chain with service2 overrides
-        let global_chain_config = service2_config
-            .chains
-            .get_chain(&global_chain_name)
-            .unwrap()
-            .unwrap();
+        let global_chain_config = service2_config.chains.get_chain(&global_chain_key).unwrap();
 
         if let crate::config::AnyChainConfig::Evm(evm_config) = global_chain_config {
-            assert_eq!(evm_config.chain_id, "1000");
+            assert_eq!(evm_config.chain_id.as_str(), "global_chain");
             assert_eq!(
                 evm_config.ws_endpoint.as_deref(),
                 Some("ws://service2.example.com")
@@ -871,8 +977,7 @@ mod test {
         // Test that service2 doesn't have the service1-specific chain
         assert!(service2_config
             .chains
-            .get_chain(&service1_chain_name)
-            .unwrap()
+            .get_chain(&service1_chain_key)
             .is_none());
 
         // Test data_dir override for different services
@@ -880,13 +985,294 @@ mod test {
         assert_eq!(service2_config.data, PathBuf::from("/var/service2"));
     }
 
+    #[test]
+    fn chain_configs_toml() {
+        let test_config = r#"
+            [evm.1]
+            ws_endpoint = "ws://example-1.com"
+            http_endpoint = "http://example-1.com"
+
+            [evm.2]
+            ws_endpoint = "ws://example-2.com"
+            http_endpoint = "http://example-2.com"
+
+            [cosmos.neutron]
+            bech32_prefix = "neutron"
+            rpc_endpoint = "https://rpc-falcron.pion-1.ntrn.tech"
+            grpc_endpoint = "http://grpc-falcron.pion-1.ntrn.tech:80"
+            gas_price = 0.0053
+            gas_denom = "untrn"
+
+            [cosmos.layer]
+            bech32_prefix = "layer"
+            rpc_endpoint = "http://localhost:26657"
+            grpc_endpoint = "http://localhost:9090"
+            gas_price = 0.025
+            gas_denom = "uslay"
+
+            [dev.my-local-evm-1]
+            type = "evm"
+            chain_id = "1"
+            ws_endpoint = "ws://example-local-evm-1.com"
+            http_endpoint = "http://example-local-evm-1.com"
+
+            [dev.my-local-evm-2]
+            type = "evm"
+            chain_id = "2"
+            ws_endpoint = "ws://example-local-evm-2.com"
+            http_endpoint = "http://example-local-evm-2.com"
+
+            [dev.my-local-cosmos-1]
+            type = "cosmos"
+            chain_id = "wasmd"
+            bech32_prefix = "wasmd"
+            rpc_endpoint = "http://example-local-cosmos-1.com"
+            grpc_endpoint = "https://example-local-cosmos-1.com"
+            gas_price = 0.025
+            gas_denom = "uwasm1"
+
+            [dev.my-local-cosmos-2]
+            type = "cosmos"
+            chain_id = "wasmd"
+            bech32_prefix = "wasmd"
+            rpc_endpoint = "http://example-local-cosmos-2.com"
+            grpc_endpoint = "https://example-local-cosmos-2.com"
+            gas_price = 0.025
+            gas_denom = "uwasm2"
+        "#;
+
+        let chain_configs: ChainConfigs = toml::from_str(test_config).unwrap();
+
+        let mut keys: Vec<String> = chain_configs
+            .all_chain_keys()
+            .unwrap()
+            .into_iter()
+            .map(|x| x.to_string())
+            .collect();
+
+        keys.sort();
+
+        assert_eq!(
+            keys,
+            [
+                "cosmos:layer",
+                "cosmos:neutron",
+                "dev:my-local-cosmos-1",
+                "dev:my-local-cosmos-2",
+                "dev:my-local-evm-1",
+                "dev:my-local-evm-2",
+                "evm:1",
+                "evm:2"
+            ]
+        );
+
+        // load evm
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("evm:1").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .http_endpoint
+                .unwrap(),
+            "http://example-1.com"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("evm:1").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "1"
+        );
+
+        // distinguish evm
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("evm:2").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .http_endpoint
+                .unwrap(),
+            "http://example-2.com"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("evm:2").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "2"
+        );
+
+        // load cosmos
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("cosmos:layer").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .gas_denom,
+            "uslay"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("cosmos:layer").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "layer"
+        );
+
+        // distinguish cosmos
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("cosmos:neutron").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .gas_denom,
+            "untrn"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("cosmos:neutron").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "neutron"
+        );
+
+        // load dev evm
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-evm-1").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .http_endpoint
+                .unwrap(),
+            "http://example-local-evm-1.com"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-evm-1").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "1"
+        );
+
+        // distinguish dev evm
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-evm-2").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .http_endpoint
+                .unwrap(),
+            "http://example-local-evm-2.com"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-evm-2").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "2"
+        );
+
+        // load dev cosmos
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-cosmos-1").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .gas_denom,
+            "uwasm1"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-cosmos-1").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "wasmd"
+        );
+
+        // distinguish dev cosmos
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-cosmos-2").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .gas_denom,
+            "uwasm2"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-cosmos-2").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap()
+                .chain_id
+                .as_str(),
+            "wasmd"
+        );
+
+        // fail to get eth dev as cosmos
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-evm-1").unwrap())
+                .unwrap()
+                .to_cosmos_config()
+                .unwrap_err(),
+            ChainConfigError::ExpectedCosmosChain
+        );
+
+        // fail to get cosmos dev as eth
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-cosmos-1").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap_err(),
+            ChainConfigError::ExpectedEvmChain
+        );
+    }
+
     fn mock_chain_configs() -> ChainConfigs {
         ChainConfigs {
             cosmos: vec![
                 (
-                    "cosmos".try_into().unwrap(),
-                    CosmosChainConfig {
-                        chain_id: "cosmos".to_string(),
+                    "wasmd".try_into().unwrap(),
+                    CosmosChainConfigBuilder {
                         bech32_prefix: "cosmos".to_string(),
                         rpc_endpoint: Some("http://127.0.0.1:1317".to_string()),
                         grpc_endpoint: Some("http://127.0.0.1:9090".to_string()),
@@ -897,8 +1283,7 @@ mod test {
                 ),
                 (
                     "layer".try_into().unwrap(),
-                    CosmosChainConfig {
-                        chain_id: "layer".to_string(),
+                    CosmosChainConfigBuilder {
                         bech32_prefix: "layer".to_string(),
                         rpc_endpoint: Some("http://127.0.0.1:1317".to_string()),
                         grpc_endpoint: Some("http://127.0.0.1:9090".to_string()),
@@ -912,9 +1297,8 @@ mod test {
             .collect(),
             evm: vec![
                 (
-                    "evm".try_into().unwrap(),
-                    EvmChainConfig {
-                        chain_id: "evm".to_string(),
+                    "anvil".try_into().unwrap(),
+                    EvmChainConfigBuilder {
                         ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
@@ -923,8 +1307,7 @@ mod test {
                 ),
                 (
                     "polygon".try_into().unwrap(),
-                    EvmChainConfig {
-                        chain_id: "polygon".to_string(),
+                    EvmChainConfigBuilder {
                         ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
@@ -934,6 +1317,7 @@ mod test {
             ]
             .into_iter()
             .collect(),
+            dev: BTreeMap::new(),
         }
     }
 }

@@ -7,7 +7,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use ordermap::OrderMap;
 use std::collections::HashMap;
 use std::sync::Arc;
-use wavs_types::{Submit, Trigger, Workflow, WorkflowID};
+use wavs_types::{Submit, Trigger, Workflow, WorkflowId};
 
 use crate::e2e::helpers::change_service_for_test;
 use crate::e2e::report::TestReport;
@@ -223,7 +223,7 @@ async fn run_test(
     component_sources: &ComponentSources,
 ) -> anyhow::Result<()> {
     // Group workflows by trigger to handle multi-triggers
-    let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowID, &Workflow)>> = OrderMap::new();
+    let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowId, &Workflow)>> = OrderMap::new();
 
     for (workflow_id, workflow) in service_deployment.service.workflows.iter() {
         trigger_groups
@@ -249,11 +249,11 @@ async fn run_test(
         // Execute the trigger once
         let trigger_id = match trigger {
             Trigger::EvmContractEvent {
-                chain_name,
+                chain,
                 address,
                 event_hash: _,
             } => {
-                let evm_client = clients.get_evm_client(chain_name);
+                let evm_client = clients.get_evm_client(chain);
                 let client = SimpleEvmTriggerClient::new(evm_client, *address);
 
                 client
@@ -261,12 +261,12 @@ async fn run_test(
                     .await?
             }
             Trigger::CosmosContractEvent {
-                chain_name,
+                chain,
                 address,
                 event_type: _,
             } => {
                 let client = SimpleCosmosTriggerClient::new(
-                    clients.get_cosmos_client(chain_name).await,
+                    clients.get_cosmos_client(chain).await,
                     address.clone(),
                 );
 
@@ -299,10 +299,9 @@ async fn run_test(
                     })?;
 
                     let SubmitDefinition::Aggregator { aggregator, .. } = &workflow_def.submit;
-                    let AggregatorDefinition::ComponentBasedAggregator { chain_name, .. } =
-                        aggregator;
+                    let AggregatorDefinition::ComponentBasedAggregator { chain, .. } = aggregator;
 
-                    let client = clients.get_evm_client(chain_name);
+                    let client = clients.get_evm_client(chain);
                     let submit_start_block = client
                         .provider
                         .get_block_number()

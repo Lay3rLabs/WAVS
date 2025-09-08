@@ -19,8 +19,8 @@ use wavs::{
     subsystems::engine::wasm_engine::WasmEngine,
 };
 use wavs_types::{
-    ComponentSource, DeleteServicesRequest, IDError, ListServicesResponse, Service, ServiceID,
-    ServiceManager, Submit, WorkflowID,
+    ChainKey, ChainKeyError, ComponentSource, DeleteServicesRequest, ListServicesResponse, Service,
+    ServiceId, ServiceManager, Submit, WorkflowId, WorkflowIdError,
 };
 
 use super::mock_trigger_manager::{mock_evm_event_trigger, mock_real_trigger_action};
@@ -105,11 +105,11 @@ impl MockE2ETestRunner {
     #[instrument(level = "debug", skip(self))]
     pub async fn send_trigger(
         &self,
-        service_id: ServiceID,
-        workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
+        service_id: ServiceId,
+        workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError> + std::fmt::Debug,
         contract_address: &layer_climb::prelude::Address,
         data: &(impl Serialize + std::fmt::Debug),
-        chain_id: impl ToString + std::fmt::Debug,
+        chain: impl TryInto<ChainKey, Error = ChainKeyError> + std::fmt::Debug + Clone,
     ) {
         self.dispatcher
             .trigger_manager
@@ -118,7 +118,7 @@ impl MockE2ETestRunner {
                 workflow_id,
                 contract_address,
                 data,
-                chain_id,
+                chain,
             ))])
             .await
             .unwrap();
@@ -149,7 +149,7 @@ impl MockE2ETestRunner {
         &self,
         name: Option<String>,
         component_source: ComponentSource,
-    ) -> ServiceID {
+    ) -> ServiceId {
         // but we can create a service via http router
         let trigger = mock_evm_event_trigger();
 
@@ -161,7 +161,7 @@ impl MockE2ETestRunner {
             component_source,
             submit,
             ServiceManager::Evm {
-                chain_name: "evm".try_into().unwrap(),
+                chain: "evm:anvil".try_into().unwrap(),
                 address: rand_address_evm(),
             },
         );

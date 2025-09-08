@@ -1,6 +1,6 @@
 use thiserror::Error;
 use utils::storage::CAStorageError;
-use wavs_types::{ComponentDigest, ServiceID, WorkflowID};
+use wavs_types::{ComponentDigest, ServiceId, WorkflowId};
 
 #[derive(Error, Debug)]
 pub enum EngineError {
@@ -11,7 +11,7 @@ pub enum EngineError {
     Compile(anyhow::Error),
 
     #[error("Unknown Workflow {0} / {1}")]
-    UnknownWorkflow(ServiceID, WorkflowID),
+    UnknownWorkflow(ServiceId, WorkflowId),
 
     #[error("No wasm found for digest {0}")]
     UnknownDigest(ComponentDigest),
@@ -20,7 +20,7 @@ pub enum EngineError {
     Engine(#[from] wavs_engine::utils::error::EngineError),
 
     #[error{"Unable to send result after executing Service {0} / Workflow {1}"}]
-    WasiResultSend(ServiceID, WorkflowID),
+    WasiResultSend(ServiceId, WorkflowId),
 
     #[error("No registry configured")]
     NoRegistry,

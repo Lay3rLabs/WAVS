@@ -4,14 +4,14 @@ use serde::{Deserialize, Serialize};
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
     Component, ComponentSource, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger,
-    WorkflowID,
+    WorkflowId,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct ServiceJson {
     pub name: String,
-    pub workflows: BTreeMap<WorkflowID, WorkflowJson>,
+    pub workflows: BTreeMap<WorkflowId, WorkflowJson>,
     pub status: ServiceStatus,
     pub manager: ServiceManagerJson,
 }
@@ -77,7 +77,7 @@ impl ServiceJson {
                         }
                         Trigger::EvmContractEvent {
                             address,
-                            chain_name: _,
+                            chain: _,
                             event_hash,
                         } => {
                             // Validate EVM address format
@@ -119,7 +119,7 @@ impl ServiceJson {
                             }
                         }
                         Trigger::BlockInterval {
-                            chain_name: _,
+                            chain: _,
                             n_blocks: _,
                             start_block,
                             end_block,

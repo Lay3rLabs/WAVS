@@ -7,7 +7,7 @@ use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::w
 use uuid::Uuid;
 
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainName, Component, Permissions, Service, ServiceManager,
+    AllowedHostPermission, ByteArray, ChainKey, Component, Permissions, Service, ServiceManager,
     ServiceStatus, Submit, Trigger, Workflow,
 };
 
@@ -131,13 +131,13 @@ async fn deploy_workflow(
     tracing::info!("[{}] Creating submit from config", test_name);
 
     // Create the submit based on test configuration
-    let chain_name = {
+    let chain = {
         let SubmitDefinition::Aggregator { aggregator, .. } = &workflow_definition.submit;
         match aggregator {
-            AggregatorDefinition::ComponentBasedAggregator { chain_name, .. } => chain_name,
+            AggregatorDefinition::ComponentBasedAggregator { chain, .. } => chain,
         }
     };
-    let submission_contract = deploy_submit_contract(clients, chain_name, service_manager_address)
+    let submission_contract = deploy_submit_contract(clients, chain, service_manager_address)
         .await
         .unwrap();
 
@@ -179,11 +179,11 @@ pub async fn create_trigger_from_config(
 ) -> Trigger {
     match trigger_definition {
         TriggerDefinition::NewEvmContract(evm_trigger_definition) => match evm_trigger_definition {
-            EvmTriggerDefinition::SimpleContractEvent { chain_name } => {
-                let client = clients.get_evm_client(&chain_name);
+            EvmTriggerDefinition::SimpleContractEvent { chain } => {
+                let client = clients.get_evm_client(&chain);
 
                 // Deploy a new EVM trigger contract
-                tracing::info!("Deploying EVM trigger contract on chain {}", chain_name);
+                tracing::info!("Deploying EVM trigger contract on chain {}", chain);
                 let contract = SimpleTrigger::deploy(client.provider.clone())
                     .await
                     .unwrap();
@@ -194,7 +194,7 @@ pub async fn create_trigger_from_config(
                     *crate::example_evm_client::example_trigger::NewTrigger::SIGNATURE_HASH;
 
                 Trigger::EvmContractEvent {
-                    chain_name: chain_name.clone(),
+                    chain: chain.clone(),
                     address,
                     event_hash: ByteArray::new(event_hash),
                 }
@@ -202,11 +202,11 @@ pub async fn create_trigger_from_config(
         },
         TriggerDefinition::NewCosmosContract(cosmos_trigger_definition) => {
             match cosmos_trigger_definition {
-                CosmosTriggerDefinition::SimpleContractEvent { ref chain_name } => {
-                    let client = clients.get_cosmos_client(chain_name).await;
+                CosmosTriggerDefinition::SimpleContractEvent { ref chain } => {
+                    let client = clients.get_cosmos_client(chain).await;
 
                     // Get the code ID with better error handling
-                    tracing::info!("Getting cosmos code ID for chain {}", chain_name);
+                    tracing::info!("Getting cosmos code ID for chain {}", chain);
                     let code_id = get_cosmos_code_id(
                         clients,
                         &cosmos_trigger_definition,
@@ -214,7 +214,7 @@ pub async fn create_trigger_from_config(
                     )
                     .await;
 
-                    tracing::info!("Using cosmos code ID: {} for chain {}", code_id, chain_name);
+                    tracing::info!("Using cosmos code ID: {} for chain {}", code_id, chain);
 
                     // Deploy a new Cosmos trigger contract with better error handling
                     let contract_name = format!("simple_trigger_{}", Uuid::now_v7());
@@ -222,7 +222,7 @@ pub async fn create_trigger_from_config(
                         "Instantiating new contract '{}' with code ID {} on chain {}",
                         contract_name,
                         code_id,
-                        chain_name
+                        chain
                     );
 
                     let contract =
@@ -236,38 +236,35 @@ pub async fn create_trigger_from_config(
                     );
 
                     Trigger::CosmosContractEvent {
-                        chain_name: chain_name.clone(),
+                        chain: chain.clone(),
                         address: contract.contract_address,
                         event_type: crate::example_cosmos_client::NewMessageEvent::KEY.to_string(),
                     }
                 }
             }
         }
-        TriggerDefinition::BlockInterval {
-            chain_name,
-            start_stop,
-        } => match start_stop {
+        TriggerDefinition::BlockInterval { chain, start_stop } => match start_stop {
             false => Trigger::BlockInterval {
-                chain_name,
+                chain,
                 n_blocks: BLOCK_INTERVAL,
                 start_block: None,
                 end_block: None,
             },
             true => {
-                let current_block = if clients.evm_clients.contains_key(&chain_name) {
-                    let client = clients.get_evm_client(&chain_name);
+                let current_block = if clients.evm_clients.contains_key(&chain) {
+                    let client = clients.get_evm_client(&chain);
                     client.provider.get_block_number().await.unwrap()
-                } else if clients.cosmos_client_pools.contains_key(&chain_name) {
-                    let client = clients.get_cosmos_client(&chain_name).await;
+                } else if clients.cosmos_client_pools.contains_key(&chain) {
+                    let client = clients.get_cosmos_client(&chain).await;
                     client.querier.block_height().await.unwrap()
                 } else {
-                    panic!("Chain is not configured: {}", chain_name)
+                    panic!("Chain is not configured: {}", chain)
                 };
 
                 let current_block = NonZero::new(current_block).unwrap();
 
                 Trigger::BlockInterval {
-                    chain_name,
+                    chain,
                     n_blocks: BLOCK_INTERVAL,
                     start_block: Some(current_block),
                     end_block: Some(current_block),
@@ -322,14 +319,14 @@ pub async fn create_submit_from_config(
 /// Deploy submit contract and return its address
 pub async fn deploy_submit_contract(
     clients: &Clients,
-    chain_name: &ChainName,
+    chain: &ChainKey,
     service_manager_address: alloy_primitives::Address,
 ) -> Result<alloy_primitives::Address> {
-    let evm_client = clients.get_evm_client(chain_name);
+    let evm_client = clients.get_evm_client(chain);
 
     tracing::info!(
         "Deploying submit contract on chain {} with service manager: {}",
-        chain_name,
+        chain,
         service_manager_address
     );
 
@@ -367,8 +364,8 @@ pub async fn get_cosmos_code_id(
     }
 
     // Upload since not cached
-    let (chain_name, cosmos_bytecode) = match cosmos_trigger_definition {
-        CosmosTriggerDefinition::SimpleContractEvent { chain_name } => {
+    let (chain, cosmos_bytecode) = match cosmos_trigger_definition {
+        CosmosTriggerDefinition::SimpleContractEvent { chain } => {
             let wasm_path = workspace_path()
                 .join("examples")
                 .join("build")
@@ -382,17 +379,17 @@ pub async fn get_cosmos_code_id(
                 );
             }
 
-            (chain_name, tokio::fs::read(&wasm_path).await.unwrap())
+            (chain, tokio::fs::read(&wasm_path).await.unwrap())
         }
     };
 
     tracing::info!(
         "Uploading cosmos wasm byte code ({} bytes) to chain {}",
         cosmos_bytecode.len(),
-        chain_name
+        chain
     );
 
-    let client = clients.get_cosmos_client(chain_name).await;
+    let client = clients.get_cosmos_client(chain).await;
 
     let (code_id, _) = client
         .contract_upload_file(cosmos_bytecode, None)
@@ -401,7 +398,7 @@ pub async fn get_cosmos_code_id(
 
     tracing::info!(
         "Successfully uploaded WASM bytecode to chain {}, code_id: {}",
-        chain_name,
+        chain,
         code_id
     );
 

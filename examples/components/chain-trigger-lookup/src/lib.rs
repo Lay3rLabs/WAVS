@@ -25,13 +25,12 @@ impl Guest for Component {
 
             let resp = match trigger_action.data {
                 TriggerData::CosmosContractEvent(TriggerDataCosmosContractEvent {
-                    chain_name,
+                    chain,
                     contract_address,
                     ..
                 }) => {
-                    let chain_config = host::get_cosmos_chain_config(&chain_name).ok_or(
-                        anyhow::anyhow!("cosmos chain config for {chain_name} not found"),
-                    )?;
+                    let chain_config = host::get_cosmos_chain_config(&chain)
+                        .ok_or(anyhow::anyhow!("cosmos chain config for {chain} not found"))?;
 
                     layer_climb::querier::QueryClient::new(chain_config.into(), None)
                         .await?
@@ -39,13 +38,10 @@ impl Guest for Component {
                         .await?
                 }
                 TriggerData::EvmContractEvent(TriggerDataEvmContractEvent {
-                    chain_name,
-                    log,
-                    ..
+                    chain, log, ..
                 }) => {
-                    let chain_config = host::get_evm_chain_config(&chain_name).ok_or(
-                        anyhow::anyhow!("EVM chain config for {chain_name} not found"),
-                    )?;
+                    let chain_config = host::get_evm_chain_config(&chain)
+                        .ok_or(anyhow::anyhow!("EVM chain config for {chain} not found"))?;
 
                     new_evm_provider::<Ethereum>(
                         chain_config

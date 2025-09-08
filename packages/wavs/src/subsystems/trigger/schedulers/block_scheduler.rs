@@ -1,13 +1,13 @@
 use std::num::{NonZeroU32, NonZeroU64};
 
 use dashmap::DashMap;
-use wavs_types::ChainName;
+use wavs_types::ChainKey;
 
 use crate::subsystems::trigger::lookup::LookupId;
 
 use super::interval_scheduler::{IntervalScheduler, IntervalState, IntervalTime};
 
-pub type BlockSchedulers = DashMap<ChainName, BlockScheduler>;
+pub type BlockSchedulers = DashMap<ChainKey, BlockScheduler>;
 
 pub type BlockScheduler = IntervalScheduler<BlockHeight, BlockIntervalState>;
 
