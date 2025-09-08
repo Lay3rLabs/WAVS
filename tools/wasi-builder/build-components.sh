@@ -34,13 +34,7 @@ else
   COMPONENT_FILTERS=("${FILTERS[@]}")
 fi
 
-IMAGE_TAG="${WASI_BUILDER_IMAGE:-wavs-wasi-builder:local}"
-
-# Build the builder image if missing or forced
-if [ "${BUILD_BUILDER_IMAGE:-0}" != "0" ] || ! docker image inspect "$IMAGE_TAG" >/dev/null 2>&1; then
-  echo "[wasi-build] Builder image $IMAGE_TAG missing or rebuild requested; building..."
-  "$ROOT_DIR/tools/wasi-builder/build-image.sh"
-fi
+IMAGE_TAG="${WASI_BUILDER_IMAGE:-wavs-wasi-builder:latest}"
 
 OUT_DIR="$ROOT_DIR/examples/build/components"
 mkdir -p "$OUT_DIR"
@@ -73,7 +67,7 @@ for filter in "${COMPONENT_FILTERS[@]}"; do
   done
 done
 
-# Create checksums file like the non-docker task
+# Create checksums file
 if command -v sha256sum >/dev/null 2>&1; then
   if compgen -G "$OUT_DIR"/*.wasm >/dev/null; then
     sha256sum -- "$OUT_DIR"/*.wasm | tee "$ROOT_DIR/checksums.txt"

@@ -1,7 +1,6 @@
 SUDO := if `groups | grep -q docker > /dev/null 2>&1 && echo true || echo false` == "true" { "" } else { "sudo" }
 TAG := env_var_or_default("TAG", "")
 WASI_OUT_DIR := "./examples/build/components"
-WASI_BUILDER_IMAGE := env_var_or_default("WASI_BUILDER_IMAGE", "wavs-wasi-builder:local")
 COSMWASM_OUT_DIR := "./examples/build/contracts"
 REPO_ROOT := `git rev-parse --show-toplevel`
 DOCKER_WAVS_ID := `docker ps | grep wavs | awk '{print $1}'`
@@ -56,12 +55,14 @@ _install-native HOME DATA:
     @echo "export WAVS_AGGREGATOR_DATA=\"{{DATA}}/wavs-aggregator\""
     @echo "export WAVS_DOTENV=\"{{HOME}}/.env\""
 
-# compile WASI components using Docker for consistent builds
-wasi-builder-image-build:
-    bash tools/wasi-builder/build-image.sh
+wasi-builder-build TAG="latest":
+    IMAGE_TAG=ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}} bash tools/wasi-builder/build-image.sh
 
-wasi-build COMPONENT="*":
-    WASI_BUILDER_IMAGE={{WASI_BUILDER_IMAGE}} bash tools/wasi-builder/build-components.sh '{{COMPONENT}}'
+wasi-builder-push TAG="latest":
+    {{SUDO}} docker push ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}}
+
+wasi-build COMPONENT="*" TAG="latest":
+    WASI_BUILDER_IMAGE=ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}} bash tools/wasi-builder/build-components.sh '{{COMPONENT}}'
 
 # compile solidity contracts (including examples) and copy the ABI to contracts/solidity/abi
 # example ABI's will be copied to examples/contracts/solidity/abi
