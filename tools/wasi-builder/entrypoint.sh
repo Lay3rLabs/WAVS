@@ -33,14 +33,18 @@ mkdir -p "$OUT_DIR"
 
 cd "$DOCKER_DIR/$COMPONENT_DIR"
 
-# Ensure reproducible builds (optional; avoid overriding tool expectations)
+# Ensure reproducible builds
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-0}
+export CARGO_BUILD_INCREMENTAL=false
+export CARGO_PROFILE_RELEASE_LTO="thin"
+export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+export CARGO_PROFILE_RELEASE_PANIC="abort"
 umask 022
 
 if [ "$MODE" = "release" ]; then
-  cargo component build --release
+  cargo component build --release --locked
 else
-  cargo component build
+  cargo component build --locked
 fi
 
 # Copy resulting wasm(s) to the repo output folder

@@ -8,8 +8,8 @@ set -euo pipefail
 #   tools/wasi-builder/build-components.sh a b c           # several
 #   tools/wasi-builder/build-components.sh --artifact name # copy only specific artifact name.wasm
 # Env:
-#   WASI_BUILDER_IMAGE (default: wavs-wasi-builder:local)
-#   BUILD_BUILDER_IMAGE=1 (optional) to force rebuilding the image
+#   WASI_BUILDER_IMAGE (default: ghcr.io/lay3rlabs/wavs-wasi-builder:latest)
+#   PLATFORM (default: host-detected or linux/amd64)
 
 ROOT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 ARTIFACT=""
@@ -34,7 +34,15 @@ else
   COMPONENT_FILTERS=("${FILTERS[@]}")
 fi
 
-IMAGE_TAG="${WASI_BUILDER_IMAGE:-wavs-wasi-builder:latest}"
+IMAGE_TAG="${WASI_BUILDER_IMAGE:-ghcr.io/lay3rlabs/wavs-wasi-builder:latest}"
+# Determine platform if not provided
+if [ -z "${PLATFORM:-}" ]; then
+  arch=$(uname -m 2>/dev/null || echo "")
+  case "$arch" in
+    arm64|aarch64) PLATFORM="linux/arm64" ;;
+    *) PLATFORM="linux/amd64" ;;
+  esac
+fi
 
 OUT_DIR="$ROOT_DIR/examples/build/components"
 mkdir -p "$OUT_DIR"
@@ -57,6 +65,7 @@ for filter in "${COMPONENT_FILTERS[@]}"; do
     echo "[wasi-build] Building component: $rel_dir"
 
     docker run --rm \
+      --platform "$PLATFORM" \
       -v "$ROOT_DIR:/docker" \
       --mount type=volume,source=wavs_wasi_target_cache,target=/target \
       --mount type=volume,source=wavs_wasi_registry_cache,target=/usr/local/cargo/registry \
