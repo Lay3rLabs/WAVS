@@ -1,5 +1,6 @@
 pub mod chain;
 mod config;
+pub mod debug;
 mod info;
 mod not_found;
 pub(crate) mod openapi;
