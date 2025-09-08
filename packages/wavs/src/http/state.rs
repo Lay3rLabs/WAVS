@@ -7,7 +7,7 @@ use utils::{
     },
     telemetry::HttpMetrics,
 };
-use wavs_types::{Service, ServiceDigest, ServiceID};
+use wavs_types::{Service, ServiceDigest, ServiceId};
 
 use crate::{config::Config, dispatcher::Dispatcher};
 
@@ -52,7 +52,7 @@ impl HttpState {
         })
     }
 
-    pub fn load_service(&self, service_id: &ServiceID) -> anyhow::Result<wavs_types::Service> {
+    pub fn load_service(&self, service_id: &ServiceId) -> anyhow::Result<wavs_types::Service> {
         match self.dispatcher.services.get(service_id) {
             Ok(service) => Ok(service),
             _ => Err(anyhow::anyhow!(

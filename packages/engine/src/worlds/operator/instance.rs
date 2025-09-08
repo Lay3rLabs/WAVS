@@ -6,7 +6,7 @@ use wasmtime::Store;
 use wasmtime::{component::Linker, Engine as WTEngine};
 use wasmtime_wasi::{p2::WasiCtxBuilder, DirPerms, FilePerms};
 use wasmtime_wasi_http::WasiHttpCtx;
-use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowID};
+use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowId};
 
 use super::component::{HostComponent, HostComponentLogger};
 use crate::{backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineError};
@@ -14,7 +14,7 @@ use crate::{backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineEr
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
     pub service: Service,
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     pub engine: &'a WTEngine,
     pub data_dir: P,
     pub chain_configs: &'a ChainConfigs,

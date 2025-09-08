@@ -8,7 +8,7 @@ use utils::{
     config::{AnyChainConfig, EvmChainConfigExt},
     evm_client::EvmSigningClient,
 };
-use wavs_types::ChainName;
+use wavs_types::{ChainKey, ChainKeyId};
 
 use crate::{args::Command, deploy::Deployment};
 
@@ -54,14 +54,15 @@ impl CliContext {
         })
     }
 
-    pub(crate) async fn new_evm_client(&self, chain_name: &ChainName) -> Result<EvmSigningClient> {
+    pub(crate) async fn new_evm_client(&self, chain_id: ChainKeyId) -> Result<EvmSigningClient> {
         let chain_config = self
             .config
             .chains
             .evm
-            .get(chain_name)
-            .context(format!("chain {chain_name} not found"))?
-            .clone();
+            .get(&chain_id)
+            .context(format!("chain id {chain_id} not found"))?
+            .clone()
+            .build(chain_id);
 
         let client_config = chain_config.signing_client_config(
             self.config
@@ -79,15 +80,16 @@ impl CliContext {
     /// Uses a dummy credential if none is configured
     pub(crate) async fn new_evm_client_read_only(
         &self,
-        chain_name: &ChainName,
+        chain_id: ChainKeyId,
     ) -> Result<EvmSigningClient> {
         let chain_config = self
             .config
             .chains
             .evm
-            .get(chain_name)
-            .context(format!("chain {chain_name} not found"))?
-            .clone();
+            .get(&chain_id)
+            .context(format!("chain {chain_id} not found"))?
+            .clone()
+            .build(chain_id);
 
         // Use actual credential if available, otherwise use a dummy one for read-only operations
         let credential = self.config.evm_credential.clone().unwrap_or_else(|| {
@@ -100,14 +102,15 @@ impl CliContext {
         Ok(evm_client)
     }
 
-    pub async fn new_cosmos_client(&self, chain_name: &ChainName) -> Result<SigningClient> {
+    pub async fn new_cosmos_client(&self, chain_id: ChainKeyId) -> Result<SigningClient> {
         let chain_config = self
             .config
             .chains
             .cosmos
-            .get(chain_name)
-            .context(format!("chain {chain_name} not found"))?
-            .clone();
+            .get(&chain_id)
+            .context(format!("chain id {chain_id} not found"))?
+            .clone()
+            .build(chain_id);
 
         let key_signer = KeySigner::new_mnemonic_str(
             self.config
@@ -123,23 +126,21 @@ impl CliContext {
 
     pub async fn address_exists_on_chain(
         &self,
-        chain_name: &ChainName,
+        chain: &ChainKey,
         address: layer_climb::prelude::Address,
     ) -> Result<bool> {
         Ok(
             match self
                 .config
                 .chains
-                .get_chain(chain_name)
-                .ok()
-                .flatten()
-                .context(format!("chain {chain_name} not found"))?
+                .get_chain(chain)
+                .context(format!("chain {chain} not found"))?
             {
                 AnyChainConfig::Evm(_) => {
                     let address = address.try_into()?;
 
                     match self
-                        .new_evm_client(chain_name)
+                        .new_evm_client(chain.id.clone())
                         .await?
                         .provider
                         .get_code_at(address)
@@ -150,7 +151,7 @@ impl CliContext {
                     }
                 }
                 AnyChainConfig::Cosmos(_) => self
-                    .new_cosmos_client(chain_name)
+                    .new_cosmos_client(chain.id.clone())
                     .await?
                     .querier
                     .contract_info(&address)

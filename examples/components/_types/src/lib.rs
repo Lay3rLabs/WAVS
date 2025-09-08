@@ -13,13 +13,8 @@ pub struct ChainTriggerLookupResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum CosmosQueryRequest {
-    BlockHeight {
-        chain_name: String,
-    },
-    Balance {
-        chain_name: String,
-        address: Address,
-    },
+    BlockHeight { chain: String },
+    Balance { chain: String, address: Address },
 }
 
 impl CosmosQueryRequest {

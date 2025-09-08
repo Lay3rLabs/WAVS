@@ -5,7 +5,7 @@ use wavs_engine::{
     bindings::aggregator::world::{host::LogLevel, wavs::aggregator::aggregator::AggregatorAction},
     worlds::aggregator::instance::AggregatorInstanceDepsBuilder,
 };
-use wavs_types::{Component, ComponentDigest, Packet, ServiceID, WorkflowID};
+use wavs_types::{Component, ComponentDigest, Packet, ServiceId, WorkflowId};
 
 use crate::helpers::service::make_service;
 
@@ -35,7 +35,7 @@ pub async fn execute_aggregator_component(
         fuel_limit: Some(u64::MAX),
         time_limit_seconds: Some(10),
         config: [
-            ("chain_name".to_string(), "31337".to_string()),
+            ("chain".to_string(), "evm:31337".to_string()),
             (
                 "service_handler".to_string(),
                 "0x0000000000000000000000000000000000000000".to_string(),
@@ -86,8 +86,8 @@ pub async fn execute_aggregator_component(
 
 #[allow(dead_code)]
 fn log_aggregator(
-    service_id: &ServiceID,
-    workflow_id: &WorkflowID,
+    service_id: &ServiceId,
+    workflow_id: &WorkflowId,
     digest: &ComponentDigest,
     level: LogLevel,
     message: String,

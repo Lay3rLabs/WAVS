@@ -9,7 +9,7 @@ use wasmtime_wasi::{
     DirPerms, FilePerms,
 };
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-use wavs_types::{AllowedHostPermission, Component, Service, WorkflowID};
+use wavs_types::{AllowedHostPermission, Component, Service, WorkflowId};
 
 use crate::{
     backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineError,
@@ -18,7 +18,7 @@ use crate::{
 
 pub struct AggregatorHostComponent {
     pub service: Service,
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     pub aggregator_component: Component,
     pub chain_configs: ChainConfigs,
     pub inner_log: HostComponentLogger,
@@ -31,7 +31,7 @@ pub struct AggregatorHostComponent {
 pub struct AggregatorInstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
     pub service: Service,
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     pub aggregator_component: Component,
     pub engine: &'a WTEngine,
     pub data_dir: P,

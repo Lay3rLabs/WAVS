@@ -47,7 +47,7 @@ fn test_exec_commands_parsing() {
                 "--component",
                 "test.wasm",
                 "--config",
-                "chain_name=31337",
+                "chain=evm:31337",
             ],
             "exec-aggregator",
         ),
@@ -74,7 +74,7 @@ fn test_exec_commands_parsing() {
                 assert_eq!(component, "test.wasm");
                 assert!(config.is_some());
                 let config_vec = config.unwrap();
-                assert!(config_vec.contains(&"chain_name=31337".to_string()));
+                assert!(config_vec.contains(&"chain=evm:31337".to_string()));
             }
             _ => panic!("Unexpected command type for test case: {:?}", args),
         }
@@ -84,7 +84,7 @@ fn test_exec_commands_parsing() {
 #[test]
 fn test_config_parsing_logic() {
     let config_values = vec![
-        "chain_name=31337",
+        "chain=evm:31337",
         "service_handler=0x1234567890123456789012345678901234567890",
         "another_key=another_value",
     ];
@@ -100,7 +100,7 @@ fn test_config_parsing_logic() {
         .map(|s| s.to_string())
         .collect::<Vec<_>>();
     assert_eq!(agg_config.len(), 3);
-    assert!(agg_config.contains(&"chain_name=31337".to_string()));
+    assert!(agg_config.contains(&"chain=evm:31337".to_string()));
 
     // Test empty config case
     let empty_config: Option<Vec<String>> = None;
@@ -259,7 +259,7 @@ fn test_exec_aggregator_with_shared_args() {
         "--component",
         "aggregator.wasm",
         "--config",
-        "chain_name=31337",
+        "chain=evm:31337",
         "--home",
         "/custom/home",
         "--data",
@@ -322,9 +322,9 @@ fn test_complex_json_config_values() {
                 "--input",
                 "test",
                 "--config",
-                r#"chain_names=["local-1","local-2","mainnet"]"#,
+                r#"chains=["evm:local-1","evm:local-2","evm:mainnet"]"#,
             ],
-            r#"chain_names=["local-1","local-2","mainnet"]"#,
+            r#"chains=["evm:local-1","evm:local-2","evm:mainnet"]"#,
         ),
         (
             vec![
@@ -375,7 +375,7 @@ fn test_multiple_complex_configs() {
         "--config",
         r#"resolver_config={"coin_market_cap_id":1,"threshold":1.0}"#,
         "--config",
-        r#"chain_names=["local-1","local-2"]"#,
+        r#"chains=["evm:local-1","evm:local-2"]"#,
         "--config",
         "simple_key=simple_value",
         "--config",
@@ -387,7 +387,7 @@ fn test_multiple_complex_configs() {
     assert!(
         config.contains(&r#"resolver_config={"coin_market_cap_id":1,"threshold":1.0}"#.to_string())
     );
-    assert!(config.contains(&r#"chain_names=["local-1","local-2"]"#.to_string()));
+    assert!(config.contains(&r#"chains=["evm:local-1","evm:local-2"]"#.to_string()));
     assert!(config.contains(&"simple_key=simple_value".to_string()));
     assert!(config.contains(&r#"nested_object={"level1":{"level2":{"value":42}}}"#.to_string()));
 }
@@ -408,8 +408,8 @@ fn test_config_formats() {
 
     // Test aggregator-specific config formats
     let aggregator_configs = vec![
-        ("chain_name", "ethereum"),
-        ("chain_name", "31337"),
+        ("chain", "evm:ethereum"),
+        ("chain", "evm:31337"),
         (
             "service_handler",
             "0x1234567890123456789012345678901234567890",
@@ -431,7 +431,7 @@ fn test_config_formats() {
 
         // Additional specific validations
         match key {
-            "chain_name" => assert!(!value.is_empty(), "Chain name should not be empty"),
+            "chain" => assert!(!value.is_empty(), "Chain name should not be empty"),
             "service_handler" => assert!(value.starts_with("0x") || !value.is_empty()),
             "url" => assert!(value.starts_with("http"), "URL should be valid"),
             _ => {} // Other keys already validated by validate_config_format

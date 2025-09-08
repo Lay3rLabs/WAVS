@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use wavs_types::{Service, Workflow, WorkflowID};
+use wavs_types::{Service, Workflow, WorkflowId};
 
 #[derive(Clone, Debug)]
 pub struct ServiceDeployment {
     pub service: Service,
-    pub submission_handlers: BTreeMap<WorkflowID, alloy_primitives::Address>,
+    pub submission_handlers: BTreeMap<WorkflowId, alloy_primitives::Address>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]

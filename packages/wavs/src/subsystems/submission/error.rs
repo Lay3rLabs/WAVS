@@ -1,6 +1,6 @@
 use thiserror::Error;
 use utils::error::EvmClientError;
-use wavs_types::{ChainName, EnvelopeError, ServiceID};
+use wavs_types::{ChainKey, EnvelopeError, ServiceId};
 
 use crate::services::ServicesError;
 
@@ -13,7 +13,7 @@ pub enum SubmissionError {
     #[error("missing mnemonic")]
     MissingMnemonic,
     #[error("missing key for service {service_id}")]
-    MissingServiceKey { service_id: ServiceID },
+    MissingServiceKey { service_id: ServiceId },
     #[error("faucet url: {0}")]
     FaucetUrl(url::ParseError),
     #[error("reqwest: {0}")]
@@ -27,7 +27,7 @@ pub enum SubmissionError {
     #[error("evm: {0}")]
     EVM(anyhow::Error),
     #[error("missing EVM chain for {0}")]
-    MissingEvmChain(ChainName),
+    MissingEvmChain(ChainKey),
     #[error("chain is not an EVM chain")]
     NotEvmChain,
     #[error("cross-chain submissions are not supported yet")]
@@ -49,11 +49,11 @@ pub enum SubmissionError {
     #[error("failed to submit to cosmos: {0}")]
     FailedToSubmitCosmos(anyhow::Error),
     #[error("missing EVM signer for service {0}")]
-    MissingEvmSigner(ServiceID),
+    MissingEvmSigner(ServiceId),
     #[error("failed to create EVM signer for service {0}: {1:?}")]
-    FailedToCreateEvmSigner(ServiceID, anyhow::Error),
+    FailedToCreateEvmSigner(ServiceId, anyhow::Error),
     #[error("missing EVM signing client for chain {0}")]
-    MissingEvmSendingClient(ChainName),
+    MissingEvmSendingClient(ChainKey),
     #[error("envelope {0:?}")]
     Envelope(#[from] EnvelopeError),
     #[error("services {0:?}")]

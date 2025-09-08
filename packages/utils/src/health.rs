@@ -1,31 +1,33 @@
 use alloy_primitives::U256;
 use alloy_provider::Provider;
 use alloy_rpc_types_eth::SyncStatus;
+use anyhow::Context;
 use thiserror::Error;
-use wavs_types::ChainName;
 
 use crate::{
     config::{ChainConfigs, CosmosChainConfig, EvmChainConfig, EvmChainConfigExt},
     error::EvmClientError,
     evm_client::EvmQueryClient,
 };
-use wavs_types::AnyChainConfig;
+use wavs_types::{AnyChainConfig, ChainKey};
 
-pub async fn health_check_chains_query<'a>(
-    chain_configs: &ChainConfigs,
-    chain_names: &'a [ChainName],
-) -> Result<'a, ()> {
-    for chain_name in chain_names {
-        let chain = chain_configs.get_chain(chain_name).unwrap().unwrap();
+pub async fn health_check_chains_query(
+    configs: &ChainConfigs,
+    keys: &[ChainKey],
+) -> anyhow::Result<()> {
+    for key in keys {
+        let config = configs
+            .get_chain(key)
+            .context(format!("Failed to get config for chain key: {key}"))?;
 
-        match chain {
+        match config {
             AnyChainConfig::Evm(config) => {
-                check_evm_chain_health_query(chain_name, config).await?;
-                tracing::info!("Evm chain [{chain_name}] is healthy");
+                check_evm_chain_health_query(key.clone(), config).await?;
+                tracing::info!("Evm chain [{key}] is healthy");
             }
             AnyChainConfig::Cosmos(config) => {
-                check_cosmos_chain_health_query(chain_name, config).await?;
-                tracing::info!("Cosmos chain [{chain_name}] is healthy");
+                check_cosmos_chain_health_query(key.clone(), config).await?;
+                tracing::info!("Cosmos chain [{key}] is healthy");
             }
         }
     }
@@ -33,46 +35,46 @@ pub async fn health_check_chains_query<'a>(
 }
 
 async fn check_evm_chain_health_query(
-    chain_name: &'_ ChainName,
+    key: ChainKey,
     config: EvmChainConfig,
-) -> Result<'_, ()> {
+) -> Result<(), HealthCheckError> {
     let endpoint = config
         .query_client_endpoint()
-        .map_err(|e| HealthCheckError::EvmClientError(chain_name, e))?;
+        .map_err(|e| HealthCheckError::EvmClientError(key.clone(), e))?;
     let client = EvmQueryClient::new(endpoint)
         .await
-        .map_err(|e| HealthCheckError::EvmClientError(chain_name, e))?;
+        .map_err(|e| HealthCheckError::EvmClientError(key.clone(), e))?;
 
     // Check block number
     client
         .provider
         .get_block_number()
         .await
-        .map_err(|e| HealthCheckError::EvmBlockNumber(chain_name, e.to_string()))?;
+        .map_err(|e| HealthCheckError::EvmBlockNumber(key.clone(), e.to_string()))?;
 
     // Check chain ID
     client
         .provider
         .get_chain_id()
         .await
-        .map_err(|e| HealthCheckError::EvmChainId(chain_name, e.to_string()))?;
+        .map_err(|e| HealthCheckError::EvmChainId(key.clone(), e.to_string()))?;
 
     // Check gas price
     client
         .provider
         .get_gas_price()
         .await
-        .map_err(|e| HealthCheckError::EvmGasPrice(chain_name, e.to_string()))?;
+        .map_err(|e| HealthCheckError::EvmGasPrice(key.clone(), e.to_string()))?;
 
     // Check if the node is syncing
     let syncing_status = client
         .provider
         .syncing()
         .await
-        .map_err(|e| HealthCheckError::EvmSyncingStatus(chain_name, e.to_string()))?;
+        .map_err(|e| HealthCheckError::EvmSyncingStatus(key.clone(), e.to_string()))?;
     if let SyncStatus::Info(sync_info) = syncing_status {
         return Err(HealthCheckError::EvmStillSyncing(
-            chain_name,
+            key,
             sync_info.current_block,
         ));
     }
@@ -81,56 +83,54 @@ async fn check_evm_chain_health_query(
 }
 
 async fn check_cosmos_chain_health_query(
-    chain_name: &'_ ChainName,
+    key: ChainKey,
     config: CosmosChainConfig,
-) -> Result<'_, ()> {
+) -> Result<(), HealthCheckError> {
     let client = layer_climb::querier::QueryClient::new(config.to_chain_config(), None)
         .await
-        .map_err(|e| HealthCheckError::CosmosCreateClient(chain_name, e))?;
+        .map_err(|e| HealthCheckError::CosmosCreateClient(key.clone(), e))?;
 
     // Check block height
     client
         .block_height()
         .await
-        .map_err(|e| HealthCheckError::CosmosBlockHeight(chain_name, e))?;
+        .map_err(|e| HealthCheckError::CosmosBlockHeight(key.clone(), e))?;
 
     // Check node info
     client
         .node_info()
         .await
-        .map_err(|e| HealthCheckError::CosmosNodeInfo(chain_name, e))?;
+        .map_err(|e| HealthCheckError::CosmosNodeInfo(key.clone(), e))?;
 
     Ok(())
 }
 
-type Result<'a, T> = std::result::Result<T, HealthCheckError<'a>>;
-
 #[derive(Error, Debug)]
-pub enum HealthCheckError<'a> {
-    #[error("[evm.{0}] {1:?}")]
-    EvmClientError(&'a ChainName, EvmClientError),
+pub enum HealthCheckError {
+    #[error("[{0}] {1:?}")]
+    EvmClientError(ChainKey, EvmClientError),
 
-    #[error("[evm.{0}] Failed to get block number: {1}")]
-    EvmBlockNumber(&'a ChainName, String),
+    #[error("[{0}] Failed to get block number: {1}")]
+    EvmBlockNumber(ChainKey, String),
 
-    #[error("[evm.{0}] Failed to get chain ID: {1}")]
-    EvmChainId(&'a ChainName, String),
+    #[error("[{0}] Failed to get chain ID: {1}")]
+    EvmChainId(ChainKey, String),
 
-    #[error("[evm.{0}] Failed to get gas price: {1}")]
-    EvmGasPrice(&'a ChainName, String),
+    #[error("[{0}] Failed to get gas price: {1}")]
+    EvmGasPrice(ChainKey, String),
 
-    #[error("[evm.{0}] Failed to get syncing status: {1}")]
-    EvmSyncingStatus(&'a ChainName, String),
+    #[error("[{0}] Failed to get syncing status: {1}")]
+    EvmSyncingStatus(ChainKey, String),
 
-    #[error("[evm.{0}] Chain is still syncing: {1}")]
-    EvmStillSyncing(&'a ChainName, U256),
+    #[error("[{0}] Chain is still syncing: {1}")]
+    EvmStillSyncing(ChainKey, U256),
 
-    #[error("[cosmos.{0}] create client: {1:?}")]
-    CosmosCreateClient(&'a ChainName, anyhow::Error),
+    #[error("[{0}] create client: {1:?}")]
+    CosmosCreateClient(ChainKey, anyhow::Error),
 
-    #[error("[cosmos.{0}] block height: {1:?}")]
-    CosmosBlockHeight(&'a ChainName, anyhow::Error),
+    #[error("[{0}] block height: {1:?}")]
+    CosmosBlockHeight(ChainKey, anyhow::Error),
 
-    #[error("[cosmos.{0}] node info: {1:?}")]
-    CosmosNodeInfo(&'a ChainName, anyhow::Error),
+    #[error("[{0}] node info: {1:?}")]
+    CosmosNodeInfo(ChainKey, anyhow::Error),
 }

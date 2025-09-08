@@ -11,11 +11,11 @@ use wavs::{
     dispatcher::DispatcherCommand, services::Services, subsystems::trigger::TriggerManager,
 };
 use wavs_benchmark_common::app_context::APP_CONTEXT;
-use wavs_types::{ChainName, Trigger, TriggerConfig};
+use wavs_types::{ChainKey, Trigger, TriggerConfig};
 
 // This is a convenience struct to initialize stuff and make it easier to pass around
 pub struct Setup {
-    pub chain_names: Vec<ChainName>,
+    pub chains: Vec<ChainKey>,
     pub trigger_manager: TriggerManager,
     pub dispatcher_command_receiver: Mutex<Option<mpsc::Receiver<DispatcherCommand>>>,
     pub config: SetupConfig,
@@ -65,25 +65,25 @@ impl Setup {
             TriggerManager::new(&config, metrics.wavs.trigger, Services::new(db_storage)).unwrap();
         let receiver = trigger_manager.start(APP_CONTEXT.clone()).unwrap();
 
-        let mut chain_names = Vec::with_capacity(setup_config.n_chains as usize);
+        let mut chains = Vec::with_capacity(setup_config.n_chains as usize);
 
         let mut trigger_id = 1;
         for chain in 1..=setup_config.n_chains {
-            let chain_name = ChainName::new(format!("wavs-benchmark-{chain}")).unwrap();
+            let chain = ChainKey::new(format!("evm:wavs-benchmark-{chain}")).unwrap();
             for block in 1..=setup_config.n_blocks {
                 for _ in 0..setup_config.triggers_per_block {
                     trigger_manager
                         .get_lookup_maps()
                         .add_trigger(TriggerConfig {
-                            service_id: wavs_types::ServiceID::hash(format!(
+                            service_id: wavs_types::ServiceId::hash(format!(
                                 "wavs-benchmark-{trigger_id}"
                             )),
-                            workflow_id: wavs_types::WorkflowID::new(format!(
+                            workflow_id: wavs_types::WorkflowId::new(format!(
                                 "wavs-benchmark-{trigger_id}"
                             ))
                             .unwrap(),
                             trigger: Trigger::BlockInterval {
-                                chain_name: chain_name.clone(),
+                                chain: chain.clone(),
                                 n_blocks: NonZero::new(setup_config.n_blocks as u32).unwrap(),
                                 start_block: Some(NonZero::new(block).unwrap()),
                                 end_block: None,
@@ -95,13 +95,13 @@ impl Setup {
                 }
             }
 
-            chain_names.push(chain_name);
+            chains.push(chain);
         }
 
         Arc::new(Setup {
             trigger_manager,
             dispatcher_command_receiver: Mutex::new(Some(receiver)),
-            chain_names,
+            chains,
             config: setup_config,
             _data_dir: data_dir,
         })

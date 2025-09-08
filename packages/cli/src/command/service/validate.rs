@@ -7,12 +7,12 @@ use layer_climb::{
 use reqwest::Client;
 use std::collections::HashMap;
 use wavs_types::{
-    Aggregator, ChainName, EvmContractSubmission, ServiceManager, Trigger, WorkflowID,
+    Aggregator, ChainKey, EvmContractSubmission, ServiceManager, Trigger, WorkflowId,
 };
 
 /// Validate a workflow trigger using a Cosmos query client
 pub async fn validate_workflow_trigger(
-    workflow_id: &WorkflowID,
+    workflow_id: &WorkflowId,
     trigger: &Trigger,
     query_client: &CosmosQueryClient,
     errors: &mut Vec<String>,
@@ -20,7 +20,7 @@ pub async fn validate_workflow_trigger(
     match trigger {
         Trigger::CosmosContractEvent {
             address,
-            chain_name,
+            chain,
             event_type,
         } => {
             // Use same validation as in set_cosmos_trigger
@@ -30,7 +30,7 @@ pub async fn validate_workflow_trigger(
             {
                 errors.push(format!(
                     "Workflow '{}' has an invalid Cosmos address format for chain {}: {}",
-                    workflow_id, chain_name, err
+                    workflow_id, chain, err
                 ));
             }
 
@@ -99,11 +99,11 @@ pub async fn validate_registry_availability(registry_url: &str, errors: &mut Vec
 /// Validation helper to check if contracts referenced in triggers exist on-chain
 pub async fn validate_contracts_exist(
     service_name: &str,
-    triggers: Vec<(&WorkflowID, &Trigger)>,
-    aggregators: Vec<(&WorkflowID, &Aggregator)>,
+    triggers: Vec<(&WorkflowId, &Trigger)>,
+    aggregators: Vec<(&WorkflowId, &Aggregator)>,
     service_manager: Option<&ServiceManager>,
-    evm_providers: &HashMap<ChainName, RootProvider>,
-    cosmos_clients: &HashMap<ChainName, CosmosQueryClient>,
+    evm_providers: &HashMap<ChainKey, RootProvider>,
+    cosmos_clients: &HashMap<ChainKey, CosmosQueryClient>,
     errors: &mut Vec<String>,
 ) -> Result<()> {
     // Track which contracts we've already checked to avoid duplicate checks
@@ -113,15 +113,11 @@ pub async fn validate_contracts_exist(
     // Check all trigger contracts
     for (workflow_id, trigger) in triggers {
         match trigger {
-            Trigger::EvmContractEvent {
-                address,
-                chain_name,
-                ..
-            } => {
+            Trigger::EvmContractEvent { address, chain, .. } => {
                 // Check if we have a provider for this chain
-                if let Some(provider) = evm_providers.get(chain_name) {
+                if let Some(provider) = evm_providers.get(chain) {
                     // Only check each contract once per chain
-                    let key = (address.to_string(), chain_name.to_string());
+                    let key = (address.to_string(), chain.to_string());
                     if let std::collections::hash_map::Entry::Vacant(e) =
                         checked_evm_contracts.entry(key)
                     {
@@ -142,19 +138,15 @@ pub async fn validate_contracts_exist(
                 } else {
                     errors.push(format!(
                         "Cannot check EVM contract for workflow {} - no provider configured for chain {}",
-                        workflow_id, chain_name
+                        workflow_id, chain
                     ));
                 }
             }
-            Trigger::CosmosContractEvent {
-                address,
-                chain_name,
-                ..
-            } => {
+            Trigger::CosmosContractEvent { address, chain, .. } => {
                 // Check if we have a query client for this chain
-                if let Some(client) = cosmos_clients.get(chain_name) {
+                if let Some(client) = cosmos_clients.get(chain) {
                     // Only check each contract once per chain
-                    let key = (address.to_string(), chain_name.to_string());
+                    let key = (address.to_string(), chain.to_string());
                     if let std::collections::hash_map::Entry::Vacant(e) =
                         checked_cosmos_contracts.entry(key)
                     {
@@ -176,7 +168,7 @@ pub async fn validate_contracts_exist(
                 } else {
                     errors.push(format!(
                         "Cannot check Cosmos contract for workflow {} - no client configured for chain {}",
-                        workflow_id, chain_name
+                        workflow_id, chain
                     ));
                 }
             }
@@ -188,15 +180,11 @@ pub async fn validate_contracts_exist(
     // Check all aggregators
     for (workflow_id, aggregator) in aggregators {
         match aggregator {
-            Aggregator::Evm(EvmContractSubmission {
-                chain_name,
-                address,
-                ..
-            }) => {
+            Aggregator::Evm(EvmContractSubmission { chain, address, .. }) => {
                 // Check if we have a provider for this chain
-                if let Some(provider) = evm_providers.get(chain_name) {
+                if let Some(provider) = evm_providers.get(chain) {
                     // Only check each contract once per chain
-                    let key = (address.to_string(), chain_name.to_string());
+                    let key = (address.to_string(), chain.to_string());
                     if let std::collections::hash_map::Entry::Vacant(e) =
                         checked_evm_contracts.entry(key)
                     {
@@ -217,7 +205,7 @@ pub async fn validate_contracts_exist(
                 } else {
                     errors.push(format!(
                         "Cannot check EVM contract for workflow {} submit - no provider configured for chain {}",
-                        workflow_id, chain_name
+                        workflow_id, chain
                     ));
                 }
             }
@@ -226,12 +214,9 @@ pub async fn validate_contracts_exist(
 
     if let Some(service_manager) = service_manager {
         match service_manager {
-            ServiceManager::Evm {
-                chain_name,
-                address,
-            } => {
-                if let Some(provider) = evm_providers.get(chain_name) {
-                    let key = (address.to_string(), chain_name.to_string());
+            ServiceManager::Evm { chain, address } => {
+                if let Some(provider) = evm_providers.get(chain) {
+                    let key = (address.to_string(), chain.to_string());
                     if let std::collections::hash_map::Entry::Vacant(e) =
                         checked_evm_contracts.entry(key)
                     {
@@ -251,7 +236,7 @@ pub async fn validate_contracts_exist(
                 } else {
                     errors.push(format!(
                         "Cannot check service manager contract - no provider configured for chain {}",
-                        chain_name
+                        chain
                     ));
                 }
             }

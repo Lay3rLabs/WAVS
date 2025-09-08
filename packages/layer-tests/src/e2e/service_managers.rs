@@ -10,7 +10,7 @@ use utils::test_utils::{
 };
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
-    ChainName, Service, ServiceID, ServiceManager, ServiceStatus, SigningKeyResponse, Submit,
+    ChainKey, Service, ServiceId, ServiceManager, ServiceStatus, SigningKeyResponse, Submit,
 };
 
 use crate::deployment::ServiceDeployment;
@@ -26,8 +26,8 @@ use crate::e2e::{
 #[derive(Clone)]
 pub struct ServiceManagers {
     configs: Arc<Configs>,
-    lookup: Arc<HashMap<String, (MockServiceManager, ChainName)>>,
-    aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<(ServiceID, String)>>>,
+    lookup: Arc<HashMap<String, (MockServiceManager, ChainKey)>>,
+    aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<(ServiceId, String)>>>,
 }
 
 impl ServiceManagers {
@@ -64,9 +64,9 @@ impl ServiceManagers {
     }
 
     pub fn get_service_manager(&self, test_name: &str) -> ServiceManager {
-        let (mock_service_manager, chain_name) = self.lookup.get(test_name).unwrap();
+        let (mock_service_manager, chain) = self.lookup.get(test_name).unwrap();
         ServiceManager::Evm {
-            chain_name: chain_name.clone(),
+            chain: chain.clone(),
             address: mock_service_manager.address(),
         }
     }
@@ -125,9 +125,9 @@ impl ServiceManagers {
         let mut futures = Vec::new();
 
         for test in registry.list_all() {
-            let (mock_service_manager, chain_name) = self.lookup.get(&test.name).unwrap();
+            let (mock_service_manager, chain) = self.lookup.get(&test.name).unwrap();
             let service_manager = ServiceManager::Evm {
-                chain_name: chain_name.clone(),
+                chain: chain.clone(),
                 address: mock_service_manager.address(),
             };
 
@@ -200,9 +200,9 @@ impl ServiceManagers {
         let mut futures = Vec::new();
 
         for test in registry.list_all() {
-            let (mock_service_manager, chain_name) = self.lookup.get(&test.name).unwrap();
+            let (mock_service_manager, chain) = self.lookup.get(&test.name).unwrap();
             let service_manager = ServiceManager::Evm {
-                chain_name: chain_name.clone(),
+                chain: chain.clone(),
                 address: mock_service_manager.address(),
             };
 

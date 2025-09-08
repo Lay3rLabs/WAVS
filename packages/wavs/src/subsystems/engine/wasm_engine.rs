@@ -11,7 +11,7 @@ use wavs_engine::{
     worlds::operator::instance::InstanceDepsBuilder,
 };
 use wavs_types::{
-    ComponentDigest, ComponentSource, Service, ServiceID, TriggerAction, WasmResponse, WorkflowID,
+    ComponentDigest, ComponentSource, Service, ServiceId, TriggerAction, WasmResponse, WorkflowId,
 };
 
 use utils::storage::CAStorage;
@@ -113,8 +113,8 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         trigger_action: TriggerAction,
     ) -> Result<Option<WasmResponse>, EngineError> {
         fn log(
-            service_id: &ServiceID,
-            workflow_id: &WorkflowID,
+            service_id: &ServiceId,
+            workflow_id: &WorkflowId,
             digest: &ComponentDigest,
             level: wavs_engine::bindings::operator::world::host::LogLevel,
             message: String,
@@ -216,7 +216,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Engine", service_id = %service_id))]
-    pub fn remove_storage(&self, service_id: &ServiceID) {
+    pub fn remove_storage(&self, service_id: &ServiceId) {
         let dir_path = self.engine.app_data_dir.join(service_id.to_string());
 
         if dir_path.exists() {
@@ -255,7 +255,7 @@ pub mod tests {
 
     use utils::{storage::memory::MemoryStorage, test_utils::address::rand_address_evm};
     use wavs_types::{
-        ChainName, ServiceID, Submit, Trigger, TriggerConfig, TriggerData, Workflow, WorkflowID,
+        ServiceId, Submit, Trigger, TriggerConfig, TriggerData, Workflow, WorkflowId,
     };
 
     use utils::test_utils::{
@@ -358,21 +358,17 @@ pub mod tests {
             .unwrap();
 
         let workflow = Workflow {
-            trigger: Trigger::evm_contract_event(
-                rand_address_evm(),
-                ChainName::new("evm").unwrap(),
-                rand_event_evm(),
-            ),
+            trigger: Trigger::evm_contract_event(rand_address_evm(), "evm:anvil", rand_event_evm()),
             component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
             submit: Submit::None,
         };
 
         let service = wavs_types::Service {
             name: "Exec Service".to_string(),
-            workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
+            workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -385,7 +381,7 @@ pub mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id,
-                        workflow_id: WorkflowID::default(),
+                        workflow_id: WorkflowId::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
@@ -429,10 +425,10 @@ pub mod tests {
 
         let service = wavs_types::Service {
             name: "Exec Service".to_string(),
-            workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
+            workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -446,7 +442,7 @@ pub mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: service_id.clone(),
-                        workflow_id: WorkflowID::default(),
+                        workflow_id: WorkflowId::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"configvar:foo"#),
@@ -463,7 +459,7 @@ pub mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: service_id.clone(),
-                        workflow_id: WorkflowID::default(),
+                        workflow_id: WorkflowId::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST"#),
@@ -480,7 +476,7 @@ pub mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id,
-                        workflow_id: WorkflowID::default(),
+                        workflow_id: WorkflowId::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#),
@@ -525,10 +521,10 @@ pub mod tests {
 
         let service = wavs_types::Service {
             name: "Exec Service".to_string(),
-            workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
+            workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -542,7 +538,7 @@ pub mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id,
-                        workflow_id: WorkflowID::default(),
+                        workflow_id: WorkflowId::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
@@ -575,7 +571,7 @@ pub mod tests {
         );
 
         // Create a service ID
-        let service_id = ServiceID::hash(b"test-service");
+        let service_id = ServiceId::hash(b"test-service");
 
         // Create a directory and a test file for the service
         let service_dir = app_data_path.join(service_id.to_string());
@@ -595,7 +591,7 @@ pub mod tests {
         assert!(!service_dir.exists());
 
         // Test non-existent directory case
-        let nonexistent_id = ServiceID::hash("nonexistent");
+        let nonexistent_id = ServiceId::hash("nonexistent");
         let nonexistent_dir = app_data_path.join(nonexistent_id.to_string());
 
         // Verify directory doesn't exist
@@ -648,10 +644,10 @@ pub mod tests {
 
         let service = wavs_types::Service {
             name: "Exec Service".to_string(),
-            workflows: BTreeMap::from([(WorkflowID::default(), workflow.clone())]),
+            workflows: BTreeMap::from([(WorkflowId::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -664,7 +660,7 @@ pub mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id: service_id.clone(),
-                        workflow_id: WorkflowID::default(),
+                        workflow_id: WorkflowId::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
@@ -685,10 +681,10 @@ pub mod tests {
 
         let service = wavs_types::Service {
             name: "Exec Service".to_string(),
-            workflows: BTreeMap::from([(WorkflowID::default(), workflow.clone())]),
+            workflows: BTreeMap::from([(WorkflowId::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -701,7 +697,7 @@ pub mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id,
-                        workflow_id: WorkflowID::default(),
+                        workflow_id: WorkflowId::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
@@ -722,10 +718,10 @@ pub mod tests {
 
         let service = wavs_types::Service {
             name: "Exec Service".to_string(),
-            workflows: BTreeMap::from([(WorkflowID::default(), workflow.clone())]),
+            workflows: BTreeMap::from([(WorkflowId::default(), workflow.clone())]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -738,7 +734,7 @@ pub mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id,
-                        workflow_id: WorkflowID::default(),
+                        workflow_id: WorkflowId::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
@@ -764,10 +760,10 @@ pub mod tests {
 
         let service = wavs_types::Service {
             name: "Exec Service".to_string(),
-            workflows: BTreeMap::from([(WorkflowID::default(), workflow)]),
+            workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "evm".parse().unwrap(),
+                chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
         };
@@ -780,7 +776,7 @@ pub mod tests {
                 TriggerAction {
                     config: TriggerConfig {
                         service_id,
-                        workflow_id: WorkflowID::default(),
+                        workflow_id: WorkflowId::default(),
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),

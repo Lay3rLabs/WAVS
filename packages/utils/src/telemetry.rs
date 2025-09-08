@@ -7,6 +7,7 @@ use opentelemetry_sdk::{
     trace::{self, Sampler, SdkTracerProvider},
 };
 use tracing_subscriber::layer::SubscriberExt;
+use wavs_types::ChainKey;
 
 pub fn setup_tracing(
     collector: &str,
@@ -340,11 +341,11 @@ impl TriggerMetrics {
             .add(1, &[KeyValue::new("error", error.to_owned())]);
     }
 
-    pub fn record_trigger_fired(&self, chain: &str, trigger_type: &str) {
+    pub fn record_trigger_fired(&self, chain: Option<&ChainKey>, trigger_type: &str) {
         self.triggers_fired.add(
             1,
             &[
-                KeyValue::new("chain", chain.to_owned()),
+                KeyValue::new("chain", chain.map(|c| c.to_string()).unwrap_or_default()),
                 KeyValue::new("type", trigger_type.to_owned()),
             ],
         );

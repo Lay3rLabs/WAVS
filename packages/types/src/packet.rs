@@ -1,7 +1,7 @@
 pub use crate::solidity_types::Envelope;
 use crate::{
     Service, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, TriggerAction,
-    WorkflowID,
+    WorkflowId,
 };
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
 use alloy_signer::Signer;
@@ -18,7 +18,7 @@ use utoipa::ToSchema;
 #[serde(rename_all = "snake_case")]
 pub struct Packet {
     pub service: Service,
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     #[schema(value_type  = Object)]
     pub envelope: Envelope,
     pub signature: EnvelopeSignature,

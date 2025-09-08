@@ -5,7 +5,7 @@ use crate::service_json::Json;
 use super::*;
 use alloy_primitives::address;
 use alloy_primitives::hex;
-use layer_climb::prelude::{ChainConfig, ChainId};
+use layer_climb::prelude::ChainConfig;
 use layer_climb::querier::QueryClient as CosmosQueryClient;
 use tempfile::tempdir;
 use utils::init_tracing_tests;
@@ -74,7 +74,7 @@ async fn test_workflow_component_operations() {
     assert_eq!(init_result.file_path, file_path);
 
     // Need to have a valid workflow before we can work on its component
-    let workflow_id = WorkflowID::new("workflow-1").unwrap();
+    let workflow_id = WorkflowId::new("workflow-1").unwrap();
     add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
     // Test adding first component using Digest source
@@ -108,7 +108,7 @@ async fn test_workflow_component_operations() {
         .is_set());
 
     // Test adding second component with Digest source
-    let workflow_id_2 = WorkflowID::new("workflow-2").unwrap();
+    let workflow_id_2 = WorkflowId::new("workflow-2").unwrap();
     add_workflow(&file_path, Some(workflow_id_2.clone())).unwrap();
 
     let second_add_result = update_workflow_component(
@@ -255,7 +255,7 @@ async fn test_workflow_component_operations() {
     ));
 
     // Test error handling for permissions update with non-existent component
-    let non_existent_id = WorkflowID::new("does-not-exist").unwrap();
+    let non_existent_id = WorkflowId::new("does-not-exist").unwrap();
     let error_permissions = update_workflow_component(
         &file_path,
         non_existent_id.clone(),
@@ -274,7 +274,7 @@ async fn test_workflow_component_operations() {
 
     // Test adding third component with Digest source
     // Need to have a valid workflow before we can work on its component
-    let workflow_id_3 = WorkflowID::new("workflow-3").unwrap();
+    let workflow_id_3 = WorkflowId::new("workflow-3").unwrap();
     add_workflow(&file_path, Some(workflow_id_3.clone())).unwrap();
 
     let third_add_result = update_workflow_component(
@@ -633,7 +633,7 @@ fn test_workflow_operations() {
     init_service(&file_path, "Test Service".to_string()).unwrap();
 
     // Test adding a workflow with specific ID
-    let workflow_id = WorkflowID::new("workflow-123").unwrap();
+    let workflow_id = WorkflowId::new("workflow-123").unwrap();
     let add_result = add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
     // Verify add result
@@ -690,7 +690,7 @@ fn test_workflow_operations() {
     assert_eq!(service_after_delete.workflows.len(), 1); // One workflow remaining
 
     // Test error handling for non-existent workflow
-    let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
+    let non_existent_workflow = WorkflowId::new("does-not-exist").unwrap();
     let workflow_error = delete_workflow(&file_path, non_existent_workflow.clone());
 
     // Verify it returns an error with appropriate message
@@ -732,7 +732,7 @@ async fn test_workflow_trigger_operations() {
     init_service(&file_path, "Test Service".to_string()).unwrap();
 
     // Add a workflow
-    let workflow_id = WorkflowID::new("workflow-123").unwrap();
+    let workflow_id = WorkflowId::new("workflow-123").unwrap();
     add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
     // Initial workflow should have manual trigger (default when created)
@@ -748,9 +748,9 @@ async fn test_workflow_trigger_operations() {
     }
 
     // Create a mock CosmosQueryClient for testing
-    let cosmos_chain_name = ChainName::from_str("cosmoshub-4").unwrap();
+    let cosmos_chain = ChainKey::from_str("cosmos:cosmoshub-4").unwrap();
     let chain_config = ChainConfig {
-        chain_id: ChainId::new(cosmos_chain_name.clone()),
+        chain_id: cosmos_chain.id.clone().into(),
         rpc_endpoint: Some("https://rpc.cosmos.network".to_string()),
         grpc_endpoint: Some("https://grpc.cosmos.network:443".to_string()),
         grpc_web_endpoint: Some("https://grpc-web.cosmos.network".to_string()),
@@ -773,7 +773,7 @@ async fn test_workflow_trigger_operations() {
         &file_path,
         workflow_id.clone(),
         cosmos_address.clone(),
-        cosmos_chain_name.clone(),
+        cosmos_chain.clone(),
         cosmos_event.clone(),
     )
     .unwrap();
@@ -782,12 +782,12 @@ async fn test_workflow_trigger_operations() {
     assert_eq!(cosmos_result.workflow_id, workflow_id);
     if let Trigger::CosmosContractEvent {
         address,
-        chain_name,
+        chain,
         event_type,
     } = &cosmos_result.trigger
     {
         assert_eq!(address.to_string(), cosmos_address);
-        assert_eq!(chain_name, &cosmos_chain_name);
+        assert_eq!(chain, &cosmos_chain);
         assert_eq!(event_type, &cosmos_event);
     } else {
         panic!("Expected CosmosContractEvent trigger");
@@ -802,12 +802,12 @@ async fn test_workflow_trigger_operations() {
     if let TriggerJson::Trigger(trigger) = &cosmos_workflow.trigger {
         if let Trigger::CosmosContractEvent {
             address,
-            chain_name,
+            chain,
             event_type,
         } = trigger
         {
             assert_eq!(address.to_string(), cosmos_address);
-            assert_eq!(chain_name, &cosmos_chain_name);
+            assert_eq!(chain, &cosmos_chain);
             assert_eq!(event_type, &cosmos_event);
         } else {
             panic!("Expected CosmosContractEvent trigger in service");
@@ -823,7 +823,7 @@ async fn test_workflow_trigger_operations() {
         &file_path,
         workflow_id.clone(),
         neutron_address,
-        cosmos_chain_name.clone(),
+        cosmos_chain.clone(),
         cosmos_event.clone(),
     );
 
@@ -836,7 +836,7 @@ async fn test_workflow_trigger_operations() {
 
     // Test setting EVM trigger
     let evm_address = address!("0x00000000219ab540356cBB839Cbe05303d7705Fa");
-    let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
+    let evm_chain = ChainKey::from_str("evm:1").unwrap();
     let evm_event_hash =
         "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef".to_string();
 
@@ -853,12 +853,12 @@ async fn test_workflow_trigger_operations() {
     assert_eq!(evm_result.workflow_id, workflow_id);
     if let Trigger::EvmContractEvent {
         address,
-        chain_name,
+        chain,
         event_hash,
     } = &evm_result.trigger
     {
         assert_eq!(*address, evm_address);
-        assert_eq!(chain_name, &evm_chain);
+        assert_eq!(chain, &evm_chain);
         // For event_hash we'll need to check the bytes match what we expect
         let expected_hash_bytes = hex::decode(evm_event_hash.trim_start_matches("0x")).unwrap();
         assert_eq!(event_hash.as_slice(), &expected_hash_bytes[..]);
@@ -875,12 +875,12 @@ async fn test_workflow_trigger_operations() {
     if let TriggerJson::Trigger(trigger) = &evm_workflow.trigger {
         if let Trigger::EvmContractEvent {
             address,
-            chain_name,
+            chain,
             event_hash,
         } = trigger
         {
             assert_eq!(*address, evm_address);
-            assert_eq!(chain_name, &evm_chain);
+            assert_eq!(chain, &evm_chain);
             let expected_hash_bytes = hex::decode(evm_event_hash.trim_start_matches("0x")).unwrap();
             assert_eq!(event_hash.as_slice(), &expected_hash_bytes[..]);
         } else {
@@ -891,7 +891,7 @@ async fn test_workflow_trigger_operations() {
     }
 
     // Test error handling for non-existent workflow
-    let non_existent_workflow = WorkflowID::new("does-not-exist").unwrap();
+    let non_existent_workflow = WorkflowId::new("does-not-exist").unwrap();
     let trigger_error = set_evm_trigger(
         &file_path,
         non_existent_workflow.clone(),
@@ -913,7 +913,7 @@ async fn test_workflow_trigger_operations() {
         &file_path,
         workflow_id.clone(),
         invalid_cosmos_address,
-        cosmos_chain_name.clone(),
+        cosmos_chain.clone(),
         cosmos_event.clone(),
     );
     assert!(invalid_cosmos_result.is_err());
@@ -923,7 +923,7 @@ async fn test_workflow_trigger_operations() {
         .contains("invalid bech32"));
 
     // Test setting BlockInterval trigger
-    let interval_chain = ChainName::from_str("polygon-mainnet").unwrap();
+    let interval_chain = ChainKey::from_str("evm:polygon-mainnet").unwrap();
     let n_blocks = NonZeroU32::new(10).unwrap();
 
     let block_interval_result = set_block_interval_trigger(
@@ -938,13 +938,13 @@ async fn test_workflow_trigger_operations() {
 
     assert_eq!(block_interval_result.workflow_id, workflow_id);
     if let Trigger::BlockInterval {
-        chain_name,
+        chain,
         n_blocks: blocks,
         start_block,
         end_block,
     } = &block_interval_result.trigger
     {
-        assert_eq!(chain_name, &interval_chain);
+        assert_eq!(chain, &interval_chain);
         assert_eq!(*blocks, n_blocks);
         assert_eq!(*start_block, Some(NonZeroU64::new(42).unwrap()));
         assert_eq!(*end_block, None);
@@ -987,8 +987,8 @@ async fn test_service_validation() {
     let temp_dir = tempdir().unwrap();
 
     // Create common test objects
-    let workflow_id = WorkflowID::new("workflow-123").unwrap();
-    let evm_chain = ChainName::from_str("ethereum-mainnet").unwrap();
+    let workflow_id = WorkflowId::new("workflow-123").unwrap();
+    let evm_chain = ChainKey::from_str("evm:1").unwrap();
     let evm_address = alloy_primitives::Address::parse_checksummed(
         "0x00000000219ab540356cBB839Cbe05303d7705Fa",
         None,
@@ -1005,7 +1005,7 @@ async fn test_service_validation() {
     // Create a valid trigger and submit for the workflow
     let trigger = Trigger::EvmContractEvent {
         address: evm_address,
-        chain_name: evm_chain.clone(),
+        chain: evm_chain.clone(),
         event_hash: wavs_types::ByteArray::new([1u8; 32]),
     };
 
@@ -1016,7 +1016,7 @@ async fn test_service_validation() {
 
     // Create service manager
     let manager = ServiceManagerJson::Manager(ServiceManager::Evm {
-        chain_name: evm_chain.clone(),
+        chain: evm_chain.clone(),
         address: evm_address,
     });
 
@@ -1065,7 +1065,7 @@ async fn test_service_validation() {
         );
 
         // Add invalid workflow with unset component
-        let invalid_workflow_id = WorkflowID::new("invalid-workflow").unwrap();
+        let invalid_workflow_id = WorkflowId::new("invalid-workflow").unwrap();
         workflows.insert(
             invalid_workflow_id.clone(),
             WorkflowJson {
@@ -1382,7 +1382,7 @@ async fn test_set_component_source_registry() {
     init_service(&file_path, "Test Service".to_string()).unwrap();
 
     // Add a workflow
-    let workflow_id = WorkflowID::new("workflow-123").unwrap();
+    let workflow_id = WorkflowId::new("workflow-123").unwrap();
     add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
     // Test setting a component source to a registry
@@ -1636,7 +1636,7 @@ fn test_aggregator_validation() {
         manager: ServiceManagerJson::Json(Json::Unset),
     };
 
-    let workflow_id = WorkflowID::default();
+    let workflow_id = WorkflowId::default();
     let test_digest = ComponentDigest::hash(b"test");
     let component = Component::new(ComponentSource::Digest(test_digest));
 

@@ -9,14 +9,14 @@ use wavs_engine::{
 };
 use wavs_types::{
     AllowedHostPermission, ComponentDigest, Service, TriggerAction, TriggerConfig, TriggerData,
-    Workflow, WorkflowID,
+    Workflow, WorkflowId,
 };
 
 /// Handle provides the setup and infrastructure needed for engine benchmarks
 pub struct EngineSetup {
     pub engine: WTEngine,
     pub service: Service,
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     pub chain_configs: ChainConfigs,
     pub component: Component,
     pub component_bytes: Vec<u8>,
@@ -47,7 +47,7 @@ impl EngineSetup {
         let component = Component::new(&engine, &component_bytes).unwrap();
 
         // Create a simple workflow
-        let workflow_id = WorkflowID::new("benchmark-workflow".to_string()).unwrap();
+        let workflow_id = WorkflowId::new("benchmark-workflow".to_string()).unwrap();
 
         let data_dir = tempdir().unwrap();
         let db_dir = tempdir().unwrap();
@@ -73,7 +73,7 @@ impl EngineSetup {
             workflows: BTreeMap::from([(workflow_id.clone(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name: "exec".parse().unwrap(),
+                chain: "evm:exec".parse().unwrap(),
                 address: Default::default(),
             },
         };

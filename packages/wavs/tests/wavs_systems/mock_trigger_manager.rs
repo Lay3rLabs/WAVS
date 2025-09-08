@@ -12,15 +12,16 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use utils::context::AppContext;
 use wavs_types::{
-    ChainName, IDError, ServiceID, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowID,
+    ChainKey, ChainKeyError, ServiceId, Trigger, TriggerAction, TriggerConfig, TriggerData,
+    WorkflowId, WorkflowIdError,
 };
 
 pub fn mock_real_trigger_action(
-    service_id: ServiceID,
-    workflow_id: impl TryInto<WorkflowID, Error = IDError> + std::fmt::Debug,
+    service_id: ServiceId,
+    workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError> + std::fmt::Debug,
     contract_address: &layer_climb::prelude::Address,
     data: &(impl Serialize + std::fmt::Debug),
-    chain_name: impl ToString + std::fmt::Debug,
+    chain: impl TryInto<ChainKey, Error = ChainKeyError> + std::fmt::Debug + Clone,
 ) -> TriggerAction {
     let data = serde_json::to_vec(data).unwrap();
     match contract_address {
@@ -31,13 +32,12 @@ pub fn mock_real_trigger_action(
                     service_id,
                     workflow_id,
                     contract_address.clone().try_into().unwrap(),
-                    ChainName::new(chain_name.to_string()).unwrap(),
+                    chain.clone(),
                     event,
-                )
-                .unwrap(),
+                ),
                 data: TriggerData::EvmContractEvent {
                     contract_address: contract_address.clone().try_into().unwrap(),
-                    chain_name: ChainName::new(chain_name.to_string()).unwrap(),
+                    chain: chain.try_into().unwrap(),
                     // FIXME: this should be a proper EVM event, this is just a placeholder
                     log_data: LogData::new(vec![event.into_inner().into()], data.into()).unwrap(),
                     tx_hash: [0; 32].into(),
@@ -58,13 +58,12 @@ pub fn mock_real_trigger_action(
                     service_id,
                     workflow_id,
                     contract_address.clone(),
-                    ChainName::new(chain_name.to_string()).unwrap(),
+                    chain.clone(),
                     event.clone(),
-                )
-                .unwrap(),
+                ),
                 data: TriggerData::CosmosContractEvent {
                     contract_address: contract_address.clone(),
-                    chain_name: ChainName::new(chain_name.to_string()).unwrap(),
+                    chain: chain.try_into().unwrap(),
                     event: cosmwasm_std::Event::new("new-message").add_attributes(vec![
                         ("id", "1".to_string()),
                         ("data", const_hex::encode(data)),
@@ -78,53 +77,43 @@ pub fn mock_real_trigger_action(
 }
 
 pub fn mock_evm_event_trigger_config(
-    service_id: ServiceID,
-    workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+    service_id: ServiceId,
+    workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
 ) -> TriggerConfig {
     TriggerConfig::evm_contract_event(
         service_id,
         workflow_id,
         rand_address_evm(),
-        ChainName::new("evm").unwrap(),
+        "evm:anvil",
         rand_event_evm(),
     )
-    .unwrap()
 }
 
 pub fn mock_cosmos_event_trigger_config(
-    service_id: ServiceID,
-    workflow_id: impl TryInto<WorkflowID, Error = IDError>,
+    service_id: ServiceId,
+    workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
 ) -> TriggerConfig {
     TriggerConfig::cosmos_contract_event(
         service_id,
         workflow_id,
         rand_address_cosmos(),
-        ChainName::new("cosmos").unwrap(),
+        "cosmos:wasmd",
         rand_event_cosmos(),
     )
-    .unwrap()
 }
 
 pub fn mock_evm_event_trigger() -> Trigger {
-    Trigger::evm_contract_event(
-        rand_address_evm(),
-        ChainName::new("evm").unwrap(),
-        rand_event_evm(),
-    )
+    Trigger::evm_contract_event(rand_address_evm(), "evm:anvil", rand_event_evm())
 }
 
 pub fn mock_cosmos_event_trigger() -> Trigger {
-    Trigger::cosmos_contract_event(
-        rand_address_cosmos(),
-        ChainName::new("cosmos").unwrap(),
-        rand_event_cosmos(),
-    )
+    Trigger::cosmos_contract_event(rand_address_cosmos(), "cosmos:wasmd", rand_event_cosmos())
 }
 
 pub fn mock_cosmos_event_trigger_data(trigger_id: u64, data: impl AsRef<[u8]>) -> TriggerData {
     TriggerData::CosmosContractEvent {
         contract_address: rand_address_cosmos(),
-        chain_name: ChainName::new("layer").unwrap(),
+        chain: "cosmos:layer".parse().unwrap(),
         // matches example_cosmos_client::NewMessageEvent
         event: cosmwasm_std::Event::new("new-message")
             .add_attribute("id", trigger_id.to_string())
@@ -184,14 +173,14 @@ impl MockTriggerManagerVec {
 
     fn start_error(&self) -> Result<(), TriggerError> {
         match self.error_on_start {
-            true => Err(TriggerError::NoSuchService(ServiceID::hash("cant-start"))),
+            true => Err(TriggerError::NoSuchService(ServiceId::hash("cant-start"))),
             false => Ok(()),
         }
     }
 
     fn store_error(&self) -> Result<(), TriggerError> {
         match self.error_on_store {
-            true => Err(TriggerError::NoSuchService(ServiceID::hash("cant-store"))),
+            true => Err(TriggerError::NoSuchService(ServiceId::hash("cant-store"))),
             false => Ok(()),
         }
     }
@@ -226,8 +215,8 @@ impl MockTriggerManagerVec {
 
     pub fn remove_trigger(
         &self,
-        service_id: ServiceID,
-        workflow_id: WorkflowID,
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
     ) -> Result<(), TriggerError> {
         self.store_error()?;
 
@@ -238,7 +227,7 @@ impl MockTriggerManagerVec {
         Ok(())
     }
 
-    pub fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
+    pub fn remove_service(&self, service_id: ServiceId) -> Result<(), TriggerError> {
         self.store_error()?;
 
         self.triggers
@@ -249,7 +238,7 @@ impl MockTriggerManagerVec {
         Ok(())
     }
 
-    pub fn list_triggers(&self, service_id: ServiceID) -> Result<Vec<TriggerConfig>, TriggerError> {
+    pub fn list_triggers(&self, service_id: ServiceId) -> Result<Vec<TriggerConfig>, TriggerError> {
         self.store_error()?;
 
         self.triggers
@@ -273,11 +262,11 @@ mod tests {
     fn mock_trigger_sends() {
         let actions = vec![
             TriggerAction {
-                config: mock_evm_event_trigger_config(ServiceID::hash("service1"), "workflow1"),
+                config: mock_evm_event_trigger_config(ServiceId::hash("service1"), "workflow1"),
                 data: TriggerData::new_raw(b"foobar"),
             },
             TriggerAction {
-                config: mock_evm_event_trigger_config(ServiceID::hash("service2"), "workflow2"),
+                config: mock_evm_event_trigger_config(ServiceId::hash("service2"), "workflow2"),
                 data: TriggerData::new_raw(b"zoomba"),
             },
         ];
@@ -295,7 +284,7 @@ mod tests {
         assert!(flow.blocking_recv().is_none());
 
         // add trigger works
-        let data = mock_evm_event_trigger_config(ServiceID::hash("abcd"), "abcd");
+        let data = mock_evm_event_trigger_config(ServiceId::hash("abcd"), "abcd");
         triggers.add_trigger(data).unwrap();
     }
 
@@ -306,7 +295,7 @@ mod tests {
         triggers.start(AppContext::new()).unwrap_err();
 
         // ensure store fails
-        let data = mock_evm_event_trigger_config(ServiceID::hash("abcd"), "abcd");
+        let data = mock_evm_event_trigger_config(ServiceId::hash("abcd"), "abcd");
         triggers.add_trigger(data).unwrap_err();
     }
 }

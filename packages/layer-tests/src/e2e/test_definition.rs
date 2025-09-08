@@ -8,13 +8,13 @@ use example_types::{
     PermissionsResponse, SquareRequest, SquareResponse,
 };
 use regex::Regex;
-use wavs_types::{ChainName, Trigger, WorkflowID};
+use wavs_types::{ChainKey, Trigger, WorkflowId};
 
 use crate::e2e::components::{
     AggregatorComponent, ComponentName, ComponentSources, OperatorComponent,
 };
 
-use super::config::DEFAULT_CHAIN_ID;
+use super::config::DEFAULT_CHAIN_KEY;
 
 /// Defines a complete end-to-end test case
 #[derive(Clone, Debug)]
@@ -26,7 +26,7 @@ pub struct TestDefinition {
     pub description: Option<String>,
 
     /// The workflows of this test
-    pub workflows: BTreeMap<WorkflowID, WorkflowDefinition>,
+    pub workflows: BTreeMap<WorkflowId, WorkflowDefinition>,
 
     /// If a service changes, set it here
     /// the change will be applied after service deployment
@@ -34,7 +34,7 @@ pub struct TestDefinition {
     pub change_service: Option<ChangeServiceDefinition>,
 
     /// Service manager chain
-    pub service_manager_chain: ChainName,
+    pub service_manager_chain: ChainKey,
 
     /// Execution group (ascending priority)
     pub group: u64,
@@ -105,18 +105,18 @@ pub struct WorkflowDefinition {
 pub enum AggregatorDefinition {
     ComponentBasedAggregator {
         component: ComponentDefinition,
-        chain_name: ChainName,
+        chain: ChainKey,
     },
 }
 
 #[derive(Clone, Debug)]
 pub enum ChangeServiceDefinition {
     Component {
-        workflow_id: WorkflowID,
+        workflow_id: WorkflowId,
         component: ComponentDefinition,
     },
     AddWorkflow {
-        workflow_id: WorkflowID,
+        workflow_id: WorkflowId,
         workflow: WorkflowDefinition,
     },
     // TODO: status etc.
@@ -131,7 +131,7 @@ pub enum TriggerDefinition {
     NewCosmosContract(CosmosTriggerDefinition),
     /// Special case for block interval tests that need runtime block height calculation.
     BlockInterval {
-        chain_name: ChainName,
+        chain: ChainKey,
         /// Set the start and stop to the same block height, effectively creating a one-shot trigger.
         start_stop: bool,
     },
@@ -142,12 +142,12 @@ pub enum TriggerDefinition {
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum CosmosTriggerDefinition {
-    SimpleContractEvent { chain_name: ChainName },
+    SimpleContractEvent { chain: ChainKey },
 }
 
 #[derive(Clone, Debug)]
 pub enum EvmTriggerDefinition {
-    SimpleContractEvent { chain_name: ChainName },
+    SimpleContractEvent { chain: ChainKey },
 }
 
 /// Configuration for a submit
@@ -250,7 +250,7 @@ impl TestBuilder {
                 name: name.to_string(),
                 description: None,
                 workflows: BTreeMap::new(),
-                service_manager_chain: ChainName::new(DEFAULT_CHAIN_ID.to_string()).unwrap(),
+                service_manager_chain: DEFAULT_CHAIN_KEY.clone(),
                 change_service: None,
                 group: u64::MAX,
             },
@@ -270,7 +270,7 @@ impl TestBuilder {
     }
 
     /// Add a workflow
-    pub fn add_workflow(mut self, workflow_id: WorkflowID, workflow: WorkflowDefinition) -> Self {
+    pub fn add_workflow(mut self, workflow_id: WorkflowId, workflow: WorkflowDefinition) -> Self {
         if self.definition.workflows.contains_key(&workflow_id) {
             panic!("Workflow id {} is already in use", workflow_id)
         }
@@ -287,8 +287,8 @@ impl TestBuilder {
     }
 
     /// Set the service manager chain
-    pub fn with_service_manager_chain(mut self, chain_name: &ChainName) -> Self {
-        self.definition.service_manager_chain = chain_name.clone();
+    pub fn with_service_manager_chain(mut self, chain: &ChainKey) -> Self {
+        self.definition.service_manager_chain = chain.clone();
         self
     }
 

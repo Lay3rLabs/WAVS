@@ -4,9 +4,9 @@ use redb::ReadableTable;
 use thiserror::Error;
 use tracing::instrument;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
-use wavs_types::{Service, ServiceID, ServiceStatus};
+use wavs_types::{Service, ServiceId, ServiceStatus};
 
-// key is ServiceID
+// key is ServiceId
 // TODO - use CAStorage instead?
 const SERVICE_TABLE: Table<[u8; 32], JSON<Service>> = Table::new("services");
 
@@ -23,7 +23,7 @@ impl Services {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
-    pub fn try_get(&self, id: &ServiceID) -> Result<Option<Service>> {
+    pub fn try_get(&self, id: &ServiceId) -> Result<Option<Service>> {
         match self.db_storage.get(SERVICE_TABLE, id.inner()) {
             Ok(Some(service)) => Ok(Some(service.value())),
             Ok(None) => Ok(None),
@@ -32,7 +32,7 @@ impl Services {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
-    pub fn get(&self, service_id: &ServiceID) -> Result<Service> {
+    pub fn get(&self, service_id: &ServiceId) -> Result<Service> {
         match self.try_get(service_id)? {
             Some(service) => Ok(service),
             None => Err(ServicesError::UnknownService(service_id.clone())),
@@ -40,14 +40,14 @@ impl Services {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
-    pub fn exists(&self, service_id: &ServiceID) -> Result<bool> {
+    pub fn exists(&self, service_id: &ServiceId) -> Result<bool> {
         match self.db_storage.get(SERVICE_TABLE, service_id.inner())? {
             Some(_) => Ok(true),
             None => Ok(false),
         }
     }
 
-    pub fn is_active(&self, service_id: &ServiceID) -> bool {
+    pub fn is_active(&self, service_id: &ServiceId) -> bool {
         self.get(service_id)
             .map(|service| match service.status {
                 ServiceStatus::Active => true,
@@ -57,7 +57,7 @@ impl Services {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
-    pub fn remove(&self, service_id: &ServiceID) -> Result<()> {
+    pub fn remove(&self, service_id: &ServiceId) -> Result<()> {
         self.db_storage
             .remove(SERVICE_TABLE, service_id.inner())
             .map_err(|e| e.into())
@@ -73,8 +73,8 @@ impl Services {
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
     pub fn list(
         &self,
-        bounds_start: Bound<&ServiceID>,
-        bounds_end: Bound<&ServiceID>,
+        bounds_start: Bound<&ServiceId>,
+        bounds_end: Bound<&ServiceId>,
     ) -> Result<Vec<Service>> {
         let res = self
             .db_storage
@@ -167,7 +167,7 @@ impl Services {
 #[derive(Error, Debug)]
 pub enum ServicesError {
     #[error("Unknown Service {0}")]
-    UnknownService(ServiceID),
+    UnknownService(ServiceId),
 
     #[error("Database error: {0}")]
     DBError(#[from] DBError),

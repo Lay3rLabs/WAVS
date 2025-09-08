@@ -1,13 +1,13 @@
-package wavs:operator@0.6.0-alpha.8;
+package wavs:operator@0.6.0-alpha.9;
 
-use wavs:types/core@0.6.0-alpha.8 as core-types;
-use wavs:types/service@0.6.0-alpha.8 as service-types;
-use wavs:types/chain@0.6.0-alpha.8 as chain-types;
+use wavs:types/core@0.6.0-alpha.9 as core-types;
+use wavs:types/service@0.6.0-alpha.9 as service-types;
+use wavs:types/chain@0.6.0-alpha.9 as chain-types;
 
 interface input {
     use core-types.{timestamp};
     use service-types.{service-id, workflow-id, trigger};
-    use chain-types.{chain-name, evm-address, evm-event-log, cosmos-address, cosmos-event};
+    use chain-types.{chain-key, evm-address, evm-event-log, cosmos-address, cosmos-event};
 
     record trigger-action {
         config: trigger-config,
@@ -29,20 +29,20 @@ interface input {
     }
 
     record trigger-data-evm-contract-event {
-        chain-name: chain-name,
+        chain: chain-key,
         log: evm-event-log,
     }
 
     record trigger-data-cosmos-contract-event {
         contract-address: cosmos-address,
-        chain-name: chain-name,
+        chain: chain-key,
         event: cosmos-event,
         event-index: u64,
         block-height: u64
     }
 
     record trigger-data-block-interval {
-        chain-name: chain-name,
+        chain: chain-key,
         block-height: u64
     }
 
@@ -74,8 +74,8 @@ world wavs-world {
         use service-types.{service-and-workflow-id, workflow-and-workflow-id};
         use core-types.{log-level};
 
-        get-evm-chain-config: func(chain-name: string) -> option<evm-chain-config>;
-        get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
+        get-evm-chain-config: func(chain-key: string) -> option<evm-chain-config>;
+        get-cosmos-chain-config: func(chain-key: string) -> option<cosmos-chain-config>;
 
         config-var: func(key: string) -> option<string>;
 
