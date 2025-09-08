@@ -79,7 +79,7 @@ done
 # Create checksums file
 if command -v sha256sum >/dev/null 2>&1; then
   if compgen -G "$OUT_DIR"/*.wasm >/dev/null; then
-    sha256sum -- "$OUT_DIR"/*.wasm | tee "$ROOT_DIR/checksums.txt"
+    (cd "$ROOT_DIR" && sha256sum -- "./${OUT_DIR#$ROOT_DIR/}"/*.wasm) | tee "$ROOT_DIR/checksums.txt"
   else
     echo "[wasi-build] No wasm artifacts found; skipping checksum generation" >&2
   fi
