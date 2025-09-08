@@ -34,7 +34,8 @@ use utils::{
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
-    ByteArray, ChainKey, IWavsServiceManager, ServiceId, TriggerAction, TriggerConfig, TriggerData,
+    ByteArray, ChainKey, IWavsServiceManager, ServiceId, Trigger, TriggerAction, TriggerConfig,
+    TriggerData,
 };
 
 #[derive(Clone)]
@@ -131,6 +132,16 @@ impl TriggerManager {
         }
 
         Ok(())
+    }
+
+    pub async fn add_trigger(&self, trigger: Trigger) {
+        self.local_command_sender
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|sender| {
+                sender.send(LocalStreamCommand::ManualTrigger(trigger));
+            });
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
@@ -252,6 +263,9 @@ impl TriggerManager {
             match res {
                 StreamTriggers::LocalCommand(command) => {
                     match command {
+                        LocalStreamCommand::ManualTrigger(trigger) => {
+                            // handle trigger
+                        }
                         LocalStreamCommand::StartListeningCron => {
                             #[cfg(debug_assertions)]
                             if self.disable_networking {

@@ -27,6 +27,7 @@ pub async fn start_local_command_stream(
 pub enum LocalStreamCommand {
     StartListeningChain { chain: ChainKey },
     StartListeningCron,
+    ManualTrigger(Trigger),
 }
 
 impl LocalStreamCommand {
