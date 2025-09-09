@@ -3,7 +3,7 @@ use std::pin::Pin;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use utils::telemetry::TriggerMetrics;
-use wavs_types::{ChainKey, Trigger, TriggerConfig};
+use wavs_types::{ChainKey, Trigger, TriggerAction, TriggerConfig};
 
 use crate::subsystems::trigger::error::TriggerError;
 
@@ -27,6 +27,7 @@ pub async fn start_local_command_stream(
 pub enum LocalStreamCommand {
     StartListeningChain { chain: ChainKey },
     StartListeningCron,
+    ManualTrigger(Box<TriggerAction>),
 }
 
 impl LocalStreamCommand {

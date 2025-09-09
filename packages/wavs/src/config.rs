@@ -63,6 +63,9 @@ pub struct Config {
     /// Optional bearer token to protect mutating HTTP endpoints.
     /// If None, endpoints remain unauthenticated.
     pub bearer_token: Option<String>,
+
+    /// Enable debug endpoints for testing (default: false)
+    pub debug_endpoints_enabled: bool,
 }
 
 impl ConfigExt for Config {
@@ -100,6 +103,7 @@ impl Default for Config {
             prometheus: None,
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
             bearer_token: None,
+            debug_endpoints_enabled: false,
         }
     }
 }
