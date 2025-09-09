@@ -179,10 +179,10 @@ macro_rules! tracing_service_info {
         if tracing::enabled!(tracing::Level::INFO) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::info!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                    tracing::info!(service.name = %service.name, service.manager = ?service.manager, "{}", format_args!($($msg)*));
                 },
                 None => {
-                    tracing::info!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::info!(service.id = %$service_id, "{}", format_args!($($msg)*));
                 }
             }
         }
@@ -195,10 +195,10 @@ macro_rules! tracing_service_debug {
         if tracing::enabled!(tracing::Level::DEBUG) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::debug!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                    tracing::debug!(service.name = %service.name, service.manager = ?service.manager, "{}", format_args!($($msg)*));
                 },
                 None => {
-                    tracing::debug!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::debug!(service.id = %$service_id, "{}", format_args!($($msg)*));
                 }
             }
         }
@@ -211,10 +211,10 @@ macro_rules! tracing_service_trace {
         if tracing::enabled!(tracing::Level::TRACE) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::trace!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                    tracing::trace!(service.name = %service.name, service.manager = ?service.manager, "{}", format_args!($($msg)*));
                 },
                 None => {
-                    tracing::trace!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::trace!(service.id = %$service_id, "{}", format_args!($($msg)*));
                 }
             }
         }
@@ -226,10 +226,10 @@ macro_rules! tracing_service_warn {
         if tracing::enabled!(tracing::Level::WARN) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::warn!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                    tracing::warn!(service.name = %service.name, service.manager = ?service.manager, "{}", format_args!($($msg)*));
                 },
                 None => {
-                    tracing::warn!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::warn!(service.id = %$service_id, "{}", format_args!($($msg)*));
                 }
             }
         }
@@ -242,10 +242,10 @@ macro_rules! tracing_service_error {
         if tracing::enabled!(tracing::Level::ERROR) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::error!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                    tracing::error!(service.name = %service.name, service.manager = ?service.manager, "{}", format_args!($($msg)*));
                 },
                 None => {
-                    tracing::error!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::error!(service.id = %$service_id, "{}", format_args!($($msg)*));
                 }
             }
         }

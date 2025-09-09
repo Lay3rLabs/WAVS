@@ -96,7 +96,7 @@ impl SubmissionManager {
                                     // Service is active, proceed with submission
                                 }
                                 false => {
-                                    tracing::warn!("Service {} is not active, skipping message", service_id);
+                                    crate::tracing_service_warn!(_self.services, service_id, "Service is not active, skipping message");
                                     continue;
                                 }
                             }
@@ -321,7 +321,7 @@ impl SubmissionManager {
                     );
                 }
                 AddPacketResponse::Burned => {
-                    tracing::info!("Aggregator queue burned for service_id={}", service_id);
+                    tracing_service_info!(self.services, service_id, "Aggregator queue burned");
                 }
             }
 
