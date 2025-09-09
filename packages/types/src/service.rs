@@ -359,21 +359,6 @@ pub enum Submit {
 /// 3. **Future Extensibility**: As new signature algorithms (BLS12-381, Ed25519, etc.)
 ///    and prefix schemes are added, this structure can accommodate them without
 ///    breaking changes.
-///
-/// ## Examples
-///
-/// ```rust
-/// // EVM-compatible signature with EIP-191 prefixing
-/// let evm_sig = SignatureKind::evm_default();
-/// assert_eq!(evm_sig.algorithm, SignatureAlgorithm::Secp256k1);
-/// assert_eq!(evm_sig.prefix, Some(SignaturePrefix::Eip191));
-///
-/// // Raw signature without prefixing
-/// let raw_sig = SignatureKind {
-///     algorithm: SignatureAlgorithm::Secp256k1,
-///     prefix: None,
-/// };
-/// ```
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 pub struct SignatureKind {
     /// The cryptographic algorithm used for signature generation and verification.
