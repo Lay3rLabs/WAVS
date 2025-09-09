@@ -211,7 +211,7 @@ impl ServiceManagers {
                 ..
             } = clients
                 .http_client
-                .get_service_key(service_manager.clone())
+                .get_service_signer(service_manager.clone())
                 .await
                 .unwrap();
 

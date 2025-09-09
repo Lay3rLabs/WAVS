@@ -290,7 +290,7 @@ impl SubmissionManager {
 
         let response = self
             .http_client
-            .post(format!("{url}/packet"))
+            .post(format!("{url}/packets"))
             .header("Content-Type", "application/json")
             .json(&AddPacketRequest { packet })
             .send()

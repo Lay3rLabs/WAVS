@@ -4,7 +4,7 @@ use wavs_types::{GetSignerRequest, ServiceId, ServiceManager, SignerResponse};
 
 #[utoipa::path(
     post,
-    path = "/services/{service_hash}/signer",
+    path = "/services/signer",
     request_body = GetSignerRequest,
     responses(
         (status = 200, description = "Service signer retrieved successfully", body = SignerResponse),

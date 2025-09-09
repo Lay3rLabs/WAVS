@@ -126,16 +126,16 @@ impl HttpClient {
             .await
             .with_context(|| format!("Failed to parse response from {}", url))?;
 
-        Ok(format!(
-            "{}/service-by-hash/{}",
-            self.endpoint, response.hash
-        ))
+        Ok(format!("{}/dev/services/{}", self.endpoint, response.hash))
     }
 
-    pub async fn get_service_key(&self, service_manager: ServiceManager) -> Result<SignerResponse> {
+    pub async fn get_service_signer(
+        &self,
+        service_manager: ServiceManager,
+    ) -> Result<SignerResponse> {
         let body = serde_json::to_string(&GetSignerRequest { service_manager })?;
 
-        let url = format!("{}/service-key", self.endpoint);
+        let url = format!("{}/services/signer", self.endpoint);
         let text = self
             .inner
             .post(&url)
