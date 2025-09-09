@@ -1,7 +1,10 @@
 use std::time::Duration;
 
 use tokio::sync::mpsc;
-use wavs::subsystems::submission::{chain_message::ChainMessage, SubmissionManager};
+use wavs::subsystems::submission::{
+    chain_message::{ChainMessage, ChainMessageDebug},
+    SubmissionManager,
+};
 use wavs_types::{
     Component, ComponentDigest, ComponentSource, Envelope, Service, ServiceManager, SignatureKind,
     Submit, Trigger, Workflow,
@@ -27,6 +30,9 @@ fn dummy_message(service: &Service, payload: &str) -> ChainMessage {
             ordering: mock_event_order().into(),
         },
         submit: service.workflows.values().next().unwrap().submit.clone(),
+        debug: ChainMessageDebug {
+            do_not_submit_aggregator: true,
+        },
     }
 }
 

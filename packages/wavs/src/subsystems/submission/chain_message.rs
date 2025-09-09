@@ -7,4 +7,14 @@ pub struct ChainMessage {
     pub workflow_id: WorkflowId,
     pub envelope: Envelope,
     pub submit: Submit,
+    #[cfg(debug_assertions)]
+    pub debug: ChainMessageDebug,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Clone, Debug, Default)]
+// these debug-only fields are used to control behavior during testing
+pub struct ChainMessageDebug {
+    // Do not submit to aggregator, even if it's defined
+    pub do_not_submit_aggregator: bool,
 }

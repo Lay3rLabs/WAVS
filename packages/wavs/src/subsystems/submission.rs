@@ -87,7 +87,8 @@ impl SubmissionManager {
                                 service_id,
                                 workflow_id,
                                 envelope,
-                                submit
+                                submit,
+                                ..
                             } = msg;
 
 
@@ -133,6 +134,12 @@ impl SubmissionManager {
 
                             match submit {
                                 Submit::Aggregator{url, ..} => {
+                                    #[cfg(debug_assertions)]
+                                    if msg.debug.do_not_submit_aggregator {
+                                        tracing::warn!("Test-only flag set, skipping submission to aggregator");
+                                        continue;
+                                    }
+
                                     if let Err(e) = _self.submit_to_aggregator(url, packet).await {
                                         tracing::error!("Failed to submit to aggregator for service_id={}, workflow_id={}: {:?}", service_id, workflow_id, e);
                                     }
