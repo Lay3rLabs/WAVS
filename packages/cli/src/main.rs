@@ -193,6 +193,8 @@ async fn main() {
                         eventId: FixedBytes::random(),
                         ordering: match wasm_response.ordering {
                             Some(ordering) => {
+                                // Convert u64 ordering to 12-byte FixedBytes by placing the u64 in the first 8 bytes
+                                // This preserves the ordering value while meeting the FixedBytes<12> requirement
                                 let mut bytes = [0u8; 12];
                                 bytes[..8].copy_from_slice(&ordering.to_le_bytes());
                                 FixedBytes(bytes)
