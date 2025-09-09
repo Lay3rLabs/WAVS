@@ -90,16 +90,68 @@ impl EvmSigningClient {
 mod test {
     use alloy_primitives::FixedBytes;
     use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
-    use wavs_types::{Envelope, EnvelopeExt};
+    use wavs_types::{Envelope, EnvelopeExt, SignatureKind};
 
     #[tokio::test]
     async fn signature_validation() {
         let signer = mock_signer();
         let envelope = mock_envelope();
 
-        let signature = envelope.sign(&signer).await.unwrap();
+        let signature = envelope
+            .sign(&signer, SignatureKind::evm_default())
+            .await
+            .unwrap();
 
         assert_eq!(
+            signature.evm_signer_address(&envelope).unwrap(),
+            signer.address()
+        );
+
+        // also see that we can recover with no prefix
+        let signature = envelope
+            .sign(
+                &signer,
+                SignatureKind {
+                    algorithm: wavs_types::SignatureAlgorithm::Secp256k1,
+                    prefix: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            signature.evm_signer_address(&envelope).unwrap(),
+            signer.address()
+        );
+
+        // and that it fails if we try the wrong prefix
+        let mut signature = envelope
+            .sign(&signer, SignatureKind::evm_default())
+            .await
+            .unwrap();
+
+        signature.kind.prefix = None;
+
+        assert_ne!(
+            signature.evm_signer_address(&envelope).unwrap(),
+            signer.address()
+        );
+
+        // in both directions
+        let mut signature = envelope
+            .sign(
+                &signer,
+                SignatureKind {
+                    algorithm: wavs_types::SignatureAlgorithm::Secp256k1,
+                    prefix: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        signature.kind.prefix = Some(wavs_types::SignaturePrefix::Eip191);
+
+        assert_ne!(
             signature.evm_signer_address(&envelope).unwrap(),
             signer.address()
         );

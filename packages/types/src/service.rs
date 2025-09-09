@@ -334,7 +334,36 @@ pub enum Submit {
         url: String,
         /// component dynamically determines the destination
         component: Box<Component>,
+        signature_kind: SignatureKind,
     },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+pub struct SignatureKind {
+    pub algorithm: SignatureAlgorithm,
+    pub prefix: Option<SignaturePrefix>,
+}
+
+impl SignatureKind {
+    pub fn evm_default() -> Self {
+        Self {
+            algorithm: SignatureAlgorithm::Secp256k1,
+            prefix: Some(SignaturePrefix::Eip191),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SignatureAlgorithm {
+    Secp256k1,
+    // Future: Bls12381, Ed25519, Secp256r1, etc.
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SignaturePrefix {
+    Eip191,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
