@@ -5,7 +5,8 @@ use utils::{
 };
 use wavs_engine::utils::error::EngineError;
 use wavs_types::{
-    ChainConfigError, ChainName, EnvelopeError, IDError, ServiceID, ServiceManagerError, WorkflowID,
+    ChainConfigError, ChainKey, ChainKeyError, EnvelopeError, ServiceId, ServiceManagerError,
+    WorkflowId, WorkflowIdError,
 };
 
 pub type AggregatorResult<T> = Result<T, AggregatorError>;
@@ -14,8 +15,8 @@ pub type AggregatorResult<T> = Result<T, AggregatorError>;
 pub enum AggregatorError {
     #[error("Missing workflow: {workflow_id} for service: {service_id}")]
     MissingWorkflow {
-        workflow_id: WorkflowID,
-        service_id: ServiceID,
+        workflow_id: WorkflowId,
+        service_id: ServiceId,
     },
 
     #[error("DB: {0}")]
@@ -49,7 +50,7 @@ pub enum AggregatorError {
     ServiceManagerValidateUnknown(alloy_contract::Error),
 
     #[error("Chain not found: {0}")]
-    ChainNotFound(ChainName),
+    ChainNotFound(ChainKey),
 
     #[error("Missing EVM credential")]
     MissingEvmCredential,
@@ -79,10 +80,10 @@ pub enum AggregatorError {
     ServiceManagerLookup(alloy_contract::Error),
 
     #[error("Service already registered: {0}")]
-    RepeatService(ServiceID),
+    RepeatService(ServiceId),
 
     #[error("No such service registered: {0}")]
-    MissingService(ServiceID),
+    MissingService(ServiceId),
 
     #[error("WASM component compilation failed: {0}")]
     WasmCompilation(#[from] wasmtime::Error),
@@ -105,8 +106,11 @@ pub enum AggregatorError {
     #[error("Storage error: {0}")]
     Storage(#[from] CAStorageError),
 
-    #[error("Invalid ID: {0}")]
-    InvalidId(#[from] IDError),
+    #[error("Invalid Workflow ID: {0}")]
+    InvalidWorkflowId(#[from] WorkflowIdError),
+
+    #[error("Invalid ChainKey: {0}")]
+    InvalidChainKey(#[from] ChainKeyError),
 }
 
 #[derive(Error, Debug)]

@@ -4,6 +4,7 @@ use crate::{
 };
 use axum::{
     extract::DefaultBodyLimit,
+    middleware,
     routing::{delete, get, post},
 };
 use axum_tracing_opentelemetry::middleware::OtelAxumLayer;
@@ -16,6 +17,7 @@ use wildmatch::WildMatch;
 
 use super::{
     handlers::{
+        debug::handle_debug_trigger,
         handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_info,
         handle_list_services, handle_not_found, handle_upload_service,
         openapi::ApiDoc,
@@ -25,6 +27,8 @@ use super::{
     },
     state::HttpState,
 };
+
+const REALM: &str = "wavs";
 
 // this is called from main, takes a file-based Dispatcher
 pub fn start(
@@ -68,8 +72,8 @@ pub async fn make_router(
 ) -> anyhow::Result<axum::Router> {
     let state = HttpState::new(config.clone(), dispatcher, is_mock_chain_client, metrics).await?;
 
-    // build our application with a single route
-    let mut router = axum::Router::new()
+    // public routes
+    let public = axum::Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .layer(OtelAxumLayer::default())
@@ -79,19 +83,38 @@ pub async fn make_router(
             "/service-by-hash/{service_hash}",
             get(handle_get_service_by_hash),
         )
+        .route("/app", get(handle_list_services))
+        .route("/info", get(handle_info))
+        .fallback(handle_not_found)
+        .with_state(state.clone());
+
+    // protected routes (POST/DELETE)
+    let mut protected = axum::Router::new()
         .route("/service-key", post(handle_get_service_key))
         .route("/save-service", post(handle_save_service))
-        .route("/app", get(handle_list_services))
         .route("/app", post(handle_add_service))
         .route("/app", delete(handle_delete_service))
         .route("/add-chain", post(handle_add_chain))
-        .route("/info", get(handle_info))
         .route(
             "/upload",
             post(handle_upload_service).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
-        ) // 50MB limit
-        .fallback(handle_not_found)
-        .with_state(state);
+        ); // 50MB limit
+
+    // Only add debug routes if debug endpoints are enabled
+    if config.debug_endpoints_enabled {
+        protected = protected.route("/debug/trigger", post(handle_debug_trigger));
+    }
+
+    let protected = protected.with_state(state);
+
+    // apply bearer auth to protected routes if configured
+    let mut router = public.merge(match &config.bearer_token {
+        Some(token) => protected.layer(middleware::from_fn_with_state(
+            (token.clone(), REALM.to_string()),
+            utils::http::verify_bearer_with_realm,
+        )),
+        None => protected,
+    });
 
     if let Some(cors) = cors_layer(&config) {
         router = router.layer(cors);

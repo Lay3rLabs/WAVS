@@ -9,7 +9,7 @@ use super::{error::TriggerError, lookup::LookupId};
 use futures::{stream::SelectAll, Stream};
 use local_command_stream::LocalStreamCommand;
 use std::pin::Pin;
-use wavs_types::{ChainName, Timestamp};
+use wavs_types::{ChainKey, Timestamp};
 
 pub type MultiplexedStream = SelectAll<
     Pin<Box<dyn Stream<Item = std::result::Result<StreamTriggers, TriggerError>> + Send>>,
@@ -21,13 +21,13 @@ pub type MultiplexedStream = SelectAll<
 #[derive(Debug)]
 pub enum StreamTriggers {
     Cosmos {
-        chain_name: ChainName,
+        chain: ChainKey,
         // these are not filtered yet, just all the contract-based events
         contract_events: Vec<StreamTriggerCosmosContractEvent>,
         block_height: u64,
     },
     Evm {
-        chain_name: ChainName,
+        chain: ChainKey,
         log: Box<alloy_rpc_types_eth::Log>,
         block_number: u64,
         tx_hash: alloy_primitives::TxHash,
@@ -35,7 +35,7 @@ pub enum StreamTriggers {
     },
     // We need a separate stream for EVM block interval triggers
     EvmBlock {
-        chain_name: ChainName,
+        chain: ChainKey,
         block_height: u64,
     },
     Cron {

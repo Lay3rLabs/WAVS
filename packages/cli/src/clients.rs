@@ -3,7 +3,7 @@ use std::time::Duration;
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use wavs_types::{
-    AddServiceRequest, ComponentDigest, DeleteServicesRequest, GetServiceKeyRequest,
+    AddServiceRequest, ChainKey, ComponentDigest, DeleteServicesRequest, GetServiceKeyRequest,
     IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceManager,
     SigningKeyResponse, UploadComponentResponse,
 };
@@ -85,13 +85,10 @@ impl HttpClient {
             anyhow::bail!("{} from {}: {}", status, url, error_text);
         }
 
-        let (chain_name, address) = match &service_manager {
-            ServiceManager::Evm {
-                chain_name,
-                address,
-            } => (chain_name.as_ref(), address.to_string()),
+        let (chain, address) = match &service_manager {
+            ServiceManager::Evm { chain, address } => (chain, address.to_string()),
         };
-        let service = self.get_service_from_node(chain_name, &address).await?;
+        let service = self.get_service_from_node(chain, &address).await?;
 
         Ok(service)
     }
@@ -164,13 +161,13 @@ impl HttpClient {
         }
     }
 
-    pub async fn get_service_from_node(&self, chain_name: &str, address: &str) -> Result<Service> {
+    pub async fn get_service_from_node(&self, chain: &ChainKey, address: &str) -> Result<Service> {
         let url = format!("{}/service", self.endpoint);
 
         let text = self
             .inner
             .get(&url)
-            .query(&[("chain_name", chain_name), ("address", address)])
+            .query(&[("chain", chain.to_string().as_str()), ("address", address)])
             .send()
             .await?
             .text()
@@ -195,16 +192,12 @@ impl HttpClient {
         let service_hash = service.hash()?;
         tokio::time::timeout(timeout.unwrap_or(Duration::from_secs(30)), async {
             loop {
-                tracing::warn!("Waiting for service update: {}", service.id());
+                tracing::warn!(service.name = %service.name, service.manager = ?service.manager, "Waiting for service update: {} [{:?}]", service.name, service.manager);
 
-                let (chain_name, address) = match &service.manager {
-                    ServiceManager::Evm {
-                        chain_name,
-                        address,
-                    } => (chain_name.as_ref(), address.to_string()),
+                let (chain, address) = match &service.manager {
+                    ServiceManager::Evm { chain, address } => (chain, address.to_string()),
                 };
-                if let Ok(current_service) = self.get_service_from_node(chain_name, &address).await
-                {
+                if let Ok(current_service) = self.get_service_from_node(chain, &address).await {
                     if current_service.hash()? == service_hash {
                         break Ok(());
                     }

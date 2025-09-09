@@ -3,7 +3,7 @@ use alloy_rpc_types_eth::Filter;
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
 use utils::{evm_client::EvmQueryClient, telemetry::TriggerMetrics};
-use wavs_types::ChainName;
+use wavs_types::ChainKey;
 
 use crate::subsystems::trigger::error::TriggerError;
 
@@ -11,7 +11,7 @@ use super::StreamTriggers;
 
 pub async fn start_evm_event_stream(
     query_client: EvmQueryClient,
-    chain_name: ChainName,
+    chain: ChainKey,
     _metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
@@ -24,15 +24,15 @@ pub async fn start_evm_event_stream(
         .map_err(|e| TriggerError::EvmSubscription(e.into()))?
         .into_stream();
 
-    let chain_name = chain_name.clone();
+    let chain = chain.clone();
 
     let event_stream = Box::pin(stream.filter_map(move |log| {
-        let chain_name = chain_name.clone();
+        let chain = chain.clone();
         async move {
             match (log.block_number, log.transaction_hash, log.log_index) {
                 (Some(block_number), Some(tx_hash), Some(log_index)) => {
                     Some(Ok(StreamTriggers::Evm {
-                        chain_name: chain_name.clone(),
+                        chain: chain.clone(),
                         block_number,
                         tx_hash,
                         log_index,
@@ -52,7 +52,7 @@ pub async fn start_evm_event_stream(
 
 pub async fn start_evm_block_stream(
     query_client: EvmQueryClient,
-    chain_name: ChainName,
+    chain: ChainKey,
     _metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
@@ -66,7 +66,7 @@ pub async fn start_evm_block_stream(
 
     let block_stream = Box::pin(stream.map(move |block| {
         Ok(StreamTriggers::EvmBlock {
-            chain_name: chain_name.clone(),
+            chain: chain.clone(),
             block_height: block.number,
         })
     }));

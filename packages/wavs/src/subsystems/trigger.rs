@@ -34,7 +34,7 @@ use utils::{
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
-    ByteArray, ChainName, IWavsServiceManager, ServiceID, TriggerAction, TriggerConfig, TriggerData,
+    ByteArray, ChainKey, IWavsServiceManager, ServiceId, TriggerAction, TriggerConfig, TriggerData,
 };
 
 #[derive(Clone)]
@@ -97,13 +97,13 @@ impl TriggerManager {
                 // Ensure the service manager's chain is being listened to for service change events
                 // This is needed even if the service has no workflows, so service URI changes can be detected
                 sender.send(LocalStreamCommand::StartListeningChain {
-                    chain_name: service.manager.chain_name().clone(),
+                    chain: service.manager.chain().clone(),
                 })?;
             }
             None => {
                 tracing::warn!(
                     "Local command sender not initialized, cannot send command for service manager chain: {:?}",
-                    service.manager.chain_name()
+                    service.manager.chain()
                 );
             }
         }
@@ -134,7 +134,7 @@ impl TriggerManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
-    pub fn remove_service(&self, service_id: ServiceID) -> Result<(), TriggerError> {
+    pub fn remove_service(&self, service_id: ServiceId) -> Result<(), TriggerError> {
         self.lookup_maps.remove_service(service_id.clone())
     }
 
@@ -194,7 +194,7 @@ impl TriggerManager {
                     );
 
                     self.metrics
-                        .record_trigger_fired(action.data.chain_name(), action.data.trigger_type());
+                        .record_trigger_fired(action.data.chain(), action.data.trigger_type());
                 }
                 DispatcherCommand::ChangeServiceUri { service_id, uri } => {
                     tracing_service_info!(
@@ -211,6 +211,16 @@ impl TriggerManager {
                 .map_err(Box::new)?;
         }
 
+        Ok(())
+    }
+
+    pub async fn add_trigger(&self, trigger: TriggerAction) -> Result<(), TriggerError> {
+        self.local_command_sender
+            .lock()
+            .unwrap()
+            .as_ref()
+            .expect("trigger manager not started")
+            .send(LocalStreamCommand::ManualTrigger(Box::new(trigger)))?;
         Ok(())
     }
 
@@ -252,6 +262,10 @@ impl TriggerManager {
             match res {
                 StreamTriggers::LocalCommand(command) => {
                     match command {
+                        LocalStreamCommand::ManualTrigger(trigger_action) => {
+                            // send it directly to dispatcher
+                            dispatcher_commands.push(DispatcherCommand::Trigger(*trigger_action));
+                        }
                         LocalStreamCommand::StartListeningCron => {
                             #[cfg(debug_assertions)]
                             if self.disable_networking {
@@ -284,7 +298,7 @@ impl TriggerManager {
                                 }
                             }
                         }
-                        LocalStreamCommand::StartListeningChain { chain_name } => {
+                        LocalStreamCommand::StartListeningChain { chain } => {
                             #[cfg(debug_assertions)]
                             if self.disable_networking {
                                 tracing::warn!(
@@ -292,28 +306,19 @@ impl TriggerManager {
                                 );
                                 continue;
                             }
-                            if listening_chains.contains(&chain_name) {
-                                tracing::debug!("Already listening to chain {}", chain_name);
+                            if listening_chains.contains(&chain) {
+                                tracing::debug!("Already listening to chain {chain}");
                                 continue;
                             }
 
                             // insert right away, before we get to an await point
-                            listening_chains.insert(chain_name.clone());
+                            listening_chains.insert(chain.clone());
 
                             let chain_config =
-                                match self.chain_configs.read().unwrap().get_chain(&chain_name) {
-                                    Ok(config) => match config {
-                                        Some(config) => config,
-                                        None => {
-                                            tracing::error!(
-                                                "No chain config found for {}",
-                                                chain_name
-                                            );
-                                            continue;
-                                        }
-                                    },
-                                    Err(e) => {
-                                        tracing::error!("{:?}", e);
+                                match self.chain_configs.read().unwrap().get_chain(&chain) {
+                                    Some(config) => config,
+                                    None => {
+                                        tracing::error!("No chain config found for {chain}");
                                         continue;
                                     }
                                 };
@@ -327,13 +332,12 @@ impl TriggerManager {
                                     .await
                                     .map_err(TriggerError::Climb)?;
 
-                                    cosmos_clients
-                                        .insert(chain_name.clone(), cosmos_client.clone());
+                                    cosmos_clients.insert(chain.clone(), cosmos_client.clone());
 
                                     // Start the Cosmos event stream
                                     match cosmos_stream::start_cosmos_stream(
                                         cosmos_client.clone(),
-                                        chain_name.clone(),
+                                        chain.clone(),
                                         self.metrics.clone(),
                                     )
                                     .await
@@ -351,21 +355,19 @@ impl TriggerManager {
                                     }
                                 }
                                 AnyChainConfig::Evm(chain_config) => {
-                                    let endpoint =
-                                        chain_config.query_client_endpoint().map_err(|e| {
-                                            TriggerError::EvmClient(chain_name.clone(), e)
-                                        })?;
-                                    let evm_client =
-                                        EvmQueryClient::new(endpoint).await.map_err(|e| {
-                                            TriggerError::EvmClient(chain_name.clone(), e)
-                                        })?;
+                                    let endpoint = chain_config
+                                        .query_client_endpoint()
+                                        .map_err(|e| TriggerError::EvmClient(chain.clone(), e))?;
+                                    let evm_client = EvmQueryClient::new(endpoint)
+                                        .await
+                                        .map_err(|e| TriggerError::EvmClient(chain.clone(), e))?;
 
-                                    evm_clients.insert(chain_name.clone(), evm_client.clone());
+                                    evm_clients.insert(chain.clone(), evm_client.clone());
 
                                     // Start the EVM event stream
                                     match evm_stream::start_evm_event_stream(
                                         evm_client.clone(),
-                                        chain_name.clone(),
+                                        chain.clone(),
                                         self.metrics.clone(),
                                     )
                                     .await
@@ -385,7 +387,7 @@ impl TriggerManager {
                                     // Start the EVM block stream
                                     match evm_stream::start_evm_block_stream(
                                         evm_client.clone(),
-                                        chain_name.clone(),
+                                        chain.clone(),
                                         self.metrics.clone(),
                                     )
                                     .await
@@ -408,7 +410,7 @@ impl TriggerManager {
                 }
                 StreamTriggers::Evm {
                     log,
-                    chain_name,
+                    chain,
                     block_number,
                     tx_hash,
                     log_index,
@@ -455,13 +457,13 @@ impl TriggerManager {
                             .unwrap();
 
                         if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
-                            chain_name.clone(),
+                            chain.clone(),
                             contract_address,
                             ByteArray::new(**event_hash),
                         )) {
                             let trigger_data = TriggerData::EvmContractEvent {
                                 contract_address,
-                                chain_name,
+                                chain,
                                 log_data: log.data().clone(),
                                 tx_hash,
                                 block_number,
@@ -485,7 +487,7 @@ impl TriggerManager {
                 }
                 StreamTriggers::Cosmos {
                     contract_events,
-                    chain_name,
+                    chain,
                     block_height,
                 } => {
                     // extra scope in order to properly drop the locks
@@ -503,13 +505,13 @@ impl TriggerManager {
                         } in contract_events
                         {
                             if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
-                                chain_name.clone(),
+                                chain.clone(),
                                 contract_address.clone(),
                                 event.ty.clone(),
                             )) {
                                 let trigger_data = TriggerData::CosmosContractEvent {
                                     contract_address,
-                                    chain_name: chain_name.clone(),
+                                    chain: chain.clone(),
                                     event,
                                     event_index,
                                     block_height,
@@ -529,13 +531,13 @@ impl TriggerManager {
                     }
 
                     // process block-based triggers
-                    dispatcher_commands.extend(self.process_blocks(chain_name, block_height));
+                    dispatcher_commands.extend(self.process_blocks(chain, block_height));
                 }
                 StreamTriggers::EvmBlock {
-                    chain_name,
+                    chain,
                     block_height,
                 } => {
-                    dispatcher_commands.extend(self.process_blocks(chain_name, block_height));
+                    dispatcher_commands.extend(self.process_blocks(chain, block_height));
                 }
                 StreamTriggers::Cron {
                     trigger_time,
@@ -578,11 +580,7 @@ impl TriggerManager {
     }
 
     /// Process blocks and return trigger actions for any triggers that should fire
-    pub fn process_blocks(
-        &self,
-        chain_name: ChainName,
-        block_height: u64,
-    ) -> Vec<DispatcherCommand> {
+    pub fn process_blocks(&self, chain: ChainKey, block_height: u64) -> Vec<DispatcherCommand> {
         let block_height = match NonZeroU64::new(block_height) {
             Some(height) => height,
             None => {
@@ -591,7 +589,7 @@ impl TriggerManager {
             }
         };
         // Get the triggers that should fire at this block height
-        let firing_lookup_ids = match self.lookup_maps.block_schedulers.get_mut(&chain_name) {
+        let firing_lookup_ids = match self.lookup_maps.block_schedulers.get_mut(&chain) {
             Some(mut scheduler) => scheduler.tick(block_height.into()),
             None => Vec::new(),
         };
@@ -604,7 +602,7 @@ impl TriggerManager {
                 .map(|trigger_config| {
                     DispatcherCommand::Trigger(TriggerAction {
                         data: TriggerData::BlockInterval {
-                            chain_name: chain_name.clone(),
+                            chain: chain.clone(),
                             block_height: block_height.get(),
                         },
                         config: trigger_config,
@@ -623,4 +621,67 @@ impl TriggerManager {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    use crate::{config::Config, services::Services};
+    use utils::{config::ChainConfigs, storage::db::RedbStorage, telemetry::TriggerMetrics};
+    use wavs_types::{ServiceId, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowId};
+
+    #[tokio::test]
+    async fn test_add_trigger() {
+        let config = Config {
+            chains: ChainConfigs::default(),
+            ..Default::default()
+        };
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_storage = RedbStorage::new(temp_dir.path().join("db")).unwrap();
+        let services = Services::new(db_storage);
+
+        let metrics = TriggerMetrics::new(&opentelemetry::global::meter("test"));
+        let trigger_manager = TriggerManager::new(&config, metrics, services).unwrap();
+
+        let ctx = utils::context::AppContext::new();
+        let mut receiver = trigger_manager.start(ctx.clone()).unwrap();
+
+        // short sleep for trigger manager to kick in
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        for i in 0..6 {
+            let action = TriggerAction {
+                config: TriggerConfig {
+                    service_id: ServiceId::hash("test-service"),
+                    workflow_id: WorkflowId::new("test-workflow").unwrap(),
+                    trigger: Trigger::Manual,
+                },
+                data: TriggerData::Raw(vec![i as u8]),
+            };
+
+            let result = trigger_manager.add_trigger(action).await;
+            assert!(result.is_ok(), "Failed to add trigger {}: {:?}", i, result);
+        }
+
+        let mut received_count = 0;
+        while let Some(command) = receiver.recv().await {
+            if let DispatcherCommand::Trigger(action) = command {
+                if let TriggerData::Raw(data) = &action.data {
+                    assert_eq!(
+                        data,
+                        &vec![received_count as u8],
+                        "Trigger {} data mismatch",
+                        received_count
+                    );
+                    received_count += 1;
+                    if received_count == 6 {
+                        break;
+                    }
+                }
+            }
+        }
+        assert_eq!(received_count, 6, "Expected to receive 6 triggers");
+
+        ctx.kill();
+    }
+}

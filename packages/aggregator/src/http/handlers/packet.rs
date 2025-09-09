@@ -5,7 +5,7 @@ use axum::{extract::State, response::IntoResponse, Json};
 use tracing::instrument;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    ChainName, EnvelopeExt, EnvelopeSignature,
+    ChainKey, EnvelopeExt, EnvelopeSignature,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
     Packet, ServiceManagerError,
@@ -32,7 +32,7 @@ use crate::{
     description = "Validates and processes a packet, adding it to the aggregation queue. When enough packets from different signers accumulate to meet the threshold, the aggregated packet is sent to the target contract."
 )]
 #[axum::debug_handler]
-#[instrument(level = "info", skip(state, req), fields(service_id = %req.packet.service.id(), workflow_id = %req.packet.workflow_id))]
+#[instrument(level = "info", skip(state, req), fields(service.name = %req.packet.service.name, service.manager = ?req.packet.service.manager, workflow_id = %req.packet.workflow_id))]
 pub async fn handle_packet(
     State(state): State<HttpState>,
     Json(req): Json<AddPacketRequest>,
@@ -46,7 +46,7 @@ pub async fn handle_packet(
     }
 }
 
-#[instrument(level = "debug", skip(state, packet), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
+#[instrument(level = "debug", skip(state, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
 async fn process_packet(
     state: HttpState,
     packet: &Packet,
@@ -78,9 +78,7 @@ async fn process_packet(
     // but drop it after this scope so we don't confuse it with the service manager
     // that is used for the actual submission
     let signer = {
-        let service_manager_client = state
-            .get_evm_client(packet.service.manager.chain_name())
-            .await?;
+        let service_manager_client = state.get_evm_client(packet.service.manager.chain()).await?;
         let service_manager = IWavsServiceManagerInstance::new(
             packet.service.manager.evm_address_unchecked(),
             service_manager_client.provider,
@@ -248,13 +246,13 @@ async fn process_action(
 
 async fn get_submission_service_manager(
     state: &HttpState,
-    chain_name: &ChainName,
+    chain: &ChainKey,
     service_handler_address: Address,
 ) -> AggregatorResult<IWavsServiceManagerInstance<DynProvider>> {
     // we need to get the service manager from the perspective of the service handler
     // which may be different than the service manager where the operator is staked
     // e.g. in the case of operator sets that are mirrored across multiple chains
-    let service_handler_client = state.get_evm_client(chain_name).await?;
+    let service_handler_client = state.get_evm_client(chain).await?;
     let service_handler = IWavsServiceHandlerInstance::new(
         service_handler_address,
         service_handler_client.provider.clone(),
@@ -278,11 +276,10 @@ async fn handle_custom_submit(
     queue: &[QueuedPacket],
     submit_action: SubmitAction,
 ) -> AggregatorResult<TransactionReceipt> {
-    let chain_name = ChainName::new(submit_action.chain_name)?;
+    let chain = ChainKey::new(submit_action.chain)?;
     let contract_address = Address::from_slice(&submit_action.contract_address.raw_bytes);
 
-    let service_manager =
-        get_submission_service_manager(state, &chain_name, contract_address).await?;
+    let service_manager = get_submission_service_manager(state, &chain, contract_address).await?;
 
     let block_height_minus_one = service_manager
         .provider()
@@ -327,7 +324,7 @@ async fn handle_custom_submit(
         },
     }
 
-    let client = state.get_evm_client(&chain_name).await?;
+    let client = state.get_evm_client(&chain).await?;
     let tx_receipt = client
         .send_envelope_signatures(
             packet.envelope.clone(),
@@ -448,7 +445,7 @@ mod test {
     use alloy_primitives::Address;
     use alloy_provider::DynProvider;
     use utils::{
-        config::{ConfigBuilder, EvmChainConfig},
+        config::{ConfigBuilder, EvmChainConfigBuilder},
         filesystem::workspace_path,
         test_utils::{
             address::rand_address_evm,
@@ -459,7 +456,7 @@ mod test {
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{ChainName, ComponentDigest, Service, WorkflowID};
+    use wavs_types::{ComponentDigest, Credential, Service, SignatureKind, WorkflowId};
 
     #[test]
     fn packet_validation() {
@@ -484,10 +481,7 @@ mod test {
         let queue =
             add_packet_to_quorum_queue(&packet_2, queue.clone(), signer_1.address()).unwrap();
         assert_eq!(queue.len(), 1);
-        assert_eq!(
-            queue[0].packet.signature.as_bytes(),
-            packet_2.signature.as_bytes()
-        );
+        assert_eq!(queue[0].packet.signature.data, packet_2.signature.data);
 
         // "fails" (expectedly) because the envelope is different
         let packet_3 = mock_packet(&signer_2, &envelope_2, "workflow-1".parse().unwrap());
@@ -570,10 +564,10 @@ mod test {
         let mut service_ids = Vec::new();
         for _ in 0..NUM_CONCURRENT {
             let manager = wavs_types::ServiceManager::Evm {
-                chain_name: "test-chain".parse().unwrap(),
+                chain: "evm:test-chain".parse().unwrap(),
                 address: rand_address_evm(),
             };
-            let service_id = wavs_types::ServiceID::from(&manager);
+            let service_id = wavs_types::ServiceId::from(&manager);
             state.register_service(&service_id).unwrap();
             service_ids.push(service_id);
         }
@@ -595,7 +589,7 @@ mod test {
                             event_id,
                             aggregator_action: wavs_types::AggregatorAction::Submit(
                                 wavs_types::SubmitAction {
-                                    chain_name: "test-chain".to_string(),
+                                    chain: "evm:test-chain".to_string(),
                                     contract_address: vec![0u8; 20],
                                 },
                             ),
@@ -950,8 +944,8 @@ mod test {
     }
 
     async fn mock_service(
-        chain_name: ChainName,
-        workflow_id: WorkflowID,
+        chain: ChainKey,
+        workflow_id: WorkflowId,
         service_manager_address: Address,
         service_handler_addresses: Vec<Address>,
         aggregator_digest: ComponentDigest,
@@ -960,7 +954,7 @@ mod test {
             wavs_types::Component::new(wavs_types::ComponentSource::Digest(aggregator_digest));
         component
             .config
-            .insert("chain_name".to_string(), chain_name.to_string());
+            .insert("chain".to_string(), chain.to_string());
         // SimpleAggregator needs the service handler address
         if !service_handler_addresses.is_empty() {
             component.config.insert(
@@ -970,20 +964,21 @@ mod test {
         }
 
         mock_service_with_submit(
-            chain_name,
+            chain,
             workflow_id,
             service_manager_address,
             wavs_types::Submit::Aggregator {
                 url: "http://localhost:8080".to_string(),
                 component: Box::new(component),
+                signature_kind: SignatureKind::evm_default(),
             },
         )
         .await
     }
 
     async fn mock_service_with_submit(
-        chain_name: ChainName,
-        workflow_id: WorkflowID,
+        chain: ChainKey,
+        workflow_id: WorkflowId,
         service_manager_address: Address,
         submit: wavs_types::Submit,
     ) -> wavs_types::Service {
@@ -1004,7 +999,7 @@ mod test {
             status: wavs_types::ServiceStatus::Active,
             workflows,
             manager: wavs_types::ServiceManager::Evm {
-                chain_name,
+                chain,
                 address: service_manager_address,
             },
         }
@@ -1034,9 +1029,8 @@ mod test {
 
             // Use the same chain configuration from contract_deps
             config.chains.evm.insert(
-                contract_deps.chain_name.clone(),
-                EvmChainConfig {
-                    chain_id: "31337".to_string(),
+                contract_deps.chain.id.clone(),
+                EvmChainConfigBuilder {
                     http_endpoint: Some(contract_deps._anvil.endpoint()),
                     ws_endpoint: Some(contract_deps._anvil.ws_endpoint()),
                     faucet_endpoint: None,
@@ -1044,8 +1038,9 @@ mod test {
                 },
             );
 
-            config.credential =
-                Some("test test test test test test test test test test test junk".to_string());
+            config.credential = Some(Credential::new(
+                "test test test test test test test test test test test junk".to_string(),
+            ));
 
             let state = HttpState::new_with_engine(config).unwrap();
 
@@ -1064,12 +1059,12 @@ mod test {
 
         pub async fn create_service(
             &self,
-            workflow_id: WorkflowID,
+            workflow_id: WorkflowId,
             service_manager_address: Address,
             service_handler_addresses: Vec<Address>,
         ) -> Service {
             mock_service(
-                self.contracts.chain_name.clone(),
+                self.contracts.chain.clone(),
                 workflow_id,
                 service_manager_address,
                 service_handler_addresses,

@@ -28,7 +28,6 @@ log_level = ["info", "wavs=debug"]
 
 # Cosmos chains
 [default.chains.cosmos.layer-local]
-chain_id = "slay3r-local"
 bech32_prefix = "layer"
 rpc_endpoint = "http://localhost:26657"
 grpc_endpoint = "http://localhost:9090"
@@ -36,26 +35,7 @@ gas_price = 0.025
 gas_denom = "uslay"
 faucet_endpoint = "http://localhost:8000"
 
-[default.chains.cosmos.layer-localnode]
-chain_id = "layer-local"
-bech32_prefix = "layer"
-rpc_endpoint = "http://layer:26657"
-grpc_endpoint = "http://layer:9090"
-gas_price = 0.025
-gas_denom = "ulayer"
-faucet_endpoint = "http://faucet:8000"
-
-[default.chains.cosmos.layer-hacknet]
-chain_id = "layer-hack-1"
-bech32_prefix = "layer"
-rpc_endpoint = "https://rpc.hack.layer.xyz:443"
-grpc_endpoint = "https://grpc.hack.layer.xyz:443"
-gas_price = 0.025
-gas_denom = "ulayer"
-faucet_endpoint = "https://rabbit.hack.layer.xyz"
-
-[default.chains.cosmos.neutron]
-chain_id = "pion-1"
+[default.chains.cosmos.pion-1]
 bech32_prefix = "neutron"
 rpc_endpoint = "https://rpc-falcron.pion-1.ntrn.tech"
 grpc_endpoint = "http://grpc-falcron.pion-1.ntrn.tech:80"
@@ -63,31 +43,28 @@ gas_price = 0.0053
 gas_denom = "untrn"
 
 # EVM chains
-[default.chains.evm.local]
-chain_id = "31337"
+[default.chains.evm.31337]
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
 poll_interval_ms = 7000
 
-[default.chains.evm.local2]
-chain_id = "31338"
+[default.chains.evm.31338]
 ws_endpoint = "ws://localhost:8645"
 http_endpoint = "http://localhost:8645"
 poll_interval_ms = 7000
 
-[default.chains.evm.sepolia]
-chain_id = "11155111"
+[default.chains.evm.11155111]
 ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
 http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
 poll_interval_ms = 7000
 
-[default.chains.evm.holesky]
-chain_id = "17000"
+[default.chains.evm.17000]
 ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
 http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
 poll_interval_ms = 7000
 
-[default.chains.evm.holesky-fork]
+[default.chains.dev.holesky-fork]
+type = "evm"
 chain_id = "17000"
 ws_endpoint = "ws://localhost:8545"
 http_endpoint = "http://localhost:8545"
@@ -117,6 +94,11 @@ port = 8000
 # jaeger = "http://localhost:4317"
 # Prometheus endpoint to send metrics to
 # prometheus = "http://localhost:9090"
+
+# Optional bearer token to protect mutating HTTP endpoints
+# If set here or via env var `WAVS_BEARER_TOKEN`, POST/DELETE endpoints require `Authorization: Bearer <token>`
+# Generate with `openssl rand -hex 32`
+# bearer_token = "change-me"
 
 # WAVS-specific chain overrides (if needed)
 # Example:
@@ -150,6 +132,11 @@ cors_allowed_origins = [
 
 # Jaeger collector to send trace data
 # jaeger = "http://localhost:4317"
+
+# Optional bearer token to protect mutating HTTP endpoints
+# If set here or via env var `WAVS_AGGREGATOR_BEARER_TOKEN`, POST endpoints require `Authorization: Bearer <token>`
+# Generate with `openssl rand -hex 32`
+# bearer_token = "change-me"
 
 # Aggregator-specific chain overrides (if needed)
 # Example:

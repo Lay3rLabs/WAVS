@@ -13,7 +13,9 @@ use wavs_systems::{
     http::{map_response, TestHttpApp},
     mock_trigger_manager::mock_evm_event_trigger,
 };
-use wavs_types::{ChainName, Component, ComponentDigest, ComponentSource, UploadComponentResponse};
+use wavs_types::{
+    ChainKey, Component, ComponentDigest, ComponentSource, SignatureKind, UploadComponentResponse,
+};
 
 #[test]
 fn http_not_found() {
@@ -95,9 +97,10 @@ fn http_save_service() {
             component: Box::new(Component::new(ComponentSource::Digest(
                 ComponentDigest::hash([1, 2, 3]),
             ))),
+            signature_kind: SignatureKind::evm_default(),
         },
         wavs_types::ServiceManager::Evm {
-            chain_name: "evm".try_into().unwrap(),
+            chain: "evm:anvil".try_into().unwrap(),
             address: rand_address_evm(),
         },
     );
@@ -159,7 +162,7 @@ fn http_save_service() {
 
 fn create_test_evm_chain_config() -> AnyChainConfig {
     AnyChainConfig::Evm(EvmChainConfig {
-        chain_id: "1337".to_string(),
+        chain_id: "1337".parse().unwrap(),
         ws_endpoint: Some("wss://localhost:8546".to_string()),
         http_endpoint: Some("http://localhost:8545".to_string()),
         faucet_endpoint: None,
@@ -169,7 +172,7 @@ fn create_test_evm_chain_config() -> AnyChainConfig {
 
 fn create_test_cosmos_chain_config() -> AnyChainConfig {
     AnyChainConfig::Cosmos(CosmosChainConfig {
-        chain_id: "test-cosmos-1".to_string(),
+        chain_id: "test-cosmos-1".parse().unwrap(),
         bech32_prefix: "cosmos".to_string(),
         rpc_endpoint: Some("http://localhost:26657".to_string()),
         grpc_endpoint: Some("http://localhost:9090".to_string()),
@@ -182,12 +185,15 @@ fn create_test_cosmos_chain_config() -> AnyChainConfig {
 #[test]
 fn test_add_chain_evm_success() {
     let app = TestHttpApp::new();
-    let chain_name: ChainName = "test-evm".try_into().unwrap();
+
     let chain_config = create_test_evm_chain_config();
+    let chain: ChainKey = format!("evm:{}", chain_config.chain_id().as_str())
+        .parse()
+        .unwrap();
 
     let request_body = serde_json::json!({
-        "chain_name": chain_name,
-        "chain_config": chain_config
+        "chain": chain,
+        "config": chain_config
     });
 
     let req = Request::builder()
@@ -208,12 +214,14 @@ fn test_add_chain_evm_success() {
 #[test]
 fn test_add_chain_cosmos_success() {
     let app = TestHttpApp::new();
-    let chain_name: ChainName = "test-cosmos".try_into().unwrap();
     let chain_config = create_test_cosmos_chain_config();
+    let chain: ChainKey = format!("cosmos:{}", chain_config.chain_id().as_str())
+        .parse()
+        .unwrap();
 
     let request_body = serde_json::json!({
-        "chain_name": chain_name,
-        "chain_config": chain_config
+        "chain": chain,
+        "config": chain_config
     });
 
     let req = Request::builder()
@@ -255,7 +263,7 @@ fn test_add_chain_invalid_config() {
     let app = TestHttpApp::new();
 
     let request_body = serde_json::json!({
-        "chain_name": "test-chain",
+        "chain": "test-chain",
         "chain_config": {
             "invalid_type": {
                 "chain_id": "1337"
@@ -281,13 +289,15 @@ fn test_add_chain_invalid_config() {
 #[test]
 fn test_add_chain_prevents_duplicates() {
     let app = TestHttpApp::new();
-    let chain_name: ChainName = "test-duplicate-chain".try_into().unwrap();
     let chain_config = create_test_evm_chain_config();
+    let chain: ChainKey = format!("evm:{}", chain_config.chain_id().as_str())
+        .parse()
+        .unwrap();
 
     // add chain first time
     let add_request1 = serde_json::json!({
-        "chain_name": chain_name,
-        "chain_config": chain_config
+        "chain": chain,
+        "config": chain_config
     });
 
     let req1 = Request::builder()
@@ -310,8 +320,8 @@ fn test_add_chain_prevents_duplicates() {
 
     // Try to add same chain again - should fail
     let add_request2 = serde_json::json!({
-        "chain_name": chain_name,
-        "chain_config": chain_config
+        "chain": chain,
+        "config": chain_config
     });
 
     let req2 = Request::builder()

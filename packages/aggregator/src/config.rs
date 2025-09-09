@@ -8,6 +8,7 @@ use utils::{
     service::DEFAULT_IPFS_GATEWAY,
 };
 use utoipa::ToSchema;
+use wavs_types::Credential;
 
 /// Default LRU cache size for compiled WASM components
 const DEFAULT_WASM_LRU_SIZE: usize = 20;
@@ -41,7 +42,7 @@ pub struct Config {
     pub chains: ChainConfigs,
 
     /// Mnemonic or private key of the signer (usually leave this as None in config file and cli args, rather override in env)
-    pub credential: Option<String>,
+    pub credential: Option<Credential>,
 
     /// The hd index of the mnemonic to sign with
     pub hd_index: Option<u32>,
@@ -60,6 +61,10 @@ pub struct Config {
 
     /// Maximum execution time in seconds for WASM components (None for unlimited)
     pub max_execution_seconds: Option<u64>,
+
+    /// Optional bearer token to protect mutating HTTP endpoints.
+    /// If None, endpoints remain unauthenticated.
+    pub bearer_token: Option<Credential>,
 }
 
 /// Default values for the config struct
@@ -78,11 +83,13 @@ impl Default for Config {
             chains: ChainConfigs {
                 cosmos: Default::default(),
                 evm: Default::default(),
+                dev: Default::default(),
             },
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
             wasm_lru_size: DEFAULT_WASM_LRU_SIZE,
             max_wasm_fuel: None,
             max_execution_seconds: None,
+            bearer_token: None,
         }
     }
 }
@@ -94,7 +101,7 @@ impl Config {
             .clone()
             .ok_or(anyhow::anyhow!("missing credentials"))?;
         let signer = MnemonicBuilder::<English>::default()
-            .phrase(mnemonic)
+            .phrase(mnemonic.as_ref())
             .build()?;
         Ok(signer)
     }

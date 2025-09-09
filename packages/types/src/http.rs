@@ -1,6 +1,9 @@
 pub mod aggregator;
 use super::Service;
-use crate::{AnyChainConfig, ChainName, ComponentDigest, ServiceDigest, ServiceID, ServiceManager};
+use crate::{
+    AnyChainConfig, ChainKey, ComponentDigest, ServiceDigest, ServiceId, ServiceManager, Trigger,
+    TriggerData, WorkflowId,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -27,8 +30,8 @@ pub struct GetServiceKeyRequest {
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct AddChainRequest {
-    pub chain_name: ChainName,
-    pub chain_config: AnyChainConfig,
+    pub chain: ChainKey,
+    pub config: AnyChainConfig,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -39,7 +42,7 @@ pub struct DeleteServicesRequest {
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ListServicesResponse {
     pub services: Vec<Service>,
-    pub service_ids: Vec<ServiceID>,
+    pub service_ids: Vec<ServiceId>,
     pub component_digests: Vec<ComponentDigest>,
 }
 
@@ -51,4 +54,19 @@ pub struct UploadComponentResponse {
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 pub struct SaveServiceResponse {
     pub hash: ServiceDigest,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct SimulatedTriggerRequest {
+    pub service_id: ServiceId,
+    pub workflow_id: WorkflowId,
+    pub trigger: Trigger,
+    #[schema(value_type = Object)]
+    pub data: TriggerData,
+    #[serde(default = "default_simulated_trigger_count")]
+    pub count: usize,
+}
+
+fn default_simulated_trigger_count() -> usize {
+    1
 }

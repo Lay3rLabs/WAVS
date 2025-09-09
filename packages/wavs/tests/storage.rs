@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use utils::storage::db::{RedbStorage, Table, JSON};
 use utils::test_utils::address::rand_address_evm;
 use wavs_types::{
-    Component, ComponentDigest, ComponentSource, Service, ServiceID, ServiceManager, ServiceStatus,
-    Submit, Workflow, WorkflowID,
+    Component, ComponentDigest, ComponentSource, Service, ServiceId, ServiceManager, ServiceStatus,
+    Submit, Workflow, WorkflowId,
 };
 
 use redb::ReadableTable;
@@ -64,9 +64,9 @@ fn db_service_store() {
 
     const SERVICE_TABLE: Table<[u8; 32], JSON<Service>> = Table::new("temp-services");
 
-    let workflows: BTreeMap<WorkflowID, Workflow> = [
+    let workflows: BTreeMap<WorkflowId, Workflow> = [
         (
-            WorkflowID::new("workflow-id-1").unwrap(),
+            WorkflowId::new("workflow-id-1").unwrap(),
             Workflow {
                 trigger: mock_evm_event_trigger(),
                 component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
@@ -76,7 +76,7 @@ fn db_service_store() {
             },
         ),
         (
-            WorkflowID::new("workflow-id-2").unwrap(),
+            WorkflowId::new("workflow-id-2").unwrap(),
             Workflow {
                 trigger: mock_evm_event_trigger(),
                 component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
@@ -93,7 +93,7 @@ fn db_service_store() {
         workflows,
         status: ServiceStatus::Active,
         manager: ServiceManager::Evm {
-            chain_name: "evm".parse().unwrap(),
+            chain: "evm:anvil".parse().unwrap(),
             address: rand_address_evm(),
         },
     };
@@ -120,9 +120,9 @@ fn db_service_store() {
                 .unwrap()
                 .map(|entry| {
                     let (k, _) = entry.unwrap();
-                    ServiceID::from(k.value())
+                    ServiceId::from(k.value())
                 })
-                .collect::<Vec<ServiceID>>())
+                .collect::<Vec<ServiceId>>())
         })
         .unwrap();
 

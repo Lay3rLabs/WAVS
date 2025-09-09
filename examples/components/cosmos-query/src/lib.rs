@@ -19,9 +19,9 @@ impl Guest for Component {
                 serde_json::from_slice(&req).map_err(|e| anyhow!("{:?}", e))?;
 
             let resp = match req {
-                CosmosQueryRequest::BlockHeight { chain_name } => {
-                    let chain_config = host::get_cosmos_chain_config(&chain_name)
-                        .ok_or(anyhow!("chain config for {chain_name} not found"))?;
+                CosmosQueryRequest::BlockHeight { chain } => {
+                    let chain_config = host::get_cosmos_chain_config(&chain)
+                        .ok_or(anyhow!("chain config for {chain} not found"))?;
 
                     let querier =
                         layer_climb::querier::QueryClient::new(chain_config.into(), None).await?;
@@ -32,12 +32,9 @@ impl Guest for Component {
                         .map(CosmosQueryResponse::BlockHeight)
                 }
 
-                CosmosQueryRequest::Balance {
-                    chain_name,
-                    address,
-                } => {
-                    let chain_config = host::get_cosmos_chain_config(&chain_name)
-                        .ok_or(anyhow!("chain config for {chain_name} not found"))?;
+                CosmosQueryRequest::Balance { chain, address } => {
+                    let chain_config = host::get_cosmos_chain_config(&chain)
+                        .ok_or(anyhow!("chain config for {chain} not found"))?;
 
                     let querier =
                         layer_climb::querier::QueryClient::new(chain_config.into(), None).await?;

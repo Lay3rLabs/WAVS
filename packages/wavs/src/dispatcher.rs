@@ -38,8 +38,8 @@ use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
-use wavs_types::{ChainConfigError, ComponentDigest, ServiceManager};
-use wavs_types::{ChainName, IDError, Service, ServiceID, SigningKeyResponse, TriggerAction};
+use wavs_types::{ChainConfigError, ChainKey, ComponentDigest, ServiceManager, WorkflowIdError};
+use wavs_types::{Service, ServiceId, SigningKeyResponse, TriggerAction};
 
 use crate::config::Config;
 use crate::services::{Services, ServicesError};
@@ -73,7 +73,7 @@ pub struct Dispatcher<S: CAStorage> {
 #[allow(clippy::large_enum_variant)]
 pub enum DispatcherCommand {
     Trigger(TriggerAction),
-    ChangeServiceUri { service_id: ServiceID, uri: String },
+    ChangeServiceUri { service_id: ServiceId, uri: String },
 }
 
 impl Dispatcher<FileStorage> {
@@ -229,20 +229,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         &self,
         service_manager: ServiceManager,
     ) -> Result<Service, DispatcherError> {
-        let (chain_name, address) = match service_manager {
-            ServiceManager::Evm {
-                chain_name,
-                address,
-            } => (chain_name, address),
+        let (chain, address) = match service_manager {
+            ServiceManager::Evm { chain, address } => (chain, address),
         };
         let chain_configs = self.chain_configs.read().unwrap().clone();
-        let service = query_service_from_address(
-            chain_name,
-            address.into(),
-            &chain_configs,
-            &self.ipfs_gateway,
-        )
-        .await?;
+        let service =
+            query_service_from_address(chain, address.into(), &chain_configs, &self.ipfs_gateway)
+                .await?;
 
         self.add_service_direct(service.clone()).await?;
 
@@ -251,17 +244,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         let total_services = current_services.len();
         let total_workflows: usize = current_services.iter().map(|s| s.workflows.len()).sum();
 
-        tracing::info!("Service registered: service_id={}, workflows={}, total_services={}, total_workflows={}",
-            service.id(), service.workflows.len(), total_services, total_workflows);
+        tracing::info!(service.name = %service.name, service.manager = ?service.manager, workflows = %service.workflows.len(), total_services = %total_services, total_workflows = %total_workflows, "Service registered: {} [{:?}], workflows={}, total_services={}, total_workflows={}", service.name, service.manager, service.workflows.len(), total_services, total_workflows);
 
         Ok(service)
     }
 
     // this is public just so we can call it from tests
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher", service.name = %service.name, service.manager = ?service.manager))]
     pub async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
         let service_id = service.id();
-        tracing::info!("Adding service: {}", service_id);
+        tracing::info!("Adding service: {} [{:?}]", service.name, service.manager);
         // Check if service is already registered
         if self.services.exists(&service_id)? {
             return Err(DispatcherError::ServiceRegistered(service_id));
@@ -287,7 +279,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    pub fn remove_service(&self, id: ServiceID) -> Result<(), DispatcherError> {
+    pub fn remove_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
         self.services.remove(&id)?;
         self.engine_manager.engine.remove_storage(&id);
         self.trigger_manager.remove_service(id.clone())?;
@@ -310,7 +302,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     pub fn get_service_key(
         &self,
-        service_id: ServiceID,
+        service_id: ServiceId,
     ) -> Result<SigningKeyResponse, DispatcherError> {
         Ok(self.submission_manager.get_service_key(service_id)?)
     }
@@ -318,7 +310,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
     async fn change_service(
         &self,
-        service_id: ServiceID,
+        service_id: ServiceId,
         url_str: String,
     ) -> Result<(), DispatcherError> {
         let service = fetch_service(&url_str, &self.ipfs_gateway).await?;
@@ -370,28 +362,22 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 }
 
 async fn query_service_from_address(
-    chain_name: ChainName,
+    chain: ChainKey,
     address: Address,
     chain_configs: &ChainConfigs,
     ipfs_gateway: &str,
 ) -> Result<Service, DispatcherError> {
     // Get the chain config
-    let chain = chain_configs.get_chain(&chain_name)?.ok_or_else(|| {
-        DispatcherError::Config(format!(
-            "Could not get chain config for chain {}",
-            chain_name
-        ))
+    let chain_config = chain_configs.get_chain(&chain).ok_or_else(|| {
+        DispatcherError::Config(format!("Could not get chain config for chain {chain}"))
     })?;
 
     // Handle different chain types
-    match chain {
+    match chain_config {
         AnyChainConfig::Evm(evm_config) => {
             // Get the HTTP endpoint, required for contract calls
             let http_endpoint = evm_config.http_endpoint.clone().ok_or_else(|| {
-                DispatcherError::Config(format!(
-                    "No HTTP endpoint configured for chain {}",
-                    chain_name
-                ))
+                DispatcherError::Config(format!("No HTTP endpoint configured for chain {chain}"))
             })?;
 
             // Create a provider using the HTTP endpoint
@@ -438,13 +424,13 @@ fn add_service_to_managers(
 #[derive(Error, Debug)]
 pub enum DispatcherError {
     #[error("Service {0} already registered")]
-    ServiceRegistered(ServiceID),
+    ServiceRegistered(ServiceId),
 
     #[error("{0:?}")]
     UnknownService(#[from] ServicesError),
 
-    #[error("Invalid ID: {0}")]
-    ID(#[from] IDError),
+    #[error("Invalid WorkflowId: {0}")]
+    ID(#[from] WorkflowIdError),
 
     #[error("DB: {0}")]
     DB(#[from] DBError),
@@ -490,7 +476,7 @@ pub enum DispatcherError {
 
     #[error("Service change: id mismatch, from {old_id} to {new_id}")]
     ChangeIdMismatch {
-        old_id: ServiceID,
-        new_id: ServiceID,
+        old_id: ServiceId,
+        new_id: ServiceId,
     },
 }

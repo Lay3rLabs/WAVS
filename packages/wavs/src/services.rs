@@ -4,9 +4,9 @@ use redb::ReadableTable;
 use thiserror::Error;
 use tracing::instrument;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
-use wavs_types::{Service, ServiceID, ServiceStatus};
+use wavs_types::{Service, ServiceId, ServiceStatus, Workflow, WorkflowId};
 
-// key is ServiceID
+// key is ServiceId
 // TODO - use CAStorage instead?
 const SERVICE_TABLE: Table<[u8; 32], JSON<Service>> = Table::new("services");
 
@@ -23,7 +23,7 @@ impl Services {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
-    pub fn try_get(&self, id: &ServiceID) -> Result<Option<Service>> {
+    pub fn try_get(&self, id: &ServiceId) -> Result<Option<Service>> {
         match self.db_storage.get(SERVICE_TABLE, id.inner()) {
             Ok(Some(service)) => Ok(Some(service.value())),
             Ok(None) => Ok(None),
@@ -32,7 +32,7 @@ impl Services {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
-    pub fn get(&self, service_id: &ServiceID) -> Result<Service> {
+    pub fn get(&self, service_id: &ServiceId) -> Result<Service> {
         match self.try_get(service_id)? {
             Some(service) => Ok(service),
             None => Err(ServicesError::UnknownService(service_id.clone())),
@@ -40,14 +40,32 @@ impl Services {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
-    pub fn exists(&self, service_id: &ServiceID) -> Result<bool> {
+    pub fn get_workflow(
+        &self,
+        service_id: &ServiceId,
+        workflow_id: &WorkflowId,
+    ) -> Result<Workflow> {
+        let service = self.get(service_id)?;
+        service
+            .workflows
+            .get(workflow_id)
+            .cloned()
+            .ok_or_else(|| ServicesError::UnknownWorkflow {
+                service_name: service.name,
+                service_id: service_id.clone(),
+                workflow_id: workflow_id.clone(),
+            })
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
+    pub fn exists(&self, service_id: &ServiceId) -> Result<bool> {
         match self.db_storage.get(SERVICE_TABLE, service_id.inner())? {
             Some(_) => Ok(true),
             None => Ok(false),
         }
     }
 
-    pub fn is_active(&self, service_id: &ServiceID) -> bool {
+    pub fn is_active(&self, service_id: &ServiceId) -> bool {
         self.get(service_id)
             .map(|service| match service.status {
                 ServiceStatus::Active => true,
@@ -57,7 +75,7 @@ impl Services {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
-    pub fn remove(&self, service_id: &ServiceID) -> Result<()> {
+    pub fn remove(&self, service_id: &ServiceId) -> Result<()> {
         self.db_storage
             .remove(SERVICE_TABLE, service_id.inner())
             .map_err(|e| e.into())
@@ -73,8 +91,8 @@ impl Services {
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
     pub fn list(
         &self,
-        bounds_start: Bound<&ServiceID>,
-        bounds_end: Bound<&ServiceID>,
+        bounds_start: Bound<&ServiceId>,
+        bounds_end: Bound<&ServiceId>,
     ) -> Result<Vec<Service>> {
         let res = self
             .db_storage
@@ -167,7 +185,14 @@ impl Services {
 #[derive(Error, Debug)]
 pub enum ServicesError {
     #[error("Unknown Service {0}")]
-    UnknownService(ServiceID),
+    UnknownService(ServiceId),
+
+    #[error("Unknown Workflow {workflow_id} for Service {service_name} (id: {service_id})")]
+    UnknownWorkflow {
+        service_name: String,
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
+    },
 
     #[error("Database error: {0}")]
     DBError(#[from] DBError),
@@ -179,10 +204,10 @@ macro_rules! tracing_service_info {
         if tracing::enabled!(tracing::Level::INFO) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::info!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                    tracing::info!(service.name = %service.name, service.manager = ?service.manager, "Service {} [{:?}]: {}", service.name, service.manager, format_args!($($msg)*));
                 },
                 None => {
-                    tracing::info!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::info!(service.id = %$service_id, "Service [id: {}]: {}", $service_id, format_args!($($msg)*));
                 }
             }
         }
@@ -195,10 +220,10 @@ macro_rules! tracing_service_debug {
         if tracing::enabled!(tracing::Level::DEBUG) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::debug!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                    tracing::debug!(service.name = %service.name, service.manager = ?service.manager, "Service {} [{:?}]: {}", service.name, service.manager, format_args!($($msg)*));
                 },
                 None => {
-                    tracing::debug!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::debug!(service.id = %$service_id, "Service [id: {}]: {}", $service_id, format_args!($($msg)*));
                 }
             }
         }
@@ -211,10 +236,10 @@ macro_rules! tracing_service_trace {
         if tracing::enabled!(tracing::Level::TRACE) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::trace!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                    tracing::trace!(service.name = %service.name, service.manager = ?service.manager, "Service {} [{:?}]: {}", service.name, service.manager, format_args!($($msg)*));
                 },
                 None => {
-                    tracing::trace!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::trace!(service.id = %$service_id, "Service [id: {}]: {}", $service_id, format_args!($($msg)*));
                 }
             }
         }
@@ -226,10 +251,10 @@ macro_rules! tracing_service_warn {
         if tracing::enabled!(tracing::Level::WARN) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::warn!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                    tracing::warn!(service.name = %service.name, service.manager = ?service.manager, "Service {} [{:?}]: {}", service.name, service.manager, format_args!($($msg)*));
                 },
                 None => {
-                    tracing::warn!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::warn!(service.id = %$service_id, "Service [id: {}]: {}", $service_id, format_args!($($msg)*));
                 }
             }
         }
@@ -242,10 +267,10 @@ macro_rules! tracing_service_error {
         if tracing::enabled!(tracing::Level::ERROR) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::error!("Service {} [id: {}]: {}", service.name, $service_id, format_args!($($msg)*));
+                    tracing::error!(service.name = %service.name, service.manager = ?service.manager, "Service {} [{:?}]: {}", service.name, service.manager, format_args!($($msg)*));
                 },
                 None => {
-                    tracing::error!("Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::error!(service.id = %$service_id, "Service [id: {}]: {}", $service_id, format_args!($($msg)*));
                 }
             }
         }

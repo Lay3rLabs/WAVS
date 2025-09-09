@@ -1,4 +1,4 @@
-mod chain_names;
+mod chains;
 mod clients;
 mod components;
 mod config;

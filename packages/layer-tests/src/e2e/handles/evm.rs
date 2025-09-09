@@ -30,7 +30,7 @@ impl EvmInstance {
         // Something is broken with Alloy's anvil thing... let's use our own
         let anvil = LameAnvilInstanceBuilder {
             port,
-            chain_id: chain_config.chain_id.clone(),
+            chain_id: chain_config.chain_id.to_string(),
         }
         .spawn();
 

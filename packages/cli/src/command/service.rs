@@ -33,8 +33,8 @@ use utils::{
 };
 use uuid::Uuid;
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ByteArray, ChainName, Component, ComponentSource, Registry,
-    ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowID,
+    Aggregator, AllowedHostPermission, ByteArray, ChainKey, Component, ComponentSource, Registry,
+    ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowId,
 };
 
 use crate::{
@@ -78,30 +78,24 @@ pub async fn handle_service_command(
             WorkflowCommand::Trigger { id, command } => match command {
                 TriggerCommand::SetCosmos {
                     address,
-                    chain_name,
+                    chain,
                     event_type,
                 } => {
-                    let query_client = ctx.new_cosmos_client(&chain_name).await?.querier;
-                    let result = set_cosmos_trigger(
-                        query_client,
-                        &file,
-                        id,
-                        address,
-                        chain_name,
-                        event_type,
-                    )?;
+                    let query_client = ctx.new_cosmos_client(chain.id.clone()).await?.querier;
+                    let result =
+                        set_cosmos_trigger(query_client, &file, id, address, chain, event_type)?;
                     display_result(ctx, result, json)?;
                 }
                 TriggerCommand::SetEvm {
                     address,
-                    chain_name,
+                    chain,
                     event_hash,
                 } => {
-                    let result = set_evm_trigger(&file, id, address, chain_name, event_hash)?;
+                    let result = set_evm_trigger(&file, id, address, chain, event_hash)?;
                     display_result(ctx, result, json)?;
                 }
                 TriggerCommand::SetBlockInterval {
-                    chain_name,
+                    chain,
                     n_blocks,
                     start_block,
                     end_block,
@@ -109,7 +103,7 @@ pub async fn handle_service_command(
                     let result = set_block_interval_trigger(
                         &file,
                         id,
-                        chain_name,
+                        chain,
                         n_blocks,
                         start_block,
                         end_block,
@@ -141,11 +135,8 @@ pub async fn handle_service_command(
             },
         },
         ServiceCommand::Manager { command } => match command {
-            ManagerCommand::SetEvm {
-                chain_name,
-                address,
-            } => {
-                let result = set_evm_manager(&file, address, chain_name)?;
+            ManagerCommand::SetEvm { chain, address } => {
+                let result = set_evm_manager(&file, address, chain)?;
                 display_result(ctx, result, json)?;
             }
         },
@@ -282,7 +273,7 @@ fn build_component_result(
 /// Unified component operation handler for both workflow and aggregator components
 pub async fn update_component(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     context: ComponentContext,
     command: ComponentCommand,
 ) -> Result<ComponentOperationResult> {
@@ -503,12 +494,12 @@ pub fn init_service(file_path: &Path, name: String) -> Result<ServiceInitResult>
 }
 
 /// Add a workflow to a service
-pub fn add_workflow(file_path: &Path, id: Option<WorkflowID>) -> Result<WorkflowAddResult> {
+pub fn add_workflow(file_path: &Path, id: Option<WorkflowId>) -> Result<WorkflowAddResult> {
     modify_service_file(file_path, |mut service| {
         // Generate workflow ID if not provided
         let workflow_id = match id {
             Some(id) => id,
-            None => WorkflowID::new(Uuid::now_v7().as_hyphenated().to_string())?,
+            None => WorkflowId::new(Uuid::now_v7().as_hyphenated().to_string())?,
         };
 
         // Create default trigger, component, and submit
@@ -537,7 +528,7 @@ pub fn add_workflow(file_path: &Path, id: Option<WorkflowID>) -> Result<Workflow
 }
 
 /// Delete a workflow from a service
-pub fn delete_workflow(file_path: &Path, workflow_id: WorkflowID) -> Result<WorkflowDeleteResult> {
+pub fn delete_workflow(file_path: &Path, workflow_id: WorkflowId) -> Result<WorkflowDeleteResult> {
     modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
         if !service.workflows.contains_key(&workflow_id) {
@@ -564,9 +555,9 @@ pub fn delete_workflow(file_path: &Path, workflow_id: WorkflowID) -> Result<Work
 pub fn set_cosmos_trigger(
     query_client: CosmosQueryClient,
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     address_str: String,
-    chain_name: ChainName,
+    chain: ChainKey,
     event_type: String,
 ) -> Result<WorkflowTriggerResult> {
     // Parse the Cosmos address
@@ -581,7 +572,7 @@ pub fn set_cosmos_trigger(
         // Update the trigger
         let trigger = Trigger::CosmosContractEvent {
             address,
-            chain_name,
+            chain,
             event_type,
         };
         workflow.trigger = TriggerJson::Trigger(trigger.clone());
@@ -600,9 +591,9 @@ pub fn set_cosmos_trigger(
 /// Set an EVM contract event trigger for a workflow
 pub fn set_evm_trigger(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     address: alloy_primitives::Address,
-    chain_name: ChainName,
+    chain: ChainKey,
     event_hash_str: String,
 ) -> Result<WorkflowTriggerResult> {
     // Order the match cases from most explicit to event parsing:
@@ -630,7 +621,7 @@ pub fn set_evm_trigger(
         // Update the trigger
         let trigger = Trigger::EvmContractEvent {
             address,
-            chain_name,
+            chain,
             event_hash: ByteArray::new(event_hash),
         };
         workflow.trigger = TriggerJson::Trigger(trigger.clone());
@@ -648,8 +639,8 @@ pub fn set_evm_trigger(
 
 pub fn set_block_interval_trigger(
     file_path: &Path,
-    workflow_id: WorkflowID,
-    chain_name: ChainName,
+    workflow_id: WorkflowId,
+    chain: ChainKey,
     n_blocks: NonZeroU32,
     start_block: Option<NonZeroU64>,
     end_block: Option<NonZeroU64>,
@@ -662,7 +653,7 @@ pub fn set_block_interval_trigger(
         validate_block_interval_config(start_block, end_block).map_err(|e| anyhow!(e))?;
 
         let trigger = Trigger::BlockInterval {
-            chain_name,
+            chain,
             n_blocks,
             start_block,
             end_block,
@@ -682,7 +673,7 @@ pub fn set_block_interval_trigger(
 
 pub fn set_cron_trigger(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     schedule: cron::Schedule,
     start_time: Option<Timestamp>,
     end_time: Option<Timestamp>,
@@ -715,7 +706,7 @@ pub fn set_cron_trigger(
 /// Update workflow component using unified logic
 pub async fn update_workflow_component(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     command: ComponentCommand,
 ) -> Result<ComponentOperationResult> {
     use crate::command::service::types::ComponentContext;
@@ -730,18 +721,18 @@ pub async fn update_workflow_component(
 pub fn set_evm_manager(
     file_path: &Path,
     address: alloy_primitives::Address,
-    chain_name: ChainName,
+    chain: ChainKey,
 ) -> Result<EvmManagerResult> {
     modify_service_file(file_path, |mut service| {
         service.manager = ServiceManagerJson::Manager(ServiceManager::Evm {
-            chain_name: chain_name.clone(),
+            chain: chain.clone(),
             address,
         });
 
         Ok((
             service,
             EvmManagerResult {
-                chain_name,
+                chain,
                 address,
                 file_path: file_path.to_path_buf(),
             },
@@ -784,15 +775,15 @@ pub async fn validate_service(
         let mut chains_to_validate = HashSet::new();
         let mut triggers = Vec::new();
         let mut submits = Vec::new();
-        let aggregators: Vec<(&WorkflowID, Aggregator)> = Vec::new();
+        let aggregators: Vec<(&WorkflowId, Aggregator)> = Vec::new();
 
         for (workflow_id, workflow) in &service.workflows {
             if let TriggerJson::Trigger(trigger) = &workflow.trigger {
                 match trigger {
-                    Trigger::CosmosContractEvent { chain_name, .. } => {
-                        chains_to_validate.insert((chain_name.clone(), ChainType::Cosmos));
+                    Trigger::CosmosContractEvent { chain, .. } => {
+                        chains_to_validate.insert((chain.clone(), ChainType::Cosmos));
 
-                        if let Ok(client) = ctx.new_cosmos_client(chain_name).await {
+                        if let Ok(client) = ctx.new_cosmos_client(chain.id.clone()).await {
                             validate_workflow_trigger(
                                 workflow_id,
                                 trigger,
@@ -804,28 +795,28 @@ pub async fn validate_service(
                             errors.push(format!(
                                 "Workflow '{}' uses chain '{}' in Cosmos trigger,
   but client configuration is invalid",
-                                workflow_id, chain_name
+                                workflow_id, chain
                             ));
                         }
                     }
-                    Trigger::EvmContractEvent { chain_name, .. } => {
-                        chains_to_validate.insert((chain_name.clone(), ChainType::EVM));
+                    Trigger::EvmContractEvent { chain, .. } => {
+                        chains_to_validate.insert((chain.clone(), ChainType::EVM));
                     }
                     Trigger::BlockInterval {
-                        chain_name,
+                        chain,
                         start_block,
                         end_block,
                         ..
-                    } => match ctx.config.chains.get_chain(chain_name).unwrap() {
+                    } => match ctx.config.chains.get_chain(chain) {
                         None => {
                             errors.push(format!(
                                 "Workflow '{}' uses chain '{}' in BlockInterval
    trigger, but chain is missing",
-                                workflow_id, chain_name
+                                workflow_id, chain
                             ));
                         }
                         Some(AnyChainConfig::Cosmos(_)) => {
-                            let cosmos_client = ctx.new_cosmos_client(chain_name).await?;
+                            let cosmos_client = ctx.new_cosmos_client(chain.id.clone()).await?;
                             let block_height = cosmos_client.querier.block_height().await?;
                             if let Err(err) = validate_block_interval_config_on_chain(
                                 *start_block,
@@ -840,7 +831,7 @@ pub async fn validate_service(
                             }
                         }
                         Some(AnyChainConfig::Evm(_)) => {
-                            let evm_client = ctx.new_evm_client_read_only(chain_name).await?;
+                            let evm_client = ctx.new_evm_client_read_only(chain.id.clone()).await?;
                             let block_height = evm_client.provider.get_block_number().await?;
                             if let Err(err) = validate_block_interval_config_on_chain(
                                 *start_block,
@@ -869,8 +860,8 @@ pub async fn validate_service(
         let service_manager = if let ServiceManagerJson::Manager(service_manager) = &service.manager
         {
             match service_manager {
-                ServiceManager::Evm { chain_name, .. } => {
-                    chains_to_validate.insert((chain_name.clone(), ChainType::EVM));
+                ServiceManager::Evm { chain, .. } => {
+                    chains_to_validate.insert((chain.clone(), ChainType::EVM));
                 }
             }
 
@@ -884,16 +875,16 @@ pub async fn validate_service(
         let mut evm_providers = HashMap::new();
 
         // Only get clients for chains actually used in triggers or submits
-        for (chain_name, chain_type) in chains_to_validate.iter() {
+        for (chain, chain_type) in chains_to_validate.iter() {
             match chain_type {
                 ChainType::Cosmos => {
-                    if let Ok(client) = ctx.new_cosmos_client(chain_name).await {
-                        cosmos_clients.insert(chain_name.clone(), client.querier);
+                    if let Ok(client) = ctx.new_cosmos_client(chain.id.clone()).await {
+                        cosmos_clients.insert(chain.clone(), client.querier);
                     }
                 }
                 ChainType::EVM => {
-                    if let Ok(client) = ctx.new_evm_client_read_only(chain_name).await {
-                        evm_providers.insert(chain_name.clone(), client.provider.root().clone());
+                    if let Ok(client) = ctx.new_evm_client_read_only(chain.id.clone()).await {
+                        evm_providers.insert(chain.clone(), client.provider.root().clone());
                     }
                 }
             }
@@ -926,7 +917,7 @@ pub async fn validate_service(
 /// Set an Aggregator submit for a workflow
 pub fn set_aggregator_submit(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     url: String,
 ) -> Result<WorkflowSetAggregatorUrlResult> {
     let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
@@ -955,7 +946,7 @@ pub fn set_aggregator_submit(
 /// Set the submit to None for a workflow
 pub fn set_none_submit(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
 ) -> Result<WorkflowSetSubmitNoneResult> {
     modify_service_file(file_path, |mut service| {
         let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
@@ -978,7 +969,7 @@ pub fn set_none_submit(
 /// Modify an aggregator component using unified logic
 pub async fn modify_aggregator_component(
     file_path: &Path,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
     component_cmd: ComponentCommand,
 ) -> Result<ComponentOperationResult> {
     let context = ComponentContext::Aggregator {

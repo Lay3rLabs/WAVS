@@ -1,13 +1,13 @@
-package wavs:aggregator@0.6.0-alpha.8;
+package wavs:aggregator@0.6.0-alpha.10;
 
-use wavs:types/core@0.6.0-alpha.8 as core-types;
-use wavs:types/service@0.6.0-alpha.8 as service-types;
-use wavs:types/chain@0.6.0-alpha.8 as chain-types;
+use wavs:types/core@0.6.0-alpha.10 as core-types;
+use wavs:types/service@0.6.0-alpha.10 as service-types;
+use wavs:types/chain@0.6.0-alpha.10 as chain-types;
 
 interface aggregator {
     use core-types.{duration};
-    use service-types.{service, workflow-id};
-    use chain-types.{chain-name, evm-address};
+    use service-types.{service, workflow-id, signature-kind};
+    use chain-types.{chain-key, evm-address};
 
     record envelope {
         event-id: list<u8>,
@@ -15,12 +15,9 @@ interface aggregator {
         payload: list<u8>,
     }
 
-    record secp256k1-signature {
-        signature-data: list<u8>,
-    }
-
-    variant envelope-signature {
-        secp256k1(secp256k1-signature),
+    record envelope-signature {
+        data: list<u8>,
+        kind: signature-kind,
     }
 
     record packet {
@@ -40,7 +37,7 @@ interface aggregator {
     }
 
     record submit-action {
-        chain-name: chain-name,
+        chain: chain-key,
         contract-address: evm-address,
     }
 }
@@ -61,8 +58,8 @@ world aggregator-world {
         use core-types.{log-level};
         use service-types.{service-and-workflow-id, workflow-and-workflow-id};
 
-        get-evm-chain-config: func(chain-name: string) -> option<evm-chain-config>;
-        get-cosmos-chain-config: func(chain-name: string) -> option<cosmos-chain-config>;
+        get-evm-chain-config: func(chain-key: string) -> option<evm-chain-config>;
+        get-cosmos-chain-config: func(chain-key: string) -> option<cosmos-chain-config>;
 
         config-var: func(key: string) -> option<string>;
 

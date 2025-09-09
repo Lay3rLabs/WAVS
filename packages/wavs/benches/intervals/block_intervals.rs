@@ -63,10 +63,8 @@ fn run_simulation(setup: Arc<Setup>) {
         move || {
             APP_CONTEXT.rt.block_on(async move {
                 for block_height in 0..=setup.config.total_blocks() {
-                    for chain_name in setup.chain_names.clone() {
-                        let commands = setup
-                            .trigger_manager
-                            .process_blocks(chain_name, block_height);
+                    for chain in setup.chains.clone() {
+                        let commands = setup.trigger_manager.process_blocks(chain, block_height);
                         setup
                             .trigger_manager
                             .send_dispatcher_commands(commands)

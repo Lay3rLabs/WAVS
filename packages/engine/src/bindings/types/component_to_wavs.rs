@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, str::FromStr};
 
-use wavs_types::WorkflowID;
+use wavs_types::WorkflowId;
 
 use crate::{
     bindings::operator::world::wavs::operator::output as component_output,
@@ -17,20 +17,20 @@ impl TryFrom<component_service::Trigger> for wavs_types::Trigger {
             component_service::Trigger::CosmosContractEvent(source) => {
                 wavs_types::Trigger::CosmosContractEvent {
                     address: source.address.into(),
-                    chain_name: source.chain_name.parse()?,
+                    chain: source.chain.parse()?,
                     event_type: source.event_type,
                 }
             }
             component_service::Trigger::EvmContractEvent(source) => {
                 wavs_types::Trigger::EvmContractEvent {
                     address: source.address.into(),
-                    chain_name: source.chain_name.parse()?,
+                    chain: source.chain.parse()?,
                     event_hash: source.event_hash.try_into()?,
                 }
             }
             component_service::Trigger::BlockInterval(source) => {
                 wavs_types::Trigger::BlockInterval {
-                    chain_name: source.chain_name.parse()?,
+                    chain: source.chain.parse()?,
                     n_blocks: source.n_blocks.try_into()?,
                     start_block: source.start_block.map(TryInto::try_into).transpose()?,
                     end_block: source.end_block.map(TryInto::try_into).transpose()?,
@@ -85,11 +85,11 @@ impl TryFrom<component_service::Service> for wavs_types::Service {
                 .workflows
                 .into_iter()
                 .map(|(workflow_id, workflow)| {
-                    let workflow_id: WorkflowID = workflow_id.parse()?;
+                    let workflow_id: WorkflowId = workflow_id.parse()?;
                     let workflow: wavs_types::Workflow = workflow.try_into()?;
                     Ok((workflow_id, workflow))
                 })
-                .collect::<anyhow::Result<BTreeMap<WorkflowID, wavs_types::Workflow>>>()?,
+                .collect::<anyhow::Result<BTreeMap<WorkflowId, wavs_types::Workflow>>>()?,
             status: src.status.into(),
             manager: src.manager.try_into()?,
         })
@@ -197,7 +197,7 @@ impl TryFrom<component_service::ServiceManager> for wavs_types::ServiceManager {
     fn try_from(src: component_service::ServiceManager) -> Result<Self, Self::Error> {
         Ok(match src {
             component_service::ServiceManager::Evm(evm) => wavs_types::ServiceManager::Evm {
-                chain_name: evm.chain_name.parse()?,
+                chain: evm.chain.parse()?,
                 address: evm.address.into(),
             },
         })
@@ -211,10 +211,39 @@ impl From<component_service::Submit> for wavs_types::Submit {
             component_service::Submit::Aggregator(component_service::AggregatorSubmit {
                 url,
                 component,
+                signature_kind,
             }) => wavs_types::Submit::Aggregator {
                 url,
                 component: Box::new(component.try_into().unwrap()),
+                signature_kind: signature_kind.into(),
             },
+        }
+    }
+}
+
+impl From<component_service::SignatureKind> for wavs_types::SignatureKind {
+    fn from(src: component_service::SignatureKind) -> Self {
+        Self {
+            algorithm: src.algorithm.into(),
+            prefix: src.prefix.map(Into::into),
+        }
+    }
+}
+
+impl From<component_service::SignatureAlgorithm> for wavs_types::SignatureAlgorithm {
+    fn from(src: component_service::SignatureAlgorithm) -> Self {
+        match src {
+            component_service::SignatureAlgorithm::Secp256k1 => {
+                wavs_types::SignatureAlgorithm::Secp256k1
+            }
+        }
+    }
+}
+
+impl From<component_service::SignaturePrefix> for wavs_types::SignaturePrefix {
+    fn from(src: component_service::SignaturePrefix) -> Self {
+        match src {
+            component_service::SignaturePrefix::Eip191 => wavs_types::SignaturePrefix::Eip191,
         }
     }
 }
@@ -234,7 +263,7 @@ impl TryFrom<component_service::EvmContractSubmission> for wavs_types::EvmContra
 
     fn try_from(src: component_service::EvmContractSubmission) -> Result<Self, Self::Error> {
         Ok(Self {
-            chain_name: src.chain_name.parse()?,
+            chain: src.chain.parse()?,
             address: src.address.into(),
             max_gas: src.max_gas,
         })

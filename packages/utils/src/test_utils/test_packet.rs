@@ -4,7 +4,7 @@ use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
 use alloy_sol_types::SolValue;
 use wavs_types::{
     Component, ComponentDigest, ComponentSource, Envelope, EnvelopeExt, EnvelopeSignature, Packet,
-    Service, ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowID,
+    Service, ServiceManager, ServiceStatus, SignatureKind, Submit, Trigger, Workflow, WorkflowId,
 };
 
 use crate::test_utils::address::rand_address_evm;
@@ -14,22 +14,27 @@ use super::test_contracts::ISimpleSubmit::DataWithId;
 pub fn packet_from_service(
     signer: &LocalSigner<SigningKey>,
     service: &Service,
-    workflow_id: &WorkflowID,
+    workflow_id: &WorkflowId,
     envelope: &Envelope,
 ) -> Packet {
-    let signature = signer.sign_hash_sync(&envelope.eip191_hash()).unwrap();
+    let signature = signer
+        .sign_hash_sync(&envelope.prefix_eip191_hash())
+        .unwrap();
 
     Packet {
         service: service.clone(),
         workflow_id: workflow_id.clone(),
         envelope: envelope.clone(),
-        signature: EnvelopeSignature::Secp256k1(signature),
+        signature: EnvelopeSignature {
+            data: signature.into(),
+            kind: SignatureKind::evm_default(),
+        },
     }
 }
 pub fn mock_packet(
     signer: &LocalSigner<SigningKey>,
     envelope: &Envelope,
-    workflow_id: WorkflowID,
+    workflow_id: WorkflowId,
 ) -> Packet {
     let service = Service {
         name: "mock packet service".to_string(),
@@ -44,7 +49,7 @@ pub fn mock_packet(
         .into(),
         status: ServiceStatus::Active,
         manager: ServiceManager::Evm {
-            chain_name: "evm".parse().unwrap(),
+            chain: "evm:local".parse().unwrap(),
             address: rand_address_evm(),
         },
     };

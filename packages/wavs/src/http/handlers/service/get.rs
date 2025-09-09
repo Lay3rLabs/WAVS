@@ -10,11 +10,11 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use wavs_types::{ChainName, ServiceDigest, ServiceID, ServiceManager};
+use wavs_types::{ChainKey, ServiceDigest, ServiceId, ServiceManager};
 
 #[derive(Deserialize)]
 pub struct GetServiceParams {
-    pub chain_name: String,
+    pub chain: ChainKey,
     pub address: String,
 }
 
@@ -22,7 +22,7 @@ pub struct GetServiceParams {
     get,
     path = "/service",
     params(
-        ("chain_name" = String, Query, description = "Name of the chain"),
+        ("chain" = String, Query, description = "Name of the chain"),
         ("address" = String, Query, description = "Service contract address")
     ),
     responses(
@@ -37,18 +37,13 @@ pub async fn handle_get_service(
     State(state): State<HttpState>,
     Query(params): Query<GetServiceParams>,
 ) -> impl IntoResponse {
-    let chain_name = match ChainName::new(params.chain_name) {
-        Ok(name) => name,
-        Err(e) => return AnyError::from(e).into_response(),
-    };
-
     let address = match params.address.parse::<alloy_primitives::Address>() {
         Ok(addr) => addr,
         Err(e) => return AnyError::from(e).into_response(),
     };
 
     let service_manager = ServiceManager::Evm {
-        chain_name,
+        chain: params.chain,
         address,
     };
 
@@ -62,7 +57,7 @@ async fn get_service_inner(
     state: &HttpState,
     service_manager: ServiceManager,
 ) -> HttpResult<wavs_types::Service> {
-    Ok(state.load_service(&ServiceID::from(&service_manager))?)
+    Ok(state.load_service(&ServiceId::from(&service_manager))?)
 }
 
 #[utoipa::path(

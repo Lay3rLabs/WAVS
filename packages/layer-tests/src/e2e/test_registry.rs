@@ -7,10 +7,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use wavs_types::aggregator::RegisterServiceRequest;
 
-use utils::config::ChainConfigs;
-use wavs_types::{ChainName, Service, Trigger, WorkflowID};
-
-use super::chain_names::ChainNames;
 use super::clients::Clients;
 use super::components::{AggregatorComponent, ComponentName, OperatorComponent};
 use super::config::CRON_INTERVAL_DATA;
@@ -20,11 +16,14 @@ use super::test_definition::{
     OutputStructure, SubmitDefinition, TestBuilder, TestDefinition, TriggerDefinition,
     WorkflowBuilder,
 };
+use crate::e2e::chains::ChainKeys;
 use crate::e2e::components::ComponentSources;
 use crate::e2e::helpers::create_trigger_from_config;
 use crate::e2e::test_definition::{
     ChangeServiceDefinition, ComponentDefinition, ExpectedOutputCallback,
 };
+use utils::config::ChainConfigs;
+use wavs_types::{ChainKey, Service, Trigger, WorkflowId};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
@@ -104,13 +103,13 @@ impl TestRegistry {
         let matrix: TestMatrix = test_mode.into();
 
         // Get chain names
-        let chain_names = ChainNames::from_config(chain_configs);
+        let chains = ChainKeys::from_config(chain_configs);
 
         let mut registry = Self::new();
 
         // Process EVM services
         for service in &matrix.evm {
-            let chain = chain_names.primary_evm().unwrap();
+            let chain = chains.primary_evm().unwrap();
             let aggregator_endpoint = &aggregator_endpoint_1();
 
             match service {
@@ -118,7 +117,7 @@ impl TestRegistry {
                     registry.register_evm_echo_data_test(chain, aggregator_endpoint);
                 }
                 EvmService::EchoDataSecondaryChain => {
-                    let secondary = chain_names.secondary_evm().unwrap();
+                    let secondary = chains.secondary_evm().unwrap();
                     registry.register_evm_echo_data_secondary_chain_test(
                         secondary,
                         aggregator_endpoint,
@@ -131,7 +130,7 @@ impl TestRegistry {
                     registry.register_evm_chain_trigger_lookup_test(chain, aggregator_endpoint);
                 }
                 EvmService::CosmosQuery => {
-                    let cosmos = chain_names.primary_cosmos().unwrap();
+                    let cosmos = chains.primary_cosmos().unwrap();
                     registry.register_evm_cosmos_query_test(chain, cosmos, aggregator_endpoint);
                 }
                 EvmService::KvStore => {
@@ -150,7 +149,7 @@ impl TestRegistry {
                     let trigger = create_trigger_from_config(
                         TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ),
                         clients,
@@ -192,8 +191,8 @@ impl TestRegistry {
 
         // Process Cosmos services
         for service in &matrix.cosmos {
-            let cosmos = chain_names.primary_cosmos().unwrap();
-            let evm = chain_names.primary_evm().unwrap();
+            let cosmos = chains.primary_cosmos().unwrap();
+            let evm = chains.primary_evm().unwrap();
             let aggregator_endpoint = &aggregator_endpoint_1();
 
             match service {
@@ -234,8 +233,8 @@ impl TestRegistry {
 
         // Process Cross-Chain services
         for service in &matrix.cross_chain {
-            let cosmos = chain_names.primary_cosmos().unwrap();
-            let evm = chain_names.primary_evm().unwrap();
+            let cosmos = chains.primary_cosmos().unwrap();
+            let evm = chains.primary_evm().unwrap();
             let aggregator_endpoint = &aggregator_endpoint_1();
 
             match service {
@@ -253,34 +252,34 @@ impl TestRegistry {
     }
 
     // Helper function to create simple aggregator configuration
-    fn simple_aggregator(chain_name: &ChainName) -> AggregatorDefinition {
+    fn simple_aggregator(chain: &ChainKey) -> AggregatorDefinition {
         AggregatorDefinition::ComponentBasedAggregator {
             component: ComponentDefinition::from(ComponentName::Aggregator(
                 AggregatorComponent::SimpleAggregator,
             ))
-            .with_config_hardcoded("chain_name".to_string(), chain_name.to_string())
+            .with_config_hardcoded("chain".to_string(), chain.to_string())
             .with_config_service_handler(),
-            chain_name: chain_name.clone(),
+            chain: chain.clone(),
         }
     }
 
     // Individual test registration methods
     fn register_evm_echo_data_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_echo_data")
                 .with_description("Tests the EchoData component on the primary EVM chain")
                 .add_workflow(
-                    WorkflowID::new("echo_data").unwrap(),
+                    WorkflowId::new("echo_data").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -297,20 +296,20 @@ impl TestRegistry {
 
     fn register_evm_echo_data_secondary_chain_test(
         &mut self,
-        secondary_chain: &ChainName,
+        secondary_chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_echo_data_secondary_chain")
                 .with_description("Tests the EchoData component on the secondary EVM chain")
                 .add_workflow(
-                    WorkflowID::new("echo_data_secondary").unwrap(),
+                    WorkflowId::new("echo_data_secondary").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: secondary_chain.clone(),
+                                chain: secondary_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -328,7 +327,7 @@ impl TestRegistry {
 
     fn register_evm_empty_to_echo_data_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
@@ -336,12 +335,12 @@ impl TestRegistry {
                 .with_description("Tests going from empty service workflows to some")
                 .with_service_manager_chain(chain)
                 .with_change_service(ChangeServiceDefinition::AddWorkflow {
-                    workflow_id: WorkflowID::new("echo_data").unwrap(),
+                    workflow_id: WorkflowId::new("echo_data").unwrap(),
                     workflow: WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -358,20 +357,20 @@ impl TestRegistry {
 
     fn register_evm_simple_aggregator_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_simple_aggregator")
                 .with_description("Tests the SimpleAggregator component-based aggregation")
                 .add_workflow(
-                    WorkflowID::new("simple_aggregator").unwrap(),
+                    WorkflowId::new("simple_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -380,10 +379,10 @@ impl TestRegistry {
                                 component: ComponentDefinition::from(ComponentName::Aggregator(
                                     AggregatorComponent::SimpleAggregator,
                                 ))
-                                .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_hardcoded("chain".to_string(), chain.to_string())
                                 .with_config_service_handler(),
                                 // for deploying the submission contract that the aggregator will use
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         })
                         .with_input_data(InputData::Text("test packet".to_string()))
@@ -396,20 +395,20 @@ impl TestRegistry {
 
     fn register_evm_timer_aggregator_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_timer_aggregator")
                 .with_description("Tests the TimerAggregator component with delayed submission")
                 .add_workflow(
-                    WorkflowID::new("timer_aggregator").unwrap(),
+                    WorkflowId::new("timer_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::TimerAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -418,14 +417,14 @@ impl TestRegistry {
                                 component: ComponentDefinition::from(ComponentName::Aggregator(
                                     AggregatorComponent::TimerAggregator,
                                 ))
-                                .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_hardcoded("chain".to_string(), chain.to_string())
                                 .with_config_hardcoded(
                                     "timer_delay_secs".to_string(),
                                     "3".to_string(),
                                 )
                                 .with_config_service_handler(),
                                 // for deploying the submission contract that the aggregator will use
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         })
                         .with_input_data(InputData::Text("test packet".to_string()))
@@ -438,7 +437,7 @@ impl TestRegistry {
 
     fn register_evm_multiple_services_with_different_aggregators_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint_1: &str,
         aggregator_endpoint_2: &str,
     ) -> &mut Self {
@@ -447,13 +446,13 @@ impl TestRegistry {
                 .with_description("Tests multiple services, each with a different aggregator")
                 // First service with SimpleAggregator on first endpoint
                 .add_workflow(
-                    WorkflowID::new("service_with_simple_aggregator").unwrap(),
+                    WorkflowId::new("service_with_simple_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -462,9 +461,9 @@ impl TestRegistry {
                                 component: ComponentDefinition::from(ComponentName::Aggregator(
                                     AggregatorComponent::SimpleAggregator,
                                 ))
-                                .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_hardcoded("chain".to_string(), chain.to_string())
                                 .with_config_service_handler(),
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         })
                         .with_input_data(InputData::Text("simple aggregator data".to_string()))
@@ -475,13 +474,13 @@ impl TestRegistry {
                 )
                 // Second service with TimerAggregator on second endpoint
                 .add_workflow(
-                    WorkflowID::new("service_with_timer_aggregator").unwrap(),
+                    WorkflowId::new("service_with_timer_aggregator").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Square)
                         .with_aggregator_component(AggregatorComponent::TimerAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -490,13 +489,13 @@ impl TestRegistry {
                                 component: ComponentDefinition::from(ComponentName::Aggregator(
                                     AggregatorComponent::TimerAggregator,
                                 ))
-                                .with_config_hardcoded("chain_name".to_string(), chain.to_string())
+                                .with_config_hardcoded("chain".to_string(), chain.to_string())
                                 .with_config_hardcoded(
                                     "timer_delay_secs".to_string(),
                                     "3".to_string(),
                                 )
                                 .with_config_service_handler(),
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         })
                         .with_input_data(InputData::Square(SquareRequest { x: 7 }))
@@ -509,20 +508,20 @@ impl TestRegistry {
 
     fn register_evm_square_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_square")
                 .with_description("Tests the Square component on EVM chain")
                 .add_workflow(
-                    WorkflowID::new("square").unwrap(),
+                    WorkflowId::new("square").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Square)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -539,20 +538,20 @@ impl TestRegistry {
 
     fn register_evm_chain_trigger_lookup_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_chain_trigger_lookup")
                 .with_description("Tests the ChainTriggerLookup component on EVM chain")
                 .add_workflow(
-                    WorkflowID::new("chain_trigger_lookup").unwrap(),
+                    WorkflowId::new("chain_trigger_lookup").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::ChainTriggerLookup)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -569,21 +568,21 @@ impl TestRegistry {
 
     fn register_evm_cosmos_query_test(
         &mut self,
-        evm_chain: &ChainName,
-        cosmos_chain: &ChainName,
+        evm_chain: &ChainKey,
+        cosmos_chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_cosmos_query")
                 .with_description("Tests the CosmosQuery component from EVM to Cosmos")
                 .add_workflow(
-                    WorkflowID::new("cosmos_query").unwrap(),
+                    WorkflowId::new("cosmos_query").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::CosmosQuery)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: evm_chain.clone(),
+                                chain: evm_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -591,7 +590,7 @@ impl TestRegistry {
                             aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::CosmosQuery(CosmosQueryRequest::BlockHeight {
-                            chain_name: cosmos_chain.to_string(),
+                            chain: cosmos_chain.to_string(),
                         }))
                         .with_expected_output(ExpectedOutput::StructureOnly(
                             OutputStructure::CosmosQueryResponse,
@@ -604,20 +603,20 @@ impl TestRegistry {
 
     fn register_evm_permissions_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_permissions")
                 .with_description("Tests permissions for HTTP and file system access on EVM chain")
                 .add_workflow(
-                    WorkflowID::new("permissions").unwrap(),
+                    WorkflowId::new("permissions").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Permissions)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -634,7 +633,7 @@ impl TestRegistry {
 
     fn register_evm_kv_store_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
@@ -643,13 +642,13 @@ impl TestRegistry {
                     "Tests counter component running twice to verify keyvalue persistence",
                 )
                 .add_workflow(
-                    WorkflowID::new("counter_first").unwrap(),
+                    WorkflowId::new("counter_first").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::KvStore)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -665,13 +664,13 @@ impl TestRegistry {
                         .build(),
                 )
                 .add_workflow(
-                    WorkflowID::new("counter_second").unwrap(),
+                    WorkflowId::new("counter_second").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::KvStore)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -693,20 +692,20 @@ impl TestRegistry {
 
     fn register_evm_multi_workflow_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_multi_workflow")
                 .with_description("Tests multiple workflows with different components on EVM chain")
                 .add_workflow(
-                    WorkflowID::new("square_workflow").unwrap(),
+                    WorkflowId::new("square_workflow").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Square)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -718,13 +717,13 @@ impl TestRegistry {
                         .build(),
                 )
                 .add_workflow(
-                    WorkflowID::new("echo_workflow").unwrap(),
+                    WorkflowId::new("echo_workflow").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -741,10 +740,10 @@ impl TestRegistry {
 
     fn register_evm_change_workflow_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
-        let workflow_id = WorkflowID::new("change_workflow").unwrap();
+        let workflow_id = WorkflowId::new("change_workflow").unwrap();
 
         self.register(
             TestBuilder::new("evm_change_workflow")
@@ -756,7 +755,7 @@ impl TestRegistry {
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewEvmContract(
                             EvmTriggerDefinition::SimpleContractEvent {
-                                chain_name: chain.clone(),
+                                chain: chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -779,7 +778,7 @@ impl TestRegistry {
 
     fn register_evm_multi_trigger_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         trigger: Trigger,
         aggregator_endpoint: &str,
     ) -> &mut Self {
@@ -789,7 +788,7 @@ impl TestRegistry {
                     "Tests multiple services triggered by the same event on EVM chain",
                 )
                 .add_workflow(
-                    WorkflowID::new("evm_multi_trigger").unwrap(),
+                    WorkflowId::new("evm_multi_trigger").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_trigger(TriggerDefinition::Existing(trigger.clone()))
@@ -804,7 +803,7 @@ impl TestRegistry {
                         .build(),
                 )
                 .add_workflow(
-                    WorkflowID::new("evm_multi_trigger_2").unwrap(),
+                    WorkflowId::new("evm_multi_trigger_2").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_trigger(TriggerDefinition::Existing(trigger))
@@ -824,19 +823,19 @@ impl TestRegistry {
 
     fn register_evm_block_interval_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_block_interval")
                 .with_description("Tests the block interval trigger on EVM chain")
                 .add_workflow(
-                    WorkflowID::new("block_interval").unwrap(),
+                    WorkflowId::new("block_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoBlockInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::BlockInterval {
-                            chain_name: chain.clone(),
+                            chain: chain.clone(),
                             start_stop: false,
                         })
                         .with_submit(SubmitDefinition::Aggregator {
@@ -856,7 +855,7 @@ impl TestRegistry {
 
     fn register_evm_block_interval_start_stop_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
@@ -865,12 +864,12 @@ impl TestRegistry {
                     "Tests the block interval trigger with start/stop on an EVM chain",
                 )
                 .add_workflow(
-                    WorkflowID::new("evm_block_interval_start_stop").unwrap(),
+                    WorkflowId::new("evm_block_interval_start_stop").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoBlockInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::BlockInterval {
-                            chain_name: chain.clone(),
+                            chain: chain.clone(),
                             start_stop: true,
                         })
                         .with_submit(SubmitDefinition::Aggregator {
@@ -890,14 +889,14 @@ impl TestRegistry {
 
     fn register_evm_cron_interval_test(
         &mut self,
-        chain: &ChainName,
+        chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("evm_cron_interval")
                 .with_description("Tests the cron interval trigger")
                 .add_workflow(
-                    WorkflowID::new("cron_interval").unwrap(),
+                    WorkflowId::new("cron_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoCronInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -923,20 +922,20 @@ impl TestRegistry {
 
     fn register_cosmos_echo_data_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        cosmos_chain: &ChainKey,
+        evm_chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_echo_data")
                 .with_description("Tests the EchoData component on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_echo_data").unwrap(),
+                    WorkflowId::new("cosmos_echo_data").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain: cosmos_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -953,21 +952,21 @@ impl TestRegistry {
 
     fn register_cosmos_square_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        cosmos_chain: &ChainKey,
+        evm_chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_square")
                 .with_description("Tests the Square component on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_square").unwrap(),
+                    WorkflowId::new("cosmos_square").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Square)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain: cosmos_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -984,21 +983,21 @@ impl TestRegistry {
 
     fn register_cosmos_chain_trigger_lookup_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        cosmos_chain: &ChainKey,
+        evm_chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_chain_trigger_lookup")
                 .with_description("Tests the ChainTriggerLookup component on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_chain_trigger_lookup").unwrap(),
+                    WorkflowId::new("cosmos_chain_trigger_lookup").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::ChainTriggerLookup)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain: cosmos_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -1015,21 +1014,21 @@ impl TestRegistry {
 
     fn register_cosmos_cosmos_query_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        cosmos_chain: &ChainKey,
+        evm_chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_cosmos_query")
                 .with_description("Tests the CosmosQuery component on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_cosmos_query").unwrap(),
+                    WorkflowId::new("cosmos_cosmos_query").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::CosmosQuery)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain: cosmos_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -1037,7 +1036,7 @@ impl TestRegistry {
                             aggregator: Self::simple_aggregator(evm_chain),
                         })
                         .with_input_data(InputData::CosmosQuery(CosmosQueryRequest::BlockHeight {
-                            chain_name: cosmos_chain.to_string(),
+                            chain: cosmos_chain.to_string(),
                         }))
                         .with_expected_output(ExpectedOutput::StructureOnly(
                             OutputStructure::CosmosQueryResponse,
@@ -1050,8 +1049,8 @@ impl TestRegistry {
 
     fn register_cosmos_permissions_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        cosmos_chain: &ChainKey,
+        evm_chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
@@ -1060,13 +1059,13 @@ impl TestRegistry {
                     "Tests permissions for HTTP and file system access on Cosmos chain",
                 )
                 .add_workflow(
-                    WorkflowID::new("cosmos_permissions").unwrap(),
+                    WorkflowId::new("cosmos_permissions").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::Permissions)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain: cosmos_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {
@@ -1085,20 +1084,20 @@ impl TestRegistry {
 
     fn register_cosmos_block_interval_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        cosmos_chain: &ChainKey,
+        evm_chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_block_interval")
                 .with_description("Tests the block interval trigger on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_block_interval").unwrap(),
+                    WorkflowId::new("cosmos_block_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoBlockInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::BlockInterval {
-                            chain_name: cosmos_chain.clone(),
+                            chain: cosmos_chain.clone(),
                             start_stop: false,
                         })
                         .with_submit(SubmitDefinition::Aggregator {
@@ -1118,8 +1117,8 @@ impl TestRegistry {
 
     fn register_cosmos_block_interval_start_stop_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        cosmos_chain: &ChainKey,
+        evm_chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
@@ -1128,12 +1127,12 @@ impl TestRegistry {
                     "Tests the block interval trigger with start/stop on a Cosmos chain",
                 )
                 .add_workflow(
-                    WorkflowID::new("cosmos_block_interval_start_stop").unwrap(),
+                    WorkflowId::new("cosmos_block_interval_start_stop").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoBlockInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::BlockInterval {
-                            chain_name: cosmos_chain.clone(),
+                            chain: cosmos_chain.clone(),
                             start_stop: true,
                         })
                         .with_submit(SubmitDefinition::Aggregator {
@@ -1153,15 +1152,15 @@ impl TestRegistry {
 
     fn register_cosmos_cron_interval_test(
         &mut self,
-        _cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        _cosmos_chain: &ChainKey,
+        evm_chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cosmos_cron_interval")
                 .with_description("Tests the cron interval trigger on Cosmos chain")
                 .add_workflow(
-                    WorkflowID::new("cosmos_cron_interval").unwrap(),
+                    WorkflowId::new("cosmos_cron_interval").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoCronInterval)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
@@ -1187,20 +1186,20 @@ impl TestRegistry {
 
     fn register_cosmos_to_evm_echo_data_test(
         &mut self,
-        cosmos_chain: &ChainName,
-        evm_chain: &ChainName,
+        cosmos_chain: &ChainKey,
+        evm_chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
         self.register(
             TestBuilder::new("cross_chain_cosmos_to_evm_echo_data")
                 .with_description("Tests the EchoData component from Cosmos to EVM")
                 .add_workflow(
-                    WorkflowID::new("cross_chain_echo_data").unwrap(),
+                    WorkflowId::new("cross_chain_echo_data").unwrap(),
                     WorkflowBuilder::new()
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_trigger(TriggerDefinition::NewCosmosContract(
                             CosmosTriggerDefinition::SimpleContractEvent {
-                                chain_name: cosmos_chain.clone(),
+                                chain: cosmos_chain.clone(),
                             },
                         ))
                         .with_submit(SubmitDefinition::Aggregator {

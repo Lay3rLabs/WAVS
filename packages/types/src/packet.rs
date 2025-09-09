@@ -1,7 +1,9 @@
+use std::borrow::Borrow;
+
 pub use crate::solidity_types::Envelope;
 use crate::{
-    Service, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, TriggerAction,
-    WorkflowID,
+    Service, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureAlgorithm,
+    SignatureData, SignatureKind, SignaturePrefix, TriggerAction, WorkflowId,
 };
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
 use alloy_signer::Signer;
@@ -18,7 +20,7 @@ use utoipa::ToSchema;
 #[serde(rename_all = "snake_case")]
 pub struct Packet {
     pub service: Service,
-    pub workflow_id: WorkflowID,
+    pub workflow_id: WorkflowId,
     #[schema(value_type  = Object)]
     pub envelope: Envelope,
     pub signature: EnvelopeSignature,
@@ -26,22 +28,70 @@ pub struct Packet {
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-pub trait EnvelopeExt {
-    fn eip191_hash(&self) -> FixedBytes<32>;
+pub trait EnvelopeExt: Borrow<Envelope> {
+    fn prefix_eip191_hash(&self) -> FixedBytes<32> {
+        let envelope_bytes = self.borrow().abi_encode();
+        eip191_hash_message(keccak256(&envelope_bytes))
+    }
 
-    async fn sign(&self, signer: &PrivateKeySigner) -> alloy_signer::Result<EnvelopeSignature> {
-        signer
-            .sign_hash(&self.eip191_hash())
+    fn unprefixed_hash(&self) -> FixedBytes<32> {
+        let envelope_bytes = self.borrow().abi_encode();
+        keccak256(&envelope_bytes)
+    }
+
+    async fn sign(
+        &self,
+        signer: &PrivateKeySigner,
+        kind: SignatureKind,
+    ) -> anyhow::Result<EnvelopeSignature> {
+        let hash = match kind.algorithm {
+            SignatureAlgorithm::Secp256k1 => match kind.prefix {
+                Some(SignaturePrefix::Eip191) => self.prefix_eip191_hash(),
+                None => self.unprefixed_hash(),
+            },
+        };
+
+        Ok(signer
+            .sign_hash(&hash)
             .await
-            .map(EnvelopeSignature::Secp256k1)
+            .map(|signature| EnvelopeSignature {
+                data: signature.into(),
+                kind,
+            })
+            .map_err(|e| anyhow::anyhow!("Failed to sign envelope: {e:?}"))?)
     }
 
     fn signature_data(
         &self,
         signatures: Vec<EnvelopeSignature>,
         block_height: u64,
-    ) -> std::result::Result<SignatureData, EnvelopeError>;
+    ) -> std::result::Result<SignatureData, EnvelopeError> {
+        let mut signers_and_signatures: Vec<(alloy_primitives::Address, alloy_primitives::Bytes)> =
+            signatures
+                .into_iter()
+                .map(|sig| {
+                    sig.evm_signer_address(self.borrow())
+                        .map(|addr| (addr, sig.data.into()))
+                })
+                .collect::<Result<_, _>>()?;
+
+        // Solidity‑compatible ascending order (lexicographic / numeric)
+        signers_and_signatures.sort_by_key(|(addr, _)| *addr);
+
+        // unzip back into two parallel, sorted vectors
+        let (signers, signatures): (Vec<alloy_primitives::Address>, Vec<alloy_primitives::Bytes>) =
+            signers_and_signatures.into_iter().unzip();
+
+        Ok(SignatureData {
+            signers,
+            signatures,
+            referenceBlock: block_height as u32,
+        })
+    }
 }
+
+// Blanket impl for anything that borrows as Envelope
+impl<T: Borrow<Envelope> + ?Sized> EnvelopeExt for T {}
 
 impl From<Envelope> for ServiceManagerEnvelope {
     fn from(envelope: Envelope) -> Self {
@@ -63,46 +113,11 @@ impl From<SignatureData> for ServiceManagerSignatureData {
     }
 }
 
-impl EnvelopeExt for Envelope {
-    fn eip191_hash(&self) -> FixedBytes<32> {
-        let envelope_bytes = self.abi_encode();
-        eip191_hash_message(keccak256(&envelope_bytes))
-    }
-
-    fn signature_data(
-        &self,
-        signatures: Vec<EnvelopeSignature>,
-        block_height: u64,
-    ) -> std::result::Result<SignatureData, EnvelopeError> {
-        let mut signers_and_signatures: Vec<(alloy_primitives::Address, alloy_primitives::Bytes)> =
-            signatures
-                .iter()
-                .map(|sig| {
-                    sig.evm_signer_address(self)
-                        .map(|addr| (addr, sig.as_bytes().into()))
-                })
-                .collect::<Result<_, _>>()?;
-
-        // Solidity‑compatible ascending order (lexicographic / numeric)
-        signers_and_signatures.sort_by_key(|(addr, _)| *addr);
-
-        // unzip back into two parallel, sorted vectors
-        let (signers, signatures): (Vec<alloy_primitives::Address>, Vec<alloy_primitives::Bytes>) =
-            signers_and_signatures.into_iter().unzip();
-
-        Ok(SignatureData {
-            signers,
-            signatures,
-            referenceBlock: block_height as u32,
-        })
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum EnvelopeSignature {
-    #[schema(value_type = Object)]
-    Secp256k1(alloy_primitives::Signature),
+pub struct EnvelopeSignature {
+    pub data: Vec<u8>,
+    pub kind: SignatureKind,
 }
 
 impl EnvelopeSignature {
@@ -110,16 +125,20 @@ impl EnvelopeSignature {
         &self,
         envelope: &Envelope,
     ) -> std::result::Result<alloy_primitives::Address, EnvelopeError> {
-        match self {
-            EnvelopeSignature::Secp256k1(sig) => sig
-                .recover_address_from_prehash(&envelope.eip191_hash())
-                .map_err(EnvelopeError::RecoverSignerAddress),
-        }
-    }
+        match self.kind.algorithm {
+            SignatureAlgorithm::Secp256k1 => {
+                let signature = alloy_primitives::Signature::from_raw(&self.data)
+                    .map_err(EnvelopeError::RecoverSignerAddress)?;
 
-    pub fn as_bytes(&self) -> [u8; 65] {
-        match self {
-            EnvelopeSignature::Secp256k1(sig) => sig.as_bytes(),
+                match self.kind.prefix {
+                    Some(SignaturePrefix::Eip191) => signature
+                        .recover_address_from_prehash(&envelope.prefix_eip191_hash())
+                        .map_err(EnvelopeError::RecoverSignerAddress),
+                    None => signature
+                        .recover_address_from_prehash(&envelope.unprefixed_hash())
+                        .map_err(EnvelopeError::RecoverSignerAddress),
+                }
+            }
         }
     }
 }
