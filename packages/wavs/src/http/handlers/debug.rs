@@ -1,22 +1,7 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use serde::Deserialize;
-use wavs_types::{ServiceId, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowId};
+use wavs_types::{SimulatedTriggerRequest, TriggerAction, TriggerConfig};
 
 use crate::http::{error::HttpResult, state::HttpState};
-
-#[derive(Debug, Deserialize)]
-pub struct SimulatedTriggerRequest {
-    pub service_id: ServiceId,
-    pub workflow_id: WorkflowId,
-    pub trigger: Trigger,
-    pub data: TriggerData,
-    #[serde(default = "default_count")]
-    pub count: usize,
-}
-
-fn default_count() -> usize {
-    1
-}
 
 pub async fn handle_debug_trigger(
     State(state): State<HttpState>,
