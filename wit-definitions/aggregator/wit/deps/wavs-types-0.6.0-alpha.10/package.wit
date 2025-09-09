@@ -1,4 +1,4 @@
-package wavs:types@0.6.0-alpha.9;
+package wavs:types@0.6.0-alpha.10;
 
 interface chain {
   /// A string mostly following the caip-2 format of namespace:reference, e.g. "eip155:1" for Ethereum mainnet or "cosmos:cosmoshub-4" for Cosmos Hub
@@ -193,9 +193,23 @@ interface service {
     manual,
   }
 
+  variant signature-algorithm {
+    secp256k1,
+  }
+
+  variant signature-prefix {
+    eip191,
+  }
+
+  record signature-kind {
+    algorithm: signature-algorithm,
+    prefix: option<signature-prefix>,
+  }
+
   record aggregator-submit {
     url: string,
     component: component,
+    signature-kind: signature-kind,
   }
 
   /// Submit types

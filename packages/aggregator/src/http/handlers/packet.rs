@@ -456,7 +456,7 @@ mod test {
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{ComponentDigest, Service, WorkflowId};
+    use wavs_types::{ComponentDigest, Service, SignatureKind, WorkflowId};
 
     #[test]
     fn packet_validation() {
@@ -481,10 +481,7 @@ mod test {
         let queue =
             add_packet_to_quorum_queue(&packet_2, queue.clone(), signer_1.address()).unwrap();
         assert_eq!(queue.len(), 1);
-        assert_eq!(
-            queue[0].packet.signature.as_bytes(),
-            packet_2.signature.as_bytes()
-        );
+        assert_eq!(queue[0].packet.signature.data, packet_2.signature.data);
 
         // "fails" (expectedly) because the envelope is different
         let packet_3 = mock_packet(&signer_2, &envelope_2, "workflow-1".parse().unwrap());
@@ -973,6 +970,7 @@ mod test {
             wavs_types::Submit::Aggregator {
                 url: "http://localhost:8080".to_string(),
                 component: Box::new(component),
+                signature_kind: SignatureKind::evm_default(),
             },
         )
         .await

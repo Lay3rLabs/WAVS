@@ -211,10 +211,39 @@ impl From<component_service::Submit> for wavs_types::Submit {
             component_service::Submit::Aggregator(component_service::AggregatorSubmit {
                 url,
                 component,
+                signature_kind,
             }) => wavs_types::Submit::Aggregator {
                 url,
                 component: Box::new(component.try_into().unwrap()),
+                signature_kind: signature_kind.into(),
             },
+        }
+    }
+}
+
+impl From<component_service::SignatureKind> for wavs_types::SignatureKind {
+    fn from(src: component_service::SignatureKind) -> Self {
+        Self {
+            algorithm: src.algorithm.into(),
+            prefix: src.prefix.map(Into::into),
+        }
+    }
+}
+
+impl From<component_service::SignatureAlgorithm> for wavs_types::SignatureAlgorithm {
+    fn from(src: component_service::SignatureAlgorithm) -> Self {
+        match src {
+            component_service::SignatureAlgorithm::Secp256k1 => {
+                wavs_types::SignatureAlgorithm::Secp256k1
+            }
+        }
+    }
+}
+
+impl From<component_service::SignaturePrefix> for wavs_types::SignaturePrefix {
+    fn from(src: component_service::SignaturePrefix) -> Self {
+        match src {
+            component_service::SignaturePrefix::Eip191 => wavs_types::SignaturePrefix::Eip191,
         }
     }
 }
