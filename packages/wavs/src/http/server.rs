@@ -85,10 +85,7 @@ pub async fn make_router(
 
     // protected routes (POST/DELETE)
     let mut protected = axum::Router::new()
-        .route(
-            "/services/signer",
-            post(handle_get_service_signer),
-        )
+        .route("/services/signer", post(handle_get_service_signer))
         .route("/services", post(handle_add_service))
         .route("/services", delete(handle_delete_service))
         .route("/chains", post(handle_add_chain));

@@ -4,13 +4,8 @@ use crate::http::{
     error::{AnyError, HttpResult},
     state::HttpState,
 };
-use axum::{
-    extract::State,
-    response::IntoResponse,
-    Json,
-};
+use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{ChainKey, ServiceDigest, ServiceId, ServiceManager};
-
 
 #[utoipa::path(
     get,
@@ -40,7 +35,7 @@ pub async fn handle_get_service(
         Ok(addr) => addr,
         Err(e) => return AnyError::from(e).into_response(),
     };
-    
+
     let service_manager = ServiceManager::Evm {
         chain: chain_key,
         address,
