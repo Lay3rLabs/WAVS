@@ -6,7 +6,7 @@ use crate::http::{error::*, state::HttpState};
 
 #[utoipa::path(
     post,
-    path = "/register-service",
+    path = "/services",
     request_body = RegisterServiceRequest,
     responses(
         (status = 200, description = "Service successfully registered"),

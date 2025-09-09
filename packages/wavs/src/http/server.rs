@@ -18,10 +18,10 @@ use wildmatch::WildMatch;
 use super::{
     handlers::{
         handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_info,
-        handle_list_services, handle_not_found, handle_upload_service,
+        handle_list_services, handle_not_found, handle_upload_component,
         openapi::ApiDoc,
         service::{
-            get::handle_get_service, key::handle_get_service_key, save::handle_save_service,
+            get::handle_get_service, key::handle_get_service_signer, save::handle_save_service,
         },
     },
     state::HttpState,
@@ -77,26 +77,29 @@ pub async fn make_router(
         .layer(TraceLayer::new_for_http())
         .layer(OtelAxumLayer::default())
         .route("/config", get(handle_config))
-        .route("/service", get(handle_get_service))
+        .route("/services", get(handle_get_service))
         .route(
-            "/service-by-hash/{service_hash}",
+            "/dev/services/{service_hash}",
             get(handle_get_service_by_hash),
         )
-        .route("/app", get(handle_list_services))
+        .route("/services", get(handle_list_services))
         .route("/info", get(handle_info))
         .fallback(handle_not_found)
         .with_state(state.clone());
 
     // protected routes (POST/DELETE)
     let protected = axum::Router::new()
-        .route("/service-key", post(handle_get_service_key))
-        .route("/save-service", post(handle_save_service))
-        .route("/app", post(handle_add_service))
-        .route("/app", delete(handle_delete_service))
-        .route("/add-chain", post(handle_add_chain))
         .route(
-            "/upload",
-            post(handle_upload_service).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
+            "/services/{service_hash}/signer",
+            post(handle_get_service_signer),
+        )
+        .route("/services", post(handle_add_service))
+        .route("/services", delete(handle_delete_service))
+        .route("/services", post(handle_save_service))
+        .route("/chains", post(handle_add_chain))
+        .route(
+            "/dev/components",
+            post(handle_upload_component).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
         ) // 50MB limit
         .with_state(state);
 

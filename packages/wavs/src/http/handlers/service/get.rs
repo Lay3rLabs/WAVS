@@ -20,7 +20,7 @@ pub struct GetServiceParams {
 
 #[utoipa::path(
     get,
-    path = "/service",
+    path = "/services",
     params(
         ("chain" = String, Query, description = "Name of the chain"),
         ("address" = String, Query, description = "Service contract address")
@@ -62,7 +62,7 @@ async fn get_service_inner(
 
 #[utoipa::path(
     get,
-    path = "/service-by-hash/{service_hash}",
+    path = "/dev/services/{service_hash}",
     params(
         ("service_hash" = String, Path, description = "Unique hash of the service")
     ),

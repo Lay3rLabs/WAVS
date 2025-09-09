@@ -3,9 +3,9 @@ use std::time::Duration;
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use wavs_types::{
-    AddServiceRequest, ChainKey, ComponentDigest, DeleteServicesRequest, GetServiceKeyRequest,
+    AddServiceRequest, ChainKey, ComponentDigest, DeleteServicesRequest, GetSignerRequest,
     IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceManager,
-    SigningKeyResponse, UploadComponentResponse,
+    SignerResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUrlArgs;
@@ -132,11 +132,8 @@ impl HttpClient {
         ))
     }
 
-    pub async fn get_service_key(
-        &self,
-        service_manager: ServiceManager,
-    ) -> Result<SigningKeyResponse> {
-        let body = serde_json::to_string(&GetServiceKeyRequest { service_manager })?;
+    pub async fn get_service_key(&self, service_manager: ServiceManager) -> Result<SignerResponse> {
+        let body = serde_json::to_string(&GetSignerRequest { service_manager })?;
 
         let url = format!("{}/service-key", self.endpoint);
         let text = self
