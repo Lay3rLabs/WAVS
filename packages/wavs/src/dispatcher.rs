@@ -244,7 +244,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         let total_services = current_services.len();
         let total_workflows: usize = current_services.iter().map(|s| s.workflows.len()).sum();
 
-        tracing::info!(service.name = %service.name, service.manager = ?service.manager, workflows = %service.workflows.len(), total_services = %total_services, total_workflows = %total_workflows, "Service registered");
+        tracing::info!(service.name = %service.name, service.manager = ?service.manager, workflows = %service.workflows.len(), total_services = %total_services, total_workflows = %total_workflows, "Service registered: {} [{:?}], workflows={}, total_services={}, total_workflows={}", service.name, service.manager, service.workflows.len(), total_services, total_workflows);
 
         Ok(service)
     }
@@ -253,7 +253,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher", service.name = %service.name, service.manager = ?service.manager))]
     pub async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
         let service_id = service.id();
-        tracing::info!("Adding service");
+        tracing::info!("Adding service: {} [{:?}]", service.name, service.manager);
         // Check if service is already registered
         if self.services.exists(&service_id)? {
             return Err(DispatcherError::ServiceRegistered(service_id));
