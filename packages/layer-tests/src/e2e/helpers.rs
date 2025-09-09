@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainKey, Component, Permissions, Service, ServiceManager,
-    ServiceStatus, Submit, Trigger, Workflow,
+    ServiceStatus, SignatureKind, Submit, Trigger, Workflow,
 };
 
 use crate::deployment::{ServiceDeployment, WorkflowDeployment};
@@ -310,6 +310,7 @@ pub async fn create_submit_from_config(
                 Ok(Submit::Aggregator {
                     url: url.clone(),
                     component: Box::new(component),
+                    signature_kind: SignatureKind::evm_default(),
                 })
             }
         },

@@ -19,8 +19,9 @@ use wavs::{
     subsystems::engine::wasm_engine::WasmEngine,
 };
 use wavs_types::{
-    ChainKey, ChainKeyError, ComponentSource, DeleteServicesRequest, ListServicesResponse, Service,
-    ServiceId, ServiceManager, Submit, WorkflowId, WorkflowIdError,
+    ChainKey, ChainKeyError, Component, ComponentSource, DeleteServicesRequest,
+    ListServicesResponse, Service, ServiceId, ServiceManager, SignatureKind, Submit, WorkflowId,
+    WorkflowIdError,
 };
 
 use super::mock_trigger_manager::{mock_evm_event_trigger, mock_real_trigger_action};
@@ -153,7 +154,12 @@ impl MockE2ETestRunner {
         // but we can create a service via http router
         let trigger = mock_evm_event_trigger();
 
-        let submit = Submit::None;
+        let submit = Submit::Aggregator {
+            url: "http://example.com".to_string(),
+            // just use the same component for submit for simplicity
+            component: Box::new(Component::new(component_source.clone())),
+            signature_kind: SignatureKind::evm_default(),
+        };
 
         let service = Service::new_simple(
             name,

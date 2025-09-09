@@ -4,7 +4,7 @@ use redb::ReadableTable;
 use thiserror::Error;
 use tracing::instrument;
 use utils::storage::db::{DBError, RedbStorage, Table, JSON};
-use wavs_types::{Service, ServiceId, ServiceStatus};
+use wavs_types::{Service, ServiceId, ServiceStatus, Workflow, WorkflowId};
 
 // key is ServiceId
 // TODO - use CAStorage instead?
@@ -37,6 +37,24 @@ impl Services {
             Some(service) => Ok(service),
             None => Err(ServicesError::UnknownService(service_id.clone())),
         }
+    }
+
+    #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
+    pub fn get_workflow(
+        &self,
+        service_id: &ServiceId,
+        workflow_id: &WorkflowId,
+    ) -> Result<Workflow> {
+        let service = self.get(service_id)?;
+        service
+            .workflows
+            .get(workflow_id)
+            .cloned()
+            .ok_or_else(|| ServicesError::UnknownWorkflow {
+                service_name: service.name,
+                service_id: service_id.clone(),
+                workflow_id: workflow_id.clone(),
+            })
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
@@ -168,6 +186,13 @@ impl Services {
 pub enum ServicesError {
     #[error("Unknown Service {0}")]
     UnknownService(ServiceId),
+
+    #[error("Unknown Workflow {workflow_id} for Service {service_name} (id: {service_id})")]
+    UnknownWorkflow {
+        service_name: String,
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
+    },
 
     #[error("Database error: {0}")]
     DBError(#[from] DBError),

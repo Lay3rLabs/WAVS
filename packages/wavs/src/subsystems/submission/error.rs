@@ -1,6 +1,6 @@
 use thiserror::Error;
 use utils::error::EvmClientError;
-use wavs_types::{ChainKey, EnvelopeError, ServiceId};
+use wavs_types::{ChainKey, EnvelopeError, ServiceId, Submit};
 
 use crate::services::ServicesError;
 
@@ -43,7 +43,7 @@ pub enum SubmissionError {
     #[error("expected EVM message")]
     ExpectedEvmMessage,
     #[error("failed to sign envelope: {0:?}")]
-    FailedToSignEnvelope(alloy_signer::Error),
+    FailedToSignEnvelope(anyhow::Error),
     #[error("failed to submit to EVM directly: {0}")]
     FailedToSubmitEvmDirect(anyhow::Error),
     #[error("failed to submit to cosmos: {0}")]
@@ -58,4 +58,6 @@ pub enum SubmissionError {
     Envelope(#[from] EnvelopeError),
     #[error("services {0:?}")]
     Services(#[from] ServicesError),
+    #[error("Cannot submit to {0:?}")]
+    InvalidSubmitKind(Submit),
 }

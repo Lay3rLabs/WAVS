@@ -87,8 +87,15 @@ impl SubmissionManager {
                                 service_id,
                                 workflow_id,
                                 envelope,
-                                submit
+                                submit,
+                                ..
                             } = msg;
+
+
+                            if matches!(&submit, Submit::None) {
+                                tracing::debug!("Skipping submission");
+                                continue;
+                            }
 
                             // Check if the service is active
                             match _self.services.is_active(&service_id) {
@@ -100,7 +107,6 @@ impl SubmissionManager {
                                     continue;
                                 }
                             }
-
 
                             _self.message_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
@@ -119,10 +125,6 @@ impl SubmissionManager {
                                 _self.debug_packets.write().unwrap().push(packet.clone());
                             }
 
-                            if matches!(&submit, Submit::None) {
-                                tracing::debug!("Skipping submission");
-                                continue;
-                            }
 
                             #[cfg(debug_assertions)]
                             if _self.disable_networking {
@@ -132,6 +134,12 @@ impl SubmissionManager {
 
                             match submit {
                                 Submit::Aggregator{url, ..} => {
+                                    #[cfg(debug_assertions)]
+                                    if msg.debug.do_not_submit_aggregator {
+                                        tracing::warn!("Test-only flag set, skipping submission to aggregator");
+                                        continue;
+                                    }
+
                                     if let Err(e) = _self.submit_to_aggregator(url, packet).await {
                                         tracing::error!("Failed to submit to aggregator for service_id={}, workflow_id={}: {:?}", service_id, workflow_id, e);
                                     }
@@ -246,8 +254,17 @@ impl SubmissionManager {
                 .clone()
         };
 
+        let signature_kind = match self
+            .services
+            .get_workflow(&service_id, &workflow_id)?
+            .submit
+        {
+            Submit::Aggregator { signature_kind, .. } => signature_kind,
+            Submit::None => return Err(SubmissionError::InvalidSubmitKind(Submit::None)),
+        };
+
         let signature = envelope
-            .sign(&evm_signer)
+            .sign(&evm_signer, signature_kind)
             .await
             .map_err(SubmissionError::FailedToSignEnvelope)?;
 
