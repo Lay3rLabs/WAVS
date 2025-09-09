@@ -17,6 +17,7 @@ use wildmatch::WildMatch;
 
 use super::{
     handlers::{
+        debug::handle_debug_trigger,
         handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_info,
         handle_list_services, handle_not_found, handle_upload_service,
         openapi::ApiDoc,
@@ -94,6 +95,7 @@ pub async fn make_router(
         .route("/app", post(handle_add_service))
         .route("/app", delete(handle_delete_service))
         .route("/add-chain", post(handle_add_chain))
+        .route("/debug/trigger", post(handle_debug_trigger))
         .route(
             "/upload",
             post(handle_upload_service).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
