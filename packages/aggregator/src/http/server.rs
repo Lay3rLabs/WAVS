@@ -59,7 +59,7 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
 
     // protected routes (POSTs)
     let protected = axum::Router::new()
-        .route("/packet", post(handle_packet))
+        .route("/packets", post(handle_packet))
         .route("/services", post(handle_register_service))
         .route("/dev/components", post(handle_upload))
         .with_state(state);
