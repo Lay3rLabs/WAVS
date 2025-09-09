@@ -5,25 +5,19 @@ use crate::http::{
     state::HttpState,
 };
 use axum::{
-    extract::{Query, State},
+    extract::State,
     response::IntoResponse,
     Json,
 };
-use serde::Deserialize;
 use wavs_types::{ChainKey, ServiceDigest, ServiceId, ServiceManager};
 
-#[derive(Deserialize)]
-pub struct GetServiceParams {
-    pub chain: ChainKey,
-    pub address: String,
-}
 
 #[utoipa::path(
     get,
-    path = "/services",
+    path = "/services/{chain}/{address}",
     params(
-        ("chain" = String, Query, description = "Name of the chain"),
-        ("address" = String, Query, description = "Service contract address")
+        ("chain" = String, Path, description = "Name of the chain"),
+        ("address" = String, Path, description = "Service contract address")
     ),
     responses(
         (status = 200, description = "Service found", body = wavs_types::Service),
@@ -35,15 +29,20 @@ pub struct GetServiceParams {
 #[axum::debug_handler]
 pub async fn handle_get_service(
     State(state): State<HttpState>,
-    Query(params): Query<GetServiceParams>,
+    axum::extract::Path((chain, address)): axum::extract::Path<(String, String)>,
 ) -> impl IntoResponse {
-    let address = match params.address.parse::<alloy_primitives::Address>() {
-        Ok(addr) => addr,
+    let chain_key = match ChainKey::from_str(&chain) {
+        Ok(key) => key,
         Err(e) => return AnyError::from(e).into_response(),
     };
 
+    let address = match address.parse::<alloy_primitives::Address>() {
+        Ok(addr) => addr,
+        Err(e) => return AnyError::from(e).into_response(),
+    };
+    
     let service_manager = ServiceManager::Evm {
-        chain: params.chain,
+        chain: chain_key,
         address,
     };
 

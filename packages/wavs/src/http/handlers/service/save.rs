@@ -5,7 +5,7 @@ use crate::http::{error::HttpResult, state::HttpState};
 
 #[utoipa::path(
     post,
-    path = "/services",
+    path = "/dev/services",
     request_body = wavs_types::Service,
     responses(
         (status = 200, description = "Service saved successfully", body = wavs_types::SaveServiceResponse),

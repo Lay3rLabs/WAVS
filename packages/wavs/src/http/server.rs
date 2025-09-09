@@ -73,20 +73,15 @@ pub async fn make_router(
     let state = HttpState::new(config.clone(), dispatcher, is_mock_chain_client, metrics).await?;
 
     // public routes
-    let public = axum::Router::new()
+    let mut public = axum::Router::new()
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .layer(OtelAxumLayer::default())
         .route("/config", get(handle_config))
-        .route("/services", get(handle_get_service))
-        .route(
-            "/dev/services/{service_hash}",
-            get(handle_get_service_by_hash),
-        )
         .route("/services", get(handle_list_services))
+        .route("/services/{chain}/{address}", get(handle_get_service))
         .route("/info", get(handle_info))
-        .fallback(handle_not_found)
-        .with_state(state.clone());
+        .fallback(handle_not_found);
 
     // protected routes (POST/DELETE)
     let mut protected = axum::Router::new()
@@ -96,18 +91,26 @@ pub async fn make_router(
         )
         .route("/services", post(handle_add_service))
         .route("/services", delete(handle_delete_service))
-        .route("/services", post(handle_save_service))
-        .route("/chains", post(handle_add_chain))
-        .route(
-            "/dev/components",
-            post(handle_upload_component).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
-        ); // 50MB limit
+        .route("/chains", post(handle_add_chain));
 
     // Only add debug routes if debug endpoints are enabled
-    if config.debug_endpoints_enabled {
-        protected = protected.route("/debug/trigger", post(handle_debug_trigger));
+    if config.dev_endpoints_enabled {
+        public = public
+            .route(
+                "/dev/services/{service_hash}",
+                get(handle_get_service_by_hash),
+            )
+            .route("/dev/services", post(handle_save_service));
+
+        protected = protected
+            .route("/dev/triggers", post(handle_debug_trigger))
+            .route(
+                "/dev/components",
+                post(handle_upload_component).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
+            ); // 50MB limit
     }
 
+    let public = public.with_state(state.clone());
     let protected = protected.with_state(state);
 
     // apply bearer auth to protected routes if configured

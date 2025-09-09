@@ -58,20 +58,27 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
         .with_state(state.clone());
 
     // protected routes (POSTs)
-    let protected = axum::Router::new()
+    let mut protected = axum::Router::new()
         .route("/packets", post(handle_packet))
-        .route("/services", post(handle_register_service))
-        .route("/dev/components", post(handle_upload))
-        .with_state(state);
+        .route("/services", post(handle_register_service));
+
+    // Only add dev endpoints if enabled
+    if config.dev_endpoints_enabled {
+        protected = protected.route("/dev/components", post(handle_upload));
+    }
+
+    protected = protected.with_state(state.clone());
 
     // apply bearer auth to protected routes if configured
-    let mut router = public.merge(match &config.bearer_token {
-        Some(token) => protected.layer(middleware::from_fn_with_state(
-            (token.clone(), REALM.to_string()),
-            utils::http::verify_bearer_with_realm,
-        )),
-        None => protected,
-    });
+    let mut router = public
+        .merge(match &config.bearer_token {
+            Some(token) => protected.layer(middleware::from_fn_with_state(
+                (token.clone(), REALM.to_string()),
+                utils::http::verify_bearer_with_realm,
+            )),
+            None => protected,
+        })
+        .with_state(state);
 
     if let Some(cors) = cors_layer(&config) {
         router = router.layer(cors);
