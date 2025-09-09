@@ -207,7 +207,7 @@ async fn main() {
                     let evm_client = match new_evm_client(&ctx, &chain_name).await {
                         Ok(client) => client,
                         Err(e) => {
-                            tracing::error!("Failed to create EVM client: {}", e);
+                            eprintln!("Failed to create EVM client: {}", e);
                             std::process::exit(1);
                         }
                     };
@@ -226,7 +226,7 @@ async fn main() {
                     let latest_block = match evm_client.provider.get_block_number().await {
                         Ok(block_num) => block_num,
                         Err(e) => {
-                            tracing::error!("Failed to get latest block number: {}", e);
+                            eprintln!("Failed to get latest block number: {}", e);
                             std::process::exit(1);
                         }
                     };
@@ -255,7 +255,7 @@ async fn main() {
                             tracing::info!("Transaction submitted: {:?}", tx.tx_hash());
                         }
                         Err(e) => {
-                            tracing::error!("Failed to submit to chain: {}", e);
+                            eprintln!("Failed to submit to chain: {}", e);
                             std::process::exit(1);
                         }
                     }
