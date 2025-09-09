@@ -205,7 +205,7 @@ async fn main() {
                     };
 
                     // Get EVM client for the chain
-                    let evm_client = match new_evm_client(&ctx, chain_key).await {
+                    let evm_client = match new_evm_client(&ctx, chain_key.id).await {
                         Ok(client) => client,
                         Err(e) => {
                             eprintln!("Failed to create EVM client: {e}");
