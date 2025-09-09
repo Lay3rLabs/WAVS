@@ -1,6 +1,5 @@
 use alloy_primitives::FixedBytes;
 use alloy_provider::Provider;
-use alloy_signer::SignerSync;
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
@@ -22,6 +21,7 @@ use wavs_cli::{
     context::CliContext,
     util::{write_output_file, ComponentInput},
 };
+use wavs_types::SignatureKind;
 use wavs_types::{ChainKeyId, Envelope, EnvelopeExt, IWavsServiceHandler};
 
 // duplicated here instead of using the one in CliContext so
@@ -180,11 +180,11 @@ async fn main() {
             }
 
             // If submit_chain is provided, submit the result to the chain
-            if let (Some(chain_name), Some(handler_address)) = (submit_chain, submit_handler) {
+            if let (Some(chain_key), Some(handler_address)) = (submit_chain, submit_handler) {
                 if let Some(wasm_response) = &res.wasm_response {
                     tracing::info!(
                         "Submitting result to chain {} at address {}",
-                        chain_name,
+                        chain_key,
                         handler_address
                     );
 
@@ -205,7 +205,7 @@ async fn main() {
                     };
 
                     // Get EVM client for the chain
-                    let evm_client = match new_evm_client(&ctx, &chain_name).await {
+                    let evm_client = match new_evm_client(&ctx, chain_key).await {
                         Ok(client) => client,
                         Err(e) => {
                             eprintln!("Failed to create EVM client: {}", e);
@@ -214,9 +214,15 @@ async fn main() {
                     };
 
                     // Create signature using the EVM client's signer
-                    let signature = evm_client
-                        .signer
-                        .sign_hash_sync(&envelope.eip191_hash())
+                    let signature = envelope
+                        .sign(
+                            &evm_client.signer,
+                            SignatureKind {
+                                algorithm: wavs_types::SignatureAlgorithm::Secp256k1,
+                                prefix: Some(wavs_types::SignaturePrefix::Eip191),
+                            },
+                        )
+                        .await
                         .unwrap();
 
                     // Create contract instance
@@ -235,7 +241,7 @@ async fn main() {
                     // Prepare signature data
                     let signature_data = IWavsServiceHandler::SignatureData {
                         signers: vec![evm_client.signer.address()],
-                        signatures: vec![signature.as_bytes().into()],
+                        signatures: vec![signature.data.into()],
                         referenceBlock: latest_block as u32,
                     };
 

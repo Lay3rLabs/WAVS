@@ -10,7 +10,9 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainKey, ComponentDigest, Credential, ServiceStatus, Timestamp, WorkflowId};
+use wavs_types::{
+    ChainKey, ChainKeyId, ComponentDigest, Credential, ServiceStatus, Timestamp, WorkflowId,
+};
 
 use crate::config::Config;
 
@@ -89,7 +91,7 @@ pub enum Command {
         /// Submit execution result to this chain via IWavsServiceHandler
         /// Must be used together with --submit-handler
         #[clap(long, requires = "submit_handler")]
-        submit_chain: Option<ChainName>,
+        submit_chain: Option<ChainKeyId>,
 
         /// Contract address of the IWavsServiceHandler to submit results to
         /// Must be used together with --submit-chain
