@@ -126,7 +126,7 @@ fn http_save_service() {
     let req = Request::builder()
         .method(Method::GET)
         .uri(format!(
-            "dev/services/{}",
+            "/dev/services/{}",
             service_hash.to_string().split_off(5)
         ))
         .body(Body::empty())
