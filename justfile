@@ -63,15 +63,14 @@ wasi-builder-push TAG="latest":
     export DOCKER_BUILDKIT=1; \
     if ! docker buildx inspect >/dev/null 2>&1; then docker buildx create --name wavs-bx --use >/dev/null; fi; \
     docker buildx build \
-      --platform linux/amd6wh4,linux/arm64 \
+      --platform linux/amd64,linux/arm64 \
       -f tools/wasi-builder/Dockerfile \
       -t ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}} \
       --push \
       tools/wasi-builder
 
-wasi-build COMPONENT="*" TAG="latest" PLATFORM="":
-    PLATFORM=${PLATFORM:-$(if [ "{{ARCH}}" = "arm64" ] || [ "{{ARCH}}" = "aarch64" ]; then echo linux/arm64; else echo linux/amd64; fi)} \
-    WASI_BUILDER_IMAGE=ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}} PLATFORM="$PLATFORM" bash tools/wasi-builder/build-components.sh '{{COMPONENT}}'
+wasi-build COMPONENT="*" TAG="latest":
+    WASI_BUILDER_IMAGE=ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}} bash tools/wasi-builder/build-components.sh '{{COMPONENT}}'
 
 # compile solidity contracts (including examples) and copy the ABI to contracts/solidity/abi
 # example ABI's will be copied to examples/contracts/solidity/abi
