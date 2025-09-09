@@ -102,7 +102,8 @@ impl Clients {
                     .config
                     .cosmos_mnemonic
                     .clone()
-                    .expect("Expected a cosmos mnemonic"),
+                    .expect("Expected a cosmos mnemonic")
+                    .to_string(),
                 climb_chain_config,
                 None,
                 None,

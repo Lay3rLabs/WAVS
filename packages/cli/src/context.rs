@@ -8,7 +8,7 @@ use utils::{
     config::{AnyChainConfig, EvmChainConfigExt},
     evm_client::EvmSigningClient,
 };
-use wavs_types::{ChainKey, ChainKeyId};
+use wavs_types::{ChainKey, ChainKeyId, Credential};
 
 use crate::{args::Command, deploy::Deployment};
 
@@ -93,7 +93,9 @@ impl CliContext {
 
         // Use actual credential if available, otherwise use a dummy one for read-only operations
         let credential = self.config.evm_credential.clone().unwrap_or_else(|| {
-            "0x0000000000000000000000000000000000000000000000000000000000000001".to_string()
+            Credential::new(
+                "0x0000000000000000000000000000000000000000000000000000000000000001".to_string(),
+            )
         });
 
         let client_config = chain_config.signing_client_config(credential)?;

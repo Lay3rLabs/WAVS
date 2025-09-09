@@ -285,7 +285,10 @@ fn test_exec_aggregator_with_shared_args() {
             assert_eq!(args.home, Some("/custom/home".into()));
             assert_eq!(args.data, Some("/custom/data".into()));
             assert_eq!(args.log_level, vec!["debug".to_string()]);
-            assert_eq!(args.evm_credential, Some("test-key".to_string()));
+            assert_eq!(
+                args.evm_credential,
+                Some(Credential::new("test-key".to_string()))
+            );
             assert_eq!(
                 args.ipfs_gateway,
                 Some("https://ipfs.example.com".to_string())

@@ -9,7 +9,7 @@ use utils::{
     evm_client::EvmSigningClient,
     filesystem::workspace_path,
 };
-use wavs_types::ChainKey;
+use wavs_types::{ChainKey, Credential};
 
 use crate::config::TestConfig;
 
@@ -50,10 +50,10 @@ pub struct Configs {
 
 #[derive(Clone, Debug)]
 pub struct TestMnemonics {
-    pub cli: String,
-    pub wavs: String,
-    pub aggregator: String,
-    pub aggregator_2: String,
+    pub cli: Credential,
+    pub wavs: Credential,
+    pub aggregator: Credential,
+    pub aggregator_2: Credential,
 }
 
 impl TestMnemonics {
@@ -61,19 +61,25 @@ impl TestMnemonics {
         // just some random mnemonics so they don't conflict with binaries, we'll fund it from the anvil wallet upon creation
         Self {
             // 0x63A513A1c878283BC1fF829d6938f45D714E22A1
-            cli: "replace course few short practice end crawl element rather strong text fit"
-                .to_string(),
+            cli: Credential::new(
+                "replace course few short practice end crawl element rather strong text fit"
+                    .to_string(),
+            ),
             // 0x55a8F5cac28c2dA45aFA89c46e47CC4A445570AE
-            wavs: "aspect mushroom fly cousin hobby body need dose blind siren shoe annual"
-                .to_string(),
+            wavs: Credential::new(
+                "aspect mushroom fly cousin hobby body need dose blind siren shoe annual"
+                    .to_string(),
+            ),
             // 0xB1Ebb71428FF42F529708B5Afd2BA6Ad3432f38d
-            aggregator:
+            aggregator: Credential::new(
                 "brain medal write network foam renew muscle mirror rather daring bike uniform"
                     .to_string(),
+            ),
             // 0x5E661B79FE2D3F6cE70F5AAC07d8Cd9AF2161630
-            aggregator_2:
+            aggregator_2: Credential::new(
                 "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat"
                     .to_string(),
+            ),
         }
     }
 
@@ -81,12 +87,14 @@ impl TestMnemonics {
         for chain_config in chain_configs.evm_iter() {
             let anvil_mnemonic =
                 "test test test test test test test test test test test junk".to_string();
-            let anvil_config = chain_config.signing_client_config(anvil_mnemonic).unwrap();
+            let anvil_config = chain_config
+                .signing_client_config(Credential::new(anvil_mnemonic))
+                .unwrap();
             let anvil_client = EvmSigningClient::new(anvil_config).await.unwrap();
 
             for mnemonic in [&self.cli, &self.wavs, &self.aggregator, &self.aggregator_2] {
                 let dest_addr = MnemonicBuilder::<English>::default()
-                    .phrase(mnemonic)
+                    .phrase(mnemonic.as_str())
                     .build()
                     .unwrap()
                     .address();

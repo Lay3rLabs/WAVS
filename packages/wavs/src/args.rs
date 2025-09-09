@@ -2,6 +2,7 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use utils::{config::CliEnvExt, serde::deserialize_vec_string};
+use wavs_types::Credential;
 
 /// This struct is used for both args and environment variables
 /// the basic idea is that every env var can be overriden by a cli arg
@@ -64,12 +65,12 @@ pub struct CliArgs {
     /// mnemonic for the submission client (usually leave this as None and override in env)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub submission_mnemonic: Option<String>,
+    pub submission_mnemonic: Option<Credential>,
 
     /// mnemonic for the submission client (usually leave this as None and override in env)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_submission_mnemonic: Option<String>,
+    pub cosmos_submission_mnemonic: Option<Credential>,
 
     /// The maximum amount of fuel (compute metering) to allow for 1 component's execution
     #[arg(long)]
@@ -94,7 +95,7 @@ pub struct CliArgs {
     /// Optional bearer token to protect mutating HTTP endpoints
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bearer_token: Option<String>,
+    pub bearer_token: Option<Credential>,
 }
 
 impl CliEnvExt for CliArgs {

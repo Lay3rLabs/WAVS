@@ -10,7 +10,7 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainKey, ComponentDigest, ServiceStatus, Timestamp, WorkflowId};
+use wavs_types::{ChainKey, ComponentDigest, Credential, ServiceStatus, Timestamp, WorkflowId};
 
 use crate::config::Config;
 
@@ -415,12 +415,12 @@ pub struct CliArgs {
     /// Usually leave this as None and override in env
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub evm_credential: Option<String>,
+    pub evm_credential: Option<Credential>,
 
     /// cosmos mnemonic (usually leave this as None and override in env)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_mnemonic: Option<String>,
+    pub cosmos_mnemonic: Option<Credential>,
 
     /// Save the deployment (default is true)
     #[arg(long)]

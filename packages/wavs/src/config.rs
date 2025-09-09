@@ -5,7 +5,7 @@ use utils::{
     service::DEFAULT_IPFS_GATEWAY,
 };
 use utoipa::ToSchema;
-use wavs_types::Workflow;
+use wavs_types::{Credential, Workflow};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -40,10 +40,10 @@ pub struct Config {
     pub chains: ChainConfigs,
 
     /// The mnemonic to use for submitting transactions on EVM chains
-    pub submission_mnemonic: Option<String>,
+    pub submission_mnemonic: Option<Credential>,
 
     /// The mnemonic to use for submitting transactions on Cosmos chains
-    pub cosmos_submission_mnemonic: Option<String>,
+    pub cosmos_submission_mnemonic: Option<Credential>,
 
     /// The maximum amount of fuel (compute metering) to allow for 1 component's execution
     pub max_wasm_fuel: u64,
@@ -62,7 +62,7 @@ pub struct Config {
 
     /// Optional bearer token to protect mutating HTTP endpoints.
     /// If None, endpoints remain unauthenticated.
-    pub bearer_token: Option<String>,
+    pub bearer_token: Option<Credential>,
 
     /// Enable debug endpoints for testing (default: false)
     pub debug_endpoints_enabled: bool,
