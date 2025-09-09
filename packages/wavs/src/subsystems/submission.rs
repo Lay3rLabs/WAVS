@@ -18,7 +18,7 @@ use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Envelope, EnvelopeExt, Packet, ServiceId, SigningKeyResponse, Submit, WorkflowId,
+    Credential, Envelope, EnvelopeExt, Packet, ServiceId, SigningKeyResponse, Submit, WorkflowId,
 };
 
 #[derive(Clone)]
@@ -26,7 +26,7 @@ pub struct SubmissionManager {
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
     evm_signers: Arc<RwLock<HashMap<ServiceId, SignerInfo>>>,
-    evm_mnemonic: Option<String>,
+    evm_mnemonic: Option<Credential>,
     evm_mnemonic_hd_index_count: Arc<AtomicU32>,
     metrics: SubmissionMetrics,
     message_count: Arc<AtomicU64>,
@@ -87,8 +87,15 @@ impl SubmissionManager {
                                 service_id,
                                 workflow_id,
                                 envelope,
-                                submit
+                                submit,
+                                ..
                             } = msg;
+
+
+                            if matches!(&submit, Submit::None) {
+                                tracing::debug!("Skipping submission");
+                                continue;
+                            }
 
                             // Check if the service is active
                             match _self.services.is_active(&service_id) {
@@ -96,17 +103,16 @@ impl SubmissionManager {
                                     // Service is active, proceed with submission
                                 }
                                 false => {
-                                    tracing::warn!("Service {} is not active, skipping message", service_id);
+                                    crate::tracing_service_warn!(_self.services, service_id, "Service is not active, skipping message");
                                     continue;
                                 }
                             }
-
 
                             _self.message_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
 
 
-                            let packet = match _self.make_packet(service_id, workflow_id, envelope).await {
+                            let packet = match _self.make_packet(service_id.clone(), workflow_id.clone(), envelope).await {
                                 Ok(packet) => packet,
                                 Err(e) => {
                                     tracing::error!("Failed to make packet: {:?}", e);
@@ -119,10 +125,6 @@ impl SubmissionManager {
                                 _self.debug_packets.write().unwrap().push(packet.clone());
                             }
 
-                            if matches!(&submit, Submit::None) {
-                                tracing::debug!("Skipping submission");
-                                continue;
-                            }
 
                             #[cfg(debug_assertions)]
                             if _self.disable_networking {
@@ -132,8 +134,14 @@ impl SubmissionManager {
 
                             match submit {
                                 Submit::Aggregator{url, ..} => {
+                                    #[cfg(debug_assertions)]
+                                    if msg.debug.do_not_submit_aggregator {
+                                        tracing::warn!("Test-only flag set, skipping submission to aggregator");
+                                        continue;
+                                    }
+
                                     if let Err(e) = _self.submit_to_aggregator(url, packet).await {
-                                        tracing::error!("{:?}", e);
+                                        tracing::error!("Failed to submit to aggregator for service_id={}, workflow_id={}: {:?}", service_id, workflow_id, e);
                                     }
                                 }
                                 Submit::None => {
@@ -246,8 +254,17 @@ impl SubmissionManager {
                 .clone()
         };
 
+        let signature_kind = match self
+            .services
+            .get_workflow(&service_id, &workflow_id)?
+            .submit
+        {
+            Submit::Aggregator { signature_kind, .. } => signature_kind,
+            Submit::None => return Err(SubmissionError::InvalidSubmitKind(Submit::None)),
+        };
+
         let signature = envelope
-            .sign(&evm_signer)
+            .sign(&evm_signer, signature_kind)
             .await
             .map_err(SubmissionError::FailedToSignEnvelope)?;
 
@@ -268,6 +285,7 @@ impl SubmissionManager {
         packet: Packet,
     ) -> Result<(), SubmissionError> {
         let service_id = packet.service.id();
+        let workflow_id = packet.workflow_id.clone();
         let start_time = std::time::Instant::now();
 
         let response = self
@@ -295,33 +313,40 @@ impl SubmissionManager {
             match response {
                 AddPacketResponse::Sent { tx_receipt, count } => {
                     tracing::info!(
-                        "Successfully submitted to aggregator {}: tx_hash={}, payload_count={}, service_id={}",
-                        url, tx_receipt.transaction_hash, count, service_id
+                        "Successfully submitted to aggregator {}: tx_hash={}, payload_count={}, service_id={}, workflow_id={}",
+                        url, tx_receipt.transaction_hash, count, service_id, workflow_id
                     );
                 }
                 AddPacketResponse::Aggregated { count } => {
                     tracing::info!(
-                        "Successfully aggregated for service_id={}: current_payload_count={}",
-                        service_id,
+                        "Successfully aggregated for service_id={}, workflow_id={}: current_payload_count={}",
+                        service_id, workflow_id,
                         count
                     );
                 }
                 AddPacketResponse::TimerStarted { delay_seconds } => {
                     tracing::info!(
-                        "Timer started for service_id={}: delay={}s",
+                        "Timer started for service_id={}, workflow_id={}: delay={}s",
                         service_id,
+                        workflow_id,
                         delay_seconds
                     );
                 }
                 AddPacketResponse::Error { reason } => {
                     tracing::error!(
-                        "Aggregator errored for service_id={}: {}",
+                        "Aggregator errored for service_id={}, workflow_id={}: {}",
                         service_id,
+                        workflow_id,
                         reason
                     );
                 }
                 AddPacketResponse::Burned => {
-                    tracing::info!("Aggregator queue burned for service_id={}", service_id);
+                    tracing_service_info!(
+                        self.services,
+                        service_id,
+                        "Aggregator queue burned for workflow_id={}",
+                        workflow_id
+                    );
                 }
             }
 

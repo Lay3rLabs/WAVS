@@ -1,6 +1,7 @@
 mod aggregator_types;
 mod bytes;
 mod chain_config;
+mod credential;
 mod http;
 mod id;
 mod packet;
@@ -10,6 +11,7 @@ mod time;
 pub use aggregator_types::*;
 pub use bytes::*;
 pub use chain_config::*;
+pub use credential::*;
 pub use http::*;
 pub use id::*;
 pub use packet::*;
