@@ -4,7 +4,8 @@ use crate::helpers::aggregator_exec::execute_aggregator_component;
 use utils::init_tracing_tests;
 use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::AggregatorAction;
 use wavs_types::{
-    Envelope, EnvelopeSignature, Packet, Service, ServiceManager, ServiceStatus, WorkflowId,
+    Envelope, EnvelopeSignature, Packet, Service, ServiceManager, ServiceStatus, SignatureKind,
+    WorkflowId,
 };
 
 const COMPONENT_SIMPLE_AGGREGATOR_BYTES: &[u8] =
@@ -30,9 +31,10 @@ async fn basic_aggregator_execution() {
             ordering: [0u8; 12].into(),
             payload: vec![].into(),
         },
-        signature: EnvelopeSignature::Secp256k1(
-            alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false),
-        ),
+        signature: EnvelopeSignature {
+            data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
+            kind: SignatureKind::evm_default(),
+        },
     };
 
     let actions = execute_aggregator_component(COMPONENT_SIMPLE_AGGREGATOR_BYTES, packet).await;

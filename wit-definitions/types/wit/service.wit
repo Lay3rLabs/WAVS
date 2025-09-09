@@ -122,6 +122,21 @@ interface service {
     record aggregator-submit {
         url: string,
         component: component,
+        signature-kind: signature-kind
+    }
+
+    record signature-kind {
+        algorithm: signature-algorithm,
+        prefix: option<signature-prefix>,
+    }
+
+    variant signature-algorithm {
+        secp256k1,
+        // Future: Bls12381, Ed25519, Secp256r1, etc.
+    }
+
+    variant signature-prefix {
+        eip191
     }
 
     // Aggregator types

@@ -334,7 +334,67 @@ pub enum Submit {
         url: String,
         /// component dynamically determines the destination
         component: Box<Component>,
+        signature_kind: SignatureKind,
     },
+}
+
+/// Defines the signature configuration for cryptographic operations in WAVS.
+///
+/// This struct separates the cryptographic algorithm from the message formatting
+/// to provide flexibility in signature schemes while maintaining compatibility
+/// across different blockchain ecosystems.
+///
+/// ## Why Separate Algorithm and Prefix?
+///
+/// The separation of `algorithm` and `prefix` serves several important purposes:
+///
+/// 1. **Algorithm Independence**: The same cryptographic algorithm (e.g., secp256k1)
+///    can be used with different message formatting schemes. This allows the same
+///    private key to work across different contexts.
+///
+/// 2. **Ethereum Compatibility**: Some signatures need EIP-191 prefixing for
+///    Ethereum compatibility, while others work with raw message hashes. The
+///    optional prefix allows both modes.
+///
+/// 3. **Future Extensibility**: As new signature algorithms (BLS12-381, Ed25519, etc.)
+///    and prefix schemes are added, this structure can accommodate them without
+///    breaking changes.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+pub struct SignatureKind {
+    /// The cryptographic algorithm used for signature generation and verification.
+    ///
+    /// This determines the elliptic curve and mathematical operations used,
+    /// but not how the message is formatted before signing.
+    pub algorithm: SignatureAlgorithm,
+
+    /// Optional message prefix scheme applied before signing.
+    ///
+    /// When `Some(prefix)`, the message is formatted according to the specified
+    /// scheme (e.g., EIP-191 for Ethereum compatibility). When `None`, the raw
+    /// message hash is signed directly.
+    pub prefix: Option<SignaturePrefix>,
+}
+
+impl SignatureKind {
+    pub fn evm_default() -> Self {
+        Self {
+            algorithm: SignatureAlgorithm::Secp256k1,
+            prefix: Some(SignaturePrefix::Eip191),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SignatureAlgorithm {
+    Secp256k1,
+    // Future: Bls12381, Ed25519, Secp256r1, etc.
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SignaturePrefix {
+    Eip191,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]

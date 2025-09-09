@@ -4,8 +4,8 @@ use std::time::Instant;
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
     AggregatorAction, AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
-    EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, Submit,
-    Trigger, Workflow, WorkflowId,
+    EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, SignatureKind,
+    Submit, Trigger, Workflow, WorkflowId,
 };
 
 use crate::util::read_component;
@@ -44,9 +44,10 @@ fn create_dummy_packet(digest: ComponentDigest) -> Packet {
         },
         workflow_id: WorkflowId::default(),
         service,
-        signature: EnvelopeSignature::Secp256k1(
-            alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false),
-        ),
+        signature: EnvelopeSignature {
+            data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
+            kind: SignatureKind::evm_default(),
+        },
     }
 }
 
@@ -254,9 +255,10 @@ mod test {
                 ordering: [0u8; 12].into(),
                 payload: b"test data".to_vec().into(),
             },
-            signature: EnvelopeSignature::Secp256k1(
-                alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false),
-            ),
+            signature: EnvelopeSignature {
+                data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
+                kind: SignatureKind::evm_default(),
+            },
         }
     }
 

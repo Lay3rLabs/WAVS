@@ -1,8 +1,14 @@
 use std::time::Duration;
 
 use tokio::sync::mpsc;
-use wavs::subsystems::submission::{chain_message::ChainMessage, SubmissionManager};
-use wavs_types::{Envelope, ServiceId, ServiceManager, Submit};
+use wavs::subsystems::submission::{
+    chain_message::{ChainMessage, ChainMessageDebug},
+    SubmissionManager,
+};
+use wavs_types::{
+    Component, ComponentDigest, ComponentSource, Envelope, Service, ServiceManager, SignatureKind,
+    Submit, Trigger, Workflow,
+};
 
 use utils::{
     context::AppContext, storage::db::RedbStorage, telemetry::SubmissionMetrics,
@@ -14,22 +20,19 @@ use wavs_systems::mock_submissions::{
     mock_event_id, mock_event_order, wait_for_submission_messages,
 };
 
-fn dummy_message(service_id: ServiceId, payload: &str) -> ChainMessage {
-    let workflow_id = {
-        // whatever, just use the first 24 chars of the service ID
-        let mut s = service_id.to_string();
-        s.truncate(24);
-        s.parse().unwrap()
-    };
+fn dummy_message(service: &Service, payload: &str) -> ChainMessage {
     ChainMessage {
-        workflow_id,
-        service_id,
+        workflow_id: service.workflows.keys().next().unwrap().clone(),
+        service_id: service.id(),
         envelope: Envelope {
             payload: payload.as_bytes().to_vec().into(),
             eventId: mock_event_id().into(),
             ordering: mock_event_order().into(),
         },
-        submit: Submit::None,
+        submit: service.workflows.values().next().unwrap().submit.clone(),
+        debug: ChainMessageDebug {
+            do_not_submit_aggregator: true,
+        },
     }
 }
 
@@ -61,7 +64,22 @@ fn collect_messages_with_wait() {
             chain: "evm:anvil".parse().unwrap(),
             address: rand_address_evm(),
         },
-        workflows: Default::default(),
+        workflows: vec![(
+            "workflow-1".parse().unwrap(),
+            Workflow {
+                trigger: Trigger::Manual,
+                component: Component::new(ComponentSource::Digest(ComponentDigest::hash([0; 32]))),
+                submit: Submit::Aggregator {
+                    url: "http://example.com".to_string(),
+                    component: Box::new(Component::new(ComponentSource::Digest(
+                        ComponentDigest::hash([0; 32]),
+                    ))),
+                    signature_kind: SignatureKind::evm_default(),
+                },
+            },
+        )]
+        .into_iter()
+        .collect(),
     };
     services.save(&service).unwrap();
     ctx.rt.block_on(async {
@@ -70,9 +88,9 @@ fn collect_messages_with_wait() {
             .unwrap();
     });
 
-    let msg1 = dummy_message(service.id(), "foo");
-    let msg2 = dummy_message(service.id(), "bar");
-    let msg3 = dummy_message(service.id(), "baz");
+    let msg1 = dummy_message(&service, "foo");
+    let msg2 = dummy_message(&service, "bar");
+    let msg3 = dummy_message(&service, "baz");
 
     send.blocking_send(msg1.clone()).unwrap();
     wait_for_submission_messages(&submission_manager, 1, None).unwrap();
