@@ -18,6 +18,7 @@ use std::{
     sync::{atomic::AtomicU64, Arc},
     time::Duration,
 };
+use wavs_types::Credential;
 
 use crate::error::EvmClientError;
 
@@ -147,7 +148,7 @@ impl EvmSigningClient {
 #[derive(Debug, Clone)]
 pub struct EvmSigningClientConfig {
     pub endpoint: EvmEndpoint,
-    pub credential: String,
+    pub credential: Credential,
     pub hd_index: Option<u32>,
     /// If a transaction does not have `max_gas` set, then it will estimate
     /// however the actual gas needed fluctuates, so we can pad it with a multiplier
@@ -190,7 +191,7 @@ impl NonceManager for AnyNonceManager {
 }
 
 impl EvmSigningClientConfig {
-    pub fn new(endpoint: EvmEndpoint, credential: String) -> Self {
+    pub fn new(endpoint: EvmEndpoint, credential: Credential) -> Self {
         Self {
             endpoint,
             credential,
@@ -204,7 +205,9 @@ impl EvmSigningClientConfig {
     pub fn new_anvil(endpoint_url: &str) -> Self {
         Self {
             endpoint: EvmEndpoint::from_str(endpoint_url).expect("Failed to parse anvil endpoint"),
-            credential: "test test test test test test test test test test test junk".to_string(),
+            credential: Credential::new(
+                "test test test test test test test test test test test junk".to_string(),
+            ),
             hd_index: None,
             gas_estimate_multiplier: None,
             poll_interval: None,

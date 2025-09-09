@@ -6,6 +6,7 @@ use utils::{
     evm_client::{EvmQueryClient, EvmSigningClient, EvmSigningClientConfig},
     init_tracing_tests,
 };
+use wavs_types::Credential;
 
 #[tokio::test]
 async fn client_stream_blocks() {
@@ -39,8 +40,10 @@ async fn client_sign_message() {
 
     let config = EvmSigningClientConfig::new(
         anvil.endpoint().parse().unwrap(),
-        "work man father plunge mystery proud hollow address reunion sauce theory bonus"
-            .to_string(),
+        Credential::new(
+            "work man father plunge mystery proud hollow address reunion sauce theory bonus"
+                .to_string(),
+        ),
     );
     let client = EvmSigningClient::new(config).await.unwrap();
 

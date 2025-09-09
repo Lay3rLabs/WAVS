@@ -13,8 +13,8 @@ use utils::{
 use wavs::dispatcher::DispatcherCommand;
 use wavs::init_tracing_tests;
 use wavs_types::{
-    Component, ComponentSource, Service, ServiceManager, ServiceStatus, Submit, Workflow,
-    WorkflowId,
+    Component, ComponentSource, Service, ServiceManager, ServiceStatus, SignatureKind, Submit,
+    Workflow, WorkflowId,
 };
 mod wavs_systems;
 use wavs_systems::{
@@ -54,6 +54,7 @@ fn dispatcher_pipeline() {
                 submit: Submit::Aggregator {
                     url: "http://example.com/aggregator".to_string(),
                     component: Box::new(Component::new(ComponentSource::Digest(digest))),
+                    signature_kind: SignatureKind::evm_default(),
                 },
             },
         )]

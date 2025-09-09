@@ -189,7 +189,7 @@ impl HttpClient {
         let service_hash = service.hash()?;
         tokio::time::timeout(timeout.unwrap_or(Duration::from_secs(30)), async {
             loop {
-                tracing::warn!("Waiting for service update: {}", service.id());
+                tracing::warn!(service.name = %service.name, service.manager = ?service.manager, "Waiting for service update: {} [{:?}]", service.name, service.manager);
 
                 let (chain, address) = match &service.manager {
                     ServiceManager::Evm { chain, address } => (chain, address.to_string()),

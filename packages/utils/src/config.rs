@@ -9,7 +9,7 @@ use crate::{
     evm_client::{EvmEndpoint, EvmSigningClientConfig},
 };
 pub use wavs_types::AnyChainConfig;
-use wavs_types::{ChainConfigError, ChainKey, ChainKeyId, ChainKeyNamespace};
+use wavs_types::{ChainConfigError, ChainKey, ChainKeyId, ChainKeyNamespace, Credential};
 
 pub const WAVS_ENV_PREFIX: &str = "WAVS_ENV";
 
@@ -449,7 +449,7 @@ pub use wavs_types::{CosmosChainConfig, EvmChainConfig};
 pub trait EvmChainConfigExt {
     fn signing_client_config(
         &self,
-        credential: String,
+        credential: Credential,
     ) -> std::result::Result<EvmSigningClientConfig, EvmClientError>;
     fn query_client_endpoint(&self) -> std::result::Result<EvmEndpoint, EvmClientError>;
 }
@@ -457,7 +457,7 @@ pub trait EvmChainConfigExt {
 impl EvmChainConfigExt for EvmChainConfig {
     fn signing_client_config(
         &self,
-        credential: String,
+        credential: Credential,
     ) -> std::result::Result<EvmSigningClientConfig, EvmClientError> {
         let endpoint = match (self.ws_endpoint.clone(), self.http_endpoint.clone()) {
             // prefer HTTP for signing clients

@@ -13,7 +13,9 @@ use wavs_systems::{
     http::{map_response, TestHttpApp},
     mock_trigger_manager::mock_evm_event_trigger,
 };
-use wavs_types::{ChainKey, Component, ComponentDigest, ComponentSource, UploadComponentResponse};
+use wavs_types::{
+    ChainKey, Component, ComponentDigest, ComponentSource, SignatureKind, UploadComponentResponse,
+};
 
 #[test]
 fn http_not_found() {
@@ -95,6 +97,7 @@ fn http_save_service() {
             component: Box::new(Component::new(ComponentSource::Digest(
                 ComponentDigest::hash([1, 2, 3]),
             ))),
+            signature_kind: SignatureKind::evm_default(),
         },
         wavs_types::ServiceManager::Evm {
             chain: "evm:anvil".try_into().unwrap(),

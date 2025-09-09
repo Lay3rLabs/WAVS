@@ -11,6 +11,7 @@ use tempfile::tempdir;
 use utils::init_tracing_tests;
 use wasm_pkg_client::PackageRef;
 use wavs_types::ComponentDigest;
+use wavs_types::SignatureKind;
 use wavs_types::Submit;
 
 #[test]
@@ -1012,6 +1013,7 @@ async fn test_service_validation() {
     let submit = Submit::Aggregator {
         url: "https://api.example.com/aggregator".to_string(),
         component: Box::new(component.clone()),
+        signature_kind: SignatureKind::evm_default(),
     };
 
     // Create service manager
@@ -1304,6 +1306,7 @@ async fn test_service_validation() {
                 submit: SubmitJson::Submit(Submit::Aggregator {
                     url: "not-a-valid-url".to_string(),
                     component: Box::new(component.clone()),
+                    signature_kind: SignatureKind::evm_default(),
                 }),
             },
         );
@@ -1577,7 +1580,11 @@ async fn test_modify_aggregator_component() {
                 }
             }
         }
-        SubmitJson::Submit(Submit::Aggregator { url, component }) => {
+        SubmitJson::Submit(Submit::Aggregator {
+            url,
+            component,
+            signature_kind: _,
+        }) => {
             // This might be matched first due to enum ordering
             assert_eq!(*url, test_url);
             match &component.source {
@@ -1648,6 +1655,7 @@ fn test_aggregator_validation() {
         submit: SubmitJson::Submit(Submit::Aggregator {
             url: "https://valid-url.com".to_string(),
             component: Box::new(component.clone()),
+            signature_kind: SignatureKind::evm_default(),
         }),
     };
 
@@ -1673,6 +1681,7 @@ fn test_aggregator_validation() {
         submit: SubmitJson::Submit(Submit::Aggregator {
             url: "https://valid-url.com".to_string(),
             component: Box::new(invalid_component),
+            signature_kind: SignatureKind::evm_default(),
         }),
     };
 
@@ -1705,6 +1714,7 @@ fn test_aggregator_validation() {
         submit: SubmitJson::Submit(Submit::Aggregator {
             url: "https://valid-url.com".to_string(),
             component: Box::new(invalid_env_component),
+            signature_kind: SignatureKind::evm_default(),
         }),
     };
 

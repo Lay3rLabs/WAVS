@@ -129,8 +129,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         // If Ok(Some(x)), send the result down the pipeline to the submit processor
         // If Ok(None), just end early here, performing no action (but updating local state if needed)
         if let Some(wasm_response) = wasm_response {
-            tracing::info!("Component execution produced result: service_id={}, workflow_id={}, payload_size={}", 
-                trigger_config.service_id, trigger_config.workflow_id, wasm_response.payload.len());
+            tracing::info!(service.name = %service.name, service.manager = ?service.manager, workflow_id = %trigger_config.workflow_id, payload_size = %wasm_response.payload.len(), "Component execution produced result: service={} [{:?}], workflow_id={}, payload_size={}", service.name, service.manager, trigger_config.workflow_id, wasm_response.payload.len());
             let service_id = trigger_config.service_id.clone();
             let workflow_id = trigger_config.workflow_id.clone();
 
@@ -148,6 +147,8 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                     },
                 },
                 submit: workflow.submit.clone(),
+                #[cfg(debug_assertions)]
+                debug: Default::default(),
             };
 
             result_sender

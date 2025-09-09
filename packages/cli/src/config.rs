@@ -4,6 +4,7 @@ use utils::{
     config::{ChainConfigs, ConfigExt},
     service::DEFAULT_IPFS_GATEWAY,
 };
+use wavs_types::Credential;
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
@@ -27,10 +28,10 @@ pub struct Config {
     pub chains: ChainConfigs,
 
     /// The mnemonic to use for submitting transactions on cosmos chains (usually None, set via env var)
-    pub cosmos_mnemonic: Option<String>,
+    pub cosmos_mnemonic: Option<Credential>,
 
     /// The credential to use for submitting transactions on evm chains (mnemonic or private key)
-    pub evm_credential: Option<String>,
+    pub evm_credential: Option<Credential>,
 
     /// The IPFS gateway URL used to access IPFS content over HTTP.
     pub ipfs_gateway: String,

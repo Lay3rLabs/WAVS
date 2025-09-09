@@ -231,12 +231,42 @@ impl From<wavs_types::Submit> for component_service::Submit {
     fn from(src: wavs_types::Submit) -> Self {
         match src {
             wavs_types::Submit::None => component_service::Submit::None,
-            wavs_types::Submit::Aggregator { url, component } => {
-                component_service::Submit::Aggregator(component_service::AggregatorSubmit {
-                    url,
-                    component: (*component).into(),
-                })
+            wavs_types::Submit::Aggregator {
+                url,
+                component,
+                signature_kind,
+            } => component_service::Submit::Aggregator(component_service::AggregatorSubmit {
+                url,
+                component: (*component).into(),
+                signature_kind: signature_kind.into(),
+            }),
+        }
+    }
+}
+
+impl From<wavs_types::SignatureKind> for component_service::SignatureKind {
+    fn from(src: wavs_types::SignatureKind) -> Self {
+        Self {
+            algorithm: src.algorithm.into(),
+            prefix: src.prefix.map(Into::into),
+        }
+    }
+}
+
+impl From<wavs_types::SignatureAlgorithm> for component_service::SignatureAlgorithm {
+    fn from(src: wavs_types::SignatureAlgorithm) -> Self {
+        match src {
+            wavs_types::SignatureAlgorithm::Secp256k1 => {
+                component_service::SignatureAlgorithm::Secp256k1
             }
+        }
+    }
+}
+
+impl From<wavs_types::SignaturePrefix> for component_service::SignaturePrefix {
+    fn from(src: wavs_types::SignaturePrefix) -> Self {
+        match src {
+            wavs_types::SignaturePrefix::Eip191 => component_service::SignaturePrefix::Eip191,
         }
     }
 }
@@ -495,14 +525,10 @@ impl From<wavs_types::Envelope> for aggregator_types::Envelope {
 
 impl From<wavs_types::EnvelopeSignature> for aggregator_types::EnvelopeSignature {
     fn from(signature: wavs_types::EnvelopeSignature) -> Self {
-        match signature {
-            wavs_types::EnvelopeSignature::Secp256k1(sig) => {
-                aggregator_types::EnvelopeSignature::Secp256k1(
-                    aggregator_types::Secp256k1Signature {
-                        signature_data: sig.as_bytes().to_vec(),
-                    },
-                )
-            }
+        let wavs_types::EnvelopeSignature { data, kind } = signature;
+        aggregator_types::EnvelopeSignature {
+            data,
+            kind: kind.into(),
         }
     }
 }
@@ -581,12 +607,42 @@ impl From<wavs_types::Submit> for aggregator_service::Submit {
     fn from(submit: wavs_types::Submit) -> Self {
         match submit {
             wavs_types::Submit::None => aggregator_service::Submit::None,
-            wavs_types::Submit::Aggregator { url, component } => {
-                aggregator_service::Submit::Aggregator(aggregator_service::AggregatorSubmit {
-                    url,
-                    component: (*component).into(),
-                })
+            wavs_types::Submit::Aggregator {
+                url,
+                component,
+                signature_kind,
+            } => aggregator_service::Submit::Aggregator(aggregator_service::AggregatorSubmit {
+                url,
+                component: (*component).into(),
+                signature_kind: signature_kind.into(),
+            }),
+        }
+    }
+}
+
+impl From<wavs_types::SignatureKind> for aggregator_service::SignatureKind {
+    fn from(src: wavs_types::SignatureKind) -> Self {
+        Self {
+            algorithm: src.algorithm.into(),
+            prefix: src.prefix.map(Into::into),
+        }
+    }
+}
+
+impl From<wavs_types::SignatureAlgorithm> for aggregator_service::SignatureAlgorithm {
+    fn from(src: wavs_types::SignatureAlgorithm) -> Self {
+        match src {
+            wavs_types::SignatureAlgorithm::Secp256k1 => {
+                aggregator_service::SignatureAlgorithm::Secp256k1
             }
+        }
+    }
+}
+
+impl From<wavs_types::SignaturePrefix> for aggregator_service::SignaturePrefix {
+    fn from(src: wavs_types::SignaturePrefix) -> Self {
+        match src {
+            wavs_types::SignaturePrefix::Eip191 => aggregator_service::SignaturePrefix::Eip191,
         }
     }
 }

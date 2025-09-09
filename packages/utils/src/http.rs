@@ -11,11 +11,12 @@ use axum_extra::{
     TypedHeader,
 };
 use subtle::ConstantTimeEq;
+use wavs_types::Credential;
 
 // Shared bearer token middleware with realm support
 // State is a tuple: (token, realm)
 pub async fn verify_bearer_with_realm(
-    State((token, realm)): State<(String, String)>,
+    State((token, realm)): State<(Credential, String)>,
     auth: Result<TypedHeader<Authorization<Bearer>>, TypedHeaderRejection>,
     req: Request,
     next: Next,
@@ -56,12 +57,13 @@ mod tests {
         routing::get,
         Router,
     };
-    use tower::util::ServiceExt; // for `oneshot`
+    use tower::util::ServiceExt;
+    use wavs_types::Credential; // for `oneshot`
 
     fn app_with_auth(token: &str, realm: &str) -> Router {
         let protected = Router::new().route("/protected", get(|| async { "ok" }));
         protected.layer(middleware::from_fn_with_state(
-            (token.to_string(), realm.to_string()),
+            (Credential::new(token.to_string()), realm.to_string()),
             verify_bearer_with_realm,
         ))
     }

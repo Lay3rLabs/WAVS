@@ -165,6 +165,7 @@ subtle = "2.6.1"
 # utilis
 cfg-if = "1.0.1"
 regex = "1.11.2"
+zeroize = {version = "1.8.1", features = ["derive"]}
 
 # versioning
 semver = { version = "1.0.26", features = ["serde"] }

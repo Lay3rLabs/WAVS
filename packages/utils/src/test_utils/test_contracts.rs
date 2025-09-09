@@ -2,7 +2,7 @@ use alloy_node_bindings::{Anvil, AnvilInstance};
 use alloy_primitives::Address;
 use alloy_provider::DynProvider;
 use tempfile::TempDir;
-use wavs_types::ChainKey;
+use wavs_types::{ChainKey, Credential};
 
 use crate::evm_client::{EvmSigningClient, EvmSigningClientConfig};
 
@@ -44,7 +44,9 @@ impl TestContractDeps {
         let endpoint = anvil.endpoint().parse().unwrap();
         let client_config = EvmSigningClientConfig::new(
             endpoint,
-            "test test test test test test test test test test test junk".to_string(),
+            Credential::new(
+                "test test test test test test test test test test test junk".to_string(),
+            ),
         );
 
         let client = EvmSigningClient::new(client_config).await.unwrap();

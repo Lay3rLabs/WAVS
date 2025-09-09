@@ -9822,6 +9822,7 @@ dependencies = [
  "utils",
  "utoipa",
  "wasm-pkg-common",
+ "zeroize",
 ]
 
 [[package]]

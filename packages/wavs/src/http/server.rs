@@ -17,6 +17,7 @@ use wildmatch::WildMatch;
 
 use super::{
     handlers::{
+        debug::handle_debug_trigger,
         handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_info,
         handle_list_services, handle_not_found, handle_upload_component,
         openapi::ApiDoc,
@@ -88,7 +89,7 @@ pub async fn make_router(
         .with_state(state.clone());
 
     // protected routes (POST/DELETE)
-    let protected = axum::Router::new()
+    let mut protected = axum::Router::new()
         .route(
             "/services/{service_hash}/signer",
             post(handle_get_service_signer),
@@ -100,8 +101,14 @@ pub async fn make_router(
         .route(
             "/dev/components",
             post(handle_upload_component).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
-        ) // 50MB limit
-        .with_state(state);
+        ); // 50MB limit
+
+    // Only add debug routes if debug endpoints are enabled
+    if config.debug_endpoints_enabled {
+        protected = protected.route("/debug/trigger", post(handle_debug_trigger));
+    }
+
+    let protected = protected.with_state(state);
 
     // apply bearer auth to protected routes if configured
     let mut router = public.merge(match &config.bearer_token {

@@ -3,7 +3,8 @@ use std::num::NonZero;
 use wavs::{config::Config, subsystems::trigger::TriggerManager};
 use wavs_types::{
     ChainKey, ChainKeyId, Component, ComponentDigest, ComponentSource, Service, ServiceId,
-    ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, TriggerConfig, Workflow, WorkflowId,
+    ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp, Trigger, TriggerConfig,
+    Workflow, WorkflowId,
 };
 
 use layer_climb::prelude::*;
@@ -229,6 +230,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
                     component: Box::new(Component::new(ComponentSource::Digest(
                         ComponentDigest::hash([1, 2, 3]),
                     ))),
+                    signature_kind: SignatureKind::evm_default(),
                 },
             },
         )]

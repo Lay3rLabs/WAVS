@@ -32,7 +32,7 @@ use crate::{
     description = "Validates and processes a packet, adding it to the aggregation queue. When enough packets from different signers accumulate to meet the threshold, the aggregated packet is sent to the target contract."
 )]
 #[axum::debug_handler]
-#[instrument(level = "info", skip(state, req), fields(service_id = %req.packet.service.id(), workflow_id = %req.packet.workflow_id))]
+#[instrument(level = "info", skip(state, req), fields(service.name = %req.packet.service.name, service.manager = ?req.packet.service.manager, workflow_id = %req.packet.workflow_id))]
 pub async fn handle_packet(
     State(state): State<HttpState>,
     Json(req): Json<AddPacketRequest>,
@@ -46,7 +46,7 @@ pub async fn handle_packet(
     }
 }
 
-#[instrument(level = "debug", skip(state, packet), fields(service_id = %packet.service.id(), workflow_id = %packet.workflow_id))]
+#[instrument(level = "debug", skip(state, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
 async fn process_packet(
     state: HttpState,
     packet: &Packet,
@@ -456,7 +456,7 @@ mod test {
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{ComponentDigest, Service, WorkflowId};
+    use wavs_types::{ComponentDigest, Credential, Service, SignatureKind, WorkflowId};
 
     #[test]
     fn packet_validation() {
@@ -481,10 +481,7 @@ mod test {
         let queue =
             add_packet_to_quorum_queue(&packet_2, queue.clone(), signer_1.address()).unwrap();
         assert_eq!(queue.len(), 1);
-        assert_eq!(
-            queue[0].packet.signature.as_bytes(),
-            packet_2.signature.as_bytes()
-        );
+        assert_eq!(queue[0].packet.signature.data, packet_2.signature.data);
 
         // "fails" (expectedly) because the envelope is different
         let packet_3 = mock_packet(&signer_2, &envelope_2, "workflow-1".parse().unwrap());
@@ -973,6 +970,7 @@ mod test {
             wavs_types::Submit::Aggregator {
                 url: "http://localhost:8080".to_string(),
                 component: Box::new(component),
+                signature_kind: SignatureKind::evm_default(),
             },
         )
         .await
@@ -1040,8 +1038,9 @@ mod test {
                 },
             );
 
-            config.credential =
-                Some("test test test test test test test test test test test junk".to_string());
+            config.credential = Some(Credential::new(
+                "test test test test test test test test test test test junk".to_string(),
+            ));
 
             let state = HttpState::new_with_engine(config).unwrap();
 
