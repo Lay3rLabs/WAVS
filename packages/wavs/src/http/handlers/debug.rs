@@ -1,8 +1,8 @@
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::Deserialize;
 use wavs_types::{ServiceId, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowId};
 
-use crate::http::state::HttpState;
+use crate::http::{error::HttpResult, state::HttpState};
 
 #[derive(Debug, Deserialize)]
 pub struct SimulatedTriggerRequest {
@@ -21,9 +21,16 @@ fn default_count() -> usize {
 pub async fn handle_debug_trigger(
     State(state): State<HttpState>,
     Json(req): Json<SimulatedTriggerRequest>,
-) -> StatusCode {
+) -> impl IntoResponse {
+    match debug_trigger_inner(state, req).await {
+        Ok(_) => StatusCode::OK.into_response(),
+        Err(e) => e.into_response(),
+    }
+}
+
+async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> HttpResult<()> {
     if !state.config.debug_endpoints_enabled {
-        return StatusCode::SERVICE_UNAVAILABLE;
+        return Err(anyhow::anyhow!("Debug endpoints are not enabled").into());
     }
 
     for _ in 0..req.count {
@@ -35,11 +42,17 @@ pub async fn handle_debug_trigger(
             },
             data: req.data.clone(),
         };
-        if let Err(e) = state.dispatcher.trigger_manager.add_trigger(action).await {
-            tracing::error!("Failed to add trigger: {}", e);
-            return StatusCode::INTERNAL_SERVER_ERROR;
-        }
+
+        state
+            .dispatcher
+            .trigger_manager
+            .add_trigger(action)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to add trigger: {}", e);
+                anyhow::anyhow!("Failed to add trigger: {}", e)
+            })?;
     }
 
-    StatusCode::OK
+    Ok(())
 }
