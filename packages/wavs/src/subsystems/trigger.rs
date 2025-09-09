@@ -214,6 +214,16 @@ impl TriggerManager {
         Ok(())
     }
 
+    pub async fn add_trigger(&self, trigger: TriggerAction) -> Result<(), TriggerError> {
+        self.local_command_sender
+            .lock()
+            .unwrap()
+            .as_ref()
+            .expect("trigger manager not started")
+            .send(LocalStreamCommand::ManualTrigger(Box::new(trigger)))?;
+        Ok(())
+    }
+
     #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
     async fn start_watcher(&self) -> Result<(), TriggerError> {
         let mut multiplexed_stream: MultiplexedStream = SelectAll::new();
@@ -252,6 +262,10 @@ impl TriggerManager {
             match res {
                 StreamTriggers::LocalCommand(command) => {
                     match command {
+                        LocalStreamCommand::ManualTrigger(trigger_action) => {
+                            // send it directly to dispatcher
+                            dispatcher_commands.push(DispatcherCommand::Trigger(*trigger_action));
+                        }
                         LocalStreamCommand::StartListeningCron => {
                             #[cfg(debug_assertions)]
                             if self.disable_networking {
