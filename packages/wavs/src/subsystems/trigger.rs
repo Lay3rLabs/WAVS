@@ -621,4 +621,67 @@ impl TriggerManager {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    use crate::{config::Config, services::Services};
+    use utils::{config::ChainConfigs, storage::db::RedbStorage, telemetry::TriggerMetrics};
+    use wavs_types::{ServiceId, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowId};
+
+    #[tokio::test]
+    async fn test_add_trigger() {
+        let config = Config {
+            chains: ChainConfigs::default(),
+            ..Default::default()
+        };
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_storage = RedbStorage::new(temp_dir.path().join("db")).unwrap();
+        let services = Services::new(db_storage);
+
+        let metrics = TriggerMetrics::new(&opentelemetry::global::meter("test"));
+        let trigger_manager = TriggerManager::new(&config, metrics, services).unwrap();
+
+        let ctx = utils::context::AppContext::new();
+        let mut receiver = trigger_manager.start(ctx.clone()).unwrap();
+
+        // short sleep for trigger manager to kick in
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        for i in 0..6 {
+            let action = TriggerAction {
+                config: TriggerConfig {
+                    service_id: ServiceId::hash("test-service"),
+                    workflow_id: WorkflowId::new("test-workflow").unwrap(),
+                    trigger: Trigger::Manual,
+                },
+                data: TriggerData::Raw(vec![i as u8]),
+            };
+
+            let result = trigger_manager.add_trigger(action).await;
+            assert!(result.is_ok(), "Failed to add trigger {}: {:?}", i, result);
+        }
+
+        let mut received_count = 0;
+        while let Some(command) = receiver.recv().await {
+            if let DispatcherCommand::Trigger(action) = command {
+                if let TriggerData::Raw(data) = &action.data {
+                    assert_eq!(
+                        data,
+                        &vec![received_count as u8],
+                        "Trigger {} data mismatch",
+                        received_count
+                    );
+                    received_count += 1;
+                    if received_count == 6 {
+                        break;
+                    }
+                }
+            }
+        }
+        assert_eq!(received_count, 6, "Expected to receive 6 triggers");
+
+        ctx.kill();
+    }
+}
