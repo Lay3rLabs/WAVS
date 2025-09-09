@@ -324,6 +324,7 @@ dependencies = [
  "const-hex",
  "derive_more",
  "foldhash",
+ "getrandom 0.3.3",
  "hashbrown 0.15.4",
  "indexmap 2.10.0",
  "itoa",

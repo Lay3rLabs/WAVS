@@ -190,7 +190,7 @@ async fn main() {
                     // Create envelope from WASM response
                     let envelope = Envelope {
                         payload: wasm_response.payload.clone().into(),
-                        eventId: FixedBytes::default(), // Mock event ID
+                        eventId: FixedBytes::random(),
                         ordering: match wasm_response.ordering {
                             Some(ordering) => {
                                 let mut bytes = [0u8; 12];
