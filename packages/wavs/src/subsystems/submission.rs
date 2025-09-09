@@ -106,7 +106,7 @@ impl SubmissionManager {
 
 
 
-                            let packet = match _self.make_packet(service_id, workflow_id, envelope).await {
+                            let packet = match _self.make_packet(service_id.clone(), workflow_id.clone(), envelope).await {
                                 Ok(packet) => packet,
                                 Err(e) => {
                                     tracing::error!("Failed to make packet: {:?}", e);
@@ -133,7 +133,7 @@ impl SubmissionManager {
                             match submit {
                                 Submit::Aggregator{url, ..} => {
                                     if let Err(e) = _self.submit_to_aggregator(url, packet).await {
-                                        tracing::error!("{:?}", e);
+                                        tracing::error!("Failed to submit to aggregator for service_id={}, workflow_id={}: {:?}", service_id, workflow_id, e);
                                     }
                                 }
                                 Submit::None => {
@@ -268,6 +268,7 @@ impl SubmissionManager {
         packet: Packet,
     ) -> Result<(), SubmissionError> {
         let service_id = packet.service.id();
+        let workflow_id = packet.workflow_id.clone();
         let start_time = std::time::Instant::now();
 
         let response = self
@@ -295,33 +296,40 @@ impl SubmissionManager {
             match response {
                 AddPacketResponse::Sent { tx_receipt, count } => {
                     tracing::info!(
-                        "Successfully submitted to aggregator {}: tx_hash={}, payload_count={}, service_id={}",
-                        url, tx_receipt.transaction_hash, count, service_id
+                        "Successfully submitted to aggregator {}: tx_hash={}, payload_count={}, service_id={}, workflow_id={}",
+                        url, tx_receipt.transaction_hash, count, service_id, workflow_id
                     );
                 }
                 AddPacketResponse::Aggregated { count } => {
                     tracing::info!(
-                        "Successfully aggregated for service_id={}: current_payload_count={}",
-                        service_id,
+                        "Successfully aggregated for service_id={}, workflow_id={}: current_payload_count={}",
+                        service_id, workflow_id,
                         count
                     );
                 }
                 AddPacketResponse::TimerStarted { delay_seconds } => {
                     tracing::info!(
-                        "Timer started for service_id={}: delay={}s",
+                        "Timer started for service_id={}, workflow_id={}: delay={}s",
                         service_id,
+                        workflow_id,
                         delay_seconds
                     );
                 }
                 AddPacketResponse::Error { reason } => {
                     tracing::error!(
-                        "Aggregator errored for service_id={}: {}",
+                        "Aggregator errored for service_id={}, workflow_id={}: {}",
                         service_id,
+                        workflow_id,
                         reason
                     );
                 }
                 AddPacketResponse::Burned => {
-                    tracing_service_info!(self.services, service_id, "Aggregator queue burned");
+                    tracing_service_info!(
+                        self.services,
+                        service_id,
+                        "Aggregator queue burned for workflow_id={}",
+                        workflow_id
+                    );
                 }
             }
 
