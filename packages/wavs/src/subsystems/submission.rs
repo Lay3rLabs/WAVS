@@ -90,6 +90,7 @@ impl SubmissionManager {
                                 submit
                             } = msg;
 
+
                             if matches!(&submit, Submit::None) {
                                 tracing::debug!("Skipping submission");
                                 continue;
