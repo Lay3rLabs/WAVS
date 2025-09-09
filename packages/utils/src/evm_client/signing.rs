@@ -3,13 +3,16 @@ use alloy_provider::Provider;
 use alloy_rpc_types_eth::TransactionReceipt;
 use alloy_signer::k256::SecretKey;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
-use wavs_types::{Envelope, SignatureData};
+use wavs_types::{Credential, Envelope, SignatureData};
 
 use crate::error::EvmClientError;
 
 use super::EvmSigningClient;
 
-pub fn make_signer(credentials: &str, hd_index: Option<u32>) -> super::Result<PrivateKeySigner> {
+pub fn make_signer(
+    credentials: &Credential,
+    hd_index: Option<u32>,
+) -> super::Result<PrivateKeySigner> {
     let hd_index = hd_index.unwrap_or_default();
 
     match credentials.strip_prefix("0x") {
@@ -24,7 +27,7 @@ pub fn make_signer(credentials: &str, hd_index: Option<u32>) -> super::Result<Pr
             Ok(PrivateKeySigner::from_signing_key(secret_key.into()))
         }
         None => Ok(MnemonicBuilder::<English>::default()
-            .phrase(credentials)
+            .phrase(credentials.as_str())
             .index(hd_index)?
             .build()?),
     }

@@ -39,6 +39,7 @@ async-trait = { workspace = true }
 utoipa = { workspace = true }
 semver = { workspace = true }
 regex = { workspace = true }
+zeroize = { workspace = true }
 
 [dev-dependencies]
 utils = { workspace = true, features = ["test-utils"] }

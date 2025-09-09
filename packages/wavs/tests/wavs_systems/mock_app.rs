@@ -19,7 +19,7 @@ use wavs::{
     subsystems::engine::wasm_engine::WasmEngine,
 };
 use wavs_types::{
-    ChainKey, ChainKeyError, Component, ComponentSource, DeleteServicesRequest,
+    ChainKey, ChainKeyError, Component, ComponentSource, Credential, DeleteServicesRequest,
     ListServicesResponse, Service, ServiceId, ServiceManager, SignatureKind, Submit, WorkflowId,
     WorkflowIdError,
 };
@@ -63,9 +63,9 @@ impl MockE2ETestRunner {
         data_dir: impl AsRef<std::path::Path>,
     ) -> Dispatcher<FileStorage> {
         let config = wavs::config::Config {
-            submission_mnemonic: Some(
+            submission_mnemonic: Some(Credential::new(
                 "test test test test test test test test test test test junk".to_string(),
-            ),
+            )),
             data: data_dir.as_ref().to_path_buf(),
             ..wavs::config::Config::default()
         };

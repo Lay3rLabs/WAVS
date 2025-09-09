@@ -6,8 +6,8 @@ use wavs::subsystems::submission::{
     SubmissionManager,
 };
 use wavs_types::{
-    Component, ComponentDigest, ComponentSource, Envelope, Service, ServiceManager, SignatureKind,
-    Submit, Trigger, Workflow,
+    Component, ComponentDigest, ComponentSource, Credential, Envelope, Service, ServiceManager,
+    SignatureKind, Submit, Trigger, Workflow,
 };
 
 use utils::{
@@ -39,9 +39,9 @@ fn dummy_message(service: &Service, payload: &str) -> ChainMessage {
 #[test]
 fn collect_messages_with_wait() {
     let config = wavs::config::Config {
-        submission_mnemonic: Some(
+        submission_mnemonic: Some(Credential::new(
             "test test test test test test test test test test test junk".to_string(),
-        ),
+        )),
         ..wavs::config::Config::default()
     };
     let meter = opentelemetry::global::meter("wavs_metrics");

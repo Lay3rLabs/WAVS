@@ -18,7 +18,7 @@ use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Envelope, EnvelopeExt, Packet, ServiceId, SigningKeyResponse, Submit, WorkflowId,
+    Credential, Envelope, EnvelopeExt, Packet, ServiceId, SigningKeyResponse, Submit, WorkflowId,
 };
 
 #[derive(Clone)]
@@ -26,7 +26,7 @@ pub struct SubmissionManager {
     http_client: reqwest::Client,
     // created on-demand from chain_name and hd_index
     evm_signers: Arc<RwLock<HashMap<ServiceId, SignerInfo>>>,
-    evm_mnemonic: Option<String>,
+    evm_mnemonic: Option<Credential>,
     evm_mnemonic_hd_index_count: Arc<AtomicU32>,
     metrics: SubmissionMetrics,
     message_count: Arc<AtomicU64>,

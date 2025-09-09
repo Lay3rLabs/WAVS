@@ -456,7 +456,7 @@ mod test {
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{ComponentDigest, Service, SignatureKind, WorkflowId};
+    use wavs_types::{ComponentDigest, Credential, Service, SignatureKind, WorkflowId};
 
     #[test]
     fn packet_validation() {
@@ -1038,8 +1038,9 @@ mod test {
                 },
             );
 
-            config.credential =
-                Some("test test test test test test test test test test test junk".to_string());
+            config.credential = Some(Credential::new(
+                "test test test test test test test test test test test junk".to_string(),
+            ));
 
             let state = HttpState::new_with_engine(config).unwrap();
 
