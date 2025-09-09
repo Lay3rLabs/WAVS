@@ -26,12 +26,6 @@ pub async fn handle_debug_trigger(
         return StatusCode::SERVICE_UNAVAILABLE;
     }
 
-    // debug endpoint requires bearer token authentication
-    if state.config.bearer_token.is_none() {
-        tracing::error!("Debug endpoints enabled but no bearer token configured - refusing request for security");
-        return StatusCode::FORBIDDEN;
-    }
-
     for _ in 0..req.count {
         let action = TriggerAction {
             config: TriggerConfig {
