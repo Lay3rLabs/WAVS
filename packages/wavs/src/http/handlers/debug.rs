@@ -14,10 +14,6 @@ pub async fn handle_debug_trigger(
 }
 
 async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> HttpResult<()> {
-    if !state.config.debug_endpoints_enabled {
-        return Err(anyhow::anyhow!("Debug endpoints are not enabled").into());
-    }
-
     for _ in 0..req.count {
         let action = TriggerAction {
             config: TriggerConfig {
