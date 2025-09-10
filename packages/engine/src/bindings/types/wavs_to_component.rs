@@ -448,6 +448,7 @@ impl TryFrom<wavs_types::Packet> for aggregator_types::Packet {
             workflow_id: packet.workflow_id.to_string(),
             envelope: packet.envelope.into(),
             signature: packet.signature.into(),
+            origin_tx_hash: packet.origin_tx_hash,
         })
     }
 }
@@ -763,6 +764,7 @@ impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
                     contract_address: aggregator_chain::EvmAddress {
                         raw_bytes: submit.contract_address,
                     },
+                    gas_price: None,  // Default to None for gas price
                 })
             }
             wavs_types::AggregatorAction::Timer(timer) => {

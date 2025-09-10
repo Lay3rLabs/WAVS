@@ -24,6 +24,7 @@ pub struct Packet {
     #[schema(value_type  = Object)]
     pub envelope: Envelope,
     pub signature: EnvelopeSignature,
+    pub origin_tx_hash: Vec<u8>,
 }
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]

@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::storage::CAStorage;
 use wavs_types::{
-    ComponentDigest, Envelope, EventId, EventOrder, Service, TriggerAction, WorkflowId,
+    ComponentDigest, Envelope, EventId, EventOrder, Service, TriggerAction, TriggerData, WorkflowId,
 };
 
 use crate::services::Services;
@@ -133,6 +133,12 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
             let service_id = trigger_config.service_id.clone();
             let workflow_id = trigger_config.workflow_id.clone();
 
+            // Extract origin tx hash from trigger data if available
+            let origin_tx_hash = match &action.data {
+                TriggerData::EvmContractEvent { tx_hash, .. } => tx_hash.to_vec(),
+                _ => vec![],  // Empty for non-EVM triggers or manual triggers
+            };
+
             let msg = ChainMessage {
                 service_id: trigger_config.service_id,
                 workflow_id: trigger_config.workflow_id,
@@ -147,6 +153,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                     },
                 },
                 submit: workflow.submit.clone(),
+                origin_tx_hash,
                 #[cfg(debug_assertions)]
                 debug: Default::default(),
             };
