@@ -20,6 +20,7 @@ pub struct SubmitAction {
     pub chain: String,
     #[serde(with = "hex")]
     pub contract_address: Vec<u8>,
+    pub gas_price: Option<u64>,
 }
 
 #[derive(
