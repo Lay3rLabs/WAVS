@@ -88,6 +88,7 @@ async-trait = "0.1.88"
 
 # collections
 dashmap = "6.1.0"
+ordermap = "0.5.8"
 bimap = { version = "0.6.3", features = ["serde"] }
 
 # fs
@@ -99,7 +100,7 @@ wildmatch = "2.4.0"
 alloy-node-bindings = "1.0.19"
 alloy-json-abi = "1.2.1"
 alloy-primitives = { version = "1.2.1", features = ["serde"] }
-alloy-provider = { version = "1.0.19", features = ["anvil-node", "ws"] }
+alloy-provider = { version = "1.0.19", features = ["anvil-node", "ws", "pubsub"] }
 alloy-sol-types = "1.2.1"
 alloy-sol-macro = { version = "1.2.1", features = ["json"] }
 alloy-transport = "1.0.19"
@@ -145,7 +146,12 @@ toml = "0.9.5"
 
 # randomness
 rand = "0.9.1"
-bip39 = "2.2.0"
+
+# pools
+deadpool = "0.12.2"
+
+# secrets
+bip39 = {version = "2.2.0", features = ["rand"]}
 
 # hashing
 sha2 = "0.10.9"
@@ -166,6 +172,7 @@ subtle = "2.6.1"
 cfg-if = "1.0.1"
 regex = "1.11.2"
 zeroize = {version = "1.8.1", features = ["derive"]}
+derive-enum-all-values = "=0.1.0"
 
 # versioning
 semver = { version = "1.0.26", features = ["serde"] }
