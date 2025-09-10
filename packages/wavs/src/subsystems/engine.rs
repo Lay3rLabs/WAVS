@@ -134,9 +134,11 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
             let workflow_id = trigger_config.workflow_id.clone();
 
             // Extract origin tx hash from trigger data if available
-            let origin_tx_hash = match &action.data {
-                TriggerData::EvmContractEvent { tx_hash, .. } => tx_hash.to_vec(),
-                _ => vec![],  // Empty for non-EVM triggers or manual triggers
+            let (origin_tx_hash, origin_block) = match &action.data {
+                TriggerData::EvmContractEvent { block_number, tx_hash, .. } => {
+                    (tx_hash.to_vec(), *block_number)
+                }
+                _ => (vec![], 0),
             };
 
             let msg = ChainMessage {
@@ -154,6 +156,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                 },
                 submit: workflow.submit.clone(),
                 origin_tx_hash,
+                origin_block,
                 #[cfg(debug_assertions)]
                 debug: Default::default(),
             };

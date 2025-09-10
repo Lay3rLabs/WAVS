@@ -34,6 +34,7 @@ fn dummy_message(service: &Service, payload: &str) -> ChainMessage {
         debug: ChainMessageDebug {
             do_not_submit_aggregator: true,
         },
+        origin_block: 0,
     }
 }
 

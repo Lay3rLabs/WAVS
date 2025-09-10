@@ -30,6 +30,7 @@ pub fn packet_from_service(
             kind: SignatureKind::evm_default(),
         },
         origin_tx_hash: vec![],  // Empty for test packets
+        origin_block: 0,
     }
 }
 pub fn mock_packet(

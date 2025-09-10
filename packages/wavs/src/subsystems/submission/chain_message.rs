@@ -8,6 +8,7 @@ pub struct ChainMessage {
     pub envelope: Envelope,
     pub submit: Submit,
     pub origin_tx_hash: Vec<u8>,
+    pub origin_block: u64,
     #[cfg(debug_assertions)]
     pub debug: ChainMessageDebug,
 }

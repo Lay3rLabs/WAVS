@@ -89,6 +89,7 @@ impl SubmissionManager {
                                 envelope,
                                 submit,
                                 origin_tx_hash,
+                                origin_block,
                                 ..
                             } = msg;
 
@@ -113,7 +114,7 @@ impl SubmissionManager {
 
 
 
-                            let packet = match _self.make_packet(service_id.clone(), workflow_id.clone(), envelope, origin_tx_hash).await {
+                            let packet = match _self.make_packet(service_id.clone(), workflow_id.clone(), envelope, origin_tx_hash, origin_block).await {
                                 Ok(packet) => packet,
                                 Err(e) => {
                                     tracing::error!("Failed to make packet: {:?}", e);
@@ -247,6 +248,7 @@ impl SubmissionManager {
         workflow_id: WorkflowId,
         envelope: Envelope,
         origin_tx_hash: Vec<u8>,
+        origin_block: u64,
     ) -> Result<Packet, SubmissionError> {
         let evm_signer = {
             let lock = self.evm_signers.read().unwrap();
@@ -278,6 +280,7 @@ impl SubmissionManager {
             envelope,
             signature,
             origin_tx_hash,
+            origin_block,
         })
     }
 

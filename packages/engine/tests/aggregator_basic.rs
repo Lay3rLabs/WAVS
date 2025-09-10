@@ -36,6 +36,7 @@ async fn basic_aggregator_execution() {
             kind: SignatureKind::evm_default(),
         },
         origin_tx_hash: vec![],  // Empty for test
+        origin_block: 0, // Dummy block number
     };
 
     let actions = execute_aggregator_component(COMPONENT_SIMPLE_AGGREGATOR_BYTES, packet).await;

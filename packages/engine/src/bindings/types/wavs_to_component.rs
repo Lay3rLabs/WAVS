@@ -449,6 +449,7 @@ impl TryFrom<wavs_types::Packet> for aggregator_types::Packet {
             envelope: packet.envelope.into(),
             signature: packet.signature.into(),
             origin_tx_hash: packet.origin_tx_hash,
+            origin_block: packet.origin_block,
         })
     }
 }
