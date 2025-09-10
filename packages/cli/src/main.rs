@@ -191,7 +191,7 @@ async fn main() {
                     // Create envelope from WASM response
                     let envelope = Envelope {
                         payload: wasm_response.payload.clone().into(),
-                        eventId: FixedBytes::random(),
+                        eventId: FixedBytes::new(rand::random()),
                         ordering: match wasm_response.ordering {
                             Some(ordering) => {
                                 // Convert u64 ordering to 12-byte FixedBytes by placing the u64 in the first 8 bytes
