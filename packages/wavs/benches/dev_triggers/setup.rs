@@ -202,7 +202,7 @@ impl DevTriggersRuntime {
         };
 
         let resp = client
-            .post(&format!(
+            .post(format!(
                 "http://{}:{}/dev/triggers",
                 self.server_addr.ip(),
                 self.server_addr.port()
