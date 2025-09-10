@@ -42,7 +42,6 @@ regex = { workspace = true }
 zeroize = { workspace = true }
 
 [dev-dependencies]
-utils = { workspace = true, features = ["test-utils"] }
 tokio = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-node-bindings = { workspace = true }
