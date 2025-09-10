@@ -7466,6 +7466,8 @@ name = "simple-aggregator"
 version = "0.5.2"
 dependencies = [
  "alloy-primitives",
+ "serde",
+ "serde_json",
  "wit-bindgen 0.43.0",
 ]
 
