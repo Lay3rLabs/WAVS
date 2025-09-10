@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, thread::JoinHandle, time::Duration};
 
 use tempfile::tempdir;
 use utils::context::AppContext;
@@ -15,6 +15,9 @@ pub struct DevTriggersRuntime {
     pub service: Service,
     pub workflow_id: WorkflowId,
     payload: Vec<u8>,
+    ctx: AppContext,
+    dispatcher_handle: Option<JoinHandle<()>>,
+    wavs_handle: Option<JoinHandle<()>>,
 }
 
 impl DevTriggersRuntime {
@@ -123,51 +126,66 @@ impl DevTriggersRuntime {
         futures::executor::block_on(dispatcher.add_service_direct(service.clone()))
             .expect("add service to dispatcher");
 
-        // Start dispatcher
+        // Start dispatcher (store handle + context for graceful shutdown)
         let ctx = AppContext::new();
         let d_for_thread = dispatcher.clone();
-        std::thread::spawn(move || {
-            d_for_thread.start(ctx).expect("dispatcher start");
+        let dispatcher_handle = std::thread::spawn({
+            let ctx = ctx.clone();
+            move || {
+                d_for_thread.start(ctx).expect("dispatcher start");
+            }
         });
 
         // Start http server and get address
         let (addr_tx, addr_rx) = std::sync::mpsc::channel();
         let server_config = config.clone();
         let d_for_server = dispatcher.clone();
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async move {
-                let router = wavs::http::server::make_router(
-                    server_config,
-                    d_for_server,
-                    false,
-                    utils::telemetry::HttpMetrics::new(&opentelemetry::global::meter(
-                        "wavs-benchmark",
-                    )),
-                )
-                .await
-                .unwrap();
+        let wavs_handle = std::thread::spawn({
+            let ctx = ctx.clone();
+            move || {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async move {
+                    let router = wavs::http::server::make_router(
+                        server_config,
+                        d_for_server,
+                        false,
+                        utils::telemetry::HttpMetrics::new(&opentelemetry::global::meter(
+                            "wavs-benchmark",
+                        )),
+                    )
+                    .await
+                    .unwrap();
 
-                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-                let addr = listener.local_addr().unwrap();
-                let _ = addr_tx.send(addr);
-                axum::serve(listener, router).await.unwrap();
-            })
+                    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                    let addr = listener.local_addr().unwrap();
+                    let _ = addr_tx.send(addr);
+
+                    // Graceful shutdown via AppContext kill signal
+                    let mut shutdown_signal = ctx.get_kill_receiver();
+                    axum::serve(listener, router)
+                        .with_graceful_shutdown(async move {
+                            let _ = shutdown_signal.recv().await;
+                        })
+                        .await
+                        .unwrap();
+                })
+            }
         });
 
         let server_addr = addr_rx
             .recv_timeout(Duration::from_secs(10))
             .expect("server start timeout");
 
-        let runtime = DevTriggersRuntime {
+        DevTriggersRuntime {
             dispatcher,
             server_addr,
             service: service.clone(),
             workflow_id: workflow_id.clone(),
             payload: b"wavs-dev-triggers-bench-payload".to_vec(),
-        };
-
-        runtime
+            ctx,
+            dispatcher_handle: Some(dispatcher_handle),
+            wavs_handle: Some(wavs_handle),
+        }
     }
 
     pub async fn submit_requests(&self, client: &reqwest::Client, n: usize) {
@@ -231,6 +249,21 @@ impl DevTriggersRuntime {
             assert_eq!(pkt.envelope.payload.0, &self.payload);
             assert_eq!(pkt.workflow_id, self.workflow_id);
             assert_eq!(pkt.service.id(), self.service.id());
+        }
+    }
+}
+
+impl Drop for DevTriggersRuntime {
+    fn drop(&mut self) {
+        // Signal shutdown to all async tasks and server
+        self.ctx.kill();
+
+        // Join dispatcher and server threads if still running
+        if let Some(handle) = self.dispatcher_handle.take() {
+            let _ = handle.join();
+        }
+        if let Some(handle) = self.wavs_handle.take() {
+            let _ = handle.join();
         }
     }
 }
