@@ -135,9 +135,11 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
 
             // Extract origin tx hash from trigger data if available
             let (origin_tx_hash, origin_block) = match &action.data {
-                TriggerData::EvmContractEvent { block_number, tx_hash, .. } => {
-                    (tx_hash.to_vec(), *block_number)
-                }
+                TriggerData::EvmContractEvent {
+                    block_number,
+                    tx_hash,
+                    ..
+                } => (tx_hash.to_vec(), *block_number),
                 _ => (vec![], 0),
             };
 

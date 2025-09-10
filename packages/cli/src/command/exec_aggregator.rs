@@ -48,7 +48,7 @@ fn create_dummy_packet(digest: ComponentDigest) -> Packet {
             data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
             kind: SignatureKind::evm_default(),
         },
-        origin_tx_hash: vec![],  // Empty for dummy packets
+        origin_tx_hash: vec![], // Empty for dummy packets
         origin_block: 0,
     }
 }
@@ -261,7 +261,7 @@ mod test {
                 data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
                 kind: SignatureKind::evm_default(),
             },
-            origin_tx_hash: vec![],  // Empty for test packets
+            origin_tx_hash: vec![], // Empty for test packets
             origin_block: 0,
         }
     }

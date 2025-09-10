@@ -29,7 +29,7 @@ pub fn packet_from_service(
             data: signature.into(),
             kind: SignatureKind::evm_default(),
         },
-        origin_tx_hash: vec![],  // Empty for test packets
+        origin_tx_hash: vec![], // Empty for test packets
         origin_block: 0,
     }
 }

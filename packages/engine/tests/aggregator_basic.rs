@@ -35,8 +35,8 @@ async fn basic_aggregator_execution() {
             data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
             kind: SignatureKind::evm_default(),
         },
-        origin_tx_hash: vec![],  // Empty for test
-        origin_block: 0, // Dummy block number
+        origin_tx_hash: vec![], // Empty for test
+        origin_block: 0,        // Dummy block number
     };
 
     let actions = execute_aggregator_component(COMPONENT_SIMPLE_AGGREGATOR_BYTES, packet).await;

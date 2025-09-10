@@ -30,7 +30,7 @@ fn dummy_message(service: &Service, payload: &str) -> ChainMessage {
             ordering: mock_event_order().into(),
         },
         submit: service.workflows.values().next().unwrap().submit.clone(),
-        origin_tx_hash: vec![],  // Empty for test messages
+        origin_tx_hash: vec![], // Empty for test messages
         debug: ChainMessageDebug {
             do_not_submit_aggregator: true,
         },

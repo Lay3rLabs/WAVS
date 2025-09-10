@@ -765,7 +765,7 @@ impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
                     contract_address: aggregator_chain::EvmAddress {
                         raw_bytes: submit.contract_address,
                     },
-                    gas_price: None,  // Default to None for gas price
+                    gas_price: None, // Default to None for gas price
                 })
             }
             wavs_types::AggregatorAction::Timer(timer) => {
