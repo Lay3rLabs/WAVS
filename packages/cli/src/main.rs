@@ -215,13 +215,7 @@ async fn main() {
 
                     // Create signature using the EVM client's signer
                     let signature = envelope
-                        .sign(
-                            &evm_client.signer,
-                            SignatureKind {
-                                algorithm: wavs_types::SignatureAlgorithm::Secp256k1,
-                                prefix: Some(wavs_types::SignaturePrefix::Eip191),
-                            },
-                        )
+                        .sign(&evm_client.signer, SignatureKind::evm_default())
                         .await
                         .unwrap();
 
@@ -239,11 +233,14 @@ async fn main() {
                     };
 
                     // Prepare signature data
-                    let signature_data = IWavsServiceHandler::SignatureData {
-                        signers: vec![evm_client.signer.address()],
-                        signatures: vec![signature.data.into()],
-                        referenceBlock: latest_block as u32,
-                    };
+                    let signature_data =
+                        match envelope.signature_data(vec![signature], latest_block) {
+                            Ok(data) => data,
+                            Err(e) => {
+                                eprintln!("Failed to prepare signature data: {e}");
+                                std::process::exit(1);
+                            }
+                        };
 
                     // Convert to contract types
                     let contract_envelope = IWavsServiceHandler::Envelope {
