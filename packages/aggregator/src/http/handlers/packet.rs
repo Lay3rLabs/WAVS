@@ -591,6 +591,7 @@ mod test {
                                 wavs_types::SubmitAction {
                                     chain: "evm:test-chain".to_string(),
                                     contract_address: vec![0u8; 20],
+                                    gas_price: None,
                                 },
                             ),
                         };

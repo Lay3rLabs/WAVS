@@ -24,6 +24,7 @@ impl Guest for Component {
             contract_address: EvmAddress {
                 raw_bytes: address.to_vec(),
             },
+            gas_price: None,
         };
 
         Ok(vec![AggregatorAction::Submit(submit_action)])
