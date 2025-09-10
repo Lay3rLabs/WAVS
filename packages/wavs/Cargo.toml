@@ -68,7 +68,7 @@ bimap = { workspace = true }
 criterion = { workspace = true }
 wavs-benchmark-common = { workspace = true }
 utils = { workspace = true, features = ["test-utils"] }
-example-types = {workspace = true}
+example-types = { workspace = true }
 
 [[bench]]
 name = "intervals"
@@ -80,4 +80,8 @@ harness = false
 
 [[bench]]
 name = "engine_system"
+harness = false
+
+[[bench]]
+name = "dev_triggers"
 harness = false
