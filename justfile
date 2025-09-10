@@ -5,6 +5,7 @@ COSMWASM_OUT_DIR := "./examples/build/contracts"
 REPO_ROOT := `git rev-parse --show-toplevel`
 DOCKER_WAVS_ID := `docker ps | grep wavs | awk '{print $1}'`
 ARCH := `uname -m`
+COSMWASM_OPTIMIZER_VERSION := env_var_or_default("COSMWASM_OPTIMIZER_VERSION", "0.17.0")
 
 help:
   just --list
@@ -54,23 +55,22 @@ _install-native HOME DATA:
     @echo "export WAVS_AGGREGATOR_DATA=\"{{DATA}}/wavs-aggregator\""
     @echo "export WAVS_DOTENV=\"{{HOME}}/.env\""
 
-# compile WASI components, places the output in components dir
-wasi-build COMPONENT="*":
-    @if [ "{{COMPONENT}}" = "*" ]; then \
-        rm -f ./target/wasm32-wasip1/release/*.wasm; \
-    fi
+wasi-builder-build TAG="latest":
+    IMAGE_TAG=ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}} bash tools/wasi-builder/build-image.sh
 
-    @for C in examples/components/{{COMPONENT}}/Cargo.toml; do \
-        if [ "{{COMPONENT}}" != "_helpers" ] && [ "{{COMPONENT}}" != "_types" ]; then \
-            echo "Building WASI component in $(dirname $C)"; \
-            ( cd $(dirname $C) && cargo component build --release && cargo fmt); \
-        fi; \
-    done
+wasi-builder-push TAG="latest":
+    # Build and push a multi-arch manifest (amd64, arm64)
+    export DOCKER_BUILDKIT=1; \
+    if ! docker buildx inspect >/dev/null 2>&1; then docker buildx create --name wavs-bx --use >/dev/null; fi; \
+    docker buildx build \
+      --platform linux/amd64,linux/arm64 \
+      -f tools/wasi-builder/Dockerfile \
+      -t ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}} \
+      --push \
+      tools/wasi-builder
 
-    rm -rf {{WASI_OUT_DIR}}
-    mkdir -p {{WASI_OUT_DIR}}
-    @cp ./target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
-    @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt
+wasi-build COMPONENT="*" TAG="latest":
+    WASI_BUILDER_IMAGE=ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}} bash tools/wasi-builder/build-components.sh '{{COMPONENT}}'
 
 # compile solidity contracts (including examples) and copy the ABI to contracts/solidity/abi
 # example ABI's will be copied to examples/contracts/solidity/abi
@@ -112,13 +112,13 @@ cosmwasm-build-inner CONTRACT_PATH:
             -v "{{REPO_ROOT}}:/code" \
             --mount type=volume,source="layer_wavs_cache",target=/target \
             --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-            cosmwasm/optimizer-arm64:0.17.0 "{{CONTRACT_PATH}}"; \
+            cosmwasm/optimizer-arm64:{{COSMWASM_OPTIMIZER_VERSION}} "{{CONTRACT_PATH}}"; \
     else \
         docker run --rm \
             -v "{{REPO_ROOT}}:/code" \
             --mount type=volume,source="layer_wavs_cache",target=/target \
             --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-            cosmwasm/optimizer:0.17.0 "{{CONTRACT_PATH}}"; \
+            cosmwasm/optimizer:{{COSMWASM_OPTIMIZER_VERSION}} "{{CONTRACT_PATH}}"; \
     fi;
 # on-chain integration test
 test-wavs-e2e:
