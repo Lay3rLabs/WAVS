@@ -226,7 +226,7 @@ impl DevTriggersRuntime {
             }
         })
         .await
-        .unwrap_or_else(|_| panic!("Timed out waiting for {} messages", expected));
+        .unwrap_or_else(|_| panic!("Timed out waiting for {expected} messages"));
     }
 
     #[cfg(debug_assertions)]
@@ -241,7 +241,7 @@ impl DevTriggersRuntime {
             }
         })
         .await
-        .unwrap_or_else(|_| panic!("Timed out waiting for {} packets", expected));
+        .unwrap_or_else(|_| panic!("Timed out waiting for {expected} packets"));
 
         let packets = self.dispatcher.submission_manager.get_debug_packets();
         assert_eq!(packets.len(), expected);
