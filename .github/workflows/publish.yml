@@ -101,13 +101,10 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v2
 
-      - name: Install cargo-component
-        run: cargo install cargo-component
-
       - name: Install wkg
         run: cargo install wkg
 
-      - name: Run wasi-build
+      - name: Build WASI components with wasi-builder image
         run: just wasi-build
 
       - name: Check if checksums.txt changed
