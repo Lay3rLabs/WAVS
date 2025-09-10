@@ -9,7 +9,8 @@ repository.workspace = true
 license.workspace = true
 publish = false
 
-[dependencies]
+# Only dev-dependencies since we only run this package via `cargo test`
+[dev-dependencies]
 wasm-pkg-common = { workspace = true }
 wavs = { workspace = true }
 wavs-types = { workspace = true }
@@ -39,11 +40,11 @@ alloy-provider = { workspace = true }
 alloy-signer = { workspace = true }
 alloy-contract = { workspace = true }
 uuid = { workspace = true }
-derive-enum-all-values = "=0.1.0"
-deadpool = "0.12.2"
-regex = "1.11.1"
 reqwest = { workspace = true }
 dashmap = { workspace = true }
-ordermap = "0.5.8"
-example-types = { workspace = true} 
-example-contract-cosmwasm-simple = { workspace = true } 
+example-types = { workspace = true}
+example-contract-cosmwasm-simple = { workspace = true }
+ordermap = { workspace = true }
+regex = { workspace = true }
+deadpool = { workspace = true }
+derive-enum-all-values = { workspace = true }
