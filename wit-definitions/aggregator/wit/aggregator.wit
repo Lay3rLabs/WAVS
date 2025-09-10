@@ -1,8 +1,8 @@
-package wavs:aggregator@0.6.0-alpha.10;
+package wavs:aggregator@0.6.0-alpha.11;
 
-use wavs:types/core@0.6.0-alpha.10 as core-types;
-use wavs:types/service@0.6.0-alpha.10 as service-types;
-use wavs:types/chain@0.6.0-alpha.10 as chain-types;
+use wavs:types/core@0.6.0-alpha.11 as core-types;
+use wavs:types/service@0.6.0-alpha.11 as service-types;
+use wavs:types/chain@0.6.0-alpha.11 as chain-types;
 
 interface aggregator {
     use core-types.{duration};
@@ -39,6 +39,7 @@ interface aggregator {
     record submit-action {
         chain: chain-key,
         contract-address: evm-address,
+        gas-price: option<u64>,
     }
 }
 
