@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 layer-wasi = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true}
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 wit-bindgen-rt = { workspace = true }
