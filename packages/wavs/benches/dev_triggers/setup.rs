@@ -17,19 +17,12 @@ pub struct DevTriggersRuntime {
     payload: Vec<u8>,
 }
 
-pub struct DevTriggersSetup {
-    pub config: Config,
-    pub service: Service,
-    pub workflow_id: WorkflowId,
-    pub _temp_dir: tempfile::TempDir,
-    pub _db_dir: tempfile::TempDir,
-    pub expected_component_digest: wavs_types::ComponentDigest,
-}
+impl DevTriggersRuntime {
+    const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+    const POLL_INTERVAL: Duration = Duration::from_millis(20);
 
-impl DevTriggersSetup {
-    pub fn new() -> Arc<Self> {
+    pub fn new() -> Self {
         // Create temporary directories for clean database state
-        let temp_dir = tempdir().unwrap();
         let db_dir = tempdir().unwrap();
 
         // Create config with dev endpoints enabled and proper data directory
@@ -97,22 +90,10 @@ impl DevTriggersSetup {
             },
         };
 
-        Arc::new(Self {
-            config,
-            service,
-            workflow_id,
-            _temp_dir: temp_dir,
-            _db_dir: db_dir,
-            expected_component_digest: component_digest,
-        })
-    }
-
-    /// Boot a dispatcher + HTTP server, register service, and return a runtime handle
-    pub fn start_runtime(self: &Arc<Self>) -> Arc<DevTriggersRuntime> {
         // Build dispatcher
         #[allow(unused_mut)]
         let mut dispatcher_local = wavs::dispatcher::Dispatcher::new(
-            &self.config,
+            &config,
             utils::telemetry::WavsMetrics::new(&opentelemetry::global::meter("wavs-benchmark")),
         )
         .expect("dispatcher new");
@@ -136,10 +117,10 @@ impl DevTriggersSetup {
         let digest = dispatcher
             .store_component_bytes(component_bytes)
             .expect("store component bytes");
-        assert_eq!(digest, self.expected_component_digest);
+        assert_eq!(digest, component_digest);
 
         // Register service
-        futures::executor::block_on(dispatcher.add_service_direct(self.service.clone()))
+        futures::executor::block_on(dispatcher.add_service_direct(service.clone()))
             .expect("add service to dispatcher");
 
         // Start dispatcher
@@ -151,7 +132,7 @@ impl DevTriggersSetup {
 
         // Start http server and get address
         let (addr_tx, addr_rx) = std::sync::mpsc::channel();
-        let server_config = self.config.clone();
+        let server_config = config.clone();
         let d_for_server = dispatcher.clone();
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
@@ -178,19 +159,16 @@ impl DevTriggersSetup {
             .recv_timeout(Duration::from_secs(10))
             .expect("server start timeout");
 
-        Arc::new(DevTriggersRuntime {
+        let runtime = DevTriggersRuntime {
             dispatcher,
             server_addr,
-            service: self.service.clone(),
-            workflow_id: self.workflow_id.clone(),
+            service: service.clone(),
+            workflow_id: workflow_id.clone(),
             payload: b"wavs-dev-triggers-bench-payload".to_vec(),
-        })
-    }
-}
+        };
 
-impl DevTriggersRuntime {
-    const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
-    const POLL_INTERVAL: Duration = Duration::from_millis(20);
+        runtime
+    }
 
     pub async fn submit_requests(&self, client: &reqwest::Client, n: usize) {
         let body = wavs_types::SimulatedTriggerRequest {

@@ -1,8 +1,7 @@
 use criterion::Criterion;
 use reqwest::Client;
-use std::sync::Arc;
 
-use crate::setup::{DevTriggersRuntime, DevTriggersSetup};
+use crate::setup::DevTriggersRuntime;
 
 /// Benchmark for dev triggers POST endpoint performance
 ///
@@ -25,10 +24,7 @@ pub fn benchmark(c: &mut Criterion) {
     for (name, request_count) in test_configs {
         group.bench_function(name, move |b| {
             b.iter_with_setup(
-                || {
-                    let setup = DevTriggersSetup::new();
-                    setup.start_runtime()
-                },
+                || DevTriggersRuntime::new(),
                 |runtime| run_dev_triggers_benchmark(runtime, request_count),
             );
         });
@@ -44,7 +40,7 @@ pub fn benchmark(c: &mut Criterion) {
 /// executes all requests sequentially. The function blocks until
 /// all requests are completed, allowing criterion to measure
 /// the total execution time.
-fn run_dev_triggers_benchmark(runtime: Arc<DevTriggersRuntime>, request_count: usize) {
+fn run_dev_triggers_benchmark(runtime: DevTriggersRuntime, request_count: usize) {
     // Use the common app context for consistency with other benchmarks
     wavs_benchmark_common::app_context::APP_CONTEXT
         .rt
