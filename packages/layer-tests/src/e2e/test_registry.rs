@@ -179,6 +179,9 @@ impl TestRegistry {
                 EvmService::TimerAggregator => {
                     registry.register_evm_timer_aggregator_test(chain, aggregator_endpoint);
                 }
+                EvmService::TimerAggregatorReorg => {
+                    registry.register_evm_timer_aggregator_reorg_test(chain, aggregator_endpoint);
+                }
                 EvmService::MultipleServicesWithDifferentAggregators => {
                     registry.register_evm_multiple_services_with_different_aggregators_test(
                         chain,
@@ -432,6 +435,49 @@ impl TestRegistry {
                         })
                         .with_input_data(InputData::Text("test packet".to_string()))
                         .with_expected_output(ExpectedOutput::Text("test packet".to_string()))
+                        .build(),
+                )
+                .build(),
+        )
+    }
+
+    fn register_evm_timer_aggregator_reorg_test(
+        &mut self,
+        chain: &ChainKey,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
+        self.register(
+            TestBuilder::new("evm_timer_aggregator_reorg")
+                .with_description("Tests TimerAggregator component with delayed submission and re-org handling - expected output should be dropped")
+                .with_re_org_simulation()
+                .add_workflow(
+                    WorkflowId::new("timer_aggregator_reorg").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_operator_component(OperatorComponent::EchoData)
+                        .with_aggregator_component(AggregatorComponent::TimerAggregator)
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                            aggregator: AggregatorDefinition::ComponentBasedAggregator {
+                                component: ComponentDefinition::from(ComponentName::Aggregator(
+                                    AggregatorComponent::TimerAggregator,
+                                ))
+                                .with_config_hardcoded("chain".to_string(), chain.to_string())
+                                .with_config_hardcoded(
+                                    "timer_delay_secs".to_string(),
+                                    "5".to_string(),
+                                )
+                                .with_config_service_handler(),
+                                // for deploying the submission contract that the aggregator will use
+                                chain: chain.clone(),
+                            },
+                        })
+                        .with_input_data(InputData::Text("reorg test packet".to_string()))
+                        .with_expected_output(ExpectedOutput::Dropped)
                         .build(),
                 )
                 .build(),

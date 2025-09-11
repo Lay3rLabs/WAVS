@@ -38,6 +38,9 @@ pub struct TestDefinition {
 
     /// Execution group (ascending priority)
     pub group: u64,
+
+    /// Whether to simulate a re-org for this test
+    pub re_org_simulation: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -222,6 +225,8 @@ pub enum ExpectedOutput {
     StructureOnly(OutputStructure),
     /// For a dynamic callback that checks the output
     Callback(Arc<dyn ExpectedOutputCallback>),
+    /// Expect no output (transaction dropped due to re-org)
+    Dropped,
 }
 
 pub trait ExpectedOutputCallback: Send + Sync + std::fmt::Debug + 'static {
@@ -258,6 +263,7 @@ impl TestBuilder {
                 service_manager_chain: DEFAULT_CHAIN_KEY.clone(),
                 change_service: None,
                 group: u64::MAX,
+                re_org_simulation: false,
             },
         }
     }
@@ -294,6 +300,12 @@ impl TestBuilder {
     /// Set the service manager chain
     pub fn with_service_manager_chain(mut self, chain: &ChainKey) -> Self {
         self.definition.service_manager_chain = chain.clone();
+        self
+    }
+
+    /// Enable re-org simulation for this test
+    pub fn with_re_org_simulation(mut self) -> Self {
+        self.definition.re_org_simulation = true;
         self
     }
 
@@ -458,6 +470,16 @@ impl ExpectedOutput {
             ExpectedOutput::Callback(callback) => {
                 callback.validate(test, clients, component_sources, actual)?;
                 return Ok(());
+            }
+            ExpectedOutput::Dropped => {
+                // For dropped transactions, validate we got no output
+                if actual.is_empty() {
+                    return Ok(());
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Expected dropped transaction but received output"
+                    ));
+                }
             }
         };
 
