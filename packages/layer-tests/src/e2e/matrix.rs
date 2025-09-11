@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use derive_enum_all_values::AllValues;
 use serde::{Deserialize, Serialize};
 
-use super::components::{ComponentName, OperatorComponent};
+use super::components::{AggregatorComponent, ComponentName, OperatorComponent};
 
 #[derive(Clone, Debug, Default)]
 pub struct TestMatrix {
@@ -34,6 +34,7 @@ pub enum EvmService {
     SimpleAggregator,
     TimerAggregator,
     MultipleServicesWithDifferentAggregators,
+    GasPrice,
 }
 
 #[derive(
@@ -176,6 +177,12 @@ impl From<EvmService> for Vec<ComponentName> {
                 vec![
                     ComponentName::Operator(OperatorComponent::EchoData),
                     ComponentName::Operator(OperatorComponent::Square),
+                ]
+            }
+            EvmService::GasPrice => {
+                vec![
+                    ComponentName::Operator(OperatorComponent::EchoData),
+                    ComponentName::Aggregator(AggregatorComponent::SimpleAggregator),
                 ]
             }
         }

@@ -76,12 +76,12 @@ impl EvmSigningClient {
         let mut tx_builder = service_handler_instance
             .handleSignedEnvelope(envelope, signature_data)
             .gas(gas);
-        
+
         // Set gas price if provided
         if let Some(price) = gas_price {
             tx_builder = tx_builder.gas_price(price as u128);
         }
-        
+
         let receipt = tx_builder
             .send()
             .await

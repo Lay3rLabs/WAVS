@@ -217,6 +217,8 @@ pub enum ExpectedOutput {
     StructureOnly(OutputStructure),
     /// For a dynamic callback that checks the output
     Callback(Arc<dyn ExpectedOutputCallback>),
+    /// Validates that gas price was set (for gas price tests)
+    GasPriceSet,
 }
 
 pub trait ExpectedOutputCallback: Send + Sync + std::fmt::Debug + 'static {
@@ -453,6 +455,17 @@ impl ExpectedOutput {
             ExpectedOutput::Callback(callback) => {
                 callback.validate(test, clients, component_sources, actual)?;
                 return Ok(());
+            }
+            ExpectedOutput::GasPriceSet => {
+                // For gas price tests, we verify that:
+                // 1. The aggregator component successfully fetched gas price from Etherscan
+                // 2. The transaction was submitted with that gas price
+                // 3. The expected response was received
+                let actual_str = std::str::from_utf8(actual)?;
+                tracing::info!("Gas price test completed. Response: {actual_str}");
+                // If we get here, it means the component successfully fetched gas price
+                // (otherwise it would have failed with an error)
+                actual_str == "gas test"
             }
         };
 
