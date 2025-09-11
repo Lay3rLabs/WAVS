@@ -7468,7 +7468,9 @@ dependencies = [
  "alloy-primitives",
  "serde",
  "serde_json",
+ "wavs-wasi-utils",
  "wit-bindgen 0.43.0",
+ "wstd",
 ]
 
 [[package]]
