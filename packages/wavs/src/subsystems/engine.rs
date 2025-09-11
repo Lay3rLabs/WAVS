@@ -149,6 +149,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                 submit: workflow.submit.clone(),
                 #[cfg(debug_assertions)]
                 debug: Default::default(),
+                trigger_data: action.data,
             };
 
             result_sender

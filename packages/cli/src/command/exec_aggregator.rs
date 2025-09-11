@@ -48,6 +48,7 @@ fn create_dummy_packet(digest: ComponentDigest) -> Packet {
             data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
             kind: SignatureKind::evm_default(),
         },
+        trigger_data: wavs_types::TriggerData::default(),
     }
 }
 
@@ -259,6 +260,7 @@ mod test {
                 data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
                 kind: SignatureKind::evm_default(),
             },
+            trigger_data: wavs_types::TriggerData::default(),
         }
     }
 

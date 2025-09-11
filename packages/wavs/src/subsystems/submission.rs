@@ -18,7 +18,8 @@ use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Credential, Envelope, EnvelopeExt, Packet, ServiceId, SignerResponse, Submit, WorkflowId,
+    Credential, Envelope, EnvelopeExt, Packet, ServiceId, SignerResponse, Submit, TriggerData,
+    WorkflowId,
 };
 
 #[derive(Clone)]
@@ -88,6 +89,7 @@ impl SubmissionManager {
                                 workflow_id,
                                 envelope,
                                 submit,
+                                trigger_data,
                                 ..
                             } = msg;
 
@@ -110,9 +112,7 @@ impl SubmissionManager {
 
                             _self.message_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-
-
-                            let packet = match _self.make_packet(service_id.clone(), workflow_id.clone(), envelope).await {
+                            let packet = match _self.make_packet(service_id.clone(), workflow_id.clone(), envelope, trigger_data).await {
                                 Ok(packet) => packet,
                                 Err(e) => {
                                     tracing::error!("Failed to make packet: {:?}", e);
@@ -245,6 +245,7 @@ impl SubmissionManager {
         service_id: ServiceId,
         workflow_id: WorkflowId,
         envelope: Envelope,
+        trigger_data: TriggerData,
     ) -> Result<Packet, SubmissionError> {
         let evm_signer = {
             let lock = self.evm_signers.read().unwrap();
@@ -275,6 +276,7 @@ impl SubmissionManager {
             workflow_id,
             envelope,
             signature,
+            trigger_data,
         })
     }
 

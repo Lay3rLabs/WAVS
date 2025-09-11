@@ -668,6 +668,7 @@ mod test {
                 &service,
                 service.workflows.keys().next().unwrap(),
                 &envelope,
+                &wavs_types::TriggerData::default(),
             );
             let state = deps.state.clone();
             let results = process_packet(state.clone(), &packet).await.unwrap();
@@ -711,6 +712,7 @@ mod test {
                 &service,
                 service.workflows.keys().next().unwrap(),
                 &envelope,
+                &wavs_types::TriggerData::default(),
             );
             let state = deps.state.clone();
             let results = process_packet(state.clone(), &packet).await.unwrap();
@@ -741,6 +743,7 @@ mod test {
                 &service,
                 service.workflows.keys().next().unwrap(),
                 &envelope,
+                &wavs_types::TriggerData::default(),
             );
             let state = deps.state.clone();
             let results = process_packet(state.clone(), &packet).await.unwrap();
@@ -805,6 +808,7 @@ mod test {
             &service,
             service.workflows.keys().next().unwrap(),
             &envelope,
+            &wavs_types::TriggerData::default(),
         );
 
         // First packet: should be validated and sent
@@ -866,6 +870,7 @@ mod test {
                     &service,
                     service.workflows.keys().next().unwrap(),
                     &envelope,
+                    &wavs_types::TriggerData::default(),
                 );
                 let resp = process_packet(deps.state.clone(), &packet)
                     .await
@@ -907,6 +912,7 @@ mod test {
                     &service,
                     service.workflows.keys().next().unwrap(),
                     &envelope,
+                    &wavs_types::TriggerData::default(),
                 );
                 futures.push({
                     let state = deps.state.clone();
@@ -938,6 +944,7 @@ mod test {
             &service,
             service.workflows.keys().next().unwrap(),
             &envelope,
+            &wavs_types::TriggerData::default(),
         );
         let responses = process_packet(deps.state.clone(), &packet).await.unwrap();
         for resp in responses {

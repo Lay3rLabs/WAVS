@@ -1,4 +1,4 @@
-package wavs:types@0.6.0-alpha.11;
+package wavs:types@0.6.0-alpha.13;
 
 interface chain {
   /// A string mostly following the caip-2 format of namespace:reference, e.g. "eip155:1" for Ethereum mainnet or "cosmos:cosmoshub-4" for Cosmos Hub
@@ -89,6 +89,41 @@ interface core {
     info,
     debug,
     trace,
+  }
+}
+
+interface events {
+  use chain.{chain-key, evm-address, evm-event-log, cosmos-address, cosmos-event};
+  use core.{timestamp};
+
+  record trigger-data-evm-contract-event {
+    chain: chain-key,
+    log: evm-event-log,
+  }
+
+  record trigger-data-cosmos-contract-event {
+    contract-address: cosmos-address,
+    chain: chain-key,
+    event: cosmos-event,
+    event-index: u64,
+    block-height: u64,
+  }
+
+  record trigger-data-block-interval {
+    chain: chain-key,
+    block-height: u64,
+  }
+
+  record trigger-data-cron {
+    trigger-time: timestamp,
+  }
+
+  variant trigger-data {
+    evm-contract-event(trigger-data-evm-contract-event),
+    cosmos-contract-event(trigger-data-cosmos-contract-event),
+    block-interval(trigger-data-block-interval),
+    cron(trigger-data-cron),
+    raw(list<u8>),
   }
 }
 

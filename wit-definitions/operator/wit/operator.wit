@@ -1,13 +1,13 @@
-package wavs:operator@0.6.0-alpha.11;
+package wavs:operator@0.6.0-alpha.13;
 
-use wavs:types/core@0.6.0-alpha.11 as core-types;
-use wavs:types/service@0.6.0-alpha.11 as service-types;
-use wavs:types/chain@0.6.0-alpha.11 as chain-types;
+use wavs:types/core@0.6.0-alpha.13 as core-types;
+use wavs:types/service@0.6.0-alpha.13 as service-types;
+use wavs:types/chain@0.6.0-alpha.13 as chain-types;
+use wavs:types/events@0.6.0-alpha.13 as event-types;
 
 interface input {
-    use core-types.{timestamp};
     use service-types.{service-id, workflow-id, trigger};
-    use chain-types.{chain-key, evm-address, evm-event-log, cosmos-address, cosmos-event};
+    use event-types.{trigger-data};
 
     record trigger-action {
         config: trigger-config,
@@ -18,36 +18,6 @@ interface input {
         service-id: service-id,
         workflow-id: workflow-id,
         trigger: trigger
-    }
-
-    variant trigger-data {
-        evm-contract-event(trigger-data-evm-contract-event),
-        cosmos-contract-event(trigger-data-cosmos-contract-event),
-        block-interval(trigger-data-block-interval),
-        cron(trigger-data-cron),
-        raw(list<u8>)
-    }
-
-    record trigger-data-evm-contract-event {
-        chain: chain-key,
-        log: evm-event-log,
-    }
-
-    record trigger-data-cosmos-contract-event {
-        contract-address: cosmos-address,
-        chain: chain-key,
-        event: cosmos-event,
-        event-index: u64,
-        block-height: u64
-    }
-
-    record trigger-data-block-interval {
-        chain: chain-key,
-        block-height: u64
-    }
-
-    record trigger-data-cron {
-        trigger-time: timestamp
     }
 }
 

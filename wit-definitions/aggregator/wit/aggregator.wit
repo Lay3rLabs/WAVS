@@ -1,13 +1,15 @@
-package wavs:aggregator@0.6.0-alpha.11;
+package wavs:aggregator@0.6.0-alpha.13;
 
-use wavs:types/core@0.6.0-alpha.11 as core-types;
-use wavs:types/service@0.6.0-alpha.11 as service-types;
-use wavs:types/chain@0.6.0-alpha.11 as chain-types;
+use wavs:types/core@0.6.0-alpha.13 as core-types;
+use wavs:types/service@0.6.0-alpha.13 as service-types;
+use wavs:types/chain@0.6.0-alpha.13 as chain-types;
+use wavs:types/events@0.6.0-alpha.13 as event-types;
 
 interface aggregator {
     use core-types.{duration};
     use service-types.{service, workflow-id, signature-kind};
     use chain-types.{chain-key, evm-address};
+    use event-types.{trigger-data};
 
     record envelope {
         event-id: list<u8>,
@@ -25,6 +27,7 @@ interface aggregator {
         workflow-id: workflow-id,
         envelope: envelope,
         signature: envelope-signature,
+        trigger-data: trigger-data,
     }
 
     variant aggregator-action {

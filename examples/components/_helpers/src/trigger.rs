@@ -1,6 +1,7 @@
 // Helpers to work with "trigger id" flows - which our example components do
 use crate::bindings::world::wavs::{
-    operator::input as component_input, operator::output as component_output,
+    operator::{input as component_input, output as component_output},
+    types::events::{TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent},
 };
 use alloy_provider::RootProvider;
 use alloy_sol_types::SolValue;
@@ -12,17 +13,18 @@ use wavs_wasi_utils::decode_event_log_data;
 
 pub fn decode_trigger_event(trigger_data: component_input::TriggerData) -> Result<(u64, Vec<u8>)> {
     match trigger_data {
-        component_input::TriggerData::CosmosContractEvent(
-            component_input::TriggerDataCosmosContractEvent { event, .. },
-        ) => {
+        component_input::TriggerData::CosmosContractEvent(TriggerDataCosmosContractEvent {
+            event,
+            ..
+        }) => {
             let event = cosmwasm_std::Event::from(event);
             let event = cosmos_contract_simple_example::event::NewMessageEvent::try_from(event)?;
 
             Ok((event.id.u64(), event.data))
         }
-        component_input::TriggerData::EvmContractEvent(
-            component_input::TriggerDataEvmContractEvent { log, .. },
-        ) => {
+        component_input::TriggerData::EvmContractEvent(TriggerDataEvmContractEvent {
+            log, ..
+        }) => {
             let event: NewTrigger = decode_event_log_data!(log.data)?;
 
             let trigger_info = TriggerInfo::abi_decode(&event.triggerData)?;
