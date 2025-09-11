@@ -31,10 +31,7 @@ pub fn get_gas_price() -> Result<Option<u64>, String> {
     // when API key is configured, gas price fetching is REQUIRED to succeed
     host::log(
         LogLevel::Info,
-        &format!(
-            "Fetching gas price from Etherscan with strategy: {}",
-            strategy
-        ),
+        &format!("Fetching gas price from Etherscan with strategy: {strategy}"),
     );
 
     let req = OutgoingRequest::new(Headers::new());
@@ -43,8 +40,7 @@ pub fn get_gas_price() -> Result<Option<u64>, String> {
     req.set_authority(Some("api.etherscan.io"))
         .map_err(|_| "Failed to set authority for Etherscan request")?;
     req.set_path_with_query(Some(&format!(
-        "/api?module=gastracker&action=gasoracle&apikey={}",
-        api_key
+        "/api?module=gastracker&action=gasoracle&apikey={api_key}"
     )))
     .map_err(|_| "Failed to set path for Etherscan request")?;
 
@@ -63,7 +59,7 @@ pub fn get_gas_price() -> Result<Option<u64>, String> {
         200 => {}
         429 => return Err("Etherscan API rate limit exceeded - cannot fetch gas price".to_string()),
         401 | 403 => return Err("Invalid or unauthorized Etherscan API key".to_string()),
-        status => return Err(format!("Etherscan API returned error status: {}", status)),
+        status => return Err(format!("Etherscan API returned error status: {status}")),
     }
 
     let body = res.consume().unwrap();
@@ -78,7 +74,7 @@ pub fn get_gas_price() -> Result<Option<u64>, String> {
     }
 
     let response: EtherscanGasOracleResponse = serde_json::from_slice(&buf)
-        .map_err(|e| format!("Failed to parse Etherscan JSON response: {}", e))?;
+        .map_err(|e| format!("Failed to parse Etherscan JSON response: {e}"))?;
 
     let gas_price_str = match strategy.as_str() {
         "fast" => &response.result.fast_gas_price,
@@ -88,12 +84,11 @@ pub fn get_gas_price() -> Result<Option<u64>, String> {
 
     let gas_price_gwei: f64 = gas_price_str
         .parse()
-        .map_err(|e| format!("Invalid gas price from Etherscan: {}", e))?;
+        .map_err(|e| format!("Invalid gas price from Etherscan: {e}"))?;
 
     if !(0.1..=10000.0).contains(&gas_price_gwei) {
         return Err(format!(
-            "Unreasonable gas price from Etherscan: {} Gwei",
-            gas_price_gwei
+            "Unreasonable gas price from Etherscan: {gas_price_gwei} Gwei"
         ));
     }
 
@@ -101,10 +96,7 @@ pub fn get_gas_price() -> Result<Option<u64>, String> {
 
     host::log(
         LogLevel::Info,
-        &format!(
-            "Successfully fetched gas price: {} Gwei ({} Wei)",
-            gas_price_gwei, gas_price_wei
-        ),
+        &format!("Successfully fetched gas price: {gas_price_gwei} Gwei ({gas_price_wei} Wei)"),
     );
 
     Ok(Some(gas_price_wei))
