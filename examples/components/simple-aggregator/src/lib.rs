@@ -22,7 +22,7 @@ impl Guest for Component {
 
         // Get gas price from Etherscan if configured
         // will fail the entire operation if API key is configured but fetching fails
-        let gas_price = gas_oracle::get_gas_price()?;
+        let gas_price = gas_oracle::get_gas_price().map_err(|e| e.to_string())?;
 
         let submit_action = SubmitAction {
             chain,

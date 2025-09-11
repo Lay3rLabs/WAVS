@@ -1,22 +1,20 @@
 use crate::world::{host, wavs::types::core::LogLevel};
-use serde::{Deserialize, Serialize};
-use wavs_wasi_utils::http::{fetch_json, http_request_post_json};
+use alloy_network::Ethereum;
+use alloy_primitives::utils::format_units;
+use alloy_provider::Provider;
+use anyhow::anyhow;
+use wavs_wasi_utils::evm::new_evm_provider;
 use wstd::runtime::block_on;
 
-#[derive(Serialize)]
-struct RpcRequest {
-    jsonrpc: String,
-    method: String,
-    params: Vec<String>,
-    id: u64,
+/// v * num / den with HALF-UP rounding and overflow checks
+fn mul_div_round_u128(v: u128, num: u128, den: u128) -> Option<u128> {
+    // (v * num + den/2) / den
+    let prod = v.checked_mul(num)?;
+    let adj = prod.checked_add(den / 2)?; // half-up
+    Some(adj / den)
 }
 
-#[derive(Deserialize)]
-struct RpcResponse {
-    result: String,
-}
-
-pub fn get_gas_price() -> Result<Option<u64>, String> {
+pub fn get_gas_price() -> anyhow::Result<Option<u64>> {
     let rpc_url = match std::env::var("WAVS_ENV_GAS_RPC_URL") {
         Ok(url) if !url.is_empty() => url,
         _ => return Ok(None),
@@ -29,40 +27,26 @@ pub fn get_gas_price() -> Result<Option<u64>, String> {
         &format!("Fetching gas price from RPC: {rpc_url} with strategy: {strategy}"),
     );
 
-    let request = RpcRequest {
-        jsonrpc: "2.0".to_string(),
-        method: "eth_gasPrice".to_string(),
-        params: vec![],
-        id: 1,
-    };
+    let provider = new_evm_provider::<Ethereum>(rpc_url);
 
-    let response: RpcResponse = block_on(async {
-        let http_request = http_request_post_json(&rpc_url, &request)
-            .map_err(|e| format!("Failed to create RPC request: {e}"))?;
+    let gas_price_wei = block_on(async { provider.get_gas_price().await })?;
 
-        fetch_json(http_request)
-            .await
-            .map_err(|e| format!("Failed to fetch gas price from RPC: {e}"))
-    })?;
-
-    let gas_price_hex = response.result.trim_start_matches("0x");
-    let gas_price_wei = u64::from_str_radix(gas_price_hex, 16)
-        .map_err(|e| format!("Invalid gas price hex from RPC: {e}"))?;
-
-    let gas_price_gwei = gas_price_wei as f64 / 1_000_000_000.0;
-
-    let adjusted_gas_price = match strategy.as_str() {
-        "fast" => (gas_price_wei as f64 * 1.2) as u64,
-        "slow" | "safe" => (gas_price_wei as f64 * 0.9) as u64,
+    let adjusted_gas_price: u128 = match strategy.to_lowercase().as_str() {
+        "fast" => mul_div_round_u128(gas_price_wei, 12, 10)
+            .ok_or_else(|| anyhow!("Overflow while computing fast gas price"))?,
+        "slow" | "safe" => mul_div_round_u128(gas_price_wei, 9, 10)
+            .ok_or_else(|| anyhow!("Overflow while computing slow/safe gas price"))?,
         _ => gas_price_wei,
     };
 
     host::log(
         LogLevel::Info,
         &format!(
-            "Successfully fetched gas price: {gas_price_gwei:.2} Gwei ({adjusted_gas_price} Wei)"
+            "Successfully fetched gas price: {0} Gwei (adjusted to {1} Gwei)",
+            format_units(gas_price_wei, "gwei")?,
+            format_units(adjusted_gas_price, "gwei")?
         ),
     );
 
-    Ok(Some(adjusted_gas_price))
+    Ok(Some(adjusted_gas_price.try_into()?))
 }

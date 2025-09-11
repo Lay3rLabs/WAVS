@@ -13,6 +13,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 wavs-wasi-utils = { workspace = true }
 wstd = { workspace = true }
+alloy-network = { workspace = true }
+alloy-provider = { workspace = true }
+anyhow = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
