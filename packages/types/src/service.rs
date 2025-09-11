@@ -1,7 +1,7 @@
 use alloy_primitives::{hex, LogData};
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::num::{NonZeroU32, NonZeroU64};
 use std::str::FromStr;
 use utoipa::ToSchema;
