@@ -80,8 +80,7 @@ pub async fn make_router(
         .route("/config", get(handle_config))
         .route("/services", get(handle_list_services))
         .route("/services/{chain}/{address}", get(handle_get_service))
-        .route("/info", get(handle_info))
-        .fallback(handle_not_found);
+        .route("/info", get(handle_info));
 
     // protected routes (POST/DELETE)
     let mut protected = axum::Router::new()
@@ -111,13 +110,15 @@ pub async fn make_router(
     let protected = protected.with_state(state);
 
     // apply bearer auth to protected routes if configured
-    let mut router = public.merge(match &config.bearer_token {
-        Some(token) => protected.layer(middleware::from_fn_with_state(
-            (token.clone(), REALM.to_string()),
-            utils::http::verify_bearer_with_realm,
-        )),
-        None => protected,
-    });
+    let mut router = public
+        .merge(match &config.bearer_token {
+            Some(token) => protected.layer(middleware::from_fn_with_state(
+                (token.clone(), REALM.to_string()),
+                utils::http::verify_bearer_with_realm,
+            )),
+            None => protected,
+        })
+        .fallback(handle_not_found);
 
     if let Some(cors) = cors_layer(&config) {
         router = router.layer(cors);

@@ -54,7 +54,6 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
         .layer(TraceLayer::new_for_http())
         .route("/config", get(handle_config))
         .route("/info", get(handle_info))
-        .fallback(handle_not_found)
         .with_state(state.clone());
 
     // protected routes (POSTs)
@@ -78,6 +77,7 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
             )),
             None => protected,
         })
+        .fallback(handle_not_found)
         .with_state(state);
 
     if let Some(cors) = cors_layer(&config) {
