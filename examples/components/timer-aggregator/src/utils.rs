@@ -29,8 +29,14 @@ pub fn is_valid_tx(trigger_data: TriggerData) -> Result<bool, String> {
                     .map_err(|e| format!("Could not query transaction via RPC {e}"))?;
 
             if let Some(tx) = maybe_tx {
-                if let Some(block_number) = tx.block_number {
-                    return Ok(block_number == log.block_number);
+                if let Some(block_hash) = tx.block_hash {
+                    let sized_hash: [u8; 32] = log
+                        .block_hash
+                        .unwrap()
+                        .try_into()
+                        .map_err(|_| "Could not convert block hash to FixedBytes<32>")?;
+
+                    return Ok(block_hash == sized_hash);
                 }
             }
 
