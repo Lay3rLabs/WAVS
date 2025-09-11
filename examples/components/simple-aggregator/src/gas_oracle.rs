@@ -31,8 +31,9 @@ pub fn get_gas_price() -> Result<Option<u64>, String> {
         &format!("Fetching gas price from Etherscan with strategy: {strategy}"),
     );
 
-    let url = format!("https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={api_key}");
-    
+    let url =
+        format!("https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={api_key}");
+
     let response: EtherscanGasOracleResponse = block_on(async {
         fetch_json(http_request_get(&url).map_err(|e| format!("Failed to create request: {e}"))?)
             .await
