@@ -24,11 +24,17 @@ pub fn is_valid_tx(trigger_data: TriggerData) -> Result<bool, String> {
                 .try_into()
                 .map_err(|_| "Could not convert tx hash to FixedBytes<32>")?;
 
-            let tx =
+            let maybe_tx =
                 block_on(async move { provider.get_transaction_by_hash(sized_hash.into()).await })
                     .map_err(|e| format!("Could not query transaction via RPC {e}"))?;
 
-            Ok(tx.is_some())
+            if let Some(tx) = maybe_tx {
+                if let Some(block_number) = tx.block_number {
+                    return Ok(block_number == log.block_number);
+                }
+            }
+
+            Ok(false)
         }
         _ => Ok(true),
     }
