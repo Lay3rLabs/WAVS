@@ -1,7 +1,7 @@
 use alloy_primitives::{hex, LogData};
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::num::{NonZeroU32, NonZeroU64};
 use std::str::FromStr;
 use utoipa::ToSchema;
@@ -11,6 +11,11 @@ use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
 
 use super::{ChainKey, ServiceId, WorkflowId};
 
+/// Service validation is a runtime check, and depends on:
+///
+/// 1. All service handlers on a given chain use the same service manager
+/// 2. All service managers on non-source chains properly mirror the operator set of the source
+/// 3. All components are legitimate (e.g. can be downloaded, match the provided digest, execute as expected, etc.)
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Service {
