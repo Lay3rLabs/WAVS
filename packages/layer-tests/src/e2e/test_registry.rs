@@ -443,16 +443,12 @@ impl TestRegistry {
         chain: &ChainKey,
         aggregator_endpoint: &str,
     ) -> &mut Self {
-        // Only run this test if ETHERSCAN_API_KEY is set
-        let api_key = std::env::var("ETHERSCAN_API_KEY").unwrap_or_default();
-        if api_key.is_empty() {
-            tracing::warn!("Skipping gas price test - ETHERSCAN_API_KEY not set");
-            return self;
-        }
+        // Use a public RPC endpoint for gas price testing
+        let rpc_url = "https://eth.meowrpc.com".to_string();
 
         self.register(
             TestBuilder::new("evm_gas_price")
-                .with_description("Tests gas price fetching from Etherscan API")
+                .with_description("Tests gas price fetching from RPC endpoint")
                 .add_workflow(
                     WorkflowId::new("gas_price_test").unwrap(),
                     WorkflowBuilder::new()
@@ -470,7 +466,7 @@ impl TestRegistry {
                                     AggregatorComponent::SimpleAggregator,
                                 ))
                                 .with_config_hardcoded("chain".to_string(), chain.to_string())
-                                .with_env_var("ETHERSCAN_API_KEY".to_string(), api_key)
+                                .with_env_var("GAS_RPC_URL".to_string(), rpc_url)
                                 .with_config_hardcoded(
                                     "gas_strategy".to_string(),
                                     "standard".to_string(),
