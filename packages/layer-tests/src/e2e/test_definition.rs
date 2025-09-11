@@ -46,7 +46,7 @@ pub struct ComponentDefinition {
     pub name: ComponentName,
 
     pub configs_to_add: ComponentConfigsToAdd,
-    pub _env_vars_to_add: (), // TODO - use this?
+    pub env_vars_to_add: HashMap<String, String>,
 }
 
 impl ComponentDefinition {
@@ -57,6 +57,11 @@ impl ComponentDefinition {
 
     pub fn with_config_service_handler(mut self) -> Self {
         self.configs_to_add.service_handler = true;
+        self
+    }
+
+    pub fn with_env_var(mut self, key: String, value: String) -> Self {
+        self.env_vars_to_add.insert(key, value);
         self
     }
 }
@@ -72,7 +77,7 @@ impl From<ComponentName> for ComponentDefinition {
         ComponentDefinition {
             name,
             configs_to_add: ComponentConfigsToAdd::default(),
-            _env_vars_to_add: (),
+            env_vars_to_add: HashMap::new(),
         }
     }
 }

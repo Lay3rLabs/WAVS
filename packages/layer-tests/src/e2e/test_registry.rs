@@ -470,7 +470,7 @@ impl TestRegistry {
                                     AggregatorComponent::SimpleAggregator,
                                 ))
                                 .with_config_hardcoded("chain".to_string(), chain.to_string())
-                                .with_config_hardcoded("etherscan_api_key".to_string(), api_key)
+                                .with_env_var("ETHERSCAN_API_KEY".to_string(), api_key)
                                 .with_config_hardcoded(
                                     "gas_strategy".to_string(),
                                     "standard".to_string(),

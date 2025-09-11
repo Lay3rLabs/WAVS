@@ -1,6 +1,8 @@
 mod gas_oracle;
 mod world;
 
+pub use gas_oracle::ETHERSCAN_API_KEY_ENV;
+
 use world::{
     host,
     wavs::aggregator::aggregator::{AggregatorAction, Packet, SubmitAction},

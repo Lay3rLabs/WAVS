@@ -3,6 +3,8 @@ use serde::Deserialize;
 use wavs_wasi_utils::http::{fetch_json, http_request_get};
 use wstd::runtime::block_on;
 
+pub const ETHERSCAN_API_KEY_ENV: &str = "WAVS_ENV_ETHERSCAN_API_KEY";
+
 #[derive(Deserialize)]
 struct EtherscanGasOracleResponse {
     result: GasOracleResult,
@@ -19,8 +21,8 @@ struct GasOracleResult {
 }
 
 pub fn get_gas_price() -> Result<Option<u64>, String> {
-    let api_key = match host::config_var("etherscan_api_key") {
-        Some(key) if !key.is_empty() => key,
+    let api_key = match std::env::var(ETHERSCAN_API_KEY_ENV) {
+        Ok(key) if !key.is_empty() => key,
         _ => return Ok(None),
     };
 
