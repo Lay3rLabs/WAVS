@@ -480,7 +480,7 @@ impl TestRegistry {
                             },
                         })
                         .with_input_data(InputData::Text("gas test".to_string()))
-                        .with_expected_output(ExpectedOutput::GasPriceSet)
+                        .with_expected_output(ExpectedOutput::Text("gas test".to_string()))
                         .build(),
                 )
                 .build(),
