@@ -480,6 +480,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Dropped)
                         .build(),
                 )
+                .with_group(3)
                 .build(),
         )
     }

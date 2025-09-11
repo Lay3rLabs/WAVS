@@ -473,13 +473,7 @@ impl ExpectedOutput {
             }
             ExpectedOutput::Dropped => {
                 // For dropped transactions, validate we got no output
-                if actual.is_empty() {
-                    return Ok(());
-                } else {
-                    return Err(anyhow::anyhow!(
-                        "Expected dropped transaction but received output"
-                    ));
-                }
+                actual.is_empty()
             }
         };
 

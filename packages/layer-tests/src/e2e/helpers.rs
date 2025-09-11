@@ -1,4 +1,4 @@
-use alloy_primitives::Address;
+use alloy_primitives::{Address, U256};
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
@@ -419,35 +419,13 @@ pub async fn get_cosmos_code_id(
 /// Simulate a re-org by reverting to a previous block and mining new blocks
 pub async fn simulate_anvil_reorg(
     evm_client: &EvmSigningClient,
-    revert_to_block: u64,
-    num_new_blocks: u64,
+    reorg_snapshot: U256,
 ) -> Result<()> {
-    tracing::info!(
-        "Simulating re-org: reverting to block {} and mining {} new blocks",
-        revert_to_block,
-        num_new_blocks
-    );
-
     // Revert to the specified block using Anvil's revert RPC
-    let block_number = alloy_primitives::Uint::from(revert_to_block);
-    match evm_client.provider.anvil_revert(block_number).await {
-        Ok(_) => {
-            tracing::info!("Successfully reverted to block {}", revert_to_block);
-        }
-        Err(e) => {
-            tracing::warn!("Failed to revert to block {}: {}", revert_to_block, e);
-            // Fallback: mine new blocks to simulate chain activity
-            evm_client.provider.evm_mine(None).await?;
-        }
-    }
+    evm_client.provider.anvil_revert(reorg_snapshot).await?;
 
     // Mine new blocks to simulate chain reorganization
     evm_client.provider.evm_mine(None).await?;
-
-    tracing::info!(
-        "Re-org simulation completed: {} new blocks mined",
-        num_new_blocks
-    );
     Ok(())
 }
 

@@ -3,6 +3,8 @@
 use crate::deployment::ServiceDeployment;
 use crate::example_evm_client::example_submit::ISimpleSubmit::SignedData;
 use crate::example_evm_client::example_submit::IWavsServiceHandler::{Envelope, SignatureData};
+use alloy_primitives::U256;
+use alloy_provider::ext::AnvilApi;
 use alloy_provider::Provider;
 use anyhow::{anyhow, Context};
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -249,6 +251,7 @@ async fn run_test(
         let input_bytes = first_workflow.input_data.to_bytes();
 
         // Execute the trigger once
+        let mut reorg_snapshot: Option<U256> = None;
         let trigger_id = match trigger {
             Trigger::EvmContractEvent {
                 chain,
@@ -256,8 +259,11 @@ async fn run_test(
                 event_hash: _,
             } => {
                 let evm_client = clients.get_evm_client(chain);
-                let client = SimpleEvmTriggerClient::new(evm_client, *address);
+                let client = SimpleEvmTriggerClient::new(evm_client.clone(), *address);
 
+                if test.re_org_simulation {
+                    reorg_snapshot = Some(evm_client.provider.anvil_snapshot().await?);
+                }
                 client
                     .add_trigger(input_bytes.expect("EVM triggers require an input"))
                     .await?
@@ -323,8 +329,8 @@ async fn run_test(
                         // Simulate re-org before waiting for task
                         simulate_anvil_reorg(
                             &client,
-                            submit_start_block,
-                            3, // Number of new blocks to mine
+                            reorg_snapshot
+                                .expect("Expected a reorg snapshot when simulating reorg"),
                         )
                         .await?;
 
