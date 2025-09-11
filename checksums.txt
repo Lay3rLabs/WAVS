@@ -7,4 +7,4 @@ da7d02abfab2d1b03f598722c561f5c80bfcf3f02ee7014a84e7a3e94519e030  ./examples/bui
 7fa0fe0bd0b7364893139feeb9bee7485ebcf24f440018ad769d726a31655f2b  ./examples/build/components/permissions.wasm
 1e37801daeee1b4b1b35c591a7fd51ff0070c2d568539b74d1457df8b0702ae3  ./examples/build/components/simple_aggregator.wasm
 9806ca51879830d33fa32cc6440364863f7e632f48fdc32275329d66abaccb3f  ./examples/build/components/square.wasm
-d82ea065b5fd760d75d128cc2d8085a7cd61d124228704bc4e22825df6ffd5b0  ./examples/build/components/timer_aggregator.wasm
+a601aea6cc17a835505351f697d3222187430daff8aa9f58f680e746a17265c8  ./examples/build/components/timer_aggregator.wasm
