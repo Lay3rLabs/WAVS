@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum SigningKeyResponse {
+pub enum SignerResponse {
     Secp256k1 {
         /// The derivation index used to create this key from the mnemonic
         hd_index: u32,
@@ -24,7 +24,7 @@ pub struct AddServiceRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
-pub struct GetServiceKeyRequest {
+pub struct GetSignerRequest {
     pub service_manager: ServiceManager,
 }
 

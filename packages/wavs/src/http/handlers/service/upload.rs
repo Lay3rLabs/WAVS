@@ -4,7 +4,7 @@ use wavs_types::UploadComponentResponse;
 
 #[utoipa::path(
     post,
-    path = "/upload",
+    path = "/dev/components",
     request_body(description = "Component file binary data (max 50MB)",
                  content_type = "application/octet-stream"),
     responses(
@@ -16,7 +16,7 @@ use wavs_types::UploadComponentResponse;
     description = "Uploads a component file to be used in a WAVS service. Returns a digest that can be used to reference the uploaded component in service configurations."
 )]
 #[axum::debug_handler]
-pub async fn handle_upload_service(
+pub async fn handle_upload_component(
     State(state): State<HttpState>,
     bytes: Bytes,
 ) -> impl IntoResponse {

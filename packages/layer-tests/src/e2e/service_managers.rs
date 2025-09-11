@@ -10,7 +10,7 @@ use utils::test_utils::{
 };
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
-    ChainKey, Service, ServiceId, ServiceManager, ServiceStatus, SigningKeyResponse, Submit,
+    ChainKey, Service, ServiceId, ServiceManager, ServiceStatus, SignerResponse, Submit,
 };
 
 use crate::deployment::ServiceDeployment;
@@ -206,12 +206,12 @@ impl ServiceManagers {
                 address: mock_service_manager.address(),
             };
 
-            let SigningKeyResponse::Secp256k1 {
+            let SignerResponse::Secp256k1 {
                 evm_address: avs_signer_address,
                 ..
             } = clients
                 .http_client
-                .get_service_key(service_manager.clone())
+                .get_service_signer(service_manager.clone())
                 .await
                 .unwrap();
 

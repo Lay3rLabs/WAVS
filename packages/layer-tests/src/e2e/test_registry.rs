@@ -71,7 +71,7 @@ impl TestRegistry {
     ) -> anyhow::Result<()> {
         let http_client = reqwest::Client::new();
 
-        let endpoint = format!("{}/register-service", aggregator_url);
+        let endpoint = format!("{}/services", aggregator_url);
         let payload = RegisterServiceRequest {
             service_manager: service.manager.clone(),
         };

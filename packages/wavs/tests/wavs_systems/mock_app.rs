@@ -129,7 +129,7 @@ impl MockE2ETestRunner {
     pub async fn list_services(&self) -> ListServicesResponse {
         let req = Request::builder()
             .method(Method::GET)
-            .uri("/app")
+            .uri("/services")
             .body(Body::empty())
             .unwrap();
 
@@ -186,7 +186,7 @@ impl MockE2ETestRunner {
         let req = Request::builder()
             .method(Method::DELETE)
             .header("Content-Type", "application/json")
-            .uri("/app")
+            .uri("/services")
             .body(body)
             .unwrap();
 

@@ -22,7 +22,7 @@ use crate::{
 
 #[utoipa::path(
     post,
-    path = "/packet",
+    path = "/packets",
     request_body = AddPacketRequest,
     responses(
         (status = 200, description = "Packet successfully added to queue or sent to contract", body = Vec<AddPacketResponse>),
