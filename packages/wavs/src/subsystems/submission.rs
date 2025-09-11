@@ -18,7 +18,7 @@ use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Credential, Envelope, EnvelopeExt, Packet, ServiceId, SigningKeyResponse, Submit, WorkflowId,
+    Credential, Envelope, EnvelopeExt, Packet, ServiceId, SignerResponse, Submit, WorkflowId,
 };
 
 #[derive(Clone)]
@@ -205,10 +205,10 @@ impl SubmissionManager {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    pub fn get_service_key(
+    pub fn get_service_signer(
         &self,
         service_id: ServiceId,
-    ) -> Result<SigningKeyResponse, SubmissionError> {
+    ) -> Result<SignerResponse, SubmissionError> {
         let key = self
             .evm_signers
             .read()
@@ -218,7 +218,7 @@ impl SubmissionManager {
                 service_id: service_id.clone(),
             })
             .map(
-                |SignerInfo { signer, hd_index }| SigningKeyResponse::Secp256k1 {
+                |SignerInfo { signer, hd_index }| SignerResponse::Secp256k1 {
                     hd_index: *hd_index,
                     evm_address: signer.address().to_string(),
                 },
@@ -226,7 +226,7 @@ impl SubmissionManager {
 
         if tracing::enabled!(tracing::Level::INFO) {
             let address = match &key {
-                SigningKeyResponse::Secp256k1 { evm_address, .. } => evm_address,
+                SignerResponse::Secp256k1 { evm_address, .. } => evm_address,
             };
 
             tracing_service_info!(
@@ -290,7 +290,7 @@ impl SubmissionManager {
 
         let response = self
             .http_client
-            .post(format!("{url}/packet"))
+            .post(format!("{url}/packets"))
             .header("Content-Type", "application/json")
             .json(&AddPacketRequest { packet })
             .send()

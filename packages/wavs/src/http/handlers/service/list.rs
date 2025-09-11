@@ -5,7 +5,7 @@ use wavs_types::ListServicesResponse;
 
 #[utoipa::path(
     get,
-    path = "/app",
+    path = "/services",
     responses(
         (status = 200, description = "Successfully retrieved service list", body = ListServicesResponse),
         (status = 500, description = "Internal server error")

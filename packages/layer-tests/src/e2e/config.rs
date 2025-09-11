@@ -183,6 +183,7 @@ impl From<TestConfig> for Configs {
 
         wavs_config.chains = chain_configs.clone();
         wavs_config.submission_mnemonic = Some(mnemonics.wavs.clone());
+        wavs_config.dev_endpoints_enabled = true;
 
         // Create first aggregator config (default port 8001)
         let mut aggregator_config: wavs_aggregator::config::Config =
@@ -198,6 +199,7 @@ impl From<TestConfig> for Configs {
 
         aggregator_config.chains = chain_configs.clone();
         aggregator_config.credential = Some(mnemonics.aggregator.clone());
+        aggregator_config.dev_endpoints_enabled = true;
 
         // Create second aggregator config
         // It is used only in few tests, but we need to spin it beforehand
@@ -205,6 +207,7 @@ impl From<TestConfig> for Configs {
         aggregator_config_2.port = AGGREGATOR_PORT_2;
         aggregator_config_2.data = tempfile::tempdir().unwrap().path().to_path_buf();
         aggregator_config_2.credential = Some(mnemonics.aggregator_2.clone());
+        aggregator_config_2.dev_endpoints_enabled = true;
 
         let cli_args = wavs_cli::args::CliArgs {
             data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),

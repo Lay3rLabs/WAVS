@@ -39,7 +39,7 @@ use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{ChainConfigError, ChainKey, ComponentDigest, ServiceManager, WorkflowIdError};
-use wavs_types::{Service, ServiceId, SigningKeyResponse, TriggerAction};
+use wavs_types::{Service, ServiceId, SignerResponse, TriggerAction};
 
 use crate::config::Config;
 use crate::services::{Services, ServicesError};
@@ -300,11 +300,11 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
-    pub fn get_service_key(
+    pub fn get_service_signer(
         &self,
         service_id: ServiceId,
-    ) -> Result<SigningKeyResponse, DispatcherError> {
-        Ok(self.submission_manager.get_service_key(service_id)?)
+    ) -> Result<SignerResponse, DispatcherError> {
+        Ok(self.submission_manager.get_service_signer(service_id)?)
     }
 
     #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
@@ -322,9 +322,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             });
         }
 
-        let SigningKeyResponse::Secp256k1 { hd_index, .. } = self
+        let SignerResponse::Secp256k1 { hd_index, .. } = self
             .submission_manager
-            .get_service_key(service_id.clone())?;
+            .get_service_signer(service_id.clone())?;
 
         if tracing::enabled!(tracing::Level::INFO) {
             let old_service = self.services.get(&service_id)?;

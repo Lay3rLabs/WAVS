@@ -4,7 +4,7 @@ use wavs_types::UploadComponentResponse;
 
 #[utoipa::path(
     post,
-    path = "/upload",
+    path = "/dev/components",
     request_body(description = "Component file binary data (max 50MB)",
                  content_type = "application/octet-stream"),
     responses(

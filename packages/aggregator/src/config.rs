@@ -65,6 +65,9 @@ pub struct Config {
     /// Optional bearer token to protect mutating HTTP endpoints.
     /// If None, endpoints remain unauthenticated.
     pub bearer_token: Option<Credential>,
+
+    /// Enable dev endpoints for testing (default: false)
+    pub dev_endpoints_enabled: bool,
 }
 
 /// Default values for the config struct
@@ -90,6 +93,7 @@ impl Default for Config {
             max_wasm_fuel: None,
             max_execution_seconds: None,
             bearer_token: None,
+            dev_endpoints_enabled: false,
         }
     }
 }

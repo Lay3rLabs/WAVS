@@ -64,8 +64,8 @@ pub struct Config {
     /// If None, endpoints remain unauthenticated.
     pub bearer_token: Option<Credential>,
 
-    /// Enable debug endpoints for testing (default: false)
-    pub debug_endpoints_enabled: bool,
+    /// Enable dev endpoints for testing (default: false)
+    pub dev_endpoints_enabled: bool,
 }
 
 impl ConfigExt for Config {
@@ -103,7 +103,7 @@ impl Default for Config {
             prometheus: None,
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
             bearer_token: None,
-            debug_endpoints_enabled: false,
+            dev_endpoints_enabled: false,
         }
     }
 }

@@ -3,9 +3,9 @@ use std::time::Duration;
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use wavs_types::{
-    AddServiceRequest, ChainKey, ComponentDigest, DeleteServicesRequest, GetServiceKeyRequest,
+    AddServiceRequest, ChainKey, ComponentDigest, DeleteServicesRequest, GetSignerRequest,
     IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceManager,
-    SigningKeyResponse, UploadComponentResponse,
+    SignerResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUrlArgs;
@@ -37,7 +37,7 @@ impl HttpClient {
     pub async fn upload_component(&self, wasm_bytes: Vec<u8>) -> Result<ComponentDigest> {
         let response: UploadComponentResponse = self
             .inner
-            .post(format!("{}/upload", self.endpoint))
+            .post(format!("{}/dev/components", self.endpoint))
             .body(wasm_bytes)
             .send()
             .await?
@@ -65,7 +65,7 @@ impl HttpClient {
             service_manager: service_manager.clone(),
         })?;
 
-        let url = format!("{}/app", self.endpoint);
+        let url = format!("{}/services", self.endpoint);
         let response = self
             .inner
             .post(&url)
@@ -113,7 +113,7 @@ impl HttpClient {
     pub async fn save_service(&self, service: &Service) -> Result<String> {
         let body = serde_json::to_string(service)?;
 
-        let url = format!("{}/save-service", self.endpoint);
+        let url = format!("{}/dev/services", self.endpoint);
         let response: SaveServiceResponse = self
             .inner
             .post(&url)
@@ -126,19 +126,16 @@ impl HttpClient {
             .await
             .with_context(|| format!("Failed to parse response from {}", url))?;
 
-        Ok(format!(
-            "{}/service-by-hash/{}",
-            self.endpoint, response.hash
-        ))
+        Ok(format!("{}/dev/services/{}", self.endpoint, response.hash))
     }
 
-    pub async fn get_service_key(
+    pub async fn get_service_signer(
         &self,
         service_manager: ServiceManager,
-    ) -> Result<SigningKeyResponse> {
-        let body = serde_json::to_string(&GetServiceKeyRequest { service_manager })?;
+    ) -> Result<SignerResponse> {
+        let body = serde_json::to_string(&GetSignerRequest { service_manager })?;
 
-        let url = format!("{}/service-key", self.endpoint);
+        let url = format!("{}/services/signer", self.endpoint);
         let text = self
             .inner
             .post(&url)
@@ -162,16 +159,9 @@ impl HttpClient {
     }
 
     pub async fn get_service_from_node(&self, chain: &ChainKey, address: &str) -> Result<Service> {
-        let url = format!("{}/service", self.endpoint);
+        let url = format!("{}/services/{chain}/{address}", self.endpoint);
 
-        let text = self
-            .inner
-            .get(&url)
-            .query(&[("chain", chain.to_string().as_str()), ("address", address)])
-            .send()
-            .await?
-            .text()
-            .await?;
+        let text = self.inner.get(&url).send().await?.text().await?;
 
         match serde_json::from_str(&text) {
             Ok(service) => Ok(service),
@@ -212,7 +202,7 @@ impl HttpClient {
     pub async fn delete_service(&self, service_managers: Vec<ServiceManager>) -> Result<()> {
         let body: String = serde_json::to_string(&DeleteServicesRequest { service_managers })?;
 
-        let url = format!("{}/app", self.endpoint);
+        let url = format!("{}/services", self.endpoint);
         let response = self
             .inner
             .delete(&url)
