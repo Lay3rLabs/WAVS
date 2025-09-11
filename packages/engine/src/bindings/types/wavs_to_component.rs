@@ -377,7 +377,6 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                 block_hash,
                 block_timestamp,
                 tx_index,
-                removed,
             } => Ok(component_input::TriggerData::EvmContractEvent(
                 component_events::TriggerDataEvmContractEvent {
                     chain: chain.to_string(),
@@ -394,10 +393,9 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                         tx_hash: tx_hash.to_vec(),
                         block_number,
                         log_index,
-                        block_hash: block_hash.map(|hash| hash.to_vec()),
+                        block_hash: block_hash.to_vec(),
                         block_timestamp,
                         tx_index,
-                        removed,
                     },
                 },
             )),
@@ -554,7 +552,6 @@ impl TryFrom<wavs_types::TriggerData> for aggregator_types::TriggerData {
                 block_hash,
                 block_timestamp,
                 tx_index,
-                removed,
             } => Ok(aggregator_types::TriggerData::EvmContractEvent(
                 aggregator_events::TriggerDataEvmContractEvent {
                     chain: chain.to_string(),
@@ -571,10 +568,9 @@ impl TryFrom<wavs_types::TriggerData> for aggregator_types::TriggerData {
                         tx_hash: tx_hash.to_vec(),
                         block_number,
                         log_index,
-                        block_hash: block_hash.map(|hash| hash.to_vec()),
+                        block_hash: block_hash.to_vec(),
                         block_timestamp,
                         tx_index,
-                        removed,
                     },
                 },
             )),

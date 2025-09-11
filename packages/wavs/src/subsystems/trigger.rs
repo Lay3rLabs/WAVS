@@ -414,6 +414,9 @@ impl TriggerManager {
                     block_number,
                     tx_hash,
                     log_index,
+                    block_hash,
+                    tx_index,
+                    block_timestamp,
                 } => {
                     if let Some(event_hash) = log.topic0() {
                         let contract_address = log.address();
@@ -468,10 +471,9 @@ impl TriggerManager {
                                 tx_hash,
                                 block_number,
                                 log_index,
-                                block_hash: log.block_hash,
-                                block_timestamp: log.block_timestamp,
-                                tx_index: log.transaction_index,
-                                removed: log.removed,
+                                block_hash,
+                                block_timestamp,
+                                tx_index,
                             };
 
                             for trigger_config in self.lookup_maps.get_trigger_configs(lookup_ids) {

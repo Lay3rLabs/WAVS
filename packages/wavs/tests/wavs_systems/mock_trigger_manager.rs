@@ -43,10 +43,9 @@ pub fn mock_real_trigger_action(
                     tx_hash: [0; 32].into(),
                     block_number: 1,
                     log_index: 0,
-                    block_hash: None,
-                    block_timestamp: None,
-                    tx_index: None,
-                    removed: false,
+                    block_hash: [0; 32].into(),
+                    block_timestamp: 0,
+                    tx_index: 0,
                 },
             }
         }

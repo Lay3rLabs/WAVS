@@ -32,7 +32,6 @@ pub fn is_valid_tx(trigger_data: TriggerData) -> Result<bool, String> {
                 if let Some(block_hash) = tx.block_hash {
                     let sized_hash: [u8; 32] = log
                         .block_hash
-                        .unwrap()
                         .try_into()
                         .map_err(|_| "Could not convert block hash to FixedBytes<32>")?;
 

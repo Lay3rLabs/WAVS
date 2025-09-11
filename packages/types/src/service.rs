@@ -265,14 +265,12 @@ pub enum TriggerData {
         log_index: u64,
         // these are all optional because they may not be present in the log and we don't need them
         /// Hash of the block the transaction that emitted this log was mined in
-        #[schema(value_type = Option<String>)]
-        block_hash: Option<alloy_primitives::B256>,
+        #[schema(value_type = String)]
+        block_hash: alloy_primitives::B256,
         /// The timestamp of the block as proposed in: https://ethereum-magicians.org/t/proposal-for-adding-blocktimestamp-to-logs-object-returned-by-eth-getlogs-and-related-requests https://github.com/ethereum/execution-apis/issues/295
-        block_timestamp: Option<u64>,
+        block_timestamp: u64,
         /// Index of the Transaction in the block
-        tx_index: Option<u64>,
-        /// Geth Compatibility Field: whether this log was removed
-        removed: bool,
+        tx_index: u64,
     },
     BlockInterval {
         /// The chain where the blocks are checked

@@ -31,6 +31,9 @@ pub enum StreamTriggers {
         log: Box<alloy_rpc_types_eth::Log>,
         block_number: u64,
         tx_hash: alloy_primitives::TxHash,
+        block_hash: alloy_primitives::BlockHash,
+        tx_index: u64,
+        block_timestamp: u64,
         log_index: u64,
     },
     // We need a separate stream for EVM block interval triggers

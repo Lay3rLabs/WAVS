@@ -36,19 +36,29 @@ pub async fn start_evm_event_stream(
 
             match (
                 log.block_hash,
+                log.block_timestamp,
+                log.transaction_index,
                 log.block_number,
                 log.transaction_hash,
                 log.log_index,
             ) {
-                (Some(_block_hash), Some(block_number), Some(tx_hash), Some(log_index)) => {
-                    Some(Ok(StreamTriggers::Evm {
-                        chain: chain.clone(),
-                        block_number,
-                        tx_hash,
-                        log_index,
-                        log: Box::new(log),
-                    }))
-                }
+                (
+                    Some(block_hash),
+                    Some(block_timestamp),
+                    Some(tx_index),
+                    Some(block_number),
+                    Some(tx_hash),
+                    Some(log_index),
+                ) => Some(Ok(StreamTriggers::Evm {
+                    chain: chain.clone(),
+                    block_number,
+                    tx_hash,
+                    log_index,
+                    log: Box::new(log),
+                    block_hash,
+                    block_timestamp,
+                    tx_index,
+                })),
                 _ => {
                     tracing::warn!("Received incomplete EVM log: {:?}", log);
                     None
