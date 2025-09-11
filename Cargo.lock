@@ -7995,6 +7995,7 @@ dependencies = [
  "alloy-provider",
  "wavs-wasi-utils",
  "wit-bindgen 0.43.0",
+ "wstd",
 ]
 
 [[package]]
