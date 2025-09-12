@@ -275,6 +275,9 @@ impl SubmissionManager {
             workflow_id,
             envelope,
             signature,
+            // TODO: those fields are removed with the next version
+            origin_tx_hash: vec![],
+            origin_block: 0,
         })
     }
 

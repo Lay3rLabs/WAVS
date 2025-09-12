@@ -29,6 +29,9 @@ pub fn packet_from_service(
             data: signature.into(),
             kind: SignatureKind::evm_default(),
         },
+        // TODO: those fields are removed with the next version
+        origin_tx_hash: vec![],
+        origin_block: 0,
     }
 }
 pub fn mock_packet(

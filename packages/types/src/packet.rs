@@ -24,6 +24,9 @@ pub struct Packet {
     #[schema(value_type  = Object)]
     pub envelope: Envelope,
     pub signature: EnvelopeSignature,
+    // origin-* is used for reorg handling
+    pub origin_tx_hash: Vec<u8>,
+    pub origin_block: u64,
 }
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]

@@ -30,6 +30,9 @@ fn dummy_message(service: &Service, payload: &str) -> ChainMessage {
             ordering: mock_event_order().into(),
         },
         submit: service.workflows.values().next().unwrap().submit.clone(),
+        // TODO: those fields are removed with the next version
+        origin_tx_hash: vec![],
+        origin_block: 0,
         debug: ChainMessageDebug {
             do_not_submit_aggregator: true,
         },

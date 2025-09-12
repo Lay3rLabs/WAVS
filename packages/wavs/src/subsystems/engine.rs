@@ -147,6 +147,9 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                     },
                 },
                 submit: workflow.submit.clone(),
+                // TODO: those fields are removed with the next version
+                origin_tx_hash: vec![],
+                origin_block: 0,
                 #[cfg(debug_assertions)]
                 debug: Default::default(),
             };
