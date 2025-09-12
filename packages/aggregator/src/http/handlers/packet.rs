@@ -331,7 +331,7 @@ async fn handle_custom_submit(
             signature_data,
             contract_address,
             None,
-            submit_action.gas_price,
+            submit_action.gas_price.map(|x| x.into()),
         )
         .await?;
 

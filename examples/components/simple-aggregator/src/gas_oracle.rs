@@ -20,7 +20,7 @@ struct GasOracleResult {
     fast_gas_price: String,
 }
 
-pub fn get_gas_price() -> Result<Option<u64>, String> {
+pub fn get_gas_price() -> Result<Option<u128>, String> {
     let api_key = match std::env::var(ETHERSCAN_API_KEY_ENV) {
         Ok(key) if !key.is_empty() => key,
         _ => return Ok(None),
@@ -58,7 +58,7 @@ pub fn get_gas_price() -> Result<Option<u64>, String> {
         ));
     }
 
-    let gas_price_wei = (gas_price_gwei * 1_000_000_000.0) as u64;
+    let gas_price_wei = (gas_price_gwei * 1_000_000_000.0) as u128;
 
     host::log(
         LogLevel::Info,
