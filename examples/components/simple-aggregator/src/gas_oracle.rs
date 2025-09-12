@@ -1,24 +1,28 @@
 use crate::world::{host, wavs::types::core::LogLevel};
-use serde::{Deserialize, Serialize};
-use wavs_wasi_utils::http::{fetch_json, http_request_post_json};
+use serde::Deserialize;
+use wavs_wasi_utils::http::{fetch_json, http_request_get};
 use wstd::runtime::block_on;
 
-#[derive(Serialize)]
-struct RpcRequest {
-    jsonrpc: String,
-    method: String,
-    params: Vec<String>,
-    id: u64,
+pub const ETHERSCAN_API_KEY_ENV: &str = "WAVS_ENV_ETHERSCAN_API_KEY";
+
+#[derive(Deserialize)]
+struct EtherscanGasOracleResponse {
+    result: GasOracleResult,
 }
 
 #[derive(Deserialize)]
-struct RpcResponse {
-    result: String,
+struct GasOracleResult {
+    #[serde(rename = "SafeGasPrice")]
+    safe_gas_price: String,
+    #[serde(rename = "ProposeGasPrice")]
+    propose_gas_price: String,
+    #[serde(rename = "FastGasPrice")]
+    fast_gas_price: String,
 }
 
 pub fn get_gas_price() -> Result<Option<u64>, String> {
-    let rpc_url = match std::env::var("WAVS_ENV_GAS_RPC_URL") {
-        Ok(url) if !url.is_empty() => url,
+    let api_key = match std::env::var(ETHERSCAN_API_KEY_ENV) {
+        Ok(key) if !key.is_empty() => key,
         _ => return Ok(None),
     };
 
@@ -26,43 +30,40 @@ pub fn get_gas_price() -> Result<Option<u64>, String> {
 
     host::log(
         LogLevel::Info,
-        &format!("Fetching gas price from RPC: {rpc_url} with strategy: {strategy}"),
+        &format!("Fetching gas price from Etherscan with strategy: {strategy}"),
     );
 
-    let request = RpcRequest {
-        jsonrpc: "2.0".to_string(),
-        method: "eth_gasPrice".to_string(),
-        params: vec![],
-        id: 1,
-    };
+    let url =
+        format!("https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey={api_key}");
 
-    let response: RpcResponse = block_on(async {
-        let http_request = http_request_post_json(&rpc_url, &request)
-            .map_err(|e| format!("Failed to create RPC request: {e}"))?;
-        
-        fetch_json(http_request)
+    let response: EtherscanGasOracleResponse = block_on(async {
+        fetch_json(http_request_get(&url).map_err(|e| format!("Failed to create request: {e}"))?)
             .await
-            .map_err(|e| format!("Failed to fetch gas price from RPC: {e}"))
+            .map_err(|e| format!("Failed to fetch gas price from Etherscan: {e}"))
     })?;
 
-    let gas_price_hex = response.result.trim_start_matches("0x");
-    let gas_price_wei = u64::from_str_radix(gas_price_hex, 16)
-        .map_err(|e| format!("Invalid gas price hex from RPC: {e}"))?;
-
-    let gas_price_gwei = gas_price_wei as f64 / 1_000_000_000.0;
-
-    let adjusted_gas_price = match strategy.as_str() {
-        "fast" => (gas_price_wei as f64 * 1.2) as u64,
-        "slow" | "safe" => (gas_price_wei as f64 * 0.9) as u64,
-        _ => gas_price_wei,
+    let gas_price_str = match strategy.as_str() {
+        "fast" => &response.result.fast_gas_price,
+        "slow" | "safe" => &response.result.safe_gas_price,
+        _ => &response.result.propose_gas_price,
     };
+
+    let gas_price_gwei: f64 = gas_price_str
+        .parse()
+        .map_err(|e| format!("Invalid gas price from Etherscan: {e}"))?;
+
+    if !(0.1..=10000.0).contains(&gas_price_gwei) {
+        return Err(format!(
+            "Unreasonable gas price from Etherscan: {gas_price_gwei} Gwei"
+        ));
+    }
+
+    let gas_price_wei = (gas_price_gwei * 1_000_000_000.0) as u64;
 
     host::log(
         LogLevel::Info,
-        &format!(
-            "Successfully fetched gas price: {gas_price_gwei:.2} Gwei ({adjusted_gas_price} Wei)"
-        ),
+        &format!("Successfully fetched gas price: {gas_price_gwei} Gwei ({gas_price_wei} Wei)"),
     );
 
-    Ok(Some(adjusted_gas_price))
+    Ok(Some(gas_price_wei))
 }
