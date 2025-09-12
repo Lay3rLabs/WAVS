@@ -9,6 +9,10 @@ repository.workspace = true
 [dependencies]
 wit-bindgen = { workspace = true }
 alloy-primitives = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+wavs-wasi-utils = { workspace = true }
+wstd = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

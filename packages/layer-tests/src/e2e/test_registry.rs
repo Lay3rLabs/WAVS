@@ -186,6 +186,9 @@ impl TestRegistry {
                         &aggregator_endpoint_2(),
                     );
                 }
+                EvmService::GasPrice => {
+                    registry.register_evm_gas_price_test(chain, aggregator_endpoint);
+                }
             }
         }
 
@@ -429,6 +432,55 @@ impl TestRegistry {
                         })
                         .with_input_data(InputData::Text("test packet".to_string()))
                         .with_expected_output(ExpectedOutput::Text("test packet".to_string()))
+                        .build(),
+                )
+                .build(),
+        )
+    }
+
+    fn register_evm_gas_price_test(
+        &mut self,
+        chain: &ChainKey,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
+        // Only run this test if ETHERSCAN_API_KEY is set
+        let api_key = std::env::var("ETHERSCAN_API_KEY").unwrap_or_default();
+        if api_key.is_empty() {
+            tracing::warn!("Skipping gas price test - ETHERSCAN_API_KEY not set");
+            return self;
+        }
+
+        self.register(
+            TestBuilder::new("evm_gas_price")
+                .with_description("Tests gas price fetching from Etherscan API")
+                .add_workflow(
+                    WorkflowId::new("gas_price_test").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_operator_component(OperatorComponent::EchoData)
+                        .with_aggregator_component(AggregatorComponent::SimpleAggregator)
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                            aggregator: AggregatorDefinition::ComponentBasedAggregator {
+                                component: ComponentDefinition::from(ComponentName::Aggregator(
+                                    AggregatorComponent::SimpleAggregator,
+                                ))
+                                .with_config_hardcoded("chain".to_string(), chain.to_string())
+                                .with_env_var("ETHERSCAN_API_KEY".to_string(), api_key)
+                                .with_config_hardcoded(
+                                    "gas_strategy".to_string(),
+                                    "standard".to_string(),
+                                )
+                                .with_config_service_handler(),
+                                chain: chain.clone(),
+                            },
+                        })
+                        .with_input_data(InputData::Text("gas test".to_string()))
+                        .with_expected_output(ExpectedOutput::Text("gas test".to_string()))
                         .build(),
                 )
                 .build(),

@@ -331,6 +331,7 @@ async fn handle_custom_submit(
             signature_data,
             contract_address,
             None,
+            submit_action.gas_price,
         )
         .await?;
 
@@ -591,6 +592,7 @@ mod test {
                                 wavs_types::SubmitAction {
                                     chain: "evm:test-chain".to_string(),
                                     contract_address: vec![0u8; 20],
+                                    gas_price: None,
                                 },
                             ),
                         };
@@ -962,6 +964,11 @@ mod test {
                 service_handler_addresses[0].to_string(),
             );
         }
+        // SimpleAggregator now requires HTTP permissions for gas oracle
+        component.permissions = wavs_types::Permissions {
+            allowed_http_hosts: wavs_types::AllowedHostPermission::All,
+            file_system: false,
+        };
 
         mock_service_with_submit(
             chain,

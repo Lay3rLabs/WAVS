@@ -103,7 +103,11 @@ fn deploy_component(
         file_system: true,
     };
     component.config = config_vars;
-    component.env_keys = env_vars.keys().cloned().collect();
+    // Set env_keys to the actual prefixed env var names that will be read by the component
+    component.env_keys = env_vars
+        .keys()
+        .map(|k| format!("{}_{}", WAVS_ENV_PREFIX, k))
+        .collect();
 
     for (k, v) in env_vars.iter() {
         // NOTE: we should avoid collisions here
@@ -292,10 +296,14 @@ pub async fn create_submit_from_config(
                 })?;
 
                 let mut config_vars = BTreeMap::new();
-                let env_vars = BTreeMap::new();
+                let mut env_vars = BTreeMap::new();
 
                 for (hardcoded_key, hardcoded_value) in &component_def.configs_to_add.hardcoded {
                     config_vars.insert(hardcoded_key.clone(), hardcoded_value.clone());
+                }
+
+                for (env_key, env_value) in &component_def.env_vars_to_add {
+                    env_vars.insert(env_key.clone(), env_value.clone());
                 }
 
                 if component_def.configs_to_add.service_handler {

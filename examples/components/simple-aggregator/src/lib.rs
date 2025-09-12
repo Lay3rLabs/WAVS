@@ -1,3 +1,4 @@
+mod gas_oracle;
 mod world;
 
 use world::{
@@ -19,11 +20,16 @@ impl Guest for Component {
             .parse()
             .map_err(|e| format!("Failed to parse service handler address: {e}"))?;
 
+        // Get gas price from Etherscan if configured
+        // will fail the entire operation if API key is configured but fetching fails
+        let gas_price = gas_oracle::get_gas_price()?;
+
         let submit_action = SubmitAction {
             chain,
             contract_address: EvmAddress {
                 raw_bytes: address.to_vec(),
             },
+            gas_price,
         };
 
         Ok(vec![AggregatorAction::Submit(submit_action)])

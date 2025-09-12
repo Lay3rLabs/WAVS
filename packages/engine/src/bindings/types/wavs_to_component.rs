@@ -763,6 +763,7 @@ impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
                     contract_address: aggregator_chain::EvmAddress {
                         raw_bytes: submit.contract_address,
                     },
+                    gas_price: submit.gas_price,
                 })
             }
             wavs_types::AggregatorAction::Timer(timer) => {
@@ -781,6 +782,7 @@ impl From<aggregator_types::AggregatorAction> for wavs_types::AggregatorAction {
                 wavs_types::AggregatorAction::Submit(wavs_types::SubmitAction {
                     chain: submit.chain,
                     contract_address: submit.contract_address.raw_bytes,
+                    gas_price: submit.gas_price,
                 })
             }
             aggregator_types::AggregatorAction::Timer(timer) => {

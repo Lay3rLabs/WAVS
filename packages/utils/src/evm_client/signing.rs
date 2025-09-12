@@ -40,6 +40,7 @@ impl EvmSigningClient {
         signature_data: SignatureData,
         service_handler: Address,
         max_gas: Option<u64>,
+        gas_price: Option<u64>,
     ) -> Result<TransactionReceipt, EvmClientError> {
         if self
             .provider
@@ -71,10 +72,17 @@ impl EvmSigningClient {
             }
         };
 
-        let receipt = self
-            .service_handler(service_handler)
+        let service_handler_instance = self.service_handler(service_handler);
+        let mut tx_builder = service_handler_instance
             .handleSignedEnvelope(envelope, signature_data)
-            .gas(gas)
+            .gas(gas);
+
+        // Set gas price if provided
+        if let Some(price) = gas_price {
+            tx_builder = tx_builder.gas_price(price as u128);
+        }
+
+        let receipt = tx_builder
             .send()
             .await
             .map_err(|e| EvmClientError::SendTransaction(e.into()))?
