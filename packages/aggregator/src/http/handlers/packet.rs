@@ -964,6 +964,11 @@ mod test {
                 service_handler_addresses[0].to_string(),
             );
         }
+        // SimpleAggregator now requires HTTP permissions for gas oracle
+        component.permissions = wavs_types::Permissions {
+            allowed_http_hosts: wavs_types::AllowedHostPermission::All,
+            file_system: false,
+        };
 
         mock_service_with_submit(
             chain,
