@@ -449,7 +449,6 @@ impl TestRegistry {
         self.register(
             TestBuilder::new("evm_timer_aggregator_reorg")
                 .with_description("Tests TimerAggregator component with delayed submission and re-org handling - expected output should be dropped")
-                .with_re_org_simulation()
                 .add_workflow(
                     WorkflowId::new("timer_aggregator_reorg").unwrap(),
                     WorkflowBuilder::new()

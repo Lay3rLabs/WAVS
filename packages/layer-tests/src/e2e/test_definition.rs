@@ -38,9 +38,6 @@ pub struct TestDefinition {
 
     /// Execution group (ascending priority)
     pub group: u64,
-
-    /// Whether to simulate a re-org for this test
-    pub re_org_simulation: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -107,6 +104,12 @@ pub struct WorkflowDefinition {
 
     /// Aggregator components needed for this workflow
     pub aggregators: Vec<ComponentName>,
+}
+
+impl WorkflowDefinition {
+    pub fn expects_reorg(&self) -> bool {
+        matches!(self.expected_output, ExpectedOutput::Dropped)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -263,7 +266,6 @@ impl TestBuilder {
                 service_manager_chain: DEFAULT_CHAIN_KEY.clone(),
                 change_service: None,
                 group: u64::MAX,
-                re_org_simulation: false,
             },
         }
     }
@@ -300,12 +302,6 @@ impl TestBuilder {
     /// Set the service manager chain
     pub fn with_service_manager_chain(mut self, chain: &ChainKey) -> Self {
         self.definition.service_manager_chain = chain.clone();
-        self
-    }
-
-    /// Enable re-org simulation for this test
-    pub fn with_re_org_simulation(mut self) -> Self {
-        self.definition.re_org_simulation = true;
         self
     }
 

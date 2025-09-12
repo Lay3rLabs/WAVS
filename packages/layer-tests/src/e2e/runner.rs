@@ -261,7 +261,7 @@ async fn run_test(
                 let evm_client = clients.get_evm_client(chain);
                 let client = SimpleEvmTriggerClient::new(evm_client.clone(), *address);
 
-                if test.re_org_simulation {
+                if first_workflow.expects_reorg() {
                     reorg_snapshot = Some(evm_client.provider.anvil_snapshot().await?);
                 }
                 client
@@ -323,7 +323,7 @@ async fn run_test(
                             anyhow!("No submission contract found for workflow {}", workflow_id)
                         })?;
 
-                    if test.re_org_simulation {
+                    if first_workflow.expects_reorg() {
                         tracing::info!("Test '{}' will simulate re-org", test.name);
 
                         // Simulate re-org before waiting for task
