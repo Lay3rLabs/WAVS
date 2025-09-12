@@ -426,15 +426,12 @@ pub async fn simulate_anvil_reorg(
     evm_client.provider.anvil_revert(reorg_snapshot).await?;
 
     // Update nonce
-    match &evm_client.nonce_manager {
-        AnyNonceManager::Fast(fast_nonce_manager) => {
-            fast_nonce_manager
-                .set_current_nonce(&evm_client.provider)
-                .await
-                .unwrap();
-        }
-        _ => {}
-    };
+    if let AnyNonceManager::Fast(fast_nonce_manager) = &evm_client.nonce_manager {
+        fast_nonce_manager
+            .set_current_nonce(&evm_client.provider)
+            .await
+            .unwrap();
+    }
 
     // Mine new blocks to simulate chain reorganization
     evm_client.provider.evm_mine(None).await?;
