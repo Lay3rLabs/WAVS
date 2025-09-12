@@ -345,12 +345,12 @@ async fn run_test(
                         .await;
 
                         match result {
-                            Ok(signed_data) => vec![signed_data],
+                            Ok(signed_data) => signed_data,
                             Err(_) => {
                                 // If we get an error (transaction dropped due to re-org),
                                 // return mocked signed data with empty content to match ExpectedOutput::Dropped
                                 tracing::info!("Transaction dropped due to re-org, returning empty signed data");
-                                vec![SignedData {
+                                SignedData {
                                     data: vec![].into(), // Empty data indicates dropped transaction
                                     signatureData: SignatureData {
                                         signers: vec![],
@@ -362,28 +362,24 @@ async fn run_test(
                                         ordering: alloy_primitives::FixedBytes([0; 12]),
                                         payload: vec![].into(),
                                     },
-                                }]
+                                }
                             }
                         }
                     } else {
-                        vec![
-                            wait_for_task_to_land(
-                                client,
-                                *submission_contract,
-                                trigger_id,
-                                submit_start_block,
-                                *timeout,
-                            )
-                            .await?,
-                        ]
+                        wait_for_task_to_land(
+                            client,
+                            *submission_contract,
+                            trigger_id,
+                            submit_start_block,
+                            *timeout,
+                        )
+                        .await?
                     }
                 }
                 Submit::None => unimplemented!("Submit::None is not implemented"),
             };
 
-            for data in signed_data {
-                expected_output.validate(test, clients, component_sources, &data.data)?;
-            }
+            expected_output.validate(test, clients, component_sources, &signed_data.data)?;
         }
     }
 
