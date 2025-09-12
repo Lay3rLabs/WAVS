@@ -2,8 +2,6 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
-use std::time::Duration;
-
 use alloy_primitives::LogData;
 use example_types::SquareRequest;
 use utils::{
@@ -329,10 +327,5 @@ fn mock_e2e_same_tx_different_block_hash() {
         }
     });
 
-    wait_for_submission_messages(
-        &runner.dispatcher.submission_manager,
-        2,
-        Some(Duration::from_secs(2)),
-    )
-    .unwrap();
+    wait_for_submission_messages(&runner.dispatcher.submission_manager, 2, None).unwrap();
 }
