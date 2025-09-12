@@ -8,6 +8,14 @@ interface core {
   record duration {
     secs: u64
   }
+  /// 128-bit unsigned integer represented as two 64-bit values.
+  ///
+  /// The tuple is stored in little-endian order:
+  /// - First element (index 0): Lower 64 bits (bits 0-63)
+  /// - Second element (index 1): Upper 64 bits (bits 64-127)
+  record u128 {
+      value: tuple<u64, u64>,
+  }
 
   variant log-level {
       error,

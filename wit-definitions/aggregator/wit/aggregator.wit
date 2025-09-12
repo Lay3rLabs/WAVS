@@ -1,8 +1,8 @@
-package wavs:aggregator@0.6.0-alpha.11;
+package wavs:aggregator@0.6.0-alpha.13;
 
-use wavs:types/core@0.6.0-alpha.11 as core-types;
-use wavs:types/service@0.6.0-alpha.11 as service-types;
-use wavs:types/chain@0.6.0-alpha.11 as chain-types;
+use wavs:types/core@0.6.0-alpha.13 as core-types;
+use wavs:types/service@0.6.0-alpha.13 as service-types;
+use wavs:types/chain@0.6.0-alpha.13 as chain-types;
 
 interface aggregator {
     use core-types.{duration};
@@ -25,6 +25,9 @@ interface aggregator {
         workflow-id: workflow-id,
         envelope: envelope,
         signature: envelope-signature,
+        // origin-* is used for reorg handling
+        origin-tx-hash: list<u8>,
+        origin-block: u64,
     }
 
     variant aggregator-action {
