@@ -149,6 +149,33 @@ start-all:
 start-wavs:
     cd packages/wavs && cargo run
 
+start-dev:
+    #!/bin/bash -eux
+    just start-prometheus &
+    just start-jaeger &
+    just start-wavs-dev &
+    trap 'kill $(jobs -pr)' EXIT
+    wait
+
+start-wavs-dev:
+    WAVS_DOTENV="$(pwd)/.env" WAVS_HOME="$(pwd)" WAVS_DATA="$(mktemp -d)" && \
+    cd packages/wavs && \
+    cargo run -- \
+        --dev-endpoints-enabled=true \
+        --disable-trigger-networking=true \
+        --disable-submission-networking=true \
+        --prometheus=http://127.0.0.1:9090 \
+        --jaeger=http://127.0.0.1:4317
+
+start-jaeger:
+    docker run --rm -p 4317:4317 -p 16686:16686 jaegertracing/jaeger:2.5.0
+
+start-prometheus:
+    docker run --rm -p 9090:9090 -v ./prometheus.yml:/etc/prometheus/prometheus.yml prom/prometheus --config.file=/etc/prometheus/prometheus.yml --web.enable-otlp-receiver
+
+dev-tool *args:
+    cd packages/dev-tool && RUST_LOG=info cargo run -- {{args}}
+
 start-aggregator:
     cd packages/aggregator && cargo run
 

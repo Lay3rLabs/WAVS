@@ -60,7 +60,7 @@ impl SubmissionManager {
             #[cfg(debug_assertions)]
             debug_packets: Arc::new(RwLock::new(Vec::new())),
             #[cfg(debug_assertions)]
-            disable_networking: false,
+            disable_networking: config.disable_submission_networking,
             services,
         })
     }

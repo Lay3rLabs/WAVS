@@ -3,6 +3,18 @@ use wavs_types::{SimulatedTriggerRequest, TriggerAction, TriggerConfig};
 
 use crate::http::{error::HttpResult, state::HttpState};
 
+#[utoipa::path(
+    post,
+    path = "/dev/triggers",
+    request_body = SimulatedTriggerRequest,
+    responses(
+        (status = 200, description = "Trigger sent successfully"),
+        (status = 400, description = "Invalid trigger"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    description = "Sends a simulated trigger to the WAVS system for testing purposes"
+)]
 pub async fn handle_debug_trigger(
     State(state): State<HttpState>,
     Json(req): Json<SimulatedTriggerRequest>,

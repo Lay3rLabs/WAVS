@@ -87,6 +87,16 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ipfs_gateway: Option<String>,
 
+    /// Jaeger collector to send trace data
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jaeger: Option<String>,
+
+    /// Prometheus collector to send metrics data
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prometheus: Option<String>,
+
     /// The interval in milliseconds to poll after submitting a transaction
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,6 +111,23 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_body_size_mb: Option<u32>,
+
+    /// Enable dev endpoints
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dev_endpoints_enabled: Option<bool>,
+
+    /// Disable trigger networking for testing (default: false)
+    #[cfg(debug_assertions)]
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disable_trigger_networking: Option<bool>,
+
+    /// Disable submission networking for testing (default: false)
+    #[cfg(debug_assertions)]
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disable_submission_networking: Option<bool>,
 }
 
 impl CliEnvExt for CliArgs {

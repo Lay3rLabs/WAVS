@@ -74,7 +74,7 @@ impl TriggerManager {
             local_command_sender: Arc::new(std::sync::Mutex::new(None)),
             metrics,
             #[cfg(debug_assertions)]
-            disable_networking: false,
+            disable_networking: config.disable_trigger_networking,
             services,
         })
     }
