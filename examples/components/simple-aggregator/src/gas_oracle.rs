@@ -39,7 +39,7 @@ pub fn get_gas_price() -> Result<Option<u64>, String> {
     let response: RpcResponse = block_on(async {
         let http_request = http_request_post_json(&rpc_url, &request)
             .map_err(|e| format!("Failed to create RPC request: {e}"))?;
-
+        
         fetch_json(http_request)
             .await
             .map_err(|e| format!("Failed to fetch gas price from RPC: {e}"))
