@@ -262,7 +262,7 @@ impl TestBuilder {
                 workflows: BTreeMap::new(),
                 service_manager_chain: DEFAULT_CHAIN_KEY.clone(),
                 change_service: None,
-                group: u64::MAX / 2,
+                group: u64::MAX,
                 re_org_simulation: false,
             },
         }
