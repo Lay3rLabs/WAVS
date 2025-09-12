@@ -66,6 +66,14 @@ pub struct Config {
 
     /// Enable dev endpoints for testing (default: false)
     pub dev_endpoints_enabled: bool,
+
+    /// Disable trigger networking for testing (default: false)
+    #[cfg(debug_assertions)]
+    pub disable_trigger_networking: bool,
+
+    /// Disable submission networking for testing (default: false)
+    #[cfg(debug_assertions)]
+    pub disable_submission_networking: bool,
 }
 
 impl ConfigExt for Config {
@@ -104,6 +112,10 @@ impl Default for Config {
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
             bearer_token: None,
             dev_endpoints_enabled: false,
+            #[cfg(debug_assertions)]
+            disable_trigger_networking: false,
+            #[cfg(debug_assertions)]
+            disable_submission_networking: false,
         }
     }
 }

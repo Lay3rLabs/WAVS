@@ -1,0 +1,39 @@
+[package]
+name = "wavs-dev-tools"
+description = "WAVS Types"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+wasm-pkg-client = { workspace = true }
+wavs-types = { workspace = true }
+wavs-engine = { workspace = true }
+wavs-aggregator = { workspace = true }
+wavs-cli = { workspace = true }
+utils = { workspace = true }
+cid = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+const-hex = { workspace = true }
+reqwest = { workspace = true }
+layer-climb = { workspace = true }
+wasmtime = { workspace = true }
+tempfile = { workspace = true }
+shellexpand = { workspace = true }
+uuid = { workspace = true }
+cfg-if = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-provider = { workspace = true }
+alloy-json-abi = { workspace = true }
+cron = { workspace = true }
+rand = { workspace = true }

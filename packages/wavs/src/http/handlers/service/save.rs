@@ -13,7 +13,7 @@ use crate::http::{error::HttpResult, state::HttpState};
         (status = 404, description = "Service not found"),
         (status = 500, description = "Internal server error")
     ),
-    description = "Updates an existing service with new configuration data"
+    description = "Saves a service and returns its hash (for testing purposes only)"
 )]
 #[axum::debug_handler]
 pub async fn handle_save_service(
