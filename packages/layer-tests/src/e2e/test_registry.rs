@@ -480,7 +480,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Dropped)
                         .build(),
                 )
-                .with_group(3)
+                .with_group(u64::MAX)
                 .build(),
         )
     }
