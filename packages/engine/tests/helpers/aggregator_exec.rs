@@ -31,7 +31,10 @@ pub async fn execute_aggregator_component(
     // dummy aggregator component
     let aggregator_component = Component {
         source: wavs_types::ComponentSource::Digest(ComponentDigest::hash(wasm_bytes)),
-        permissions: wavs_types::Permissions::default(),
+        permissions: wavs_types::Permissions {
+            allowed_http_hosts: wavs_types::AllowedHostPermission::All,
+            file_system: false,
+        },
         fuel_limit: Some(u64::MAX),
         time_limit_seconds: Some(10),
         config: [
