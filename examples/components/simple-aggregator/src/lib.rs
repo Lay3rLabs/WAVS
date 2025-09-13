@@ -1,12 +1,17 @@
 mod gas_oracle;
 mod world;
 
+use wavs_wasi_utils::impl_u128_conversions;
 use world::{
     host,
     wavs::aggregator::aggregator::{AggregatorAction, Packet, SubmitAction},
     wavs::types::chain::{AnyTxHash, EvmAddress},
     Guest,
 };
+
+use crate::world::wavs::aggregator::aggregator::U128;
+
+impl_u128_conversions!(U128);
 
 struct Component;
 
@@ -29,7 +34,7 @@ impl Guest for Component {
             contract_address: EvmAddress {
                 raw_bytes: address.to_vec(),
             },
-            gas_price,
+            gas_price: gas_price.map(|x| x.into()),
         };
 
         Ok(vec![AggregatorAction::Submit(submit_action)])

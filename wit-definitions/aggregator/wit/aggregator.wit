@@ -1,12 +1,12 @@
-package wavs:aggregator@0.6.0-alpha.14;
+package wavs:aggregator@0.6.0-alpha.15;
 
-use wavs:types/core@0.6.0-alpha.14 as core-types;
-use wavs:types/service@0.6.0-alpha.14 as service-types;
-use wavs:types/chain@0.6.0-alpha.14 as chain-types;
-use wavs:types/events@0.6.0-alpha.14 as event-types;
+use wavs:types/core@0.6.0-alpha.15 as core-types;
+use wavs:types/service@0.6.0-alpha.15 as service-types;
+use wavs:types/chain@0.6.0-alpha.15 as chain-types;
+use wavs:types/events@0.6.0-alpha.15 as event-types;
 
 interface aggregator {
-    use core-types.{duration};
+    use core-types.{duration, u128};
     use service-types.{service, workflow-id, signature-kind};
     use chain-types.{chain-key, evm-address};
     use event-types.{trigger-data};
@@ -42,7 +42,7 @@ interface aggregator {
     record submit-action {
         chain: chain-key,
         contract-address: evm-address,
-        gas-price: option<u64>,
+        gas-price: option<u128>,
     }
 }
 

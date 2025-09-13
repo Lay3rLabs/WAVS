@@ -40,7 +40,7 @@ impl EvmSigningClient {
         signature_data: SignatureData,
         service_handler: Address,
         max_gas: Option<u64>,
-        gas_price: Option<u64>,
+        gas_price: Option<u128>,
     ) -> Result<TransactionReceipt, EvmClientError> {
         if self
             .provider
@@ -79,7 +79,7 @@ impl EvmSigningClient {
 
         // Set gas price if provided
         if let Some(price) = gas_price {
-            tx_builder = tx_builder.gas_price(price as u128);
+            tx_builder = tx_builder.gas_price(price);
         }
 
         let receipt = tx_builder
