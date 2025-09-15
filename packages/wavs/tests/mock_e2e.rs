@@ -2,6 +2,7 @@
 // does not test throughput with real pipelinning
 // intended more to confirm API and logic is working as expected
 
+use alloy_primitives::LogData;
 use example_types::SquareRequest;
 use utils::{
     context::AppContext,
@@ -11,8 +12,18 @@ use utils::{
     },
 };
 mod wavs_systems;
+use alloy_sol_types::{sol, SolValue};
+use wavs::dispatcher::DispatcherCommand;
 use wavs_systems::{mock_app::MockE2ETestRunner, mock_submissions::wait_for_submission_messages};
-use wavs_types::{ComponentSource, ServiceManager, WorkflowId};
+use wavs_types::{
+    ChainKey, Component, ComponentSource, EventId, Service, ServiceManager, SignatureKind, Submit,
+    Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowId,
+};
+
+// Solidity types used by mock EVM event encoding
+sol! {
+    struct TriggerInfo { uint64 triggerId; address creator; bytes data; }
+}
 
 #[test]
 fn mock_e2e_trigger_flow() {
@@ -200,4 +211,121 @@ fn mock_e2e_component_none() {
 
     // this _should_ error because submission is not fired
     wait_for_submission_messages(&runner.dispatcher.submission_manager, 1, None).unwrap_err();
+}
+
+#[test]
+fn mock_e2e_same_tx_different_block_hash() {
+    let runner = MockE2ETestRunner::new(AppContext::new());
+
+    let digest = runner
+        .dispatcher
+        .engine_manager
+        .engine
+        .store_component_bytes(COMPONENT_SQUARE_BYTES)
+        .unwrap();
+
+    let workflow_id = WorkflowId::new("workflow-1").unwrap();
+    let contract_address = rand_address_evm();
+    let chain = ChainKey::new("evm:anvil").unwrap();
+    // Keccak256("NewTrigger(bytes)") from SimpleTrigger.NewTrigger
+    let event_hash = {
+        let bytes =
+            const_hex::decode("86eacd23610d81706516de1ed0476c87772fdf939c7c771fbbd7f0230d619e68")
+                .unwrap();
+        wavs_types::ByteArray::try_from(bytes).unwrap()
+    };
+    let trigger = Trigger::EvmContractEvent {
+        address: contract_address,
+        chain: chain.clone(),
+        event_hash,
+    };
+
+    let service = Service {
+        name: "Test Service".to_string(),
+        workflows: [(
+            workflow_id.clone(),
+            Workflow {
+                trigger: trigger.clone(),
+                component: Component::new(ComponentSource::Digest(digest.clone())),
+                submit: Submit::Aggregator {
+                    url: "http://example.com".to_string(),
+                    component: Box::new(Component::new(ComponentSource::Digest(digest.clone()))),
+                    signature_kind: SignatureKind::evm_default(),
+                },
+            },
+        )]
+        .into(),
+        status: wavs_types::ServiceStatus::Active,
+        manager: ServiceManager::Evm {
+            chain: chain.clone(),
+            address: rand_address_evm(),
+        },
+    };
+
+    runner.ctx.rt.block_on({
+        let runner = runner.clone();
+        let service = service.clone();
+        async move { runner.dispatcher.add_service_direct(service).await.unwrap() }
+    });
+
+    let same_tx_hash = alloy_primitives::TxHash::from_slice(&[1u8; 32]);
+    let block_hash_1 = alloy_primitives::B256::from_slice(&[2u8; 32]);
+    let block_hash_2 = alloy_primitives::B256::from_slice(&[3u8; 32]);
+
+    // ABI-encode event data: NewTrigger(bytes triggerData)
+    // triggerData = abi.encode(TriggerInfo(triggerId, creator, data))
+    let payload = SquareRequest { x: 3 }.to_vec();
+    let trigger_info = TriggerInfo {
+        triggerId: 1,
+        creator: contract_address,
+        data: payload.clone().into(),
+    };
+    let trigger_info_bytes: Vec<u8> = trigger_info.abi_encode();
+    let event_data: Vec<u8> = trigger_info_bytes.abi_encode();
+    let log_data = LogData::new(vec![event_hash.into_inner().into()], event_data.into()).unwrap();
+
+    let make_action = |block_hash| TriggerAction {
+        config: TriggerConfig {
+            service_id: service.id(),
+            workflow_id: workflow_id.clone(),
+            trigger: trigger.clone(),
+        },
+        data: TriggerData::EvmContractEvent {
+            block_hash,
+            chain: chain.clone(),
+            contract_address,
+            log_data: log_data.clone(),
+            tx_hash: same_tx_hash,
+            block_number: 1,
+            log_index: 0,
+            block_timestamp: 0,
+            tx_index: 0,
+        },
+    };
+
+    let trigger_action_1 = make_action(block_hash_1);
+    let trigger_action_2 = make_action(block_hash_2);
+
+    // EventIds should differ due to different block hashes
+    let event_id_1 = EventId::try_from((&service, &trigger_action_1)).unwrap();
+    let event_id_2 = EventId::try_from((&service, &trigger_action_2)).unwrap();
+    assert_ne!(event_id_1, event_id_2);
+
+    // Send both triggers through the dispatcher and wait for submissions
+    runner.ctx.rt.block_on({
+        let runner = runner.clone();
+        async move {
+            runner
+                .dispatcher
+                .trigger_manager
+                .send_dispatcher_commands(vec![
+                    DispatcherCommand::Trigger(trigger_action_1),
+                    DispatcherCommand::Trigger(trigger_action_2),
+                ])
+                .await
+                .unwrap();
+        }
+    });
+
+    wait_for_submission_messages(&runner.dispatcher.submission_manager, 2, None).unwrap();
 }
