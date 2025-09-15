@@ -32,7 +32,7 @@ use crate::{
     description = "Validates and processes a packet, adding it to the aggregation queue. When enough packets from different signers accumulate to meet the threshold, the aggregated packet is sent to the target contract."
 )]
 #[axum::debug_handler]
-#[instrument(level = "info", skip(state, req), fields(service.name = %req.packet.service.name, service.manager = ?req.packet.service.manager, workflow_id = %req.packet.workflow_id))]
+#[instrument(skip(state, req), fields(service.name = %req.packet.service.name, service.manager = ?req.packet.service.manager, workflow_id = %req.packet.workflow_id))]
 pub async fn handle_packet(
     State(state): State<HttpState>,
     Json(req): Json<AddPacketRequest>,
@@ -46,7 +46,7 @@ pub async fn handle_packet(
     }
 }
 
-#[instrument(level = "debug", skip(state, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
+#[instrument(skip(state, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
 async fn process_packet(
     state: HttpState,
     packet: &Packet,
@@ -107,7 +107,7 @@ struct AggregatorProcess<'a> {
 }
 
 impl AggregatorProcess<'_> {
-    #[instrument(level = "debug", skip(self), fields(signer = ?self.signer))]
+    #[instrument(skip(self), fields(signer = ?self.signer))]
     async fn run(self) -> AggregatorResult<Vec<AddPacketResponse>> {
         let Self {
             state,

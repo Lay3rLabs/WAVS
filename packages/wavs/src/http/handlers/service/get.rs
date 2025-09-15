@@ -78,7 +78,7 @@ pub async fn handle_get_service_by_hash(
     }
 }
 
-async fn get_service_inner_hash(
+pub async fn get_service_inner_hash(
     state: &HttpState,
     service_hash: String,
 ) -> HttpResult<wavs_types::Service> {

@@ -69,6 +69,14 @@ pub struct Config {
 
     /// Maximum HTTP request body size in megabytes (default: 15MB)
     pub max_body_size_mb: u32,
+
+    /// Disable trigger networking for testing (default: false)
+    #[cfg(debug_assertions)]
+    pub disable_trigger_networking: bool,
+
+    /// Disable submission networking for testing (default: false)
+    #[cfg(debug_assertions)]
+    pub disable_submission_networking: bool,
 }
 
 impl ConfigExt for Config {
@@ -108,6 +116,10 @@ impl Default for Config {
             bearer_token: None,
             dev_endpoints_enabled: false,
             max_body_size_mb: 15,
+            #[cfg(debug_assertions)]
+            disable_trigger_networking: false,
+            #[cfg(debug_assertions)]
+            disable_submission_networking: false,
         }
     }
 }

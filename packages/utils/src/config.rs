@@ -96,6 +96,7 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
         dotenv_paths.push(std::env::current_dir()?.join(".env"));
 
         for dotenv_path in dotenv_paths {
+            eprintln!("Loading env vars from {}", dotenv_path.display());
             if dotenv_path.exists() {
                 if let Err(e) = dotenvy::from_path(dotenv_path) {
                     bail!("Error loading dotenv file: {}", e);
@@ -114,6 +115,8 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
                 CONFIG::FILENAME,
                 cli_env_args.home_dir()
             ))?;
+
+        eprintln!("Loading config from {}", filepath.display());
 
         let figment = Figment::new()
             // Start with the default values as the base
@@ -137,6 +140,8 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
             *data_dir = shellexpand::tilde(&data_dir.to_string_lossy())
                 .to_string()
                 .into();
+
+            eprintln!("Using data directory: {}", data_dir.display());
         });
 
         Ok(config)

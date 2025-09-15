@@ -73,5 +73,12 @@ fn zeroed_cli_args(
         submission_poll_interval_ms: None,
         bearer_token: None,
         max_body_size_mb: None,
+        dev_endpoints_enabled: None,
+        #[cfg(debug_assertions)]
+        disable_trigger_networking: None,
+        #[cfg(debug_assertions)]
+        disable_submission_networking: None,
+        jaeger: None,
+        prometheus: None,
     }
 }
