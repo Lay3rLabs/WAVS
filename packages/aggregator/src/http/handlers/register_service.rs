@@ -16,7 +16,7 @@ use crate::http::{error::*, state::HttpState};
     description = "Registers a new service with the aggregator."
 )]
 #[axum::debug_handler]
-#[instrument(level = "info", skip(state, req), fields(service.manager = ?req.service_manager))]
+#[instrument(skip(state, req), fields(service.manager = ?req.service_manager))]
 pub async fn handle_register_service(
     State(state): State<HttpState>,
     Json(req): Json<RegisterServiceRequest>,

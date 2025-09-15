@@ -49,18 +49,18 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         Self { engine, metrics }
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self), fields(subsys = "Engine"))]
     pub fn start(&self) -> Result<(), EngineError> {
         self.engine.start_epoch_thread();
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self), fields(subsys = "Engine"))]
     pub fn store_component_bytes(&self, bytecode: &[u8]) -> Result<ComponentDigest, EngineError> {
         Ok(self.engine.store_component_bytes(bytecode)?)
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self), fields(subsys = "Engine"))]
     pub async fn store_component_from_source(
         &self,
         source: &ComponentSource,
@@ -94,7 +94,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
     }
 
     // TODO: paginate this
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self), fields(subsys = "Engine"))]
     pub fn list_digests(&self) -> Result<Vec<ComponentDigest>, EngineError> {
         let digests: Result<Vec<_>, _> = self
             .engine
@@ -106,7 +106,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
     }
 
     /// This will execute a contract that implements the wavs:worker wit interface
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self), fields(subsys = "Engine"))]
     pub fn execute(
         &self,
         service: Service,
@@ -215,7 +215,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         result.map_err(|e| e.into())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine", service_id = %service_id))]
+    #[instrument(skip(self), fields(subsys = "Engine", service_id = %service_id))]
     pub fn remove_storage(&self, service_id: &ServiceId) {
         let dir_path = self.engine.app_data_dir.join(service_id.to_string());
 
