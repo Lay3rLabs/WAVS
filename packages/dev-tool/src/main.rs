@@ -25,8 +25,11 @@ async fn main() {
         Command::DeployService => {
             deploy_service::run().await;
         }
-        Command::SendTriggers { count } => {
-            send_triggers::run(count).await;
+        Command::SendTriggers {
+            count,
+            wait_for_completion,
+        } => {
+            send_triggers::run(count, wait_for_completion).await;
         }
     }
 }

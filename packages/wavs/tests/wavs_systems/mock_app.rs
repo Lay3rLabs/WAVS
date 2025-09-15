@@ -43,7 +43,7 @@ impl MockE2ETestRunner {
         let memory_storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let metrics = metrics
-            .unwrap_or_else(|| EngineMetrics::new(&opentelemetry::global::meter("wavs_metrics")));
+            .unwrap_or_else(|| EngineMetrics::new(opentelemetry::global::meter("wavs_metrics")));
         let db_dir = tempfile::tempdir().unwrap();
 
         WasmEngine::new(
@@ -70,7 +70,7 @@ impl MockE2ETestRunner {
             ..wavs::config::Config::default()
         };
         let meter = opentelemetry::global::meter("wavs_metrics");
-        let metrics = Metrics::new(&meter);
+        let metrics = Metrics::new(meter);
 
         let mut dispatcher = Dispatcher::new(&config, metrics.wavs).unwrap();
         dispatcher.trigger_manager.disable_networking = true;

@@ -46,7 +46,7 @@ impl TestHttpApp {
         let inner = TestApp::new();
 
         let meter = opentelemetry::global::meter("wavs_test_metrics");
-        let metrics = HttpMetrics::new(&meter);
+        let metrics = HttpMetrics::new(meter);
 
         ctx.clone().rt.block_on(async move {
             let http_router = wavs::http::server::make_router(

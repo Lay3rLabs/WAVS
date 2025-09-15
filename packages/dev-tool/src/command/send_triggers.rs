@@ -1,6 +1,6 @@
 use crate::service::SERVICE;
 
-pub async fn run(count: usize) {
+pub async fn run(count: usize, wait_for_completion: bool) {
     let service_id = SERVICE.id();
     let workflow_id = SERVICE.workflows.keys().next().unwrap().clone();
 
@@ -10,6 +10,7 @@ pub async fn run(count: usize) {
         trigger: wavs_types::Trigger::Manual,
         data: wavs_types::TriggerData::Raw("hello world!".as_bytes().to_vec()),
         count,
+        wait_for_completion,
     };
 
     let resp = reqwest::Client::new()

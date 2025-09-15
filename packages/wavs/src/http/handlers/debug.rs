@@ -26,6 +26,10 @@ pub async fn handle_debug_trigger(
 }
 
 async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> HttpResult<()> {
+    let start = std::time::Instant::now();
+
+    let initial_count = state.dispatcher.submission_manager.get_message_count();
+
     for _ in 0..req.count {
         let action = TriggerAction {
             config: TriggerConfig {
@@ -47,5 +51,19 @@ async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> 
             })?;
     }
 
+    if req.wait_for_completion {
+        let mut tick = tokio::time::interval(std::time::Duration::from_millis(100));
+        let expected = initial_count + req.count as u64;
+        loop {
+            if state.dispatcher.submission_manager.get_message_count() >= expected {
+                let elapsed = start.elapsed();
+                state
+                    .metrics
+                    .record_trigger_simulation_completed(elapsed.as_secs_f64(), req.count);
+                break;
+            }
+            tick.tick().await;
+        }
+    }
     Ok(())
 }

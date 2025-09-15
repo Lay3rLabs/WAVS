@@ -58,7 +58,7 @@ impl Setup {
     pub fn new(setup_config: SetupConfig) -> Arc<Self> {
         let config = wavs::config::Config::default();
         let data_dir = tempfile::tempdir().unwrap();
-        let metrics = Metrics::new(&meter("wavs-benchmark"));
+        let metrics = Metrics::new(meter("wavs-benchmark"));
 
         let db_storage = RedbStorage::new(data_dir.path().join("db")).unwrap();
         let trigger_manager =

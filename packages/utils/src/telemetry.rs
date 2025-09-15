@@ -1,6 +1,9 @@
+use std::time::Duration;
+
 use opentelemetry::metrics::{Counter, Gauge, Histogram, Meter, UpDownCounter};
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
 use opentelemetry_otlp::{Protocol, SpanExporter, WithExportConfig};
+use opentelemetry_sdk::metrics::PeriodicReader;
 use opentelemetry_sdk::{
     metrics::SdkMeterProvider,
     resource::Resource,
@@ -59,13 +62,17 @@ pub fn setup_metrics(collector: &str, service_name: &str) -> SdkMeterProvider {
         .build()
         .expect("Failed to build OTLP exporter!");
 
+    let reader = PeriodicReader::builder(exporter)
+        .with_interval(Duration::from_secs(1)) // Push every 1 second
+        .build();
+
     let meter_provider = SdkMeterProvider::builder()
         .with_resource(
             Resource::builder()
                 .with_service_name(service_name.to_owned())
                 .build(),
         )
-        .with_periodic_exporter(exporter)
+        .with_reader(reader)
         .build();
 
     global::set_meter_provider(meter_provider.clone());
@@ -81,9 +88,9 @@ pub struct Metrics {
 }
 
 impl Metrics {
-    pub fn new(meter: &Meter) -> Self {
+    pub fn new(meter: Meter) -> Self {
         Self {
-            http: HttpMetrics::new(meter),
+            http: HttpMetrics::new(meter.clone()),
             wavs: WavsMetrics::new(meter),
         }
     }
@@ -92,18 +99,59 @@ impl Metrics {
 #[derive(Clone, Debug)]
 pub struct HttpMetrics {
     pub registered_services: UpDownCounter<i64>,
+    pub meter: Meter,
 }
 
 impl HttpMetrics {
     pub const NAMESPACE: &'static str = "http";
 
-    pub fn new(meter: &Meter) -> Self {
-        HttpMetrics {
+    pub fn new(meter: Meter) -> Self {
+        Self {
             registered_services: meter
                 .i64_up_down_counter(format!("{}.registered_services", Self::NAMESPACE))
                 .with_description("Number of services currently registered")
                 .build(),
+            meter,
         }
+    }
+
+    pub fn record_trigger_simulation_completed(&self, duration: f64, trigger_count: usize) {
+        // first, histogram
+        let buckets = match trigger_count {
+            1 => vec![0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.5],
+            2..=100 => vec![0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.6, 1.0],
+            101..=1000 => vec![0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 5.0],
+            1001..=10000 => vec![5.0, 8.0, 10.0, 12.0, 15.0, 18.0, 25.0, 30.0, 40.0],
+            _ => vec![20.0, 30.0, 40.0, 50.0, 60.0, 80.0, 100.0, 120.0, 180.0],
+        };
+
+        self.meter
+            .f64_histogram(format!(
+                "{}.simulated_{}_trigger_duration_seconds",
+                Self::NAMESPACE,
+                trigger_count
+            ))
+            .with_description("Duration to process simulated triggers")
+            .with_boundaries(buckets)
+            .build()
+            .record(
+                duration,
+                &[KeyValue::new("batch_size", trigger_count as i64)],
+            );
+
+        // Also record as a gauge for "latest value" queries
+        self.meter
+            .f64_gauge(format!(
+                "{}.latest_simulated_{}_trigger_duration_seconds",
+                Self::NAMESPACE,
+                trigger_count
+            ))
+            .with_description("Most recent duration for simulated triggers")
+            .build()
+            .record(
+                duration,
+                &[KeyValue::new("batch_size", trigger_count as i64)],
+            );
     }
 
     pub fn increment_registered_services(&self) {
@@ -124,11 +172,11 @@ pub struct WavsMetrics {
 }
 
 impl WavsMetrics {
-    pub fn new(meter: &Meter) -> Self {
+    pub fn new(meter: Meter) -> Self {
         Self {
-            engine: EngineMetrics::new(meter),
-            dispatcher: DispatcherMetrics::new(meter),
-            submission: SubmissionMetrics::new(meter),
+            engine: EngineMetrics::new(meter.clone()),
+            dispatcher: DispatcherMetrics::new(meter.clone()),
+            submission: SubmissionMetrics::new(meter.clone()),
             trigger: TriggerMetrics::new(meter),
         }
     }
@@ -147,7 +195,7 @@ pub struct EngineMetrics {
 impl EngineMetrics {
     pub const NAMESPACE: &'static str = "engine";
 
-    pub fn new(meter: &Meter) -> Self {
+    pub fn new(meter: Meter) -> Self {
         Self {
             total_threads: meter
                 .u64_counter(format!("{}.total_threads", Self::NAMESPACE))
@@ -224,7 +272,7 @@ pub struct DispatcherMetrics {
 impl DispatcherMetrics {
     pub const NAMESPACE: &'static str = "dispatcher";
 
-    pub fn new(meter: &Meter) -> Self {
+    pub fn new(meter: Meter) -> Self {
         Self {
             messages_in_channel: meter
                 .u64_gauge(format!("{}.messages_in_channel", Self::NAMESPACE))
@@ -249,7 +297,7 @@ impl DispatcherMetrics {
 
 impl Default for DispatcherMetrics {
     fn default() -> Self {
-        Self::new(&global::meter("wavs_metrics"))
+        Self::new(global::meter("wavs_metrics"))
     }
 }
 
@@ -265,7 +313,7 @@ pub struct SubmissionMetrics {
 impl SubmissionMetrics {
     pub const NAMESPACE: &'static str = "submission";
 
-    pub fn new(meter: &Meter) -> Self {
+    pub fn new(meter: Meter) -> Self {
         Self {
             total_messages_processed: meter
                 .u64_counter(format!("{}.total_messages_processed", Self::NAMESPACE))
@@ -318,12 +366,13 @@ impl SubmissionMetrics {
 pub struct TriggerMetrics {
     pub total_errors: Counter<u64>,
     pub triggers_fired: Counter<u64>,
+    pub sent_dispatcher_command_latency: Histogram<f64>,
 }
 
 impl TriggerMetrics {
     pub const NAMESPACE: &'static str = "trigger";
 
-    pub fn new(meter: &Meter) -> Self {
+    pub fn new(meter: Meter) -> Self {
         Self {
             total_errors: meter
                 .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
@@ -332,6 +381,14 @@ impl TriggerMetrics {
             triggers_fired: meter
                 .u64_counter(format!("{}.triggers_fired", Self::NAMESPACE))
                 .with_description("Total triggers fired")
+                .build(),
+            sent_dispatcher_command_latency: meter
+                .f64_histogram(format!(
+                    "{}.sent_dispatcher_command_latency_seconds",
+                    Self::NAMESPACE
+                ))
+                .with_description("Time taken to send command to dispatcher")
+                .with_boundaries(vec![0.001, 0.01, 0.05, 0.1, 0.2, 0.5, 1.0])
                 .build(),
         }
     }
@@ -349,5 +406,9 @@ impl TriggerMetrics {
                 KeyValue::new("type", trigger_type.to_owned()),
             ],
         );
+    }
+
+    pub fn record_trigger_sent_dispatcher_command(&self, duration: f64) {
+        self.sent_dispatcher_command_latency.record(duration, &[]);
     }
 }

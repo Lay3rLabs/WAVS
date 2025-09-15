@@ -72,7 +72,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     };
 
     let meter = opentelemetry::global::meter("wavs_test_metrics");
-    let metrics = Metrics::new(&meter);
+    let metrics = Metrics::new(meter);
 
     let configs: Configs = config.into();
 
