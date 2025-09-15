@@ -72,5 +72,6 @@ fn zeroed_cli_args(
         ipfs_gateway: None,
         submission_poll_interval_ms: None,
         bearer_token: None,
+        max_body_size_mb: None,
     }
 }
