@@ -19,7 +19,7 @@ use super::{
 const REALM: &str = "aggregator";
 
 // this is called from main
-#[instrument(level = "info", skip(ctx, config))]
+#[instrument(skip(ctx, config))]
 pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
     let mut shutdown_signal = ctx.get_kill_receiver();
     ctx.rt.block_on(async move {

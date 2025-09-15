@@ -34,7 +34,7 @@ pub struct MockE2ETestRunner {
 }
 
 impl MockE2ETestRunner {
-    #[instrument(level = "debug", skip(config, metrics))]
+    #[instrument(skip(config, metrics))]
     pub fn create_engine(
         config: Option<wavs::config::Config>,
         metrics: Option<EngineMetrics>,
@@ -57,7 +57,7 @@ impl MockE2ETestRunner {
             RedbStorage::new(db_dir.path()).unwrap(),
         )
     }
-    #[instrument(level = "debug", skip(_ctx, data_dir))]
+    #[instrument(skip(_ctx, data_dir))]
     pub fn create_dispatcher(
         _ctx: AppContext,
         data_dir: impl AsRef<std::path::Path>,
@@ -78,7 +78,7 @@ impl MockE2ETestRunner {
         dispatcher
     }
 
-    #[instrument(level = "debug", skip(ctx))]
+    #[instrument(skip(ctx))]
     pub fn new(ctx: AppContext) -> Arc<Self> {
         let temp_data_dir = tempfile::tempdir().unwrap();
         let dispatcher = Arc::new(Self::create_dispatcher(ctx.clone(), &temp_data_dir));
@@ -103,7 +103,7 @@ impl MockE2ETestRunner {
         })
     }
 
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(skip(self))]
     pub async fn send_trigger(
         &self,
         service_id: ServiceId,
@@ -125,7 +125,7 @@ impl MockE2ETestRunner {
             .unwrap();
     }
 
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(skip(self))]
     pub async fn list_services(&self) -> ListServicesResponse {
         let req = Request::builder()
             .method(Method::GET)
@@ -145,7 +145,7 @@ impl MockE2ETestRunner {
         map_response::<ListServicesResponse>(response).await
     }
 
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(skip(self))]
     pub async fn create_service(
         &self,
         name: Option<String>,
@@ -179,7 +179,7 @@ impl MockE2ETestRunner {
         service_id
     }
 
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(skip(self))]
     pub async fn delete_services(&self, service_managers: Vec<ServiceManager>) {
         let body = serde_json::to_string(&DeleteServicesRequest { service_managers }).unwrap();
 

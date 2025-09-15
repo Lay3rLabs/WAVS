@@ -44,7 +44,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         }
     }
 
-    #[instrument(level = "debug", skip(self, _ctx), fields(subsys = "EngineRunner"))]
+    #[instrument(skip(self, _ctx), fields(subsys = "EngineRunner"))]
     pub fn start(
         &self,
         _ctx: AppContext,
@@ -72,7 +72,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         });
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self), fields(subsys = "Engine"))]
     pub async fn store_components_for_service(
         &self,
         service: &Service,

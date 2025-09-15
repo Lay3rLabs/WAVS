@@ -12,7 +12,7 @@ pub struct FileStorage {
 }
 
 impl FileStorage {
-    #[instrument(level = "debug", skip(data_dir), fields(subsys = "CaStorage"))]
+    #[instrument(skip(data_dir), fields(subsys = "CaStorage"))]
     pub fn new(data_dir: impl Into<PathBuf>) -> Result<Self, CAStorageError> {
         let data_dir: PathBuf = data_dir.into();
         if !data_dir.exists() {
@@ -49,7 +49,7 @@ impl FileStorage {
 }
 
 impl CAStorage for FileStorage {
-    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn reset(&self) -> Result<(), CAStorageError> {
         // wipe out and re-create the entire directory
         std::fs::remove_dir_all(&self.data_dir)?;
@@ -58,7 +58,7 @@ impl CAStorage for FileStorage {
     }
 
     /// look for file by key and only write if not present
-    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn set_data(&self, data: &[u8]) -> Result<AnyDigest, CAStorageError> {
         let digest = AnyDigest::hash(data);
         let path = self.digest_to_path(&digest)?;
@@ -69,7 +69,7 @@ impl CAStorage for FileStorage {
         Ok(digest)
     }
 
-    #[instrument(level = "debug", skip(self, digest), fields(subsys = "CaStorage"))]
+    #[instrument(skip(self, digest), fields(subsys = "CaStorage"))]
     fn get_data(&self, digest: &AnyDigest) -> Result<Vec<u8>, CAStorageError> {
         let path = self.digest_to_path(digest)?;
         if !path.exists() {
@@ -82,7 +82,7 @@ impl CAStorage for FileStorage {
         Ok(data)
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn data_exists(&self, digest: &AnyDigest) -> Result<bool, CAStorageError> {
         let path = self.digest_to_path(digest)?;
         Ok(path.exists())
@@ -90,7 +90,7 @@ impl CAStorage for FileStorage {
 
     /// Returns an iterator over all the digests in the storage.
     /// We store these multiple levels deep (see digest_to_path), so we need to walk the directory tree.
-    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn digests(
         &self,
     ) -> Result<impl Iterator<Item = Result<AnyDigest, CAStorageError>>, CAStorageError> {
