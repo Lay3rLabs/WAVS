@@ -115,7 +115,7 @@ impl Dispatcher<FileStorage> {
 
 impl<S: CAStorage + 'static> Dispatcher<S> {
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
-    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Dispatcher"))]
+    #[instrument(skip(self, ctx), fields(subsys = "Dispatcher"))]
     pub fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
         // Trigger is pipeline start
         let mut trigger_commands_in = self.trigger_manager.start(ctx.clone())?;
@@ -208,7 +208,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self, source), fields(subsys = "Dispatcher"))]
+    #[instrument(skip(self, source), fields(subsys = "Dispatcher"))]
     pub fn store_component_bytes(
         &self,
         source: Vec<u8>,
@@ -217,14 +217,14 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(digest)
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
     pub fn list_component_digests(&self) -> Result<Vec<ComponentDigest>, DispatcherError> {
         let digests = self.engine_manager.engine.list_digests()?;
 
         Ok(digests)
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
     pub async fn add_service(
         &self,
         service_manager: ServiceManager,
@@ -250,7 +250,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     // this is public just so we can call it from tests
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher", service.name = %service.name, service.manager = ?service.manager))]
+    #[instrument(skip(self), fields(subsys = "Dispatcher", service.name = %service.name, service.manager = ?service.manager))]
     pub async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
         let service_id = service.id();
         tracing::info!("Adding service: {} [{:?}]", service.name, service.manager);
@@ -278,7 +278,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
     pub fn remove_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
         self.services.remove(&id)?;
         self.engine_manager.engine.remove_storage(&id);
@@ -299,7 +299,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
     pub fn get_service_signer(
         &self,
         service_id: ServiceId,
@@ -307,7 +307,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(self.submission_manager.get_service_signer(service_id)?)
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
     async fn change_service(
         &self,
         service_id: ServiceId,

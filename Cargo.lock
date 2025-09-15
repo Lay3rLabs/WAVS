@@ -4120,9 +4120,9 @@ dependencies = [
 
 [[package]]
 name = "iana-time-zone"
-version = "0.1.63"
+version = "0.1.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0c919e5debc312ad217002b8048a17b7d83f80703865bbfcfebb0458b0b27d8"
+checksum = "33e57f83510bb73707521ebaffa789ec8caf86f9657cad665b092b581d40e9fb"
 dependencies = [
  "android_system_properties",
  "core-foundation-sys",
@@ -9784,6 +9784,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "wavs-dev-tools"
+version = "0.5.2"
+dependencies = [
+ "alloy-json-abi",
+ "alloy-primitives",
+ "alloy-provider",
+ "anyhow",
+ "cfg-if",
+ "cid",
+ "clap 4.5.47",
+ "const-hex",
+ "cron",
+ "layer-climb",
+ "rand 0.9.2",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "shellexpand",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "utils",
+ "uuid",
+ "wasm-pkg-client",
+ "wasmtime",
+ "wavs-aggregator",
+ "wavs-cli",
+ "wavs-engine",
+ "wavs-types",
+]
+
+[[package]]
 name = "wavs-engine"
 version = "0.5.2"
 dependencies = [
@@ -9806,6 +9839,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wasi-http",
  "wavs-types",
+ "wavs-wasi-utils",
 ]
 
 [[package]]
@@ -9844,9 +9878,9 @@ dependencies = [
 
 [[package]]
 name = "wavs-wasi-utils"
-version = "0.6.0-alpha.12"
+version = "0.6.0-alpha.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f998d2bf637f06ba2e269bdb0ada18443e84f451149b31aed8b892f42348a8f1"
+checksum = "f3808f9258f87e170d1ebe04cdfcdd833bef1ee3dc20d3c087301429a88d03df"
 dependencies = [
  "alloy-json-rpc",
  "alloy-primitives",
@@ -9863,7 +9897,6 @@ dependencies = [
  "serde_json",
  "tower-service",
  "wasi 0.14.5+wasi-0.2.4",
- "wit-bindgen-rt",
  "wstd",
 ]
 
@@ -10005,15 +10038,15 @@ dependencies = [
 
 [[package]]
 name = "windows-core"
-version = "0.61.2"
+version = "0.62.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0fdd3ddb90610c7638aa2b3a3ab2904fb9e5cdbecc643ddb3647212781c4ae3"
+checksum = "57fe7168f7de578d2d8a05b07fd61870d2e73b4020e9f49aa00da8471723497c"
 dependencies = [
  "windows-implement",
  "windows-interface",
- "windows-link 0.1.3",
- "windows-result",
- "windows-strings",
+ "windows-link 0.2.0",
+ "windows-result 0.4.0",
+ "windows-strings 0.5.0",
 ]
 
 [[package]]
@@ -10057,8 +10090,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b8a9ed28765efc97bbc954883f4e6796c33a06546ebafacbabee9696967499e"
 dependencies = [
  "windows-link 0.1.3",
- "windows-result",
- "windows-strings",
+ "windows-result 0.3.4",
+ "windows-strings 0.4.2",
 ]
 
 [[package]]
@@ -10071,12 +10104,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "windows-result"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7084dcc306f89883455a206237404d3eaf961e5bd7e0f312f7c91f57eb44167f"
+dependencies = [
+ "windows-link 0.2.0",
+]
+
+[[package]]
 name = "windows-strings"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56e6c93f3a0c3b36176cb1327a4958a0353d5d166c2a35cb268ace15e91d3b57"
 dependencies = [
  "windows-link 0.1.3",
+]
+
+[[package]]
+name = "windows-strings"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7218c655a553b0bed4426cf54b20d7ba363ef543b52d515b3e48d7fd55318dda"
+dependencies = [
+ "windows-link 0.2.0",
 ]
 
 [[package]]

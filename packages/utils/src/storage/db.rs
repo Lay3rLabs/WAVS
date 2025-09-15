@@ -14,7 +14,7 @@ pub type Table<K, V> = redb::TableDefinition<'static, K, V>;
 pub type DBError = redb::Error;
 
 impl RedbStorage {
-    #[instrument(level = "debug", skip(path), fields(subsys = "DbStorage"))]
+    #[instrument(skip(path), fields(subsys = "DbStorage"))]
     #[allow(clippy::result_large_err)]
     pub fn new(path: impl AsRef<Path>) -> Result<Self, DBError> {
         let path = if path.as_ref().is_dir() {
@@ -33,7 +33,7 @@ impl RedbStorage {
 }
 
 impl RedbStorage {
-    #[instrument(level = "debug", skip(self, table), fields(subsys = "DbStorage"))]
+    #[instrument(skip(self, table), fields(subsys = "DbStorage"))]
     #[allow(clippy::result_large_err)]
     pub fn set<K: Key, V: Value + 'static>(
         &self,
@@ -50,7 +50,7 @@ impl RedbStorage {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self, table), fields(subsys = "DbStorage"))]
+    #[instrument(skip(self, table), fields(subsys = "DbStorage"))]
     #[allow(clippy::result_large_err)]
     pub fn get<K: Key, V: Value + 'static>(
         &self,
@@ -67,7 +67,7 @@ impl RedbStorage {
         }
     }
 
-    #[instrument(level = "debug", skip(self, table), fields(subsys = "DbStorage"))]
+    #[instrument(skip(self, table), fields(subsys = "DbStorage"))]
     #[allow(clippy::result_large_err)]
     pub fn remove<K: Key, V: Value + 'static>(
         &self,
@@ -84,7 +84,7 @@ impl RedbStorage {
     }
 
     // TODO: this could just be an internal helper method for get(), range(), etc.
-    #[instrument(level = "debug", skip(self, table, f), fields(subsys = "DbStorage"))]
+    #[instrument(skip(self, table, f), fields(subsys = "DbStorage"))]
     #[allow(clippy::result_large_err)]
     pub fn map_table_read<'a, K, V, F, R>(&self, table: Table<K, V>, f: F) -> Result<R, DBError>
     where

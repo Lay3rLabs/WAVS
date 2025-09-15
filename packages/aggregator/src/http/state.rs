@@ -72,12 +72,12 @@ const SERVICES: Table<[u8; 32], ()> = Table::new("services");
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
-    #[instrument(level = "debug", skip(config))]
+    #[instrument(skip(config))]
     pub fn new(config: Config) -> AggregatorResult<Self> {
         Self::new_with_engine(config)
     }
 
-    #[instrument(level = "debug", skip(config))]
+    #[instrument(skip(config))]
     pub fn new_with_engine(config: Config) -> AggregatorResult<Self> {
         tracing::info!("Creating file storage at: {:?}", config.data);
         let file_storage = FileStorage::new(&config.data)?;
@@ -109,7 +109,7 @@ impl HttpState {
         })
     }
 
-    #[instrument(level = "debug", skip(self), fields(chain = %chain))]
+    #[instrument(skip(self), fields(chain = %chain))]
     pub async fn get_evm_client(&self, chain: &ChainKey) -> AggregatorResult<EvmSigningClient> {
         {
             let lock = self.evm_clients.read().unwrap();
@@ -177,7 +177,7 @@ impl HttpState {
             .map_err(Into::into)
     }
 
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(skip(self))]
     pub async fn service_registered(&self, service_id: ServiceId) -> bool {
         let storage = self.storage.clone();
 
@@ -193,7 +193,7 @@ impl HttpState {
         .unwrap_or(false)
     }
 
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(skip(self))]
     #[allow(clippy::result_large_err)]
     pub fn register_service(&self, service_id: &ServiceId) -> AggregatorResult<()> {
         if self.storage.get(SERVICES, service_id.inner())?.is_none() {

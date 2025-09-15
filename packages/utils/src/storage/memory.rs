@@ -25,14 +25,14 @@ impl Default for MemoryStorage {
 }
 
 impl CAStorage for MemoryStorage {
-    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn reset(&self) -> Result<(), CAStorageError> {
         let mut tree = self.data.write()?;
         tree.clear();
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn set_data(&self, data: &[u8]) -> Result<AnyDigest, CAStorageError> {
         let digest = AnyDigest::hash(data);
         let mut tree = self.data.write()?;
@@ -42,7 +42,7 @@ impl CAStorage for MemoryStorage {
         Ok(digest)
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn get_data(&self, digest: &AnyDigest) -> Result<Vec<u8>, CAStorageError> {
         let tree = self.data.read()?;
         match tree.get(digest) {
@@ -51,13 +51,13 @@ impl CAStorage for MemoryStorage {
         }
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn data_exists(&self, digest: &AnyDigest) -> Result<bool, CAStorageError> {
         let tree = self.data.read()?;
         Ok(tree.get(digest).is_some())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "CaStorage"))]
+    #[instrument(skip(self), fields(subsys = "CaStorage"))]
     fn digests(
         &self,
     ) -> Result<impl Iterator<Item = Result<AnyDigest, CAStorageError>>, CAStorageError> {

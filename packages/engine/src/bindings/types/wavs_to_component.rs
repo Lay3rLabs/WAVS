@@ -1,6 +1,8 @@
+use wavs_wasi_utils::impl_u128_conversions;
+
 use crate::bindings::{
     aggregator::world::wavs::{
-        aggregator::aggregator as aggregator_types,
+        aggregator::aggregator::{self as aggregator_types, U128},
         types::{
             chain as aggregator_chain, core as aggregator_core, events as aggregator_events,
             service as aggregator_service,
@@ -14,6 +16,8 @@ use crate::bindings::{
         },
     },
 };
+
+impl_u128_conversions!(U128);
 
 impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
     type Error = anyhow::Error;
@@ -845,7 +849,7 @@ impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
                     contract_address: aggregator_chain::EvmAddress {
                         raw_bytes: submit.contract_address,
                     },
-                    gas_price: submit.gas_price,
+                    gas_price: submit.gas_price.map(|x| x.into()),
                 })
             }
             wavs_types::AggregatorAction::Timer(timer) => {
@@ -864,7 +868,7 @@ impl From<aggregator_types::AggregatorAction> for wavs_types::AggregatorAction {
                 wavs_types::AggregatorAction::Submit(wavs_types::SubmitAction {
                     chain: submit.chain,
                     contract_address: submit.contract_address.raw_bytes,
-                    gas_price: submit.gas_price,
+                    gas_price: submit.gas_price.map(|x| x.into()),
                 })
             }
             aggregator_types::AggregatorAction::Timer(timer) => {

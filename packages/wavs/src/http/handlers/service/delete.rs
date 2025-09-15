@@ -5,7 +5,7 @@ use wavs_types::{DeleteServicesRequest, ServiceId, ServiceManager};
 
 #[utoipa::path(
     delete,
-    path = "/app",
+    path = "/services",
     request_body = DeleteServicesRequest,
     responses(
         (status = 204, description = "Service successfully deleted"),
