@@ -102,7 +102,10 @@ pub async fn make_router(
             .route("/dev/triggers", post(handle_debug_trigger))
             .route("/dev/components", post(handle_upload_component))
             .route("/dev/services", post(handle_save_service))
-            .route("/dev/services/{service_hash}", post(handle_add_service_direct));
+            .route(
+                "/dev/services/{service_hash}",
+                post(handle_add_service_direct),
+            );
     }
 
     let public = public.with_state(state.clone());
