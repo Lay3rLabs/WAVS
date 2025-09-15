@@ -2,11 +2,12 @@ use alloy_network::Ethereum;
 use anyhow::Context;
 use example_helpers::bindings::world::{
     host,
-    wavs::operator::{
-        input::{
-            TriggerAction, TriggerData, TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent,
+    wavs::{
+        operator::{
+            input::{TriggerAction, TriggerData},
+            output::WasmResponse,
         },
-        output::WasmResponse,
+        types::events::{TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent},
     },
     Guest,
 };

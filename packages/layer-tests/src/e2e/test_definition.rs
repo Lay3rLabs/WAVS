@@ -106,6 +106,12 @@ pub struct WorkflowDefinition {
     pub aggregators: Vec<ComponentName>,
 }
 
+impl WorkflowDefinition {
+    pub fn expects_reorg(&self) -> bool {
+        matches!(self.expected_output, ExpectedOutput::Dropped)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum AggregatorDefinition {
     ComponentBasedAggregator {
@@ -222,6 +228,8 @@ pub enum ExpectedOutput {
     StructureOnly(OutputStructure),
     /// For a dynamic callback that checks the output
     Callback(Arc<dyn ExpectedOutputCallback>),
+    /// Expect no output (transaction dropped due to re-org)
+    Dropped,
 }
 
 pub trait ExpectedOutputCallback: Send + Sync + std::fmt::Debug + 'static {
@@ -458,6 +466,10 @@ impl ExpectedOutput {
             ExpectedOutput::Callback(callback) => {
                 callback.validate(test, clients, component_sources, actual)?;
                 return Ok(());
+            }
+            ExpectedOutput::Dropped => {
+                // For dropped transactions, validate we got no output
+                actual.is_empty()
             }
         };
 

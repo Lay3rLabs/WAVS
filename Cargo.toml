@@ -100,7 +100,11 @@ wildmatch = "2.4.0"
 alloy-node-bindings = "1.0.19"
 alloy-json-abi = "1.2.1"
 alloy-primitives = { version = "1.2.1", features = ["serde"] }
-alloy-provider = { version = "1.0.19", features = ["anvil-node", "ws", "pubsub"] }
+alloy-provider = { version = "1.0.19", features = [
+    "anvil-node",
+    "ws",
+    "pubsub",
+] }
 alloy-sol-types = "1.2.1"
 alloy-sol-macro = { version = "1.2.1", features = ["json"] }
 alloy-transport = "1.0.19"
@@ -132,7 +136,7 @@ wasmtime = { version = "34.0.1", features = [
 wasmtime-wasi = { version = "34.0.1", default-features = true }
 wasmtime-wasi-http = "34.0.1"
 wit-bindgen = "0.43.0"
-wavs-wasi-utils = "0.6.0-alpha.11"
+wavs-wasi-utils = "0.6.0-alpha.15"
 
 # benchmarking
 criterion = { version = "0.6.0", features = ["async_tokio"] }
@@ -151,7 +155,7 @@ rand = "0.9.1"
 deadpool = "0.12.2"
 
 # secrets
-bip39 = {version = "2.2.0", features = ["rand"]}
+bip39 = { version = "2.2.0", features = ["rand"] }
 
 # hashing
 sha2 = "0.10.9"
@@ -171,7 +175,7 @@ subtle = "2.6.1"
 # utilis
 cfg-if = "1.0.1"
 regex = "1.11.2"
-zeroize = {version = "1.8.1", features = ["derive"]}
+zeroize = { version = "1.8.1", features = ["derive"] }
 derive-enum-all-values = "=0.1.0"
 
 # versioning

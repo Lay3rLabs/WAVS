@@ -7,8 +7,12 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+wstd = { workspace = true }
 wit-bindgen = { workspace = true }
 alloy-primitives = { workspace = true }
+wavs-wasi-utils = { workspace = true }
+alloy-network = { workspace = true }
+alloy-provider = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

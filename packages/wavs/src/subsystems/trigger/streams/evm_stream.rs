@@ -29,16 +29,36 @@ pub async fn start_evm_event_stream(
     let event_stream = Box::pin(stream.filter_map(move |log| {
         let chain = chain.clone();
         async move {
-            match (log.block_number, log.transaction_hash, log.log_index) {
-                (Some(block_number), Some(tx_hash), Some(log_index)) => {
-                    Some(Ok(StreamTriggers::Evm {
-                        chain: chain.clone(),
-                        block_number,
-                        tx_hash,
-                        log_index,
-                        log: Box::new(log),
-                    }))
-                }
+            if log.removed {
+                tracing::warn!("Reorg removed log: {:?}", log);
+                return None;
+            }
+
+            match (
+                log.block_hash,
+                log.block_timestamp,
+                log.transaction_index,
+                log.block_number,
+                log.transaction_hash,
+                log.log_index,
+            ) {
+                (
+                    Some(block_hash),
+                    Some(block_timestamp),
+                    Some(tx_index),
+                    Some(block_number),
+                    Some(tx_hash),
+                    Some(log_index),
+                ) => Some(Ok(StreamTriggers::Evm {
+                    chain: chain.clone(),
+                    block_number,
+                    tx_hash,
+                    log_index,
+                    log: Box::new(log),
+                    block_hash,
+                    block_timestamp,
+                    tx_index,
+                })),
                 _ => {
                     tracing::warn!("Received incomplete EVM log: {:?}", log);
                     None

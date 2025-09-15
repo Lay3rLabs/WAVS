@@ -1,0 +1,34 @@
+interface events {
+    use chain.{chain-key, evm-address, evm-event-log, cosmos-address, cosmos-event};
+    use core.{timestamp};
+
+    variant trigger-data {
+        evm-contract-event(trigger-data-evm-contract-event),
+        cosmos-contract-event(trigger-data-cosmos-contract-event),
+        block-interval(trigger-data-block-interval),
+        cron(trigger-data-cron),
+        raw(list<u8>)
+    }
+
+    record trigger-data-evm-contract-event {
+        chain: chain-key,
+        log: evm-event-log,
+    }
+
+    record trigger-data-cosmos-contract-event {
+        contract-address: cosmos-address,
+        chain: chain-key,
+        event: cosmos-event,
+        event-index: u64,
+        block-height: u64
+    }
+
+    record trigger-data-block-interval {
+        chain: chain-key,
+        block-height: u64
+    }
+
+    record trigger-data-cron {
+        trigger-time: timestamp
+    }
+}

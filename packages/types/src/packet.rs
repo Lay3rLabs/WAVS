@@ -3,7 +3,7 @@ use std::borrow::Borrow;
 pub use crate::solidity_types::Envelope;
 use crate::{
     Service, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureAlgorithm,
-    SignatureData, SignatureKind, SignaturePrefix, TriggerAction, WorkflowId,
+    SignatureData, SignatureKind, SignaturePrefix, TriggerAction, TriggerData, WorkflowId,
 };
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
 use alloy_signer::Signer;
@@ -24,6 +24,7 @@ pub struct Packet {
     #[schema(value_type  = Object)]
     pub envelope: Envelope,
     pub signature: EnvelopeSignature,
+    pub trigger_data: TriggerData,
 }
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]

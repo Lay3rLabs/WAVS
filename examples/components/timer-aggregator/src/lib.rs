@@ -1,3 +1,4 @@
+mod utils;
 mod world;
 
 use world::{
@@ -27,7 +28,7 @@ impl Guest for Component {
         Ok(vec![AggregatorAction::Timer(timer_action)])
     }
 
-    fn handle_timer_callback(_packet: Packet) -> Result<Vec<AggregatorAction>, String> {
+    fn handle_timer_callback(packet: Packet) -> Result<Vec<AggregatorAction>, String> {
         let chain = host::config_var("chain").ok_or("chain config variable is required")?;
         let service_handler_str = host::config_var("service_handler")
             .ok_or("service_handler config variable is required")?;
@@ -42,6 +43,10 @@ impl Guest for Component {
             },
             gas_price: None,
         };
+
+        if !utils::is_valid_tx(packet.trigger_data)? {
+            return Ok(vec![]);
+        }
 
         Ok(vec![AggregatorAction::Submit(submit_action)])
     }

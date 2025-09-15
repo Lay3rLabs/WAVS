@@ -38,9 +38,8 @@ bincode = { workspace = true }
 lru = { workspace = true }
 
 [dev-dependencies]
-tempfile = {workspace = true}
+tempfile = { workspace = true }
 alloy-node-bindings = { workspace = true }
 futures = { workspace = true }
 utils = { workspace = true, features = ["test-utils"] }
 alloy-rpc-types-eth = { workspace = true }
-

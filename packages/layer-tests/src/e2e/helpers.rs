@@ -1,8 +1,9 @@
-use alloy_primitives::Address;
+use alloy_primitives::{Address, U256};
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
 use std::{collections::BTreeMap, num::NonZero, sync::Arc, time::Duration};
+use utils::evm_client::AnyNonceManager;
 use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
 
@@ -414,6 +415,27 @@ pub async fn get_cosmos_code_id(
     // Cache result and return
     *guard = Some(code_id);
     code_id
+}
+
+/// Simulate a re-org by reverting to a previous block and mining new blocks
+pub async fn simulate_anvil_reorg(
+    evm_client: &EvmSigningClient,
+    reorg_snapshot: U256,
+) -> Result<()> {
+    // Revert to the specified block using Anvil's revert RPC
+    evm_client.provider.anvil_revert(reorg_snapshot).await?;
+
+    // Update nonce
+    if let AnyNonceManager::Fast(fast_nonce_manager) = &evm_client.nonce_manager {
+        fast_nonce_manager
+            .set_current_nonce(&evm_client.provider)
+            .await
+            .unwrap();
+    }
+
+    // Mine new blocks to simulate chain reorganization
+    evm_client.provider.evm_mine(None).await?;
+    Ok(())
 }
 
 pub async fn wait_for_task_to_land(

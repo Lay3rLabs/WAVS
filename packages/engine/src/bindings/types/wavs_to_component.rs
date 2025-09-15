@@ -1,14 +1,23 @@
-use crate::{
-    bindings::aggregator::world::wavs::{
-        aggregator::aggregator as aggregator_types, types::chain as aggregator_chain,
-        types::core as aggregator_core, types::service as aggregator_service,
+use wavs_wasi_utils::impl_u128_conversions;
+
+use crate::bindings::{
+    aggregator::world::wavs::{
+        aggregator::aggregator::{self as aggregator_types, U128},
+        types::{
+            chain as aggregator_chain, core as aggregator_core, events as aggregator_events,
+            service as aggregator_service,
+        },
     },
-    bindings::operator::world::wavs::operator::input as component_input,
-    bindings::operator::world::wavs::operator::output as component_output,
-    bindings::operator::world::wavs::types::chain as component_chain,
-    bindings::operator::world::wavs::types::core as component_core,
-    bindings::operator::world::wavs::types::service as component_service,
+    operator::world::wavs::{
+        operator::{input as component_input, output as component_output},
+        types::{
+            chain as component_chain, core as component_core, events as component_events,
+            service as component_service,
+        },
+    },
 };
+
+impl_u128_conversions!(U128);
 
 impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
     type Error = anyhow::Error;
@@ -372,11 +381,10 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                 block_hash,
                 block_timestamp,
                 tx_index,
-                removed,
             } => Ok(component_input::TriggerData::EvmContractEvent(
-                component_input::TriggerDataEvmContractEvent {
+                component_events::TriggerDataEvmContractEvent {
                     chain: chain.to_string(),
-                    log: component_input::EvmEventLog {
+                    log: component_events::EvmEventLog {
                         address: contract_address.into(),
                         data: component_chain::EvmEventLogData {
                             topics: log_data
@@ -389,10 +397,9 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                         tx_hash: tx_hash.to_vec(),
                         block_number,
                         log_index,
-                        block_hash: block_hash.map(|hash| hash.to_vec()),
+                        block_hash: block_hash.to_vec(),
                         block_timestamp,
                         tx_index,
-                        removed,
                     },
                 },
             )),
@@ -403,10 +410,10 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                 event_index,
                 block_height,
             } => Ok(component_input::TriggerData::CosmosContractEvent(
-                component_input::TriggerDataCosmosContractEvent {
+                component_events::TriggerDataCosmosContractEvent {
                     contract_address: contract_address.try_into()?,
                     chain: chain.to_string(),
-                    event: component_input::CosmosEvent {
+                    event: component_events::CosmosEvent {
                         ty: event.ty,
                         attributes: event
                             .attributes
@@ -422,13 +429,13 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                 chain,
                 block_height,
             } => Ok(component_input::TriggerData::BlockInterval(
-                component_input::TriggerDataBlockInterval {
+                component_events::TriggerDataBlockInterval {
                     chain: chain.to_string(),
                     block_height,
                 },
             )),
             wavs_types::TriggerData::Cron { trigger_time } => Ok(
-                component_input::TriggerData::Cron(component_input::TriggerDataCron {
+                component_input::TriggerData::Cron(component_events::TriggerDataCron {
                     trigger_time: trigger_time.into(),
                 }),
             ),
@@ -448,6 +455,7 @@ impl TryFrom<wavs_types::Packet> for aggregator_types::Packet {
             workflow_id: packet.workflow_id.to_string(),
             envelope: packet.envelope.into(),
             signature: packet.signature.into(),
+            trigger_data: packet.trigger_data.try_into()?,
         })
     }
 }
@@ -529,6 +537,84 @@ impl From<wavs_types::EnvelopeSignature> for aggregator_types::EnvelopeSignature
         aggregator_types::EnvelopeSignature {
             data,
             kind: kind.into(),
+        }
+    }
+}
+
+impl TryFrom<wavs_types::TriggerData> for aggregator_types::TriggerData {
+    type Error = anyhow::Error;
+
+    fn try_from(src: wavs_types::TriggerData) -> Result<Self, Self::Error> {
+        match src {
+            wavs_types::TriggerData::EvmContractEvent {
+                chain,
+                contract_address,
+                log_data,
+                tx_hash,
+                block_number,
+                log_index,
+                block_hash,
+                block_timestamp,
+                tx_index,
+            } => Ok(aggregator_types::TriggerData::EvmContractEvent(
+                aggregator_events::TriggerDataEvmContractEvent {
+                    chain: chain.to_string(),
+                    log: aggregator_events::EvmEventLog {
+                        address: contract_address.into(),
+                        data: aggregator_chain::EvmEventLogData {
+                            topics: log_data
+                                .topics()
+                                .iter()
+                                .map(|topic| topic.to_vec())
+                                .collect(),
+                            data: log_data.data.to_vec(),
+                        },
+                        tx_hash: tx_hash.to_vec(),
+                        block_number,
+                        log_index,
+                        block_hash: block_hash.to_vec(),
+                        block_timestamp,
+                        tx_index,
+                    },
+                },
+            )),
+            wavs_types::TriggerData::CosmosContractEvent {
+                contract_address,
+                chain,
+                event,
+                event_index,
+                block_height,
+            } => Ok(aggregator_types::TriggerData::CosmosContractEvent(
+                aggregator_events::TriggerDataCosmosContractEvent {
+                    contract_address: contract_address.try_into()?,
+                    chain: chain.to_string(),
+                    event: aggregator_events::CosmosEvent {
+                        ty: event.ty,
+                        attributes: event
+                            .attributes
+                            .into_iter()
+                            .map(|attr| (attr.key, attr.value))
+                            .collect(),
+                    },
+                    event_index,
+                    block_height,
+                },
+            )),
+            wavs_types::TriggerData::BlockInterval {
+                chain,
+                block_height,
+            } => Ok(aggregator_types::TriggerData::BlockInterval(
+                aggregator_events::TriggerDataBlockInterval {
+                    chain: chain.to_string(),
+                    block_height,
+                },
+            )),
+            wavs_types::TriggerData::Cron { trigger_time } => Ok(
+                aggregator_types::TriggerData::Cron(aggregator_events::TriggerDataCron {
+                    trigger_time: trigger_time.into(),
+                }),
+            ),
+            wavs_types::TriggerData::Raw(data) => Ok(aggregator_types::TriggerData::Raw(data)),
         }
     }
 }
@@ -763,7 +849,7 @@ impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
                     contract_address: aggregator_chain::EvmAddress {
                         raw_bytes: submit.contract_address,
                     },
-                    gas_price: submit.gas_price,
+                    gas_price: submit.gas_price.map(|x| x.into()),
                 })
             }
             wavs_types::AggregatorAction::Timer(timer) => {
@@ -782,7 +868,7 @@ impl From<aggregator_types::AggregatorAction> for wavs_types::AggregatorAction {
                 wavs_types::AggregatorAction::Submit(wavs_types::SubmitAction {
                     chain: submit.chain,
                     contract_address: submit.contract_address.raw_bytes,
-                    gas_price: submit.gas_price,
+                    gas_price: submit.gas_price.map(|x| x.into()),
                 })
             }
             aggregator_types::AggregatorAction::Timer(timer) => {
