@@ -107,6 +107,11 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bearer_token: Option<Credential>,
 
+    /// Maximum HTTP request body size in megabytes
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_body_size_mb: Option<u32>,
+
     /// Enable dev endpoints
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]

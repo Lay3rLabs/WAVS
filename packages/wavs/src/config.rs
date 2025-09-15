@@ -67,6 +67,9 @@ pub struct Config {
     /// Enable dev endpoints for testing (default: false)
     pub dev_endpoints_enabled: bool,
 
+    /// Maximum HTTP request body size in megabytes (default: 15MB)
+    pub max_body_size_mb: u32,
+
     /// Disable trigger networking for testing (default: false)
     #[cfg(debug_assertions)]
     pub disable_trigger_networking: bool,
@@ -112,6 +115,7 @@ impl Default for Config {
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
             bearer_token: None,
             dev_endpoints_enabled: false,
+            max_body_size_mb: 15,
             #[cfg(debug_assertions)]
             disable_trigger_networking: false,
             #[cfg(debug_assertions)]

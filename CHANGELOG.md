@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning].
 ### Changed
 
 - Deprecate old variant Submit::Aggregator with evm_contracts; Aggregator component is required now
+- Added body size limit to http requests (default 15MB)
 
 ## [v0.5.1]
 

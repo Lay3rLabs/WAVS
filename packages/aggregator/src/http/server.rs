@@ -1,5 +1,6 @@
 use crate::{config::Config, http::handlers::handle_register_service, AppContext};
 use axum::{
+    extract::DefaultBodyLimit,
     middleware,
     routing::{get, post},
 };
@@ -79,6 +80,10 @@ pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
         })
         .fallback(handle_not_found)
         .with_state(state);
+
+    // apply global body size limit
+    let body_limit_bytes = (config.max_body_size_mb as usize) * 1024 * 1024;
+    router = router.layer(DefaultBodyLimit::max(body_limit_bytes));
 
     if let Some(cors) = cors_layer(&config) {
         router = router.layer(cors);
