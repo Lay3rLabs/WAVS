@@ -127,7 +127,7 @@ impl HttpMetrics {
 
         self.meter
             .f64_histogram(format!(
-                "{}.simulated_{}_trigger_duration_seconds",
+                "{}.simulated_{}_trigger_seconds",
                 Self::NAMESPACE,
                 trigger_count
             ))
@@ -142,7 +142,7 @@ impl HttpMetrics {
         // Also record as a gauge for "latest value" queries
         self.meter
             .f64_gauge(format!(
-                "{}.latest_simulated_{}_trigger_duration_seconds",
+                "{}.latest_simulated_{}_trigger_seconds",
                 Self::NAMESPACE,
                 trigger_count
             ))
@@ -206,7 +206,7 @@ impl EngineMetrics {
                 .with_description("Total number of errors encountered")
                 .build(),
             execution_duration: meter
-                .f64_histogram(format!("{}.execution_duration_seconds", Self::NAMESPACE))
+                .f64_histogram(format!("{}.execution_seconds", Self::NAMESPACE))
                 .with_description("WASM execution duration in seconds")
                 .with_boundaries(vec![0.001, 0.01, 0.1, 0.5, 1.0, 5.0, 10.0])
                 .build(),
