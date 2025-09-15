@@ -20,6 +20,10 @@
 [default]
 log_level = ["info", "wavs=debug"]
 
+# Those configs are global and shared between wavs and aggregator
+jaeger = "http://localhost:4317"
+prometheus = "http://localhost:9090"
+
 # The IPFS gateway URL used to access IPFS content over HTTP.
 # ipfs_gateway = "https://ipfs.io/ipfs/"
 
@@ -27,48 +31,48 @@ log_level = ["info", "wavs=debug"]
 # Each component can override these in its own section if needed
 
 # Cosmos chains
-[default.chains.cosmos.layer-local]
-bech32_prefix = "layer"
-rpc_endpoint = "http://localhost:26657"
-grpc_endpoint = "http://localhost:9090"
-gas_price = 0.025
-gas_denom = "uslay"
-faucet_endpoint = "http://localhost:8000"
+# [default.chains.cosmos.layer-local]
+# bech32_prefix = "layer"
+# rpc_endpoint = "http://localhost:26657"
+# grpc_endpoint = "http://localhost:9090"
+# gas_price = 0.025
+# gas_denom = "uslay"
+# faucet_endpoint = "http://localhost:8000"
 
-[default.chains.cosmos.pion-1]
-bech32_prefix = "neutron"
-rpc_endpoint = "https://rpc-falcron.pion-1.ntrn.tech"
-grpc_endpoint = "http://grpc-falcron.pion-1.ntrn.tech:80"
-gas_price = 0.0053
-gas_denom = "untrn"
+# [default.chains.cosmos.pion-1]
+# bech32_prefix = "neutron"
+# rpc_endpoint = "https://rpc-falcron.pion-1.ntrn.tech"
+# grpc_endpoint = "http://grpc-falcron.pion-1.ntrn.tech:80"
+# gas_price = 0.0053
+# gas_denom = "untrn"
 
-# EVM chains
-[default.chains.evm.31337]
-ws_endpoint = "ws://localhost:8545"
-http_endpoint = "http://localhost:8545"
-poll_interval_ms = 7000
+# # EVM chains
+# [default.chains.evm.31337]
+# ws_endpoint = "ws://localhost:8545"
+# http_endpoint = "http://localhost:8545"
+# poll_interval_ms = 7000
 
-[default.chains.evm.31338]
-ws_endpoint = "ws://localhost:8645"
-http_endpoint = "http://localhost:8645"
-poll_interval_ms = 7000
+# [default.chains.evm.31338]
+# ws_endpoint = "ws://localhost:8645"
+# http_endpoint = "http://localhost:8645"
+# poll_interval_ms = 7000
 
-[default.chains.evm.11155111]
-ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
-http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
-poll_interval_ms = 7000
+# [default.chains.evm.11155111]
+# ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
+# http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
+# poll_interval_ms = 7000
 
-[default.chains.evm.17000]
-ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
-http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
-poll_interval_ms = 7000
+# [default.chains.evm.17000]
+# ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
+# http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
+# poll_interval_ms = 7000
 
-[default.chains.dev.holesky-fork]
-type = "evm"
-chain_id = "17000"
-ws_endpoint = "ws://localhost:8545"
-http_endpoint = "http://localhost:8545"
-poll_interval_ms = 7000
+# [default.chains.dev.holesky-fork]
+# type = "evm"
+# chain_id = "17000"
+# ws_endpoint = "ws://localhost:8545"
+# http_endpoint = "http://localhost:8545"
+# poll_interval_ms = 7000
 
 # ----------------------------
 # WAVS specific settings

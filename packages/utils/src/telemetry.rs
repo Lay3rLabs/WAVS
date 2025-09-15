@@ -45,7 +45,7 @@ pub fn setup_tracing(
     tracing::subscriber::set_global_default(subscriber)
         .expect("Failed to set global default subscriber");
 
-    tracing::info!("Jaeger tracing enabled");
+    tracing::warn!("Jaeger tracing enabled");
     provider
 }
 
@@ -70,7 +70,7 @@ pub fn setup_metrics(collector: &str, service_name: &str) -> SdkMeterProvider {
 
     global::set_meter_provider(meter_provider.clone());
 
-    tracing::info!("Metrics enabled and exporting to {}", collector);
+    tracing::warn!("Metrics enabled and exporting to {}", collector);
 
     meter_provider
 }
