@@ -1,0 +1,4 @@
+global:
+  scrape_interval: 3s # Just to see changes quickly
+
+scrape_configs: []
