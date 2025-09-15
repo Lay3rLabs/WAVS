@@ -140,6 +140,8 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
             *data_dir = shellexpand::tilde(&data_dir.to_string_lossy())
                 .to_string()
                 .into();
+
+            eprintln!("Using data directory: {}", data_dir.display());
         });
 
         Ok(config)
