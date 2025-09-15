@@ -56,7 +56,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self, packet, wasm_component), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
+    #[instrument(skip(self, packet, wasm_component), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
     fn create_instance_deps(
         &self,
         component: &Component,
@@ -115,7 +115,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             .map_err(|e| AggregatorError::ComponentLoad(format!("Failed to load component: {}", e)))
     }
 
-    #[instrument(level = "debug", skip(self, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
+    #[instrument(skip(self, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
     pub async fn execute_timer_callback(
         &self,
         component: &Component,
@@ -131,7 +131,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             .map_err(Into::into)
     }
 
-    #[instrument(level = "debug", skip(self, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
+    #[instrument(skip(self, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
     pub async fn execute_submit_callback(
         &self,
         component: &Component,

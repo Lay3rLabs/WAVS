@@ -129,6 +129,44 @@ impl HttpClient {
         Ok(format!("{}/dev/services/{}", self.endpoint, response.hash))
     }
 
+    pub async fn dev_add_service_direct(&self, service: &Service) -> Result<()> {
+        let body = serde_json::to_string(service)?;
+
+        let url = format!("{}/dev/services", self.endpoint);
+        let response: SaveServiceResponse = self
+            .inner
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .body(body)
+            .send()
+            .await
+            .with_context(|| format!("Failed to send request to {}", url))?
+            .json()
+            .await
+            .with_context(|| format!("Failed to parse response from {}", url))?;
+
+        let url = format!("{}/dev/services/{}", self.endpoint, response.hash);
+
+        let res = self
+            .inner
+            .post(&url)
+            .send()
+            .await
+            .with_context(|| format!("Failed to send request to {}", url))?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let error_text = res
+                .text()
+                .await
+                .unwrap_or_else(|_| "<Failed to read response body>".to_string());
+
+            Err(anyhow::anyhow!("{} from {}: {}", status, url, error_text))
+        } else {
+            Ok(())
+        }
+    }
+
     pub async fn get_service_signer(
         &self,
         service_manager: ServiceManager,

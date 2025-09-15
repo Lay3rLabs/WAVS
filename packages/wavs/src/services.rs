@@ -22,7 +22,7 @@ impl Services {
         Self { db_storage }
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
+    #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn try_get(&self, id: &ServiceId) -> Result<Option<Service>> {
         match self.db_storage.get(SERVICE_TABLE, id.inner()) {
             Ok(Some(service)) => Ok(Some(service.value())),
@@ -31,7 +31,7 @@ impl Services {
         }
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
+    #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn get(&self, service_id: &ServiceId) -> Result<Service> {
         match self.try_get(service_id)? {
             Some(service) => Ok(service),
@@ -39,7 +39,7 @@ impl Services {
         }
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
+    #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn get_workflow(
         &self,
         service_id: &ServiceId,
@@ -57,7 +57,7 @@ impl Services {
             })
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
+    #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn exists(&self, service_id: &ServiceId) -> Result<bool> {
         match self.db_storage.get(SERVICE_TABLE, service_id.inner())? {
             Some(_) => Ok(true),
@@ -74,21 +74,21 @@ impl Services {
             .unwrap_or(false)
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
+    #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn remove(&self, service_id: &ServiceId) -> Result<()> {
         self.db_storage
             .remove(SERVICE_TABLE, service_id.inner())
             .map_err(|e| e.into())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
+    #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn save(&self, service: &Service) -> Result<()> {
         self.db_storage
             .set(SERVICE_TABLE, service.id().inner(), service)
             .map_err(|e| e.into())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Services"))]
+    #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn list(
         &self,
         bounds_start: Bound<&ServiceId>,

@@ -1,6 +1,8 @@
 use crate::{
-    config::Config, dispatcher::Dispatcher,
-    http::handlers::service::get::handle_get_service_by_hash, AppContext,
+    config::Config,
+    dispatcher::Dispatcher,
+    http::handlers::service::{add::handle_add_service_direct, get::handle_get_service_by_hash},
+    AppContext,
 };
 use axum::{
     extract::DefaultBodyLimit,
@@ -91,19 +93,19 @@ pub async fn make_router(
 
     // Only add debug routes if debug endpoints are enabled
     if config.dev_endpoints_enabled {
-        public = public
-            .route(
-                "/dev/services/{service_hash}",
-                get(handle_get_service_by_hash),
-            )
-            .route("/dev/services", post(handle_save_service));
+        public = public.route(
+            "/dev/services/{service_hash}",
+            get(handle_get_service_by_hash),
+        );
 
         protected = protected
             .route("/dev/triggers", post(handle_debug_trigger))
+            .route("/dev/components", post(handle_upload_component))
+            .route("/dev/services", post(handle_save_service))
             .route(
-                "/dev/components",
-                post(handle_upload_component).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
-            ); // 50MB limit
+                "/dev/services/{service_hash}",
+                post(handle_add_service_direct),
+            );
     }
 
     let public = public.with_state(state.clone());
@@ -119,6 +121,10 @@ pub async fn make_router(
             None => protected,
         })
         .fallback(handle_not_found);
+
+    // apply global body size limit
+    let body_limit_bytes = (config.max_body_size_mb as usize) * 1024 * 1024;
+    router = router.layer(DefaultBodyLimit::max(body_limit_bytes));
 
     if let Some(cors) = cors_layer(&config) {
         router = router.layer(cors);

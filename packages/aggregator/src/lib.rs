@@ -12,7 +12,7 @@ use utils::context::AppContext;
 
 /// Entry point to start up the server
 /// Called from main
-#[instrument(level = "info", skip(ctx, config))]
+#[instrument(skip(ctx, config))]
 pub fn run_server(ctx: AppContext, config: config::Config) {
     tracing::info!(
         "Aggregator server initializing with data path: {:?}",

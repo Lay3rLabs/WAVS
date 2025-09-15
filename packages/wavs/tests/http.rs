@@ -342,3 +342,47 @@ fn test_add_chain_prevents_duplicates() {
         "Duplicate chain addition should fail with 500"
     );
 }
+
+#[test]
+fn body_size_limit() {
+    wavs::init_tracing_tests();
+    let app = TestHttpApp::new();
+
+    // 14MB body succeeds (under default 15MB limit)
+    let body_14mb = vec![0u8; 14 * 1024 * 1024];
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/dev/components")
+        .body(Body::from(body_14mb))
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert_ne!(
+        response.status(),
+        413,
+        "14MB body should not be rejected (under 15MB limit)"
+    );
+
+    // 16MB body fails with 413
+    let body_16mb = vec![0u8; 16 * 1024 * 1024];
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri("/dev/components")
+        .body(Body::from(body_16mb))
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert_eq!(
+        response.status(),
+        413,
+        "16MB body should be rejected with 413 Payload Too Large"
+    );
+}

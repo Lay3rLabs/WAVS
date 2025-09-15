@@ -52,7 +52,7 @@ pub struct TriggerManager {
 
 impl TriggerManager {
     #[allow(clippy::new_without_default)]
-    #[instrument(level = "debug", skip(services), fields(subsys = "TriggerManager"))]
+    #[instrument(skip(services), fields(subsys = "TriggerManager"))]
     pub fn new(
         config: &Config,
         metrics: TriggerMetrics,
@@ -74,12 +74,12 @@ impl TriggerManager {
             local_command_sender: Arc::new(std::sync::Mutex::new(None)),
             metrics,
             #[cfg(debug_assertions)]
-            disable_networking: false,
+            disable_networking: config.disable_trigger_networking,
             services,
         })
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
     pub fn add_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
         // The mechanics of adding a trigger are that we:
 
@@ -133,12 +133,12 @@ impl TriggerManager {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
     pub fn remove_service(&self, service_id: ServiceId) -> Result<(), TriggerError> {
         self.lookup_maps.remove_service(service_id.clone())
     }
 
-    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "TriggerManager"))]
+    #[instrument(skip(self, ctx), fields(subsys = "TriggerManager"))]
     pub fn start(
         &self,
         ctx: AppContext,
@@ -224,7 +224,7 @@ impl TriggerManager {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
     async fn start_watcher(&self) -> Result<(), TriggerError> {
         let mut multiplexed_stream: MultiplexedStream = SelectAll::new();
 

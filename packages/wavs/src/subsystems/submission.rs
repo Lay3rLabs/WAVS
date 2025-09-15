@@ -45,7 +45,7 @@ struct SignerInfo {
 
 impl SubmissionManager {
     #[allow(clippy::new_without_default)]
-    #[instrument(level = "debug", skip(services), fields(subsys = "Submission"))]
+    #[instrument(skip(services), fields(subsys = "Submission"))]
     pub fn new(
         config: &Config,
         metrics: SubmissionMetrics,
@@ -61,12 +61,12 @@ impl SubmissionManager {
             #[cfg(debug_assertions)]
             debug_packets: Arc::new(RwLock::new(Vec::new())),
             #[cfg(debug_assertions)]
-            disable_networking: false,
+            disable_networking: config.disable_submission_networking,
             services,
         })
     }
 
-    #[instrument(level = "debug", skip(self, ctx), fields(subsys = "Submission"))]
+    #[instrument(skip(self, ctx), fields(subsys = "Submission"))]
     pub fn start(
         &self,
         ctx: AppContext,
@@ -160,7 +160,7 @@ impl SubmissionManager {
         Ok(())
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
+    #[instrument(skip(self), fields(subsys = "Submission"))]
     // Adds a service to the submission manager, creating a new signer for it.
     // if no hd_index is provided, it will be automatically assigned.
     pub fn add_service_key(
@@ -204,7 +204,7 @@ impl SubmissionManager {
         self.debug_packets.read().unwrap().clone()
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
     pub fn get_service_signer(
         &self,
         service_id: ServiceId,
@@ -280,7 +280,7 @@ impl SubmissionManager {
         })
     }
 
-    #[instrument(level = "debug", skip(self), fields(subsys = "Submission"))]
+    #[instrument(skip(self), fields(subsys = "Submission"))]
     async fn submit_to_aggregator(
         &self,
         url: String,
