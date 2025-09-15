@@ -18,11 +18,10 @@
 # The log level, in the format of tracing directives. Default is ["info"]
 # See https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
 [default]
-log_level = ["info", "wavs=debug"]
+# log_level = ["info", "wavs=debug"]
 
-# Those configs are global and shared between wavs and aggregator
-jaeger = "http://localhost:4317"
-prometheus = "http://localhost:9090"
+# jaeger = "http://localhost:4317"
+# prometheus = "http://localhost:9090"
 
 # The IPFS gateway URL used to access IPFS content over HTTP.
 # ipfs_gateway = "https://ipfs.io/ipfs/"
@@ -50,11 +49,6 @@ prometheus = "http://localhost:9090"
 # [default.chains.evm.31337]
 # ws_endpoint = "ws://localhost:8545"
 # http_endpoint = "http://localhost:8545"
-# poll_interval_ms = 7000
-
-# [default.chains.evm.31338]
-# ws_endpoint = "ws://localhost:8645"
-# http_endpoint = "http://localhost:8645"
 # poll_interval_ms = 7000
 
 # [default.chains.evm.11155111]
@@ -94,11 +88,6 @@ port = 8000
 # The directory to store the data. Default is "/var/wavs"
 # data = "/var/wavs"
 
-# Jaeger collector to send trace data
-# jaeger = "http://localhost:4317"
-# Prometheus endpoint to send metrics to
-# prometheus = "http://localhost:9090"
-
 # Optional bearer token to protect mutating HTTP endpoints
 # If set here or via env var `WAVS_BEARER_TOKEN`, POST/DELETE endpoints require `Authorization: Bearer <token>`
 # Generate with `openssl rand -hex 32`
@@ -133,9 +122,6 @@ cors_allowed_origins = [
     "http://localhost:*",
     "http://127.0.0.1:*",
 ]
-
-# Jaeger collector to send trace data
-# jaeger = "http://localhost:4317"
 
 # Optional bearer token to protect mutating HTTP endpoints
 # If set here or via env var `WAVS_AGGREGATOR_BEARER_TOKEN`, POST endpoints require `Authorization: Bearer <token>`

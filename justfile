@@ -163,7 +163,9 @@ start-wavs-dev:
     cargo run -- \
         --dev-endpoints-enabled=true \
         --disable-trigger-networking=true \
-        --disable-submission-networking=true
+        --disable-submission-networking=true \
+        --prometheus="http://127.0.0.1:9090" \
+        --jaeger="http://127.0.0.1:4317"
 
 start-jaeger:
     docker run --rm -p 4317:4317 -p 16686:16686 jaegertracing/jaeger:2.5.0
