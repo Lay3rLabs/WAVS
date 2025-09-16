@@ -97,6 +97,11 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prometheus: Option<String>,
 
+    /// Prometheus metrics push interval in seconds
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prometheus_push_interval_secs: Option<u64>,
+
     /// The interval in milliseconds to poll after submitting a transaction
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
