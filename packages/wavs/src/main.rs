@@ -52,7 +52,7 @@ fn main() {
         .as_ref()
         .map(|collector| setup_metrics(collector, "wavs_metrics"));
     let meter = global::meter("wavs_metrics");
-    let metrics = Metrics::new(&meter);
+    let metrics = Metrics::new(meter);
 
     let config_clone = config.clone();
     let dispatcher = Arc::new(Dispatcher::new(&config_clone, metrics.wavs).unwrap());

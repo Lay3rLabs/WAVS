@@ -267,7 +267,7 @@ pub mod tests {
     use super::*;
 
     fn metrics() -> EngineMetrics {
-        EngineMetrics::new(&opentelemetry::global::meter("engine-test-metrics"))
+        EngineMetrics::new(opentelemetry::global::meter("engine-test-metrics"))
     }
 
     #[test]

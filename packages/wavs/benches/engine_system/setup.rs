@@ -51,7 +51,7 @@ impl SystemSetup {
         let file_storage = FileStorage::new(engine_setup.data_dir.path().join("ca")).unwrap();
 
         // Create metrics for the engine
-        let metrics = Metrics::new(&meter("wavs-benchmark"));
+        let metrics = Metrics::new(meter("wavs-benchmark"));
 
         // Create a WasmEngine similar to how it's done in CoreDispatcher
         let app_storage = engine_setup.data_dir.path().join("app");

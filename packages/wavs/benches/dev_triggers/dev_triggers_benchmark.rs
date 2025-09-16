@@ -33,7 +33,7 @@ pub fn benchmark(c: &mut Criterion) {
                     wavs_benchmark_common::app_context::APP_CONTEXT
                         .rt
                         .block_on(async {
-                            runtime.submit_requests(&client, request_count).await;
+                            runtime.submit_requests(&client, request_count, false).await;
                             runtime.wait_for_messages(request_count).await;
 
                             #[cfg(debug_assertions)]

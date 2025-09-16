@@ -53,7 +53,7 @@ fn core_trigger_lookups() {
         wavs::services::Services::new(RedbStorage::new(data_dir.path().join("db")).unwrap());
     let manager = TriggerManager::new(
         &config,
-        TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
+        TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services,
     )
     .unwrap();
@@ -202,7 +202,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
         wavs::services::Services::new(RedbStorage::new(data_dir.path().join("db")).unwrap());
     let manager = TriggerManager::new(
         &config,
-        TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
+        TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services.clone(),
     )
     .unwrap();
@@ -338,7 +338,7 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
         wavs::services::Services::new(RedbStorage::new(data_dir.path().join("db")).unwrap());
     let manager = TriggerManager::new(
         &config,
-        TriggerMetrics::new(&opentelemetry::global::meter("trigger-test-metrics")),
+        TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services,
     )
     .unwrap();

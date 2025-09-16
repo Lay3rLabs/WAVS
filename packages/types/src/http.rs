@@ -65,6 +65,7 @@ pub struct SimulatedTriggerRequest {
     pub data: TriggerData,
     #[serde(default = "default_simulated_trigger_count")]
     pub count: usize,
+    pub wait_for_completion: bool,
 }
 
 fn default_simulated_trigger_count() -> usize {

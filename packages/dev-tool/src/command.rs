@@ -10,5 +10,7 @@ pub enum Command {
     SendTriggers {
         #[arg(short, long, default_value_t = 1)]
         count: usize,
+        #[arg(short, long, default_value_t = true)]
+        wait_for_completion: bool,
     },
 }

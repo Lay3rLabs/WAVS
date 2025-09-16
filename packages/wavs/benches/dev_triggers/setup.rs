@@ -97,7 +97,7 @@ impl DevTriggersRuntime {
         #[allow(unused_mut)]
         let mut dispatcher_local = wavs::dispatcher::Dispatcher::new(
             &config,
-            utils::telemetry::WavsMetrics::new(&opentelemetry::global::meter("wavs-benchmark")),
+            utils::telemetry::WavsMetrics::new(opentelemetry::global::meter("wavs-benchmark")),
         )
         .expect("dispatcher new");
 
@@ -149,7 +149,7 @@ impl DevTriggersRuntime {
                         server_config,
                         d_for_server,
                         false,
-                        utils::telemetry::HttpMetrics::new(&opentelemetry::global::meter(
+                        utils::telemetry::HttpMetrics::new(opentelemetry::global::meter(
                             "wavs-benchmark",
                         )),
                     )
@@ -188,13 +188,19 @@ impl DevTriggersRuntime {
         }
     }
 
-    pub async fn submit_requests(&self, client: &reqwest::Client, n: usize) {
+    pub async fn submit_requests(
+        &self,
+        client: &reqwest::Client,
+        n: usize,
+        wait_for_completion: bool,
+    ) {
         let body = wavs_types::SimulatedTriggerRequest {
             service_id: self.service.id(),
             workflow_id: self.workflow_id.clone(),
             trigger: wavs_types::Trigger::Manual,
             data: wavs_types::TriggerData::Raw(self.payload.clone()),
             count: n,
+            wait_for_completion,
         };
 
         let resp = client

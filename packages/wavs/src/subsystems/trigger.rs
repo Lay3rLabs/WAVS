@@ -205,10 +205,15 @@ impl TriggerManager {
                     );
                 }
             }
+
+            let start = std::time::Instant::now();
             dispatcher_command_sender
                 .send(command)
                 .await
                 .map_err(Box::new)?;
+
+            self.metrics
+                .record_trigger_sent_dispatcher_command(start.elapsed().as_secs_f64());
         }
 
         Ok(())
@@ -642,7 +647,7 @@ mod tests {
         let db_storage = RedbStorage::new(temp_dir.path().join("db")).unwrap();
         let services = Services::new(db_storage);
 
-        let metrics = TriggerMetrics::new(&opentelemetry::global::meter("test"));
+        let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
         let trigger_manager = TriggerManager::new(&config, metrics, services).unwrap();
 
         let ctx = utils::context::AppContext::new();
