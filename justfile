@@ -152,6 +152,7 @@ start-wavs:
 start-dev:
     #!/bin/bash -eux
     just start-prometheus &
+    just start-alertmanager &
     just start-jaeger &
     just start-wavs-dev &
     trap 'kill $(jobs -pr)' EXIT
@@ -174,7 +175,10 @@ start-jaeger:
     docker run --rm -p 4317:4317 -p 16686:16686 jaegertracing/jaeger:2.5.0
 
 start-prometheus:
-    docker run --rm -p 9090:9090 -v ./prometheus.yml:/etc/prometheus/prometheus.yml -v ./alerts.yml:/etc/prometheus/alerts.yml prom/prometheus --config.file=/etc/prometheus/prometheus.yml --web.enable-otlp-receiver
+    docker run --rm --name prometheus --network host -v ./prometheus.yml:/etc/prometheus/prometheus.yml -v ./alerts.yml:/etc/prometheus/alerts.yml prom/prometheus --config.file=/etc/prometheus/prometheus.yml --web.enable-otlp-receiver
+
+start-alertmanager:
+    docker run --rm --name alertmanager --network host -v ./alertmanager.yml:/etc/alertmanager/alertmanager.yml prom/alertmanager:v0.27.0 --config.file=/etc/alertmanager/alertmanager.yml
 
 dev-tool *args:
     cd packages/dev-tool && RUST_LOG=info cargo run -- {{args}}
