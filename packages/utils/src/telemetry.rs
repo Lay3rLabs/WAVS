@@ -52,7 +52,11 @@ pub fn setup_tracing(
     provider
 }
 
-pub fn setup_metrics(collector: &str, service_name: &str, push_interval_secs: Option<u64>) -> SdkMeterProvider {
+pub fn setup_metrics(
+    collector: &str,
+    service_name: &str,
+    push_interval_secs: Option<u64>,
+) -> SdkMeterProvider {
     let endpoint = format!("{collector}/api/v1/otlp/v1/metrics");
 
     let exporter = opentelemetry_otlp::MetricExporter::builder()
