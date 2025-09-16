@@ -3,10 +3,10 @@ use example_helpers::bindings::world::{
     wasi::keyvalue::{atomics, store},
     wavs::{
         operator::{
-            input::{Trigger, TriggerAction, TriggerData, TriggerDataBlockInterval},
+            input::{Trigger, TriggerAction, TriggerData},
             output::WasmResponse,
         },
-        types::service::TriggerBlockInterval,
+        types::{events::TriggerDataBlockInterval, service::TriggerBlockInterval},
     },
     Guest,
 };

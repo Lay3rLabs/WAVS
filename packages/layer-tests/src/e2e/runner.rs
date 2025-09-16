@@ -1,6 +1,10 @@
 // src/e2e/test_runner.rs
 
 use crate::deployment::ServiceDeployment;
+use crate::example_evm_client::example_submit::ISimpleSubmit::SignedData;
+use crate::example_evm_client::example_submit::IWavsServiceHandler::{Envelope, SignatureData};
+use alloy_primitives::U256;
+use alloy_provider::ext::AnvilApi;
 use alloy_provider::Provider;
 use anyhow::{anyhow, Context};
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -25,7 +29,7 @@ use crate::{
     example_evm_client::{SimpleEvmTriggerClient, TriggerId},
 };
 
-use super::helpers::wait_for_task_to_land;
+use super::helpers::{simulate_anvil_reorg, wait_for_task_to_land};
 use super::test_definition::WorkflowDefinition;
 
 /// Simplified test runner that leverages services directly attached to test definitions
@@ -247,6 +251,7 @@ async fn run_test(
         let input_bytes = first_workflow.input_data.to_bytes();
 
         // Execute the trigger once
+        let mut reorg_snapshot: Option<U256> = None;
         let trigger_id = match trigger {
             Trigger::EvmContractEvent {
                 chain,
@@ -254,8 +259,11 @@ async fn run_test(
                 event_hash: _,
             } => {
                 let evm_client = clients.get_evm_client(chain);
-                let client = SimpleEvmTriggerClient::new(evm_client, *address);
+                let client = SimpleEvmTriggerClient::new(evm_client.clone(), *address);
 
+                if first_workflow.expects_reorg() {
+                    reorg_snapshot = Some(evm_client.provider.anvil_snapshot().await?);
+                }
                 client
                     .add_trigger(input_bytes.expect("EVM triggers require an input"))
                     .await?
@@ -315,7 +323,49 @@ async fn run_test(
                             anyhow!("No submission contract found for workflow {}", workflow_id)
                         })?;
 
-                    vec![
+                    if first_workflow.expects_reorg() {
+                        tracing::info!("Test '{}' will simulate re-org", test.name);
+
+                        // Simulate re-org before waiting for task
+                        simulate_anvil_reorg(
+                            &client,
+                            reorg_snapshot
+                                .expect("Expected a reorg snapshot when simulating reorg"),
+                        )
+                        .await?;
+
+                        // Wait for task - should return empty data on error due to re-org
+                        let result = wait_for_task_to_land(
+                            client,
+                            *submission_contract,
+                            trigger_id,
+                            submit_start_block,
+                            *timeout,
+                        )
+                        .await;
+
+                        match result {
+                            Ok(signed_data) => signed_data,
+                            Err(_) => {
+                                // If we get an error (transaction dropped due to re-org),
+                                // return mocked signed data with empty content to match ExpectedOutput::Dropped
+                                tracing::info!("Transaction dropped due to re-org, returning empty signed data");
+                                SignedData {
+                                    data: vec![].into(), // Empty data indicates dropped transaction
+                                    signatureData: SignatureData {
+                                        signers: vec![],
+                                        signatures: vec![],
+                                        referenceBlock: submit_start_block.try_into().unwrap(),
+                                    },
+                                    envelope: Envelope {
+                                        eventId: alloy_primitives::FixedBytes([0; 20]),
+                                        ordering: alloy_primitives::FixedBytes([0; 12]),
+                                        payload: vec![].into(),
+                                    },
+                                }
+                            }
+                        }
+                    } else {
                         wait_for_task_to_land(
                             client,
                             *submission_contract,
@@ -323,15 +373,13 @@ async fn run_test(
                             submit_start_block,
                             *timeout,
                         )
-                        .await?,
-                    ]
+                        .await?
+                    }
                 }
                 Submit::None => unimplemented!("Submit::None is not implemented"),
             };
 
-            for data in signed_data {
-                expected_output.validate(test, clients, component_sources, &data.data)?;
-            }
+            expected_output.validate(test, clients, component_sources, &signed_data.data)?;
         }
     }
 

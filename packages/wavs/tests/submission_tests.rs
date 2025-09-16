@@ -33,6 +33,7 @@ fn dummy_message(service: &Service, payload: &str) -> ChainMessage {
         debug: ChainMessageDebug {
             do_not_submit_aggregator: true,
         },
+        trigger_data: wavs_types::TriggerData::default(),
     }
 }
 

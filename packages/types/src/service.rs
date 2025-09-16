@@ -196,7 +196,6 @@ impl Workflow {
 pub enum Trigger {
     // A contract that emits an event
     CosmosContractEvent {
-        #[schema(value_type = Object)] // TODO: update this in layer-climb
         address: layer_climb_address::Address,
         chain: ChainKey,
         event_type: String,
@@ -233,7 +232,7 @@ pub enum Trigger {
 }
 
 /// The data that came from the trigger and is passed to the component after being converted into the WIT-friendly type
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 pub enum TriggerData {
     CosmosContractEvent {
         /// The address of the contract that emitted the event
@@ -241,6 +240,7 @@ pub enum TriggerData {
         /// The chain where the event was emitted
         chain: ChainKey,
         /// The data that was emitted by the contract
+        #[schema(value_type = Object)]
         event: cosmwasm_std::Event,
         /// The block height where the event was emitted
         block_height: u64,
@@ -251,10 +251,13 @@ pub enum TriggerData {
         /// The chain where the event was emitted
         chain: ChainKey,
         /// The address of the contract that emitted the event
+        #[schema(value_type = String)]
         contract_address: alloy_primitives::Address,
         /// The log data
+        #[schema(value_type = Object)]
         log_data: LogData,
         /// The transaction hash where the event was emitted
+        #[schema(value_type = String)]
         tx_hash: alloy_primitives::TxHash,
         /// The block height where the event was emitted
         block_number: u64,
@@ -262,13 +265,12 @@ pub enum TriggerData {
         log_index: u64,
         // these are all optional because they may not be present in the log and we don't need them
         /// Hash of the block the transaction that emitted this log was mined in
-        block_hash: Option<alloy_primitives::B256>,
+        #[schema(value_type = String)]
+        block_hash: alloy_primitives::B256,
         /// The timestamp of the block as proposed in: https://ethereum-magicians.org/t/proposal-for-adding-blocktimestamp-to-logs-object-returned-by-eth-getlogs-and-related-requests https://github.com/ethereum/execution-apis/issues/295
-        block_timestamp: Option<u64>,
+        block_timestamp: u64,
         /// Index of the Transaction in the block
-        tx_index: Option<u64>,
-        /// Geth Compatibility Field: whether this log was removed
-        removed: bool,
+        tx_index: u64,
     },
     BlockInterval {
         /// The chain where the blocks are checked
@@ -281,6 +283,12 @@ pub enum TriggerData {
         trigger_time: Timestamp,
     },
     Raw(Vec<u8>),
+}
+
+impl Default for TriggerData {
+    fn default() -> Self {
+        Self::new_raw(vec![])
+    }
 }
 
 impl TriggerData {
