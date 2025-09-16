@@ -62,11 +62,15 @@ pub fn run(args: TestArgs, ctx: AppContext) {
         None
     };
 
+    let prometheus_push_interval = 1;
     let meter_provider = if let Some(collector) = config.prometheus.as_ref() {
-        Some(
-            ctx.rt
-                .block_on(async move { setup_metrics(collector, "wavs_test_metrics", Some(1)) }),
-        )
+        Some(ctx.rt.block_on(async move {
+            setup_metrics(
+                collector,
+                "wavs_test_metrics",
+                Some(prometheus_push_interval),
+            )
+        }))
     } else {
         None
     };
