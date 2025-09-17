@@ -15,9 +15,9 @@ pub async fn run() {
         panic!("aggregator component bytes got unexpected hash!");
     }
 
-    let service_id = SERVICE.id();
+    let service_manager = &SERVICE.manager;
     client
-        .register_aggregator_service(&service_id)
+        .register_aggregator_service(service_manager)
         .await
         .unwrap();
 }

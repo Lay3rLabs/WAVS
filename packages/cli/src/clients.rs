@@ -4,8 +4,8 @@ use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use wavs_types::{
     AddServiceRequest, ChainKey, ComponentDigest, DeleteServicesRequest, GetSignerRequest,
-    IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceId,
-    ServiceManager, SignerResponse, UploadComponentResponse,
+    IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceManager,
+    SignerResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUrlArgs;
@@ -47,12 +47,17 @@ impl HttpClient {
         Ok(response.digest)
     }
 
-    pub async fn register_aggregator_service(&self, service_id: &ServiceId) -> Result<()> {
+    pub async fn register_aggregator_service(
+        &self,
+        service_manager: &ServiceManager,
+    ) -> Result<()> {
+        use wavs_types::aggregator::RegisterServiceRequest;
+
         self.inner
             .post(format!("{}/services", self.endpoint))
-            .json(&serde_json::json!({
-                "service_id": service_id.to_string()
-            }))
+            .json(&RegisterServiceRequest {
+                service_manager: service_manager.clone(),
+            })
             .send()
             .await?;
 
