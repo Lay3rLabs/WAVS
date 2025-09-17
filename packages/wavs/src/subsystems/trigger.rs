@@ -186,6 +186,12 @@ impl TriggerManager {
         for command in commands {
             match &command {
                 DispatcherCommand::Trigger(action) => {
+                    #[cfg(debug_assertions)]
+                    if std::env::var("WAVS_FORCE_TRIGGER_ERROR_XXX").is_ok() {
+                        self.metrics.increment_total_errors("forced trigger error");
+                        continue;
+                    }
+
                     tracing_service_info!(
                         &self.services,
                         action.config.service_id,

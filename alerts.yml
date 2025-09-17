@@ -8,44 +8,36 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "More than 3 engine errors in 2 minutes"
-          
+          summary: "More than 3 engine errors in 2 minutes in last 2 minutes"
+
       - alert: SlowEngineExecution
         expr: histogram_quantile(0.95, rate(engine_execution_seconds_bucket[2m])) > 5
         for: 1m
         labels:
           severity: warning
         annotations:
-          summary: "95th percentile engine execution time above 5s"
+          summary: "95th percentile engine execution time above 5s in last 2 minutes"
 
       - alert: HighSubmissionFailures
-        expr: increase(submission_submissions_failed_total[5m]) > 3
+        expr: increase(submission_submissions_failed_total[2m]) > 3
         for: 2m
         labels:
           severity: warning
         annotations:
-          summary: "More than 3 submission failures in 5 minutes"
+          summary: "More than 3 submission failures in last 2 minutes"
 
       - alert: SlowSubmissions
-        expr: histogram_quantile(0.95, rate(submission_submission_latency_seconds_bucket[5m])) > 5
+        expr: histogram_quantile(0.95, rate(submission_submission_latency_seconds_bucket[2m])) > 5
         for: 3m
         labels:
           severity: warning
         annotations:
-          summary: "95th percentile submission latency above 5s"
-
-      - alert: DispatcherChannelFull
-        expr: dispatcher_messages_in_channel > 900
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Dispatcher channel almost full ({{ $value }} messages)"
+          summary: "95th percentile submission latency above 5s in last 2 minutes"
 
       - alert: TriggerErrors
-        expr: rate(trigger_errors_total[5m]) > 0.01
-        for: 5m
+        expr: increase(trigger_errors_total[2m]) > 2
+        for: 1m
         labels:
           severity: warning
         annotations:
-          summary: "Trigger errors detected"
+          summary: "More than 2 trigger errors detected in last 2 minutes"

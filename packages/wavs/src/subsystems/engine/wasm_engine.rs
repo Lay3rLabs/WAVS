@@ -121,11 +121,6 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             )));
         }
 
-        #[cfg(debug_assertions)]
-        if std::env::var("WAVS_FORCE_SLOW_ENGINE_XXX").is_ok() {
-            std::thread::sleep(std::time::Duration::from_secs(6));
-        }
-
         fn log(
             service_id: &ServiceId,
             workflow_id: &WorkflowId,
@@ -197,6 +192,11 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
 
         let initial_fuel = instance_deps.store.get_fuel().unwrap_or(0);
         let start_time = Instant::now();
+
+        #[cfg(debug_assertions)]
+        if std::env::var("WAVS_FORCE_SLOW_ENGINE_XXX").is_ok() {
+            std::thread::sleep(std::time::Duration::from_secs(6));
+        }
 
         let (result, final_fuel) = self.block_on_run(async move {
             let result =
