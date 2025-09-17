@@ -9,6 +9,7 @@ use wasmtime_wasi_http::WasiHttpCtx;
 use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowId};
 
 use super::component::{HostComponent, HostComponentLogger};
+use crate::common::base_engine::EPOCH_TICK_MILLIS;
 use crate::{backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineError};
 
 pub struct InstanceDepsBuilder<'a, P> {
@@ -145,7 +146,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
         // This time limit kills things from _within_ the Wasm instance
         // and is not the same as the time limit from the host side, which still needs to be imposed
         // see https://github.com/bytecodealliance/wasmtime-go/issues/233#issuecomment-2356238658
-        store.set_epoch_deadline(time_limit_seconds);
+        store.set_epoch_deadline(time_limit_seconds * 1000);
 
         Ok(InstanceDeps {
             store,
