@@ -37,9 +37,19 @@ pub async fn handle_packet(
     State(state): State<HttpState>,
     Json(req): Json<AddPacketRequest>,
 ) -> impl IntoResponse {
-    match process_packet(state, &req.packet).await {
-        Ok(resp) => Json(resp).into_response(),
+    state.metrics.packets_received.add(1, &[]);
+    let start_time = std::time::Instant::now();
+
+    match process_packet(state.clone(), &req.packet).await {
+        Ok(resp) => {
+            state.metrics.packets_processed.add(1, &[]);
+            let duration = start_time.elapsed().as_secs_f64();
+            state.metrics.processing_latency.record(duration, &[]);
+            Json(resp).into_response()
+        }
         Err(e) => {
+            state.metrics.packets_failed.add(1, &[]);
+            state.metrics.total_errors.add(1, &[]);
             tracing::error!("{:?}", e);
             AnyError::from(e).into_response()
         }

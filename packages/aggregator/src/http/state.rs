@@ -100,6 +100,7 @@ impl HttpState {
             config.max_execution_seconds,
             storage.clone(),
             ca_storage,
+            metrics.clone(),
         )
         .map_err(|e| AggregatorError::EngineInitialization(e.to_string()))?;
 
