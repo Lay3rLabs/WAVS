@@ -47,10 +47,13 @@ fn main() {
         }
     });
 
-    let meter_provider = config
-        .prometheus
-        .as_ref()
-        .map(|collector| setup_metrics(collector, "wavs_metrics"));
+    let meter_provider = config.prometheus.as_ref().map(|collector| {
+        setup_metrics(
+            collector,
+            "wavs_metrics",
+            config.prometheus_push_interval_secs,
+        )
+    });
     let meter = global::meter("wavs_metrics");
     let metrics = Metrics::new(meter);
 

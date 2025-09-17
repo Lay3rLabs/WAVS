@@ -57,6 +57,9 @@ pub struct Config {
     /// Prometheus collector to send metrics data
     pub prometheus: Option<String>,
 
+    /// Prometheus metrics push interval in seconds (default: 30)
+    pub prometheus_push_interval_secs: Option<u64>,
+
     /// The IPFS gateway URL used to access IPFS content over HTTP.
     pub ipfs_gateway: String,
 
@@ -112,6 +115,7 @@ impl Default for Config {
             max_wasm_fuel: Workflow::DEFAULT_FUEL_LIMIT * 3,
             jaeger: None,
             prometheus: None,
+            prometheus_push_interval_secs: None,
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
             bearer_token: None,
             dev_endpoints_enabled: false,

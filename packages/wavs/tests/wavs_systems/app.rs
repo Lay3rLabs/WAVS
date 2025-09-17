@@ -80,5 +80,6 @@ fn zeroed_cli_args(
         disable_submission_networking: None,
         jaeger: None,
         prometheus: None,
+        prometheus_push_interval_secs: None,
     }
 }

@@ -52,7 +52,11 @@ pub fn setup_tracing(
     provider
 }
 
-pub fn setup_metrics(collector: &str, service_name: &str) -> SdkMeterProvider {
+pub fn setup_metrics(
+    collector: &str,
+    service_name: &str,
+    push_interval_secs: Option<u64>,
+) -> SdkMeterProvider {
     let endpoint = format!("{collector}/api/v1/otlp/v1/metrics");
 
     let exporter = opentelemetry_otlp::MetricExporter::builder()
@@ -62,8 +66,9 @@ pub fn setup_metrics(collector: &str, service_name: &str) -> SdkMeterProvider {
         .build()
         .expect("Failed to build OTLP exporter!");
 
+    let push_interval = push_interval_secs.unwrap_or(30); // default 30 second
     let reader = PeriodicReader::builder(exporter)
-        .with_interval(Duration::from_secs(1)) // Push every 1 second
+        .with_interval(Duration::from_secs(push_interval))
         .build();
 
     let meter_provider = SdkMeterProvider::builder()
