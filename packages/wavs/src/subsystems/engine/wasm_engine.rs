@@ -120,6 +120,12 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 "Forced engine error for testing alerts"
             )));
         }
+
+        #[cfg(debug_assertions)]
+        if std::env::var("WAVS_FORCE_SLOW_ENGINE_XXX").is_ok() {
+            std::thread::sleep(std::time::Duration::from_secs(6));
+        }
+
         fn log(
             service_id: &ServiceId,
             workflow_id: &WorkflowId,

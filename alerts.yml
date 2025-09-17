@@ -9,6 +9,14 @@ groups:
           severity: critical
         annotations:
           summary: "More than 3 engine errors in 2 minutes"
+          
+      - alert: SlowEngineExecution
+        expr: histogram_quantile(0.95, rate(engine_execution_seconds_bucket[2m])) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "95th percentile engine execution time above 5s"
 
       - alert: HighSubmissionFailures
         expr: increase(submission_submissions_failed_total[5m]) > 3
