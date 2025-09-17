@@ -12,6 +12,8 @@ use opentelemetry_sdk::{
 use tracing_subscriber::layer::SubscriberExt;
 use wavs_types::ChainKey;
 
+const DEFAULT_PROMETHEUS_PUSH_INTERVAL: u64 = 30; // seconds
+
 pub fn setup_tracing(
     collector: &str,
     service_name: &str,
@@ -66,9 +68,10 @@ pub fn setup_metrics(
         .build()
         .expect("Failed to build OTLP exporter!");
 
-    let push_interval = push_interval_secs.unwrap_or(30); // default 30 second
     let reader = PeriodicReader::builder(exporter)
-        .with_interval(Duration::from_secs(push_interval))
+        .with_interval(Duration::from_secs(
+            push_interval_secs.unwrap_or(DEFAULT_PROMETHEUS_PUSH_INTERVAL),
+        ))
         .build();
 
     let meter_provider = SdkMeterProvider::builder()
