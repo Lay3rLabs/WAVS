@@ -149,7 +149,12 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         // this only configureds the component to yield periodically
         // killing is done from the outside via a tokio timeout
-        store.set_epoch_deadline(time_limit_seconds * (1000 / EPOCH_YIELD_PERIOD_MS));
+        tracing::info!(
+            "epoch deadline: {}",
+            time_limit_seconds * (1000 / EPOCH_YIELD_PERIOD_MS)
+        );
+
+        store.set_epoch_deadline(time_limit_seconds * 1000);
         //store.epoch_deadline_async_yield_and_update(EPOCH_YIELD_PERIOD_MS);
 
         Ok(InstanceDeps {

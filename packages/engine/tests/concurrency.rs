@@ -27,6 +27,7 @@ async fn do_it(kind: &str) {
     let mut wt_config = WTConfig::new();
 
     wt_config.wasm_component_model(true);
+    wt_config.epoch_interruption(true);
     wt_config.async_support(true);
     wt_config.consume_fuel(true);
 
@@ -46,39 +47,74 @@ async fn do_it(kind: &str) {
     let kind = kind.to_string();
 
     // try to tie up the runtime
-    tokio::spawn(execute_component_raw(
-        engine.clone(),
-        COMPONENT_ECHO_DATA_BYTES,
-        [
-            ("sleep-ms".to_string(), "10000".to_string()),
-            ("sleep-kind".to_string(), kind.clone()),
-        ]
-        .into_iter()
-        .collect(),
-        None,
-        b"long".to_vec(),
-    ));
+    let (long_tx, mut long_rx) = tokio::sync::oneshot::channel::<Vec<u8>>();
+    tokio::spawn({
+        let engine = engine.clone();
+        let kind = kind.clone();
+        async move {
+            let res = execute_component_raw(
+                engine,
+                COMPONENT_ECHO_DATA_BYTES,
+                [
+                    ("sleep-ms".to_string(), "10000".to_string()),
+                    ("sleep-kind".to_string(), kind),
+                ]
+                .into_iter()
+                .collect(),
+                None,
+                b"long".to_vec(),
+            )
+            .await;
 
-    let short_fut = tokio::spawn(execute_component_raw(
-        engine,
-        COMPONENT_ECHO_DATA_BYTES,
-        [
-            ("sleep-ms".to_string(), "10".to_string()),
-            ("sleep-kind".to_string(), kind),
-        ]
-        .into_iter()
-        .collect(),
-        None,
-        b"short".to_vec(),
-    ));
+            long_tx.send(res).unwrap();
+        }
+    });
+
+    let (short_tx, mut short_rx) = tokio::sync::oneshot::channel::<Vec<u8>>();
+    tokio::spawn({
+        async move {
+            let res = execute_component_raw(
+                engine,
+                COMPONENT_ECHO_DATA_BYTES,
+                [
+                    ("sleep-ms".to_string(), "10".to_string()),
+                    ("sleep-kind".to_string(), kind),
+                ]
+                .into_iter()
+                .collect(),
+                None,
+                b"short".to_vec(),
+            )
+            .await;
+
+            short_tx.send(res).unwrap();
+        }
+    });
 
     let time = std::time::Instant::now();
     loop {
-        if short_fut.is_finished() {
-            break;
+        match short_rx.try_recv() {
+            Ok(res) => {
+                assert_eq!(res, b"short".to_vec());
+                break;
+            }
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                panic!("short task channel closed!");
+            }
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
         }
 
         tokio::task::yield_now().await;
+    }
+
+    match long_rx.try_recv() {
+        Ok(res) => {
+            assert_eq!(res, b"long".to_vec());
+        }
+        Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+            panic!("long task channel closed!");
+        }
+        Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
     }
 
     if time.elapsed() >= Duration::from_secs(5) {
