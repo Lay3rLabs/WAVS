@@ -11,6 +11,11 @@ use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowId};
 use super::component::{HostComponent, HostComponentLogger};
 use crate::{backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineError};
 
+// how often to yield to check for epoch interruption
+// this is in milliseconds since that's the unit we use for driving the epoch
+// via increment_epoch()
+pub const EPOCH_YIELD_PERIOD_MS: u64 = 100;
+
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
     pub service: Service,
@@ -142,10 +147,10 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         store.set_fuel(fuel_limit).map_err(EngineError::Store)?;
 
-        // This time limit kills things from _within_ the Wasm instance
-        // and is not the same as the time limit from the host side, which still needs to be imposed
-        // see https://github.com/bytecodealliance/wasmtime-go/issues/233#issuecomment-2356238658
-        store.set_epoch_deadline(time_limit_seconds * 1000);
+        // this only configureds the component to yield periodically
+        // killing is done from the outside via a tokio timeout
+        store.set_epoch_deadline(time_limit_seconds * (1000 / EPOCH_YIELD_PERIOD_MS));
+        //store.epoch_deadline_async_yield_and_update(EPOCH_YIELD_PERIOD_MS);
 
         Ok(InstanceDeps {
             store,

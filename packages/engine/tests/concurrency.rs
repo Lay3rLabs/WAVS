@@ -32,6 +32,17 @@ async fn do_it(kind: &str) {
 
     let engine = WTEngine::new(&wt_config).unwrap();
 
+    let engine_ticker = engine.weak();
+    // just run forever, ticking forward till the end of time (or however long this node is up)
+    std::thread::spawn(move || loop {
+        if let Some(engine) = engine_ticker.upgrade() {
+            engine.increment_epoch();
+        } else {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    });
+
     let kind = kind.to_string();
 
     // try to tie up the runtime
