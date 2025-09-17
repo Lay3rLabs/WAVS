@@ -9,7 +9,6 @@ use wasmtime_wasi_http::WasiHttpCtx;
 use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowId};
 
 use super::component::{HostComponent, HostComponentLogger};
-use crate::common::base_engine::EPOCH_TICK_MILLIS;
 use crate::{backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineError};
 
 pub struct InstanceDepsBuilder<'a, P> {
