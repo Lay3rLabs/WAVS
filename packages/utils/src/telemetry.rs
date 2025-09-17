@@ -111,10 +111,7 @@ pub struct AggregatorMetrics {
     pub packets_failed: Counter<u64>,
     pub processing_latency: Histogram<f64>,
     pub total_errors: Counter<u64>,
-    pub engine_executions_success: Counter<u64>,
-    pub engine_executions_failed: Counter<u64>,
-    pub engine_execution_duration: Histogram<f64>,
-    pub engine_fuel_consumption: Histogram<u64>,
+    pub engine: EngineMetrics,
 }
 
 impl AggregatorMetrics {
@@ -143,31 +140,7 @@ impl AggregatorMetrics {
                 .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
                 .with_description("Total errors in aggregator")
                 .build(),
-            engine_executions_success: meter
-                .u64_counter(format!("{}.engine_executions_success", Self::NAMESPACE))
-                .with_description("Successful engine executions in aggregator")
-                .build(),
-            engine_executions_failed: meter
-                .u64_counter(format!("{}.engine_executions_failed", Self::NAMESPACE))
-                .with_description("Failed engine executions in aggregator")
-                .build(),
-            engine_execution_duration: meter
-                .f64_histogram(format!("{}.engine_execution_seconds", Self::NAMESPACE))
-                .with_description("Engine execution duration in seconds")
-                .with_boundaries(vec![0.001, 0.01, 0.1, 0.5, 1.0, 5.0, 10.0])
-                .build(),
-            engine_fuel_consumption: meter
-                .u64_histogram(format!("{}.engine_fuel_consumption", Self::NAMESPACE))
-                .with_description("Fuel consumed per engine execution")
-                .with_boundaries(vec![
-                    1000.0,
-                    10000.0,
-                    100000.0,
-                    1000000.0,
-                    10000000.0,
-                    100000000.0,
-                ])
-                .build(),
+            engine: EngineMetrics::new(meter.clone()),
         }
     }
 }

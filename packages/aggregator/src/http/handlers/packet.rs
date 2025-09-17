@@ -40,6 +40,21 @@ pub async fn handle_packet(
     state.metrics.packets_received.add(1, &[]);
     let start_time = std::time::Instant::now();
 
+    #[cfg(debug_assertions)]
+    if std::env::var("WAVS_FORCE_AGGREGATOR_PACKET_ERROR_XXX").is_ok() {
+        state.metrics.packets_failed.add(1, &[]);
+        state.metrics.total_errors.add(1, &[]);
+        return AnyError::from(AggregatorError::ComponentLoad(
+            "Forced aggregator packet error for testing alerts".into(),
+        ))
+        .into_response();
+    }
+
+    #[cfg(debug_assertions)]
+    if std::env::var("WAVS_FORCE_SLOW_AGGREGATOR_PACKET_XXX").is_ok() {
+        std::thread::sleep(std::time::Duration::from_secs(6));
+    }
+
     match process_packet(state.clone(), &req.packet).await {
         Ok(resp) => {
             state.metrics.packets_processed.add(1, &[]);

@@ -102,8 +102,8 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
 
         #[cfg(debug_assertions)]
         if std::env::var("WAVS_FORCE_AGGREGATOR_ENGINE_ERROR_XXX").is_ok() {
-            self.metrics.engine_executions_failed.add(1, &[]);
-            self.metrics.total_errors.add(1, &[]);
+            self.metrics.engine.executions_failed.add(1, &[]);
+            self.metrics.engine.total_errors.add(1, &[]);
             return Err(AggregatorError::ComponentLoad(
                 "Forced aggregator engine error for testing alerts".into(),
             ));
@@ -128,20 +128,21 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let fuel_after = instance_deps.store.get_fuel().unwrap_or(0);
         let fuel_consumed = fuel_before.saturating_sub(fuel_after);
         self.metrics
-            .engine_fuel_consumption
+            .engine
+            .fuel_consumption
             .record(fuel_consumed, &[]);
 
         let duration = start_time.elapsed().as_secs_f64();
-        self.metrics.engine_execution_duration.record(duration, &[]);
+        self.metrics.engine.execution_duration.record(duration, &[]);
 
         match result {
             Ok(actions) => {
-                self.metrics.engine_executions_success.add(1, &[]);
+                self.metrics.engine.executions_success.add(1, &[]);
                 Ok(actions)
             }
             Err(e) => {
-                self.metrics.engine_executions_failed.add(1, &[]);
-                self.metrics.total_errors.add(1, &[]);
+                self.metrics.engine.executions_failed.add(1, &[]);
+                self.metrics.engine.total_errors.add(1, &[]);
                 Err(e.into())
             }
         }
@@ -180,20 +181,21 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let fuel_after = instance_deps.store.get_fuel().unwrap_or(0);
         let fuel_consumed = fuel_before.saturating_sub(fuel_after);
         self.metrics
-            .engine_fuel_consumption
+            .engine
+            .fuel_consumption
             .record(fuel_consumed, &[]);
 
         let duration = start_time.elapsed().as_secs_f64();
-        self.metrics.engine_execution_duration.record(duration, &[]);
+        self.metrics.engine.execution_duration.record(duration, &[]);
 
         match result {
             Ok(actions) => {
-                self.metrics.engine_executions_success.add(1, &[]);
+                self.metrics.engine.executions_success.add(1, &[]);
                 Ok(actions)
             }
             Err(e) => {
-                self.metrics.engine_executions_failed.add(1, &[]);
-                self.metrics.total_errors.add(1, &[]);
+                self.metrics.engine.executions_failed.add(1, &[]);
+                self.metrics.engine.total_errors.add(1, &[]);
                 Err(e.into())
             }
         }
@@ -224,20 +226,21 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         let fuel_after = instance_deps.store.get_fuel().unwrap_or(0);
         let fuel_consumed = fuel_before.saturating_sub(fuel_after);
         self.metrics
-            .engine_fuel_consumption
+            .engine
+            .fuel_consumption
             .record(fuel_consumed, &[]);
 
         let duration = start_time.elapsed().as_secs_f64();
-        self.metrics.engine_execution_duration.record(duration, &[]);
+        self.metrics.engine.execution_duration.record(duration, &[]);
 
         match result {
             Ok(()) => {
-                self.metrics.engine_executions_success.add(1, &[]);
+                self.metrics.engine.executions_success.add(1, &[]);
                 Ok(())
             }
             Err(e) => {
-                self.metrics.engine_executions_failed.add(1, &[]);
-                self.metrics.total_errors.add(1, &[]);
+                self.metrics.engine.executions_failed.add(1, &[]);
+                self.metrics.engine.total_errors.add(1, &[]);
                 Err(e.into())
             }
         }
