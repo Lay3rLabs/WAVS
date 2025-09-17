@@ -51,7 +51,7 @@ groups:
           summary: "More than 3 packet failures in aggregator in last 2 minutes"
           
       - alert: AggregatorEngineErrors
-        expr: increase(aggregator_engine_executions_failed_total[2m]) > 3
+        expr: increase(engine_executions_failed_total[2m]) > 3
         for: 1m
         labels:
           severity: critical
@@ -67,7 +67,7 @@ groups:
           summary: "95th percentile aggregator processing time above 5s"
           
       - alert: SlowAggregatorEngine
-        expr: histogram_quantile(0.95, rate(aggregator_engine_execution_seconds_bucket[2m])) > 5
+        expr: histogram_quantile(0.95, rate(engine_execution_seconds_bucket[2m])) > 5
         for: 2m
         labels:
           severity: warning

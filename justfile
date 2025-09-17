@@ -158,6 +158,15 @@ start-dev:
     trap 'kill $(jobs -pr)' EXIT
     wait
 
+start-aggregator-dev-full:
+    #!/bin/bash -eux
+    just start-prometheus &
+    just start-alertmanager &
+    just start-jaeger &
+    just start-aggregator-dev &
+    trap 'kill $(jobs -pr)' EXIT
+    wait
+
 start-wavs-dev:
     #!/bin/bash -eu
     ROOT_DIR="$(pwd)"
@@ -186,6 +195,17 @@ dev-tool *args:
 
 start-aggregator:
     cd packages/aggregator && cargo run
+
+start-aggregator-dev:
+    #!/bin/bash -eux
+    ROOT_DIR="$(pwd)"
+    TEMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TEMP_DIR"' EXIT
+    cd packages/aggregator && \
+    WAVS_HOME="../.." WAVS_AGGREGATOR_DATA="$TEMP_DIR" \
+    cargo run -- \
+        --prometheus="http://127.0.0.1:9090" \
+        --jaeger="http://127.0.0.1:4317"
 
 start-anvil:
     anvil

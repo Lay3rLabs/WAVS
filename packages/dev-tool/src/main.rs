@@ -4,7 +4,7 @@ mod service;
 use clap::Parser;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::command::{deploy_service, send_triggers, Command};
+use crate::command::{deploy_aggregator, deploy_service, send_triggers, Command};
 
 #[tokio::main]
 async fn main() {
@@ -22,6 +22,9 @@ async fn main() {
     let command = Command::parse();
 
     match command {
+        Command::DeployAggregator => {
+            deploy_aggregator::run().await;
+        }
         Command::DeployService => {
             deploy_service::run().await;
         }
