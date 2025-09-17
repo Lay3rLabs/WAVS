@@ -10,9 +10,9 @@ route:
 
 receivers:
   - name: 'default'
-    # No configs - just displays in Alertmanager UI
-    # Add your notification configs here later:
-    # slack_configs:
-    #   - api_url: 'YOUR_SLACK_WEBHOOK_URL'
-    # email_configs:
-    #   - to: 'your-email@example.com'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/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'
+        channel: '#alerts'
+        title: 'WAVS Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        send_resolved: true

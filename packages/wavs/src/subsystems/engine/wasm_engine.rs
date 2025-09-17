@@ -112,6 +112,14 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         service: Service,
         trigger_action: TriggerAction,
     ) -> Result<Option<WasmResponse>, EngineError> {
+        #[cfg(debug_assertions)]
+        if std::env::var("WAVS_FORCE_ENGINE_ERROR_XXX").is_ok() {
+            self.metrics.total_errors.add(1, &[]);
+            self.metrics.executions_failed.add(1, &[]);
+            return Err(EngineError::Compile(anyhow::anyhow!(
+                "Forced engine error for testing alerts"
+            )));
+        }
         fn log(
             service_id: &ServiceId,
             workflow_id: &WorkflowId,

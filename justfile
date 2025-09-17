@@ -160,10 +160,11 @@ start-dev:
 
 start-wavs-dev:
     #!/bin/bash -eu
+    ROOT_DIR="$(pwd)"
     TEMP_DIR="$(mktemp -d)"
     trap 'rm -rf "$TEMP_DIR"' EXIT
     cd packages/wavs && \
-    WAVS_DOTENV="${PWD}/.env" WAVS_HOME="${PWD}" WAVS_DATA="$TEMP_DIR" \
+    WAVS_DOTENV="${ROOT_DIR}/.env" WAVS_HOME="../.." WAVS_DATA="$TEMP_DIR" \
     cargo run -- \
         --dev-endpoints-enabled=true \
         --disable-trigger-networking=true \

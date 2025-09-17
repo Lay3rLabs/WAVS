@@ -3,29 +3,29 @@ groups:
     interval: 30s
     rules:
       - alert: HighEngineErrors
-        expr: rate(engine_total_errors[5m]) > 0.1
-        for: 2m
+        expr: increase(engine_errors_total[2m]) > 3
+        for: 30s
         labels:
           severity: critical
         annotations:
-          summary: "Engine errors above 0.1/sec"
-          
+          summary: "More than 3 engine errors in 2 minutes"
+
       - alert: HighSubmissionFailures
-        expr: rate(submission_submissions_failed[5m]) > 0.05
-        for: 3m
+        expr: increase(submission_submissions_failed_total[5m]) > 3
+        for: 2m
         labels:
           severity: warning
         annotations:
-          summary: "Submission failures above 0.05/sec"
-          
+          summary: "More than 3 submission failures in 5 minutes"
+
       - alert: SlowSubmissions
-        expr: histogram_quantile(0.95, rate(submission_submission_latency_bucket[5m])) > 5
+        expr: histogram_quantile(0.95, rate(submission_submission_latency_seconds_bucket[5m])) > 5
         for: 3m
         labels:
           severity: warning
         annotations:
           summary: "95th percentile submission latency above 5s"
-          
+
       - alert: DispatcherChannelFull
         expr: dispatcher_messages_in_channel > 900
         for: 1m
@@ -33,9 +33,9 @@ groups:
           severity: critical
         annotations:
           summary: "Dispatcher channel almost full ({{ $value }} messages)"
-          
+
       - alert: TriggerErrors
-        expr: rate(trigger_total_errors[5m]) > 0.01
+        expr: rate(trigger_errors_total[5m]) > 0.01
         for: 5m
         labels:
           severity: warning
