@@ -24,6 +24,7 @@ async fn keyvalue_basic() {
     // Write a value to the key-value store
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::Write {
             bucket: BUCKET.to_string(),
@@ -38,6 +39,7 @@ async fn keyvalue_basic() {
     // Read it back
     let resp = execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx),
         KvStoreRequest::Read {
             bucket: BUCKET.to_string(),
@@ -70,6 +72,7 @@ async fn keyvalue_wrong_context() {
     // Write a value to the key-value store
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx_1),
         KvStoreRequest::Write {
             bucket: BUCKET.to_string(),
@@ -84,6 +87,7 @@ async fn keyvalue_wrong_context() {
     // Attempt to read the wrong context
     let err = try_execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx_2),
         KvStoreRequest::Read {
             bucket: BUCKET.to_string(),
@@ -119,6 +123,7 @@ async fn keyvalue_wrong_key() {
     // Write a value to the key-value store
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::Write {
             bucket: BUCKET.to_string(),
@@ -133,6 +138,7 @@ async fn keyvalue_wrong_key() {
     // Attempt to read the wrong key
     let err = try_execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx),
         KvStoreRequest::Read {
             bucket: BUCKET.to_string(),
@@ -167,6 +173,7 @@ async fn keyvalue_atomic_increment() {
     // Increment the key (without setting it first)
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::AtomicIncrement {
             bucket: BUCKET.to_string(),
@@ -181,6 +188,7 @@ async fn keyvalue_atomic_increment() {
     // Increment the key again so we can test against previous value
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::AtomicIncrement {
             bucket: BUCKET.to_string(),
@@ -196,6 +204,7 @@ async fn keyvalue_atomic_increment() {
     // behavior here is currently undefined, but we expect it to be a separate table
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::Write {
             bucket: BUCKET.to_string(),
@@ -208,6 +217,7 @@ async fn keyvalue_atomic_increment() {
 
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::AtomicIncrement {
             bucket: BUCKET.to_string(),
@@ -238,6 +248,7 @@ async fn keyvalue_atomic_swap() {
     // Write a value to the key-value store
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::Write {
             bucket: BUCKET.to_string(),
@@ -252,6 +263,7 @@ async fn keyvalue_atomic_swap() {
     // Swap it
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::AtomicSwap {
             bucket: BUCKET.to_string(),
@@ -266,6 +278,7 @@ async fn keyvalue_atomic_swap() {
     // Read it back
     let resp = execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::Read {
             bucket: BUCKET.to_string(),
@@ -284,6 +297,7 @@ async fn keyvalue_atomic_swap() {
     // Swap it, without setting first
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::AtomicSwap {
             bucket: BUCKET.to_string(),
@@ -298,6 +312,7 @@ async fn keyvalue_atomic_swap() {
     // Read it back
     let resp = execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx),
         KvStoreRequest::Read {
             bucket: BUCKET.to_string(),
@@ -332,6 +347,7 @@ async fn keyvalue_batch() {
     // Perform batch write
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::BatchWrite {
             bucket: BUCKET.to_string(),
@@ -345,6 +361,7 @@ async fn keyvalue_batch() {
     // Perform batch read
     let resp = execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::BatchRead {
             bucket: BUCKET.to_string(),
@@ -373,6 +390,7 @@ async fn keyvalue_batch() {
     ];
     let resp: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::BatchDelete {
             bucket: BUCKET.to_string(),
@@ -386,6 +404,7 @@ async fn keyvalue_batch() {
     // Verify deleted keys are no longer present
     let resp = execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::BatchRead {
             bucket: BUCKET.to_string(),
@@ -418,6 +437,7 @@ async fn keyvalue_batch() {
 
     let resp = execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::Read {
             bucket: BUCKET.to_string(),
@@ -435,6 +455,7 @@ async fn keyvalue_batch() {
 
     let err = try_execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx),
         KvStoreRequest::Read {
             bucket: BUCKET.to_string(),
@@ -473,6 +494,7 @@ async fn keyvalue_list() {
     // Perform batch write
     let _: KvStoreResponse = execute_component(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::BatchWrite {
             bucket: BUCKET.to_string(),
@@ -484,6 +506,7 @@ async fn keyvalue_list() {
     // list all keys
     let resp = execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::ListKeys {
             bucket: BUCKET.to_string(),
@@ -512,6 +535,7 @@ async fn keyvalue_list() {
     // list all keys with a cursor
     let resp = execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::ListKeys {
             bucket: BUCKET.to_string(),
@@ -543,6 +567,7 @@ async fn keyvalue_list() {
 
     let resp = execute_component::<KvStoreResponse>(
         COMPONENT_KV_STORE_BYTES,
+        Default::default(),
         Some(keyvalue_ctx.clone()),
         KvStoreRequest::ListKeys {
             bucket: BUCKET.to_string(),

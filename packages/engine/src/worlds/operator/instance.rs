@@ -110,7 +110,9 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             .unwrap_or(Workflow::DEFAULT_FUEL_LIMIT);
 
         if let Some(max_wasm_fuel) = max_wasm_fuel {
-            fuel_limit = fuel_limit.min(max_wasm_fuel);
+            // Users will be able to set this super high
+            // but we're okay with that since wasmtime will force yield points to be interjected
+            fuel_limit = fuel_limit.max(max_wasm_fuel);
         }
 
         let mut time_limit_seconds = workflow
