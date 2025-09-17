@@ -50,6 +50,12 @@ pub struct Config {
     /// Jaeger collector to send trace data
     pub jaeger: Option<String>,
 
+    /// Prometheus push gateway to send metrics
+    pub prometheus: Option<String>,
+
+    /// Prometheus metrics push interval in seconds
+    pub prometheus_push_interval_secs: Option<u64>,
+
     /// The IPFS gateway URL used to access IPFS content over HTTP.
     pub ipfs_gateway: String,
 
@@ -86,6 +92,8 @@ impl Default for Config {
             credential: None,
             hd_index: None,
             jaeger: None,
+            prometheus: None,
+            prometheus_push_interval_secs: None,
             chains: ChainConfigs {
                 cosmos: Default::default(),
                 evm: Default::default(),

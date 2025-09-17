@@ -41,3 +41,35 @@ groups:
           severity: warning
         annotations:
           summary: "More than 2 trigger errors detected in last 2 minutes"
+          
+      - alert: AggregatorPacketFailures
+        expr: increase(aggregator_packets_failed_total[2m]) > 3
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 3 packet failures in aggregator in last 2 minutes"
+          
+      - alert: AggregatorEngineErrors
+        expr: increase(aggregator_engine_executions_failed_total[2m]) > 3
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 3 engine execution failures in aggregator in last 2 minutes"
+          
+      - alert: SlowAggregatorProcessing
+        expr: histogram_quantile(0.95, rate(aggregator_processing_latency_seconds_bucket[2m])) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "95th percentile aggregator processing time above 5s"
+          
+      - alert: SlowAggregatorEngine
+        expr: histogram_quantile(0.95, rate(aggregator_engine_execution_seconds_bucket[2m])) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "95th percentile aggregator engine execution time above 5s"

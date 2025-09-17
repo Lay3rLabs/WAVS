@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning].
 
 ### Added
 
-- new alerts in both wavs and aggregator with configuration that sends alerts to Slack
+- new metrics in both wavs and aggregator with configuration that sends alerts to Slack
 
 ### Changed
 

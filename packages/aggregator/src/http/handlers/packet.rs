@@ -1056,7 +1056,9 @@ mod test {
                 "test test test test test test test test test test test junk".to_string(),
             ));
 
-            let state = HttpState::new_with_engine(config).unwrap();
+            let metrics =
+                utils::telemetry::AggregatorMetrics::new(opentelemetry::global::meter("test"));
+            let state = HttpState::new_with_engine(config, metrics).unwrap();
 
             let digest = state
                 .aggregator_engine

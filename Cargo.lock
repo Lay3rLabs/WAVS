@@ -9724,6 +9724,7 @@ dependencies = [
  "ctrlc",
  "futures",
  "lru 0.16.1",
+ "opentelemetry",
  "serde",
  "tempfile",
  "thiserror 2.0.16",
