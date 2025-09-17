@@ -106,6 +106,11 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prometheus_push_interval_secs: Option<u64>,
+
+    /// Enable dev endpoints for testing
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dev_endpoints_enabled: Option<bool>,
 }
 
 impl CliEnvExt for CliArgs {

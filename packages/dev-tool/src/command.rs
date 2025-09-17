@@ -1,5 +1,6 @@
 pub mod deploy_aggregator;
 pub mod deploy_service;
+pub mod send_packet;
 pub mod send_triggers;
 
 use clap::Parser;
@@ -9,6 +10,7 @@ use clap::Parser;
 pub enum Command {
     DeployAggregator,
     DeployService,
+    SendPacket,
     SendTriggers {
         #[arg(short, long, default_value_t = 1)]
         count: usize,
