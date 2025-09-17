@@ -151,18 +151,14 @@ start-wavs:
 
 start-dev:
     #!/bin/bash -eux
-    just start-prometheus &
-    just start-alertmanager &
-    just start-jaeger &
+    just start-telemetry &
     just start-wavs-dev &
     trap 'kill $(jobs -pr)' EXIT
     wait
 
 start-aggregator-dev-full:
     #!/bin/bash -eux
-    just start-prometheus &
-    just start-alertmanager &
-    just start-jaeger &
+    just start-telemetry &
     just start-aggregator-dev &
     trap 'kill $(jobs -pr)' EXIT
     wait
@@ -189,6 +185,11 @@ start-prometheus:
 
 start-alertmanager:
     docker run --rm --name alertmanager --network host -v ./alertmanager.yml:/etc/alertmanager/alertmanager.yml prom/alertmanager:v0.27.0 --config.file=/etc/alertmanager/alertmanager.yml
+
+start-telemetry:
+    just start-prometheus &
+    just start-alertmanager &
+    just start-jaeger &
 
 dev-tool *args:
     cd packages/dev-tool && RUST_LOG=info cargo run -- {{args}}
