@@ -140,7 +140,10 @@ pub enum ComponentSource {
         digest: ComponentDigest,
     },
     /// The wasm bytecode downloaded from a standard registry, digest provided to ensure no tampering
-    Registry { registry: Registry },
+    Registry {
+        #[serde(flatten)]
+        registry: Registry,
+    },
     /// An already deployed component
     Digest(ComponentDigest),
 }
