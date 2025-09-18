@@ -22,7 +22,6 @@ impl AppContext {
     pub fn new() -> Self {
         let rt = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(4) // TODO: make configurable?
                 .enable_all()
                 .build()
                 .unwrap(),

@@ -9711,7 +9711,6 @@ dependencies = [
  "lru 0.16.1",
  "opentelemetry",
  "rand 0.9.2",
- "rayon",
  "redb",
  "reqwest",
  "serde",
