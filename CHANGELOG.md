@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+### Added
+
+- new metrics in both wavs and aggregator with configuration that sends alerts to Slack
+
 ### Changed
 
 - Deprecate old variant Submit::Aggregator with evm_contracts; Aggregator component is required now
@@ -244,7 +248,8 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.5.0...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.5.1...HEAD
+[v0.5.1]: https://github.com/Lay3rLabs/WAVS/compare/v0.5.0...v0.5.1
 [v0.5.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.4.0...v0.5.0
 [v0.4.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0...v0.4.0
 [v0.3.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.2.0...v0.3.0
