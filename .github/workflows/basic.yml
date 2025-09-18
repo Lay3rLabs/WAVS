@@ -56,9 +56,9 @@ jobs:
       - name: Run temp tests
         uses: actions-rs/cargo@v1
         with:
-          working-directory: ./packages/engine
           toolchain: 1.88.0
           command: test
+          args: --package wavs-engine concurrency_
         env:
           RUST_BACKTRACE: 1
           RUST_LOG: info
