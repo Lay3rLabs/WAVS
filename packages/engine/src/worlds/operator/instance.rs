@@ -15,7 +15,7 @@ use crate::{backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineEr
 // this is in milliseconds since that's the unit we use for driving the epoch
 // via increment_epoch()
 // TODO - follow-up with questions about this... increasing to 100 breaks things
-pub const EPOCH_YIELD_PERIOD_MS: u64 = 10;
+pub const EPOCH_YIELD_PERIOD_MS: u64 = 1;
 
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
