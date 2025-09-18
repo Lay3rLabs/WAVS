@@ -1,6 +1,6 @@
 on: [pull_request]
 
-name: Basic Checks (Optimized)
+name: Basic Checks
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
