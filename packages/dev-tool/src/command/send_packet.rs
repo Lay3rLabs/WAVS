@@ -1,7 +1,8 @@
 use wavs_types::{
     aggregator::AddPacketRequest, Envelope, EnvelopeSignature, Packet, SignatureKind, TriggerData,
-    WorkflowId,
+    WorkflowId, EnvelopeExt,
 };
+use alloy_signer_local::PrivateKeySigner;
 
 use crate::service::SERVICE;
 
@@ -9,18 +10,24 @@ pub async fn run() {
     let service = SERVICE.clone();
     let workflow_id = WorkflowId::new("dev-trigger-workflow".to_string()).unwrap();
 
+    let signer = PrivateKeySigner::random();
+    
+    let envelope = Envelope {
+        eventId: [0u8; 20].into(),
+        ordering: [0u8; 12].into(),
+        payload: vec![1, 2, 3, 4, 5].into(),
+    };
+    
+    let signature = envelope
+        .sign(&signer, SignatureKind::evm_default())
+        .await
+        .unwrap();
+
     let packet = Packet {
-        envelope: Envelope {
-            eventId: [0u8; 20].into(),
-            ordering: [0u8; 12].into(),
-            payload: vec![1, 2, 3, 4, 5].into(),
-        },
+        envelope,
         workflow_id: workflow_id.clone(),
         service,
-        signature: EnvelopeSignature {
-            data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
-            kind: SignatureKind::evm_default(),
-        },
+        signature,
         trigger_data: TriggerData::Raw(vec![1, 2, 3, 4, 5]),
     };
 

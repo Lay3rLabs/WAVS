@@ -35,5 +35,6 @@ cfg-if = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
 alloy-json-abi = { workspace = true }
+alloy-signer-local = { workspace = true }
 cron = { workspace = true }
 rand = { workspace = true }
