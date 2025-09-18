@@ -146,7 +146,8 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
             };
 
             result_sender
-                .blocking_send(msg)
+                .send(msg)
+                .await
                 .map_err(|_| EngineError::WasiResultSend(service_id, workflow_id))
         } else {
             tracing::info!(
