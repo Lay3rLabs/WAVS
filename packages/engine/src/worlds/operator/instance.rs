@@ -14,8 +14,7 @@ use crate::{backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineEr
 // how often to yield to check for epoch interruption
 // this is in milliseconds since that's the unit we use for driving the epoch
 // via increment_epoch()
-// TODO - follow-up with questions about this... increasing to 100 breaks things
-pub const EPOCH_YIELD_PERIOD_MS: u64 = 1;
+pub const EPOCH_YIELD_PERIOD_MS: u64 = 100;
 
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
@@ -150,7 +149,15 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         // this only configures the component to yield periodically
         // killing is done from the outside via a tokio timeout
-        store.epoch_deadline_async_yield_and_update(EPOCH_YIELD_PERIOD_MS);
+        // The reason we use epoch_deadline_callback instead of epoch_deadline_async_yield_and_update
+        // is because the latter appears to have a bug where it doesn't always schedule nicely with tokio
+        // See https://github.com/dakom/debug-wasmtime-concurrency for more info
+        store.epoch_deadline_callback(move |_| {
+            Ok(wasmtime::UpdateDeadline::YieldCustom(
+                EPOCH_YIELD_PERIOD_MS,
+                Box::pin(tokio::task::yield_now()),
+            ))
+        });
 
         Ok(InstanceDeps {
             store,
