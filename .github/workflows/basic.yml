@@ -7,7 +7,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CARGO_INCREMENTAL: true
+  CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: short
   CARGO_TERM_COLOR: always
   WAVS_SUBMISSION_MNEMONIC: "test test test test test test test test test test test junk"
