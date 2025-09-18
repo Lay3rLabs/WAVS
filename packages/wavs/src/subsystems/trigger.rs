@@ -34,7 +34,8 @@ use utils::{
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
-    ByteArray, ChainKey, IWavsServiceManager, ServiceId, TriggerAction, TriggerConfig, TriggerData,
+    ByteArray, ChainKey, EventId, IWavsServiceManager, ServiceId, TriggerAction, TriggerConfig,
+    TriggerData,
 };
 
 #[derive(Clone)]
@@ -567,12 +568,19 @@ impl TriggerManager {
                 for (idx, command) in dispatcher_commands.iter().enumerate() {
                     if let DispatcherCommand::Trigger(action) = command {
                         // Log the trigger action details
+                        let service = self
+                            .services
+                            .get(&action.config.service_id)
+                            .map_err(TriggerError::Services)?;
+                        let event_id = EventId::try_from((&service, action))
+                            .map_err(TriggerError::EncodeEventId)?;
                         tracing::debug!(
-                            "Trigger action (in this batch) {}: service_id={}, workflow_id={}, trigger_data={:?}",
+                            "Trigger action (in this batch) {}: service_id={}, workflow_id={}, trigger_data={:?}, event_id={:?}",
                             idx + 1,
                             action.config.service_id,
                             action.config.workflow_id,
-                            action.data
+                            action.data,
+                            event_id
                         );
                     }
                 }
