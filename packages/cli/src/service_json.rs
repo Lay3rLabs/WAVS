@@ -3,8 +3,8 @@ use std::{collections::BTreeMap, num::NonZeroU64, str::FromStr};
 use serde::{Deserialize, Serialize};
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
-    Component, ComponentSource, ServiceManager, ServiceStatus, Submit, Timestamp, Trigger,
-    WorkflowId,
+    Component, ComponentSource, ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp,
+    Trigger, WorkflowId,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -146,7 +146,11 @@ impl ServiceJson {
                     errors.push(format!("Workflow '{}' has an unset submit", workflow_id));
                 }
                 SubmitJson::AggregatorJson(aggregator_json) => match aggregator_json {
-                    AggregatorJson::Aggregator { url, component } => {
+                    AggregatorJson::Aggregator {
+                        url,
+                        component,
+                        signature_kind: _,
+                    } => {
                         if reqwest::Url::parse(url).is_err() {
                             errors.push(format!(
                                 "Workflow '{}' has an invalid URL: {}",
@@ -312,6 +316,7 @@ pub enum AggregatorJson {
     Aggregator {
         url: String,
         component: ComponentJson,
+        signature_kind: SignatureKind,
     },
 }
 
