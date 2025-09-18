@@ -9,7 +9,7 @@ use crate::subsystems::trigger::error::TriggerError;
 
 use super::StreamTriggers;
 
-pub async fn start_local_command_stream(
+pub fn start_local_command_stream(
     receiver: mpsc::UnboundedReceiver<LocalStreamCommand>,
     _metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>

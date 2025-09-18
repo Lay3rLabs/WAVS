@@ -4,9 +4,7 @@ pub mod schedulers;
 pub mod streams;
 
 use crate::{
-    config::Config,
-    dispatcher::{DispatcherCommand, TRIGGER_CHANNEL_SIZE},
-    services::Services,
+    config::Config, dispatcher::DispatcherCommand, services::Services,
     subsystems::trigger::streams::cosmos_stream::StreamTriggerCosmosContractEvent,
     tracing_service_info, AppContext,
 };
@@ -26,7 +24,6 @@ use streams::{
     local_command_stream::{self, LocalStreamCommand},
     MultiplexedStream, StreamTriggers,
 };
-use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{
     config::{AnyChainConfig, ChainConfigs, EvmChainConfigExt},
@@ -40,9 +37,10 @@ use wavs_types::{
 #[derive(Clone)]
 pub struct TriggerManager {
     pub chain_configs: Arc<std::sync::RwLock<ChainConfigs>>,
-    dispatcher_command_sender: Arc<std::sync::Mutex<Option<mpsc::Sender<DispatcherCommand>>>>,
-    dispatcher_command_receiver: Arc<std::sync::Mutex<Option<mpsc::Receiver<DispatcherCommand>>>>,
-    local_command_sender: Arc<std::sync::Mutex<Option<mpsc::UnboundedSender<LocalStreamCommand>>>>,
+    dispatcher_command_sender: crossbeam::channel::Sender<DispatcherCommand>,
+    local_command_sender: tokio::sync::mpsc::UnboundedSender<LocalStreamCommand>,
+    local_command_receiver:
+        Arc<std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<LocalStreamCommand>>>>,
     lookup_maps: Arc<LookupMaps>,
     metrics: TriggerMetrics,
     #[cfg(debug_assertions)]
@@ -57,21 +55,16 @@ impl TriggerManager {
         config: &Config,
         metrics: TriggerMetrics,
         services: Services,
+        dispatcher_command_sender: crossbeam::channel::Sender<DispatcherCommand>,
     ) -> Result<Self, TriggerError> {
-        // TODO - discuss unbounded, crossbeam, etc.
-        let (dispatcher_command_sender, dispatcher_command_receiver) =
-            mpsc::channel(TRIGGER_CHANNEL_SIZE);
+        let (local_command_sender, local_command_receiver) = tokio::sync::mpsc::unbounded_channel();
 
         Ok(Self {
             chain_configs: Arc::new(std::sync::RwLock::new(config.chains.clone())),
             lookup_maps: Arc::new(LookupMaps::new(services.clone(), metrics.clone())),
-            dispatcher_command_sender: Arc::new(std::sync::Mutex::new(Some(
-                dispatcher_command_sender,
-            ))),
-            dispatcher_command_receiver: Arc::new(std::sync::Mutex::new(Some(
-                dispatcher_command_receiver,
-            ))),
-            local_command_sender: Arc::new(std::sync::Mutex::new(None)),
+            dispatcher_command_sender,
+            local_command_sender,
+            local_command_receiver: Arc::new(std::sync::Mutex::new(Some(local_command_receiver))),
             metrics,
             #[cfg(debug_assertions)]
             disable_networking: config.disable_trigger_networking,
@@ -92,21 +85,12 @@ impl TriggerManager {
 
         self.lookup_maps.add_service(service)?;
 
-        match self.local_command_sender.lock().unwrap().as_ref() {
-            Some(sender) => {
-                // Ensure the service manager's chain is being listened to for service change events
-                // This is needed even if the service has no workflows, so service URI changes can be detected
-                sender.send(LocalStreamCommand::StartListeningChain {
-                    chain: service.manager.chain().clone(),
-                })?;
-            }
-            None => {
-                tracing::warn!(
-                    "Local command sender not initialized, cannot send command for service manager chain: {:?}",
-                    service.manager.chain()
-                );
-            }
-        }
+        // Ensure the service manager's chain is being listened to for service change events
+        // This is needed even if the service has no workflows, so service URI changes can be detected
+        self.local_command_sender
+            .send(LocalStreamCommand::StartListeningChain {
+                chain: service.manager.chain().clone(),
+            })?;
 
         for (id, workflow) in &service.workflows {
             let config = TriggerConfig {
@@ -116,17 +100,7 @@ impl TriggerManager {
             };
 
             if let Some(command) = LocalStreamCommand::new(&config) {
-                match self.local_command_sender.lock().unwrap().as_ref() {
-                    Some(sender) => {
-                        sender.send(command)?;
-                    }
-                    None => {
-                        tracing::warn!(
-                            "Local command sender not initialized, cannot send command: {:?}",
-                            command
-                        );
-                    }
-                }
+                self.local_command_sender.send(command)?;
             }
         }
 
@@ -139,17 +113,7 @@ impl TriggerManager {
     }
 
     #[instrument(skip(self, ctx), fields(subsys = "TriggerManager"))]
-    pub fn start(
-        &self,
-        ctx: AppContext,
-    ) -> Result<mpsc::Receiver<DispatcherCommand>, TriggerError> {
-        let dispatcher_command_receiver = self
-            .dispatcher_command_receiver
-            .lock()
-            .unwrap()
-            .take()
-            .unwrap();
-
+    pub fn start(&self, ctx: AppContext) -> Result<(), TriggerError> {
         ctx.rt.clone().spawn({
             let _self = self.clone();
             let mut kill_receiver = ctx.get_kill_receiver();
@@ -157,8 +121,6 @@ impl TriggerManager {
                 tokio::select! {
                     _ = kill_receiver.recv() => {
                         tracing::debug!("Trigger Manager shutting down");
-                        // see the note in dispatcher about the channel automatically closing
-                        _self.dispatcher_command_sender.lock().unwrap().take();
                     },
                     res = _self.start_watcher() => {
                         if let Err(err) = res {
@@ -170,19 +132,13 @@ impl TriggerManager {
             }
         });
 
-        Ok(dispatcher_command_receiver)
+        Ok(())
     }
 
     pub async fn send_dispatcher_commands(
         &self,
         commands: impl IntoIterator<Item = DispatcherCommand>,
     ) -> Result<(), TriggerError> {
-        let dispatcher_command_sender = self
-            .dispatcher_command_sender
-            .lock()
-            .unwrap()
-            .clone()
-            .unwrap();
         for command in commands {
             match &command {
                 DispatcherCommand::Trigger(action) => {
@@ -213,9 +169,8 @@ impl TriggerManager {
             }
 
             let start = std::time::Instant::now();
-            dispatcher_command_sender
+            self.dispatcher_command_sender
                 .send(command)
-                .await
                 .map_err(Box::new)?;
 
             self.metrics
@@ -227,10 +182,6 @@ impl TriggerManager {
 
     pub async fn add_trigger(&self, trigger: TriggerAction) -> Result<(), TriggerError> {
         self.local_command_sender
-            .lock()
-            .unwrap()
-            .as_ref()
-            .expect("trigger manager not started")
             .send(LocalStreamCommand::ManualTrigger(Box::new(trigger)))?;
         Ok(())
     }
@@ -239,15 +190,10 @@ impl TriggerManager {
     async fn start_watcher(&self) -> Result<(), TriggerError> {
         let mut multiplexed_stream: MultiplexedStream = SelectAll::new();
 
-        // Start the local command stream
-        let (local_stream_command_sender, local_stream_command_receiver) =
-            mpsc::unbounded_channel();
-        *self.local_command_sender.lock().unwrap() = Some(local_stream_command_sender);
         let local_command_stream = local_command_stream::start_local_command_stream(
-            local_stream_command_receiver,
+            self.local_command_receiver.lock().unwrap().take().unwrap(),
             self.metrics.clone(),
-        )
-        .await?;
+        )?;
         multiplexed_stream.push(local_command_stream);
 
         let mut cosmos_clients = HashMap::new();
@@ -654,7 +600,10 @@ mod tests {
         let services = Services::new(db_storage);
 
         let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
-        let trigger_manager = TriggerManager::new(&config, metrics, services).unwrap();
+        let (dispatcher_tx, dispatcher_rx) = crossbeam::channel::unbounded::<DispatcherCommand>();
+
+        let trigger_manager =
+            TriggerManager::new(&config, metrics, services, dispatcher_tx).unwrap();
 
         let ctx = utils::context::AppContext::new();
         let mut receiver = trigger_manager.start(ctx.clone()).unwrap();
@@ -677,7 +626,7 @@ mod tests {
         }
 
         let mut received_count = 0;
-        while let Some(command) = receiver.recv().await {
+        while let Some(command) = dispatcher_rx.recv().ok() {
             if let DispatcherCommand::Trigger(action) = command {
                 if let TriggerData::Raw(data) = &action.data {
                     assert_eq!(

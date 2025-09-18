@@ -54,10 +54,6 @@ use utils::storage::db::{DBError, RedbStorage};
 use utils::storage::{CAStorage, CAStorageError};
 use wasm_pkg_common::Error as RegistryError;
 
-pub const TRIGGER_CHANNEL_SIZE: usize = 100;
-pub const ENGINE_CHANNEL_SIZE: usize = 20;
-pub const SUBMISSION_CHANNEL_SIZE: usize = 20;
-
 pub struct Dispatcher<S: CAStorage> {
     pub trigger_manager: TriggerManager,
     pub engine_manager: EngineManager<S>,
@@ -76,12 +72,20 @@ pub enum DispatcherCommand {
 
 impl Dispatcher<FileStorage> {
     pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, DispatcherError> {
+        // Create all our channels for communication
+        let (dispatcher_tx, dispatcher_rx) = crossbeam::channel::unbounded::<DispatcherCommand>();
+
         let file_storage = FileStorage::new(config.data.join("ca"))?;
         let db_storage = RedbStorage::new(config.data.join("db"))?;
 
         let services = Services::new(db_storage.clone());
 
-        let trigger_manager = TriggerManager::new(config, metrics.trigger, services.clone())?;
+        let trigger_manager = TriggerManager::new(
+            config,
+            metrics.trigger,
+            services.clone(),
+            dispatcher_tx.clone(),
+        )?;
 
         let app_storage = config.data.join("app");
         let engine = WasmEngine::new(

@@ -9718,6 +9718,7 @@ dependencies = [
  "cosmwasm-std",
  "criterion",
  "cron",
+ "crossbeam",
  "ctrlc",
  "dashmap",
  "example-types",
