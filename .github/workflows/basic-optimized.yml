@@ -46,6 +46,10 @@ jobs:
           shared-key: "v0-workspace-${{ hashFiles('**/Cargo.lock') }}"
           workspaces: './'
           cache-targets: true
+          cache-directories: |
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/git/db
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -78,6 +82,10 @@ jobs:
           shared-key: "v0-workspace-${{ hashFiles('**/Cargo.lock') }}"
           workspaces: './'
           cache-targets: true
+          cache-directories: |
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/git/db
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -105,6 +113,10 @@ jobs:
           shared-key: "v0-workspace-${{ hashFiles('**/Cargo.lock') }}"
           workspaces: './'
           cache-targets: true
+          cache-directories: |
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/git/db
 
       - name: Check formatting
         run: cargo fmt --all -- --check
