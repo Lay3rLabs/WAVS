@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use alloy_primitives::FixedBytes;
 use error::EngineError;
-use rayon::ThreadPoolBuilder;
 use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::storage::CAStorage;
@@ -21,7 +20,6 @@ use crate::AppContext;
 
 pub struct EngineManager<S: CAStorage> {
     pub engine: Arc<WasmEngine<S>>,
-    pub thread_count: usize,
     pub services: Services,
 }
 
@@ -29,25 +27,23 @@ impl<S: CAStorage> Clone for EngineManager<S> {
     fn clone(&self) -> Self {
         Self {
             engine: Arc::clone(&self.engine),
-            thread_count: self.thread_count,
             services: self.services.clone(),
         }
     }
 }
 
 impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
-    pub fn new(engine: WasmEngine<S>, thread_count: usize, services: Services) -> Self {
+    pub fn new(engine: WasmEngine<S>, services: Services) -> Self {
         Self {
             engine: Arc::new(engine),
-            thread_count,
             services,
         }
     }
 
-    #[instrument(skip(self, _ctx), fields(subsys = "EngineRunner"))]
+    #[instrument(skip(self, ctx), fields(subsys = "EngineRunner"))]
     pub fn start(
         &self,
-        _ctx: AppContext,
+        ctx: AppContext,
         mut input: mpsc::Receiver<(TriggerAction, Service)>,
         result_sender: mpsc::Sender<ChainMessage>,
     ) where
@@ -56,18 +52,15 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         let _self = self.clone();
 
         std::thread::spawn(move || {
-            let pool = ThreadPoolBuilder::new()
-                .num_threads(_self.thread_count)
-                .build()
-                .unwrap();
             while let Some((action, service)) = input.blocking_recv() {
                 let _self = _self.clone();
                 let result_sender = result_sender.clone();
-                pool.install(move || {
-                    if let Err(e) = _self.run_trigger(action, service, result_sender) {
-                        tracing::error!("{:?}", e);
-                    }
-                })
+                if let Err(e) = ctx
+                    .rt
+                    .block_on(_self.run_trigger(action, service, result_sender))
+                {
+                    tracing::error!("{:?}", e);
+                }
             }
         });
     }
@@ -90,7 +83,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         Ok(digests)
     }
 
-    fn run_trigger(
+    async fn run_trigger(
         &self,
         action: TriggerAction,
         service: Service,
@@ -124,7 +117,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
             workflow.component.source.digest()
         );
 
-        let wasm_response = self.engine.execute(service.clone(), action.clone())?;
+        let wasm_response = self.engine.execute(service.clone(), action.clone()).await?;
 
         // If Ok(Some(x)), send the result down the pipeline to the submit processor
         // If Ok(None), just end early here, performing no action (but updating local state if needed)

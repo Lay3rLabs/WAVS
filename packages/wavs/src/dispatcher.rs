@@ -12,13 +12,11 @@
  * It continually listens to new results from the TriggerManager, and executes them on the WasmEngine.
  * When the WasmEngine has produced the result, it submits it to the destination (typically a ServiceHandler contract).
  *
- * The TriggerManager has it's own internal runtime and is meant to be able to handle a large number of
+ * The TriggerManager is meant to be able to handle a large number of
  * async network requests. These may be polling or event-driven (websockets), but there are expected to be quite
  * a few network calls and relatively little computation.
  *
- * The WasmEngine stores a large number of wasm components, indexed by their digest.
- * It should be able to quickly execute any of them, via a number of predefined wit component interfaces.
- * We do want to limit the number of wasmtime instances at once, and so we use a capped rayon threadpool.
+ * The WasmEngine stores a large number of wasm components, indexed by their digest, but all sharing the same WIT entrypoint.
  *
  * Once the results are calculated, they need to be signed and submitted to the chain (typically via the aggregator).
  *
@@ -96,7 +94,7 @@ impl Dispatcher<FileStorage> {
             metrics.engine,
             db_storage,
         );
-        let engine_manager = EngineManager::new(engine, config.wasm_threads, services.clone());
+        let engine_manager = EngineManager::new(engine, services.clone());
 
         let submission_manager =
             SubmissionManager::new(config, metrics.submission, services.clone())?;
