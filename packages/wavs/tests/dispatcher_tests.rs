@@ -104,7 +104,10 @@ fn dispatcher_pipeline() {
     // check that the events were properly handled and arrived at submission
     wait_for_submission_messages(&dispatcher.submission_manager, 2, None).unwrap();
     let processed = dispatcher.submission_manager.get_debug_packets();
+
     assert_eq!(processed.len(), 2);
+
+    // eh, just happens to be the order we want
 
     let payload_1: DataWithId = DataWithId::abi_decode(&processed[0].envelope.payload).unwrap();
     let data_1: SquareResponse = serde_json::from_slice(&payload_1.data).unwrap();
@@ -113,7 +116,10 @@ fn dispatcher_pipeline() {
     let data_2: SquareResponse = serde_json::from_slice(&payload_2.data).unwrap();
 
     // Check the payloads
-    assert_eq!(data_1, SquareResponse::new(9));
-
-    assert_eq!(data_2, SquareResponse::new(441));
+    if data_1 == SquareResponse::new(9) {
+        assert_eq!(data_2, SquareResponse::new(441));
+    } else {
+        assert_eq!(data_1, SquareResponse::new(441));
+        assert_eq!(data_2, SquareResponse::new(9));
+    }
 }

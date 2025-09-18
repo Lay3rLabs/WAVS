@@ -151,7 +151,17 @@ impl Packet {
 }
 
 #[derive(
-    Serialize, Deserialize, Clone, Eq, PartialEq, Debug, Hash, bincode::Decode, bincode::Encode,
+    Serialize,
+    Deserialize,
+    Clone,
+    Eq,
+    PartialEq,
+    Debug,
+    Hash,
+    bincode::Decode,
+    bincode::Encode,
+    Ord,
+    PartialOrd,
 )]
 #[serde(transparent)]
 pub struct EventId([u8; 20]);
