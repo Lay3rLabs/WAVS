@@ -65,6 +65,7 @@ pub struct HttpState {
     storage: RedbStorage,
     evm_clients: Arc<RwLock<HashMap<ChainKey, EvmSigningClient>>>,
     pub aggregator_engine: Arc<AggregatorEngine<FileStorage>>,
+    pub metrics: utils::telemetry::AggregatorMetrics,
 }
 
 // key is ServiceId
@@ -72,13 +73,19 @@ const SERVICES: Table<[u8; 32], ()> = Table::new("services");
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
-    #[instrument(skip(config))]
-    pub fn new(config: Config) -> AggregatorResult<Self> {
-        Self::new_with_engine(config)
+    #[instrument(skip(config, metrics))]
+    pub fn new(
+        config: Config,
+        metrics: utils::telemetry::AggregatorMetrics,
+    ) -> AggregatorResult<Self> {
+        Self::new_with_engine(config, metrics)
     }
 
-    #[instrument(skip(config))]
-    pub fn new_with_engine(config: Config) -> AggregatorResult<Self> {
+    #[instrument(skip(config, metrics))]
+    pub fn new_with_engine(
+        config: Config,
+        metrics: utils::telemetry::AggregatorMetrics,
+    ) -> AggregatorResult<Self> {
         tracing::info!("Creating file storage at: {:?}", config.data);
         let file_storage = FileStorage::new(&config.data)?;
         let ca_storage = Arc::new(file_storage);
@@ -93,6 +100,7 @@ impl HttpState {
             config.max_execution_seconds,
             storage.clone(),
             ca_storage,
+            metrics.clone(),
         )
         .map_err(|e| AggregatorError::EngineInitialization(e.to_string()))?;
 
@@ -106,6 +114,7 @@ impl HttpState {
             evm_clients,
             queue_transaction: AsyncTransaction::new(false),
             aggregator_engine: Arc::new(engine),
+            metrics,
         })
     }
 

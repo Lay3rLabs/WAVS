@@ -20,13 +20,17 @@ use super::{
 const REALM: &str = "aggregator";
 
 // this is called from main
-#[instrument(skip(ctx, config))]
-pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
+#[instrument(skip(ctx, config, metrics))]
+pub fn start(
+    ctx: AppContext,
+    config: Config,
+    metrics: utils::telemetry::AggregatorMetrics,
+) -> anyhow::Result<()> {
     let mut shutdown_signal = ctx.get_kill_receiver();
     ctx.rt.block_on(async move {
         let (host, port) = (config.host.clone(), config.port);
 
-        let router = make_router(config).await?;
+        let router = make_router(config, metrics).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
@@ -44,9 +48,12 @@ pub fn start(ctx: AppContext, config: Config) -> anyhow::Result<()> {
 }
 
 // this is called from main and tests
-pub async fn make_router(config: Config) -> anyhow::Result<axum::Router> {
+pub async fn make_router(
+    config: Config,
+    metrics: utils::telemetry::AggregatorMetrics,
+) -> anyhow::Result<axum::Router> {
     tracing::info!("Creating HttpState with engine");
-    let state = HttpState::new_with_engine(config.clone())?;
+    let state = HttpState::new_with_engine(config.clone(), metrics)?;
     tracing::info!("HttpState created successfully with engine");
 
     // public routes

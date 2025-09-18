@@ -12,6 +12,8 @@ use opentelemetry_sdk::{
 use tracing_subscriber::layer::SubscriberExt;
 use wavs_types::ChainKey;
 
+const DEFAULT_PROMETHEUS_PUSH_INTERVAL: u64 = 30; // seconds
+
 pub fn setup_tracing(
     collector: &str,
     service_name: &str,
@@ -66,9 +68,10 @@ pub fn setup_metrics(
         .build()
         .expect("Failed to build OTLP exporter!");
 
-    let push_interval = push_interval_secs.unwrap_or(30); // default 30 second
     let reader = PeriodicReader::builder(exporter)
-        .with_interval(Duration::from_secs(push_interval))
+        .with_interval(Duration::from_secs(
+            push_interval_secs.unwrap_or(DEFAULT_PROMETHEUS_PUSH_INTERVAL),
+        ))
         .build();
 
     let meter_provider = SdkMeterProvider::builder()
@@ -97,6 +100,47 @@ impl Metrics {
         Self {
             http: HttpMetrics::new(meter.clone()),
             wavs: WavsMetrics::new(meter),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AggregatorMetrics {
+    pub packets_received: Counter<u64>,
+    pub packets_processed: Counter<u64>,
+    pub packets_failed: Counter<u64>,
+    pub processing_latency: Histogram<f64>,
+    pub total_errors: Counter<u64>,
+    pub engine: EngineMetrics,
+}
+
+impl AggregatorMetrics {
+    pub const NAMESPACE: &'static str = "aggregator";
+
+    pub fn new(meter: Meter) -> Self {
+        Self {
+            packets_received: meter
+                .u64_counter(format!("{}.packets_received", Self::NAMESPACE))
+                .with_description("Total packets received by aggregator")
+                .build(),
+            packets_processed: meter
+                .u64_counter(format!("{}.packets_processed", Self::NAMESPACE))
+                .with_description("Total packets successfully processed")
+                .build(),
+            packets_failed: meter
+                .u64_counter(format!("{}.packets_failed", Self::NAMESPACE))
+                .with_description("Total packets that failed processing")
+                .build(),
+            processing_latency: meter
+                .f64_histogram(format!("{}.processing_latency_seconds", Self::NAMESPACE))
+                .with_description("Packet processing latency in seconds")
+                .with_boundaries(vec![0.001, 0.01, 0.1, 0.5, 1.0, 5.0, 10.0])
+                .build(),
+            total_errors: meter
+                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
+                .with_description("Total errors in aggregator")
+                .build(),
+            engine: EngineMetrics::new(meter.clone()),
         }
     }
 }
