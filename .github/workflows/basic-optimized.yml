@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - id: packages
         run: |
-          PACKAGES=$(cargo metadata --no-deps --format-version 1 | jq -c '[.workspace_members[] | select(contains("packages/")) | split(" ")[0] | split("#")[0] | split("/") | .[-1]]')
+          PACKAGES=$(cargo metadata --no-deps --format-version 1 | jq -c '[.packages[] | select(.manifest_path | contains("/packages/")) | .name]')
           echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
   test:
