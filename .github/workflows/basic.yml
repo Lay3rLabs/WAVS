@@ -11,7 +11,6 @@ env:
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: short
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
   WAVS_SUBMISSION_MNEMONIC: "test test test test test test test test test test test junk"
   WAVS_CLI_EVM_CREDENTIAL: "test test test test test test test test test test test junk"
   WAVS_AGGREGATOR_CREDENTIAL: "test test test test test test test test test test test junk"
@@ -24,11 +23,6 @@ jobs:
     runs-on: linux-8-core
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y lld
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
