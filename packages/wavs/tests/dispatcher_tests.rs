@@ -95,12 +95,11 @@ fn dispatcher_pipeline() {
 
     ctx.rt.block_on(async {
         dispatcher.add_service_direct(service).await.unwrap();
-        dispatcher
-            .trigger_manager
-            .send_dispatcher_commands(actions.into_iter().map(DispatcherCommand::Trigger))
-            .await
-            .unwrap();
     });
+    dispatcher
+        .trigger_manager
+        .send_dispatcher_commands(actions.into_iter().map(DispatcherCommand::Trigger))
+        .unwrap();
 
     // check that the events were properly handled and arrived at submission
     wait_for_submission_messages(&dispatcher.submission_manager, 2, None).unwrap();

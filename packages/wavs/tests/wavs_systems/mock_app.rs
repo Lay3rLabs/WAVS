@@ -104,7 +104,7 @@ impl MockE2ETestRunner {
     }
 
     #[instrument(skip(self))]
-    pub async fn send_trigger(
+    pub fn send_trigger(
         &self,
         service_id: ServiceId,
         workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError> + std::fmt::Debug,
@@ -121,7 +121,6 @@ impl MockE2ETestRunner {
                 data,
                 chain,
             ))])
-            .await
             .unwrap();
     }
 

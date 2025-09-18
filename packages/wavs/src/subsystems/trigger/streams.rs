@@ -3,11 +3,12 @@ pub mod cron_stream;
 pub mod evm_stream;
 pub mod local_command_stream;
 
-use crate::subsystems::trigger::streams::cosmos_stream::StreamTriggerCosmosContractEvent;
+use crate::subsystems::trigger::{
+    streams::cosmos_stream::StreamTriggerCosmosContractEvent, TriggerCommand,
+};
 
 use super::{error::TriggerError, lookup::LookupId};
 use futures::{stream::SelectAll, Stream};
-use local_command_stream::LocalStreamCommand;
 use std::pin::Pin;
 use wavs_types::{ChainKey, Timestamp};
 
@@ -48,5 +49,5 @@ pub enum StreamTriggers {
         /// Multiple triggers can fire simultaneously in a single tick.
         lookup_ids: Vec<LookupId>,
     },
-    LocalCommand(LocalStreamCommand),
+    LocalCommand(TriggerCommand),
 }

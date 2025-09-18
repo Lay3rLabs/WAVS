@@ -7,6 +7,7 @@ use wavs_types::AnyDigest;
 
 use super::prelude::*;
 
+#[derive(Clone)]
 pub struct FileStorage {
     data_dir: PathBuf,
 }

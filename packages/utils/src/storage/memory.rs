@@ -1,19 +1,20 @@
 use std::collections::BTreeMap;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use tracing::instrument;
 use wavs_types::AnyDigest;
 
 use super::prelude::*;
 
+#[derive(Clone)]
 pub struct MemoryStorage {
-    data: RwLock<BTreeMap<AnyDigest, Vec<u8>>>,
+    data: Arc<RwLock<BTreeMap<AnyDigest, Vec<u8>>>>,
 }
 
 impl MemoryStorage {
     pub fn new() -> Self {
         MemoryStorage {
-            data: RwLock::new(BTreeMap::new()),
+            data: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 }

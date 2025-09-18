@@ -1,7 +1,7 @@
 use criterion::Criterion;
 use std::sync::Arc;
 use tokio::sync::oneshot;
-use wavs::subsystems::submission::chain_message::ChainMessage;
+use wavs::subsystems::{engine::EngineCommand, submission::chain_message::ChainMessage};
 use wavs_benchmark_common::app_context::APP_CONTEXT;
 
 use crate::setup::{SystemConfig, SystemSetup};
@@ -47,27 +47,26 @@ fn run_simulation(setup: Arc<SystemSetup>) {
     let total_actions = setup.config.n_actions;
 
     // Collect all results
-    let mut results_receiver = setup.result_receiver.lock().unwrap().take().unwrap();
+    let results_receiver = setup.engine_to_dispatcher_rx.clone();
     std::thread::spawn(move || {
-        APP_CONTEXT.rt.block_on(async move {
-            let mut received_results = Vec::new();
-            while let Some(result) = results_receiver.recv().await {
-                received_results.push(result);
-                if received_results.len() == total_actions as usize {
-                    // Notify that all results have been received
-                    let _ = finished_sender.send(received_results);
-                    break;
-                }
+        let mut received_results = Vec::new();
+        while let Some(result) = results_receiver.recv().ok() {
+            received_results.push(result);
+            if received_results.len() == total_actions as usize {
+                // Notify that all results have been received
+                let _ = finished_sender.send(received_results);
+                break;
             }
-        });
-    });
-
-    APP_CONTEXT.rt.block_on(async move {
-        let mut actions = setup.trigger_actions.lock().unwrap().take().unwrap();
-        for (action, service) in actions.drain(..) {
-            setup.action_sender.send((action, service)).await.unwrap();
         }
     });
+
+    let mut actions = setup.trigger_actions.lock().unwrap().take().unwrap();
+    for (action, service) in actions.drain(..) {
+        setup
+            .dispatcher_to_engine_tx
+            .send(EngineCommand::Execute { action, service })
+            .unwrap();
+    }
 
     let received_results = APP_CONTEXT.rt.block_on(async {
         // Wait for all results to be received

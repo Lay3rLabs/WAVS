@@ -6,7 +6,6 @@ use std::sync::Arc;
 
 use alloy_primitives::FixedBytes;
 use error::EngineError;
-use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::storage::CAStorage;
 use wavs_types::{
@@ -18,51 +17,69 @@ use crate::subsystems::engine::wasm_engine::WasmEngine;
 use crate::subsystems::submission::chain_message::ChainMessage;
 use crate::AppContext;
 
+#[derive(Debug)]
+pub enum EngineCommand {
+    Kill,
+    Execute {
+        action: TriggerAction,
+        service: Service,
+    },
+}
+
+#[derive(Clone)]
 pub struct EngineManager<S: CAStorage> {
     pub engine: Arc<WasmEngine<S>>,
     pub services: Services,
-}
-
-impl<S: CAStorage> Clone for EngineManager<S> {
-    fn clone(&self) -> Self {
-        Self {
-            engine: Arc::clone(&self.engine),
-            services: self.services.clone(),
-        }
-    }
+    pub dispatcher_to_engine_rx: crossbeam::channel::Receiver<EngineCommand>,
+    pub engine_to_dispatcher_tx: crossbeam::channel::Sender<ChainMessage>,
 }
 
 impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
-    pub fn new(engine: WasmEngine<S>, services: Services) -> Self {
+    pub fn new(
+        engine: WasmEngine<S>,
+        services: Services,
+        dispatcher_to_engine_rx: crossbeam::channel::Receiver<EngineCommand>,
+        engine_to_dispatcher_tx: crossbeam::channel::Sender<ChainMessage>,
+    ) -> Self {
         Self {
             engine: Arc::new(engine),
             services,
+            dispatcher_to_engine_rx,
+            engine_to_dispatcher_tx,
         }
     }
 
     #[instrument(skip(self, ctx), fields(subsys = "EngineRunner"))]
-    pub fn start(
-        &self,
-        ctx: AppContext,
-        mut input: mpsc::Receiver<(TriggerAction, Service)>,
-        result_sender: mpsc::Sender<ChainMessage>,
-    ) where
+    pub fn start(&self, ctx: AppContext)
+    where
         S: 'static,
     {
-        let _self = self.clone();
-
-        std::thread::spawn(move || {
-            while let Some((action, service)) = input.blocking_recv() {
-                let _self = _self.clone();
-                let result_sender = result_sender.clone();
-                if let Err(e) = ctx
-                    .rt
-                    .block_on(_self.run_trigger(action, service, result_sender))
-                {
-                    tracing::error!("{:?}", e);
+        while let Some(command) = self.dispatcher_to_engine_rx.recv().ok() {
+            match command {
+                EngineCommand::Kill => {
+                    tracing::info!("Received kill command, shutting down engine manager");
+                    break;
+                }
+                EngineCommand::Execute { action, service } => {
+                    let _self = self.clone();
+                    ctx.rt.spawn(async move {
+                        match _self.run_trigger(action, service).await {
+                            Err(e) => {
+                                tracing::error!("Error running trigger: {:?}", e);
+                            }
+                            Ok(Some(msg)) => {
+                                if let Err(e) = _self.engine_to_dispatcher_tx.send(msg) {
+                                    tracing::error!("Error sending message to dispatcher: {:?}", e);
+                                }
+                            }
+                            Ok(None) => {
+                                // No message to send, just continue
+                            }
+                        }
+                    });
                 }
             }
-        });
+        }
     }
 
     #[instrument(skip(self), fields(subsys = "Engine"))]
@@ -87,15 +104,14 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         &self,
         action: TriggerAction,
         service: Service,
-        result_sender: mpsc::Sender<ChainMessage>,
-    ) -> Result<(), EngineError> {
+    ) -> Result<Option<ChainMessage>, EngineError> {
         // early-exit without an error if the service is not active
         if !self.services.is_active(&action.config.service_id) {
             tracing::info!(
                 "Service is not active, skipping action: service_id={}",
                 action.config.service_id
             );
-            return Ok(());
+            return Ok(None);
         }
         // early-exit if we can't get the workflow
         let workflow = service
@@ -123,8 +139,6 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         // If Ok(None), just end early here, performing no action (but updating local state if needed)
         if let Some(wasm_response) = wasm_response {
             tracing::info!(service.name = %service.name, service.manager = ?service.manager, workflow_id = %trigger_config.workflow_id, payload_size = %wasm_response.payload.len(), "Component execution produced result: service={} [{:?}], workflow_id={}, payload_size={}", service.name, service.manager, trigger_config.workflow_id, wasm_response.payload.len());
-            let service_id = trigger_config.service_id.clone();
-            let workflow_id = trigger_config.workflow_id.clone();
 
             let msg = ChainMessage {
                 service_id: trigger_config.service_id,
@@ -145,17 +159,14 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                 trigger_data: action.data,
             };
 
-            result_sender
-                .send(msg)
-                .await
-                .map_err(|_| EngineError::WasiResultSend(service_id, workflow_id))
+            Ok(Some(msg))
         } else {
             tracing::info!(
                 "Component execution produced no result: service_id={}, workflow_id={}",
                 trigger_config.service_id,
                 trigger_config.workflow_id
             );
-            Ok(())
+            Ok(None)
         }
     }
 }
