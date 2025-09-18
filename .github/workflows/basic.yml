@@ -7,7 +7,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RUST_VERSION: 1.88.0
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: short
   CARGO_TERM_COLOR: always
@@ -27,13 +26,12 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.RUST_VERSION }}
+          toolchain: 1.88.0
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -55,7 +53,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.RUST_VERSION }}
+          toolchain: 1.88.0
           components: rustfmt, clippy
 
       - name: Cache dependencies
