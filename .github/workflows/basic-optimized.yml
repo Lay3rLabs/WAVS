@@ -74,12 +74,12 @@ jobs:
       matrix:
         package:
           - wavs
-          - engine
-          - aggregator
-          - cli
+          - wavs-engine
+          - wavs-aggregator
+          - wavs-cli
           - utils
-          - types
-          - dev-tool
+          - wavs-types
+          - wavs-dev-tools
           - layer-tests
     steps:
       - uses: actions/checkout@v4
