@@ -30,26 +30,10 @@ jobs:
           #   target: wasm32-unknown-unknown
           override: true
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
-
-      - name: Cache cargo target
-        uses: actions/cache@v4
-        with:
-          path: target/
-          key: ${{ runner.os }}-cargo-target-test-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/*.rs') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-target-test-${{ hashFiles('**/Cargo.lock') }}-
-            ${{ runner.os }}-cargo-target-test-
-            ${{ runner.os }}-cargo-target-
+          key: test
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -104,26 +88,10 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-registry-
-
-      - name: Cache cargo target
-        uses: actions/cache@v4
-        with:
-          path: target/
-          key: ${{ runner.os }}-cargo-target-lint-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('**/*.rs') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-target-lint-${{ hashFiles('**/Cargo.lock') }}-
-            ${{ runner.os }}-cargo-target-lint-
-            ${{ runner.os }}-cargo-target-
+          key: lint
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
