@@ -12,7 +12,6 @@ alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
 alloy-sol-macro = { workspace = true }
 alloy-sol-types = { workspace = true }
-alloy-contract = { workspace = true }
 layer-climb = { workspace = true }
 serde = { workspace = true }
 anyhow = { workspace = true }

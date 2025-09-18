@@ -8,7 +8,6 @@ repository.workspace = true
 
 [dependencies]
 layer-climb = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 wstd = { workspace = true }
