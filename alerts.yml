@@ -2,21 +2,21 @@ groups:
   - name: wavs_alerts
     interval: 30s
     rules:
-      - alert: HighEngineErrors
-        expr: increase(engine_errors_total[2m]) > 3
+      - alert: HighWavsEngineErrors
+        expr: increase(engine_errors_total{job="wavs_metrics"}[2m]) > 3
         for: 30s
         labels:
           severity: critical
         annotations:
-          summary: "More than 3 engine errors in 2 minutes in last 2 minutes"
+          summary: "More than 3 WAVS engine errors in last 2 minutes"
 
-      - alert: SlowEngineExecution
-        expr: histogram_quantile(0.95, rate(engine_execution_seconds_bucket[2m])) > 5
+      - alert: SlowWavsEngineExecution
+        expr: histogram_quantile(0.95, rate(engine_execution_seconds_bucket{job="wavs_metrics"}[2m])) > 5
         for: 1m
         labels:
           severity: warning
         annotations:
-          summary: "95th percentile engine execution time above 5s in last 2 minutes"
+          summary: "95th percentile WAVS engine execution time above 5s"
 
       - alert: HighSubmissionFailures
         expr: increase(submission_submissions_failed_total[2m]) > 3
@@ -41,7 +41,10 @@ groups:
           severity: warning
         annotations:
           summary: "More than 2 trigger errors detected in last 2 minutes"
-          
+
+  - name: aggregator_alerts
+    interval: 30s
+    rules:
       - alert: AggregatorPacketFailures
         expr: increase(aggregator_packets_failed_total[2m]) > 3
         for: 1m
@@ -50,13 +53,13 @@ groups:
         annotations:
           summary: "More than 3 packet failures in aggregator in last 2 minutes"
           
-      - alert: AggregatorEngineErrors
-        expr: increase(engine_executions_failed_total[2m]) > 3
+      - alert: HighAggregatorEngineErrors
+        expr: increase(engine_executions_failed_total{job="aggregator_metrics"}[2m]) > 3
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "More than 3 engine execution failures in aggregator in last 2 minutes"
+          summary: "More than 3 aggregator engine execution failures in last 2 minutes"
           
       - alert: SlowAggregatorProcessing
         expr: histogram_quantile(0.95, rate(aggregator_processing_latency_seconds_bucket[2m])) > 5
@@ -67,7 +70,7 @@ groups:
           summary: "95th percentile aggregator processing time above 5s"
           
       - alert: SlowAggregatorEngine
-        expr: histogram_quantile(0.95, rate(engine_execution_seconds_bucket[2m])) > 5
+        expr: histogram_quantile(0.95, rate(engine_execution_seconds_bucket{job="aggregator_metrics"}[2m])) > 5
         for: 2m
         labels:
           severity: warning

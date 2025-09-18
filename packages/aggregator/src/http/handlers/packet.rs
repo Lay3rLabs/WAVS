@@ -53,6 +53,7 @@ pub async fn handle_packet(
 
     #[cfg(debug_assertions)]
     if std::env::var("WAVS_FORCE_SLOW_AGGREGATOR_PACKET_XXX").is_ok() {
+        tracing::warn!("FORCING SLOW PACKET PROCESSING - sleeping for 6 seconds");
         std::thread::sleep(std::time::Duration::from_secs(6));
     }
 
@@ -60,6 +61,7 @@ pub async fn handle_packet(
         Ok(resp) => {
             state.metrics.packets_processed.add(1, &[]);
             let duration = start_time.elapsed().as_secs_f64();
+            tracing::info!("Packet processing took {} seconds", duration);
             state.metrics.processing_latency.record(duration, &[]);
             Json(resp).into_response()
         }
