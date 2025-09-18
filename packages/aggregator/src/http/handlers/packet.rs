@@ -2,6 +2,7 @@ use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
 use alloy_rpc_types_eth::TransactionReceipt;
 use axum::{extract::State, response::IntoResponse, Json};
+use reqwest::Url;
 use tracing::instrument;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
@@ -37,9 +38,36 @@ pub async fn handle_packet(
     State(state): State<HttpState>,
     Json(req): Json<AddPacketRequest>,
 ) -> impl IntoResponse {
-    match process_packet(state, &req.packet).await {
-        Ok(resp) => Json(resp).into_response(),
+    state.metrics.packets_received.add(1, &[]);
+    let start_time = std::time::Instant::now();
+
+    #[cfg(debug_assertions)]
+    if std::env::var("WAVS_FORCE_AGGREGATOR_PACKET_ERROR_XXX").is_ok() {
+        state.metrics.packets_failed.add(1, &[]);
+        state.metrics.total_errors.add(1, &[]);
+        return AnyError::from(AggregatorError::ComponentLoad(
+            "Forced aggregator packet error for testing alerts".into(),
+        ))
+        .into_response();
+    }
+
+    #[cfg(debug_assertions)]
+    if std::env::var("WAVS_FORCE_SLOW_AGGREGATOR_PACKET_XXX").is_ok() {
+        tracing::warn!("FORCING SLOW PACKET PROCESSING - sleeping for 6 seconds");
+        std::thread::sleep(std::time::Duration::from_secs(6));
+    }
+
+    match process_packet(state.clone(), &req.packet).await {
+        Ok(resp) => {
+            state.metrics.packets_processed.add(1, &[]);
+            let duration = start_time.elapsed().as_secs_f64();
+            tracing::info!("Packet processing took {} seconds", duration);
+            state.metrics.processing_latency.record(duration, &[]);
+            Json(resp).into_response()
+        }
         Err(e) => {
+            state.metrics.packets_failed.add(1, &[]);
+            state.metrics.total_errors.add(1, &[]);
             tracing::error!("{:?}", e);
             AnyError::from(e).into_response()
         }
@@ -68,6 +96,18 @@ async fn process_packet(
             workflow_id: packet.workflow_id.clone(),
             service_id: packet.service.id(),
         });
+    }
+
+    #[cfg(debug_assertions)]
+    if state.config.disable_networking {
+        let signer = alloy_signer_local::PrivateKeySigner::random().address();
+        return AggregatorProcess {
+            state: &state,
+            packet,
+            signer,
+        }
+        .run()
+        .await;
     }
 
     // this implicitly validates that the signature is valid
@@ -249,6 +289,15 @@ async fn get_submission_service_manager(
     chain: &ChainKey,
     service_handler_address: Address,
 ) -> AggregatorResult<IWavsServiceManagerInstance<DynProvider>> {
+    #[cfg(debug_assertions)]
+    if state.config.disable_networking {
+        let mock_provider = alloy_provider::ProviderBuilder::new()
+            .connect_http(Url::parse("http://localhost:1234").unwrap());
+        return Ok(IWavsServiceManagerInstance::new(
+            service_handler_address,
+            alloy_provider::DynProvider::new(mock_provider),
+        ));
+    }
     // we need to get the service manager from the perspective of the service handler
     // which may be different than the service manager where the operator is staked
     // e.g. in the case of operator sets that are mirrored across multiple chains
@@ -324,6 +373,10 @@ async fn handle_custom_submit(
         },
     }
 
+    #[cfg(debug_assertions)]
+    if state.config.disable_networking {
+        return Ok(mock_transaction_receipt(contract_address));
+    }
     let client = state.get_evm_client(&chain).await?;
     let tx_receipt = client
         .send_envelope_signatures(
@@ -431,6 +484,29 @@ fn add_packet_to_quorum_queue(
     });
 
     Ok(queue)
+}
+
+#[cfg(debug_assertions)]
+fn mock_transaction_receipt(contract_address: Address) -> TransactionReceipt {
+    let receipt_json = format!(
+        r#"{{
+        "status": "0x1",
+        "transactionHash": "0x0101010101010101010101010101010101010101010101010101010101010101",
+        "transactionIndex": "0x0",
+        "blockHash": "0x0202020202020202020202020202020202020202020202020202020202020202",
+        "blockNumber": "0x1",
+        "from": "0x0303030303030303030303030303030303030303",
+        "to": "{:#x}",
+        "cumulativeGasUsed": "0x5208",
+        "gasUsed": "0x5208",
+        "logs": [],
+        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "type": "0x2",
+        "effectiveGasPrice": "0x4a817c800"
+    }}"#,
+        contract_address
+    );
+    serde_json::from_str(&receipt_json).unwrap()
 }
 
 #[cfg(test)]
@@ -1056,7 +1132,9 @@ mod test {
                 "test test test test test test test test test test test junk".to_string(),
             ));
 
-            let state = HttpState::new_with_engine(config).unwrap();
+            let metrics =
+                utils::telemetry::AggregatorMetrics::new(opentelemetry::global::meter("test"));
+            let state = HttpState::new_with_engine(config, metrics).unwrap();
 
             let digest = state
                 .aggregator_engine

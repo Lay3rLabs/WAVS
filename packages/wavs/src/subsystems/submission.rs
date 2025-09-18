@@ -286,9 +286,23 @@ impl SubmissionManager {
         url: String,
         packet: Packet,
     ) -> Result<(), SubmissionError> {
+        #[cfg(debug_assertions)]
+        if std::env::var("WAVS_FORCE_SUBMISSION_ERROR_XXX").is_ok() {
+            self.metrics.submissions_failed.add(1, &[]);
+            self.metrics.total_errors.add(1, &[]);
+            return Err(SubmissionError::Aggregator(
+                "Forced submission error for testing alerts".into(),
+            ));
+        }
+
         let service_id = packet.service.id();
         let workflow_id = packet.workflow_id.clone();
         let start_time = std::time::Instant::now();
+
+        #[cfg(debug_assertions)]
+        if std::env::var("WAVS_FORCE_SLOW_SUBMISSION_XXX").is_ok() {
+            std::thread::sleep(std::time::Duration::from_secs(6));
+        }
 
         let response = self
             .http_client

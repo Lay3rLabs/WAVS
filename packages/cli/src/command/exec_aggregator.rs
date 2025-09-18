@@ -86,7 +86,9 @@ impl ExecAggregator {
             ..Default::default()
         };
         let data_dir = aggregator_config.data.clone();
-        let state = wavs_aggregator::http::state::HttpState::new(aggregator_config)?;
+        let meter = opentelemetry::global::meter("aggregator_cli");
+        let metrics = utils::telemetry::AggregatorMetrics::new(meter);
+        let state = wavs_aggregator::http::state::HttpState::new(aggregator_config, metrics)?;
 
         let wasm_bytes = read_component(&component_path)?;
         let digest = state

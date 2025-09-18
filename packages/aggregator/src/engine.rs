@@ -26,9 +26,11 @@ use crate::error::{AggregatorError, AggregatorResult};
 
 pub struct AggregatorEngine<S: CAStorage> {
     engine: BaseEngine<S>,
+    metrics: utils::telemetry::AggregatorMetrics,
 }
 
 impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         app_data_dir: impl Into<PathBuf>,
         chain_configs: ChainConfigs,
@@ -37,6 +39,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         max_execution_seconds: Option<u64>,
         db: RedbStorage,
         storage: Arc<S>,
+        metrics: utils::telemetry::AggregatorMetrics,
     ) -> AggregatorResult<Self> {
         let config = BaseEngineConfig {
             app_data_dir: app_data_dir.into(),
@@ -48,12 +51,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
 
         let engine = BaseEngine::new(config, db, storage)?;
 
-        Ok(Self { engine })
-    }
-
-    pub fn start(&self) -> AggregatorResult<()> {
-        self.engine.start_epoch_thread();
-        Ok(())
+        Ok(Self { engine, metrics })
     }
 
     #[instrument(skip(self, packet, wasm_component), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
@@ -97,12 +95,52 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     ) -> AggregatorResult<Vec<AggregatorAction>> {
         tracing::info!("Processing packet with custom aggregator component");
 
+        #[cfg(debug_assertions)]
+        if std::env::var("WAVS_FORCE_AGGREGATOR_ENGINE_ERROR_XXX").is_ok() {
+            self.metrics.engine.executions_failed.add(1, &[]);
+            self.metrics.engine.total_errors.add(1, &[]);
+            return Err(AggregatorError::ComponentLoad(
+                "Forced aggregator engine error for testing alerts".into(),
+            ));
+        }
+
+        let start_time = std::time::Instant::now();
+
+        #[cfg(debug_assertions)]
+        if std::env::var("WAVS_FORCE_SLOW_AGGREGATOR_ENGINE_XXX").is_ok() {
+            std::thread::sleep(std::time::Duration::from_secs(6));
+        }
+
         let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
-        wavs_engine::worlds::aggregator::execute::execute_packet(&mut instance_deps, packet)
-            .await
-            .map_err(Into::into)
+        let fuel_before = instance_deps.store.get_fuel().unwrap_or(0);
+
+        let result =
+            wavs_engine::worlds::aggregator::execute::execute_packet(&mut instance_deps, packet)
+                .await;
+
+        let fuel_after = instance_deps.store.get_fuel().unwrap_or(0);
+        let fuel_consumed = fuel_before.saturating_sub(fuel_after);
+        self.metrics
+            .engine
+            .fuel_consumption
+            .record(fuel_consumed, &[]);
+
+        let duration = start_time.elapsed().as_secs_f64();
+        self.metrics.engine.execution_duration.record(duration, &[]);
+
+        match result {
+            Ok(actions) => {
+                self.metrics.engine.executions_success.add(1, &[]);
+                Ok(actions)
+            }
+            Err(e) => {
+                self.metrics.engine.executions_failed.add(1, &[]);
+                self.metrics.engine.total_errors.add(1, &[]);
+                Err(e.into())
+            }
+        }
     }
 
     async fn load_component(
@@ -123,12 +161,39 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     ) -> AggregatorResult<Vec<AggregatorAction>> {
         tracing::info!("Handling timer callback with custom aggregator component");
 
+        let start_time = std::time::Instant::now();
         let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
-        wavs_engine::worlds::aggregator::execute::execute_timer_callback(&mut instance_deps, packet)
-            .await
-            .map_err(Into::into)
+        let fuel_before = instance_deps.store.get_fuel().unwrap_or(0);
+
+        let result = wavs_engine::worlds::aggregator::execute::execute_timer_callback(
+            &mut instance_deps,
+            packet,
+        )
+        .await;
+
+        let fuel_after = instance_deps.store.get_fuel().unwrap_or(0);
+        let fuel_consumed = fuel_before.saturating_sub(fuel_after);
+        self.metrics
+            .engine
+            .fuel_consumption
+            .record(fuel_consumed, &[]);
+
+        let duration = start_time.elapsed().as_secs_f64();
+        self.metrics.engine.execution_duration.record(duration, &[]);
+
+        match result {
+            Ok(actions) => {
+                self.metrics.engine.executions_success.add(1, &[]);
+                Ok(actions)
+            }
+            Err(e) => {
+                self.metrics.engine.executions_failed.add(1, &[]);
+                self.metrics.engine.total_errors.add(1, &[]);
+                Err(e.into())
+            }
+        }
     }
 
     #[instrument(skip(self, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
@@ -140,16 +205,40 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     ) -> AggregatorResult<()> {
         tracing::info!("Handling submit callback with custom aggregator component");
 
+        let start_time = std::time::Instant::now();
         let wasm_component = self.load_component(component).await?;
         let mut instance_deps = self.create_instance_deps(component, packet, wasm_component)?;
 
-        wavs_engine::worlds::aggregator::execute::execute_submit_callback(
+        let fuel_before = instance_deps.store.get_fuel().unwrap_or(0);
+
+        let result = wavs_engine::worlds::aggregator::execute::execute_submit_callback(
             &mut instance_deps,
             packet,
             tx_result,
         )
-        .await
-        .map_err(Into::into)
+        .await;
+
+        let fuel_after = instance_deps.store.get_fuel().unwrap_or(0);
+        let fuel_consumed = fuel_before.saturating_sub(fuel_after);
+        self.metrics
+            .engine
+            .fuel_consumption
+            .record(fuel_consumed, &[]);
+
+        let duration = start_time.elapsed().as_secs_f64();
+        self.metrics.engine.execution_duration.record(duration, &[]);
+
+        match result {
+            Ok(()) => {
+                self.metrics.engine.executions_success.add(1, &[]);
+                Ok(())
+            }
+            Err(e) => {
+                self.metrics.engine.executions_failed.add(1, &[]);
+                self.metrics.engine.total_errors.add(1, &[]);
+                Err(e.into())
+            }
+        }
     }
 
     pub async fn upload_component(
