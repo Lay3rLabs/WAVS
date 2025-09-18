@@ -58,7 +58,7 @@ jobs:
         run: cargo fetch --locked
 
       - name: Build workspace
-        run: cargo build --workspace --locked --all-targets
+        run: cargo build --workspace --locked --lib
 
   test:
     name: Test ${{ matrix.package }}
