@@ -21,7 +21,6 @@ layer-climb = { workspace = true }
 alloy-primitives = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 redb = { workspace = true }
 lru = { workspace = true }
 wavs-wasi-utils = { workspace = true }

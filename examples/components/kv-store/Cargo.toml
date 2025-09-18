@@ -9,10 +9,7 @@ repository.workspace = true
 [dependencies]
 example-helpers = { workspace = true }
 example-types = { workspace = true }
-wit-bindgen = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { workspace = true }
 
 [lib]
 crate-type = ["rlib", "cdylib"]
