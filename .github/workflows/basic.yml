@@ -58,7 +58,7 @@ jobs:
         with:
           toolchain: 1.88.0
           command: test
-          args: --package wavs-engine concurrency_
+          args: --package wavs-engine concurrency_ -- --nocapture
         env:
           RUST_BACKTRACE: 1
           RUST_LOG: info

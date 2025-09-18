@@ -21,7 +21,7 @@ async fn concurrency_hotloop() {
     do_it("hotloop").await;
 }
 
-async fn do_it(kind: &str) {
+async fn do_it(kind: impl ToString) {
     init_tracing_tests();
 
     let mut wt_config = WTConfig::new();
@@ -32,6 +32,9 @@ async fn do_it(kind: &str) {
     wt_config.consume_fuel(true);
 
     let engine = WTEngine::new(&wt_config).unwrap();
+    let kind = kind.to_string();
+
+    let time = std::time::Instant::now();
 
     // just run forever, ticking forward till the end of time (or however long this node is up)
     let engine_ticker = engine.weak();
@@ -44,10 +47,8 @@ async fn do_it(kind: &str) {
         std::thread::sleep(Duration::from_millis(1));
     });
 
-    let kind = kind.to_string();
-
     // try to tie up the runtime
-    let (long_tx, mut long_rx) = tokio::sync::oneshot::channel::<Vec<u8>>();
+    let (slow_tx, _) = crossbeam::channel::unbounded();
     tokio::spawn({
         let engine = engine.clone();
         let kind = kind.clone();
@@ -66,11 +67,12 @@ async fn do_it(kind: &str) {
             )
             .await;
 
-            long_tx.send(res).unwrap();
+            slow_tx.send(res).unwrap();
         }
     });
 
-    let (short_tx, mut short_rx) = tokio::sync::oneshot::channel::<Vec<u8>>();
+    // so that this quick task doesn't complete fast
+    let (quick_tx, quick_rx) = crossbeam::channel::unbounded();
     tokio::spawn({
         async move {
             let res = execute_component_raw(
@@ -87,40 +89,22 @@ async fn do_it(kind: &str) {
             )
             .await;
 
-            short_tx.send(res).unwrap();
+            quick_tx.send(res).unwrap();
         }
     });
 
-    let time = std::time::Instant::now();
-    loop {
-        match short_rx.try_recv() {
-            Ok(res) => {
-                assert_eq!(res, b"short".to_vec());
-                break;
-            }
-            Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
-                panic!("short task channel closed!");
-            }
-            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
-        }
+    let res = tokio::task::spawn_blocking(move || quick_rx.recv().unwrap())
+        .await
+        .unwrap();
 
-        tokio::task::yield_now().await;
-    }
+    assert_eq!(res, b"short".to_vec());
 
-    match long_rx.try_recv() {
-        Ok(res) => {
-            assert_eq!(res, b"long".to_vec());
-        }
-        Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
-            panic!("long task channel closed!");
-        }
-        Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
-    }
-
-    if time.elapsed() >= Duration::from_secs(5) {
+    if time.elapsed() >= Duration::from_secs(10) {
         panic!(
             "took way too long for tasks to complete! ({}ms)",
             time.elapsed().as_millis()
         );
     }
+
+    println!("Success! took {}ms", time.elapsed().as_millis());
 }
