@@ -28,9 +28,17 @@ impl Guest for Component {
                 Some("sync") => {
                     std::thread::sleep(std::time::Duration::from_millis(n));
                 }
+                Some("hotloop") => {
+                    let start = std::time::Instant::now();
+                    let expires = std::time::Duration::from_millis(n);
+                    while start.elapsed() < expires {
+                        // busy wait
+                    }
+                }
                 _ => {
                     return Err(
-                        "invalid or missing 'sleep-kind', must be 'async' or 'sync'".to_string()
+                        "invalid or missing 'sleep-kind', must be 'async', 'sync', or 'hotloop'"
+                            .to_string(),
                     );
                 }
             }

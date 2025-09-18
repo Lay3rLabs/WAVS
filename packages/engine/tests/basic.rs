@@ -9,8 +9,13 @@ use example_types::{SquareRequest, SquareResponse};
 async fn basic_execution() {
     init_tracing_tests();
 
-    let resp: SquareResponse =
-        execute_component(COMPONENT_SQUARE_BYTES, None, SquareRequest::new(5)).await;
+    let resp: SquareResponse = execute_component(
+        COMPONENT_SQUARE_BYTES,
+        Default::default(),
+        None,
+        SquareRequest::new(5),
+    )
+    .await;
 
     assert_eq!(resp.y, 25, "Expected output to be 25, got {}", resp.y);
 }

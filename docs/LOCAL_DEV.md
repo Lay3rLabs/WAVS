@@ -33,7 +33,7 @@ You'll need to open another terminal to interact with it
 You can run `just dev-tool help` to see available commands in the dev tool, and then `just dev-tool *` to run the command. For example:
 
 1. `just dev-tool deploy-service`
-2. `just dev-tool send-triggers --count 10`
+2. `just dev-tool send-triggers --count 1000`
 
 ### View telemetry
 

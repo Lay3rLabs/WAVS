@@ -21,7 +21,7 @@ pub fn make_trigger_action(
     }
 }
 
-pub fn make_service(wasm_digest: ComponentDigest) -> Service {
+pub fn make_service(wasm_digest: ComponentDigest, config: BTreeMap<String, String>) -> Service {
     let workflow_id = WorkflowId::new("workflow-1").unwrap();
 
     let workflow = Workflow {
@@ -34,7 +34,7 @@ pub fn make_service(wasm_digest: ComponentDigest) -> Service {
             },
             fuel_limit: None,
             time_limit_seconds: None,
-            config: Default::default(),
+            config,
             env_keys: Default::default(),
         },
         submit: Submit::None,
