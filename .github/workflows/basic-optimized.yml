@@ -1,0 +1,189 @@
+on: [pull_request]
+
+name: Basic Checks
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_VERSION: 1.88.0
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings -C link-arg=-fuse-ld=lld"
+  RUST_BACKTRACE: short
+  # Combine all test env vars here
+  WAVS_SUBMISSION_MNEMONIC: "test test test test test test test test test test test junk"
+  WAVS_CLI_EVM_CREDENTIAL: "test test test test test test test test test test test junk"
+  WAVS_AGGREGATOR_CREDENTIAL: "test test test test test test test test test test test junk"
+  WAVS_COSMOS_SUBMISSION_MNEMONIC: "reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff"
+  WAVS_CLI_COSMOS_MNEMONIC: "reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff"
+
+jobs:
+  # Quick checks first - fail fast
+  formatting:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  # Linting in parallel with tests
+  linting:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust and lld
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain ${{ env.RUST_VERSION }}
+          sudo apt-get update && sudo apt-get install -y lld
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+          shared-key: "clippy"
+          cache-targets: false
+          cache-on-failure: true
+
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Run clippy
+        env:
+          RUSTC_WRAPPER: sccache
+        run: cargo clippy --all-targets --all-features
+
+  # Split tests for parallelization
+  test-matrix:
+    name: Tests - ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - wavs
+          - engine
+          - aggregator
+          - cli
+          - utils
+          - types
+          - dev-tool
+          - layer-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lld
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+          shared-key: "test-${{ matrix.package }}"
+          cache-on-failure: true
+
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Install Foundry (if needed)
+        if: matrix.package == 'layer-tests' || matrix.package == 'wavs'
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          cache: true
+
+      - name: Run tests
+        env:
+          RUSTC_WRAPPER: sccache
+          RUST_LOG: info
+        run: |
+          cargo test -p ${{ matrix.package }} --locked -- --nocapture
+
+  # Workspace-wide test as safety net
+  test-workspace:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [formatting]  # Only after quick checks
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lld
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+          shared-key: "test-workspace"
+          cache-on-failure: true
+
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          cache: true
+
+      - name: Run workspace tests
+        env:
+          RUSTC_WRAPPER: sccache
+          RUST_LOG: info
+        run: |
+          # Run only integration tests that span multiple packages
+          cargo test --workspace --locked -- --ignored --nocapture
+
+  # Build check for WASM targets
+  build-wasm:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+          shared-key: "wasm"
+          cache-targets: false
+          cache-on-failure: true
+
+      - name: Install sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Check WASM build
+        env:
+          RUSTC_WRAPPER: sccache
+        run: |
+          cargo check --target wasm32-unknown-unknown -p wavs-types
