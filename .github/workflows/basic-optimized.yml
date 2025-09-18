@@ -24,7 +24,7 @@ jobs:
       fail-fast: false
       max-parallel: 20
       matrix:
-        package: [wavs-types, wavs-engine, utils, aggregator, cli, dev-tool, layer-tests, wavs]
+        package: [wavs-aggregator, utils, wavs-types, wavs-engine, wavs-cli, layer-tests, wavs]
     steps:
       - uses: actions/checkout@v4
 
