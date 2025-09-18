@@ -10,6 +10,8 @@ env:
   RUST_VERSION: 1.88.0
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: short
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-C link-arg=-fuse-ld=lld"
   WAVS_SUBMISSION_MNEMONIC: "test test test test test test test test test test test junk"
   WAVS_CLI_EVM_CREDENTIAL: "test test test test test test test test test test test junk"
   WAVS_AGGREGATOR_CREDENTIAL: "test test test test test test test test test test test junk"
@@ -17,28 +19,16 @@ env:
   WAVS_CLI_COSMOS_MNEMONIC: "reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff"
 
 jobs:
-  get-packages:
-    name: Get workspace packages
-    runs-on: ubuntu-latest
-    outputs:
-      packages: ${{ steps.packages.outputs.packages }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: packages
-        run: |
-          PACKAGES=$(cargo metadata --no-deps --format-version 1 | jq -c '[.packages[] | select(.manifest_path | contains("/packages/")) | .name]')
-          echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
-
   test:
-    name: Test ${{ matrix.package }}
-    needs: get-packages
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        package: ${{ fromJson(needs.get-packages.outputs.packages) }}
+    name: Test Suite
+    runs-on: linux-8-core
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lld
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -49,19 +39,22 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          shared-key: "v0-workspace"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      - name: Build tests first
+        run: cargo test --workspace --no-run --locked
+
       - name: Run tests
-        run: cargo test -p ${{ matrix.package }} --locked -- --nocapture
+        run: cargo test --workspace --locked -- --nocapture --test-threads=4
         env:
           RUST_LOG: info
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: linux-8-core
     steps:
       - uses: actions/checkout@v4
 
