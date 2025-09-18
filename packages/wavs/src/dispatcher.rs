@@ -73,7 +73,17 @@ pub enum DispatcherCommand {
 impl Dispatcher<FileStorage> {
     pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, DispatcherError> {
         // Create all our channels for communication
-        let (dispatcher_tx, dispatcher_rx) = crossbeam::channel::unbounded::<DispatcherCommand>();
+        let (trigger_to_dispatcher_tx, trigger_to_dispatcher_rx) =
+            crossbeam::channel::unbounded::<DispatcherCommand>();
+
+        let (dispatcher_to_engine_tx, dispatcher_to_engine_rx) =
+            crossbeam::channel::unbounded::<(TriggerAction, Service)>();
+
+        let (engine_to_dispatcher_tx, engine_to_dispatcher_rx) =
+            crossbeam::channel::unbounded::<ChainMessage>();
+
+        let (dispatcher_to_submission_tx, dispatcher_to_engine_rx) =
+            crossbeam::channel::unbounded::<ChainMessage>();
 
         let file_storage = FileStorage::new(config.data.join("ca"))?;
         let db_storage = RedbStorage::new(config.data.join("db"))?;
@@ -84,7 +94,7 @@ impl Dispatcher<FileStorage> {
             config,
             metrics.trigger,
             services.clone(),
-            dispatcher_tx.clone(),
+            trigger_to_dispatcher_tx,
         )?;
 
         let app_storage = config.data.join("app");
@@ -122,11 +132,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         // Trigger is pipeline start
         let mut trigger_commands_in = self.trigger_manager.start(ctx.clone())?;
 
-        // Next is the local (blocking) processing
-        let (work_sender, work_receiver) =
-            mpsc::channel::<(TriggerAction, Service)>(ENGINE_CHANNEL_SIZE);
-        let (wasi_result_sender, wasi_result_receiver) =
-            mpsc::channel::<ChainMessage>(SUBMISSION_CHANNEL_SIZE);
         // Then the engine processing
         self.engine_manager
             .start(ctx.clone(), work_receiver, wasi_result_sender);
