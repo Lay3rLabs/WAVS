@@ -206,6 +206,7 @@ start-aggregator-dev:
     WAVS_HOME="../.." WAVS_AGGREGATOR_DATA="$TEMP_DIR" \
     cargo run -- \
         --dev-endpoints-enabled=true \
+        --disable-networking=true \
         --prometheus="http://127.0.0.1:9090" \
         --jaeger="http://127.0.0.1:4317"
 

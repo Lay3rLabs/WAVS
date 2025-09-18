@@ -2,6 +2,7 @@ use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
 use alloy_rpc_types_eth::TransactionReceipt;
 use axum::{extract::State, response::IntoResponse, Json};
+use reqwest::Url;
 use tracing::instrument;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
@@ -93,6 +94,18 @@ async fn process_packet(
             workflow_id: packet.workflow_id.clone(),
             service_id: packet.service.id(),
         });
+    }
+
+    #[cfg(debug_assertions)]
+    if state.config.disable_networking {
+        let signer = alloy_signer_local::PrivateKeySigner::random().address();
+        return AggregatorProcess {
+            state: &state,
+            packet,
+            signer,
+        }
+        .run()
+        .await;
     }
 
     // this implicitly validates that the signature is valid
@@ -274,6 +287,15 @@ async fn get_submission_service_manager(
     chain: &ChainKey,
     service_handler_address: Address,
 ) -> AggregatorResult<IWavsServiceManagerInstance<DynProvider>> {
+    #[cfg(debug_assertions)]
+    if state.config.disable_networking {
+        let mock_provider = alloy_provider::ProviderBuilder::new()
+            .connect_http(Url::parse("http://localhost:1234").unwrap());
+        return Ok(IWavsServiceManagerInstance::new(
+            service_handler_address,
+            alloy_provider::DynProvider::new(mock_provider),
+        ));
+    }
     // we need to get the service manager from the perspective of the service handler
     // which may be different than the service manager where the operator is staked
     // e.g. in the case of operator sets that are mirrored across multiple chains
@@ -349,6 +371,10 @@ async fn handle_custom_submit(
         },
     }
 
+    #[cfg(debug_assertions)]
+    if state.config.disable_networking {
+        return Ok(mock_transaction_receipt(contract_address));
+    }
     let client = state.get_evm_client(&chain).await?;
     let tx_receipt = client
         .send_envelope_signatures(
@@ -456,6 +482,29 @@ fn add_packet_to_quorum_queue(
     });
 
     Ok(queue)
+}
+
+#[cfg(debug_assertions)]
+fn mock_transaction_receipt(contract_address: Address) -> TransactionReceipt {
+    let receipt_json = format!(
+        r#"{{
+        "status": "0x1",
+        "transactionHash": "0x0101010101010101010101010101010101010101010101010101010101010101",
+        "transactionIndex": "0x0",
+        "blockHash": "0x0202020202020202020202020202020202020202020202020202020202020202",
+        "blockNumber": "0x1",
+        "from": "0x0303030303030303030303030303030303030303",
+        "to": "{:#x}",
+        "cumulativeGasUsed": "0x5208",
+        "gasUsed": "0x5208",
+        "logs": [],
+        "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "type": "0x2",
+        "effectiveGasPrice": "0x4a817c800"
+    }}"#,
+        contract_address
+    );
+    serde_json::from_str(&receipt_json).unwrap()
 }
 
 #[cfg(test)]

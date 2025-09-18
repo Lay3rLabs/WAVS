@@ -77,6 +77,10 @@ pub struct Config {
 
     /// Maximum HTTP request body size in megabytes (default: 15MB)
     pub max_body_size_mb: u32,
+
+    /// Disable all network operations (for testing)
+    #[cfg(debug_assertions)]
+    pub disable_networking: bool,
 }
 
 /// Default values for the config struct
@@ -106,6 +110,8 @@ impl Default for Config {
             bearer_token: None,
             dev_endpoints_enabled: false,
             max_body_size_mb: 15,
+            #[cfg(debug_assertions)]
+            disable_networking: false,
         }
     }
 }

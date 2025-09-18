@@ -111,6 +111,12 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dev_endpoints_enabled: Option<bool>,
+
+    /// Disable all network operations (for testing)
+    #[cfg(debug_assertions)]
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disable_networking: Option<bool>,
 }
 
 impl CliEnvExt for CliArgs {
