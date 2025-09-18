@@ -641,8 +641,14 @@ mod tests {
     use std::time::Duration;
 
     use crate::{config::Config, services::Services};
-    use utils::{config::ChainConfigs, storage::db::RedbStorage, telemetry::TriggerMetrics};
-    use wavs_types::{ServiceId, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowId};
+    use utils::{
+        config::ChainConfigs, storage::db::RedbStorage, telemetry::TriggerMetrics,
+        test_utils::address::rand_address_evm,
+    };
+    use wavs_types::{
+        Component, ComponentDigest, ComponentSource, ServiceManager, SignatureKind, Submit,
+        Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowId,
+    };
 
     #[tokio::test]
     async fn test_add_trigger() {
@@ -656,19 +662,46 @@ mod tests {
         let services = Services::new(db_storage);
 
         let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
-        let trigger_manager = TriggerManager::new(&config, metrics, services).unwrap();
+        let trigger_manager = TriggerManager::new(&config, metrics, services.clone()).unwrap();
 
         let ctx = utils::context::AppContext::new();
         let mut receiver = trigger_manager.start(ctx.clone()).unwrap();
 
         // short sleep for trigger manager to kick in
         tokio::time::sleep(Duration::from_millis(100)).await;
+        let service = wavs_types::Service {
+            name: "serv1".to_string(),
+            status: wavs_types::ServiceStatus::Active,
+            manager: ServiceManager::Evm {
+                chain: "evm:anvil".parse().unwrap(),
+                address: rand_address_evm(),
+            },
+            workflows: vec![(
+                "workflow-1".parse().unwrap(),
+                Workflow {
+                    trigger: Trigger::Manual,
+                    component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
+                        [0; 32],
+                    ))),
+                    submit: Submit::Aggregator {
+                        url: "http://example.com".to_string(),
+                        component: Box::new(Component::new(ComponentSource::Digest(
+                            ComponentDigest::hash([0; 32]),
+                        ))),
+                        signature_kind: SignatureKind::evm_default(),
+                    },
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+        services.save(&service).unwrap();
 
         for i in 0..6 {
             let action = TriggerAction {
                 config: TriggerConfig {
-                    service_id: ServiceId::hash("test-service"),
-                    workflow_id: WorkflowId::new("test-workflow").unwrap(),
+                    service_id: service.id(),
+                    workflow_id: WorkflowId::new("workflow-1").unwrap(),
                     trigger: Trigger::Manual,
                 },
                 data: TriggerData::Raw(vec![i as u8]),
