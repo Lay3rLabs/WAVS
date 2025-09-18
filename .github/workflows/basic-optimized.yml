@@ -29,9 +29,36 @@ jobs:
           PACKAGES=$(cargo metadata --no-deps --format-version 1 | jq -c '[.packages[] | select(.manifest_path | contains("/packages/")) | .name]')
           echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
 
+  build-deps:
+    name: Build dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "v0-workspace-${{ hashFiles('**/Cargo.lock') }}"
+          workspaces: './'
+          cache-targets: true
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Fetch dependencies
+        run: cargo fetch --locked
+
+      - name: Build workspace
+        run: cargo build --workspace --locked --all-targets
+
   test:
     name: Test ${{ matrix.package }}
-    needs: get-packages
+    needs: [get-packages, build-deps]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,14 +75,15 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          cache-on-failure: true
-          shared-key: "v0-workspace"
+          shared-key: "v0-workspace-${{ hashFiles('**/Cargo.lock') }}"
+          workspaces: './'
+          cache-targets: true
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run tests
-        run: cargo test -p ${{ matrix.package }} --locked -- --nocapture
+        run: cargo test -p ${{ matrix.package }} --locked --offline -- --nocapture
         env:
           RUST_LOG: info
 
@@ -74,7 +102,9 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          cache-on-failure: true
+          shared-key: "v0-workspace-${{ hashFiles('**/Cargo.lock') }}"
+          workspaces: './'
+          cache-targets: true
 
       - name: Check formatting
         run: cargo fmt --all -- --check
