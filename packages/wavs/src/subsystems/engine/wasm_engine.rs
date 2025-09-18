@@ -107,7 +107,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
 
     /// This will execute a contract that implements the wavs:worker wit interface
     #[instrument(skip(self), fields(subsys = "Engine"))]
-    pub fn execute(
+    pub async fn execute(
         &self,
         service: Service,
         trigger_action: TriggerAction,
@@ -159,7 +159,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let digest = workflow.component.source.digest().clone();
         let chain_configs = self.engine.get_chain_configs()?;
 
-        let component = self.block_on_run(async { self.engine.load_component(&digest).await })?;
+        let component = self.engine.load_component(&digest).await?;
 
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
@@ -184,13 +184,10 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let initial_fuel = instance_deps.store.get_fuel().unwrap_or(0);
         let start_time = Instant::now();
 
-        let (result, final_fuel) = self.block_on_run(async move {
-            let result =
-                wavs_engine::worlds::operator::execute::execute(&mut instance_deps, trigger_action)
-                    .await;
-            let final_fuel = instance_deps.store.get_fuel().unwrap_or(0);
-            (result, final_fuel)
-        });
+        let result =
+            wavs_engine::worlds::operator::execute::execute(&mut instance_deps, trigger_action)
+                .await;
+        let final_fuel = instance_deps.store.get_fuel().unwrap_or(0);
 
         let duration = start_time.elapsed().as_secs_f64();
         let fuel_consumed = initial_fuel.saturating_sub(final_fuel);
@@ -231,21 +228,6 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         } else {
             tracing::warn!("Storage directory {:?} does not exist", dir_path);
         }
-    }
-
-    fn block_on_run<F, T>(&self, fut: F) -> T
-    where
-        F: std::future::Future<Output = T>,
-    {
-        // Is this necessary? It's a very nuanced and hairy question... see https://github.com/Lay3rLabs/WAVS/issues/224 for details
-        // In the meantime, it's reasonable and maybe even optimal even *IF* it's not 100% strictly necessary.
-        // TODO: revisit when we have the capability for properly testing throughput under load in different scenarios
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        rt.block_on(fut)
     }
 }
 
@@ -331,8 +313,8 @@ pub mod tests {
         assert_eq!(digests, vec![digest]);
     }
 
-    #[test]
-    fn execute_echo() {
+    #[tokio::test]
+    async fn execute_echo() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let db_dir = tempfile::tempdir().unwrap();
@@ -387,13 +369,14 @@ pub mod tests {
                     data: TriggerData::new_raw(br#"{"x":12}"#),
                 },
             )
+            .await
             .unwrap();
 
         assert_eq!(&result.unwrap().payload, br#"{"x":12}"#);
     }
 
-    #[test]
-    fn validate_execute_config_environment() {
+    #[tokio::test]
+    async fn validate_execute_config_environment() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let db_dir = tempfile::tempdir().unwrap();
@@ -448,6 +431,7 @@ pub mod tests {
                     data: TriggerData::new_raw(br#"configvar:foo"#),
                 },
             )
+            .await
             .unwrap();
 
         assert_eq!(&result.unwrap().payload, br#"bar"#);
@@ -465,6 +449,7 @@ pub mod tests {
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST"#),
                 },
             )
+            .await
             .unwrap();
 
         assert_eq!(&result.unwrap().payload, br#"testing"#);
@@ -482,6 +467,7 @@ pub mod tests {
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#),
                 },
             )
+            .await
             .unwrap_err();
 
         assert!(matches!(
@@ -490,8 +476,8 @@ pub mod tests {
         ));
     }
 
-    #[test]
-    fn execute_without_enough_fuel() {
+    #[tokio::test]
+    async fn execute_without_enough_fuel() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let low_fuel_limit = 1;
@@ -544,6 +530,7 @@ pub mod tests {
                     data: TriggerData::new_raw(br#"{"x":12}"#),
                 },
             )
+            .await
             .unwrap_err();
 
         assert!(matches!(
@@ -604,8 +591,8 @@ pub mod tests {
         assert!(!nonexistent_dir.exists());
     }
 
-    #[test]
-    fn execute_with_low_time_limit() {
+    #[tokio::test]
+    async fn execute_with_low_time_limit() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let db_dir = tempfile::tempdir().unwrap();
@@ -666,6 +653,7 @@ pub mod tests {
                     data: TriggerData::new_raw(br#"hello world"#),
                 },
             )
+            .await
             .unwrap();
 
         // now same thing but sync sleep
@@ -703,6 +691,7 @@ pub mod tests {
                     data: TriggerData::new_raw(br#"hello world"#),
                 },
             )
+            .await
             .unwrap();
 
         // next, check that it "fails" expectedly with async sleep
@@ -740,6 +729,7 @@ pub mod tests {
                     data: TriggerData::new_raw(br#"hello world"#),
                 },
             )
+            .await
             .unwrap_err();
 
         assert!(matches!(
@@ -782,6 +772,7 @@ pub mod tests {
                     data: TriggerData::new_raw(br#"hello world"#),
                 },
             )
+            .await
             .unwrap_err();
 
         assert!(matches!(

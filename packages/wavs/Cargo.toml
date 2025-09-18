@@ -42,7 +42,6 @@ reqwest = { workspace = true }
 rand = { workspace = true }
 wasmtime = { workspace = true }
 lru = { workspace = true }
-rayon = { workspace = true }
 url = { workspace = true }
 bip39 = { workspace = true }
 alloy-contract = { workspace = true }
