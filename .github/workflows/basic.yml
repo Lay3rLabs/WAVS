@@ -54,25 +54,15 @@ jobs:
       - name: Set env
         run: echo "WAVS_CLI_COSMOS_MNEMONIC=\"reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff\"" >> $GITHUB_ENV
 
-      - name: Run temp tests
+      - name: Run tests
         uses: actions-rs/cargo@v1
         with:
           toolchain: 1.88.0
           command: test
-          args: --package wavs-engine concurrency_ -- --nocapture
+          args: --workspace --locked -- --nocapture
         env:
           RUST_BACKTRACE: 1
           RUST_LOG: info
-
-      # - name: Run tests
-      #   uses: actions-rs/cargo@v1
-      #   with:
-      #     toolchain: 1.88.0
-      #     command: test
-      #     args: --workspace --locked -- --nocapture
-      #   env:
-      #     RUST_BACKTRACE: 1
-      #     RUST_LOG: info
 
   lints:
     name: Lints
