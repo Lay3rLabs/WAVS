@@ -54,6 +54,9 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      - name: Build dependencies
+        run: cargo build --workspace --all-targets --locked
+
       - name: Run tests
         run: cargo test -p ${{ matrix.package }} --locked -- --nocapture
         env:
