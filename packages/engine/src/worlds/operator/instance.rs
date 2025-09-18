@@ -148,7 +148,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         store.set_fuel(fuel_limit).map_err(EngineError::Store)?;
 
-        // this only configureds the component to yield periodically
+        // this only configures the component to yield periodically
         // killing is done from the outside via a tokio timeout
         store.epoch_deadline_async_yield_and_update(EPOCH_YIELD_PERIOD_MS);
 
