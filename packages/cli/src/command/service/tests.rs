@@ -1494,9 +1494,14 @@ fn test_set_aggregator_submit() {
 
     // Should create AggregatorJson with unset component
     match &workflow.submit {
-        SubmitJson::AggregatorJson(AggregatorJson::Aggregator { url, component }) => {
+        SubmitJson::AggregatorJson(AggregatorJson::Aggregator {
+            url,
+            component,
+            signature_kind,
+        }) => {
             assert_eq!(url, test_url);
             assert!(component.is_unset());
+            assert_eq!(*signature_kind, SignatureKind::evm_default());
         }
         _ => panic!("Expected AggregatorJson variant"),
     }
@@ -1568,7 +1573,11 @@ async fn test_modify_aggregator_component() {
     let workflow = service.workflows.get(&workflow_id).unwrap();
 
     match &workflow.submit {
-        SubmitJson::AggregatorJson(AggregatorJson::Aggregator { url, component }) => {
+        SubmitJson::AggregatorJson(AggregatorJson::Aggregator {
+            url,
+            component,
+            signature_kind: _,
+        }) => {
             assert_eq!(url, test_url);
             assert!(component.is_set());
             if let ComponentJson::Component(comp) = component {

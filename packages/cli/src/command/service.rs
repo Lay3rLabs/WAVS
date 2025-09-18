@@ -34,7 +34,7 @@ use utils::{
 use uuid::Uuid;
 use wavs_types::{
     Aggregator, AllowedHostPermission, ByteArray, ChainKey, Component, ComponentSource, Registry,
-    ServiceManager, ServiceStatus, Submit, Timestamp, Trigger, WorkflowId,
+    ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp, Trigger, WorkflowId,
 };
 
 use crate::{
@@ -930,6 +930,7 @@ pub fn set_aggregator_submit(
         workflow.submit = SubmitJson::AggregatorJson(AggregatorJson::Aggregator {
             url: url.clone(),
             component: ComponentJson::new_unset(),
+            signature_kind: SignatureKind::evm_default(),
         });
 
         Ok((
