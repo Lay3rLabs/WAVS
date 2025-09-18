@@ -118,6 +118,9 @@ async fn do_it(kind: &str) {
     }
 
     if time.elapsed() >= Duration::from_secs(5) {
-        panic!("took way too long for tasks to complete!");
+        panic!(
+            "took way too long for tasks to complete! ({}ms)",
+            time.elapsed().as_millis()
+        );
     }
 }
