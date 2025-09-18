@@ -14,7 +14,8 @@ use crate::{backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineEr
 // how often to yield to check for epoch interruption
 // this is in milliseconds since that's the unit we use for driving the epoch
 // via increment_epoch()
-pub const EPOCH_YIELD_PERIOD_MS: u64 = 100;
+// TODO - follow-up with questions about this... increasing to 100 breaks things
+pub const EPOCH_YIELD_PERIOD_MS: u64 = 10;
 
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
@@ -149,8 +150,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         // this only configureds the component to yield periodically
         // killing is done from the outside via a tokio timeout
-        store.set_epoch_deadline(time_limit_seconds * 1000);
-        //store.epoch_deadline_async_yield_and_update(10);
+        store.epoch_deadline_async_yield_and_update(EPOCH_YIELD_PERIOD_MS);
 
         Ok(InstanceDeps {
             store,

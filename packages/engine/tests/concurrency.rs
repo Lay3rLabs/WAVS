@@ -33,11 +33,11 @@ async fn do_it(kind: &str) {
 
     let engine = WTEngine::new(&wt_config).unwrap();
 
-    let engine_ticker = engine.weak();
     // just run forever, ticking forward till the end of time (or however long this node is up)
+    let engine_ticker = engine.weak();
     std::thread::spawn(move || loop {
-        if let Some(engine) = engine_ticker.upgrade() {
-            engine.increment_epoch();
+        if let Some(engine_ticker) = engine_ticker.upgrade() {
+            engine_ticker.increment_epoch();
         } else {
             break;
         }
