@@ -17,9 +17,26 @@ env:
   WAVS_CLI_COSMOS_MNEMONIC: "reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff"
 
 jobs:
-  test:
-    name: Test Suite
+  get-packages:
+    name: Get workspace packages
     runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.packages.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: packages
+        run: |
+          PACKAGES=$(cargo metadata --no-deps --format-version 1 | jq -c '[.workspace_members[] | split(" ")[0]]')
+          echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
+
+  test:
+    name: Test ${{ matrix.package }}
+    needs: get-packages
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.get-packages.outputs.packages) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,12 +49,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          prefix-key: v0-${{ matrix.package }}
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run tests
-        run: cargo test --workspace --locked -- --nocapture
+        run: cargo test -p ${{ matrix.package }} --locked -- --nocapture
         env:
           RUST_LOG: info
 
