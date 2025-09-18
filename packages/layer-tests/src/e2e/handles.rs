@@ -53,7 +53,9 @@ impl AppHandles {
                 let ctx = ctx.clone();
                 let config = config.clone();
                 move || {
-                    wavs_aggregator::run_server(ctx, config);
+                    let meter = opentelemetry::global::meter("aggregator_test");
+                    let metrics = utils::telemetry::AggregatorMetrics::new(meter);
+                    wavs_aggregator::run_server(ctx, config, metrics);
                 }
             }));
         }

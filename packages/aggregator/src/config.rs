@@ -50,6 +50,12 @@ pub struct Config {
     /// Jaeger collector to send trace data
     pub jaeger: Option<String>,
 
+    /// Prometheus push gateway to send metrics
+    pub prometheus: Option<String>,
+
+    /// Prometheus metrics push interval in seconds
+    pub prometheus_push_interval_secs: Option<u64>,
+
     /// The IPFS gateway URL used to access IPFS content over HTTP.
     pub ipfs_gateway: String,
 
@@ -71,6 +77,10 @@ pub struct Config {
 
     /// Maximum HTTP request body size in megabytes (default: 15MB)
     pub max_body_size_mb: u32,
+
+    /// Disable all network operations (for testing)
+    #[cfg(debug_assertions)]
+    pub disable_networking: bool,
 }
 
 /// Default values for the config struct
@@ -86,6 +96,8 @@ impl Default for Config {
             credential: None,
             hd_index: None,
             jaeger: None,
+            prometheus: None,
+            prometheus_push_interval_secs: None,
             chains: ChainConfigs {
                 cosmos: Default::default(),
                 evm: Default::default(),
@@ -98,6 +110,8 @@ impl Default for Config {
             bearer_token: None,
             dev_endpoints_enabled: false,
             max_body_size_mb: 15,
+            #[cfg(debug_assertions)]
+            disable_networking: false,
         }
     }
 }
