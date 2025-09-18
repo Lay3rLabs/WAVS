@@ -15,7 +15,6 @@ wavs-types = { workspace = true }
 wavs-engine = { workspace = true }
 wavs-aggregator = { workspace = true }
 utils = { workspace = true }
-cid = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }

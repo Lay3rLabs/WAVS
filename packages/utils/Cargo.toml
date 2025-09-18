@@ -34,6 +34,7 @@ async-trait = { workspace = true }
 const-hex = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-types = { workspace = true }
+alloy-contract = { workspace = true }
 alloy-provider = { workspace = true}
 alloy-node-bindings = { workspace = true }
 alloy-signer = { workspace = true }
@@ -53,7 +54,6 @@ reqwest = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 tempfile = { workspace = true }
-alloy-contract = { workspace = true }
 rand = { workspace = true, optional = true }
 bip39 = { workspace = true, optional = true }
 subtle = { workspace = true }
