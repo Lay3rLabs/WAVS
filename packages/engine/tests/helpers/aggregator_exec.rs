@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use utils::storage::db::RedbStorage;
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
@@ -12,9 +14,10 @@ use crate::helpers::service::make_service;
 #[allow(dead_code)]
 pub async fn execute_aggregator_component(
     wasm_bytes: &[u8],
+    config: BTreeMap<String, String>,
     packet: Packet,
 ) -> Vec<AggregatorAction> {
-    let service = make_service(ComponentDigest::hash(wasm_bytes));
+    let service = make_service(ComponentDigest::hash(wasm_bytes), config);
 
     let mut wt_config = WTConfig::new();
     wt_config.wasm_component_model(true);

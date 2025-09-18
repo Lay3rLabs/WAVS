@@ -11,6 +11,11 @@ use wavs_types::{AllowedHostPermission, Service, Workflow, WorkflowId};
 use super::component::{HostComponent, HostComponentLogger};
 use crate::{backend::wasi_keyvalue::context::KeyValueCtx, utils::error::EngineError};
 
+// how often to yield to check for epoch interruption
+// this is in milliseconds since that's the unit we use for driving the epoch
+// via increment_epoch()
+pub const EPOCH_YIELD_PERIOD_MS: u64 = 100;
+
 pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
     pub service: Service,
@@ -110,7 +115,9 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             .unwrap_or(Workflow::DEFAULT_FUEL_LIMIT);
 
         if let Some(max_wasm_fuel) = max_wasm_fuel {
-            fuel_limit = fuel_limit.min(max_wasm_fuel);
+            // Users will be able to set this super high
+            // but we're okay with that since wasmtime will force yield points to be interjected
+            fuel_limit = fuel_limit.max(max_wasm_fuel);
         }
 
         let mut time_limit_seconds = workflow
@@ -140,10 +147,17 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         store.set_fuel(fuel_limit).map_err(EngineError::Store)?;
 
-        // This time limit kills things from _within_ the Wasm instance
-        // and is not the same as the time limit from the host side, which still needs to be imposed
-        // see https://github.com/bytecodealliance/wasmtime-go/issues/233#issuecomment-2356238658
-        store.set_epoch_deadline(time_limit_seconds);
+        // this only configures the component to yield periodically
+        // killing is done from the outside via a tokio timeout
+        // The reason we use epoch_deadline_callback instead of epoch_deadline_async_yield_and_update
+        // is because the latter appears to have a bug where it doesn't always schedule nicely with tokio
+        // See https://github.com/dakom/debug-wasmtime-concurrency for more info
+        store.epoch_deadline_callback(move |_| {
+            Ok(wasmtime::UpdateDeadline::YieldCustom(
+                EPOCH_YIELD_PERIOD_MS,
+                Box::pin(tokio::task::yield_now()),
+            ))
+        });
 
         Ok(InstanceDeps {
             store,

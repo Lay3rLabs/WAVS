@@ -49,7 +49,7 @@ pub async fn validate_workflow_trigger(
 }
 
 /// Check registry availability for component services
-pub async fn validate_registry_availability(registry_url: &str, errors: &mut Vec<String>) {
+pub async fn validate_registry_availability(wavs_endpoint: &str, errors: &mut Vec<String>) {
     // Create HTTP client with reasonable timeouts
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -58,7 +58,7 @@ pub async fn validate_registry_availability(registry_url: &str, errors: &mut Vec
         .unwrap();
 
     // Construct the URL for the app endpoint
-    let app_url = format!("{}/app", registry_url);
+    let app_url = format!("{}/info", wavs_endpoint);
 
     // Try to fetch the app endpoint using HTTP GET request to check availability
     let result = match client.get(&app_url).send().await {

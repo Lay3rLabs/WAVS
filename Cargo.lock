@@ -1841,7 +1841,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chain-trigger-lookup"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-network",
  "anyhow",
@@ -2192,7 +2192,7 @@ dependencies = [
 
 [[package]]
 name = "cosmos-query"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -2532,6 +2532,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1137cd7e7fc0fb5d3c5a8678be38ec56e819125d8d7907411fe24ccb943faca8"
+dependencies = [
+ "crossbeam-channel",
+ "crossbeam-deque",
+ "crossbeam-epoch",
+ "crossbeam-queue",
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-channel"
+version = "0.5.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82b8f8f868b36967f9606790d1903570de9ceaf870a7bf9fbbd3016d636a2cb2"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "crossbeam-deque"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2546,6 +2568,15 @@ name = "crossbeam-epoch"
 version = "0.9.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b82ac4a3c2ca9c3460964f020e1402edd5753411d7737aa39c3714ad1b5420e"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-queue"
+version = "0.3.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f58bbc28f91df819d0aa2a2c00cd19754769c2fad90579b3592b1c9ba7a3115"
 dependencies = [
  "crossbeam-utils",
 ]
@@ -3144,7 +3175,7 @@ dependencies = [
 
 [[package]]
 name = "echo-block-interval"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -3155,14 +3186,14 @@ dependencies = [
 
 [[package]]
 name = "echo-cron-interval"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-data"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "example-helpers",
  "wstd",
@@ -3372,7 +3403,7 @@ dependencies = [
 
 [[package]]
 name = "example-helpers"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -3390,7 +3421,7 @@ dependencies = [
 
 [[package]]
 name = "example-types"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "layer-climb-address",
  "serde",
@@ -4612,7 +4643,7 @@ dependencies = [
 
 [[package]]
 name = "kv-store"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -4748,7 +4779,7 @@ dependencies = [
 
 [[package]]
 name = "layer-tests"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -5793,7 +5824,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissions"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -7463,7 +7494,7 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
 name = "simple-aggregator"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -7557,7 +7588,7 @@ dependencies = [
 
 [[package]]
 name = "square"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -7988,7 +8019,7 @@ dependencies = [
 
 [[package]]
 name = "timer-aggregator"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
@@ -8631,7 +8662,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -9648,7 +9679,7 @@ dependencies = [
 
 [[package]]
 name = "wavs"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -9707,7 +9738,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-aggregator"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9745,7 +9776,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-benchmark-common"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "tempfile",
  "utils",
@@ -9756,7 +9787,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-cli"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -9789,7 +9820,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-dev-tools"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -9823,11 +9854,12 @@ dependencies = [
 
 [[package]]
 name = "wavs-engine"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
  "anyhow",
+ "crossbeam",
  "example-types",
  "layer-climb",
  "lru 0.16.1",
@@ -9849,7 +9881,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-types"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",

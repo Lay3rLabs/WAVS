@@ -30,18 +30,11 @@ jobs:
           #   target: wasm32-unknown-unknown
           override: true
 
-      - name: Set up cargo cache
-        uses: actions/cache@v3
-        continue-on-error: false
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-test-${{ hashFiles('Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-test-
+          key: test
+          cache-on-failure: "true"
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -86,18 +79,11 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-      - name: Set up cargo cache
-        uses: actions/cache@v3
-        continue-on-error: false
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-lint-
+          key: lint
+          cache-on-failure: "true"
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1

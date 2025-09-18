@@ -25,7 +25,7 @@ split-debuginfo = "unpacked"
 
 [workspace.package]
 edition = "2021"
-version = "0.5.2"
+version = "0.6.0-beta.1"
 license = "GPL-3.0-or-later"
 authors = ["Layer Labs (Cayman)"]
 repository = "https://github.com/Lay3rLabs/WAVS"
@@ -177,6 +177,7 @@ cfg-if = "1.0.1"
 regex = "1.11.2"
 zeroize = { version = "1.8.1", features = ["derive"] }
 derive-enum-all-values = "=0.1.0"
+crossbeam = "0.8.4"
 
 # versioning
 semver = { version = "1.0.26", features = ["serde"] }
