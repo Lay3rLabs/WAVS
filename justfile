@@ -165,7 +165,7 @@ start-aggregator-dev-full:
 
 start-wavs-dev:
     #!/bin/bash -eu
-    ROOT_DIR="$(pwd)"
+    ROOT_DIR="$(PWD)"
     TEMP_DIR="$(mktemp -d)"
     trap 'rm -rf "$TEMP_DIR"' EXIT
     cd packages/wavs && \
