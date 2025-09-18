@@ -22,6 +22,7 @@ use wavs_types::{
 };
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum SubmissionCommand {
     Kill,
     Submit(ChainMessage),
@@ -76,7 +77,7 @@ impl SubmissionManager {
 
     #[instrument(skip(self, ctx), fields(subsys = "Submission"))]
     pub fn start(&self, ctx: AppContext) {
-        while let Some(msg) = self.dispatcher_to_submission_rx.recv().ok() {
+        while let Ok(msg) = self.dispatcher_to_submission_rx.recv() {
             match msg {
                 SubmissionCommand::Kill => {
                     tracing::info!("SubmissionManager received Kill command, shutting down");

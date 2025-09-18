@@ -209,7 +209,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         std::thread::spawn({
             let _self = self.clone();
             move || {
-                while let Some(command) = _self.trigger_to_dispatcher_rx.recv().ok() {
+                while let Ok(command) = _self.trigger_to_dispatcher_rx.recv() {
                     match command {
                         DispatcherCommand::Trigger(action) => {
                             tracing::info!(
@@ -257,7 +257,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         std::thread::spawn({
             let _self = self.clone();
             move || {
-                while let Some(msg) = _self.engine_to_dispatcher_rx.recv().ok() {
+                while let Ok(msg) = _self.engine_to_dispatcher_rx.recv() {
                     if let Err(e) = _self
                         .dispatcher_to_submission_tx
                         .send(SubmissionCommand::Submit(msg))

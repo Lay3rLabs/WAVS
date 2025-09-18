@@ -50,7 +50,7 @@ fn run_simulation(setup: Arc<SystemSetup>) {
     let results_receiver = setup.engine_to_dispatcher_rx.clone();
     std::thread::spawn(move || {
         let mut received_results = Vec::new();
-        while let Some(result) = results_receiver.recv().ok() {
+        while let Ok(result) = results_receiver.recv() {
             received_results.push(result);
             if received_results.len() == total_actions as usize {
                 // Notify that all results have been received

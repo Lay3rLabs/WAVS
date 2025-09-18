@@ -18,6 +18,7 @@ use crate::subsystems::submission::chain_message::ChainMessage;
 use crate::AppContext;
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum EngineCommand {
     Kill,
     Execute {
@@ -54,7 +55,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
     where
         S: 'static,
     {
-        while let Some(command) = self.dispatcher_to_engine_rx.recv().ok() {
+        while let Ok(command) = self.dispatcher_to_engine_rx.recv() {
             match command {
                 EngineCommand::Kill => {
                     tracing::info!("Received kill command, shutting down engine manager");

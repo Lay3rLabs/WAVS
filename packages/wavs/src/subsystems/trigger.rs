@@ -641,7 +641,7 @@ mod tests {
         }
 
         let mut received_count = 0;
-        while let Some(command) = dispatcher_rx.recv().ok() {
+        while let Ok(command) = dispatcher_rx.recv() {
             if let DispatcherCommand::Trigger(action) = command {
                 if let TriggerData::Raw(data) = &action.data {
                     assert_eq!(

@@ -35,6 +35,7 @@ pub struct SystemSetup {
     pub config: SystemConfig,
     pub dispatcher_to_engine_tx: crossbeam::channel::Sender<EngineCommand>,
     pub engine_to_dispatcher_rx: crossbeam::channel::Receiver<ChainMessage>,
+    #[allow(clippy::type_complexity)]
     pub trigger_actions: Arc<std::sync::Mutex<Option<Vec<(TriggerAction, Service)>>>>,
 }
 
