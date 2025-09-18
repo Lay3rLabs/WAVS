@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use alloy_sol_types::SolValue;
 use serde::{de::DeserializeOwned, Serialize};
 use utils::{storage::db::RedbStorage, test_utils::test_contracts::ISimpleSubmit::DataWithId};
@@ -13,10 +15,24 @@ use crate::helpers::service::{make_service, make_trigger_action};
 #[allow(dead_code)]
 pub async fn execute_component<D: DeserializeOwned>(
     wasm_bytes: &[u8],
+    config: BTreeMap<String, String>,
     keyvalue_ctx: Option<KeyValueCtx>,
     input: impl Serialize,
 ) -> D {
-    try_execute_component(wasm_bytes, keyvalue_ctx, input)
+    try_execute_component(wasm_bytes, config, keyvalue_ctx, input)
+        .await
+        .unwrap()
+}
+
+#[allow(dead_code)]
+pub async fn execute_component_raw(
+    engine: WTEngine,
+    wasm_bytes: &[u8],
+    config: BTreeMap<String, String>,
+    keyvalue_ctx: Option<KeyValueCtx>,
+    input: Vec<u8>,
+) -> Vec<u8> {
+    try_execute_component_raw(engine, wasm_bytes, config, keyvalue_ctx, input)
         .await
         .unwrap()
 }
@@ -24,12 +40,10 @@ pub async fn execute_component<D: DeserializeOwned>(
 #[allow(dead_code)]
 pub async fn try_execute_component<D: DeserializeOwned>(
     wasm_bytes: &[u8],
+    config: BTreeMap<String, String>,
     keyvalue_ctx: Option<KeyValueCtx>,
     input: impl Serialize,
 ) -> std::result::Result<D, String> {
-    let service = make_service(ComponentDigest::hash(wasm_bytes));
-    let trigger_action = make_trigger_action(&service, None, serde_json::to_vec(&input).unwrap());
-
     let mut wt_config = WTConfig::new();
 
     wt_config.wasm_component_model(true);
@@ -37,6 +51,30 @@ pub async fn try_execute_component<D: DeserializeOwned>(
     wt_config.consume_fuel(true);
 
     let engine = WTEngine::new(&wt_config).unwrap();
+
+    let res = try_execute_component_raw(
+        engine,
+        wasm_bytes,
+        config,
+        keyvalue_ctx,
+        serde_json::to_vec(&input).unwrap(),
+    )
+    .await?;
+
+    let data_with_id: DataWithId = DataWithId::abi_decode(&res).unwrap();
+    Ok(serde_json::from_slice::<D>(&data_with_id.data).unwrap())
+}
+
+#[allow(dead_code)]
+pub async fn try_execute_component_raw(
+    engine: WTEngine,
+    wasm_bytes: &[u8],
+    config: BTreeMap<String, String>,
+    keyvalue_ctx: Option<KeyValueCtx>,
+    input: Vec<u8>,
+) -> std::result::Result<Vec<u8>, String> {
+    let service = make_service(ComponentDigest::hash(wasm_bytes), config);
+    let trigger_action = make_trigger_action(&service, None, input);
 
     let data_dir = tempfile::tempdir().unwrap();
     let db_dir = tempfile::tempdir().unwrap();
@@ -63,10 +101,7 @@ pub async fn try_execute_component<D: DeserializeOwned>(
         wavs_engine::worlds::operator::execute::execute(&mut instance_deps, trigger_action).await;
 
     match resp {
-        Ok(Some(response)) => {
-            let data_with_id: DataWithId = DataWithId::abi_decode(&response.payload).unwrap();
-            Ok(serde_json::from_slice::<D>(&data_with_id.data).unwrap())
-        }
+        Ok(Some(response)) => Ok(response.payload),
         Ok(None) => Err("No response from component".to_string()),
         Err(e) => {
             match e {

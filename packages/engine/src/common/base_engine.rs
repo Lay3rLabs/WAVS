@@ -69,11 +69,15 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
     }
 
     pub fn start_epoch_thread(&self) {
-        let engine = self.wasm_engine.clone();
+        let engine = self.wasm_engine.weak();
         // just run forever, ticking forward till the end of time (or however long this node is up)
         std::thread::spawn(move || loop {
-            engine.increment_epoch();
-            std::thread::sleep(Duration::from_secs(1));
+            if let Some(engine) = engine.upgrade() {
+                engine.increment_epoch();
+            } else {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
         });
     }
 

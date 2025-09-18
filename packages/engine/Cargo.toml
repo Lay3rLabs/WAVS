@@ -33,3 +33,4 @@ utils = { workspace = true, features = ["test-utils"] }
 tempfile = { workspace = true }
 alloy-sol-types = { workspace = true }
 example-types = { workspace = true }
+crossbeam = { workspace = true }

@@ -16,7 +16,7 @@ pub async fn execute(
         trigger.try_into().map_err(EngineError::Input)?;
 
     // Even though we have epochs forcing timeouts within WASI
-    // we still need to set a timeout on the host side
+    // we still need to set a timeout on the host side since we need to cancel sleeping components too
     // see https://github.com/bytecodealliance/wasmtime-go/issues/233#issuecomment-2356238658
     tokio::time::timeout(Duration::from_secs(deps.time_limit_seconds), {
         let service_id = service_id.clone();

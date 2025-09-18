@@ -38,7 +38,12 @@ async fn basic_aggregator_execution() {
         trigger_data: wavs_types::TriggerData::default(),
     };
 
-    let actions = execute_aggregator_component(COMPONENT_SIMPLE_AGGREGATOR_BYTES, packet).await;
+    let actions = execute_aggregator_component(
+        COMPONENT_SIMPLE_AGGREGATOR_BYTES,
+        Default::default(),
+        packet,
+    )
+    .await;
 
     assert_eq!(actions.len(), 1, "Expected one action");
 
