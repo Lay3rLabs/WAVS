@@ -104,10 +104,6 @@ impl HttpState {
         )
         .map_err(|e| AggregatorError::EngineInitialization(e.to_string()))?;
 
-        engine
-            .start()
-            .map_err(|e| AggregatorError::EngineInitialization(e.to_string()))?;
-
         Ok(Self {
             config,
             storage,

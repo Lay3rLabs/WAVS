@@ -50,12 +50,6 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
     }
 
     #[instrument(skip(self), fields(subsys = "Engine"))]
-    pub fn start(&self) -> Result<(), EngineError> {
-        self.engine.start_epoch_thread();
-        Ok(())
-    }
-
-    #[instrument(skip(self), fields(subsys = "Engine"))]
     pub fn store_component_bytes(&self, bytecode: &[u8]) -> Result<ComponentDigest, EngineError> {
         Ok(self.engine.store_component_bytes(bytecode)?)
     }
@@ -620,8 +614,6 @@ pub mod tests {
             metrics(),
             RedbStorage::new(db_dir.path()).unwrap(),
         );
-
-        engine.start().unwrap();
 
         let digest = engine
             .store_component_bytes(COMPONENT_ECHO_DATA_BYTES)

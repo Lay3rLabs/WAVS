@@ -54,11 +54,6 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         Ok(Self { engine, metrics })
     }
 
-    pub fn start(&self) -> AggregatorResult<()> {
-        self.engine.start_epoch_thread();
-        Ok(())
-    }
-
     #[instrument(skip(self, packet, wasm_component), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
     fn create_instance_deps(
         &self,
