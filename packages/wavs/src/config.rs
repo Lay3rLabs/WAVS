@@ -34,7 +34,6 @@ pub struct Config {
 
     // wasm engine config
     pub wasm_lru_size: usize,
-    pub wasm_threads: usize,
 
     /// All the available chains
     pub chains: ChainConfigs,
@@ -108,7 +107,6 @@ impl Default for Config {
                 dev: BTreeMap::new(),
             },
             wasm_lru_size: 20,
-            wasm_threads: 4,
             submission_mnemonic: None,
             cosmos_submission_mnemonic: None,
             max_execution_seconds: Workflow::DEFAULT_TIME_LIMIT_SECONDS * 3,

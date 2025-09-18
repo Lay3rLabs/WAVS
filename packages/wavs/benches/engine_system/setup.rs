@@ -19,16 +19,11 @@ use wavs_types::{Service, TriggerAction};
 pub struct SystemConfig {
     /// Number of concurrent actions to process
     pub n_actions: u64,
-    /// Number of threads for the MultiEngineRunner
-    pub thread_count: usize,
 }
 
 impl SystemConfig {
     pub fn description(&self) -> String {
-        format!(
-            "system actions: {} (threads: {})",
-            self.n_actions, self.thread_count
-        )
+        format!("system actions: {}", self.n_actions)
     }
 }
 
@@ -77,11 +72,7 @@ impl SystemSetup {
         }
 
         // Create the MultiEngineRunner
-        let engine_manager = EngineManager::new(
-            wasm_engine,
-            system_config.thread_count,
-            Services::new(db_storage),
-        );
+        let engine_manager = EngineManager::new(wasm_engine, Services::new(db_storage));
 
         let trigger_actions = (1..=system_config.n_actions)
             .enumerate()

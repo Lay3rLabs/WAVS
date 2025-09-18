@@ -18,20 +18,15 @@ pub fn benchmark(c: &mut Criterion) {
     // Use moderate sample size for consistent results
     group.sample_size(10);
 
-    // Test different thread counts to see scaling behavior
-    let thread_counts = vec![4, 16];
     let base_actions = 1000;
 
-    for &thread_count in &thread_counts {
-        let config = SystemConfig {
-            n_actions: base_actions,
-            thread_count,
-        };
+    let config = SystemConfig {
+        n_actions: base_actions,
+    };
 
-        group.bench_function(config.description(), move |b| {
-            b.iter_with_setup(|| SystemSetup::new(config), run_simulation);
-        });
-    }
+    group.bench_function(config.description(), move |b| {
+        b.iter_with_setup(|| SystemSetup::new(config), run_simulation);
+    });
 
     group.finish();
 }
@@ -67,12 +62,11 @@ fn run_simulation(setup: Arc<SystemSetup>) {
         });
     });
 
-    let setup = APP_CONTEXT.rt.block_on(async move {
+    APP_CONTEXT.rt.block_on(async move {
         let mut actions = setup.trigger_actions.lock().unwrap().take().unwrap();
         for (action, service) in actions.drain(..) {
             setup.action_sender.send((action, service)).await.unwrap();
         }
-        setup
     });
 
     let received_results = APP_CONTEXT.rt.block_on(async {
@@ -82,9 +76,5 @@ fn run_simulation(setup: Arc<SystemSetup>) {
 
     // to keep the setup alive until the end of the simulation
     // we print out the thread count from setup.config
-    println!(
-        "Completed {} concurrent actions across {} threads",
-        received_results.len(),
-        setup.config.thread_count
-    );
+    println!("Completed {} concurrent actions", received_results.len(),);
 }
