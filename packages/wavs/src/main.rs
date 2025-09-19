@@ -63,12 +63,12 @@ fn main() {
     wavs::run_server(ctx, config, dispatcher, metrics.http);
 
     if let Some(tracer) = tracer_provider {
-        if let Err(_) = tracer.shutdown() {
+        if tracer.shutdown().is_err() {
             //eprintln!("TracerProvider didn't shutdown cleanly: {e:?}")
         }
     }
     if let Some(meter) = meter_provider {
-        if let Err(_) = meter.shutdown() {
+        if meter.shutdown().is_err() {
             //eprintln!("MeterProvider didn't shutdown cleanly: {e:?}")
         }
     }
