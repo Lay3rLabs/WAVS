@@ -35,11 +35,7 @@ pub fn benchmark(c: &mut Criterion) {
                         .block_on(async {
                             runtime.submit_requests(&client, request_count, false).await;
                             runtime.wait_for_messages(request_count).await;
-
-                            #[cfg(debug_assertions)]
-                            {
-                                runtime.wait_and_validate_packets(request_count).await;
-                            }
+                            runtime.wait_and_validate_packets(request_count).await;
                         });
                     total += start.elapsed();
 

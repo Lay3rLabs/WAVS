@@ -102,11 +102,8 @@ impl DevTriggersRuntime {
         .expect("dispatcher new");
 
         // Disable external networking for benches (debug only)
-        #[cfg(debug_assertions)]
-        {
-            dispatcher_local.submission_manager.disable_networking = true;
-            dispatcher_local.trigger_manager.disable_networking = true;
-        }
+        dispatcher_local.submission_manager.disable_networking = true;
+        dispatcher_local.trigger_manager.disable_networking = true;
 
         let dispatcher = Arc::new(dispatcher_local);
 
@@ -235,7 +232,6 @@ impl DevTriggersRuntime {
         .unwrap_or_else(|_| panic!("Timed out waiting for {expected} messages"));
     }
 
-    #[cfg(debug_assertions)]
     pub async fn wait_and_validate_packets(&self, expected: usize) {
         let mut tick = tokio::time::interval(Self::POLL_INTERVAL);
         tokio::time::timeout(Self::WAIT_TIMEOUT, async {
