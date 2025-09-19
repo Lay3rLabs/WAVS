@@ -1,12 +1,8 @@
 use thiserror::Error;
-use tokio::sync::mpsc::error::SendError;
 use utils::error::EvmClientError;
 use wavs_types::{ByteArray, ChainKey, ServiceId, WorkflowId};
 
-use crate::{
-    dispatcher::DispatcherCommand,
-    subsystems::trigger::streams::local_command_stream::LocalStreamCommand,
-};
+use crate::{dispatcher::DispatcherCommand, subsystems::trigger::TriggerCommand};
 
 #[derive(Error, Debug)]
 pub enum TriggerError {
@@ -45,9 +41,9 @@ pub enum TriggerError {
     #[error("Config error: {0}")]
     Config(String),
     #[error("Dispatcher command send error: {0}")]
-    DispatcherCommandSendError(#[from] Box<SendError<DispatcherCommand>>),
+    DispatcherCommandSendError(#[from] Box<crossbeam::channel::SendError<DispatcherCommand>>),
     #[error("Local command send error: {0}")]
-    LocalCommandError(#[from] SendError<LocalStreamCommand>),
+    LocalCommandError(#[from] tokio::sync::mpsc::error::SendError<TriggerCommand>),
     #[error("Unable to convert event index: {0}")]
     EventIndexConversion(std::num::TryFromIntError),
 }

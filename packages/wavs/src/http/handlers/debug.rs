@@ -44,7 +44,6 @@ async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> 
             .dispatcher
             .trigger_manager
             .add_trigger(action)
-            .await
             .map_err(|e| {
                 tracing::error!("Failed to add trigger: {}", e);
                 anyhow::anyhow!("Failed to add trigger: {}", e)

@@ -13,7 +13,6 @@ use crate::{config::Config, services::Services, tracing_service_info, AppContext
 use alloy_signer_local::PrivateKeySigner;
 use chain_message::ChainMessage;
 use error::SubmissionError;
-use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::{
@@ -21,6 +20,13 @@ use wavs_types::{
     Credential, Envelope, EnvelopeExt, Packet, ServiceId, SignerResponse, Submit, TriggerData,
     WorkflowId,
 };
+
+#[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
+pub enum SubmissionCommand {
+    Kill,
+    Submit(ChainMessage),
+}
 
 #[derive(Clone)]
 pub struct SubmissionManager {
@@ -31,6 +37,7 @@ pub struct SubmissionManager {
     evm_mnemonic_hd_index_count: Arc<AtomicU32>,
     metrics: SubmissionMetrics,
     message_count: Arc<AtomicU64>,
+    dispatcher_to_submission_rx: crossbeam::channel::Receiver<SubmissionCommand>,
     #[cfg(debug_assertions)]
     pub debug_packets: Arc<RwLock<Vec<Packet>>>,
     #[cfg(debug_assertions)]
@@ -50,6 +57,7 @@ impl SubmissionManager {
         config: &Config,
         metrics: SubmissionMetrics,
         services: Services,
+        dispatcher_to_submission_rx: crossbeam::channel::Receiver<SubmissionCommand>,
     ) -> Result<Self, SubmissionError> {
         Ok(Self {
             http_client: reqwest::Client::new(),
@@ -58,6 +66,7 @@ impl SubmissionManager {
             evm_mnemonic_hd_index_count: Arc::new(AtomicU32::new(1)),
             metrics,
             message_count: Arc::new(AtomicU64::new(0)),
+            dispatcher_to_submission_rx,
             #[cfg(debug_assertions)]
             debug_packets: Arc::new(RwLock::new(Vec::new())),
             #[cfg(debug_assertions)]
@@ -67,95 +76,90 @@ impl SubmissionManager {
     }
 
     #[instrument(skip(self, ctx), fields(subsys = "Submission"))]
-    pub fn start(
-        &self,
-        ctx: AppContext,
-        mut rx: mpsc::Receiver<ChainMessage>,
-    ) -> Result<(), SubmissionError> {
-        ctx.rt.clone().spawn({
-            let mut kill_receiver = ctx.get_kill_receiver();
-            let _self = self.clone();
-
-            async move {
-                tokio::select! {
-                    _ = kill_receiver.recv() => {
-                        tracing::debug!("Submissions shutting down");
-                    },
-                    _ = async move {
-                    } => {
-                        while let Some(msg) = rx.recv().await {
-                            let ChainMessage {
-                                service_id,
-                                workflow_id,
-                                envelope,
-                                submit,
-                                trigger_data,
-                                ..
-                            } = msg;
-
-
-                            if matches!(&submit, Submit::None) {
-                                tracing::debug!("Skipping submission");
-                                continue;
-                            }
-
-                            // Check if the service is active
-                            match _self.services.is_active(&service_id) {
-                                true => {
-                                    // Service is active, proceed with submission
-                                }
-                                false => {
-                                    crate::tracing_service_warn!(_self.services, service_id, "Service is not active, skipping message");
-                                    continue;
-                                }
-                            }
-
-                            _self.message_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-                            let packet = match _self.make_packet(service_id.clone(), workflow_id.clone(), envelope, trigger_data).await {
-                                Ok(packet) => packet,
-                                Err(e) => {
-                                    tracing::error!("Failed to make packet: {:?}", e);
-                                    continue;
-                                }
-                            };
-
-                            #[cfg(debug_assertions)]
-                            {
-                                _self.debug_packets.write().unwrap().push(packet.clone());
-                            }
-
-
-                            #[cfg(debug_assertions)]
-                            if _self.disable_networking {
-                                tracing::warn!("Networking is disabled, skipping submission");
-                                continue;
-                            }
-
-                            match submit {
-                                Submit::Aggregator{url, ..} => {
-                                    #[cfg(debug_assertions)]
-                                    if msg.debug.do_not_submit_aggregator {
-                                        tracing::warn!("Test-only flag set, skipping submission to aggregator");
-                                        continue;
-                                    }
-
-                                    if let Err(e) = _self.submit_to_aggregator(url, packet).await {
-                                        tracing::error!("Failed to submit to aggregator for service_id={}, workflow_id={}: {:?}", service_id, workflow_id, e);
-                                    }
-                                }
-                                Submit::None => {
-                                    if !cfg!(debug_assertions) {
-                                        tracing::error!("Submit::None here should be unreachable!");
-                                    }
-                                }
-                            };
+    pub fn start(&self, ctx: AppContext) {
+        while let Ok(msg) = self.dispatcher_to_submission_rx.recv() {
+            match msg {
+                SubmissionCommand::Kill => {
+                    tracing::info!("SubmissionManager received Kill command, shutting down");
+                    break;
+                }
+                SubmissionCommand::Submit(msg) => {
+                    let _self = self.clone();
+                    ctx.rt.spawn(async move {
+                        if let Err(e) = _self.process_message(msg).await {
+                            tracing::error!("Error processing message: {:?}", e);
                         }
-                        tracing::debug!("Submission channel closed");
-                    }
+                    });
                 }
             }
-        });
+        }
+    }
+
+    #[instrument(skip(self), fields(subsys = "Submission"))]
+    async fn process_message(&self, msg: ChainMessage) -> Result<(), SubmissionError> {
+        let ChainMessage {
+            service_id,
+            workflow_id,
+            envelope,
+            submit,
+            trigger_data,
+            ..
+        } = msg;
+
+        if matches!(&submit, Submit::None) {
+            tracing::debug!("Skipping submission");
+            return Ok(());
+        }
+
+        // Check if the service is active
+        if !self.services.is_active(&service_id) {
+            crate::tracing_service_warn!(
+                self.services,
+                service_id,
+                "Service is not active, skipping message"
+            );
+            return Ok(());
+        }
+
+        self.message_count
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        let packet = self
+            .make_packet(
+                service_id.clone(),
+                workflow_id.clone(),
+                envelope,
+                trigger_data,
+            )
+            .await?;
+
+        #[cfg(debug_assertions)]
+        {
+            self.debug_packets.write().unwrap().push(packet.clone());
+        }
+
+        #[cfg(debug_assertions)]
+        if self.disable_networking {
+            tracing::warn!("Networking is disabled, skipping submission");
+            return Ok(());
+        }
+
+        match submit {
+            Submit::Aggregator { url, .. } => {
+                #[cfg(debug_assertions)]
+                if msg.debug.do_not_submit_aggregator {
+                    tracing::warn!("Test-only flag set, skipping submission to aggregator");
+                    return Ok(());
+                }
+
+                self.submit_to_aggregator(url, packet).await?;
+            }
+            Submit::None => {
+                if !cfg!(debug_assertions) {
+                    tracing::error!("Submit::None here should be unreachable!");
+                }
+            }
+        };
 
         Ok(())
     }

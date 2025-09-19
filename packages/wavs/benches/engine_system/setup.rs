@@ -3,8 +3,8 @@ use std::{collections::BTreeMap, sync::Arc};
 use opentelemetry::global::meter;
 use utils::storage::{db::RedbStorage, fs::FileStorage};
 use utils::telemetry::Metrics;
+use wavs::subsystems::engine::EngineCommand;
 use wavs::{
-    dispatcher::{ENGINE_CHANNEL_SIZE, SUBMISSION_CHANNEL_SIZE},
     services::Services,
     subsystems::{
         engine::{wasm_engine::WasmEngine, EngineManager},
@@ -33,9 +33,10 @@ pub struct SystemSetup {
     pub _engine_setup: Arc<EngineSetup>,
     pub _engine_manager: EngineManager<FileStorage>,
     pub config: SystemConfig,
-    pub action_sender: tokio::sync::mpsc::Sender<(TriggerAction, Service)>,
-    pub result_receiver: std::sync::Mutex<Option<tokio::sync::mpsc::Receiver<ChainMessage>>>,
-    pub trigger_actions: std::sync::Mutex<Option<Vec<(TriggerAction, Service)>>>,
+    pub dispatcher_to_engine_tx: crossbeam::channel::Sender<EngineCommand>,
+    pub engine_to_dispatcher_rx: crossbeam::channel::Receiver<ChainMessage>,
+    #[allow(clippy::type_complexity)]
+    pub trigger_actions: Arc<std::sync::Mutex<Option<Vec<(TriggerAction, Service)>>>>,
 }
 
 impl SystemSetup {
@@ -71,8 +72,16 @@ impl SystemSetup {
             panic!("Component digest mismatch");
         }
 
-        // Create the MultiEngineRunner
-        let engine_manager = EngineManager::new(wasm_engine, Services::new(db_storage));
+        let (dispatcher_to_engine_tx, dispatcher_to_engine_rx) =
+            crossbeam::channel::unbounded::<EngineCommand>();
+        let (engine_to_dispatcher_tx, engine_to_dispatcher_rx) =
+            crossbeam::channel::unbounded::<ChainMessage>();
+        let engine_manager = EngineManager::new(
+            wasm_engine,
+            Services::new(db_storage),
+            dispatcher_to_engine_rx,
+            engine_to_dispatcher_tx,
+        );
 
         let trigger_actions = (1..=system_config.n_actions)
             .enumerate()
@@ -84,19 +93,22 @@ impl SystemSetup {
             .collect::<Vec<_>>();
 
         // Create channels for the Engine Manager pipeline - mirror production pipeline sizes
-        let (action_sender, input_receiver) = tokio::sync::mpsc::channel(ENGINE_CHANNEL_SIZE);
-        let (result_sender, result_receiver) = tokio::sync::mpsc::channel(SUBMISSION_CHANNEL_SIZE);
 
         // Start the Engine Manager
-        engine_manager.start(APP_CONTEXT.clone(), input_receiver, result_sender);
+        std::thread::spawn({
+            let engine_manager = engine_manager.clone();
+            move || {
+                engine_manager.start(APP_CONTEXT.clone());
+            }
+        });
 
         Arc::new(SystemSetup {
             _engine_setup: engine_setup,
             _engine_manager: engine_manager,
             config: system_config,
-            action_sender,
-            result_receiver: std::sync::Mutex::new(Some(result_receiver)),
-            trigger_actions: std::sync::Mutex::new(Some(trigger_actions)),
+            dispatcher_to_engine_tx,
+            engine_to_dispatcher_rx,
+            trigger_actions: Arc::new(std::sync::Mutex::new(Some(trigger_actions))),
         })
     }
 }

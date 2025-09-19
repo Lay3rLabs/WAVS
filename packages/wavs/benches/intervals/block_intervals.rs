@@ -34,25 +34,16 @@ fn run_simulation(setup: Arc<Setup>) {
     std::thread::spawn({
         let setup = setup.clone();
         move || {
-            APP_CONTEXT.rt.block_on(async move {
-                let mut count = 0;
-                // take out the action receiver so we can listen to it
-                let mut receiver = setup
-                    .dispatcher_command_receiver
-                    .lock()
-                    .unwrap()
-                    .take()
-                    .unwrap();
+            let mut count = 0;
 
-                while receiver.recv().await.is_some() {
-                    count += 1;
-                    if count == setup.config.total_triggers() {
-                        // all done, send the finished signal!
-                        finished_sender.send(count).unwrap();
-                        break;
-                    }
+            while setup.trigger_to_dispatcher_rx.recv().is_ok() {
+                count += 1;
+                if count == setup.config.total_triggers() {
+                    // all done, send the finished signal!
+                    finished_sender.send(count).unwrap();
+                    break;
                 }
-            });
+            }
         }
     });
 
@@ -61,18 +52,15 @@ fn run_simulation(setup: Arc<Setup>) {
     std::thread::spawn({
         let setup = setup.clone();
         move || {
-            APP_CONTEXT.rt.block_on(async move {
-                for block_height in 0..=setup.config.total_blocks() {
-                    for chain in setup.chains.clone() {
-                        let commands = setup.trigger_manager.process_blocks(chain, block_height);
-                        setup
-                            .trigger_manager
-                            .send_dispatcher_commands(commands)
-                            .await
-                            .unwrap();
-                    }
+            for block_height in 0..=setup.config.total_blocks() {
+                for chain in setup.chains.clone() {
+                    let commands = setup.trigger_manager.process_blocks(chain, block_height);
+                    setup
+                        .trigger_manager
+                        .send_dispatcher_commands(commands)
+                        .unwrap();
                 }
-            });
+            }
         }
     });
 

@@ -1,9 +1,8 @@
 use std::time::Duration;
 
-use tokio::sync::mpsc;
 use wavs::subsystems::submission::{
     chain_message::{ChainMessage, ChainMessageDebug},
-    SubmissionManager,
+    SubmissionCommand, SubmissionManager,
 };
 use wavs_types::{
     Component, ComponentDigest, ComponentSource, Credential, Envelope, Service, ServiceManager,
@@ -50,13 +49,24 @@ fn collect_messages_with_wait() {
     let data_dir = tempfile::tempdir().unwrap();
     let data_dir = data_dir.path().join("db");
     let services = wavs::services::Services::new(RedbStorage::new(data_dir).unwrap());
-    let submission_manager = SubmissionManager::new(&config, metrics, services.clone()).unwrap();
+    let (dispatcher_to_submission_tx, dispatcher_to_submission_rx) =
+        crossbeam::channel::unbounded::<SubmissionCommand>();
+    let submission_manager = SubmissionManager::new(
+        &config,
+        metrics,
+        services.clone(),
+        dispatcher_to_submission_rx,
+    )
+    .unwrap();
 
     assert_eq!(submission_manager.get_message_count(), 0);
 
     let ctx = AppContext::new();
-    let (send, rx) = mpsc::channel::<ChainMessage>(2);
-    submission_manager.start(ctx.clone(), rx).unwrap();
+    std::thread::spawn({
+        let ctx = ctx.clone();
+        let submission_manager = submission_manager.clone();
+        move || submission_manager.start(ctx)
+    });
 
     let service = wavs_types::Service {
         name: "serv1".to_string(),
@@ -93,7 +103,9 @@ fn collect_messages_with_wait() {
     let msg2 = dummy_message(&service, "bar");
     let msg3 = dummy_message(&service, "baz");
 
-    send.blocking_send(msg1.clone()).unwrap();
+    dispatcher_to_submission_tx
+        .send(SubmissionCommand::Submit(msg1.clone()))
+        .unwrap();
     wait_for_submission_messages(&submission_manager, 1, None).unwrap();
 
     assert_eq!(
@@ -105,8 +117,12 @@ fn collect_messages_with_wait() {
         vec![(msg1.service_id.clone(), msg1.workflow_id.clone())]
     );
 
-    send.blocking_send(msg2.clone()).unwrap();
-    send.blocking_send(msg3.clone()).unwrap();
+    dispatcher_to_submission_tx
+        .send(SubmissionCommand::Submit(msg2.clone()))
+        .unwrap();
+    dispatcher_to_submission_tx
+        .send(SubmissionCommand::Submit(msg3.clone()))
+        .unwrap();
     wait_for_submission_messages(&submission_manager, 3, None).unwrap();
     assert_eq!(submission_manager.get_message_count(), 3);
     assert_eq!(
