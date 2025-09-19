@@ -5,16 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
-## [unreleased]
+## [v0.6.0]
 
 ### Added
 
 - new metrics in both wavs and aggregator with configuration that sends alerts to Slack
+- full support for custom aggregator components, and with timeout callbacks
 
 ### Changed
 
 - Deprecate old variant Submit::Aggregator with evm_contracts; Aggregator component is required now
 - Added body size limit to http requests (default 15MB)
+- New architecture to remove thread contention and allow many more components to run on the same async runtime without blocking eachother
 
 ## [v0.5.1]
 
@@ -248,7 +250,8 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.5.1...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.6.0...HEAD
+[v0.6.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.5.1...v0.6.0
 [v0.5.1]: https://github.com/Lay3rLabs/WAVS/compare/v0.5.0...v0.5.1
 [v0.5.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.4.0...v0.5.0
 [v0.4.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0...v0.4.0

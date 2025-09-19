@@ -7,11 +7,10 @@ Most of the developer tasks are executed via justfiles. Run `just` to see a full
 ## Contents
 
 ### Guides
+- [Local Development](LOCAL_DEV.md)
 - [Publishing and Wasm & WIT Registry Usage](PUBLISHING_AND_REGISTRY_USAGE.md)
 - [Logging](LOGGING.md)
-- [EigenLayer](EIGENLAYER.md)
 - [Contracts](CONTRACTS.md)
-- [Develop Wasm components](AUTHORING_COMPONENTS.md)
 
 ### Documents
 - [WAVS API](API.md)
@@ -19,5 +18,5 @@ Most of the developer tasks are executed via justfiles. Run `just` to see a full
 - [Async notes](./ASYNC_NOTES.md)
 
 ### Architecture
-- [Architecture](architecture/architecture.md)
-- [Overall Message and Channels Flow](architecture/channels-runtimes.md)
+- [Architecture](ARCHITECTURE.md)
+
