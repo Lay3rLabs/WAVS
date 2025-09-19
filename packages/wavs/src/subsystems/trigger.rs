@@ -624,20 +624,6 @@ mod tests {
         let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
         let (dispatcher_tx, dispatcher_rx) = crossbeam::channel::unbounded::<DispatcherCommand>();
 
-        let trigger_manager =
-            TriggerManager::new(&config, metrics, services, dispatcher_tx).unwrap();
-
-        let ctx = utils::context::AppContext::new();
-        std::thread::spawn({
-            let trigger_manager = trigger_manager.clone();
-            let ctx = ctx.clone();
-            move || {
-                trigger_manager.start(ctx);
-            }
-        });
-
-        // short sleep for trigger manager to kick in
-        tokio::time::sleep(Duration::from_millis(100)).await;
         let service = wavs_types::Service {
             name: "serv1".to_string(),
             status: wavs_types::ServiceStatus::Active,
@@ -665,6 +651,21 @@ mod tests {
             .collect(),
         };
         services.save(&service).unwrap();
+
+        let trigger_manager =
+            TriggerManager::new(&config, metrics, services, dispatcher_tx).unwrap();
+
+        let ctx = utils::context::AppContext::new();
+        std::thread::spawn({
+            let trigger_manager = trigger_manager.clone();
+            let ctx = ctx.clone();
+            move || {
+                trigger_manager.start(ctx);
+            }
+        });
+
+        // short sleep for trigger manager to kick in
+        std::thread::sleep(Duration::from_millis(100));
 
         for i in 0..6 {
             let action = TriggerAction {
