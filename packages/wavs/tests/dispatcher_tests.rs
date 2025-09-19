@@ -1,3 +1,4 @@
+#![cfg(feature = "dev")]
 use std::sync::Arc;
 
 use alloy_sol_types::SolValue;

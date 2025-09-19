@@ -66,7 +66,7 @@ pub struct TriggerManager {
         Arc<std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<TriggerCommand>>>>,
     lookup_maps: Arc<LookupMaps>,
     metrics: TriggerMetrics,
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     pub disable_networking: bool,
     pub services: Services,
 }
@@ -89,7 +89,7 @@ impl TriggerManager {
             command_sender,
             command_receiver: Arc::new(std::sync::Mutex::new(Some(command_receiver))),
             metrics,
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "dev")]
             disable_networking: config.disable_trigger_networking,
             services,
         })
@@ -147,7 +147,7 @@ impl TriggerManager {
         for command in commands {
             match &command {
                 DispatcherCommand::Trigger(action) => {
-                    #[cfg(debug_assertions)]
+                    #[cfg(feature = "dev")]
                     if std::env::var("WAVS_FORCE_TRIGGER_ERROR_XXX").is_ok() {
                         self.metrics.increment_total_errors("forced trigger error");
                         continue;
@@ -233,7 +233,7 @@ impl TriggerManager {
                             dispatcher_commands.push(DispatcherCommand::Trigger(*trigger_action));
                         }
                         TriggerCommand::StartListeningCron => {
-                            #[cfg(debug_assertions)]
+                            #[cfg(feature = "dev")]
                             if self.disable_networking {
                                 tracing::warn!(
                                     "Networking is disabled, skipping cron stream start"
@@ -265,7 +265,7 @@ impl TriggerManager {
                             }
                         }
                         TriggerCommand::StartListeningChain { chain } => {
-                            #[cfg(debug_assertions)]
+                            #[cfg(feature = "dev")]
                             if self.disable_networking {
                                 tracing::warn!(
                                     "Networking is disabled, skipping chain stream start"
@@ -589,7 +589,7 @@ impl TriggerManager {
         }
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     pub fn get_lookup_maps(&self) -> &Arc<LookupMaps> {
         &self.lookup_maps
     }

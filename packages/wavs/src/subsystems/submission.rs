@@ -38,9 +38,9 @@ pub struct SubmissionManager {
     metrics: SubmissionMetrics,
     message_count: Arc<AtomicU64>,
     dispatcher_to_submission_rx: crossbeam::channel::Receiver<SubmissionCommand>,
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     pub debug_packets: Arc<RwLock<Vec<Packet>>>,
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     pub disable_networking: bool,
     pub services: Services,
 }
@@ -67,9 +67,9 @@ impl SubmissionManager {
             metrics,
             message_count: Arc::new(AtomicU64::new(0)),
             dispatcher_to_submission_rx,
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "dev")]
             debug_packets: Arc::new(RwLock::new(Vec::new())),
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "dev")]
             disable_networking: config.disable_submission_networking,
             services,
         })
@@ -133,12 +133,12 @@ impl SubmissionManager {
             )
             .await?;
 
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "dev")]
         {
             self.debug_packets.write().unwrap().push(packet.clone());
         }
 
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "dev")]
         if self.disable_networking {
             tracing::warn!("Networking is disabled, skipping submission");
             return Ok(());
@@ -146,7 +146,7 @@ impl SubmissionManager {
 
         match submit {
             Submit::Aggregator { url, .. } => {
-                #[cfg(debug_assertions)]
+                #[cfg(feature = "dev")]
                 if msg.debug.do_not_submit_aggregator {
                     tracing::warn!("Test-only flag set, skipping submission to aggregator");
                     return Ok(());
@@ -155,7 +155,7 @@ impl SubmissionManager {
                 self.submit_to_aggregator(url, packet).await?;
             }
             Submit::None => {
-                if !cfg!(debug_assertions) {
+                if !cfg!(feature = "dev") {
                     tracing::error!("Submit::None here should be unreachable!");
                 }
             }
@@ -203,7 +203,7 @@ impl SubmissionManager {
         self.message_count.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     pub fn get_debug_packets(&self) -> Vec<Packet> {
         self.debug_packets.read().unwrap().clone()
     }
@@ -292,7 +292,7 @@ impl SubmissionManager {
         url: String,
         packet: Packet,
     ) -> Result<(), SubmissionError> {
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "dev")]
         if std::env::var("WAVS_FORCE_SUBMISSION_ERROR_XXX").is_ok() {
             self.metrics.submissions_failed.add(1, &[]);
             self.metrics.total_errors.add(1, &[]);
@@ -305,7 +305,7 @@ impl SubmissionManager {
         let workflow_id = packet.workflow_id.clone();
         let start_time = std::time::Instant::now();
 
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "dev")]
         if std::env::var("WAVS_FORCE_SLOW_SUBMISSION_XXX").is_ok() {
             std::thread::sleep(std::time::Duration::from_secs(6));
         }

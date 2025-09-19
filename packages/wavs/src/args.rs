@@ -123,13 +123,13 @@ pub struct CliArgs {
     pub dev_endpoints_enabled: Option<bool>,
 
     /// Disable trigger networking for testing (default: false)
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_trigger_networking: Option<bool>,
 
     /// Disable submission networking for testing (default: false)
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_submission_networking: Option<bool>,
