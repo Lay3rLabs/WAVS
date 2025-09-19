@@ -535,12 +535,12 @@ impl TriggerManager {
                         let event_id = EventId::try_from((&service, action))
                             .map_err(TriggerError::EncodeEventId)?;
                         tracing::debug!(
-                            "Trigger action (in this batch) {}: service_id={}, workflow_id={}, trigger_data={:?}, event_id={:?}",
-                            idx + 1,
-                            action.config.service_id,
-                            action.config.workflow_id,
-                            action.data,
-                            event_id
+                            batch = idx + 1,
+                            service_id = %action.config.service_id,
+                            workflow_id = %action.config.workflow_id,
+                            trigger_data = ?action.data,
+                            event_id = %event_id,
+                            "Trigger action (in this batch)"
                         );
                     }
                 }
