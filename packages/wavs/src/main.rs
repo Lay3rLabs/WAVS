@@ -61,14 +61,15 @@ fn main() {
     let dispatcher = Arc::new(Dispatcher::new(&config_clone, metrics.wavs).unwrap());
 
     wavs::run_server(ctx, config, dispatcher, metrics.http);
+
     if let Some(tracer) = tracer_provider {
-        tracer
-            .shutdown()
-            .expect("TracerProvider should shutdown successfully")
+        if tracer.shutdown().is_err() {
+            //eprintln!("TracerProvider didn't shutdown cleanly: {e:?}")
+        }
     }
     if let Some(meter) = meter_provider {
-        meter
-            .shutdown()
-            .expect("MeterProvider should shutdown successfully")
+        if meter.shutdown().is_err() {
+            //eprintln!("MeterProvider didn't shutdown cleanly: {e:?}")
+        }
     }
 }
