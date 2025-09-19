@@ -11,7 +11,7 @@ route:
 receivers:
   - name: 'slack'
     slack_configs:
-      - api_url: 'https://hooks.slack.com/services/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'
+      - api_url_file: '/etc/alertmanager/slack_webhook_url'
         channel: '#test'
         title: 'WAVS Alert: {{ .GroupLabels.alertname }}'
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
