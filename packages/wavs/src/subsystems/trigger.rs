@@ -31,8 +31,8 @@ use utils::{
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
-    ByteArray, ChainKey, IWavsServiceManager, ServiceId, Trigger, TriggerAction, TriggerConfig,
-    TriggerData,
+    ByteArray, ChainKey, EventId, IWavsServiceManager, ServiceId, Trigger, TriggerAction,
+    TriggerConfig, TriggerData,
 };
 
 #[derive(Debug)]
@@ -528,12 +528,19 @@ impl TriggerManager {
                 for (idx, command) in dispatcher_commands.iter().enumerate() {
                     if let DispatcherCommand::Trigger(action) = command {
                         // Log the trigger action details
+                        let service = self
+                            .services
+                            .get(&action.config.service_id)
+                            .map_err(TriggerError::Services)?;
+                        let event_id = EventId::try_from((&service, action))
+                            .map_err(TriggerError::EncodeEventId)?;
                         tracing::debug!(
-                            "Trigger action (in this batch) {}: service_id={}, workflow_id={}, trigger_data={:?}",
-                            idx + 1,
-                            action.config.service_id,
-                            action.config.workflow_id,
-                            action.data
+                            batch = idx + 1,
+                            service_id = %action.config.service_id,
+                            workflow_id = %action.config.workflow_id,
+                            trigger_data = ?action.data,
+                            event_id = %event_id,
+                            "Trigger action (in this batch)"
                         );
                     }
                 }
@@ -594,8 +601,14 @@ mod tests {
     use std::time::Duration;
 
     use crate::{config::Config, services::Services};
-    use utils::{config::ChainConfigs, storage::db::RedbStorage, telemetry::TriggerMetrics};
-    use wavs_types::{ServiceId, Trigger, TriggerAction, TriggerConfig, TriggerData, WorkflowId};
+    use utils::{
+        config::ChainConfigs, storage::db::RedbStorage, telemetry::TriggerMetrics,
+        test_utils::address::rand_address_evm,
+    };
+    use wavs_types::{
+        Component, ComponentDigest, ComponentSource, ServiceManager, SignatureKind, Submit,
+        Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowId,
+    };
 
     #[test]
     fn test_add_trigger() {
@@ -610,6 +623,34 @@ mod tests {
 
         let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
         let (dispatcher_tx, dispatcher_rx) = crossbeam::channel::unbounded::<DispatcherCommand>();
+
+        let service = wavs_types::Service {
+            name: "serv1".to_string(),
+            status: wavs_types::ServiceStatus::Active,
+            manager: ServiceManager::Evm {
+                chain: "evm:anvil".parse().unwrap(),
+                address: rand_address_evm(),
+            },
+            workflows: vec![(
+                "workflow-1".parse().unwrap(),
+                Workflow {
+                    trigger: Trigger::Manual,
+                    component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
+                        [0; 32],
+                    ))),
+                    submit: Submit::Aggregator {
+                        url: "http://example.com".to_string(),
+                        component: Box::new(Component::new(ComponentSource::Digest(
+                            ComponentDigest::hash([0; 32]),
+                        ))),
+                        signature_kind: SignatureKind::evm_default(),
+                    },
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+        services.save(&service).unwrap();
 
         let trigger_manager =
             TriggerManager::new(&config, metrics, services, dispatcher_tx).unwrap();
@@ -629,8 +670,8 @@ mod tests {
         for i in 0..6 {
             let action = TriggerAction {
                 config: TriggerConfig {
-                    service_id: ServiceId::hash("test-service"),
-                    workflow_id: WorkflowId::new("test-workflow").unwrap(),
+                    service_id: service.id(),
+                    workflow_id: WorkflowId::new("workflow-1").unwrap(),
                     trigger: Trigger::Manual,
                 },
                 data: TriggerData::Raw(vec![i as u8]),

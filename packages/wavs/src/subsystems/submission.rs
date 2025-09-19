@@ -284,7 +284,9 @@ impl SubmissionManager {
         })
     }
 
-    #[instrument(skip(self), fields(subsys = "Submission"))]
+    #[instrument(skip(self, packet),
+        fields(subsys = "Submission", service_id = %packet.service.id(), workflow_id = %packet.workflow_id, event_id = %packet.event_id())
+    )]
     async fn submit_to_aggregator(
         &self,
         url: String,

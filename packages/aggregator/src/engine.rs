@@ -54,7 +54,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         Ok(Self { engine, metrics })
     }
 
-    #[instrument(skip(self, packet, wasm_component), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
+    #[instrument(skip(self, packet, wasm_component), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id, event_id = %packet.event_id()))]
     fn create_instance_deps(
         &self,
         component: &Component,
@@ -88,6 +88,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         .map_err(Into::into)
     }
 
+    #[instrument(skip(self, component, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id, event_id = %packet.event_id()))]
     pub async fn execute_packet(
         &self,
         component: &Component,
@@ -153,7 +154,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             .map_err(|e| AggregatorError::ComponentLoad(format!("Failed to load component: {}", e)))
     }
 
-    #[instrument(skip(self, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
+    #[instrument(skip(self, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id, event_id = %packet.event_id()))]
     pub async fn execute_timer_callback(
         &self,
         component: &Component,
@@ -196,7 +197,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         }
     }
 
-    #[instrument(skip(self, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id))]
+    #[instrument(skip(self, packet), fields(service.name = %packet.service.name, service.manager = ?packet.service.manager, workflow_id = %packet.workflow_id, event_id = %packet.event_id()))]
     pub async fn execute_submit_callback(
         &self,
         component: &Component,

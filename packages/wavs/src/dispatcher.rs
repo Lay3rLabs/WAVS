@@ -34,7 +34,9 @@ use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
-use wavs_types::{ChainConfigError, ChainKey, ComponentDigest, ServiceManager, WorkflowIdError};
+use wavs_types::{
+    ChainConfigError, ChainKey, ComponentDigest, EventId, ServiceManager, WorkflowIdError,
+};
 use wavs_types::{Service, ServiceId, SignerResponse, TriggerAction};
 
 use crate::config::Config;
@@ -212,12 +214,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                 while let Ok(command) = _self.trigger_to_dispatcher_rx.recv() {
                     match command {
                         DispatcherCommand::Trigger(action) => {
-                            tracing::info!(
-                                "Dispatcher received trigger action: service_id={}, workflow_id={}",
-                                action.config.service_id,
-                                action.config.workflow_id
-                            );
-
                             let service = match _self.services.get(&action.config.service_id) {
                                 Ok(service) => service,
                                 Err(err) => {
@@ -225,6 +221,18 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                     continue;
                                 }
                             };
+                            let event_id = EventId::try_from((&service, &action))
+                                .map_err(DispatcherError::EncodeEventId)
+                                .unwrap_or(EventId::from(alloy_primitives::FixedBytes::new(
+                                    [0; 20],
+                                )));
+
+                            tracing::info!(
+                                service_id = %action.config.service_id,
+                                workflow_id = %action.config.workflow_id,
+                                event_id = %event_id,
+                                "Dispatcher received trigger action",
+                            );
                             if let Err(err) = _self
                                 .dispatcher_to_engine_tx
                                 .send(EngineCommand::Execute { service, action })
@@ -566,4 +574,7 @@ pub enum DispatcherError {
         old_id: ServiceId,
         new_id: ServiceId,
     },
+
+    #[error("could not encode EventId {0:?}")]
+    EncodeEventId(anyhow::Error),
 }

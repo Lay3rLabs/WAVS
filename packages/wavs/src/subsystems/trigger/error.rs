@@ -2,7 +2,9 @@ use thiserror::Error;
 use utils::error::EvmClientError;
 use wavs_types::{ByteArray, ChainKey, ServiceId, WorkflowId};
 
-use crate::{dispatcher::DispatcherCommand, subsystems::trigger::TriggerCommand};
+use crate::{
+    dispatcher::DispatcherCommand, services::ServicesError, subsystems::trigger::TriggerCommand,
+};
 
 #[derive(Error, Debug)]
 pub enum TriggerError {
@@ -46,4 +48,8 @@ pub enum TriggerError {
     LocalCommandError(#[from] tokio::sync::mpsc::error::SendError<TriggerCommand>),
     #[error("Unable to convert event index: {0}")]
     EventIndexConversion(std::num::TryFromIntError),
+    #[error("could not encode EventId {0:?}")]
+    EncodeEventId(anyhow::Error),
+    #[error("could not get service {0:?}")]
+    Services(ServicesError),
 }
