@@ -1,11 +1,7 @@
-use std::{
-    num::NonZero,
-    sync::{Arc, Mutex},
-};
+use std::{num::NonZero, sync::Arc};
 
 use opentelemetry::global::meter;
 use tempfile::TempDir;
-use tokio::sync::mpsc;
 use utils::{storage::db::RedbStorage, telemetry::Metrics};
 use wavs::{
     dispatcher::DispatcherCommand, services::Services, subsystems::trigger::TriggerManager,
@@ -17,8 +13,8 @@ use wavs_types::{ChainKey, Trigger, TriggerConfig};
 pub struct Setup {
     pub chains: Vec<ChainKey>,
     pub trigger_manager: TriggerManager,
-    pub dispatcher_command_receiver: Mutex<Option<mpsc::Receiver<DispatcherCommand>>>,
     pub config: SetupConfig,
+    pub trigger_to_dispatcher_rx: crossbeam::channel::Receiver<DispatcherCommand>,
     _data_dir: TempDir,
 }
 
@@ -61,9 +57,22 @@ impl Setup {
         let metrics = Metrics::new(meter("wavs-benchmark"));
 
         let db_storage = RedbStorage::new(data_dir.path().join("db")).unwrap();
-        let trigger_manager =
-            TriggerManager::new(&config, metrics.wavs.trigger, Services::new(db_storage)).unwrap();
-        let receiver = trigger_manager.start(APP_CONTEXT.clone()).unwrap();
+        let (trigger_to_dispatcher_tx, trigger_to_dispatcher_rx) =
+            crossbeam::channel::unbounded::<DispatcherCommand>();
+        let trigger_manager = TriggerManager::new(
+            &config,
+            metrics.wavs.trigger,
+            Services::new(db_storage),
+            trigger_to_dispatcher_tx,
+        )
+        .unwrap();
+
+        std::thread::spawn({
+            let trigger_manager = trigger_manager.clone();
+            move || {
+                trigger_manager.start(APP_CONTEXT.clone());
+            }
+        });
 
         let mut chains = Vec::with_capacity(setup_config.n_chains as usize);
 
@@ -100,7 +109,7 @@ impl Setup {
 
         Arc::new(Setup {
             trigger_manager,
-            dispatcher_command_receiver: Mutex::new(Some(receiver)),
+            trigger_to_dispatcher_rx,
             chains,
             config: setup_config,
             _data_dir: data_dir,

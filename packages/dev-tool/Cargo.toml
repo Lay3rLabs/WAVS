@@ -10,6 +10,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
+alloy-signer-local = { workspace = true }
 wavs-types = { workspace = true }
 wavs-cli = { workspace = true }
 utils = { workspace = true }

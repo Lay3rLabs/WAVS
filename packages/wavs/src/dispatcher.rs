@@ -27,9 +27,7 @@ use anyhow::Result;
 use layer_climb::prelude::Address;
 use std::ops::Bound;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
 use thiserror::Error;
-use tokio::sync::mpsc;
 use tracing::instrument;
 use utils::config::{AnyChainConfig, ChainConfigs};
 use utils::service::fetch_service;
@@ -43,21 +41,18 @@ use crate::config::Config;
 use crate::services::{Services, ServicesError};
 use crate::subsystems::engine::error::EngineError;
 use crate::subsystems::engine::wasm_engine::WasmEngine;
-use crate::subsystems::engine::EngineManager;
+use crate::subsystems::engine::{EngineCommand, EngineManager};
 use crate::subsystems::submission::chain_message::ChainMessage;
 use crate::subsystems::submission::error::SubmissionError;
-use crate::subsystems::submission::SubmissionManager;
+use crate::subsystems::submission::{SubmissionCommand, SubmissionManager};
 use crate::subsystems::trigger::error::TriggerError;
-use crate::subsystems::trigger::TriggerManager;
+use crate::subsystems::trigger::{TriggerCommand, TriggerManager};
 use crate::{tracing_service_info, AppContext};
 use utils::storage::db::{DBError, RedbStorage};
 use utils::storage::{CAStorage, CAStorageError};
 use wasm_pkg_common::Error as RegistryError;
 
-pub const TRIGGER_CHANNEL_SIZE: usize = 100;
-pub const ENGINE_CHANNEL_SIZE: usize = 20;
-pub const SUBMISSION_CHANNEL_SIZE: usize = 20;
-
+#[derive(Clone)]
 pub struct Dispatcher<S: CAStorage> {
     pub trigger_manager: TriggerManager,
     pub engine_manager: EngineManager<S>,
@@ -66,9 +61,14 @@ pub struct Dispatcher<S: CAStorage> {
     pub chain_configs: Arc<RwLock<ChainConfigs>>,
     pub metrics: DispatcherMetrics,
     pub ipfs_gateway: String,
+    pub trigger_to_dispatcher_rx: crossbeam::channel::Receiver<DispatcherCommand>,
+    pub dispatcher_to_engine_tx: crossbeam::channel::Sender<EngineCommand>,
+    pub engine_to_dispatcher_rx: crossbeam::channel::Receiver<ChainMessage>,
+    pub dispatcher_to_submission_tx: crossbeam::channel::Sender<SubmissionCommand>,
 }
 
 #[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
 pub enum DispatcherCommand {
     Trigger(TriggerAction),
     ChangeServiceUri { service_id: ServiceId, uri: String },
@@ -76,12 +76,30 @@ pub enum DispatcherCommand {
 
 impl Dispatcher<FileStorage> {
     pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, DispatcherError> {
+        // Create all our channels for communication
+        // except dispatcher_to_trigger calls its local stream channel
+        let (trigger_to_dispatcher_tx, trigger_to_dispatcher_rx) =
+            crossbeam::channel::unbounded::<DispatcherCommand>();
+
+        let (dispatcher_to_engine_tx, dispatcher_to_engine_rx) =
+            crossbeam::channel::unbounded::<EngineCommand>();
+        let (engine_to_dispatcher_tx, engine_to_dispatcher_rx) =
+            crossbeam::channel::unbounded::<ChainMessage>();
+
+        let (dispatcher_to_submission_tx, dispatcher_to_submission_rx) =
+            crossbeam::channel::unbounded::<SubmissionCommand>();
+
         let file_storage = FileStorage::new(config.data.join("ca"))?;
         let db_storage = RedbStorage::new(config.data.join("db"))?;
 
         let services = Services::new(db_storage.clone());
 
-        let trigger_manager = TriggerManager::new(config, metrics.trigger, services.clone())?;
+        let trigger_manager = TriggerManager::new(
+            config,
+            metrics.trigger,
+            services.clone(),
+            trigger_to_dispatcher_tx,
+        )?;
 
         let app_storage = config.data.join("app");
         let engine = WasmEngine::new(
@@ -94,10 +112,19 @@ impl Dispatcher<FileStorage> {
             metrics.engine,
             db_storage,
         );
-        let engine_manager = EngineManager::new(engine, services.clone());
+        let engine_manager = EngineManager::new(
+            engine,
+            services.clone(),
+            dispatcher_to_engine_rx,
+            engine_to_dispatcher_tx,
+        );
 
-        let submission_manager =
-            SubmissionManager::new(config, metrics.submission, services.clone())?;
+        let submission_manager = SubmissionManager::new(
+            config,
+            metrics.submission,
+            services.clone(),
+            dispatcher_to_submission_rx,
+        )?;
 
         Ok(Self {
             trigger_manager,
@@ -107,6 +134,10 @@ impl Dispatcher<FileStorage> {
             chain_configs: Arc::new(RwLock::new(config.chains.clone())),
             metrics: metrics.dispatcher.clone(),
             ipfs_gateway: config.ipfs_gateway.clone(),
+            trigger_to_dispatcher_rx,
+            dispatcher_to_engine_tx,
+            engine_to_dispatcher_rx,
+            dispatcher_to_submission_tx,
         })
     }
 }
@@ -115,20 +146,127 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     /// This will run forever, taking the triggers, processing results, and sending them to submission to write.
     #[instrument(skip(self, ctx), fields(subsys = "Dispatcher"))]
     pub fn start(&self, ctx: AppContext) -> Result<(), DispatcherError> {
-        // Trigger is pipeline start
-        let mut trigger_commands_in = self.trigger_manager.start(ctx.clone())?;
+        let mut handles = Vec::new();
 
-        // Next is the local (blocking) processing
-        let (work_sender, work_receiver) =
-            mpsc::channel::<(TriggerAction, Service)>(ENGINE_CHANNEL_SIZE);
-        let (wasi_result_sender, wasi_result_receiver) =
-            mpsc::channel::<ChainMessage>(SUBMISSION_CHANNEL_SIZE);
-        // Then the engine processing
-        self.engine_manager
-            .start(ctx.clone(), work_receiver, wasi_result_sender);
-        // And pipeline finishes with submission
-        self.submission_manager
-            .start(ctx.clone(), wasi_result_receiver)?;
+        // Start all subsystems
+        handles.push(std::thread::spawn({
+            let _self = self.clone();
+            let ctx = ctx.clone();
+            move || {
+                _self.trigger_manager.start(ctx);
+            }
+        }));
+
+        handles.push(std::thread::spawn({
+            let _self = self.clone();
+            let ctx = ctx.clone();
+            move || {
+                _self.engine_manager.start(ctx);
+            }
+        }));
+
+        handles.push(std::thread::spawn({
+            let _self = self.clone();
+            let ctx = ctx.clone();
+            move || {
+                _self.submission_manager.start(ctx);
+            }
+        }));
+
+        // Kill all subsystems on demand
+        handles.push(std::thread::spawn({
+            let _self = self.clone();
+            let ctx = ctx.clone();
+            move || {
+                ctx.rt.clone().block_on(async move {
+                    if ctx.get_kill_receiver().recv().await.is_ok() {
+                        tracing::info!("Shutdown signal received, shutting down dispatcher");
+                        // shut down trigger manager
+                        if let Err(err) = _self
+                            .trigger_manager
+                            .command_sender
+                            .send(TriggerCommand::Kill)
+                        {
+                            tracing::error!("Error shutting down trigger manager: {:?}", err);
+                        }
+                        // shut down engine manager
+                        if let Err(err) = _self.dispatcher_to_engine_tx.send(EngineCommand::Kill) {
+                            tracing::error!("Error sending kill to engine manager: {:?}", err);
+                        }
+                        // shut down submission manager
+                        if let Err(err) = _self
+                            .dispatcher_to_submission_tx
+                            .send(SubmissionCommand::Kill)
+                        {
+                            tracing::error!("Error sending kill to submission manager: {:?}", err);
+                        }
+                    }
+                });
+            }
+        }));
+
+        // handle incoming commands from trigger manager
+        std::thread::spawn({
+            let _self = self.clone();
+            move || {
+                while let Ok(command) = _self.trigger_to_dispatcher_rx.recv() {
+                    match command {
+                        DispatcherCommand::Trigger(action) => {
+                            tracing::info!(
+                                "Dispatcher received trigger action: service_id={}, workflow_id={}",
+                                action.config.service_id,
+                                action.config.workflow_id
+                            );
+
+                            let service = match _self.services.get(&action.config.service_id) {
+                                Ok(service) => service,
+                                Err(err) => {
+                                    tracing::error!("{}", err);
+                                    continue;
+                                }
+                            };
+                            if let Err(err) = _self
+                                .dispatcher_to_engine_tx
+                                .send(EngineCommand::Execute { service, action })
+                            {
+                                tracing::error!("Error sending work to engine: {:?}", err);
+                                // blocking_send only fails if the receiver has been dropped (channel closed)
+                                _self.metrics.channel_closed_errors.add(
+                                    1,
+                                    &[opentelemetry::KeyValue::new("channel", "engine_work")],
+                                );
+                            }
+                        }
+                        DispatcherCommand::ChangeServiceUri { service_id, uri } => {
+                            let _self = _self.clone();
+                            ctx.rt.spawn(async move {
+                                if let Err(err) = _self.change_service(service_id, uri).await {
+                                    tracing::error!(
+                                        "Error changing service in managers: {:?}",
+                                        err
+                                    );
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+        });
+
+        // handle incoming commands from engine manager
+        std::thread::spawn({
+            let _self = self.clone();
+            move || {
+                while let Ok(msg) = _self.engine_to_dispatcher_rx.recv() {
+                    if let Err(e) = _self
+                        .dispatcher_to_submission_tx
+                        .send(SubmissionCommand::Submit(msg))
+                    {
+                        tracing::error!("Error sending message to submission manager: {:?}", e);
+                    }
+                }
+            }
+        });
 
         // populate the initial triggers
         let initial_services = self.services.list(Bound::Unbounded, Bound::Unbounded)?;
@@ -148,60 +286,11 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             )?;
         }
 
-        // since triggers listens to the async kill signal handler and closes the channel when
-        // it is triggered, we don't need to jump through hoops here to make an async block to listen.
-        // Just waiting for the channel to close is enough.
-
-        // This reads the actions, extends them with the local service data, and passes
-        // the combined info down to the EngineRunner to work.
-        while let Some(command) = trigger_commands_in.blocking_recv() {
-            match command {
-                DispatcherCommand::Trigger(action) => {
-                    tracing::info!(
-                        "Dispatcher received trigger action: service_id={}, workflow_id={}",
-                        action.config.service_id,
-                        action.config.workflow_id
-                    );
-
-                    let service = match self.services.get(&action.config.service_id) {
-                        Ok(service) => service,
-                        Err(err) => {
-                            tracing::error!("{}", err);
-                            continue;
-                        }
-                    };
-                    if let Err(err) = work_sender.blocking_send((action, service)) {
-                        tracing::error!("Error sending work to engine: {:?}", err);
-                        // blocking_send only fails if the receiver has been dropped (channel closed)
-                        self.metrics
-                            .channel_closed_errors
-                            .add(1, &[opentelemetry::KeyValue::new("channel", "engine_work")]);
-                    }
-                }
-                DispatcherCommand::ChangeServiceUri { service_id, uri } => {
-                    ctx.rt.block_on(async {
-                        if let Err(err) = self.change_service(service_id, uri).await {
-                            tracing::error!("Error changing service in managers: {:?}", err);
-                        }
-                    });
-                }
+        for handle in handles {
+            if let Err(err) = handle.join() {
+                tracing::error!("Error joining dispatcher thread: {:?}", err);
             }
         }
-
-        // Note: closing channel doesn't let receiver read all buffered messages, but immediately shuts it down
-        // https://docs.rs/tokio/latest/tokio/sync/mpsc/fn.channel.html
-        // Similarly, if Sender is disconnected while trying to recv,
-        // the recv method will return None.
-
-        // see https://stackoverflow.com/questions/65501193/is-it-possible-to-preserve-items-in-a-tokio-mpsc-when-the-last-sender-is-dropped
-        // and it seems like they should be delivered...
-        // https://github.com/tokio-rs/tokio/issues/6053
-
-        // FIXME: this sleep is a hack to make sure the messages are delivered
-        // is there a better way to do this?
-        // (in production, this is only hit in shutdown, so not so important, but it causes annoying test failures)
-        tracing::debug!("no more work in dispatcher, channel closing");
-        std::thread::sleep(Duration::from_millis(500));
 
         Ok(())
     }

@@ -12,8 +12,12 @@ use utils::context::AppContext;
 
 /// Entry point to start up the server
 /// Called from main
-#[instrument(skip(ctx, config))]
-pub fn run_server(ctx: AppContext, config: config::Config) {
+#[instrument(skip(ctx, config, metrics))]
+pub fn run_server(
+    ctx: AppContext,
+    config: config::Config,
+    metrics: utils::telemetry::AggregatorMetrics,
+) {
     tracing::info!(
         "Aggregator server initializing with data path: {:?}",
         config.data
@@ -30,7 +34,7 @@ pub fn run_server(ctx: AppContext, config: config::Config) {
         let ctx = ctx.clone();
         move || {
             tracing::info!("Starting HTTP server thread");
-            http::server::start(ctx.clone(), config).unwrap();
+            http::server::start(ctx.clone(), config, metrics).unwrap();
         }
     });
 

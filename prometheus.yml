@@ -1,0 +1,10 @@
+global:
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["localhost:9093"]
+
+rule_files:
+  - "/etc/prometheus/alerts.yml"

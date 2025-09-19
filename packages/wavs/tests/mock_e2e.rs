@@ -49,30 +49,21 @@ fn mock_e2e_trigger_flow() {
     });
 
     // now pretend like we're reading some triggers off the chain
-    runner.ctx.rt.block_on({
-        let runner = runner.clone();
 
-        async move {
-            runner
-                .send_trigger(
-                    service_id.clone(),
-                    WorkflowId::default().to_string().as_str(),
-                    &task_queue_address.clone(),
-                    &SquareRequest { x: 3 },
-                    "evm:anvil",
-                )
-                .await;
-            runner
-                .send_trigger(
-                    service_id,
-                    WorkflowId::default().to_string().as_str(),
-                    &task_queue_address,
-                    &SquareRequest { x: 21 },
-                    "evm:anvil",
-                )
-                .await;
-        }
-    });
+    runner.send_trigger(
+        service_id.clone(),
+        WorkflowId::default().to_string().as_str(),
+        &task_queue_address.clone(),
+        &SquareRequest { x: 3 },
+        "evm:anvil",
+    );
+    runner.send_trigger(
+        service_id,
+        WorkflowId::default().to_string().as_str(),
+        &task_queue_address,
+        &SquareRequest { x: 21 },
+        "evm:anvil",
+    );
 
     // block and wait for triggers to go through the whole flow
     wait_for_submission_messages(&runner.dispatcher.submission_manager, 2, None).unwrap();
@@ -193,21 +184,13 @@ fn mock_e2e_component_none() {
     });
 
     // now pretend like we're reading some triggers off the chain
-    runner.ctx.rt.block_on({
-        let runner = runner.clone();
-
-        async move {
-            runner
-                .send_trigger(
-                    service_id,
-                    WorkflowId::default().to_string().as_str(),
-                    &task_queue_address.into(),
-                    &SquareRequest { x: 3 },
-                    "evm:anvil",
-                )
-                .await;
-        }
-    });
+    runner.send_trigger(
+        service_id,
+        WorkflowId::default().to_string().as_str(),
+        &task_queue_address.into(),
+        &SquareRequest { x: 3 },
+        "evm:anvil",
+    );
 
     // this _should_ error because submission is not fired
     wait_for_submission_messages(&runner.dispatcher.submission_manager, 1, None).unwrap_err();
@@ -312,20 +295,14 @@ fn mock_e2e_same_tx_different_block_hash() {
     assert_ne!(event_id_1, event_id_2);
 
     // Send both triggers through the dispatcher and wait for submissions
-    runner.ctx.rt.block_on({
-        let runner = runner.clone();
-        async move {
-            runner
-                .dispatcher
-                .trigger_manager
-                .send_dispatcher_commands(vec![
-                    DispatcherCommand::Trigger(trigger_action_1),
-                    DispatcherCommand::Trigger(trigger_action_2),
-                ])
-                .await
-                .unwrap();
-        }
-    });
+    runner
+        .dispatcher
+        .trigger_manager
+        .send_dispatcher_commands(vec![
+            DispatcherCommand::Trigger(trigger_action_1),
+            DispatcherCommand::Trigger(trigger_action_2),
+        ])
+        .unwrap();
 
     wait_for_submission_messages(&runner.dispatcher.submission_manager, 2, None).unwrap();
 }

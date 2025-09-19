@@ -1,6 +1,6 @@
 use std::num::NonZero;
 
-use wavs::{config::Config, subsystems::trigger::TriggerManager};
+use wavs::{config::Config, dispatcher::DispatcherCommand, subsystems::trigger::TriggerManager};
 use wavs_types::{
     ChainKey, ChainKeyId, Component, ComponentDigest, ComponentSource, Service, ServiceId,
     ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp, Trigger, TriggerConfig,
@@ -51,10 +51,13 @@ fn core_trigger_lookups() {
     let data_dir = tempfile::tempdir().unwrap();
     let services =
         wavs::services::Services::new(RedbStorage::new(data_dir.path().join("db")).unwrap());
+
+    let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services,
+        trigger_to_dispatcher_tx,
     )
     .unwrap();
 
@@ -200,10 +203,13 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
     let data_dir = tempfile::tempdir().unwrap();
     let services =
         wavs::services::Services::new(RedbStorage::new(data_dir.path().join("db")).unwrap());
+
+    let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services.clone(),
+        trigger_to_dispatcher_tx,
     )
     .unwrap();
 
@@ -336,10 +342,12 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
     let data_dir = tempfile::tempdir().unwrap();
     let services =
         wavs::services::Services::new(RedbStorage::new(data_dir.path().join("db")).unwrap());
+    let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
         &config,
         TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services,
+        trigger_to_dispatcher_tx,
     )
     .unwrap();
 

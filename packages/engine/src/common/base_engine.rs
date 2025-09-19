@@ -56,6 +56,17 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
                 .map_err(|e| EngineError::IO(format!("Failed to create app data dir: {}", e)))?;
         }
 
+        // just run forever, ticking forward till the end of time (or however long this node is up)
+        let engine_ticker = wasm_engine.weak();
+        std::thread::spawn(move || loop {
+            if let Some(engine_ticker) = engine_ticker.upgrade() {
+                engine_ticker.increment_epoch();
+            } else {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        });
+
         Ok(Self {
             wasm_engine,
             chain_configs: Arc::new(RwLock::new(config.chain_configs)),
@@ -66,19 +77,6 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
             db,
             storage,
         })
-    }
-
-    pub fn start_epoch_thread(&self) {
-        let engine = self.wasm_engine.weak();
-        // just run forever, ticking forward till the end of time (or however long this node is up)
-        std::thread::spawn(move || loop {
-            if let Some(engine) = engine.upgrade() {
-                engine.increment_epoch();
-            } else {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(1));
-        });
     }
 
     pub async fn load_component(

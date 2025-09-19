@@ -24,7 +24,7 @@ use wavs_types::AnyDigest;
 
 /// Trait for content-addressable storage. With immutible data on one key.
 /// This is what is used for WASM code, stored by hash digest.
-pub trait CAStorage: Send + Sync {
+pub trait CAStorage: Send + Sync + Clone {
     /// Reset and remove storage data.
     fn reset(&self) -> Result<(), CAStorageError>;
 

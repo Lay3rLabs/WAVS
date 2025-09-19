@@ -91,6 +91,32 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_body_size_mb: Option<u32>,
+
+    /// Jaeger collector to send trace data
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jaeger: Option<String>,
+
+    /// Prometheus collector to send metrics data
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prometheus: Option<String>,
+
+    /// Prometheus metrics push interval in seconds
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prometheus_push_interval_secs: Option<u64>,
+
+    /// Enable dev endpoints for testing
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dev_endpoints_enabled: Option<bool>,
+
+    /// Disable all network operations (for testing)
+    #[cfg(debug_assertions)]
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disable_networking: Option<bool>,
 }
 
 impl CliEnvExt for CliArgs {

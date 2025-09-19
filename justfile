@@ -151,18 +151,25 @@ start-wavs:
 
 start-dev:
     #!/bin/bash -eux
-    just start-prometheus &
-    just start-jaeger &
+    just start-telemetry &
     just start-wavs-dev &
+    trap 'kill $(jobs -pr)' EXIT
+    wait
+
+start-aggregator-dev-full:
+    #!/bin/bash -eux
+    just start-telemetry &
+    just start-aggregator-dev &
     trap 'kill $(jobs -pr)' EXIT
     wait
 
 start-wavs-dev:
     #!/bin/bash -eu
+    ROOT_DIR="$(PWD)"
     TEMP_DIR="$(mktemp -d)"
     trap 'rm -rf "$TEMP_DIR"' EXIT
     cd packages/wavs && \
-    WAVS_DOTENV="$(PWD)/../../.env" WAVS_HOME="$(PWD)/../../" WAVS_DATA="$TEMP_DIR" \
+    WAVS_DOTENV="${ROOT_DIR}/.env" WAVS_HOME="../.." WAVS_DATA="$TEMP_DIR" \
     cargo run -- \
         --dev-endpoints-enabled=true \
         --disable-trigger-networking=true \
@@ -175,13 +182,34 @@ start-jaeger:
     docker run --rm -p 4317:4317 -p 16686:16686 jaegertracing/jaeger:2.5.0
 
 start-prometheus:
-    docker run --rm -p 9090:9090 -v ./prometheus.yml:/etc/prometheus/prometheus.yml prom/prometheus --config.file=/etc/prometheus/prometheus.yml --web.enable-otlp-receiver
+    docker run --rm --name prometheus --network host -v ./prometheus.yml:/etc/prometheus/prometheus.yml -v ./alerts.yml:/etc/prometheus/alerts.yml prom/prometheus --config.file=/etc/prometheus/prometheus.yml --web.enable-otlp-receiver
+
+start-alertmanager:
+    docker run --rm --name alertmanager --network host -v ./alertmanager.yml:/etc/alertmanager/alertmanager.yml prom/alertmanager:v0.27.0 --config.file=/etc/alertmanager/alertmanager.yml
+
+start-telemetry:
+    just start-prometheus &
+    just start-alertmanager &
+    just start-jaeger &
 
 dev-tool *args:
     cd packages/dev-tool && RUST_LOG=info cargo run -- {{args}}
 
 start-aggregator:
     cd packages/aggregator && cargo run
+
+start-aggregator-dev:
+    #!/bin/bash -eux
+    ROOT_DIR="$(pwd)"
+    TEMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TEMP_DIR"' EXIT
+    cd packages/aggregator && \
+    WAVS_HOME="../.." WAVS_AGGREGATOR_DATA="$TEMP_DIR" \
+    cargo run -- \
+        --dev-endpoints-enabled=true \
+        --disable-networking=true \
+        --prometheus="http://127.0.0.1:9090" \
+        --jaeger="http://127.0.0.1:4317"
 
 start-anvil:
     anvil
