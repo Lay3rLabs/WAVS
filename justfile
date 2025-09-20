@@ -129,13 +129,13 @@ update-submodules:
 
 lint:
     cargo fmt --all -- --check
-    cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 lint-fix:
     cargo fmt --all
-    cargo fix --workspace --all-targets --allow-dirty --allow-staged
-    cargo clippy --fix --workspace --all-targets --allow-dirty -- -D warnings
-    cargo check --workspace --all-targets
+    cargo fix --workspace --all-targets --all-features --allow-dirty --allow-staged
+    cargo clippy --fix --workspace --all-targets --all-features --allow-dirty -- -D warnings
+    cargo check --workspace --all-targets --all-features
 
 # waiting on: https://github.com/casey/just/issues/626
 start-all:
@@ -165,12 +165,12 @@ start-aggregator-dev-full:
 
 start-wavs-dev:
     #!/bin/bash -eu
-    ROOT_DIR="$(PWD)"
+    ROOT_DIR="$(pwd)"
     TEMP_DIR="$(mktemp -d)"
     trap 'rm -rf "$TEMP_DIR"' EXIT
     cd packages/wavs && \
     WAVS_DOTENV="${ROOT_DIR}/.env" WAVS_HOME="../.." WAVS_DATA="$TEMP_DIR" \
-    cargo run -- \
+    cargo run --features dev -- \
         --dev-endpoints-enabled=true \
         --disable-trigger-networking=true \
         --disable-submission-networking=true \
