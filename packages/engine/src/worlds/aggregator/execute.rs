@@ -5,7 +5,6 @@ use wasmtime::Trap;
 use wavs_types::Packet;
 
 use crate::utils::error::EngineError;
-use crate::worlds::instance::ComponentStore;
 use crate::{bindings::aggregator::world::AggregatorWorld, worlds::instance::InstanceDeps};
 
 pub use crate::bindings::aggregator::world::wavs::aggregator::aggregator::{
@@ -104,14 +103,7 @@ pub async fn execute_submit_callback(
             )
             .await
             .map_err(EngineError::Instantiate)?
-            .call_handle_submit_callback(
-                match &mut deps.store {
-                    ComponentStore::AggregatorComponentStore(store) => store,
-                    _ => unreachable!(),
-                },
-                &wit_packet,
-                wit_tx_result,
-            )
+            .call_handle_submit_callback(deps.store.as_aggregator_mut(), &wit_packet, wit_tx_result)
             .await
             .map_err(|e| match e.downcast_ref::<Trap>() {
                 Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
