@@ -27,6 +27,9 @@ pub trait CliEnvExt: Serialize + DeserializeOwned + Default + std::fmt::Debug {
     // The section identifier in the TOML file, e.g. "wavs", "cli", "aggregator"
     const TOML_IDENTIFIER: &'static str;
 
+    // whether to print debug messages during config loading
+    const PRINT_DEBUG_MSGS: bool = false;
+
     // an optional argument to specify the home directory
     // if not supplied, config will try a series of fallbacks
     fn home_dir(&self) -> Option<PathBuf>;
@@ -96,7 +99,9 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
         dotenv_paths.push(std::env::current_dir()?.join(".env"));
 
         for dotenv_path in dotenv_paths {
-            eprintln!("Loading env vars from {}", dotenv_path.display());
+            if ARG::PRINT_DEBUG_MSGS {
+                eprintln!("Loading env vars from {}", dotenv_path.display());
+            }
             if dotenv_path.exists() {
                 if let Err(e) = dotenvy::from_path(dotenv_path) {
                     bail!("Error loading dotenv file: {}", e);
@@ -116,7 +121,9 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
                 cli_env_args.home_dir()
             ))?;
 
-        eprintln!("Loading config from {}", filepath.display());
+        if ARG::PRINT_DEBUG_MSGS {
+            eprintln!("Loading config from {}", filepath.display());
+        }
 
         let figment = Figment::new()
             // Start with the default values as the base
@@ -140,9 +147,13 @@ impl<CONFIG: ConfigExt, ARG: CliEnvExt> ConfigBuilder<CONFIG, ARG> {
             *data_dir = shellexpand::tilde(&data_dir.to_string_lossy())
                 .to_string()
                 .into();
-
-            eprintln!("Using data directory: {}", data_dir.display());
         });
+
+        if ARG::PRINT_DEBUG_MSGS {
+            config.with_data_dir(|data_dir| {
+                eprintln!("Using data directory: {}", data_dir.display());
+            });
+        }
 
         Ok(config)
     }
