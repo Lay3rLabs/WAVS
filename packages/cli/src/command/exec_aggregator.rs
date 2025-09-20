@@ -18,24 +18,29 @@ fn create_dummy_packet(
     fuel_limit: Option<u64>,
     time_limit_seconds: Option<u64>,
 ) -> Packet {
+    let component = Component {
+        source: ComponentSource::Digest(digest),
+        permissions: Permissions {
+            allowed_http_hosts: AllowedHostPermission::All,
+            file_system: true,
+        },
+        fuel_limit,
+        time_limit_seconds,
+        config,
+        env_keys,
+    };
     let service = Service {
         name: "dummy-service".to_string(),
         workflows: [(
             WorkflowId::default(),
             Workflow {
                 trigger: Trigger::Manual,
-                component: Component {
-                    source: ComponentSource::Digest(digest),
-                    permissions: Permissions {
-                        allowed_http_hosts: AllowedHostPermission::All,
-                        file_system: true,
-                    },
-                    fuel_limit,
-                    time_limit_seconds,
-                    config,
-                    env_keys,
+                component: component.clone(),
+                submit: Submit::Aggregator {
+                    url: "https://api.example.com/aggregator".to_string(),
+                    component: Box::new(component),
+                    signature_kind: SignatureKind::evm_default(),
                 },
-                submit: Submit::None,
             },
         )]
         .into(),
@@ -223,32 +228,37 @@ mod test {
         let wasm_bytes = read_component(component_path).unwrap();
         let digest = wavs_types::ComponentDigest::hash(&wasm_bytes);
 
+        let component = Component {
+            source: ComponentSource::Digest(digest),
+            permissions: Permissions {
+                allowed_http_hosts: AllowedHostPermission::All,
+                file_system: true,
+            },
+            fuel_limit: None,
+            time_limit_seconds: None,
+            config: [
+                ("chain".to_string(), "evm:31337".to_string()),
+                (
+                    "service_handler".to_string(),
+                    "0x0000000000000000000000000000000000000000".to_string(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            env_keys: Default::default(),
+        };
         let service = Service {
             name: "test-service".to_string(),
             workflows: [(
                 WorkflowId::default(),
                 Workflow {
                     trigger: Trigger::Manual,
-                    component: Component {
-                        source: ComponentSource::Digest(digest),
-                        permissions: Permissions {
-                            allowed_http_hosts: AllowedHostPermission::All,
-                            file_system: true,
-                        },
-                        fuel_limit: None,
-                        time_limit_seconds: None,
-                        config: [
-                            ("chain".to_string(), "evm:31337".to_string()),
-                            (
-                                "service_handler".to_string(),
-                                "0x0000000000000000000000000000000000000000".to_string(),
-                            ),
-                        ]
-                        .into_iter()
-                        .collect(),
-                        env_keys: Default::default(),
+                    component: component.clone(),
+                    submit: Submit::Aggregator {
+                        url: "https://api.example.com/aggregator".to_string(),
+                        component: Box::new(component),
+                        signature_kind: SignatureKind::evm_default(),
                     },
-                    submit: Submit::None,
                 },
             )]
             .into(),
