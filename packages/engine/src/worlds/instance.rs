@@ -104,55 +104,49 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             keyvalue_ctx,
         } = self;
 
-        let workflow =
-            service
-                .workflows
-                .get(&workflow_id)
-                .ok_or_else(|| EngineError::WorkflowNotFound {
+        // create linker
+        let (linker, wavs_component) = {
+            let workflow = service.workflows.get(&workflow_id).ok_or_else(|| {
+                EngineError::WorkflowNotFound {
                     service_id: service.id().clone(),
                     workflow_id: workflow_id.clone(),
-                })?;
+                }
+            })?;
+            match log {
+                HostComponentLogger::OperatorHostComponentLogger(_) => {
+                    let mut linker = Linker::new(engine);
 
-        // create linker
-        let (linker, permissions) = match log {
-            HostComponentLogger::OperatorHostComponentLogger(_) => {
-                let mut linker = Linker::new(engine);
+                    crate::bindings::operator::world::host::add_to_linker::<_, HasSelf<_>>(
+                        &mut linker,
+                        |state| state,
+                    )
+                    .unwrap();
 
-                crate::bindings::operator::world::host::add_to_linker::<_, HasSelf<_>>(
-                    &mut linker,
-                    |state| state,
-                )
-                .unwrap();
+                    let component = workflow.component.clone();
+                    configure_linker(&mut linker, &component.permissions)?;
 
-                let permissions = workflow.component.permissions.clone();
-                configure_linker(&mut linker, &permissions)?;
+                    (ComponentLinker::OperatorComponentLinker(linker), component)
+                }
+                HostComponentLogger::AggregatorHostComponentLogger(_) => {
+                    let mut linker = Linker::new(engine);
 
-                (
-                    ComponentLinker::OperatorComponentLinker(linker),
-                    permissions,
-                )
-            }
-            HostComponentLogger::AggregatorHostComponentLogger(_) => {
-                let mut linker = Linker::new(engine);
+                    crate::bindings::aggregator::world::host::add_to_linker::<_, HasSelf<_>>(
+                        &mut linker,
+                        |state| state,
+                    )
+                    .unwrap();
 
-                crate::bindings::aggregator::world::host::add_to_linker::<_, HasSelf<_>>(
-                    &mut linker,
-                    |state| state,
-                )
-                .unwrap();
+                    let component = match &workflow.submit {
+                        wavs_types::Submit::None => unreachable!(),
+                        wavs_types::Submit::Aggregator { component, .. } => (**component).clone(),
+                    };
+                    configure_linker(&mut linker, &component.permissions)?;
 
-                let permissions = match &workflow.submit {
-                    wavs_types::Submit::None => unreachable!(),
-                    wavs_types::Submit::Aggregator { component, .. } => {
-                        component.permissions.clone()
-                    }
-                };
-                configure_linker(&mut linker, &permissions)?;
-
-                (
-                    ComponentLinker::AggregatorComponentLinker(linker),
-                    permissions,
-                )
+                    (
+                        ComponentLinker::AggregatorComponentLinker(linker),
+                        component,
+                    )
+                }
             }
         };
 
@@ -162,7 +156,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
         builder.inherit_stdout().inherit_stderr();
 
         // conditionally allow fs access
-        if permissions.file_system {
+        if wavs_component.permissions.file_system {
             // we namespace by service id so that all components within a service have access to the same data
             // and services are each isolated from each other
             let data_dir = data_dir.as_ref();
@@ -177,7 +171,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
         // read in system env variables that are prefixed with WAVS_ENV and are allowed to access via the component config
         let env: Vec<_> = std::env::vars()
             .filter(|(key, _)| {
-                key.starts_with(WAVS_ENV_PREFIX) && workflow.component.env_keys.contains(key)
+                key.starts_with(WAVS_ENV_PREFIX) && wavs_component.env_keys.contains(key)
             })
             .collect();
 
@@ -185,13 +179,11 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             builder.envs(&env);
         }
 
-        let fuel_limit = workflow
-            .component
+        let fuel_limit = wavs_component
             .fuel_limit
             .unwrap_or(Workflow::DEFAULT_FUEL_LIMIT);
 
-        let time_limit_seconds = workflow
-            .component
+        let time_limit_seconds = wavs_component
             .time_limit_seconds
             .unwrap_or(Workflow::DEFAULT_TIME_LIMIT_SECONDS);
 
