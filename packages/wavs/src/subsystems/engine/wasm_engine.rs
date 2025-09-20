@@ -8,7 +8,7 @@ use utils::telemetry::EngineMetrics;
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     common::base_engine::{BaseEngine, BaseEngineConfig},
-    worlds::operator::instance::InstanceDepsBuilder,
+    worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{
     ComponentDigest, ComponentSource, Service, ServiceId, TriggerAction, WasmResponse, WorkflowId,
@@ -178,9 +178,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 .app_data_dir
                 .join(trigger_action.config.service_id.to_string()),
             chain_configs: &chain_configs,
-            log,
-            max_execution_seconds: self.engine.max_execution_seconds,
-            max_wasm_fuel: self.engine.max_wasm_fuel,
+            log: HostComponentLogger::OperatorHostComponentLogger(log),
         }
         .build()?;
 

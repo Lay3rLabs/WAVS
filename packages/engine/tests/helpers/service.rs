@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use wavs_types::{
-    AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, Service, Submit, Trigger,
-    TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowId,
+    AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, Service, SignatureKind,
+    Submit, Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowId,
 };
 
 #[allow(dead_code)]
@@ -23,21 +23,25 @@ pub fn make_trigger_action(
 
 pub fn make_service(wasm_digest: ComponentDigest, config: BTreeMap<String, String>) -> Service {
     let workflow_id = WorkflowId::new("workflow-1").unwrap();
-
+    let component = wavs_types::Component {
+        source: ComponentSource::Digest(wasm_digest),
+        permissions: Permissions {
+            allowed_http_hosts: AllowedHostPermission::All,
+            file_system: true,
+        },
+        fuel_limit: None,
+        time_limit_seconds: None,
+        config,
+        env_keys: Default::default(),
+    };
     let workflow = Workflow {
         trigger: Trigger::Manual,
-        component: wavs_types::Component {
-            source: ComponentSource::Digest(wasm_digest),
-            permissions: Permissions {
-                allowed_http_hosts: AllowedHostPermission::All,
-                file_system: true,
-            },
-            fuel_limit: None,
-            time_limit_seconds: None,
-            config,
-            env_keys: Default::default(),
+        component: component.clone(),
+        submit: Submit::Aggregator {
+            url: "https://api.example.com/aggregator".to_string(),
+            component: Box::new(component),
+            signature_kind: SignatureKind::evm_default(),
         },
-        submit: Submit::None,
     };
 
     Service {

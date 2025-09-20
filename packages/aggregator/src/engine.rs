@@ -15,10 +15,7 @@ use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     bindings::aggregator::world::wavs::types::{chain::AnyTxHash, core::LogLevel},
     common::base_engine::{BaseEngine, BaseEngineConfig},
-    worlds::aggregator::instance::{
-        AggregatorInstanceDeps as InstanceDeps,
-        AggregatorInstanceDepsBuilder as InstanceDepsBuilder,
-    },
+    worlds::instance::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder},
 };
 use wavs_types::{Component, ComponentDigest, Packet};
 
@@ -65,23 +62,20 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
 
         InstanceDepsBuilder {
             component: wasm_component,
-            aggregator_component: component.clone(),
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
             engine: &self.engine.wasm_engine,
             data_dir: &self.engine.app_data_dir,
             chain_configs: &chain_configs,
-            log: |_service_id, _workflow_id, _digest, level, message| match level {
-                LogLevel::Error => tracing::error!("{}", message),
-                LogLevel::Warn => tracing::warn!("{}", message),
-                LogLevel::Info => tracing::info!("{}", message),
-                LogLevel::Debug => tracing::debug!("{}", message),
-                LogLevel::Trace => tracing::trace!("{}", message),
-            },
-            max_wasm_fuel: component.fuel_limit.or(self.engine.max_wasm_fuel),
-            max_execution_seconds: component
-                .time_limit_seconds
-                .or(self.engine.max_execution_seconds),
+            log: HostComponentLogger::AggregatorHostComponentLogger(
+                |_service_id, _workflow_id, _digest, level, message| match level {
+                    LogLevel::Error => tracing::error!("{}", message),
+                    LogLevel::Warn => tracing::warn!("{}", message),
+                    LogLevel::Info => tracing::info!("{}", message),
+                    LogLevel::Debug => tracing::debug!("{}", message),
+                    LogLevel::Trace => tracing::trace!("{}", message),
+                },
+            ),
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), packet.service.id().to_string()),
         }
         .build()

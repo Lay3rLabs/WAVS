@@ -5,8 +5,10 @@ use serde::{de::DeserializeOwned, Serialize};
 use utils::{storage::db::RedbStorage, test_utils::test_contracts::ISimpleSubmit::DataWithId};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
-    backend::wasi_keyvalue::context::KeyValueCtx, bindings::operator::world::host::LogLevel,
-    utils::error::EngineError, worlds::operator::instance::InstanceDepsBuilder,
+    backend::wasi_keyvalue::context::KeyValueCtx,
+    bindings::operator::world::host::LogLevel,
+    utils::error::EngineError,
+    worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{ComponentDigest, ServiceId, WorkflowId};
 
@@ -89,9 +91,7 @@ pub async fn try_execute_component_raw(
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),
         chain_configs: &Default::default(),
-        log: log_wasi,
-        max_execution_seconds: Some(10),
-        max_wasm_fuel: Some(u64::MAX),
+        log: HostComponentLogger::OperatorHostComponentLogger(log_wasi),
         keyvalue_ctx,
     }
     .build()

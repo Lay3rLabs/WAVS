@@ -6,9 +6,13 @@ use wavs_types::{ComponentDigest, Service, ServiceId, WorkflowId};
 use crate::backend::wasi_keyvalue::context::KeyValueCtx;
 use crate::bindings::operator::world::host::LogLevel;
 
+// This is defined separately because LogLevel comes from bindings
+pub type OperatorHostComponentLogger =
+    fn(&ServiceId, &WorkflowId, &ComponentDigest, LogLevel, String);
+
 // TODO: revisit this an understand it.
 // Copied blindly from old code
-pub struct HostComponent {
+pub struct OperatorHostComponent {
     pub service: Service,
     pub workflow_id: WorkflowId,
     pub chain_configs: ChainConfigs,
@@ -16,24 +20,22 @@ pub struct HostComponent {
     pub(crate) ctx: WasiCtx,
     pub(crate) http: WasiHttpCtx,
     pub(crate) keyvalue_ctx: KeyValueCtx,
-    pub(crate) inner_log: HostComponentLogger,
+    pub(crate) inner_log: OperatorHostComponentLogger,
 }
 
-pub type HostComponentLogger = fn(&ServiceId, &WorkflowId, &ComponentDigest, LogLevel, String);
-
-impl WasiView for HostComponent {
+impl WasiView for OperatorHostComponent {
     fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.ctx
     }
 }
 
-impl IoView for HostComponent {
+impl IoView for OperatorHostComponent {
     fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
         &mut self.table
     }
 }
 
-impl WasiHttpView for HostComponent {
+impl WasiHttpView for OperatorHostComponent {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
     }

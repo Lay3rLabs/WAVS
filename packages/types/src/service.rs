@@ -190,8 +190,8 @@ pub struct Workflow {
 }
 
 impl Workflow {
-    pub const DEFAULT_FUEL_LIMIT: u64 = 100_000_000;
-    pub const DEFAULT_TIME_LIMIT_SECONDS: u64 = 30;
+    pub const DEFAULT_FUEL_LIMIT: u64 = u64::MAX;
+    pub const DEFAULT_TIME_LIMIT_SECONDS: u64 = u64::MAX;
 }
 
 // The TriggerManager reacts to these triggers

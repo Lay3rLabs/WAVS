@@ -1,7 +1,8 @@
 use anyhow::Result;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 use utils::config::WAVS_ENV_PREFIX;
+use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDepsBuilder};
 use wavs_types::{
     AggregatorAction, AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
     EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, SignatureKind,
@@ -10,22 +11,36 @@ use wavs_types::{
 
 use crate::util::read_component;
 
-fn create_dummy_packet(digest: ComponentDigest) -> Packet {
+fn create_dummy_packet(
+    digest: ComponentDigest,
+    env_keys: BTreeSet<String>,
+    config: BTreeMap<String, String>,
+    fuel_limit: Option<u64>,
+    time_limit_seconds: Option<u64>,
+) -> Packet {
+    let component = Component {
+        source: ComponentSource::Digest(digest),
+        permissions: Permissions {
+            allowed_http_hosts: AllowedHostPermission::All,
+            file_system: true,
+        },
+        fuel_limit,
+        time_limit_seconds,
+        config,
+        env_keys,
+    };
     let service = Service {
         name: "dummy-service".to_string(),
         workflows: [(
             WorkflowId::default(),
             Workflow {
                 trigger: Trigger::Manual,
-                component: Component {
-                    source: ComponentSource::Digest(digest),
-                    permissions: Permissions::default(),
-                    fuel_limit: None,
-                    time_limit_seconds: None,
-                    config: Default::default(),
-                    env_keys: Default::default(),
+                component: component.clone(),
+                submit: Submit::Aggregator {
+                    url: "https://api.example.com/aggregator".to_string(),
+                    component: Box::new(component),
+                    signature_kind: SignatureKind::evm_default(),
                 },
-                submit: Submit::None,
             },
         )]
         .into(),
@@ -101,24 +116,12 @@ impl ExecAggregator {
             .filter(|key| key.starts_with(WAVS_ENV_PREFIX))
             .collect();
 
-        let component = Component {
-            source: ComponentSource::Digest(digest.clone()),
-            permissions: Permissions {
-                allowed_http_hosts: AllowedHostPermission::All,
-                file_system: true,
-            },
-            fuel_limit,
-            time_limit_seconds: time_limit,
-            config,
-            env_keys,
-        };
-
         // Read packet from file or create a dummy one
         let packet = if let Some(packet_path) = packet {
             let packet_json = std::fs::read_to_string(&packet_path)?;
             serde_json::from_str(&packet_json)?
         } else {
-            create_dummy_packet(digest)
+            create_dummy_packet(digest, env_keys, config, time_limit, fuel_limit)
         };
 
         let mut wt_config = wasmtime::Config::new();
@@ -127,23 +130,34 @@ impl ExecAggregator {
         wt_config.consume_fuel(true);
         let engine = wasmtime::Engine::new(&wt_config)?;
 
-        let mut instance_deps = wavs_engine::worlds::aggregator::instance::AggregatorInstanceDepsBuilder {
+        let mut instance_deps = InstanceDepsBuilder {
             component: wasmtime::component::Component::new(&engine, &wasm_bytes)?,
-            aggregator_component: component.clone(),
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
             engine: &engine,
             data_dir: &data_dir,
             chain_configs: &cli_config.chains,
-            log: |_service_id, _workflow_id, _digest, level, message| match level {
-                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Error => tracing::error!("{}", message),
-                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Warn => tracing::warn!("{}", message),
-                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Info => tracing::info!("{}", message),
-                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Debug => tracing::debug!("{}", message),
-                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Trace => tracing::trace!("{}", message),
-            },
-            max_wasm_fuel: component.fuel_limit,
-            max_execution_seconds: component.time_limit_seconds,
+            log: HostComponentLogger::AggregatorHostComponentLogger(
+                |_service_id, _workflow_id, _digest, level, message| {
+                    match level {
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Error => {
+                    tracing::error!("{}", message)
+                }
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Warn => {
+                    tracing::warn!("{}", message)
+                }
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Info => {
+                    tracing::info!("{}", message)
+                }
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Debug => {
+                    tracing::debug!("{}", message)
+                }
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Trace => {
+                    tracing::trace!("{}", message)
+                }
+            }
+                },
+            ),
             keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
                 utils::storage::db::RedbStorage::new(tempfile::tempdir()?.keep())?,
                 packet.service.id().to_string(),
@@ -206,40 +220,45 @@ mod test {
     use tempfile::NamedTempFile;
     use utils::filesystem::workspace_path;
     use wavs_types::{
-        Envelope, EnvelopeSignature, Service, ServiceManager, ServiceStatus, Submit, Trigger,
-        Workflow, WorkflowId,
+        AllowedHostPermission, Envelope, EnvelopeSignature, Service, ServiceManager, ServiceStatus,
+        Submit, Trigger, Workflow, WorkflowId,
     };
 
     fn create_test_packet(component_path: &str) -> Packet {
         let wasm_bytes = read_component(component_path).unwrap();
         let digest = wavs_types::ComponentDigest::hash(&wasm_bytes);
 
+        let component = Component {
+            source: ComponentSource::Digest(digest),
+            permissions: Permissions {
+                allowed_http_hosts: AllowedHostPermission::All,
+                file_system: true,
+            },
+            fuel_limit: None,
+            time_limit_seconds: None,
+            config: [
+                ("chain".to_string(), "evm:31337".to_string()),
+                (
+                    "service_handler".to_string(),
+                    "0x0000000000000000000000000000000000000000".to_string(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            env_keys: Default::default(),
+        };
         let service = Service {
             name: "test-service".to_string(),
             workflows: [(
                 WorkflowId::default(),
                 Workflow {
                     trigger: Trigger::Manual,
-                    component: Component {
-                        source: ComponentSource::Digest(digest),
-                        permissions: Permissions {
-                            allowed_http_hosts: AllowedHostPermission::All,
-                            file_system: true,
-                        },
-                        fuel_limit: None,
-                        time_limit_seconds: None,
-                        config: [
-                            ("chain".to_string(), "evm:31337".to_string()),
-                            (
-                                "service_handler".to_string(),
-                                "0x0000000000000000000000000000000000000000".to_string(),
-                            ),
-                        ]
-                        .into_iter()
-                        .collect(),
-                        env_keys: Default::default(),
+                    component: component.clone(),
+                    submit: Submit::Aggregator {
+                        url: "https://api.example.com/aggregator".to_string(),
+                        component: Box::new(component),
+                        signature_kind: SignatureKind::evm_default(),
                     },
-                    submit: Submit::None,
                 },
             )]
             .into(),
