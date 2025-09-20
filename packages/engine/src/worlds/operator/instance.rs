@@ -126,7 +126,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             .unwrap_or(Workflow::DEFAULT_TIME_LIMIT_SECONDS);
 
         if let Some(max_execution_seconds) = max_execution_seconds {
-            time_limit_seconds = time_limit_seconds.min(max_execution_seconds);
+            time_limit_seconds = time_limit_seconds.max(max_execution_seconds);
         }
 
         let ctx = builder.build();

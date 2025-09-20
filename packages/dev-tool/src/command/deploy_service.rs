@@ -1,9 +1,9 @@
 use wavs_cli::clients::HttpClient;
 use wavs_types::ComponentDigest;
 
-use crate::service::{SERVICE, WAVS_COMPONENT_BYTES};
+use crate::service::{create_service, WAVS_COMPONENT_BYTES};
 
-pub async fn run() {
+pub async fn run(sleep_ms: Option<u64>) {
     let client = HttpClient::new("http://127.0.0.1:8000".to_string());
 
     if client
@@ -15,5 +15,7 @@ pub async fn run() {
         panic!("wavs component bytes got unexpected hash!");
     }
 
-    client.dev_add_service_direct(&SERVICE).await.unwrap();
+    let service = create_service(sleep_ms);
+
+    client.dev_add_service_direct(&service).await.unwrap();
 }

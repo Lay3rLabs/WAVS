@@ -11,6 +11,7 @@ publish = false
 
 [features]
 test-utils = []
+dev = []
 
 [dependencies]
 wavs-types = { workspace = true }
@@ -66,15 +67,19 @@ example-types = { workspace = true }
 [[bench]]
 name = "intervals"
 harness = false
+required-features = ["dev"]
 
 [[bench]]
 name = "engine_execute"
 harness = false
+required-features = ["dev"]
 
 [[bench]]
 name = "engine_system"
 harness = false
+required-features = ["dev"]
 
 [[bench]]
 name = "dev_triggers"
 harness = false
+required-features = ["dev"]

@@ -1,3 +1,4 @@
+#![cfg(feature = "dev")]
 use std::num::NonZero;
 
 use wavs::{config::Config, dispatcher::DispatcherCommand, subsystems::trigger::TriggerManager};

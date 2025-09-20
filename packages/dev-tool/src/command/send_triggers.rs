@@ -1,12 +1,11 @@
-use crate::service::SERVICE;
+use crate::service::{SERVICE_MANAGER, WORKFLOW_ID};
 
 pub async fn run(count: usize, wait_for_completion: bool) {
-    let service_id = SERVICE.id();
-    let workflow_id = SERVICE.workflows.keys().next().unwrap().clone();
+    let service_id: wavs_types::ServiceId = (&*SERVICE_MANAGER).into();
 
     let body = wavs_types::SimulatedTriggerRequest {
         service_id,
-        workflow_id,
+        workflow_id: WORKFLOW_ID.clone(),
         trigger: wavs_types::Trigger::Manual,
         data: wavs_types::TriggerData::Raw("hello world!".as_bytes().to_vec()),
         count,

@@ -73,11 +73,11 @@ pub struct Config {
     pub max_body_size_mb: u32,
 
     /// Disable trigger networking for testing (default: false)
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     pub disable_trigger_networking: bool,
 
     /// Disable submission networking for testing (default: false)
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     pub disable_submission_networking: bool,
 }
 
@@ -118,9 +118,9 @@ impl Default for Config {
             bearer_token: None,
             dev_endpoints_enabled: false,
             max_body_size_mb: 15,
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "dev")]
             disable_trigger_networking: false,
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "dev")]
             disable_submission_networking: false,
         }
     }
