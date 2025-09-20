@@ -9,6 +9,12 @@ use wavs_types::{
 };
 use wavs_types::{SignatureKind, Submit};
 
+#[derive(Debug, Clone)]
+pub enum ComponentConfig {
+    Default,
+    HotLoop { sleep_ms: u32 },
+}
+
 pub struct DevTriggersRuntime {
     pub dispatcher: Arc<wavs::dispatcher::Dispatcher<utils::storage::fs::FileStorage>>,
     pub server_addr: SocketAddr,
@@ -21,10 +27,9 @@ pub struct DevTriggersRuntime {
 }
 
 impl DevTriggersRuntime {
-    const WAIT_TIMEOUT: Duration = Duration::from_secs(5);
     const POLL_INTERVAL: Duration = Duration::from_millis(20);
 
-    pub fn new() -> Self {
+    pub fn new(component_config: ComponentConfig) -> Self {
         // Create temporary directories for clean database state
         let db_dir = tempdir().unwrap();
 
@@ -51,6 +56,15 @@ impl DevTriggersRuntime {
         let component_bytes = std::fs::read(&component_path).expect("read echo_data.wasm");
         let component_digest = ComponentDigest::hash(&component_bytes);
 
+        // Configure component based on the provided config
+        let component_config = match component_config {
+            ComponentConfig::Default => std::collections::BTreeMap::new(),
+            ComponentConfig::HotLoop { sleep_ms } => std::collections::BTreeMap::from([
+                ("sleep-kind".to_string(), "hotloop".to_string()),
+                ("sleep-ms".to_string(), sleep_ms.to_string()),
+            ]),
+        };
+
         let service = Service {
             name: "Dev Test Service".to_string(),
             workflows: std::collections::BTreeMap::from([(
@@ -65,7 +79,7 @@ impl DevTriggersRuntime {
                         },
                         fuel_limit: None,
                         time_limit_seconds: None,
-                        config: std::collections::BTreeMap::new(),
+                        config: component_config,
                         env_keys: std::collections::BTreeSet::new(),
                     },
                     // Use aggregator submit so the submission manager produces packets
@@ -220,30 +234,22 @@ impl DevTriggersRuntime {
 
     pub async fn wait_for_messages(&self, expected: usize) {
         let mut tick = tokio::time::interval(Self::POLL_INTERVAL);
-        tokio::time::timeout(Self::WAIT_TIMEOUT, async {
-            loop {
-                if self.dispatcher.submission_manager.get_message_count() >= expected as u64 {
-                    break;
-                }
-                tick.tick().await;
+        loop {
+            if self.dispatcher.submission_manager.get_message_count() >= expected as u64 {
+                break;
             }
-        })
-        .await
-        .unwrap_or_else(|_| panic!("Timed out waiting for {expected} messages"));
+            tick.tick().await;
+        }
     }
 
     pub async fn wait_and_validate_packets(&self, expected: usize) {
         let mut tick = tokio::time::interval(Self::POLL_INTERVAL);
-        tokio::time::timeout(Self::WAIT_TIMEOUT, async {
-            loop {
-                if self.dispatcher.submission_manager.get_debug_packets().len() >= expected {
-                    break;
-                }
-                tick.tick().await;
+        loop {
+            if self.dispatcher.submission_manager.get_debug_packets().len() >= expected {
+                break;
             }
-        })
-        .await
-        .unwrap_or_else(|_| panic!("Timed out waiting for {expected} packets"));
+            tick.tick().await;
+        }
 
         let packets = self.dispatcher.submission_manager.get_debug_packets();
         assert_eq!(packets.len(), expected);

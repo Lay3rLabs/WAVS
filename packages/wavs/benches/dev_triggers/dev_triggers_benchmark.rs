@@ -2,7 +2,7 @@ use criterion::Criterion;
 use reqwest::Client;
 use std::time::{Duration, Instant};
 
-use crate::setup::DevTriggersRuntime;
+use crate::setup::{ComponentConfig, DevTriggersRuntime};
 
 /// Benchmark for dev triggers POST endpoint performance
 ///
@@ -16,35 +16,50 @@ pub fn benchmark(c: &mut Criterion) {
     group.sample_size(10);
 
     // Use request count as the primary metric, payload stays constant
-    let test_configs = vec![
+    let component_configs = [
+        ComponentConfig::Default,
+        ComponentConfig::HotLoop { sleep_ms: 10 },
+        ComponentConfig::HotLoop { sleep_ms: 100 },
+    ];
+    let test_configs = [
         ("100_requests", 100usize),
         ("500_requests", 500usize),
         ("1000_requests", 1000usize),
     ];
 
-    for (name, request_count) in test_configs {
-        group.bench_function(name, move |b| {
-            b.iter_custom(|iters| {
-                let mut total = Duration::from_secs(0);
-                for _ in 0..iters {
-                    let runtime = DevTriggersRuntime::new();
-                    let start = Instant::now();
-                    let client = Client::new();
-                    wavs_benchmark_common::app_context::APP_CONTEXT
-                        .rt
-                        .block_on(async {
-                            runtime.submit_requests(&client, request_count, false).await;
-                            runtime.wait_for_messages(request_count).await;
-                            runtime.wait_and_validate_packets(request_count).await;
-                        });
-                    total += start.elapsed();
-
-                    // Ensure shutdown happens outside measured time
-                    drop(runtime);
+    for component_config in component_configs.iter() {
+        for (name, request_count) in test_configs.iter() {
+            let benchmark_name = match component_config {
+                ComponentConfig::Default => format!("{}_default", name),
+                ComponentConfig::HotLoop { sleep_ms: ms } => {
+                    format!("{}_hotloop_{}ms", name, ms)
                 }
-                total
-            })
-        });
+            };
+            group.bench_function(&benchmark_name, move |b| {
+                b.iter_custom(|iters| {
+                    let mut total = Duration::from_secs(0);
+                    for _ in 0..iters {
+                        let runtime = DevTriggersRuntime::new(component_config.clone());
+                        let start = Instant::now();
+                        let client = Client::new();
+                        wavs_benchmark_common::app_context::APP_CONTEXT
+                            .rt
+                            .block_on(async {
+                                runtime
+                                    .submit_requests(&client, *request_count, false)
+                                    .await;
+                                runtime.wait_for_messages(*request_count).await;
+                                runtime.wait_and_validate_packets(*request_count).await;
+                            });
+                        total += start.elapsed();
+
+                        // Ensure shutdown happens outside measured time
+                        drop(runtime);
+                    }
+                    total
+                })
+            });
+        }
     }
 
     group.finish();
