@@ -133,6 +133,7 @@ pub struct Component {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum ComponentSource {
     /// The wasm bytecode provided at fixed url, digest provided to ensure no tampering
     Download {

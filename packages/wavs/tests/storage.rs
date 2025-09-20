@@ -1,3 +1,4 @@
+#![cfg(feature = "dev")]
 use std::collections::BTreeMap;
 
 use utils::storage::db::{RedbStorage, Table, JSON};

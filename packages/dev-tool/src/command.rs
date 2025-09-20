@@ -9,7 +9,10 @@ use clap::Parser;
 #[command(version, about, long_about = None)]
 pub enum Command {
     DeployAggregator,
-    DeployService,
+    DeployService {
+        #[arg(short, long)]
+        sleep_ms: Option<u64>,
+    },
     SendPacket,
     SendTriggers {
         #[arg(short, long, default_value_t = 1)]

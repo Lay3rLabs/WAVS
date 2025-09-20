@@ -8,11 +8,11 @@ pub struct ChainMessage {
     pub envelope: Envelope,
     pub trigger_data: TriggerData,
     pub submit: Submit,
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "dev")]
     pub debug: ChainMessageDebug,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "dev")]
 #[derive(Clone, Debug, Default)]
 // these debug-only fields are used to control behavior during testing
 pub struct ChainMessageDebug {

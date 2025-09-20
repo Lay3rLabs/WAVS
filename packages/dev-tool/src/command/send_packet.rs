@@ -4,10 +4,10 @@ use wavs_types::{
     WorkflowId,
 };
 
-use crate::service::SERVICE;
+use crate::service::create_service;
 
 pub async fn run() {
-    let service = SERVICE.clone();
+    let service = create_service(None);
     let workflow_id = WorkflowId::new("dev-trigger-workflow".to_string()).unwrap();
 
     let signer = PrivateKeySigner::random();

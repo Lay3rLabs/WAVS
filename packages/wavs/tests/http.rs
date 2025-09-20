@@ -1,3 +1,4 @@
+#![cfg(feature = "dev")]
 use axum::{
     body::Body,
     http::{Method, Request},

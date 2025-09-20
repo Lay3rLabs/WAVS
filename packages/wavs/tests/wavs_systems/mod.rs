@@ -1,3 +1,4 @@
+#![cfg(feature = "dev")]
 #![allow(dead_code)]
 pub mod app;
 pub mod http;
