@@ -5,9 +5,9 @@ use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, En
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     bindings::aggregator::world::{host::LogLevel, wavs::aggregator::aggregator::AggregatorAction},
-    worlds::aggregator::instance::AggregatorInstanceDepsBuilder,
+    worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
-use wavs_types::{Component, ComponentDigest, Packet, ServiceId, WorkflowId};
+use wavs_types::{ComponentDigest, Packet, ServiceId, WorkflowId};
 
 use crate::helpers::service::make_service;
 
@@ -31,38 +31,14 @@ pub async fn execute_aggregator_component(
     let keyvalue_ctx =
         KeyValueCtx::new(RedbStorage::new(db_dir.path()).unwrap(), "test".to_string());
 
-    // dummy aggregator component
-    let aggregator_component = Component {
-        source: wavs_types::ComponentSource::Digest(ComponentDigest::hash(wasm_bytes)),
-        permissions: wavs_types::Permissions {
-            allowed_http_hosts: wavs_types::AllowedHostPermission::All,
-            file_system: false,
-        },
-        fuel_limit: Some(u64::MAX),
-        time_limit_seconds: Some(10),
-        config: [
-            ("chain".to_string(), "evm:31337".to_string()),
-            (
-                "service_handler".to_string(),
-                "0x0000000000000000000000000000000000000000".to_string(),
-            ),
-        ]
-        .into_iter()
-        .collect(),
-        env_keys: Default::default(),
-    };
-
-    let mut instance_deps = AggregatorInstanceDepsBuilder {
+    let mut instance_deps = InstanceDepsBuilder {
         workflow_id: service.workflows.keys().next().cloned().unwrap(),
         service,
-        aggregator_component,
         component: WasmtimeComponent::new(&engine, wasm_bytes).unwrap(),
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),
         chain_configs: &Default::default(),
-        log: log_aggregator,
-        max_execution_seconds: Some(10),
-        max_wasm_fuel: Some(u64::MAX),
+        log: HostComponentLogger::AggregatorHostComponentLogger(log_aggregator),
         keyvalue_ctx,
     }
     .build()
@@ -70,9 +46,9 @@ pub async fn execute_aggregator_component(
 
     let aggregator_world =
         wavs_engine::bindings::aggregator::world::AggregatorWorld::instantiate_async(
-            &mut instance_deps.store,
+            instance_deps.store.as_aggregator_mut(),
             &instance_deps.component,
-            &instance_deps.linker,
+            instance_deps.linker.as_aggregator_ref(),
         )
         .await
         .unwrap();
@@ -80,7 +56,7 @@ pub async fn execute_aggregator_component(
     let wit_packet = packet.try_into().unwrap();
 
     let result = aggregator_world
-        .call_process_packet(&mut instance_deps.store, &wit_packet)
+        .call_process_packet(instance_deps.store.as_aggregator_mut(), &wit_packet)
         .await
         .unwrap();
 

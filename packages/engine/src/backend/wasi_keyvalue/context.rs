@@ -3,10 +3,8 @@ use wasmtime::component::HasData;
 use wasmtime_wasi::ResourceTable;
 
 use crate::bindings::operator::world::wasi::keyvalue::{atomics, batch, store};
-use crate::{
-    utils::error::EngineError, worlds::aggregator::AggregatorHostComponent,
-    worlds::operator::component::HostComponent,
-};
+use crate::worlds::aggregator::component::AggregatorHostComponent;
+use crate::{utils::error::EngineError, worlds::operator::component::OperatorHostComponent};
 
 pub trait KeyValueCtxProvider {
     fn keyvalue_ctx(&self) -> &KeyValueCtx;
@@ -61,7 +59,7 @@ impl HasData for KeyValueCtx {
     type Data<'a> = KeyValueState<'a>;
 }
 
-impl KeyValueCtxProvider for HostComponent {
+impl KeyValueCtxProvider for OperatorHostComponent {
     fn keyvalue_ctx(&self) -> &KeyValueCtx {
         &self.keyvalue_ctx
     }

@@ -1,11 +1,11 @@
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::time::Instant;
-use utils::config::WAVS_ENV_PREFIX;
+use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDepsBuilder};
 use wavs_types::{
-    AggregatorAction, AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
-    EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, SignatureKind,
-    Submit, Trigger, Workflow, WorkflowId,
+    AggregatorAction, Component, ComponentDigest, ComponentSource, Envelope, EnvelopeSignature,
+    Packet, Permissions, Service, ServiceManager, ServiceStatus, SignatureKind, Submit, Trigger,
+    Workflow, WorkflowId,
 };
 
 use crate::util::read_component;
@@ -68,9 +68,9 @@ impl ExecAggregator {
         ExecAggregatorArgs {
             component,
             packet,
-            fuel_limit,
-            time_limit,
-            config,
+            fuel_limit: _,
+            time_limit: _,
+            config: _,
         }: ExecAggregatorArgs,
     ) -> Result<ExecAggregatorResult> {
         let component_path = component;
@@ -96,23 +96,6 @@ impl ExecAggregator {
             .upload_component(wasm_bytes.clone())
             .await?;
 
-        let env_keys = std::env::vars()
-            .map(|(key, _)| key)
-            .filter(|key| key.starts_with(WAVS_ENV_PREFIX))
-            .collect();
-
-        let component = Component {
-            source: ComponentSource::Digest(digest.clone()),
-            permissions: Permissions {
-                allowed_http_hosts: AllowedHostPermission::All,
-                file_system: true,
-            },
-            fuel_limit,
-            time_limit_seconds: time_limit,
-            config,
-            env_keys,
-        };
-
         // Read packet from file or create a dummy one
         let packet = if let Some(packet_path) = packet {
             let packet_json = std::fs::read_to_string(&packet_path)?;
@@ -127,23 +110,34 @@ impl ExecAggregator {
         wt_config.consume_fuel(true);
         let engine = wasmtime::Engine::new(&wt_config)?;
 
-        let mut instance_deps = wavs_engine::worlds::aggregator::instance::AggregatorInstanceDepsBuilder {
+        let mut instance_deps = InstanceDepsBuilder {
             component: wasmtime::component::Component::new(&engine, &wasm_bytes)?,
-            aggregator_component: component.clone(),
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
             engine: &engine,
             data_dir: &data_dir,
             chain_configs: &cli_config.chains,
-            log: |_service_id, _workflow_id, _digest, level, message| match level {
-                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Error => tracing::error!("{}", message),
-                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Warn => tracing::warn!("{}", message),
-                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Info => tracing::info!("{}", message),
-                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Debug => tracing::debug!("{}", message),
-                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Trace => tracing::trace!("{}", message),
-            },
-            max_wasm_fuel: component.fuel_limit,
-            max_execution_seconds: component.time_limit_seconds,
+            log: HostComponentLogger::AggregatorHostComponentLogger(
+                |_service_id, _workflow_id, _digest, level, message| {
+                    match level {
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Error => {
+                    tracing::error!("{}", message)
+                }
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Warn => {
+                    tracing::warn!("{}", message)
+                }
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Info => {
+                    tracing::info!("{}", message)
+                }
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Debug => {
+                    tracing::debug!("{}", message)
+                }
+                wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Trace => {
+                    tracing::trace!("{}", message)
+                }
+            }
+                },
+            ),
             keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
                 utils::storage::db::RedbStorage::new(tempfile::tempdir()?.keep())?,
                 packet.service.id().to_string(),
@@ -206,8 +200,8 @@ mod test {
     use tempfile::NamedTempFile;
     use utils::filesystem::workspace_path;
     use wavs_types::{
-        Envelope, EnvelopeSignature, Service, ServiceManager, ServiceStatus, Submit, Trigger,
-        Workflow, WorkflowId,
+        AllowedHostPermission, Envelope, EnvelopeSignature, Service, ServiceManager, ServiceStatus,
+        Submit, Trigger, Workflow, WorkflowId,
     };
 
     fn create_test_packet(component_path: &str) -> Packet {

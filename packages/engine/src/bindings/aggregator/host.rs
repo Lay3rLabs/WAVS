@@ -1,6 +1,6 @@
 use wavs_types::ChainKey;
 
-use crate::worlds::aggregator::AggregatorHostComponent;
+use crate::worlds::aggregator::component::AggregatorHostComponent;
 
 use super::world::host::Host;
 use super::world::wavs::types::core::LogLevel;
@@ -34,7 +34,14 @@ impl Host for AggregatorHostComponent {
     }
 
     fn config_var(&mut self, key: String) -> Option<String> {
-        self.aggregator_component.config.get(&key).cloned()
+        self.service
+            .workflows
+            .get(&self.workflow_id)
+            .and_then(|workflow| match &workflow.submit {
+                wavs_types::Submit::Aggregator { component, .. } => component.config.get(&key),
+                _ => unreachable!(),
+            })
+            .cloned()
     }
 
     fn get_service(&mut self) -> ServiceAndWorkflowId {
@@ -64,7 +71,21 @@ impl Host for AggregatorHostComponent {
     }
 
     fn log(&mut self, level: LogLevel, message: String) {
-        let digest = self.aggregator_component.source.digest();
+        let digest = self
+            .service
+            .workflows
+            .get(&self.workflow_id)
+            .and_then(|workflow| match &workflow.submit {
+                wavs_types::Submit::Aggregator { component, .. } => Some(component.source.digest()),
+                _ => unreachable!(),
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "Workflow with ID {} not found in service {}",
+                    self.workflow_id,
+                    self.service.id()
+                )
+            });
 
         (self.inner_log)(
             &self.service.id(),
