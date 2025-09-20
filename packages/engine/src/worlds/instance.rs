@@ -130,7 +130,19 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
                 ComponentLinker::OperatorComponentLinker(linker)
             }
-            HostComponentLogger::AggregatorHostComponentLogger(_) => todo!(),
+            HostComponentLogger::AggregatorHostComponentLogger(_) => {
+                let mut linker = Linker::new(engine);
+
+                crate::bindings::aggregator::world::host::add_to_linker::<_, HasSelf<_>>(
+                    &mut linker,
+                    |state| state,
+                )
+                .unwrap();
+
+                configure_linker(&mut linker, permissions)?;
+
+                ComponentLinker::AggregatorComponentLinker(linker)
+            }
         };
 
         // create wasi context
