@@ -113,10 +113,8 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                     workflow_id: workflow_id.clone(),
                 })?;
 
-        let permissions = &workflow.component.permissions;
-
         // create linker
-        let linker = match log {
+        let (linker, permissions) = match log {
             HostComponentLogger::OperatorHostComponentLogger(_) => {
                 let mut linker = Linker::new(engine);
 
@@ -126,9 +124,13 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                 )
                 .unwrap();
 
-                configure_linker(&mut linker, permissions)?;
+                let permissions = workflow.component.permissions.clone();
+                configure_linker(&mut linker, &permissions)?;
 
-                ComponentLinker::OperatorComponentLinker(linker)
+                (
+                    ComponentLinker::OperatorComponentLinker(linker),
+                    permissions,
+                )
             }
             HostComponentLogger::AggregatorHostComponentLogger(_) => {
                 let mut linker = Linker::new(engine);
@@ -139,9 +141,18 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                 )
                 .unwrap();
 
-                configure_linker(&mut linker, permissions)?;
+                let permissions = match &workflow.submit {
+                    wavs_types::Submit::None => unreachable!(),
+                    wavs_types::Submit::Aggregator { component, .. } => {
+                        component.permissions.clone()
+                    }
+                };
+                configure_linker(&mut linker, &permissions)?;
 
-                ComponentLinker::AggregatorComponentLinker(linker)
+                (
+                    ComponentLinker::AggregatorComponentLinker(linker),
+                    permissions,
+                )
             }
         };
 
