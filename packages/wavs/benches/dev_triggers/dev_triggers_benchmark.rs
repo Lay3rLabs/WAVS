@@ -30,9 +30,9 @@ pub fn benchmark(c: &mut Criterion) {
     for component_config in component_configs.iter() {
         for (name, request_count) in test_configs.iter() {
             let benchmark_name = match component_config {
-                ComponentConfig::Default => format!("{}_default", name),
+                ComponentConfig::Default => format!("{name}_default"),
                 ComponentConfig::HotLoop { sleep_ms: ms } => {
-                    format!("{}_hotloop_{}ms", name, ms)
+                    format!("{name}_hotloop_{ms}ms")
                 }
             };
             group.bench_function(&benchmark_name, move |b| {

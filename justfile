@@ -129,7 +129,7 @@ update-submodules:
 
 lint:
     cargo fmt --all -- --check
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    cargo clippy --all-targets --all-features -- -D warnings
 
 lint-fix:
     cargo fmt --all
