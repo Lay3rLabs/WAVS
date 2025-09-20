@@ -1,16 +1,23 @@
 use anyhow::Result;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
+use utils::config::WAVS_ENV_PREFIX;
 use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDepsBuilder};
 use wavs_types::{
-    AggregatorAction, Component, ComponentDigest, ComponentSource, Envelope, EnvelopeSignature,
-    Packet, Permissions, Service, ServiceManager, ServiceStatus, SignatureKind, Submit, Trigger,
-    Workflow, WorkflowId,
+    AggregatorAction, AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
+    EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, SignatureKind,
+    Submit, Trigger, Workflow, WorkflowId,
 };
 
 use crate::util::read_component;
 
-fn create_dummy_packet(digest: ComponentDigest) -> Packet {
+fn create_dummy_packet(
+    digest: ComponentDigest,
+    env_keys: BTreeSet<String>,
+    config: BTreeMap<String, String>,
+    fuel_limit: Option<u64>,
+    time_limit_seconds: Option<u64>,
+) -> Packet {
     let service = Service {
         name: "dummy-service".to_string(),
         workflows: [(
@@ -19,11 +26,14 @@ fn create_dummy_packet(digest: ComponentDigest) -> Packet {
                 trigger: Trigger::Manual,
                 component: Component {
                     source: ComponentSource::Digest(digest),
-                    permissions: Permissions::default(),
-                    fuel_limit: None,
-                    time_limit_seconds: None,
-                    config: Default::default(),
-                    env_keys: Default::default(),
+                    permissions: Permissions {
+                        allowed_http_hosts: AllowedHostPermission::All,
+                        file_system: true,
+                    },
+                    fuel_limit,
+                    time_limit_seconds,
+                    config,
+                    env_keys,
                 },
                 submit: Submit::None,
             },
@@ -68,9 +78,9 @@ impl ExecAggregator {
         ExecAggregatorArgs {
             component,
             packet,
-            fuel_limit: _,
-            time_limit: _,
-            config: _,
+            fuel_limit,
+            time_limit,
+            config,
         }: ExecAggregatorArgs,
     ) -> Result<ExecAggregatorResult> {
         let component_path = component;
@@ -96,12 +106,17 @@ impl ExecAggregator {
             .upload_component(wasm_bytes.clone())
             .await?;
 
+        let env_keys = std::env::vars()
+            .map(|(key, _)| key)
+            .filter(|key| key.starts_with(WAVS_ENV_PREFIX))
+            .collect();
+
         // Read packet from file or create a dummy one
         let packet = if let Some(packet_path) = packet {
             let packet_json = std::fs::read_to_string(&packet_path)?;
             serde_json::from_str(&packet_json)?
         } else {
-            create_dummy_packet(digest)
+            create_dummy_packet(digest, env_keys, config, time_limit, fuel_limit)
         };
 
         let mut wt_config = wasmtime::Config::new();
