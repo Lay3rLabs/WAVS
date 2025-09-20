@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use utils::storage::db::RedbStorage;
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
@@ -9,16 +7,11 @@ use wavs_engine::{
 };
 use wavs_types::{ComponentDigest, Packet, ServiceId, WorkflowId};
 
-use crate::helpers::service::make_service;
-
 #[allow(dead_code)]
 pub async fn execute_aggregator_component(
     wasm_bytes: &[u8],
-    config: BTreeMap<String, String>,
     packet: Packet,
 ) -> Vec<AggregatorAction> {
-    let service = make_service(ComponentDigest::hash(wasm_bytes), config);
-
     let mut wt_config = WTConfig::new();
     wt_config.wasm_component_model(true);
     wt_config.async_support(true);
@@ -32,8 +25,8 @@ pub async fn execute_aggregator_component(
         KeyValueCtx::new(RedbStorage::new(db_dir.path()).unwrap(), "test".to_string());
 
     let mut instance_deps = InstanceDepsBuilder {
-        workflow_id: service.workflows.keys().next().cloned().unwrap(),
-        service,
+        workflow_id: packet.workflow_id.clone(),
+        service: packet.service.clone(),
         component: WasmtimeComponent::new(&engine, wasm_bytes).unwrap(),
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),
