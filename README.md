@@ -1,4 +1,3 @@
-developed.](https://img.shields.io/badge/repo%20status-Active-green.svg?style=flat-square)](https://www.repostatus.org/#active)
 # WAVS
 
 ![Banner](docs/images/wavs.png)
