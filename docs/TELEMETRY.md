@@ -74,7 +74,7 @@ How to run Prometheus and configure wavs to collect metrics during Rust tests us
 
 ### 1. Configure a `prometheus.yml` file 
 
-In order to run a Prometheus instance in Docker, we need to have a `prometheus.yml` configuration file. For this test, an empty file is sufficient. If you are in the main `wavs` directory, there is already one there.
+In order to run a Prometheus instance in Docker, we need to have a `prometheus.yml` configuration file. For this test, an empty file is sufficient. If you are in the main `wavs` directory, there is already one in the `config/` directory.
 
 ### 2. Start Prometheus Using Docker
 
@@ -84,7 +84,7 @@ Run the following command in a separate command line to run a Prometheus instanc
 docker run \
   --name prometheus \
   -p 9090:9090 \
-  -v ./prometheus.yml:/etc/prometheus/prometheus.yml \
+  -v ./config/prometheus.yml:/etc/prometheus/prometheus.yml \
   prom/prometheus \
   --config.file=/etc/prometheus/prometheus.yml \
   --web.enable-otlp-receiver
@@ -93,7 +93,7 @@ docker run \
 - ports:
   - `9090`: Prometheus UI and OTLP receiver endpoint for receiving metrics.
 - configuration:
-  - `-v ./prometheus.yml:/etc/prometheus/prometheus.yml`: mounts your local `prometheus.yml` file into the container, allowing you to configure Prometheus externally.
+  - `-v ./config/prometheus.yml:/etc/prometheus/prometheus.yml`: mounts your local `prometheus.yml` file into the container, allowing you to configure Prometheus externally.
   - `--config.file=/etc/prometheus/prometheus.yml`: specifies the path to the configuration file inside the container.
   - `--web.enable-otlp-receiver`: enables Prometheus to accept metrics via the OTLP protocol.
 

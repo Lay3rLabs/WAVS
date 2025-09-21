@@ -182,10 +182,10 @@ start-jaeger:
     docker run --rm -p 4317:4317 -p 16686:16686 jaegertracing/jaeger:2.5.0
 
 start-prometheus:
-    docker run --rm --name prometheus --network host -v ./prometheus.yml:/etc/prometheus/prometheus.yml -v ./alerts.yml:/etc/prometheus/alerts.yml prom/prometheus --config.file=/etc/prometheus/prometheus.yml --web.enable-otlp-receiver
+    docker run --rm --name prometheus --network host -v ./config/prometheus.yml:/etc/prometheus/prometheus.yml -v ./config/alerts.yml:/etc/prometheus/alerts.yml prom/prometheus --config.file=/etc/prometheus/prometheus.yml --web.enable-otlp-receiver
 
 start-alertmanager:
-    docker run --rm --name alertmanager --network host -v ./alertmanager.yml:/etc/alertmanager/alertmanager.yml prom/alertmanager:v0.27.0 --config.file=/etc/alertmanager/alertmanager.yml
+    docker run --rm --name alertmanager --network host -v ./config/alertmanager.yml:/etc/alertmanager/alertmanager.yml prom/alertmanager:v0.27.0 --config.file=/etc/alertmanager/alertmanager.yml
 
 start-telemetry:
     just start-prometheus &
