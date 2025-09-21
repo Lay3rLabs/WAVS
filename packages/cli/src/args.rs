@@ -1,10 +1,10 @@
+use alloy_primitives::{Address, LogData};
+use clap::{arg, Parser, Subcommand};
+use serde::{Deserialize, Serialize};
 use std::{
     num::{NonZeroU32, NonZeroU64},
     path::PathBuf,
 };
-
-use clap::{arg, Parser, Subcommand};
-use serde::{Deserialize, Serialize};
 use utils::{
     config::{CliEnvExt, ConfigBuilder},
     serde::deserialize_vec_string,
@@ -95,6 +95,10 @@ pub enum Command {
         /// Must be used together with --submit-chain
         #[clap(long, requires = "submit_chain")]
         submit_handler: Option<alloy_primitives::Address>,
+
+        /// Simulate the transaction execution as actual TriggerData (JSON format)
+        #[clap(long)]
+        simulates_trigger: Option<TriggerKind>,
     },
 
     /// Service management commands
@@ -463,6 +467,33 @@ impl CliEnvExt for CliArgs {
 
     fn dotenv_path(&self) -> Option<PathBuf> {
         self.dotenv.clone()
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TriggerKind {
+    Cron {
+        trigger_time: u64,
+    },
+    EvmContractEvent {
+        chain: ChainKey,
+        contract_address: Address,
+        log_data: LogData,
+        block_number: u64,
+    },
+    CosmosContractEvent,
+    BlockInterval {
+        chain: ChainKey,
+        block_height: u64,
+    },
+}
+
+impl std::str::FromStr for TriggerKind {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s)
+            .map_err(|e| anyhow::anyhow!("Failed to parse TriggerKind JSON: {}", e))
     }
 }
 
