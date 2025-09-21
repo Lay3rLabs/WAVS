@@ -141,10 +141,10 @@ impl ExecComponent {
                     chain,
                     contract_address,
                     log_data,
-                    tx_hash: FixedBytes::new([0; 32]),
+                    tx_hash: FixedBytes::new(rand::random()),
                     block_number,
                     log_index: 0,
-                    block_hash: FixedBytes::new([0; 32]),
+                    block_hash: FixedBytes::new(rand::random()),
                     block_timestamp: SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .expect("Time went backwards")
