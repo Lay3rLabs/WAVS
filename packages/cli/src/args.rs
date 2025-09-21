@@ -481,7 +481,6 @@ pub enum TriggerKind {
         log_data: LogData,
         block_number: u64,
     },
-    CosmosContractEvent,
     BlockInterval {
         chain: ChainKey,
         block_height: u64,

@@ -151,7 +151,6 @@ impl ExecComponent {
                         .as_secs(),
                     tx_index: 0,
                 },
-                TriggerKind::CosmosContractEvent => todo!(),
                 TriggerKind::BlockInterval {
                     chain,
                     block_height,
