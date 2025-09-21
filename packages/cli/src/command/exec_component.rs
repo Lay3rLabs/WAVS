@@ -4,7 +4,8 @@ use anyhow::{Context, Result};
 use utils::{config::WAVS_ENV_PREFIX, storage::db::RedbStorage};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
-    bindings::operator::world::host::LogLevel, worlds::operator::instance::InstanceDepsBuilder,
+    bindings::operator::world::host::LogLevel,
+    worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{
     AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, ServiceId, Submit,
@@ -136,9 +137,7 @@ impl ExecComponent {
             engine: &engine,
             data_dir: tempfile::tempdir()?.keep(),
             chain_configs: &cli_config.chains,
-            log: log_wasi,
-            max_execution_seconds: Some(u64::MAX),
-            max_wasm_fuel: Some(u64::MAX),
+            log: HostComponentLogger::OperatorHostComponentLogger(log_wasi),
             keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
                 RedbStorage::new(tempfile::tempdir()?.keep()).unwrap(),
                 "exec_component".to_string(),

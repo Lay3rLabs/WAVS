@@ -1,10 +1,10 @@
 use wavs_types::ChainKey;
 
-use crate::worlds::operator::component::HostComponent;
+use crate::worlds::operator::component::OperatorHostComponent;
 
 use super::world::host::{LogLevel, ServiceAndWorkflowId, WorkflowAndWorkflowId};
 
-impl super::world::host::Host for HostComponent {
+impl super::world::host::Host for OperatorHostComponent {
     fn get_cosmos_chain_config(
         &mut self,
         chain: String,

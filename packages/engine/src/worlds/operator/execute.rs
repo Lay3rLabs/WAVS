@@ -3,8 +3,7 @@ use std::time::Duration;
 use wasmtime::Trap;
 use wavs_types::{TriggerAction, WasmResponse};
 
-use super::instance::InstanceDeps;
-use crate::utils::error::EngineError;
+use crate::{utils::error::EngineError, worlds::instance::InstanceDeps};
 
 pub async fn execute(
     deps: &mut InstanceDeps,
@@ -23,13 +22,13 @@ pub async fn execute(
         let workflow_id = workflow_id.clone();
         async move {
             crate::bindings::operator::world::WavsWorld::instantiate_async(
-                &mut deps.store,
+                deps.store.as_operator_mut(),
                 &deps.component,
-                &deps.linker,
+                deps.linker.as_operator_ref(),
             )
             .await
             .map_err(EngineError::Instantiate)?
-            .call_run(&mut deps.store, &input)
+            .call_run(deps.store.as_operator_mut(), &input)
             .await
             .map_err(|e| match e.downcast_ref::<Trap>() {
                 Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),

@@ -4,9 +4,8 @@ use anyhow::Result;
 use wasmtime::Trap;
 use wavs_types::Packet;
 
-use super::instance::AggregatorInstanceDeps;
-use crate::bindings::aggregator::world::AggregatorWorld;
 use crate::utils::error::EngineError;
+use crate::{bindings::aggregator::world::AggregatorWorld, worlds::instance::InstanceDeps};
 
 pub use crate::bindings::aggregator::world::wavs::aggregator::aggregator::{
     AggregatorAction, SubmitAction,
@@ -14,7 +13,7 @@ pub use crate::bindings::aggregator::world::wavs::aggregator::aggregator::{
 use crate::bindings::aggregator::world::wavs::types::chain::AnyTxHash;
 
 pub async fn execute_packet(
-    deps: &mut AggregatorInstanceDeps,
+    deps: &mut InstanceDeps,
     packet: &Packet,
 ) -> Result<Vec<AggregatorAction>, EngineError> {
     let service_id = packet.service.id();
@@ -25,23 +24,23 @@ pub async fn execute_packet(
         let service_id = service_id.clone();
         let workflow_id = workflow_id.clone();
         async move {
-            AggregatorWorld::instantiate_async(&mut deps.store, &deps.component, &deps.linker)
-                .await
-                .map_err(EngineError::Instantiate)?
-                .call_process_packet(&mut deps.store, &wit_packet)
-                .await
-                .map_err(|e| match e.downcast_ref::<Trap>() {
-                    Some(t) if *t == Trap::OutOfFuel => {
-                        EngineError::OutOfFuel(service_id, workflow_id)
-                    }
-                    Some(t) if *t == Trap::Interrupt => {
-                        EngineError::OutOfTime(service_id, workflow_id)
-                    }
-                    _ => EngineError::ComponentError(e),
-                })?
-                .map_err(|error| {
-                    EngineError::ExecResult(format!("Process packet execution failed: {}", error))
-                })
+            AggregatorWorld::instantiate_async(
+                deps.store.as_aggregator_mut(),
+                &deps.component,
+                deps.linker.as_aggregator_ref(),
+            )
+            .await
+            .map_err(EngineError::Instantiate)?
+            .call_process_packet(deps.store.as_aggregator_mut(), &wit_packet)
+            .await
+            .map_err(|e| match e.downcast_ref::<Trap>() {
+                Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
+                Some(t) if *t == Trap::Interrupt => EngineError::OutOfTime(service_id, workflow_id),
+                _ => EngineError::ComponentError(e),
+            })?
+            .map_err(|error| {
+                EngineError::ExecResult(format!("Process packet execution failed: {}", error))
+            })
         }
     })
     .await
@@ -49,7 +48,7 @@ pub async fn execute_packet(
 }
 
 pub async fn execute_timer_callback(
-    deps: &mut AggregatorInstanceDeps,
+    deps: &mut InstanceDeps,
     packet: &Packet,
 ) -> Result<Vec<AggregatorAction>, EngineError> {
     let service_id = packet.service.id();
@@ -60,23 +59,23 @@ pub async fn execute_timer_callback(
         let service_id = service_id.clone();
         let workflow_id = workflow_id.clone();
         async move {
-            AggregatorWorld::instantiate_async(&mut deps.store, &deps.component, &deps.linker)
-                .await
-                .map_err(EngineError::Instantiate)?
-                .call_handle_timer_callback(&mut deps.store, &wit_packet)
-                .await
-                .map_err(|e| match e.downcast_ref::<Trap>() {
-                    Some(t) if *t == Trap::OutOfFuel => {
-                        EngineError::OutOfFuel(service_id, workflow_id)
-                    }
-                    Some(t) if *t == Trap::Interrupt => {
-                        EngineError::OutOfTime(service_id, workflow_id)
-                    }
-                    _ => EngineError::ComponentError(e),
-                })?
-                .map_err(|error| {
-                    EngineError::ExecResult(format!("Timer callback execution failed: {}", error))
-                })
+            AggregatorWorld::instantiate_async(
+                deps.store.as_aggregator_mut(),
+                &deps.component,
+                deps.linker.as_aggregator_ref(),
+            )
+            .await
+            .map_err(EngineError::Instantiate)?
+            .call_handle_timer_callback(deps.store.as_aggregator_mut(), &wit_packet)
+            .await
+            .map_err(|e| match e.downcast_ref::<Trap>() {
+                Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
+                Some(t) if *t == Trap::Interrupt => EngineError::OutOfTime(service_id, workflow_id),
+                _ => EngineError::ComponentError(e),
+            })?
+            .map_err(|error| {
+                EngineError::ExecResult(format!("Timer callback execution failed: {}", error))
+            })
         }
     })
     .await
@@ -84,7 +83,7 @@ pub async fn execute_timer_callback(
 }
 
 pub async fn execute_submit_callback(
-    deps: &mut AggregatorInstanceDeps,
+    deps: &mut InstanceDeps,
     packet: &Packet,
     tx_result: Result<AnyTxHash, String>,
 ) -> Result<(), EngineError> {
@@ -97,23 +96,23 @@ pub async fn execute_submit_callback(
         let service_id = service_id.clone();
         let workflow_id = workflow_id.clone();
         async move {
-            AggregatorWorld::instantiate_async(&mut deps.store, &deps.component, &deps.linker)
-                .await
-                .map_err(EngineError::Instantiate)?
-                .call_handle_submit_callback(&mut deps.store, &wit_packet, wit_tx_result)
-                .await
-                .map_err(|e| match e.downcast_ref::<Trap>() {
-                    Some(t) if *t == Trap::OutOfFuel => {
-                        EngineError::OutOfFuel(service_id, workflow_id)
-                    }
-                    Some(t) if *t == Trap::Interrupt => {
-                        EngineError::OutOfTime(service_id, workflow_id)
-                    }
-                    _ => EngineError::ComponentError(e),
-                })?
-                .map_err(|error| {
-                    EngineError::ExecResult(format!("Submit callback execution failed: {}", error))
-                })
+            AggregatorWorld::instantiate_async(
+                deps.store.as_aggregator_mut(),
+                &deps.component,
+                deps.linker.as_aggregator_ref(),
+            )
+            .await
+            .map_err(EngineError::Instantiate)?
+            .call_handle_submit_callback(deps.store.as_aggregator_mut(), &wit_packet, wit_tx_result)
+            .await
+            .map_err(|e| match e.downcast_ref::<Trap>() {
+                Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
+                Some(t) if *t == Trap::Interrupt => EngineError::OutOfTime(service_id, workflow_id),
+                _ => EngineError::ComponentError(e),
+            })?
+            .map_err(|error| {
+                EngineError::ExecResult(format!("Submit callback execution failed: {}", error))
+            })
         }
     })
     .await

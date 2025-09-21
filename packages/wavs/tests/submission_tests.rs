@@ -1,3 +1,4 @@
+#![cfg(feature = "dev")]
 use std::time::Duration;
 
 use wavs::subsystems::submission::{

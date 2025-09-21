@@ -25,8 +25,8 @@ async fn main() {
         Command::DeployAggregator => {
             deploy_aggregator::run().await;
         }
-        Command::DeployService => {
-            deploy_service::run().await;
+        Command::DeployService { sleep_ms } => {
+            deploy_service::run(sleep_ms).await;
         }
         Command::SendPacket => {
             send_packet::run().await;

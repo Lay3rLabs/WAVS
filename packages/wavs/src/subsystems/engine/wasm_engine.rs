@@ -8,7 +8,7 @@ use utils::telemetry::EngineMetrics;
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     common::base_engine::{BaseEngine, BaseEngineConfig},
-    worlds::operator::instance::InstanceDepsBuilder,
+    worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{
     ComponentDigest, ComponentSource, Service, ServiceId, TriggerAction, WasmResponse, WorkflowId,
@@ -106,7 +106,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         service: Service,
         trigger_action: TriggerAction,
     ) -> Result<Option<WasmResponse>, EngineError> {
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "dev")]
         if std::env::var("WAVS_FORCE_ENGINE_ERROR_XXX").is_ok() {
             self.metrics.total_errors.add(1, &[]);
             self.metrics.executions_failed.add(1, &[]);
@@ -178,16 +178,14 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 .app_data_dir
                 .join(trigger_action.config.service_id.to_string()),
             chain_configs: &chain_configs,
-            log,
-            max_execution_seconds: self.engine.max_execution_seconds,
-            max_wasm_fuel: self.engine.max_wasm_fuel,
+            log: HostComponentLogger::OperatorHostComponentLogger(log),
         }
         .build()?;
 
         let initial_fuel = instance_deps.store.get_fuel().unwrap_or(0);
         let start_time = Instant::now();
 
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "dev")]
         if std::env::var("WAVS_FORCE_SLOW_ENGINE_XXX").is_ok() {
             std::thread::sleep(std::time::Duration::from_secs(6));
         }

@@ -3,10 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use utils::{config::ChainConfigs, filesystem::workspace_path, storage::db::RedbStorage};
 use wasmtime::{component::Component, Engine as WTEngine};
-use wavs_engine::{
-    worlds::operator::component::HostComponentLogger,
-    worlds::operator::instance::{InstanceDeps, InstanceDepsBuilder},
-};
+use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
     AllowedHostPermission, ComponentDigest, Service, TriggerAction, TriggerConfig, TriggerData,
     Workflow, WorkflowId,
@@ -107,9 +104,11 @@ impl EngineSetup {
 
     /// Create a new InstanceDeps for execution
     pub fn create_instance_deps(&self) -> InstanceDeps {
-        let log: HostComponentLogger = |_service_id, _workflow_id, _digest, _level, _message| {
-            // No-op logger for benchmarks
-        };
+        let log = HostComponentLogger::OperatorHostComponentLogger(
+            |_service_id, _workflow_id, _digest, _level, _message| {
+                // No-op logger for benchmarks
+            },
+        );
 
         let builder = InstanceDepsBuilder {
             component: self.component.clone(),
@@ -119,8 +118,6 @@ impl EngineSetup {
             data_dir: self.data_dir.path().to_path_buf(),
             chain_configs: &self.chain_configs,
             log,
-            max_wasm_fuel: None,
-            max_execution_seconds: None,
             keyvalue_ctx: self.keyvalue_ctx.clone(),
         };
 
