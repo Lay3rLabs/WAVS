@@ -45,7 +45,8 @@ the other imported package dependencies.
 
 ## Publishing to a Warg Registry
 
-Currently, the [`wavs:worker`](https://wa.dev/wavs:worker) WIT package is published on [wa.dev](https://wa.dev).
+Currently, the [`wavs:operator`](https://wa.dev/wavs:operator) WIT package is published on [wa.dev](https://wa.dev).
+
 In order to use the `wkg publish` command, we need to first authenticate and configure with the `warg` CLI.
 
 ```bash
