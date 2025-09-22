@@ -271,7 +271,9 @@ pub enum TriggerData {
         /// Hash of the block the transaction that emitted this log was mined in
         #[schema(value_type = String)]
         block_hash: alloy_primitives::B256,
-        /// The timestamp of the block as proposed in: https://ethereum-magicians.org/t/proposal-for-adding-blocktimestamp-to-logs-object-returned-by-eth-getlogs-and-related-requests https://github.com/ethereum/execution-apis/issues/295
+        /// The timestamp of the block containing this event, as proposed in https://github.com/ethereum/execution-apis/issues/295
+        /// This field is optional since nodes are not required to include it in event logs.
+        /// If not provided, applications may need to fetch the block header directly to obtain the timestamp.
         block_timestamp: Option<u64>,
         /// Index of the Transaction in the block
         tx_index: u64,
