@@ -53,7 +53,7 @@ fn create_dummy_packet(
 
     Packet {
         envelope: Envelope {
-            eventId: [0u8; 20].into(),
+            eventId: [1u8; 20].into(),
             ordering: [0u8; 12].into(),
             payload: vec![].into(),
         },
@@ -274,7 +274,7 @@ mod test {
             service,
             workflow_id: WorkflowId::default(),
             envelope: Envelope {
-                eventId: [0u8; 20].into(),
+                eventId: [1u8; 20].into(),
                 ordering: [0u8; 12].into(),
                 payload: b"test data".to_vec().into(),
             },
