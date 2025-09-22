@@ -44,6 +44,11 @@ impl Guest for Component {
             }
         }
 
+        // Sanity check that we can get the event id
+        if host::get_event_id().iter().all(|x| *x == 0) {
+            return Err("event id is all zeros".to_string());
+        }
+
         let (maybe_trigger_id, data) = match trigger_action.data {
             TriggerData::EvmContractEvent(_) | TriggerData::CosmosContractEvent(_) => {
                 let (trigger_id, data) =

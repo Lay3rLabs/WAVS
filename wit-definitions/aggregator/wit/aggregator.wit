@@ -1,18 +1,18 @@
-package wavs:aggregator@1.1.0;
+package wavs:aggregator@1.2.0;
 
-use wavs:types/core@1.1.0 as core-types;
-use wavs:types/service@1.1.0 as service-types;
-use wavs:types/chain@1.1.0 as chain-types;
-use wavs:types/events@1.1.0 as event-types;
+use wavs:types/core@1.2.0 as core-types;
+use wavs:types/service@1.2.0 as service-types;
+use wavs:types/chain@1.2.0 as chain-types;
+use wavs:types/events@1.2.0 as event-types;
 
 interface aggregator {
     use core-types.{duration, u128};
     use service-types.{service, workflow-id, signature-kind};
     use chain-types.{chain-key, evm-address};
-    use event-types.{trigger-data};
+    use event-types.{trigger-data, event-id};
 
     record envelope {
-        event-id: list<u8>,
+        event-id: event-id,
         ordering: list<u8>,
         payload: list<u8>,
     }
@@ -61,6 +61,7 @@ world aggregator-world {
         use chain-types.{evm-chain-config, cosmos-chain-config};
         use core-types.{log-level};
         use service-types.{service-and-workflow-id, workflow-and-workflow-id};
+        use event-types.{event-id};
 
         get-evm-chain-config: func(chain-key: string) -> option<evm-chain-config>;
         get-cosmos-chain-config: func(chain-key: string) -> option<cosmos-chain-config>;
@@ -74,6 +75,9 @@ world aggregator-world {
 
         // convenience function to get the workflow without having to walk service.workflows
         get-workflow: func() -> workflow-and-workflow-id;
+
+        // convenience function to get the event-id
+        get-event-id: func() -> event-id;
     }
 
     use aggregator.{packet, aggregator-action};

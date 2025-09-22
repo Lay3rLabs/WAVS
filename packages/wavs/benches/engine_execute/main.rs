@@ -18,7 +18,7 @@ pub fn run_simulation(setup: Arc<ExecuteSetup>) {
 
         for (trigger_action, echo_data) in trigger_actions.drain(..) {
             // Create a new instance for this execution to ensure isolation
-            let mut deps = setup.engine_setup.create_instance_deps();
+            let mut deps = setup.engine_setup.create_instance_deps(&trigger_action);
 
             // Execute the component and measure performance
             match wavs_engine::worlds::operator::execute::execute(&mut deps, trigger_action).await {

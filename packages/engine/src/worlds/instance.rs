@@ -77,6 +77,7 @@ pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
     pub service: Service,
     pub workflow_id: WorkflowId,
+    pub event_id: wavs_types::EventId,
     pub engine: &'a WTEngine,
     pub data_dir: P,
     pub chain_configs: &'a ChainConfigs,
@@ -97,6 +98,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             component,
             service,
             workflow_id,
+            event_id,
             engine,
             data_dir,
             chain_configs,
@@ -195,6 +197,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                 let host = OperatorHostComponent {
                     service,
                     workflow_id,
+                    event_id,
                     chain_configs: chain_configs.clone(),
                     table: wasmtime::component::ResourceTable::new(),
                     ctx,
@@ -212,6 +215,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                 let host = AggregatorHostComponent {
                     service,
                     workflow_id,
+                    event_id,
                     chain_configs: chain_configs.clone(),
                     table: wasmtime::component::ResourceTable::new(),
                     ctx,

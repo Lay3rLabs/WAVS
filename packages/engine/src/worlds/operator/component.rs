@@ -1,7 +1,7 @@
 use utils::config::ChainConfigs;
 use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-use wavs_types::{ComponentDigest, Service, ServiceId, WorkflowId};
+use wavs_types::{ComponentDigest, EventId, Service, ServiceId, WorkflowId};
 
 use crate::backend::wasi_keyvalue::context::KeyValueCtx;
 use crate::bindings::operator::world::host::LogLevel;
@@ -16,6 +16,7 @@ pub struct OperatorHostComponent {
     pub service: Service,
     pub workflow_id: WorkflowId,
     pub chain_configs: ChainConfigs,
+    pub event_id: EventId,
     pub(crate) table: wasmtime::component::ResourceTable,
     pub(crate) ctx: WasiCtx,
     pub(crate) http: WasiHttpCtx,

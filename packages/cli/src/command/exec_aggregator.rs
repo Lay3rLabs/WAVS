@@ -134,6 +134,7 @@ impl ExecAggregator {
             component: wasmtime::component::Component::new(&engine, &wasm_bytes)?,
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
+            event_id: packet.event_id(),
             engine: &engine,
             data_dir: &data_dir,
             chain_configs: &cli_config.chains,
