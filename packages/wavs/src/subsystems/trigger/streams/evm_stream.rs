@@ -34,9 +34,10 @@ pub async fn start_evm_event_stream(
                 return None;
             }
 
+            let block_timestamp = log.block_timestamp;
+
             match (
                 log.block_hash,
-                log.block_timestamp,
                 log.transaction_index,
                 log.block_number,
                 log.transaction_hash,
@@ -44,7 +45,6 @@ pub async fn start_evm_event_stream(
             ) {
                 (
                     Some(block_hash),
-                    Some(block_timestamp),
                     Some(tx_index),
                     Some(block_number),
                     Some(tx_hash),

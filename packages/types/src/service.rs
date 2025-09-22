@@ -272,7 +272,7 @@ pub enum TriggerData {
         #[schema(value_type = String)]
         block_hash: alloy_primitives::B256,
         /// The timestamp of the block as proposed in: https://ethereum-magicians.org/t/proposal-for-adding-blocktimestamp-to-logs-object-returned-by-eth-getlogs-and-related-requests https://github.com/ethereum/execution-apis/issues/295
-        block_timestamp: u64,
+        block_timestamp: Option<u64>,
         /// Index of the Transaction in the block
         tx_index: u64,
     },

@@ -1,9 +1,9 @@
-package wavs:operator@1.0.0;
+package wavs:operator@1.1.0;
 
-use wavs:types/core@1.0.0 as core-types;
-use wavs:types/service@1.0.0 as service-types;
-use wavs:types/chain@1.0.0 as chain-types;
-use wavs:types/events@1.0.0 as event-types;
+use wavs:types/core@1.1.0 as core-types;
+use wavs:types/service@1.1.0 as service-types;
+use wavs:types/chain@1.1.0 as chain-types;
+use wavs:types/events@1.1.0 as event-types;
 
 interface input {
     use service-types.{service-id, workflow-id, trigger};
