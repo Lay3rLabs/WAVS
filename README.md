@@ -1,6 +1,6 @@
 # WAVS
 
-test
+test2
 
 ![Banner!](docs/images/wavs.png)
 
