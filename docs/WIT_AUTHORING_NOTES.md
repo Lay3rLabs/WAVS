@@ -1,5 +1,3 @@
-# Wit Authoring Meeting Notes from Dec 12, 2024
-
 ## Wit deps and imports
 
 The scoping of a `wit` package is determined by the package declaration at the top of a `wit` file.  

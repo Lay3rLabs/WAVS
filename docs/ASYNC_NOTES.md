@@ -42,7 +42,7 @@ WASI 0.3 solves these problems with “deleting” `wasi:io` by implementing asy
 
 ## Async / Sync in the Host
 
-Wasmtime can be used in both async and sync mode. Tokio shouldn’t be a requirement.
+Wasmtime can be used in both async and sync mode. Tokio shouldn’t be a requirement, though we do use async with the Tokio runtime.
 
 [https://docs.rs/wasmtime/27.0.0/wasmtime/struct.Config.html\#method.async\_support](https://docs.rs/wasmtime/27.0.0/wasmtime/struct.Config.html#method.async_support)
 

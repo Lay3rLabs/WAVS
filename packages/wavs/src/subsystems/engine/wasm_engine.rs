@@ -11,7 +11,8 @@ use wavs_engine::{
     worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{
-    ComponentDigest, ComponentSource, Service, ServiceId, TriggerAction, WasmResponse, WorkflowId,
+    ComponentDigest, ComponentSource, EventId, Service, ServiceId, TriggerAction, WasmResponse,
+    WorkflowId,
 };
 
 use utils::storage::CAStorage;
@@ -167,11 +168,14 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
 
+        let event_id: EventId = (&service, &trigger_action).try_into()?;
+
         let mut instance_deps = InstanceDepsBuilder {
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
             component,
+            event_id,
             engine: &self.engine.wasm_engine,
             data_dir: self
                 .engine

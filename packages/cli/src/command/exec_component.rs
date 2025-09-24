@@ -174,10 +174,15 @@ impl ExecComponent {
             data,
         };
 
+        let event_id = (&service, &trigger_action)
+            .try_into()
+            .context("Failed to create event ID from service and trigger action")?;
+
         let mut instance_deps = InstanceDepsBuilder {
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
             component: WasmtimeComponent::new(&engine, &wasm_bytes)?,
+            event_id,
             engine: &engine,
             data_dir: tempfile::tempdir()?.keep(),
             chain_configs: &cli_config.chains,

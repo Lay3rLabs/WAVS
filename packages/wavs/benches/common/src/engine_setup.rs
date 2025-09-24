@@ -5,8 +5,8 @@ use utils::{config::ChainConfigs, filesystem::workspace_path, storage::db::RedbS
 use wasmtime::{component::Component, Engine as WTEngine};
 use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
-    AllowedHostPermission, ComponentDigest, Service, TriggerAction, TriggerConfig, TriggerData,
-    Workflow, WorkflowId,
+    AllowedHostPermission, ComponentDigest, EventId, Service, TriggerAction, TriggerConfig,
+    TriggerData, Workflow, WorkflowId,
 };
 
 /// Handle provides the setup and infrastructure needed for engine benchmarks
@@ -103,15 +103,18 @@ impl EngineSetup {
     }
 
     /// Create a new InstanceDeps for execution
-    pub fn create_instance_deps(&self) -> InstanceDeps {
+    pub fn create_instance_deps(&self, trigger_action: &TriggerAction) -> InstanceDeps {
         let log = HostComponentLogger::OperatorHostComponentLogger(
             |_service_id, _workflow_id, _digest, _level, _message| {
                 // No-op logger for benchmarks
             },
         );
 
+        let event_id: EventId = (&self.service, trigger_action).try_into().unwrap();
+
         let builder = InstanceDepsBuilder {
             component: self.component.clone(),
+            event_id,
             service: self.service.clone(),
             workflow_id: self.workflow_id.clone(),
             engine: &self.engine,

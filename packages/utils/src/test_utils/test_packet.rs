@@ -81,7 +81,7 @@ pub fn mock_envelope(trigger_id: u64, data: impl Into<Bytes>) -> Envelope {
     };
     Envelope {
         payload: payload.abi_encode().into(),
-        eventId: FixedBytes([0; 20]),
+        eventId: FixedBytes([1; 20]),
         ordering: FixedBytes([0; 12]),
     }
 }
