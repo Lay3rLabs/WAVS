@@ -472,6 +472,7 @@ impl CliEnvExt for CliArgs {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum TriggerKind {
+    /// Cron trigger time (in nanos)
     Cron {
         trigger_time: u64,
     },
