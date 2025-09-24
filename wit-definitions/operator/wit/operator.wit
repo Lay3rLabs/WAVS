@@ -1,9 +1,9 @@
-package wavs:operator@1.1.0;
+package wavs:operator@1.2.0;
 
-use wavs:types/core@1.1.0 as core-types;
-use wavs:types/service@1.1.0 as service-types;
-use wavs:types/chain@1.1.0 as chain-types;
-use wavs:types/events@1.1.0 as event-types;
+use wavs:types/core@1.2.0 as core-types;
+use wavs:types/service@1.2.0 as service-types;
+use wavs:types/chain@1.2.0 as chain-types;
+use wavs:types/events@1.2.0 as event-types;
 
 interface input {
     use service-types.{service-id, workflow-id, trigger};
@@ -43,6 +43,7 @@ world wavs-world {
         use chain-types.{evm-chain-config, cosmos-chain-config};
         use service-types.{service-and-workflow-id, workflow-and-workflow-id};
         use core-types.{log-level};
+        use event-types.{event-id};
 
         get-evm-chain-config: func(chain-key: string) -> option<evm-chain-config>;
         get-cosmos-chain-config: func(chain-key: string) -> option<cosmos-chain-config>;
@@ -56,6 +57,9 @@ world wavs-world {
 
         // convenience function to get the workflow without having to walk service.workflows
         get-workflow: func() -> workflow-and-workflow-id;
+
+        // convenience function to get the event-id
+        get-event-id: func() -> event-id;
     }
 
     use input.{trigger-action};

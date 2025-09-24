@@ -358,7 +358,7 @@ async fn run_test(
                                         referenceBlock: submit_start_block.try_into().unwrap(),
                                     },
                                     envelope: Envelope {
-                                        eventId: alloy_primitives::FixedBytes([0; 20]),
+                                        eventId: alloy_primitives::FixedBytes([1; 20]),
                                         ordering: alloy_primitives::FixedBytes([0; 12]),
                                         payload: vec![].into(),
                                     },

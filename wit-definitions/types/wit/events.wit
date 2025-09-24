@@ -1,6 +1,8 @@
 interface events {
     use chain.{chain-key, evm-address, evm-event-log, cosmos-address, cosmos-event};
     use core.{timestamp};
+    type event-id = list<u8>; // 20-byte unique hash
+
 
     variant trigger-data {
         evm-contract-event(trigger-data-evm-contract-event),

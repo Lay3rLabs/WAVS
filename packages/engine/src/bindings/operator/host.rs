@@ -57,6 +57,10 @@ impl super::world::host::Host for OperatorHostComponent {
         }
     }
 
+    fn get_event_id(&mut self) -> Vec<u8> {
+        self.event_id.as_ref().to_vec()
+    }
+
     fn config_var(&mut self, key: String) -> Option<String> {
         self.service
             .workflows

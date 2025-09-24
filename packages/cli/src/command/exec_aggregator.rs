@@ -1,3 +1,4 @@
+use alloy_primitives::FixedBytes;
 use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
@@ -53,7 +54,7 @@ fn create_dummy_packet(
 
     Packet {
         envelope: Envelope {
-            eventId: [0u8; 20].into(),
+            eventId: FixedBytes::new(rand::random()),
             ordering: [0u8; 12].into(),
             payload: vec![].into(),
         },
@@ -134,6 +135,7 @@ impl ExecAggregator {
             component: wasmtime::component::Component::new(&engine, &wasm_bytes)?,
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
+            event_id: packet.event_id(),
             engine: &engine,
             data_dir: &data_dir,
             chain_configs: &cli_config.chains,
@@ -216,6 +218,7 @@ impl std::fmt::Display for ExecAggregatorResult {
 #[cfg(test)]
 mod test {
     use super::*;
+    use alloy_primitives::FixedBytes;
     use std::io::Write;
     use tempfile::NamedTempFile;
     use utils::filesystem::workspace_path;
@@ -273,7 +276,7 @@ mod test {
             service,
             workflow_id: WorkflowId::default(),
             envelope: Envelope {
-                eventId: [0u8; 20].into(),
+                eventId: FixedBytes::new(rand::random()),
                 ordering: [0u8; 12].into(),
                 payload: b"test data".to_vec().into(),
             },
