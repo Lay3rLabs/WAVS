@@ -178,7 +178,7 @@ mod test {
     fn mock_envelope() -> Envelope {
         Envelope {
             payload: vec![1, 2, 3].into(),
-            eventId: FixedBytes([0; 20]),
+            eventId: FixedBytes([1; 20]),
             ordering: FixedBytes([0; 12]),
         }
     }

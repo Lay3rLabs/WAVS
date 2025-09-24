@@ -282,7 +282,7 @@ fn mock_e2e_same_tx_different_block_hash() {
             tx_hash: same_tx_hash,
             block_number: 1,
             log_index: 0,
-            block_timestamp: 0,
+            block_timestamp: None,
             tx_index: 0,
         },
     };

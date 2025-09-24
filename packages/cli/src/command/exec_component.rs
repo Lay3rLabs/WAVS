@@ -1,5 +1,9 @@
-use std::{collections::BTreeMap, time::Instant};
+use std::{
+    collections::BTreeMap,
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
 
+use alloy_primitives::FixedBytes;
 use anyhow::{Context, Result};
 use utils::{config::WAVS_ENV_PREFIX, storage::db::RedbStorage};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
@@ -8,11 +12,13 @@ use wavs_engine::{
     worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{
-    AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, ServiceId, Submit,
-    Trigger, TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow, WorkflowId,
+    AllowedHostPermission, ChainKey, ComponentDigest, ComponentSource, Permissions, ServiceId,
+    Submit, Timestamp, Trigger, TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow,
+    WorkflowId,
 };
 
 use crate::{
+    args::TriggerKind,
     config::Config,
     util::{read_component, ComponentInput},
 };
@@ -60,6 +66,7 @@ pub struct ExecComponentArgs {
     pub fuel_limit: Option<u64>,
     pub time_limit: Option<u64>,
     pub config: BTreeMap<String, String>,
+    pub simulates_trigger: Option<TriggerKind>,
 }
 
 impl ExecComponent {
@@ -71,6 +78,7 @@ impl ExecComponent {
             fuel_limit,
             time_limit,
             config,
+            simulates_trigger,
         }: ExecComponentArgs,
     ) -> Result<Self> {
         let wasm_bytes = read_component(&component_path).context(format!(
@@ -108,14 +116,56 @@ impl ExecComponent {
             submit: Submit::None,
         };
 
+        let chain: ChainKey = "evm:exec".parse().unwrap();
         let service = wavs_types::Service {
             name: "Exec Service".to_string(),
             workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
             status: wavs_types::ServiceStatus::Active,
             manager: wavs_types::ServiceManager::Evm {
-                chain: "evm:exec".parse().unwrap(),
+                chain: chain.clone(),
                 address: Default::default(),
             },
+        };
+
+        let data = match simulates_trigger {
+            Some(trigger_kind) => match trigger_kind {
+                TriggerKind::Cron { trigger_time } => TriggerData::Cron {
+                    trigger_time: Timestamp::from_nanos(trigger_time),
+                },
+                TriggerKind::EvmContractEvent {
+                    chain,
+                    contract_address,
+                    log_data,
+                    block_number,
+                } => TriggerData::EvmContractEvent {
+                    chain,
+                    contract_address,
+                    log_data,
+                    tx_hash: FixedBytes::new(rand::random()),
+                    block_number,
+                    log_index: 0,
+                    block_hash: FixedBytes::new(rand::random()),
+                    block_timestamp: Some(
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .expect("Time went backwards")
+                            .as_secs(),
+                    ),
+                    tx_index: 0,
+                },
+                TriggerKind::BlockInterval {
+                    chain,
+                    block_height,
+                } => TriggerData::BlockInterval {
+                    chain,
+                    block_height,
+                },
+            },
+            None => TriggerData::Raw(
+                input
+                    .decode()
+                    .context("Failed to decode input for component execution")?,
+            ),
         };
 
         let trigger_action = TriggerAction {
@@ -124,16 +174,18 @@ impl ExecComponent {
                 workflow_id: WorkflowId::default(),
                 trigger: Trigger::Manual,
             },
-            data: TriggerData::Raw(input.decode().context(format!(
-                "Failed to decode input '{}' for component execution",
-                input.into_string()
-            ))?),
+            data,
         };
+
+        let event_id = (&service, &trigger_action)
+            .try_into()
+            .context("Failed to create event ID from service and trigger action")?;
 
         let mut instance_deps = InstanceDepsBuilder {
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
             component: WasmtimeComponent::new(&engine, &wasm_bytes)?,
+            event_id,
             engine: &engine,
             data_dir: tempfile::tempdir()?.keep(),
             chain_configs: &cli_config.chains,
@@ -217,6 +269,7 @@ mod test {
             fuel_limit: None,
             time_limit: None,
             config: BTreeMap::default(),
+            simulates_trigger: None,
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
@@ -231,6 +284,7 @@ mod test {
             fuel_limit: None,
             time_limit: None,
             config: BTreeMap::default(),
+            simulates_trigger: None,
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
@@ -245,6 +299,7 @@ mod test {
             fuel_limit: None,
             time_limit: None,
             config: BTreeMap::default(),
+            simulates_trigger: None,
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
@@ -266,6 +321,7 @@ mod test {
             fuel_limit: None,
             time_limit: None,
             config: BTreeMap::default(),
+            simulates_trigger: None,
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
@@ -283,6 +339,7 @@ mod test {
             fuel_limit: None,
             time_limit: None,
             config: config_map,
+            simulates_trigger: None,
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
@@ -300,6 +357,7 @@ mod test {
             fuel_limit: None,
             time_limit: None,
             config: BTreeMap::default(),
+            simulates_trigger: None,
         };
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();

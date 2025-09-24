@@ -13,7 +13,7 @@ pub async fn run() {
     let signer = PrivateKeySigner::random();
 
     let envelope = Envelope {
-        eventId: [0u8; 20].into(),
+        eventId: [1u8; 20].into(),
         ordering: [0u8; 12].into(),
         payload: vec![1, 2, 3, 4, 5].into(),
     };

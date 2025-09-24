@@ -1,7 +1,10 @@
 use alloy_network::Ethereum;
+use alloy_primitives::BlockHash;
+use alloy_provider::Provider;
+
 use anyhow::Context;
 use example_helpers::bindings::world::{
-    host,
+    host::{self, LogLevel},
     wavs::{
         operator::{
             input::{TriggerAction, TriggerData},
@@ -44,13 +47,31 @@ impl Guest for Component {
                     let chain_config = host::get_evm_chain_config(&chain)
                         .ok_or(anyhow::anyhow!("EVM chain config for {chain} not found"))?;
 
-                    new_evm_provider::<Ethereum>(
+                    let provider = new_evm_provider::<Ethereum>(
                         chain_config
                             .http_endpoint
                             .context("http_endpoint is missing")?,
-                    )
-                    .trigger_data(log.address.into(), trigger_id)
-                    .await?
+                    );
+
+                    let block_timestamp = provider
+                        .get_block(BlockHash::from_slice(&log.block_hash).into())
+                        .await?
+                        .ok_or(anyhow::anyhow!("Unable to get block"))?
+                        .header
+                        .timestamp;
+
+                    if block_timestamp == 0 {
+                        return Err(anyhow::anyhow!("Block timestamp is zero, invalid block"));
+                    }
+
+                    host::log(
+                        LogLevel::Info,
+                        &format!("Block timestamp: {block_timestamp}"),
+                    );
+
+                    provider
+                        .trigger_data(log.address.into(), trigger_id)
+                        .await?
                 }
                 _ => {
                     return Err(anyhow::anyhow!("expected cosmos contract event"));

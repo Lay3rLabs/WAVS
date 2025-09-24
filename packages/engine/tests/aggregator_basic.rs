@@ -30,7 +30,7 @@ async fn basic_aggregator_execution() {
         service,
         workflow_id,
         envelope: Envelope {
-            eventId: [0u8; 20].into(),
+            eventId: [1u8; 20].into(),
             ordering: [0u8; 12].into(),
             payload: vec![].into(),
         },

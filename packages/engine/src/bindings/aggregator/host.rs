@@ -70,6 +70,10 @@ impl Host for AggregatorHostComponent {
         }
     }
 
+    fn get_event_id(&mut self) -> Vec<u8> {
+        self.event_id.as_ref().to_vec()
+    }
+
     fn log(&mut self, level: LogLevel, message: String) {
         let digest = self
             .service

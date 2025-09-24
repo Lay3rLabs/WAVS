@@ -37,6 +37,11 @@ impl Guest for Component {
             gas_price: gas_price.map(|x| x.into()),
         };
 
+        // Sanity check that we can get the event id
+        if host::get_event_id().iter().all(|x| *x == 0) {
+            return Err("event id is all zeros".to_string());
+        }
+
         Ok(vec![AggregatorAction::Submit(submit_action)])
     }
 

@@ -1,4 +1,4 @@
-package wavs:types@1.0.0;
+package wavs:types@1.2.0;
 
 interface chain {
   /// A string mostly following the caip-2 format of namespace:reference, e.g. "eip155:1" for Ethereum mainnet or "cosmos:cosmoshub-4" for Cosmos Hub
@@ -57,7 +57,7 @@ interface chain {
     log-index: u64,
     block-hash: list<u8>,
     /// 256 bytes
-    block-timestamp: u64,
+    block-timestamp: option<u64>,
     tx-index: u64,
   }
 
@@ -101,6 +101,8 @@ interface events {
   use chain.{chain-key, evm-address, evm-event-log, cosmos-address, cosmos-event};
   use core.{timestamp};
 
+  type event-id = list<u8>;
+
   record trigger-data-evm-contract-event {
     chain: chain-key,
     log: evm-event-log,
@@ -123,6 +125,7 @@ interface events {
     trigger-time: timestamp,
   }
 
+  /// 20-byte unique hash
   variant trigger-data {
     evm-contract-event(trigger-data-evm-contract-event),
     cosmos-contract-event(trigger-data-cosmos-contract-event),
