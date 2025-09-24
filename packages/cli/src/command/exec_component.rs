@@ -160,8 +160,7 @@ impl ExecComponent {
                 },
             },
             None => TriggerData::Raw(input.decode().context(format!(
-                "Failed to decode input '{}' for component execution",
-                input.into_string()
+                "Failed to decode input for component execution"
             ))?),
         };
 
