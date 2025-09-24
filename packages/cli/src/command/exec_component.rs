@@ -145,10 +145,12 @@ impl ExecComponent {
                     block_number,
                     log_index: 0,
                     block_hash: FixedBytes::new(rand::random()),
-                    block_timestamp: SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("Time went backwards")
-                        .as_secs(),
+                    block_timestamp: Some(
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .expect("Time went backwards")
+                            .as_secs(),
+                    ),
                     tx_index: 0,
                 },
                 TriggerKind::BlockInterval {
@@ -159,9 +161,11 @@ impl ExecComponent {
                     block_height,
                 },
             },
-            None => TriggerData::Raw(input.decode().context(format!(
-                "Failed to decode input for component execution"
-            ))?),
+            None => TriggerData::Raw(
+                input
+                    .decode()
+                    .context("Failed to decode input for component execution")?,
+            ),
         };
 
         let trigger_action = TriggerAction {
