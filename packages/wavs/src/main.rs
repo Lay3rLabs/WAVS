@@ -37,16 +37,6 @@ fn main() {
         None
     };
 
-    ctx.rt.block_on(async {
-        // warn bad health for chains (services may or may not submit to these)
-        let chains = config.chains.all_chain_keys().unwrap();
-        if !chains.is_empty() {
-            if let Err(err) = health_check_chains_query(&config.chains, &chains).await {
-                tracing::warn!("Non-trigger-chain health-check failed: {}", err);
-            }
-        }
-    });
-
     let meter_provider = config.prometheus.as_ref().map(|collector| {
         setup_metrics(
             collector,
@@ -60,7 +50,25 @@ fn main() {
     let config_clone = config.clone();
     let dispatcher = Arc::new(Dispatcher::new(&config_clone, metrics.wavs).unwrap());
 
+    let health_check_handle = std::thread::spawn({
+        let config_chains = config.chains.clone();
+        move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let chains = config_chains.all_chain_keys().unwrap();
+                if !chains.is_empty() {
+                    if let Err(err) = health_check_chains_query(&config_chains, &chains).await {
+                        tracing::warn!("Non-trigger-chain health-check failed: {}", err);
+                    }
+                }
+            });
+        }
+    });
+
     wavs::run_server(ctx, config, dispatcher, metrics.http);
+
+    // Wait for health check to complete
+    health_check_handle.join().unwrap();
 
     if let Some(tracer) = tracer_provider {
         if tracer.shutdown().is_err() {
