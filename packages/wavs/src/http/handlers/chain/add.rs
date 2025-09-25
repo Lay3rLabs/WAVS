@@ -31,11 +31,21 @@ async fn add_chain_inner(
     chain: ChainKey,
     config: AnyChainConfig,
 ) -> HttpResult<()> {
+    // Update dispatcher's chain configs
     state
         .dispatcher
         .chain_configs
         .write()
         .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
-        .add_chain(chain, config)?;
+        .add_chain(chain.clone(), config.clone())?;
+
+    // Notify trigger manager about the new chain
+    state
+        .dispatcher
+        .trigger_manager
+        .command_sender
+        .send(crate::subsystems::trigger::TriggerCommand::AddChain { chain, config })
+        .map_err(|_| anyhow::anyhow!("Failed to notify trigger manager"))?;
+
     Ok(())
 }
