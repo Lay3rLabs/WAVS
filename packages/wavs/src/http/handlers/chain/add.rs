@@ -1,7 +1,10 @@
 use axum::{extract::State, response::IntoResponse, Json};
 use wavs_types::{AddChainRequest, AnyChainConfig, ChainKey};
 
-use crate::http::{error::HttpResult, state::HttpState};
+use crate::{
+    http::{error::HttpResult, state::HttpState},
+    subsystems::{engine::EngineCommand, trigger::TriggerCommand},
+};
 
 #[utoipa::path(
     post,
@@ -44,8 +47,18 @@ async fn add_chain_inner(
         .dispatcher
         .trigger_manager
         .command_sender
-        .send(crate::subsystems::trigger::TriggerCommand::AddChain { chain, config })
+        .send(TriggerCommand::AddChain {
+            chain: chain.clone(),
+            config: config.clone(),
+        })
         .map_err(|_| anyhow::anyhow!("Failed to notify trigger manager"))?;
+
+    // Notify engine manager about the new chain
+    state
+        .dispatcher
+        .dispatcher_to_engine_tx
+        .send(EngineCommand::AddChain { chain, config })
+        .map_err(|_| anyhow::anyhow!("Failed to notify engine manager"))?;
 
     Ok(())
 }
