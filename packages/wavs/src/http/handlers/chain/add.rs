@@ -34,14 +34,6 @@ async fn add_chain_inner(
     chain: ChainKey,
     config: AnyChainConfig,
 ) -> HttpResult<()> {
-    // Update dispatcher's chain configs
-    state
-        .dispatcher
-        .chain_configs
-        .write()
-        .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
-        .add_chain(chain.clone(), config.clone())?;
-
     // Notify trigger manager about the new chain
     state
         .dispatcher
@@ -57,8 +49,19 @@ async fn add_chain_inner(
     state
         .dispatcher
         .dispatcher_to_engine_tx
-        .send(EngineCommand::AddChain { chain, config })
+        .send(EngineCommand::AddChain {
+            chain: chain.clone(),
+            config: config.clone(),
+        })
         .map_err(|_| anyhow::anyhow!("Failed to notify engine manager"))?;
+
+    // Update dispatcher's chain configs
+    state
+        .dispatcher
+        .chain_configs
+        .write()
+        .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
+        .add_chain(chain, config)?;
 
     Ok(())
 }
