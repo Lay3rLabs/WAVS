@@ -312,34 +312,16 @@ async fn run_test(
                 let mut receipts = Vec::new();
 
                 while !pending.is_empty() {
-                    // Let the chain naturally mine blocks
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-
                     let mut remaining = Vec::new();
-                    let mut mined_count = 0;
 
                     for (kind, tx_hash) in pending.drain(..) {
                         tracing::debug!("Checking receipt for transaction: {:?}", tx_hash);
                         match evm_client.provider.get_transaction_receipt(tx_hash).await? {
                             Some(receipt) => {
                                 receipts.push((kind, receipt));
-                                mined_count += 1;
-                                tracing::info!(
-                                    "Transaction mined: {:?} (kind: {:?})",
-                                    tx_hash,
-                                    kind
-                                );
                             }
                             None => remaining.push((kind, tx_hash)),
                         }
-                    }
-
-                    if mined_count > 0 {
-                        tracing::info!(
-                            "Mined {} transactions, {} remaining",
-                            mined_count,
-                            remaining.len()
-                        );
                     }
 
                     if start.elapsed() > Duration::from_secs(60) {
@@ -352,14 +334,6 @@ async fn run_test(
                     }
 
                     pending = remaining;
-
-                    // Add some debug info
-                    if start.elapsed().as_secs() % 10 == 0 && start.elapsed().as_secs() > 0 {
-                        tracing::warn!(
-                            "Still waiting for transactions... elapsed: {:?}",
-                            start.elapsed()
-                        );
-                    }
                 }
 
                 let mut trigger_ids = Vec::new();
