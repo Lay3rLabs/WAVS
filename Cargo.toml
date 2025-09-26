@@ -81,9 +81,11 @@ shellexpand = "3.1.1"
 tokio = { version = "1.46.1", features = ["full"] }
 tokio-stream = { version = "0.1" }
 futures = "0.3.31"
+tokio-util = { version = "0.7.12", features = ["rt"] }
 ctrlc = "3.4.7"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.88"
+async-stream = "0.3"
 
 # collections
 dashmap = "6.1.0"

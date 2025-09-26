@@ -1,5 +1,6 @@
 pub mod error;
 pub mod lookup;
+pub mod recovery;
 pub mod schedulers;
 pub mod streams;
 
@@ -12,18 +13,22 @@ use crate::{
     },
     tracing_service_info, AppContext,
 };
+use alloy_provider::Provider;
 use alloy_sol_types::SolEvent;
 use anyhow::Result;
 use error::TriggerError;
 use futures::{stream::SelectAll, StreamExt};
 use layer_climb::prelude::*;
 use lookup::LookupMaps;
+use std::pin::Pin;
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroU64,
     sync::Arc,
 };
-use streams::{cosmos_stream, cron_stream, evm_stream, MultiplexedStream, StreamTriggers};
+use streams::{catchup, cosmos_stream, cron_stream, evm_stream, MultiplexedStream, StreamTriggers};
+use tokio_stream::StreamMap;
+use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 use utils::{
     config::{AnyChainConfig, ChainConfigs, EvmChainConfigExt},
@@ -31,15 +36,18 @@ use utils::{
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
-    ByteArray, ChainKey, EventId, IWavsServiceManager, ServiceId, Trigger, TriggerAction,
-    TriggerConfig, TriggerData,
+    ByteArray, ChainKey, EventId, IWavsServiceManager, ServiceId, ServiceManager, Trigger,
+    TriggerAction, TriggerConfig, TriggerData,
 };
 
 #[derive(Debug)]
 pub enum TriggerCommand {
     Kill,
     StartListeningChain { chain: ChainKey },
+    ResubscribeEvmChain { chain: ChainKey },
     StartListeningCron,
+    StartCatchup { chain: ChainKey, from_block: u64 },
+    CatchupCompleted { chain: ChainKey },
     ManualTrigger(Box<TriggerAction>),
 }
 
@@ -65,6 +73,7 @@ pub struct TriggerManager {
     command_receiver:
         Arc<std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<TriggerCommand>>>>,
     lookup_maps: Arc<LookupMaps>,
+    recovery_manager: Arc<recovery::RecoveryManager>,
     metrics: TriggerMetrics,
     #[cfg(feature = "dev")]
     pub disable_networking: bool,
@@ -82,9 +91,15 @@ impl TriggerManager {
     ) -> Result<Self, TriggerError> {
         let (command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+        // Create recovery manager with shorter delay before starting recovery
+        let recovery_manager = Arc::new(recovery::RecoveryManager::new(
+            std::time::Duration::from_secs(3),
+        ));
+
         Ok(Self {
             chain_configs: Arc::new(std::sync::RwLock::new(config.chains.clone())),
             lookup_maps: Arc::new(LookupMaps::new(services.clone(), metrics.clone())),
+            recovery_manager,
             trigger_to_dispatcher_tx,
             command_sender,
             command_receiver: Arc::new(std::sync::Mutex::new(Some(command_receiver))),
@@ -110,10 +125,15 @@ impl TriggerManager {
 
         // Ensure the service manager's chain is being listened to for service change events
         // This is needed even if the service has no workflows, so service URI changes can be detected
+        let manager_chain = service.manager.chain().clone();
         self.command_sender
             .send(TriggerCommand::StartListeningChain {
-                chain: service.manager.chain().clone(),
+                chain: manager_chain.clone(),
             })?;
+
+        // Accumulate chains that need resubscribe (EVM)
+        let mut evm_chains_to_refresh: std::collections::HashSet<ChainKey> =
+            std::collections::HashSet::new();
 
         for (id, workflow) in &service.workflows {
             let config = TriggerConfig {
@@ -125,6 +145,18 @@ impl TriggerManager {
             if let Some(command) = TriggerCommand::new(&config) {
                 self.command_sender.send(command)?;
             }
+
+            if let Trigger::EvmContractEvent { chain, .. } = &workflow.trigger {
+                evm_chains_to_refresh.insert(chain.clone());
+            }
+        }
+
+        // Ensure event stream filters include this service’s contracts/events
+        evm_chains_to_refresh.insert(manager_chain);
+        for chain in evm_chains_to_refresh {
+            let _ = self
+                .command_sender
+                .send(TriggerCommand::ResubscribeEvmChain { chain });
         }
 
         Ok(())
@@ -132,7 +164,26 @@ impl TriggerManager {
 
     #[instrument(skip(self), fields(subsys = "TriggerManager"))]
     pub fn remove_service(&self, service_id: ServiceId) -> Result<(), TriggerError> {
-        self.lookup_maps.remove_service(service_id.clone())
+        // determine affected chains before removing
+        let mut evm_chains_to_refresh: std::collections::HashSet<ChainKey> =
+            std::collections::HashSet::new();
+        if let Ok(service) = self.services.get(&service_id) {
+            evm_chains_to_refresh.insert(service.manager.chain().clone());
+            for workflow in service.workflows.values() {
+                if let Trigger::EvmContractEvent { chain, .. } = &workflow.trigger {
+                    evm_chains_to_refresh.insert(chain.clone());
+                }
+            }
+        }
+
+        self.lookup_maps.remove_service(service_id.clone())?;
+
+        for chain in evm_chains_to_refresh {
+            let _ = self
+                .command_sender
+                .send(TriggerCommand::ResubscribeEvmChain { chain });
+        }
+        Ok(())
     }
 
     #[instrument(skip(self, ctx), fields(subsys = "TriggerManager"))]
@@ -203,13 +254,74 @@ impl TriggerManager {
 
         let mut cosmos_clients = HashMap::new();
         let mut evm_clients = HashMap::new();
+        // EVM stream management via keyed StreamMap and cancellation tokens
+        let mut evm_event_streams: StreamMap<
+            ChainKey,
+            Pin<
+                Box<
+                    dyn futures::Stream<Item = std::result::Result<StreamTriggers, TriggerError>>
+                        + Send,
+                >,
+            >,
+        > = StreamMap::new();
+        let mut evm_block_streams: StreamMap<
+            ChainKey,
+            Pin<
+                Box<
+                    dyn futures::Stream<Item = std::result::Result<StreamTriggers, TriggerError>>
+                        + Send,
+                >,
+            >,
+        > = StreamMap::new();
+        let mut evm_event_cancels: HashMap<ChainKey, CancellationToken> = HashMap::new();
 
         let mut listening_chains = HashSet::new();
+        // Track active catchup streams per chain to avoid duplicates
+        let mut active_catchups: HashSet<ChainKey> = HashSet::new();
         let mut has_started_cron_stream = false;
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
-        while let Some(res) = multiplexed_stream.next().await {
+        // Monitor recovery chains periodically
+        let mut recovery_check_interval =
+            tokio::time::interval(tokio::time::Duration::from_secs(10));
+
+        loop {
+            let maybe_item = tokio::select! {
+                _ = recovery_check_interval.tick() => {
+                    // Check if any chains need recovery
+                    for chain in self.recovery_manager.get_all_recovery_chains().await {
+                        if let Some(recovery_block) = self.recovery_manager.needs_recovery(&chain).await {
+                            if active_catchups.contains(&chain) {
+                                continue;
+                            }
+                            tracing::info!("Chain {} needs recovery from block {}", chain, recovery_block);
+                            let _ = self.command_sender.send(TriggerCommand::StartCatchup {
+                                chain: chain.clone(),
+                                from_block: recovery_block
+                            });
+                        }
+                    }
+                    continue;
+                }
+                // First, EVM event streams
+                r1 = evm_event_streams.next() => {
+                    r1.map(|(_k, item)| item)
+                }
+                // Then, EVM block streams
+                r2 = evm_block_streams.next() => {
+                    r2.map(|(_k, item)| item)
+                }
+                // Finally, the general multiplexed streams
+                res = multiplexed_stream.next() => res,
+            };
+
+            let Some(res) = maybe_item else {
+                // Some branch yielded no item (e.g., an empty StreamMap). Yield to avoid busy loop.
+                tokio::task::yield_now().await;
+                continue;
+            };
+
             let res = match res {
                 Err(err) => {
                     tracing::error!("{:?}", err);
@@ -263,6 +375,182 @@ impl TriggerManager {
                                     continue;
                                 }
                             }
+                        }
+                        TriggerCommand::StartCatchup { chain, from_block } => {
+                            #[cfg(feature = "dev")]
+                            if self.disable_networking {
+                                tracing::warn!(
+                                    "Networking is disabled, skipping catchup stream start"
+                                );
+                                continue;
+                            }
+
+                            // Avoid starting duplicate catchup streams for the same chain
+                            if active_catchups.contains(&chain) {
+                                tracing::debug!(
+                                    "Catchup already active for chain {}, skipping",
+                                    chain
+                                );
+                                continue;
+                            }
+
+                            // Create a temporary EVM client for catchup
+                            if let Some(AnyChainConfig::Evm(chain_config)) =
+                                self.chain_configs.read().unwrap().get_chain(&chain)
+                            {
+                                let endpoint = chain_config
+                                    .query_client_endpoint()
+                                    .map_err(|e| TriggerError::EvmClient(chain.clone(), e));
+                                match endpoint {
+                                    Ok(endpoint) => match EvmQueryClient::new(endpoint).await {
+                                        Ok(catchup_client) => {
+                                            // Start immediate block-interval catchup emission (no stream)
+                                            tracing::info!("Starting immediate block catchup for chain {} from block {}", chain, from_block);
+                                            active_catchups.insert(chain.clone());
+                                            let tm = self.clone();
+                                            let chain_for_task = chain.clone();
+                                            let catchup_client_for_task = catchup_client.clone();
+                                            tokio::spawn(async move {
+                                                // Snapshot latest bound
+                                                let latest = match catchup_client_for_task
+                                                    .provider
+                                                    .get_block_number()
+                                                    .await
+                                                {
+                                                    Ok(n) => n,
+                                                    Err(e) => {
+                                                        tracing::error!("Failed to snapshot latest for catchup on {}: {:?}", chain_for_task, e);
+                                                        let _ = tm.command_sender.send(
+                                                            TriggerCommand::CatchupCompleted {
+                                                                chain: chain_for_task,
+                                                            },
+                                                        );
+                                                        return;
+                                                    }
+                                                };
+                                                let mut height = from_block;
+                                                let mut processed: u64 = 0;
+                                                while height <= latest {
+                                                    tm.recovery_manager
+                                                        .record_successful_block(
+                                                            &chain_for_task,
+                                                            height,
+                                                        )
+                                                        .await;
+                                                    let cmds = tm.process_blocks(
+                                                        chain_for_task.clone(),
+                                                        height,
+                                                    );
+                                                    if !cmds.is_empty() {
+                                                        let _ = tm.send_dispatcher_commands(cmds);
+                                                    }
+                                                    height = height.saturating_add(1);
+                                                    processed += 1;
+                                                    if processed % 500 == 0 {
+                                                        tokio::task::yield_now().await;
+                                                    }
+                                                }
+                                                let _ = tm.command_sender.send(
+                                                    TriggerCommand::CatchupCompleted {
+                                                        chain: chain_for_task,
+                                                    },
+                                                );
+                                            });
+
+                                            // Build filter matching current subscriptions for backfill
+                                            let filter = {
+                                                use alloy_rpc_types_eth::Filter;
+                                                use std::collections::HashSet;
+                                                let triggers = self
+                                                    .lookup_maps
+                                                    .triggers_by_evm_contract_event
+                                                    .read()
+                                                    .unwrap();
+                                                let mut addrs: HashSet<alloy_primitives::Address> =
+                                                    HashSet::new();
+                                                let mut topic0s: HashSet<alloy_primitives::B256> =
+                                                    HashSet::new();
+                                                for ((c, addr, event_hash), _ids) in triggers.iter()
+                                                {
+                                                    if *c == chain {
+                                                        addrs.insert(*addr);
+                                                        topic0s.insert(
+                                                            alloy_primitives::B256::from_slice(
+                                                                event_hash.as_slice(),
+                                                            ),
+                                                        );
+                                                    }
+                                                }
+                                                if let Ok(services) = self.services.list(
+                                                    std::ops::Bound::Unbounded,
+                                                    std::ops::Bound::Unbounded,
+                                                ) {
+                                                    for service in services.into_iter() {
+                                                        match service.manager {
+                                                            ServiceManager::Evm {
+                                                                chain: mgr_chain,
+                                                                address,
+                                                            } => {
+                                                                if mgr_chain == chain {
+                                                                    addrs.insert(address);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                topic0s.insert(alloy_primitives::B256::from_slice(IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH.as_slice()));
+                                                let mut f = Filter::new();
+                                                if !addrs.is_empty() {
+                                                    f = f.address(
+                                                        addrs.into_iter().collect::<Vec<_>>(),
+                                                    );
+                                                }
+                                                if !topic0s.is_empty() {
+                                                    f = f.event_signature(
+                                                        topic0s.into_iter().collect::<Vec<_>>(),
+                                                    );
+                                                }
+                                                f
+                                            };
+                                            match catchup::start_event_backfill_stream(
+                                                chain.clone(),
+                                                catchup_client,
+                                                self.recovery_manager.clone(),
+                                                filter,
+                                                from_block,
+                                                self.metrics.clone(),
+                                            )
+                                            .await
+                                            {
+                                                Ok(backfill_stream) => {
+                                                    multiplexed_stream.push(backfill_stream);
+                                                }
+                                                Err(err) => {
+                                                    tracing::error!("Failed to start event backfill for chain {}: {:?}", chain, err);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            tracing::error!("Failed to create EVM client for catchup on chain {}: {:?}", chain, e);
+                                        }
+                                    },
+                                    Err(e) => {
+                                        tracing::error!(
+                                            "Failed to get endpoint for chain {}: {:?}",
+                                            chain,
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        TriggerCommand::CatchupCompleted { chain } => {
+                            // Catchup finished: end recovery, clear active flag, and refresh live subscription
+                            self.recovery_manager.end_recovery(&chain).await;
+                            active_catchups.remove(&chain);
+                            let _ = self
+                                .command_sender
+                                .send(TriggerCommand::ResubscribeEvmChain { chain });
                         }
                         TriggerCommand::StartListeningChain { chain } => {
                             #[cfg(feature = "dev")]
@@ -331,21 +619,114 @@ impl TriggerManager {
                                     evm_clients.insert(chain.clone(), evm_client.clone());
 
                                     // Start the EVM event stream
-                                    match evm_stream::start_evm_event_stream(
+                                    // Build a narrowed filter from registered EVM triggers on this chain
+                                    let filter = {
+                                        use alloy_rpc_types_eth::Filter;
+                                        use std::collections::HashSet;
+                                        let triggers = self
+                                            .lookup_maps
+                                            .triggers_by_evm_contract_event
+                                            .read()
+                                            .unwrap();
+                                        let mut addrs: HashSet<alloy_primitives::Address> =
+                                            HashSet::new();
+                                        let mut topic0s: HashSet<alloy_primitives::B256> =
+                                            HashSet::new();
+                                        for ((c, addr, event_hash), _ids) in triggers.iter() {
+                                            if *c == chain {
+                                                addrs.insert(*addr);
+                                                topic0s.insert(alloy_primitives::B256::from_slice(
+                                                    event_hash.as_slice(),
+                                                ));
+                                            }
+                                        }
+                                        // Include ServiceManager addresses (active services) on this chain
+                                        if let Ok(services) = self.services.list(
+                                            std::ops::Bound::Unbounded,
+                                            std::ops::Bound::Unbounded,
+                                        ) {
+                                            for service in services.into_iter() {
+                                                match service.manager {
+                                                    ServiceManager::Evm {
+                                                        chain: mgr_chain,
+                                                        address,
+                                                    } => {
+                                                        if mgr_chain == chain {
+                                                            addrs.insert(address);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        // Include ServiceURIUpdated topic0
+                                        topic0s.insert(alloy_primitives::B256::from_slice(
+                                            IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH
+                                                .as_slice(),
+                                        ));
+                                        let mut f = Filter::new();
+                                        if !addrs.is_empty() {
+                                            f = f.address(addrs.into_iter().collect::<Vec<_>>());
+                                        }
+                                        if !topic0s.is_empty() {
+                                            // Prefer event_signature (topic0) narrowing
+                                            f = f.event_signature(
+                                                topic0s.into_iter().collect::<Vec<_>>(),
+                                            );
+                                        }
+                                        f
+                                    };
+
+                                    match evm_stream::start_evm_stream(
                                         evm_client.clone(),
                                         chain.clone(),
+                                        filter,
                                         self.metrics.clone(),
+                                        {
+                                            let cancel = CancellationToken::new();
+                                            evm_event_cancels.insert(chain.clone(), cancel.clone());
+                                            cancel
+                                        },
                                     )
                                     .await
                                     {
                                         Ok(evm_event_stream) => {
-                                            multiplexed_stream.push(evm_event_stream);
+                                            evm_event_streams
+                                                .insert(chain.clone(), evm_event_stream);
                                         }
                                         Err(err) => {
                                             tracing::error!(
                                                 "Failed to start EVM event stream: {:?}",
                                                 err
                                             );
+                                            self.recovery_manager.record_stream_error(&chain).await;
+
+                                            // Immediately trigger catchup from last processed block if available
+                                            if let Some(state) =
+                                                self.recovery_manager.get_state(&chain).await
+                                            {
+                                                if let Some(last) = state.last_processed_block {
+                                                    let _ = self
+                                                        .recovery_manager
+                                                        .start_recovery(&chain, last + 1)
+                                                        .await;
+                                                }
+                                            }
+
+                                            // Check if we need to trigger catchup
+                                            if let Some(recovery_block) =
+                                                self.recovery_manager.needs_recovery(&chain).await
+                                            {
+                                                tracing::warn!("EVM stream failed for chain {}, triggering catchup from block {}", chain, recovery_block);
+
+                                                // Send command to start catchup stream
+                                                let _ = self.command_sender.send(
+                                                    TriggerCommand::StartCatchup {
+                                                        chain: chain.clone(),
+                                                        from_block: recovery_block,
+                                                    },
+                                                );
+                                            }
+
                                             continue;
                                         }
                                     }
@@ -359,14 +740,140 @@ impl TriggerManager {
                                     .await
                                     {
                                         Ok(evm_block_stream) => {
-                                            multiplexed_stream.push(evm_block_stream);
+                                            evm_block_streams
+                                                .insert(chain.clone(), evm_block_stream);
                                         }
                                         Err(err) => {
                                             tracing::error!(
                                                 "Failed to start EVM block stream: {:?}",
                                                 err
                                             );
+                                            self.recovery_manager.record_stream_error(&chain).await;
+
+                                            // Immediately trigger catchup from last processed block if available
+                                            if let Some(state) =
+                                                self.recovery_manager.get_state(&chain).await
+                                            {
+                                                if let Some(last) = state.last_processed_block {
+                                                    let _ = self
+                                                        .recovery_manager
+                                                        .start_recovery(&chain, last + 1)
+                                                        .await;
+                                                }
+                                            }
+
+                                            // Check if we need to trigger catchup
+                                            if let Some(recovery_block) =
+                                                self.recovery_manager.needs_recovery(&chain).await
+                                            {
+                                                tracing::warn!("EVM block stream failed for chain {}, triggering catchup from block {}", chain, recovery_block);
+
+                                                // Send command to start catchup stream
+                                                let _ = self.command_sender.send(
+                                                    TriggerCommand::StartCatchup {
+                                                        chain: chain.clone(),
+                                                        from_block: recovery_block,
+                                                    },
+                                                );
+                                            }
+
                                             continue;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        TriggerCommand::ResubscribeEvmChain { chain } => {
+                            // Only applicable if already listening and the chain is EVM
+                            if !listening_chains.contains(&chain) {
+                                continue;
+                            }
+                            if let Some(AnyChainConfig::Evm(_)) =
+                                self.chain_configs.read().unwrap().get_chain(&chain)
+                            {
+                                // Cancel and remove previous keyed event stream
+                                if let Some(tok) = evm_event_cancels.remove(&chain) {
+                                    tok.cancel();
+                                }
+                                let _ = evm_event_streams.remove(&chain);
+
+                                // Rebuild filter and resubscribe
+                                let filter = {
+                                    use alloy_rpc_types_eth::Filter;
+                                    use std::collections::HashSet;
+                                    let triggers = self
+                                        .lookup_maps
+                                        .triggers_by_evm_contract_event
+                                        .read()
+                                        .unwrap();
+                                    let mut addrs: HashSet<alloy_primitives::Address> =
+                                        HashSet::new();
+                                    let mut topic0s: HashSet<alloy_primitives::B256> =
+                                        HashSet::new();
+                                    for ((c, addr, event_hash), _ids) in triggers.iter() {
+                                        if *c == chain {
+                                            addrs.insert(*addr);
+                                            topic0s.insert(alloy_primitives::B256::from_slice(
+                                                event_hash.as_slice(),
+                                            ));
+                                        }
+                                    }
+                                    // Include ServiceManager addresses (active services) on this chain
+                                    if let Ok(services) = self.services.list(
+                                        std::ops::Bound::Unbounded,
+                                        std::ops::Bound::Unbounded,
+                                    ) {
+                                        for service in services.into_iter() {
+                                            match service.manager {
+                                                ServiceManager::Evm {
+                                                    chain: mgr_chain,
+                                                    address,
+                                                } => {
+                                                    if mgr_chain == chain {
+                                                        addrs.insert(address);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Include ServiceURIUpdated topic0
+                                    topic0s.insert(alloy_primitives::B256::from_slice(
+                                        IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH
+                                            .as_slice(),
+                                    ));
+                                    let mut f = Filter::new();
+                                    if !addrs.is_empty() {
+                                        f = f.address(addrs.into_iter().collect::<Vec<_>>());
+                                    }
+                                    if !topic0s.is_empty() {
+                                        f = f.event_signature(
+                                            topic0s.into_iter().collect::<Vec<_>>(),
+                                        );
+                                    }
+                                    f
+                                };
+
+                                if let Some(evm_client) = evm_clients.get(&chain).cloned() {
+                                    let cancel = CancellationToken::new();
+                                    evm_event_cancels.insert(chain.clone(), cancel.clone());
+                                    match evm_stream::start_evm_stream(
+                                        evm_client,
+                                        chain.clone(),
+                                        filter,
+                                        self.metrics.clone(),
+                                        cancel,
+                                    )
+                                    .await
+                                    {
+                                        Ok(stream) => {
+                                            evm_event_streams.insert(chain.clone(), stream);
+                                        }
+                                        Err(err) => {
+                                            tracing::error!(
+                                                "Failed to resubscribe EVM stream for {}: {:?}",
+                                                chain,
+                                                err
+                                            );
                                         }
                                     }
                                 }
@@ -376,7 +883,7 @@ impl TriggerManager {
                 }
                 StreamTriggers::Evm {
                     log,
-                    chain,
+                    chain: chain_key,
                     block_number,
                     tx_hash,
                     log_index,
@@ -426,13 +933,13 @@ impl TriggerManager {
                             .unwrap();
 
                         if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
-                            chain.clone(),
+                            chain_key.clone(),
                             contract_address,
                             ByteArray::new(**event_hash),
                         )) {
                             let trigger_data = TriggerData::EvmContractEvent {
                                 contract_address,
-                                chain,
+                                chain: chain_key.clone(),
                                 log_data: log.data().clone(),
                                 tx_hash,
                                 block_number,
@@ -451,6 +958,11 @@ impl TriggerManager {
                                 ));
                             }
                         }
+
+                        // Record successful block processing for recovery
+                        self.recovery_manager
+                            .record_successful_block(&chain_key, block_number)
+                            .await;
                     }
                 }
                 StreamTriggers::Cosmos {
@@ -505,6 +1017,23 @@ impl TriggerManager {
                     chain,
                     block_height,
                 } => {
+                    // Record successful block processing for recovery
+                    self.recovery_manager
+                        .record_successful_block(&chain, block_height)
+                        .await;
+
+                    // Check if this chain needs recovery (due to missed blocks)
+                    if let Some(recovery_block) = self.recovery_manager.needs_recovery(&chain).await
+                    {
+                        if recovery_block <= block_height {
+                            // We've caught up, end recovery mode
+                            self.recovery_manager.end_recovery(&chain).await;
+                            tracing::info!("Recovery completed for chain {}", chain);
+                            // Allow future catchups if needed
+                            active_catchups.remove(&chain);
+                        }
+                    }
+
                     dispatcher_commands.extend(self.process_blocks(chain, block_height));
                 }
                 StreamTriggers::Cron {
