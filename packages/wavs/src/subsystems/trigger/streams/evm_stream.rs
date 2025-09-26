@@ -20,6 +20,7 @@ pub async fn start_evm_event_stream(
     let stream = query_client
         .provider
         .subscribe_logs(&filter)
+        .channel_size(1000)
         .await
         .map_err(|e| TriggerError::EvmSubscription(e.into()))?
         .into_stream();
