@@ -359,6 +359,12 @@ impl std::fmt::Display for ComponentContext {
 
 #[derive(Debug, Clone, Serialize)]
 pub enum ComponentOperationResult {
+    SourceUrl {
+        context: ComponentContext,
+        digest: ComponentDigest,
+        file_path: PathBuf,
+        url: String,
+    },
     SourceDigest {
         context: ComponentContext,
         digest: ComponentDigest,
@@ -405,6 +411,7 @@ impl ComponentOperationResult {
         match self {
             ComponentOperationResult::SourceDigest { file_path, .. } => file_path,
             ComponentOperationResult::SourceRegistry { file_path, .. } => file_path,
+            ComponentOperationResult::SourceUrl { file_path, .. } => file_path,
             ComponentOperationResult::Permissions { file_path, .. } => file_path,
             ComponentOperationResult::FuelLimit { file_path, .. } => file_path,
             ComponentOperationResult::Config { file_path, .. } => file_path,
@@ -416,6 +423,10 @@ impl ComponentOperationResult {
     /// Get the workflow ID from any variant (extracts from context)
     pub fn workflow_id(&self) -> &wavs_types::WorkflowId {
         match self {
+            ComponentOperationResult::SourceUrl { context, .. } => match context {
+                ComponentContext::Workflow { workflow_id } => workflow_id,
+                ComponentContext::Aggregator { workflow_id } => workflow_id,
+            },
             ComponentOperationResult::SourceDigest { context, .. } => match context {
                 ComponentContext::Workflow { workflow_id } => workflow_id,
                 ComponentContext::Aggregator { workflow_id } => workflow_id,
@@ -451,6 +462,17 @@ impl ComponentOperationResult {
 impl std::fmt::Display for ComponentOperationResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ComponentOperationResult::SourceUrl {
+                context,
+                digest,
+                file_path,
+                url,
+            } => {
+                writeln!(f, "{} source set to url successfully!", context)?;
+                writeln!(f, "  Url:          {}", url)?;
+                writeln!(f, "  Digest:       {}", digest)?;
+                writeln!(f, "  Updated:      {}", file_path.display())
+            }
             ComponentOperationResult::SourceDigest {
                 context,
                 digest,

@@ -33,8 +33,9 @@ use utils::{
 };
 use uuid::Uuid;
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ByteArray, ChainKey, Component, ComponentSource, Registry,
-    ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp, Trigger, WorkflowId,
+    Aggregator, AllowedHostPermission, ByteArray, ChainKey, Component, ComponentDigest,
+    ComponentSource, Registry, ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp,
+    Trigger, WorkflowId,
 };
 
 use crate::{
@@ -263,7 +264,9 @@ fn build_component_result(
             env_keys: component.env_keys.clone(),
             file_path: file_path.to_path_buf(),
         },
-        ComponentCommand::SetSourceDigest { .. } | ComponentCommand::SetSourceRegistry { .. } => {
+        ComponentCommand::SetSourceDigest { .. }
+        | ComponentCommand::SetSourceRegistry { .. }
+        | ComponentCommand::SetSourceUrl { .. } => {
             unreachable!("Source commands should be handled separately")
         }
     };
@@ -278,65 +281,110 @@ pub async fn update_component(
     command: ComponentCommand,
 ) -> Result<ComponentOperationResult> {
     // Handle async command separately for use in modify_service_file
-    if let ComponentCommand::SetSourceRegistry {
-        domain,
-        package,
-        version,
-    } = &command
-    {
-        let resolved_domain = domain.clone().unwrap_or("wa.dev".to_string());
-        let wkg_client = WkgClient::new(resolved_domain.clone())?;
-        let (digest, resolved_version) = wkg_client
-            .get_digest(domain.clone(), package, version.as_ref())
-            .await?;
+    match &command {
+        ComponentCommand::SetSourceRegistry {
+            domain,
+            package,
+            version,
+        } => {
+            let resolved_domain = domain.clone().unwrap_or("wa.dev".to_string());
+            let wkg_client = WkgClient::new(resolved_domain.clone())?;
+            let (digest, resolved_version) = wkg_client
+                .get_digest(domain.clone(), package, version.as_ref())
+                .await?;
 
-        let registry = Registry {
-            digest: digest.clone(),
-            domain: domain.clone(),
-            version: version.clone(),
-            package: package.clone(),
-        };
+            let registry = Registry {
+                digest: digest.clone(),
+                domain: domain.clone(),
+                version: version.clone(),
+                package: package.clone(),
+            };
 
-        modify_service_file(file_path, |mut service| {
+            modify_service_file(file_path, |mut service| {
+                let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+                    anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+                })?;
+
+                match get_target_component(workflow, &context)? {
+                    ComponentTarget::Direct(component) => {
+                        component.source = ComponentSource::Registry { registry };
+                    }
+                    ComponentTarget::Json(component_json) => {
+                        let source = ComponentSource::Registry { registry };
+                        let new_component = Component::new(source);
+                        *component_json = ComponentJson::Component(new_component);
+                    }
+                }
+
+                Ok((service, ()))
+            })?;
+
+            Ok(ComponentOperationResult::SourceRegistry {
+                context,
+                domain: resolved_domain,
+                package: package.clone(),
+                digest,
+                version: resolved_version,
+                file_path: file_path.to_path_buf(),
+            })
+        }
+
+        ComponentCommand::SetSourceUrl { url } => {
+            let resp = reqwest::get(url.clone())
+                .await
+                .context("Failed to download from URL")?;
+            if !resp.status().is_success() {
+                return Err(anyhow!(
+                    "Failed to download from URL: HTTP {}",
+                    resp.status()
+                ));
+            }
+            let bytes = resp.bytes().await.context("Failed to read response body")?;
+            let digest = ComponentDigest::hash(&bytes);
+
+            modify_service_file(file_path, |mut service| {
+                let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+                    anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+                })?;
+
+                match get_target_component(workflow, &context)? {
+                    ComponentTarget::Direct(component) => {
+                        component.source = ComponentSource::Download {
+                            url: url.to_string(),
+                            digest: digest.clone(),
+                        };
+                    }
+                    ComponentTarget::Json(component_json) => {
+                        let source = ComponentSource::Download {
+                            url: url.to_string(),
+                            digest: digest.clone(),
+                        };
+                        let new_component = Component::new(source);
+                        *component_json = ComponentJson::Component(new_component);
+                    }
+                }
+
+                Ok((service, ()))
+            })?;
+
+            Ok(ComponentOperationResult::SourceUrl {
+                context,
+                url: url.to_string(),
+                digest,
+                file_path: file_path.to_path_buf(),
+            })
+        }
+        _ => modify_service_file(file_path, |mut service| {
             let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
                 anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
             })?;
 
-            match get_target_component(workflow, &context)? {
-                ComponentTarget::Direct(component) => {
-                    component.source = ComponentSource::Registry { registry };
-                }
-                ComponentTarget::Json(component_json) => {
-                    let source = ComponentSource::Registry { registry };
-                    let new_component = Component::new(source);
-                    *component_json = ComponentJson::Component(new_component);
-                }
-            }
+            let target = get_target_component(workflow, &context)?;
+            let result = execute_sync_command(target, &command, &context, file_path)?;
 
-            Ok((service, ()))
-        })?;
-
-        return Ok(ComponentOperationResult::SourceRegistry {
-            context,
-            domain: resolved_domain,
-            package: package.clone(),
-            digest,
-            version: resolved_version,
-            file_path: file_path.to_path_buf(),
-        });
+            Ok((service, result))
+        }),
     }
-
-    // Handle all other commands
-    modify_service_file(file_path, |mut service| {
-        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
-            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
-        })?;
-
-        let target = get_target_component(workflow, &context)?;
-        let result = execute_sync_command(target, &command, &context, file_path)?;
-
-        Ok((service, result))
-    })
 }
 
 /// Execute synchronous component commands
@@ -379,7 +427,9 @@ fn execute_sync_command(
 /// Apply a component command to a mutable component reference
 fn apply_component_command(component: &mut Component, command: ComponentCommand) -> Result<()> {
     match command {
-        ComponentCommand::SetSourceDigest { .. } | ComponentCommand::SetSourceRegistry { .. } => {
+        ComponentCommand::SetSourceDigest { .. }
+        | ComponentCommand::SetSourceRegistry { .. }
+        | ComponentCommand::SetSourceUrl { .. } => {
             unreachable!("This should be handled in caller")
         }
         ComponentCommand::Permissions {
