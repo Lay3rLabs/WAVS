@@ -20,7 +20,7 @@ use utils::storage::CAStorage;
 use super::error::EngineError;
 
 pub struct WasmEngine<S: CAStorage> {
-    engine: BaseEngine<S>,
+    pub(crate) engine: BaseEngine<S>,
     metrics: EngineMetrics,
 }
 

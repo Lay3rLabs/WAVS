@@ -1,4 +1,8 @@
-use crate::{config::Config, http::handlers::handle_register_service, AppContext};
+use crate::{
+    config::Config,
+    http::handlers::{handle_add_chain, handle_register_service},
+    AppContext,
+};
 use axum::{
     extract::DefaultBodyLimit,
     middleware,
@@ -67,6 +71,7 @@ pub async fn make_router(
     // protected routes (POSTs)
     let mut protected = axum::Router::new()
         .route("/packets", post(handle_packet))
+        .route("/chains", post(handle_add_chain))
         .route("/services", post(handle_register_service));
 
     // Only add dev endpoints if enabled
