@@ -3,14 +3,19 @@
 use crate::deployment::ServiceDeployment;
 use crate::example_evm_client::example_submit::ISimpleSubmit::SignedData;
 use crate::example_evm_client::example_submit::IWavsServiceHandler::{Envelope, SignatureData};
+use crate::example_evm_client::example_trigger::ISimpleTrigger::TriggerInfo;
+use crate::example_evm_client::example_trigger::NewTrigger;
 use alloy_primitives::U256;
 use alloy_provider::ext::AnvilApi;
 use alloy_provider::Provider;
-use anyhow::{anyhow, Context};
+use alloy_sol_types::SolType;
+use anyhow::{anyhow, bail, Context};
 use futures::{stream::FuturesUnordered, StreamExt};
 use ordermap::OrderMap;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+use utils::alloy_helpers::SolidityEventFinder;
 use wavs_types::{Submit, Trigger, Workflow, WorkflowId};
 
 use crate::e2e::helpers::change_service_for_test;
@@ -26,7 +31,7 @@ use crate::{
         test_registry::TestRegistry,
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
-    example_evm_client::{SimpleEvmTriggerClient, TriggerId},
+    example_evm_client::{LogSpamClient, SimpleEvmTriggerClient, TriggerId},
 };
 
 use super::helpers::{simulate_anvil_reorg, wait_for_task_to_land};
@@ -252,7 +257,7 @@ async fn run_test(
 
         // Execute the trigger once
         let mut reorg_snapshot: Option<U256> = None;
-        let trigger_id = match trigger {
+        let trigger_ids = match trigger {
             Trigger::EvmContractEvent {
                 chain,
                 address,
@@ -264,9 +269,121 @@ async fn run_test(
                 if first_workflow.expects_reorg() {
                     reorg_snapshot = Some(evm_client.provider.anvil_snapshot().await?);
                 }
-                client
-                    .add_trigger(input_bytes.expect("EVM triggers require an input"))
-                    .await?
+                let input = input_bytes.clone().expect("EVM triggers require an input");
+
+                let spam_client = if first_workflow.trigger_execution.log_spam_count > 0 {
+                    let address = super::helpers::deploy_log_spam_contract(clients, chain).await?;
+                    let client = LogSpamClient::new(evm_client.clone(), address);
+                    Some(client)
+                } else {
+                    None
+                };
+
+                #[derive(Clone, Copy, Debug)]
+                enum TxKind {
+                    Trigger,
+                    Spam,
+                }
+
+                let mut pending: Vec<(TxKind, alloy_primitives::TxHash)> = Vec::new();
+
+                let pending_trigger = client
+                    .contract
+                    .addTrigger(input.clone().into())
+                    .send()
+                    .await?;
+                pending.push((TxKind::Trigger, *pending_trigger.tx_hash()));
+
+                if let Some(spam_client) = &spam_client {
+                    let spam_count = first_workflow.trigger_execution.log_spam_count as u64;
+                    tracing::info!(
+                        "Emitting {} bulk spam logs using LogSpam contract",
+                        spam_count
+                    );
+
+                    // Use bulk emission to spam N logs in a single transaction
+                    let spam_hash = spam_client.emit_spam(0, spam_count).await?;
+
+                    tracing::info!("Bulk spam transaction sent: {:?}", spam_hash);
+                    pending.push((TxKind::Spam, spam_hash));
+                }
+
+                let start = Instant::now();
+                let mut receipts = Vec::new();
+
+                while !pending.is_empty() {
+                    // Let the chain naturally mine blocks
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+
+                    let mut remaining = Vec::new();
+                    let mut mined_count = 0;
+
+                    for (kind, tx_hash) in pending.drain(..) {
+                        tracing::debug!("Checking receipt for transaction: {:?}", tx_hash);
+                        match evm_client.provider.get_transaction_receipt(tx_hash).await? {
+                            Some(receipt) => {
+                                receipts.push((kind, receipt));
+                                mined_count += 1;
+                                tracing::info!(
+                                    "Transaction mined: {:?} (kind: {:?})",
+                                    tx_hash,
+                                    kind
+                                );
+                            }
+                            None => remaining.push((kind, tx_hash)),
+                        }
+                    }
+
+                    if mined_count > 0 {
+                        tracing::info!(
+                            "Mined {} transactions, {} remaining",
+                            mined_count,
+                            remaining.len()
+                        );
+                    }
+
+                    if start.elapsed() > Duration::from_secs(60) {
+                        tracing::error!(
+                            "Timeout waiting for transactions to be mined. Pending: {}, Mined: {}",
+                            remaining.len(),
+                            receipts.len()
+                        );
+                        bail!("Timed out waiting for transactions to be mined");
+                    }
+
+                    pending = remaining;
+
+                    // Add some debug info
+                    if start.elapsed().as_secs() % 10 == 0 && start.elapsed().as_secs() > 0 {
+                        tracing::warn!(
+                            "Still waiting for transactions... elapsed: {:?}",
+                            start.elapsed()
+                        );
+                    }
+                }
+
+                let mut trigger_ids = Vec::new();
+                for (kind, receipt) in receipts {
+                    if matches!(kind, TxKind::Trigger) {
+                        if let Some(event) =
+                            SolidityEventFinder::<NewTrigger>::solidity_event(&receipt)
+                        {
+                            let trigger_info = TriggerInfo::abi_decode(&event.triggerData)?;
+                            trigger_ids.push(TriggerId::new(trigger_info.triggerId));
+                        }
+                    }
+                }
+
+                if trigger_ids.is_empty() {
+                    bail!("Failed to obtain trigger id from transaction receipts");
+                }
+
+                tracing::info!(
+                    "Successfully extracted {} trigger IDs: {:?}",
+                    trigger_ids.len(),
+                    trigger_ids
+                );
+                trigger_ids
             }
             Trigger::CosmosContractEvent {
                 chain,
@@ -282,15 +399,20 @@ async fn run_test(
                     .add_trigger(input_bytes.expect("Cosmos triggers require an input"))
                     .await?;
 
-                TriggerId::new(trigger_id.u64())
+                vec![TriggerId::new(trigger_id.u64())]
             }
-            Trigger::BlockInterval { .. } => TriggerId::new(1337),
-            Trigger::Cron { .. } => TriggerId::new(1338),
+            Trigger::BlockInterval { .. } => vec![TriggerId::new(1337)],
+            Trigger::Cron { .. } => vec![TriggerId::new(1338)],
             Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
         };
 
+        tracing::info!(
+            "Starting workflow validation for {} workflows",
+            workflows_group.len()
+        );
         // Validate all workflows associated with this trigger
         for (workflow_id, workflow) in workflows_group {
+            tracing::info!("Validating workflow: {}", workflow_id);
             let WorkflowDefinition {
                 timeout,
                 expected_output,
@@ -300,89 +422,124 @@ async fn run_test(
                 workflow_id
             ))?;
 
-            let signed_data = match &workflow.submit {
-                Submit::Aggregator { .. } => {
-                    let workflow_def = test.workflows.get(workflow_id).ok_or_else(|| {
-                        anyhow!("Could not get workflow definition from id: {}", workflow_id)
-                    })?;
-
-                    let SubmitDefinition::Aggregator { aggregator, .. } = &workflow_def.submit;
-                    let AggregatorDefinition::ComponentBasedAggregator { chain, .. } = aggregator;
-
-                    let client = clients.get_evm_client(chain);
-                    let submit_start_block = client
-                        .provider
-                        .get_block_number()
-                        .await
-                        .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
-
-                    let submission_contract = service_deployment
-                        .submission_handlers
-                        .get(workflow_id)
-                        .ok_or_else(|| {
-                            anyhow!("No submission contract found for workflow {}", workflow_id)
+            for trigger_id in trigger_ids.iter().copied() {
+                tracing::info!(
+                    "Processing trigger_id: {} for workflow: {}",
+                    trigger_id,
+                    workflow_id
+                );
+                let signed_data = match &workflow.submit {
+                    Submit::Aggregator { .. } => {
+                        let workflow_def = test.workflows.get(workflow_id).ok_or_else(|| {
+                            anyhow!("Could not get workflow definition from id: {}", workflow_id)
                         })?;
 
-                    if first_workflow.expects_reorg() {
-                        tracing::info!("Test '{}' will simulate re-org", test.name);
+                        let SubmitDefinition::Aggregator { aggregator, .. } = &workflow_def.submit;
+                        let AggregatorDefinition::ComponentBasedAggregator { chain, .. } =
+                            aggregator;
 
-                        // Simulate re-org before waiting for task
-                        simulate_anvil_reorg(
-                            &client,
-                            reorg_snapshot
-                                .expect("Expected a reorg snapshot when simulating reorg"),
-                        )
-                        .await?;
+                        let client = clients.get_evm_client(chain);
+                        tracing::info!("Getting submit start block for workflow: {}", workflow_id);
+                        let submit_start_block = client
+                            .provider
+                            .get_block_number()
+                            .await
+                            .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
+                        tracing::info!("Submit start block: {}", submit_start_block);
 
-                        // Wait for task - should return empty data on error due to re-org
-                        let result = wait_for_task_to_land(
-                            client,
-                            *submission_contract,
-                            trigger_id,
-                            submit_start_block,
-                            *timeout,
-                        )
-                        .await;
+                        let submission_contract = service_deployment
+                            .submission_handlers
+                            .get(workflow_id)
+                            .ok_or_else(|| {
+                                anyhow!("No submission contract found for workflow {}", workflow_id)
+                            })?;
+                        tracing::info!(
+                            "Submission contract for workflow {}: {}",
+                            workflow_id,
+                            submission_contract
+                        );
 
-                        match result {
-                            Ok(signed_data) => signed_data,
-                            Err(_) => {
-                                // If we get an error (transaction dropped due to re-org),
-                                // return mocked signed data with empty content to match ExpectedOutput::Dropped
-                                tracing::info!("Transaction dropped due to re-org, returning empty signed data");
-                                SignedData {
-                                    data: vec![].into(), // Empty data indicates dropped transaction
-                                    signatureData: SignatureData {
-                                        signers: vec![],
-                                        signatures: vec![],
-                                        referenceBlock: submit_start_block.try_into().unwrap(),
-                                    },
-                                    envelope: Envelope {
-                                        eventId: alloy_primitives::FixedBytes([1; 20]),
-                                        ordering: alloy_primitives::FixedBytes([0; 12]),
-                                        payload: vec![].into(),
-                                    },
+                        if first_workflow.expects_reorg() {
+                            tracing::info!("Test '{}' will simulate re-org", test.name);
+
+                            // Simulate re-org before waiting for task
+                            simulate_anvil_reorg(
+                                &client,
+                                reorg_snapshot
+                                    .expect("Expected a reorg snapshot when simulating reorg"),
+                            )
+                            .await?;
+
+                            // Wait for task - should return empty data on error due to re-org
+                            tracing::info!(
+                                "Waiting for task to land after re-org for trigger_id: {}",
+                                trigger_id
+                            );
+                            let result = wait_for_task_to_land(
+                                client,
+                                *submission_contract,
+                                trigger_id,
+                                submit_start_block,
+                                *timeout,
+                            )
+                            .await;
+
+                            match result {
+                                Ok(signed_data) => signed_data,
+                                Err(_) => {
+                                    // If we get an error (transaction dropped due to re-org),
+                                    // return mocked signed data with empty content to match ExpectedOutput::Dropped
+                                    tracing::info!("Transaction dropped due to re-org, returning empty signed data");
+                                    SignedData {
+                                        data: vec![].into(), // Empty data indicates dropped transaction
+                                        signatureData: SignatureData {
+                                            signers: vec![],
+                                            signatures: vec![],
+                                            referenceBlock: submit_start_block.try_into().unwrap(),
+                                        },
+                                        envelope: Envelope {
+                                            eventId: alloy_primitives::FixedBytes([1; 20]),
+                                            ordering: alloy_primitives::FixedBytes([0; 12]),
+                                            payload: vec![].into(),
+                                        },
+                                    }
                                 }
                             }
+                        } else {
+                            tracing::info!(
+                                "Waiting for task to land (no re-org) for trigger_id: {}",
+                                trigger_id
+                            );
+                            let result = wait_for_task_to_land(
+                                client,
+                                *submission_contract,
+                                trigger_id,
+                                submit_start_block,
+                                *timeout,
+                            )
+                            .await?;
+                            tracing::info!("Task result (no re-org): {:?}", result.data);
+                            result
                         }
-                    } else {
-                        wait_for_task_to_land(
-                            client,
-                            *submission_contract,
-                            trigger_id,
-                            submit_start_block,
-                            *timeout,
-                        )
-                        .await?
                     }
-                }
-                Submit::None => unimplemented!("Submit::None is not implemented"),
-            };
+                    Submit::None => unimplemented!("Submit::None is not implemented"),
+                };
 
-            expected_output.validate(test, clients, component_sources, &signed_data.data)?;
+                tracing::info!("Validating expected output for workflow: {}", workflow_id);
+                expected_output.validate(test, clients, component_sources, &signed_data.data)?;
+                tracing::info!(
+                    "Successfully validated output for workflow: {}",
+                    workflow_id
+                );
+            }
         }
+        tracing::info!("Test completed successfully!");
     }
 
+    tracing::info!(
+        "Cleaning up service: {0:?}",
+        service_deployment.service.manager
+    );
     clients
         .http_client
         .delete_service(vec![service_deployment.service.manager])

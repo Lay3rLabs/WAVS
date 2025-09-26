@@ -26,7 +26,7 @@ use crate::{
     },
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{
-        example_submit::ISimpleSubmit::SignedData, example_trigger::SimpleTrigger,
+        example_submit::ISimpleSubmit::SignedData, example_trigger::SimpleTrigger, LogSpamClient,
         SimpleEvmSubmitClient, TriggerId,
     },
 };
@@ -349,6 +349,24 @@ pub async fn deploy_submit_contract(
 
     let address = *result.address();
     tracing::info!("Submit contract deployed at address: {}", address);
+
+    Ok(address)
+}
+
+/// Deploy LogSpam contract and return its address
+pub async fn deploy_log_spam_contract(
+    clients: &Clients,
+    chain: &ChainKey,
+) -> Result<alloy_primitives::Address> {
+    let evm_client = clients.get_evm_client(chain);
+
+    tracing::info!("Deploying LogSpam contract on chain {}", chain);
+
+    let address = LogSpamClient::deploy(evm_client.provider.clone())
+        .await
+        .context("Failed to deploy LogSpam contract")?;
+
+    tracing::info!("LogSpam contract deployed at address: {}", address);
 
     Ok(address)
 }
