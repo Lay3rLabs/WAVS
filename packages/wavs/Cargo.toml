@@ -21,6 +21,7 @@ clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
@@ -37,6 +38,7 @@ layer-climb = { workspace = true }
 ctrlc = { workspace = true }
 tempfile = { workspace = true }
 futures = { workspace = true }
+async-stream = { workspace = true }
 cosmwasm-std = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }

@@ -1,3 +1,4 @@
+pub mod catchup;
 pub mod cosmos_stream;
 pub mod cron_stream;
 pub mod evm_stream;
