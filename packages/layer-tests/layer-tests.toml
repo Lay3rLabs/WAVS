@@ -5,13 +5,13 @@ log_level = ["info", "wavs=debug"]
 wavs_concurrency = true
 middleware_concurrency = false
 # Run all tests
-# mode = "all"
+mode = "all"
 
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
 # mode = "all_eth"
 
 # Run a specific test
-mode = { "isolated" = [{ evm = "trigger_backpressure" }] }
+# mode = { "isolated" = [{ evm = "trigger_backpressure" }] }
 
 # Run a few specific tests
 # mode = {"isolated" = [

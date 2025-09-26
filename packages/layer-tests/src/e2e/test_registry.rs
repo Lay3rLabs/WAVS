@@ -951,6 +951,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .with_group(4)
                 .build(),
         )
     }
