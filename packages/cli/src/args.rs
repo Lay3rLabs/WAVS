@@ -1,5 +1,6 @@
 use alloy_primitives::{Address, LogData};
 use clap::{arg, Parser, Subcommand};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use std::{
     num::{NonZeroU32, NonZeroU64},
@@ -178,6 +179,12 @@ pub enum ServiceCommand {
 /// Commands for managing components
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum ComponentCommand {
+    /// Set a component using a url
+    SetSourceUrl {
+        /// The url of the component to set
+        #[clap(long)]
+        url: Url,
+    },
     /// Set a component using a digest
     SetSourceDigest {
         /// The digest of the component to set
