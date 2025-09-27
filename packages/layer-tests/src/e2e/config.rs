@@ -125,6 +125,7 @@ impl From<TestConfig> for Configs {
                 ws_endpoint: Some(ws_endpoint),
                 faucet_endpoint: None,
                 poll_interval_ms: None,
+                event_channel_size: None,
             };
 
             chain_configs

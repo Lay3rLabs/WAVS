@@ -27,6 +27,7 @@ pub enum EvmService {
     Square,
     MultiWorkflow,
     MultiTrigger,
+    TriggerBackpressure,
     BlockInterval,
     BlockIntervalStartStop,
     CronInterval,
@@ -156,6 +157,9 @@ impl From<EvmService> for Vec<ComponentName> {
                 ComponentName::Operator(OperatorComponent::EchoData),
             ],
             EvmService::MultiTrigger => vec![ComponentName::Operator(OperatorComponent::EchoData)],
+            EvmService::TriggerBackpressure => {
+                vec![ComponentName::Operator(OperatorComponent::EchoData)]
+            }
             EvmService::BlockInterval => vec![ComponentName::Operator(
                 OperatorComponent::EchoBlockInterval,
             )],

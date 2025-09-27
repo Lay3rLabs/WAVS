@@ -9,17 +9,22 @@ use crate::subsystems::trigger::error::TriggerError;
 
 use super::StreamTriggers;
 
+const DEFAULT_ALLOY_CHANNEL_SIZE: usize = 16;
+
 pub async fn start_evm_event_stream(
     query_client: EvmQueryClient,
     chain: ChainKey,
+    channel_size: usize,
     _metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
     let filter = Filter::new();
-
+    // Minimum default Alloy configuration
+    let channel_size = channel_size.max(DEFAULT_ALLOY_CHANNEL_SIZE);
     let stream = query_client
         .provider
         .subscribe_logs(&filter)
+        .channel_size(channel_size)
         .await
         .map_err(|e| TriggerError::EvmSubscription(e.into()))?
         .into_stream();

@@ -27,6 +27,7 @@ fn core_trigger_lookups() {
                     http_endpoint: Some("http://127.0.0.1:26657".to_string()),
                     faucet_endpoint: None,
                     poll_interval_ms: None,
+                    event_channel_size: None,
                 },
             )]
             .into_iter()
@@ -191,6 +192,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
                     http_endpoint: Some("http://127.0.0.1:26657".to_string()),
                     faucet_endpoint: None,
                     poll_interval_ms: None,
+                    event_channel_size: None,
                 },
             )]
             .into_iter()

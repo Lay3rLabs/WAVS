@@ -334,6 +334,7 @@ impl TriggerManager {
                                     match evm_stream::start_evm_event_stream(
                                         evm_client.clone(),
                                         chain.clone(),
+                                        chain_config.event_channel_size,
                                         self.metrics.clone(),
                                     )
                                     .await
