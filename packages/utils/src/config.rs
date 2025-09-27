@@ -301,7 +301,7 @@ pub struct EvmChainConfigBuilder {
     pub http_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
     pub poll_interval_ms: Option<u64>,
-    pub channel_size: Option<usize>,
+    pub event_channel_size: Option<usize>,
 }
 
 impl EvmChainConfigBuilder {
@@ -312,9 +312,9 @@ impl EvmChainConfigBuilder {
             http_endpoint: self.http_endpoint,
             faucet_endpoint: self.faucet_endpoint,
             poll_interval_ms: self.poll_interval_ms,
-            channel_size: self
-                .channel_size
-                .unwrap_or_else(EvmChainConfig::default_channel_size),
+            event_channel_size: self
+                .event_channel_size
+                .unwrap_or_else(EvmChainConfig::default_event_channel_size),
         }
     }
 }
@@ -432,7 +432,7 @@ impl ChainConfigs {
                         http_endpoint: evm_config.http_endpoint,
                         faucet_endpoint: evm_config.faucet_endpoint,
                         poll_interval_ms: evm_config.poll_interval_ms,
-                        channel_size: Some(evm_config.channel_size),
+                        event_channel_size: Some(evm_config.event_channel_size),
                     };
                     self.evm.insert(key.id, evm_config);
                 }
@@ -1324,7 +1324,7 @@ mod test {
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         poll_interval_ms: None,
-                        channel_size: None,
+                        event_channel_size: None,
                     },
                 ),
                 (
@@ -1334,7 +1334,7 @@ mod test {
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
                         poll_interval_ms: None,
-                        channel_size: None,
+                        event_channel_size: None,
                     },
                 ),
             ]

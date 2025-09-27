@@ -11,7 +11,7 @@ pub fn mock_chain_configs() -> ChainConfigs {
                 http_endpoint: Some("http://localhost:8545".to_string()),
                 faucet_endpoint: None,
                 poll_interval_ms: None,
-                channel_size: None,
+                event_channel_size: None,
             },
         )]
         .into_iter()

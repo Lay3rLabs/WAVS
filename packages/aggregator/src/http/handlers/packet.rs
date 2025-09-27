@@ -1125,7 +1125,7 @@ mod test {
                     ws_endpoint: Some(contract_deps._anvil.ws_endpoint()),
                     faucet_endpoint: None,
                     poll_interval_ms: None,
-                    channel_size: None,
+                    event_channel_size: None,
                 },
             );
 

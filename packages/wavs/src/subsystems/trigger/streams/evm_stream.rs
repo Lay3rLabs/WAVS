@@ -78,17 +78,13 @@ pub async fn start_evm_event_stream(
 pub async fn start_evm_block_stream(
     query_client: EvmQueryClient,
     chain: ChainKey,
-    channel_size: usize,
     _metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
-    // Minimum default Alloy configuration
-    let channel_size = channel_size.max(DEFAULT_ALLOY_CHANNEL_SIZE);
     // Start the block stream (for block-based triggers)
     let stream = query_client
         .provider
         .subscribe_blocks()
-        .channel_size(channel_size)
         .await
         .map_err(|e| TriggerError::EvmSubscription(e.into()))?
         .into_stream();
