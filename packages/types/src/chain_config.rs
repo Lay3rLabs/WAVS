@@ -60,6 +60,16 @@ pub struct EvmChainConfig {
     pub http_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
     pub poll_interval_ms: Option<u64>,
+    #[serde(default = "EvmChainConfig::default_channel_size")]
+    /// Maximum number of buffered pubsub messages before we start dropping them; defaults to `DEFAULT_CHANNEL_SIZE`.
+    pub channel_size: usize,
+}
+
+impl EvmChainConfig {
+    /// Default buffer large enough to absorb short spikes (≈20 MiB if logs average 1 KiB) without overwhelming memory.
+    pub const fn default_channel_size() -> usize {
+        20_000
+    }
 }
 
 impl From<&EvmChainConfig> for ChainKey {

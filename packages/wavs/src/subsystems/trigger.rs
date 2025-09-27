@@ -321,6 +321,7 @@ impl TriggerManager {
                                     }
                                 }
                                 AnyChainConfig::Evm(chain_config) => {
+                                    let channel_size = chain_config.channel_size;
                                     let endpoint = chain_config
                                         .query_client_endpoint()
                                         .map_err(|e| TriggerError::EvmClient(chain.clone(), e))?;
@@ -334,6 +335,7 @@ impl TriggerManager {
                                     match evm_stream::start_evm_event_stream(
                                         evm_client.clone(),
                                         chain.clone(),
+                                        channel_size,
                                         self.metrics.clone(),
                                     )
                                     .await
@@ -354,6 +356,7 @@ impl TriggerManager {
                                     match evm_stream::start_evm_block_stream(
                                         evm_client.clone(),
                                         chain.clone(),
+                                        channel_size,
                                         self.metrics.clone(),
                                     )
                                     .await
