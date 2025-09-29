@@ -3,7 +3,7 @@ use wavs_types::{AddChainRequest, AnyChainConfig, ChainKey};
 
 use crate::{
     http::{error::HttpResult, state::HttpState},
-    subsystems::{engine::EngineCommand, trigger::TriggerCommand},
+    subsystems::trigger::TriggerCommand,
 };
 
 #[utoipa::path(
@@ -34,34 +34,21 @@ async fn add_chain_inner(
     chain: ChainKey,
     config: AnyChainConfig,
 ) -> HttpResult<()> {
-    // Notify trigger manager about the new chain
-    state
-        .dispatcher
-        .trigger_manager
-        .command_sender
-        .send(TriggerCommand::AddChain {
-            chain: chain.clone(),
-            config: config.clone(),
-        })
-        .map_err(|_| anyhow::anyhow!("Failed to notify trigger manager"))?;
-
-    // Notify engine manager about the new chain
-    state
-        .dispatcher
-        .dispatcher_to_engine_tx
-        .send(EngineCommand::AddChain {
-            chain: chain.clone(),
-            config: config.clone(),
-        })
-        .map_err(|_| anyhow::anyhow!("Failed to notify engine manager"))?;
-
     // Update dispatcher's chain configs
     state
         .dispatcher
         .chain_configs
         .write()
         .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
-        .add_chain(chain, config)?;
+        .add_chain(chain.clone(), config)?;
+
+    // Notify trigger manager about the new chain
+    state
+        .dispatcher
+        .trigger_manager
+        .command_sender
+        .send(TriggerCommand::StartListeningChain { chain })
+        .map_err(|_| anyhow::anyhow!("Failed to notify trigger manager"))?;
 
     Ok(())
 }

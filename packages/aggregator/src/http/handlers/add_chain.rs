@@ -1,4 +1,5 @@
 use axum::{extract::State, response::IntoResponse, Json};
+use tracing::instrument;
 use wavs_types::{AddChainRequest, AnyChainConfig, ChainKey};
 
 use crate::http::{error::HttpResult, state::HttpState};
@@ -16,6 +17,7 @@ use crate::http::{error::HttpResult, state::HttpState};
     description = "Dynamically adds a new chain configuration"
 )]
 #[axum::debug_handler]
+#[instrument(skip(state))]
 pub async fn handle_add_chain(
     State(state): State<HttpState>,
     Json(request): Json<AddChainRequest>,
@@ -31,12 +33,11 @@ async fn add_chain_inner(
     chain: ChainKey,
     config: AnyChainConfig,
 ) -> HttpResult<()> {
-    // Update engine's chain configs
     state
         .chain_configs
         .write()
         .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
-        .add_chain(chain, config)?;
+        .add_chain(chain.clone(), config.clone())?;
 
     Ok(())
 }

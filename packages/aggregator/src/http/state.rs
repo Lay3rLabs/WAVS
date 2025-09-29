@@ -94,18 +94,10 @@ impl HttpState {
         let ca_storage = Arc::new(file_storage);
         let storage = RedbStorage::new(config.data.join("db"))?;
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
-        let engine_chain_configs = if config.dev_endpoints_enabled {
-            chain_configs
-                .read()
-                .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
-                .clone()
-        } else {
-            config.chains.clone()
-        };
 
         let engine = AggregatorEngine::new(
             config.data.join("wasm"),
-            engine_chain_configs,
+            chain_configs.clone(),
             config.wasm_lru_size,
             config.max_wasm_fuel,
             config.max_execution_seconds,

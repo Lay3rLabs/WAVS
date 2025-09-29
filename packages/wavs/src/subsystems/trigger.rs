@@ -38,15 +38,9 @@ use wavs_types::{
 #[derive(Debug)]
 pub enum TriggerCommand {
     Kill,
-    StartListeningChain {
-        chain: ChainKey,
-    },
+    StartListeningChain { chain: ChainKey },
     StartListeningCron,
     ManualTrigger(Box<TriggerAction>),
-    AddChain {
-        chain: ChainKey,
-        config: AnyChainConfig,
-    },
 }
 
 impl TriggerCommand {
@@ -374,41 +368,6 @@ impl TriggerManager {
                                             );
                                             continue;
                                         }
-                                    }
-                                }
-                            }
-                        }
-                        TriggerCommand::AddChain { chain, config } => {
-                            // Update the trigger manager's chain configs
-                            if let Ok(mut chain_configs) = self.chain_configs.write() {
-                                if let Err(err) =
-                                    chain_configs.add_chain(chain.clone(), config.clone())
-                                {
-                                    tracing::error!(
-                                        "Failed to add chain config for {}: {}",
-                                        chain,
-                                        err
-                                    );
-                                    continue;
-                                }
-
-                                // Ensure we're listening to it
-                                if !listening_chains.contains(&chain) {
-                                    tracing::debug!(
-                                    "Sending TriggerCommand::StartListeningChain for new chain {}",
-                                    chain
-                                );
-                                    // Send StartListeningChain command to ensure we're listening
-                                    if let Err(err) = self.command_sender.send(
-                                        TriggerCommand::StartListeningChain {
-                                            chain: chain.clone(),
-                                        },
-                                    ) {
-                                        tracing::error!(
-                                        "Failed to send StartListeningChain for new chain {}: {}",
-                                        chain,
-                                        err
-                                    );
                                     }
                                 }
                             }

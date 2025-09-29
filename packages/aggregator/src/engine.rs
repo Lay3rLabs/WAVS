@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::sync::Arc;
+use std::{path::PathBuf, sync::RwLock};
 
 use anyhow::Result;
 use tracing::instrument;
@@ -22,7 +22,7 @@ use wavs_types::{Component, ComponentDigest, Packet};
 use crate::error::{AggregatorError, AggregatorResult};
 
 pub struct AggregatorEngine<S: CAStorage> {
-    pub(crate) engine: BaseEngine<S>,
+    engine: BaseEngine<S>,
     metrics: utils::telemetry::AggregatorMetrics,
 }
 
@@ -30,7 +30,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         app_data_dir: impl Into<PathBuf>,
-        chain_configs: ChainConfigs,
+        chain_configs: Arc<RwLock<ChainConfigs>>,
         lru_size: usize,
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,

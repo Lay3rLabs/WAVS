@@ -18,7 +18,7 @@ const DEFAULT_LRU_SIZE: usize = 10;
 
 pub struct BaseEngineConfig {
     pub app_data_dir: PathBuf,
-    pub chain_configs: ChainConfigs,
+    pub chain_configs: Arc<RwLock<ChainConfigs>>,
     pub lru_size: usize,
     pub max_wasm_fuel: Option<u64>,
     pub max_execution_seconds: Option<u64>,
@@ -69,7 +69,7 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
 
         Ok(Self {
             wasm_engine,
-            chain_configs: Arc::new(RwLock::new(config.chain_configs)),
+            chain_configs: config.chain_configs,
             memory_cache: Mutex::new(LruCache::new(lru_size)),
             app_data_dir: config.app_data_dir,
             max_wasm_fuel: config.max_wasm_fuel,

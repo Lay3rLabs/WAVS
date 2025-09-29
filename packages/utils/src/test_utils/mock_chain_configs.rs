@@ -1,9 +1,12 @@
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, RwLock},
+};
 
 use crate::config::{ChainConfigs, CosmosChainConfigBuilder, EvmChainConfigBuilder};
 
-pub fn mock_chain_configs() -> ChainConfigs {
-    ChainConfigs {
+pub fn mock_chain_configs() -> Arc<RwLock<ChainConfigs>> {
+    Arc::new(RwLock::new(ChainConfigs {
         evm: vec![(
             "31337".try_into().unwrap(),
             EvmChainConfigBuilder {
@@ -29,5 +32,5 @@ pub fn mock_chain_configs() -> ChainConfigs {
         .into_iter()
         .collect(),
         dev: BTreeMap::new(),
-    }
+    }))
 }

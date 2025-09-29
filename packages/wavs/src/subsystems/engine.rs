@@ -9,8 +9,7 @@ use error::EngineError;
 use tracing::instrument;
 use utils::storage::CAStorage;
 use wavs_types::{
-    AnyChainConfig, ChainKey, ComponentDigest, Envelope, EventId, EventOrder, Service,
-    TriggerAction, WorkflowId,
+    ComponentDigest, Envelope, EventId, EventOrder, Service, TriggerAction, WorkflowId,
 };
 
 use crate::services::Services;
@@ -25,10 +24,6 @@ pub enum EngineCommand {
     Execute {
         action: TriggerAction,
         service: Service,
-    },
-    AddChain {
-        chain: ChainKey,
-        config: AnyChainConfig,
     },
 }
 
@@ -83,16 +78,6 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                             }
                         }
                     });
-                }
-                EngineCommand::AddChain { chain, config } => {
-                    // Update the engine's chain configs
-                    if let Ok(mut chain_configs) = self.engine.engine.chain_configs.write() {
-                        if let Err(err) = chain_configs.add_chain(chain.clone(), config.clone()) {
-                            tracing::error!("Failed to add chain config for {}: {}", chain, err);
-                        } else {
-                            tracing::info!("Chain config updated for {}", chain);
-                        }
-                    }
                 }
             }
         }

@@ -1,6 +1,6 @@
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
+use std::{path::Path, sync::RwLock};
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
@@ -20,7 +20,7 @@ use utils::storage::CAStorage;
 use super::error::EngineError;
 
 pub struct WasmEngine<S: CAStorage> {
-    pub(crate) engine: BaseEngine<S>,
+    engine: BaseEngine<S>,
     metrics: EngineMetrics,
 }
 
@@ -31,7 +31,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         wasm_storage: S,
         app_data_dir: impl AsRef<Path>,
         lru_size: usize,
-        chain_configs: ChainConfigs,
+        chain_configs: Arc<RwLock<ChainConfigs>>,
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
         metrics: EngineMetrics,
@@ -272,7 +272,7 @@ pub mod tests {
             storage,
             &app_data,
             3,
-            ChainConfigs::default(),
+            mock_chain_configs(),
             None,
             None,
             metrics(),
@@ -304,7 +304,7 @@ pub mod tests {
             storage,
             &app_data,
             3,
-            ChainConfigs::default(),
+            mock_chain_configs(),
             None,
             None,
             metrics(),
@@ -560,7 +560,7 @@ pub mod tests {
             storage,
             &app_data_path,
             3,
-            ChainConfigs::default(),
+            mock_chain_configs(),
             None,
             None,
             metrics(),
