@@ -200,7 +200,7 @@ fn test_add_chain_evm_success() {
     let req = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from(serde_json::to_vec(&request_body).unwrap()))
         .unwrap();
 
@@ -228,7 +228,7 @@ fn test_add_chain_cosmos_success() {
     let req = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from(serde_json::to_vec(&request_body).unwrap()))
         .unwrap();
 
@@ -247,7 +247,7 @@ fn test_add_chain_invalid_json() {
     let req = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from("invalid json"))
         .unwrap();
 
@@ -275,7 +275,7 @@ fn test_add_chain_invalid_config() {
     let req = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from(serde_json::to_vec(&request_body).unwrap()))
         .unwrap();
 
@@ -304,7 +304,7 @@ fn test_add_chain_prevents_duplicates() {
     let req1 = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from(serde_json::to_vec(&add_request1).unwrap()))
         .unwrap();
 
@@ -328,7 +328,7 @@ fn test_add_chain_prevents_duplicates() {
     let req2 = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from(serde_json::to_vec(&add_request2).unwrap()))
         .unwrap();
 

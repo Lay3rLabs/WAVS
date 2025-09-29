@@ -5,7 +5,7 @@ use crate::http::{error::HttpResult, state::HttpState};
 
 #[utoipa::path(
     post,
-    path = "/chains",
+    path = "/dev/chains",
     request_body = AddChainRequest,
     responses(
         (status = 200, description = "Chain added successfully"),
