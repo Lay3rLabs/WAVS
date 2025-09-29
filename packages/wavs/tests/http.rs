@@ -168,6 +168,7 @@ fn create_test_evm_chain_config() -> AnyChainConfig {
         http_endpoint: Some("http://localhost:8545".to_string()),
         faucet_endpoint: None,
         poll_interval_ms: Some(1000),
+        event_channel_size: EvmChainConfig::default_event_channel_size(),
     })
 }
 

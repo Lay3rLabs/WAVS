@@ -60,29 +60,19 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         &self,
         source: &ComponentSource,
     ) -> Result<ComponentDigest, EngineError> {
-        match source {
-            // Leaving unimplemented for now, should do validations to confirm bytes
-            // really are a wasm component before registring component
-            ComponentSource::Download { .. } => todo!(),
-            ComponentSource::Registry { registry } => {
-                if !(self
-                    .engine
-                    .storage
-                    .data_exists(&registry.digest.clone().into())?)
-                {
-                    // Fetches package from registry and validates it has the expected digest
-                    let _component = self.engine.load_component_from_source(source).await?;
-                    Ok(registry.digest.clone())
-                } else {
-                    Ok(registry.digest.clone())
+        let digest = source.digest().clone();
+        if self.engine.storage.data_exists(&digest.clone().into())? {
+            Ok(digest)
+        } else {
+            match source {
+                ComponentSource::Download { .. } | ComponentSource::Registry { .. } => {
+                    // Fetches component, validates it has the expected digest, and stores it in the lookup
+                    self.engine.load_component_from_source(source).await?;
+                    Ok(digest)
                 }
-            }
-            ComponentSource::Digest(digest) => {
-                if self.engine.storage.data_exists(&digest.clone().into())? {
-                    Ok(digest.clone())
-                } else {
+                ComponentSource::Digest(_) => {
                     self.metrics.increment_total_errors("unknown digest");
-                    Err(EngineError::UnknownDigest(digest.clone()))
+                    Err(EngineError::UnknownDigest(digest))
                 }
             }
         }

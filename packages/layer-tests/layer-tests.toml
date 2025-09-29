@@ -11,9 +11,7 @@ mode = "all"
 # mode = "all_eth"
 
 # Run a specific test
-# mode = {"isolated" = [
-#     {evm = "chain_trigger_lookup"},
-# ]}
+# mode = { "isolated" = [{ evm = "trigger_backpressure" }] }
 
 # Run a few specific tests
 # mode = {"isolated" = [

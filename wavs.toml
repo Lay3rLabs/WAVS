@@ -50,11 +50,13 @@
 # ws_endpoint = "ws://localhost:8545"
 # http_endpoint = "http://localhost:8545"
 # poll_interval_ms = 7000
+# event_channel_size = 16
 
 # [default.chains.evm.11155111]
 # ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
 # http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
 # poll_interval_ms = 7000
+# event_channel_size = 20000
 
 # [default.chains.evm.17000]
 # ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
