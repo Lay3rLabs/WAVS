@@ -137,11 +137,15 @@ impl HttpState {
             }
         }
 
-        let chain_config = self
-            .config
-            .chains
-            .get_chain(chain)
-            .ok_or(AggregatorError::ChainNotFound(chain.clone()))?;
+        let chain_config = if self.config.dev_endpoints_enabled {
+            self.chain_configs
+                .read()
+                .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
+                .get_chain(chain)
+        } else {
+            self.config.chains.get_chain(chain)
+        }
+        .ok_or(AggregatorError::ChainNotFound(chain.clone()))?;
 
         let chain_config = EvmChainConfig::try_from(chain_config)?;
 
