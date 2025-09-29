@@ -3,51 +3,23 @@ use std::num::NonZero;
 
 use wavs::{config::Config, dispatcher::DispatcherCommand, subsystems::trigger::TriggerManager};
 use wavs_types::{
-    ChainKey, ChainKeyId, Component, ComponentDigest, ComponentSource, Service, ServiceId,
-    ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp, Trigger, TriggerConfig,
-    Workflow, WorkflowId,
+    ChainKey, Component, ComponentDigest, ComponentSource, Service, ServiceId, ServiceManager,
+    ServiceStatus, SignatureKind, Submit, Timestamp, Trigger, TriggerConfig, Workflow, WorkflowId,
 };
 
 use layer_climb::prelude::*;
 use utils::{
-    config::{ChainConfigs, CosmosChainConfigBuilder, EvmChainConfigBuilder},
     storage::db::RedbStorage,
     telemetry::TriggerMetrics,
-    test_utils::address::{rand_address_evm, rand_event_evm},
+    test_utils::{
+        address::{rand_address_evm, rand_event_evm},
+        mock_chain_configs::mock_chain_configs,
+    },
 };
 
 #[test]
 fn core_trigger_lookups() {
-    let config = Config {
-        chains: ChainConfigs {
-            evm: [(
-                ChainKeyId::new("evm-local").unwrap(),
-                EvmChainConfigBuilder {
-                    ws_endpoint: Some("ws://127.0.0.1:26657".to_string()),
-                    http_endpoint: Some("http://127.0.0.1:26657".to_string()),
-                    faucet_endpoint: None,
-                    poll_interval_ms: None,
-                },
-            )]
-            .into_iter()
-            .collect(),
-            cosmos: [(
-                ChainKeyId::new("layer-local").unwrap(),
-                CosmosChainConfigBuilder {
-                    rpc_endpoint: Some("http://127.0.0.1:26657".to_string()),
-                    grpc_endpoint: Some("http://127.0.0.1:9090".to_string()),
-                    gas_price: 0.025,
-                    gas_denom: "uslay".to_string(),
-                    bech32_prefix: "layer".to_string(),
-                    faucet_endpoint: None,
-                },
-            )]
-            .into_iter()
-            .collect(),
-            dev: Default::default(),
-        },
-        ..Default::default()
-    };
+    let config = Config::default();
 
     let data_dir = tempfile::tempdir().unwrap();
     let services =
@@ -56,6 +28,7 @@ fn core_trigger_lookups() {
     let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
         &config,
+        mock_chain_configs(),
         TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services,
         trigger_to_dispatcher_tx,
@@ -182,24 +155,7 @@ fn core_trigger_lookups() {
 
 #[tokio::test]
 async fn block_interval_trigger_is_removed_when_config_is_gone() {
-    let config = Config {
-        chains: ChainConfigs {
-            evm: [(
-                ChainKeyId::new("local").unwrap(),
-                EvmChainConfigBuilder {
-                    ws_endpoint: Some("ws://127.0.0.1:26657".to_string()),
-                    http_endpoint: Some("http://127.0.0.1:26657".to_string()),
-                    faucet_endpoint: None,
-                    poll_interval_ms: None,
-                },
-            )]
-            .into_iter()
-            .collect(),
-            cosmos: Default::default(),
-            dev: Default::default(),
-        },
-        ..Default::default()
-    };
+    let config = Config::default();
 
     let data_dir = tempfile::tempdir().unwrap();
     let services =
@@ -208,6 +164,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
     let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
         &config,
+        mock_chain_configs(),
         TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services.clone(),
         trigger_to_dispatcher_tx,
@@ -346,6 +303,7 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
     let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
         &config,
+        mock_chain_configs(),
         TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services,
         trigger_to_dispatcher_tx,

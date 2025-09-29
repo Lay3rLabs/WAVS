@@ -99,6 +99,7 @@ impl Dispatcher<FileStorage> {
 
         let trigger_manager = TriggerManager::new(
             config,
+            chain_configs.clone(),
             metrics.trigger,
             services.clone(),
             trigger_to_dispatcher_tx,
