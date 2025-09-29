@@ -88,8 +88,7 @@ pub async fn make_router(
     let mut protected = axum::Router::new()
         .route("/services/signer", post(handle_get_service_signer))
         .route("/services", post(handle_add_service))
-        .route("/services", delete(handle_delete_service))
-        .route("/chains", post(handle_add_chain));
+        .route("/services", delete(handle_delete_service));
 
     // Only add debug routes if debug endpoints are enabled
     if config.dev_endpoints_enabled {
@@ -105,7 +104,8 @@ pub async fn make_router(
             .route(
                 "/dev/services/{service_hash}",
                 post(handle_add_service_direct),
-            );
+            )
+            .route("/dev/chains", post(handle_add_chain));
     }
 
     let public = public.with_state(state.clone());

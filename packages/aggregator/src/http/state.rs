@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use utils::{
     async_transaction::AsyncTransaction,
-    config::{EvmChainConfig, EvmChainConfigExt},
+    config::{ChainConfigs, EvmChainConfig, EvmChainConfigExt},
     evm_client::EvmSigningClient,
     storage::{
         db::{RedbStorage, Table, JSON},
@@ -61,6 +61,7 @@ pub struct QueuedPacket {
 #[derive(Clone)]
 pub struct HttpState {
     pub config: Config,
+    pub chain_configs: Arc<RwLock<ChainConfigs>>,
     pub queue_transaction: AsyncTransaction<QuorumQueueId>,
     storage: RedbStorage,
     evm_clients: Arc<RwLock<HashMap<ChainKey, EvmSigningClient>>>,
@@ -76,14 +77,16 @@ impl HttpState {
     #[instrument(skip(config, metrics))]
     pub fn new(
         config: Config,
+        chain_configs: Arc<RwLock<ChainConfigs>>,
         metrics: utils::telemetry::AggregatorMetrics,
     ) -> AggregatorResult<Self> {
-        Self::new_with_engine(config, metrics)
+        Self::new_with_engine(config, chain_configs, metrics)
     }
 
     #[instrument(skip(config, metrics))]
     pub fn new_with_engine(
         config: Config,
+        chain_configs: Arc<RwLock<ChainConfigs>>,
         metrics: utils::telemetry::AggregatorMetrics,
     ) -> AggregatorResult<Self> {
         tracing::info!("Creating file storage at: {:?}", config.data);
@@ -91,10 +94,18 @@ impl HttpState {
         let ca_storage = Arc::new(file_storage);
         let storage = RedbStorage::new(config.data.join("db"))?;
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
+        let engine_chain_configs = if config.dev_endpoints_enabled {
+            chain_configs
+                .read()
+                .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
+                .clone()
+        } else {
+            config.chains.clone()
+        };
 
         let engine = AggregatorEngine::new(
             config.data.join("wasm"),
-            config.chains.clone(),
+            engine_chain_configs,
             config.wasm_lru_size,
             config.max_wasm_fuel,
             config.max_execution_seconds,
@@ -108,6 +119,7 @@ impl HttpState {
             config,
             storage,
             evm_clients,
+            chain_configs,
             queue_transaction: AsyncTransaction::new(false),
             aggregator_engine: Arc::new(engine),
             metrics,

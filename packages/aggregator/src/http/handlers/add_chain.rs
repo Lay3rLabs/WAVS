@@ -33,8 +33,6 @@ async fn add_chain_inner(
 ) -> HttpResult<()> {
     // Update engine's chain configs
     state
-        .aggregator_engine
-        .engine
         .chain_configs
         .write()
         .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
