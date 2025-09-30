@@ -168,6 +168,7 @@ fn create_test_evm_chain_config() -> AnyChainConfig {
         http_endpoint: Some("http://localhost:8545".to_string()),
         faucet_endpoint: None,
         poll_interval_ms: Some(1000),
+        event_channel_size: EvmChainConfig::default_event_channel_size(),
     })
 }
 
@@ -200,7 +201,7 @@ fn test_add_chain_evm_success() {
     let req = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from(serde_json::to_vec(&request_body).unwrap()))
         .unwrap();
 
@@ -228,7 +229,7 @@ fn test_add_chain_cosmos_success() {
     let req = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from(serde_json::to_vec(&request_body).unwrap()))
         .unwrap();
 
@@ -247,7 +248,7 @@ fn test_add_chain_invalid_json() {
     let req = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from("invalid json"))
         .unwrap();
 
@@ -275,7 +276,7 @@ fn test_add_chain_invalid_config() {
     let req = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from(serde_json::to_vec(&request_body).unwrap()))
         .unwrap();
 
@@ -304,7 +305,7 @@ fn test_add_chain_prevents_duplicates() {
     let req1 = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from(serde_json::to_vec(&add_request1).unwrap()))
         .unwrap();
 
@@ -328,7 +329,7 @@ fn test_add_chain_prevents_duplicates() {
     let req2 = Request::builder()
         .method(Method::POST)
         .header("Content-Type", "application/json")
-        .uri("/chains")
+        .uri("/dev/chains")
         .body(Body::from(serde_json::to_vec(&add_request2).unwrap()))
         .unwrap();
 

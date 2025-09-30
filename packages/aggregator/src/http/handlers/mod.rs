@@ -1,3 +1,4 @@
+mod add_chain;
 mod config;
 mod info;
 mod not_found;
@@ -6,6 +7,7 @@ mod packet;
 mod register_service;
 mod upload;
 
+pub use add_chain::handle_add_chain;
 pub use config::handle_config;
 pub use info::handle_info;
 pub use not_found::handle_not_found;

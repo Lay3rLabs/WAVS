@@ -10,7 +10,7 @@ use wavs_types::{EventId, EventOrder};
 use wavs::subsystems::submission::SubmissionManager;
 
 pub fn mock_event_id() -> EventId {
-    FixedBytes::new([0; 20]).into()
+    FixedBytes::new([1; 20]).into()
 }
 
 pub fn mock_event_order() -> EventOrder {

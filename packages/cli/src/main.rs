@@ -129,6 +129,7 @@ async fn main() {
             output_file,
             submit_chain,
             submit_handler,
+            simulates_trigger,
             args: _,
         } => {
             let config = config
@@ -150,6 +151,7 @@ async fn main() {
                     time_limit,
                     fuel_limit,
                     config,
+                    simulates_trigger,
                 },
             )
             .await

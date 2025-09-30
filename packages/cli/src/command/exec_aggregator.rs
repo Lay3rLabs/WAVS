@@ -1,5 +1,7 @@
+use alloy_primitives::FixedBytes;
 use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDepsBuilder};
@@ -53,7 +55,7 @@ fn create_dummy_packet(
 
     Packet {
         envelope: Envelope {
-            eventId: [0u8; 20].into(),
+            eventId: FixedBytes::new(rand::random()),
             ordering: [0u8; 12].into(),
             payload: vec![].into(),
         },
@@ -103,7 +105,12 @@ impl ExecAggregator {
         let data_dir = aggregator_config.data.clone();
         let meter = opentelemetry::global::meter("aggregator_cli");
         let metrics = utils::telemetry::AggregatorMetrics::new(meter);
-        let state = wavs_aggregator::http::state::HttpState::new(aggregator_config, metrics)?;
+        let chain_configs = Arc::new(RwLock::new(aggregator_config.chains.clone()));
+        let state = wavs_aggregator::http::state::HttpState::new(
+            aggregator_config,
+            chain_configs,
+            metrics,
+        )?;
 
         let wasm_bytes = read_component(&component_path)?;
         let digest = state
@@ -134,6 +141,7 @@ impl ExecAggregator {
             component: wasmtime::component::Component::new(&engine, &wasm_bytes)?,
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
+            event_id: packet.event_id(),
             engine: &engine,
             data_dir: &data_dir,
             chain_configs: &cli_config.chains,
@@ -216,6 +224,7 @@ impl std::fmt::Display for ExecAggregatorResult {
 #[cfg(test)]
 mod test {
     use super::*;
+    use alloy_primitives::FixedBytes;
     use std::io::Write;
     use tempfile::NamedTempFile;
     use utils::filesystem::workspace_path;
@@ -273,7 +282,7 @@ mod test {
             service,
             workflow_id: WorkflowId::default(),
             envelope: Envelope {
-                eventId: [0u8; 20].into(),
+                eventId: FixedBytes::new(rand::random()),
                 ordering: [0u8; 12].into(),
                 payload: b"test data".to_vec().into(),
             },

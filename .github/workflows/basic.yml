@@ -16,10 +16,11 @@ env:
   WAVS_COSMOS_SUBMISSION_MNEMONIC: "reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff"
   WAVS_CLI_COSMOS_MNEMONIC: "reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff"
 
+
 jobs:
   test:
     name: Test Suite
-    runs-on: linux-8-core
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
 
@@ -46,7 +47,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: linux-8-core
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
 

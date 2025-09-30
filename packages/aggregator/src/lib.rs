@@ -7,6 +7,8 @@ pub mod engine;
 pub mod error;
 pub mod http;
 
+use std::sync::{Arc, RwLock};
+
 use tracing::instrument;
 use utils::context::AppContext;
 
@@ -33,8 +35,9 @@ pub fn run_server(
     let server_handle = std::thread::spawn({
         let ctx = ctx.clone();
         move || {
+            let chain_configs = Arc::new(RwLock::new(config.chains.clone()));
             tracing::info!("Starting HTTP server thread");
-            http::server::start(ctx.clone(), config, metrics).unwrap();
+            http::server::start(ctx.clone(), config, chain_configs, metrics).unwrap();
         }
     });
 

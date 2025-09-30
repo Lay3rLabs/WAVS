@@ -24,6 +24,7 @@ tracing = { workspace = true }
 redb = { workspace = true }
 lru = { workspace = true }
 wavs-wasi-utils = { workspace = true }
+reqwest = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }

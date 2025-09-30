@@ -21,7 +21,7 @@ use lookup::LookupMaps;
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroU64,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 use streams::{cosmos_stream, cron_stream, evm_stream, MultiplexedStream, StreamTriggers};
 use tracing::instrument;
@@ -76,6 +76,7 @@ impl TriggerManager {
     #[instrument(skip(services), fields(subsys = "TriggerManager"))]
     pub fn new(
         config: &Config,
+        chain_configs: Arc<RwLock<ChainConfigs>>,
         metrics: TriggerMetrics,
         services: Services,
         trigger_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
@@ -83,7 +84,7 @@ impl TriggerManager {
         let (command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel();
 
         Ok(Self {
-            chain_configs: Arc::new(std::sync::RwLock::new(config.chains.clone())),
+            chain_configs,
             lookup_maps: Arc::new(LookupMaps::new(services.clone(), metrics.clone())),
             trigger_to_dispatcher_tx,
             command_sender,
@@ -334,6 +335,7 @@ impl TriggerManager {
                                     match evm_stream::start_evm_event_stream(
                                         evm_client.clone(),
                                         chain.clone(),
+                                        chain_config.event_channel_size,
                                         self.metrics.clone(),
                                     )
                                     .await
@@ -602,8 +604,10 @@ mod tests {
 
     use crate::{config::Config, services::Services};
     use utils::{
-        config::ChainConfigs, storage::db::RedbStorage, telemetry::TriggerMetrics,
-        test_utils::address::rand_address_evm,
+        config::ChainConfigs,
+        storage::db::RedbStorage,
+        telemetry::TriggerMetrics,
+        test_utils::{address::rand_address_evm, mock_chain_configs::mock_chain_configs},
     };
     use wavs_types::{
         Component, ComponentDigest, ComponentSource, ServiceManager, SignatureKind, Submit,
@@ -652,8 +656,14 @@ mod tests {
         };
         services.save(&service).unwrap();
 
-        let trigger_manager =
-            TriggerManager::new(&config, metrics, services, dispatcher_tx).unwrap();
+        let trigger_manager = TriggerManager::new(
+            &config,
+            mock_chain_configs(),
+            metrics,
+            services,
+            dispatcher_tx,
+        )
+        .unwrap();
 
         let ctx = utils::context::AppContext::new();
         std::thread::spawn({

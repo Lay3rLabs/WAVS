@@ -11,7 +11,7 @@ The Slack webhook URL should NEVER be committed to the repository.
    chmod 600 /etc/alertmanager/slack_webhook_url
    ```
 
-2. The alertmanager.yml is configured to read from this file using `api_url_file`
+2. The config/alertmanager.yml is configured to read from this file using `api_url_file`
 
 ## Docker Compose Setup
 If using docker-compose, mount the webhook file:
@@ -20,7 +20,7 @@ If using docker-compose, mount the webhook file:
 services:
   alertmanager:
     volumes:
-      - ./alertmanager.yml:/etc/alertmanager/config.yml
+      - ./config/alertmanager.yml:/etc/alertmanager/config.yml
       - /path/to/your/slack_webhook_url:/etc/alertmanager/slack_webhook_url:ro
 ```
 

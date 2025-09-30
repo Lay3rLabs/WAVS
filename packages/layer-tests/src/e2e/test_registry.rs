@@ -160,6 +160,9 @@ impl TestRegistry {
 
                     registry.register_evm_multi_trigger_test(chain, trigger, aggregator_endpoint);
                 }
+                EvmService::TriggerBackpressure => {
+                    registry.register_evm_trigger_backpressure_test(chain, aggregator_endpoint);
+                }
                 EvmService::BlockInterval => {
                     registry.register_evm_block_interval_test(chain, aggregator_endpoint);
                 }
@@ -915,6 +918,40 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .build(),
+        )
+    }
+
+    fn register_evm_trigger_backpressure_test(
+        &mut self,
+        chain: &ChainKey,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
+        self.register(
+            TestBuilder::new("evm_trigger_backpressure")
+                .with_description("Floods trigger logs to expose the subscribe_logs buffer limit")
+                .add_workflow(
+                    WorkflowId::new("trigger_backpressure").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_operator_component(OperatorComponent::EchoData)
+                        .with_aggregator_component(AggregatorComponent::SimpleAggregator)
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain: chain.clone(),
+                            },
+                        ))
+                        .with_log_spam_count(64)
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                            aggregator: Self::simple_aggregator(chain),
+                        })
+                        .with_input_data(InputData::Text("trigger-backpressure".to_string()))
+                        .with_expected_output(ExpectedOutput::Text(
+                            "trigger-backpressure".to_string(),
+                        ))
+                        .build(),
+                )
+                .with_group(4)
                 .build(),
         )
     }

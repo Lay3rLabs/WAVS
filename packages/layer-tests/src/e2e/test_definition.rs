@@ -104,12 +104,20 @@ pub struct WorkflowDefinition {
 
     /// Aggregator components needed for this workflow
     pub aggregators: Vec<ComponentName>,
+
+    /// Configuration for how trigger execution should behave during tests
+    pub trigger_execution: TriggerExecutionConfig,
 }
 
 impl WorkflowDefinition {
     pub fn expects_reorg(&self) -> bool {
         matches!(self.expected_output, ExpectedOutput::Dropped)
     }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct TriggerExecutionConfig {
+    pub log_spam_count: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -321,12 +329,16 @@ pub struct WorkflowBuilder {
     expected_output: Option<ExpectedOutput>,
     timeout: Option<Duration>,
     aggregators: Vec<ComponentName>,
+    trigger_execution: TriggerExecutionConfig,
 }
 
 impl WorkflowBuilder {
     /// Create a new workflow builder
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            trigger_execution: TriggerExecutionConfig::default(),
+            ..Default::default()
+        }
     }
 
     /// Set the operator component to use
@@ -389,6 +401,12 @@ impl WorkflowBuilder {
         self
     }
 
+    /// Emit additional unrelated EVM logs to stress the trigger stream
+    pub fn with_log_spam_count(mut self, count: usize) -> Self {
+        self.trigger_execution.log_spam_count = count;
+        self
+    }
+
     /// Build the workflow definition
     pub fn build(self) -> WorkflowDefinition {
         let component = self.component.expect("Component not set");
@@ -406,6 +424,7 @@ impl WorkflowBuilder {
             expected_output,
             timeout: self.timeout.unwrap_or(Duration::from_secs(30)),
             aggregators: self.aggregators,
+            trigger_execution: self.trigger_execution,
         }
     }
 }

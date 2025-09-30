@@ -18,7 +18,7 @@ const DEFAULT_LRU_SIZE: usize = 10;
 
 pub struct BaseEngineConfig {
     pub app_data_dir: PathBuf,
-    pub chain_configs: ChainConfigs,
+    pub chain_configs: Arc<RwLock<ChainConfigs>>,
     pub lru_size: usize,
     pub max_wasm_fuel: Option<u64>,
     pub max_execution_seconds: Option<u64>,
@@ -69,7 +69,7 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
 
         Ok(Self {
             wasm_engine,
-            chain_configs: Arc::new(RwLock::new(config.chain_configs)),
+            chain_configs: config.chain_configs,
             memory_cache: Mutex::new(LruCache::new(lru_size)),
             app_data_dir: config.app_data_dir,
             max_wasm_fuel: config.max_wasm_fuel,
@@ -114,37 +114,72 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
 
         match self.load_component(digest).await {
             Ok(component) => Ok(component),
-            Err(_) => match source {
-                ComponentSource::Registry { registry } => {
-                    let client =
-                        WkgClient::new(registry.domain.clone().unwrap_or("wa.dev".to_string()))
+            Err(_) => {
+                let bytes: Vec<u8> = match source {
+                    ComponentSource::Download { url, .. } => {
+                        let resp = reqwest::get(url).await.map_err(|e| {
+                            EngineError::StorageError(format!("Failed to download from url: {}", e))
+                        })?;
+
+                        if !resp.status().is_success() {
+                            return Err(EngineError::StorageError(format!(
+                                "Failed to download from url: HTTP {}",
+                                resp.status()
+                            )));
+                        }
+
+                        resp.bytes()
+                            .await
                             .map_err(|e| {
                                 EngineError::StorageError(format!(
-                                    "Failed to create WKG client: {}",
+                                    "Failed to read response body: {}",
                                     e
                                 ))
-                            })?;
+                            })?
+                            .into()
+                    }
+                    ComponentSource::Registry { registry } => {
+                        let client =
+                            WkgClient::new(registry.domain.clone().unwrap_or("wa.dev".to_string()))
+                                .map_err(|e| {
+                                    EngineError::StorageError(format!(
+                                        "Failed to create WKG client: {}",
+                                        e
+                                    ))
+                                })?;
 
-                    let bytes = client.fetch(registry).await.map_err(|e| {
-                        EngineError::StorageError(format!("Failed to fetch from registry: {}", e))
-                    })?;
+                        client.fetch(registry).await.map_err(|e| {
+                            EngineError::StorageError(format!(
+                                "Failed to fetch from registry: {}",
+                                e
+                            ))
+                        })?
+                    }
+                    _ => {
+                        return Err(EngineError::UnknownDigest(digest.clone()));
+                    }
+                };
 
-                    self.storage.set_data(&bytes).map_err(|e| {
-                        EngineError::StorageError(format!("Failed to store component: {}", e))
-                    })?;
-
-                    let component = WasmComponent::new(&self.wasm_engine, &bytes)
-                        .map_err(EngineError::Compile)?;
-
-                    self.memory_cache
-                        .lock()
-                        .unwrap()
-                        .put(digest.clone(), component.clone());
-
-                    Ok(component)
+                if ComponentDigest::hash(&bytes) != *digest {
+                    return Err(EngineError::StorageError(
+                        "Downloaded component digest does not match expected digest".to_string(),
+                    ));
                 }
-                _ => Err(EngineError::UnknownDigest(digest.clone())),
-            },
+
+                self.storage.set_data(&bytes).map_err(|e| {
+                    EngineError::StorageError(format!("Failed to store component: {}", e))
+                })?;
+
+                let component =
+                    WasmComponent::new(&self.wasm_engine, &bytes).map_err(EngineError::Compile)?;
+
+                self.memory_cache
+                    .lock()
+                    .unwrap()
+                    .put(digest.clone(), component.clone());
+
+                Ok(component)
+            }
         }
     }
 

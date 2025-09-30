@@ -34,7 +34,7 @@ pub enum StreamTriggers {
         tx_hash: alloy_primitives::TxHash,
         block_hash: alloy_primitives::BlockHash,
         tx_index: u64,
-        block_timestamp: u64,
+        block_timestamp: Option<u64>,
         log_index: u64,
     },
     // We need a separate stream for EVM block interval triggers

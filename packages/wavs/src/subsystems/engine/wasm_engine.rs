@@ -1,6 +1,6 @@
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
+use std::{path::Path, sync::RwLock};
 use tracing::{event, instrument, span};
 use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
@@ -11,7 +11,8 @@ use wavs_engine::{
     worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{
-    ComponentDigest, ComponentSource, Service, ServiceId, TriggerAction, WasmResponse, WorkflowId,
+    ComponentDigest, ComponentSource, EventId, Service, ServiceId, TriggerAction, WasmResponse,
+    WorkflowId,
 };
 
 use utils::storage::CAStorage;
@@ -30,7 +31,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         wasm_storage: S,
         app_data_dir: impl AsRef<Path>,
         lru_size: usize,
-        chain_configs: ChainConfigs,
+        chain_configs: Arc<RwLock<ChainConfigs>>,
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
         metrics: EngineMetrics,
@@ -59,29 +60,19 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         &self,
         source: &ComponentSource,
     ) -> Result<ComponentDigest, EngineError> {
-        match source {
-            // Leaving unimplemented for now, should do validations to confirm bytes
-            // really are a wasm component before registring component
-            ComponentSource::Download { .. } => todo!(),
-            ComponentSource::Registry { registry } => {
-                if !(self
-                    .engine
-                    .storage
-                    .data_exists(&registry.digest.clone().into())?)
-                {
-                    // Fetches package from registry and validates it has the expected digest
-                    let _component = self.engine.load_component_from_source(source).await?;
-                    Ok(registry.digest.clone())
-                } else {
-                    Ok(registry.digest.clone())
+        let digest = source.digest().clone();
+        if self.engine.storage.data_exists(&digest.clone().into())? {
+            Ok(digest)
+        } else {
+            match source {
+                ComponentSource::Download { .. } | ComponentSource::Registry { .. } => {
+                    // Fetches component, validates it has the expected digest, and stores it in the lookup
+                    self.engine.load_component_from_source(source).await?;
+                    Ok(digest)
                 }
-            }
-            ComponentSource::Digest(digest) => {
-                if self.engine.storage.data_exists(&digest.clone().into())? {
-                    Ok(digest.clone())
-                } else {
+                ComponentSource::Digest(_) => {
                     self.metrics.increment_total_errors("unknown digest");
-                    Err(EngineError::UnknownDigest(digest.clone()))
+                    Err(EngineError::UnknownDigest(digest))
                 }
             }
         }
@@ -167,11 +158,14 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
 
+        let event_id: EventId = (&service, &trigger_action).try_into()?;
+
         let mut instance_deps = InstanceDepsBuilder {
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
             component,
+            event_id,
             engine: &self.engine.wasm_engine,
             data_dir: self
                 .engine
@@ -268,7 +262,7 @@ pub mod tests {
             storage,
             &app_data,
             3,
-            ChainConfigs::default(),
+            mock_chain_configs(),
             None,
             None,
             metrics(),
@@ -300,7 +294,7 @@ pub mod tests {
             storage,
             &app_data,
             3,
-            ChainConfigs::default(),
+            mock_chain_configs(),
             None,
             None,
             metrics(),
@@ -556,7 +550,7 @@ pub mod tests {
             storage,
             &app_data_path,
             3,
-            ChainConfigs::default(),
+            mock_chain_configs(),
             None,
             None,
             metrics(),

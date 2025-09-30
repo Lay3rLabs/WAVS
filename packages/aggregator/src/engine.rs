@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::sync::Arc;
+use std::{path::PathBuf, sync::RwLock};
 
 use anyhow::Result;
 use tracing::instrument;
@@ -30,7 +30,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         app_data_dir: impl Into<PathBuf>,
-        chain_configs: ChainConfigs,
+        chain_configs: Arc<RwLock<ChainConfigs>>,
         lru_size: usize,
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
@@ -64,6 +64,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             component: wasm_component,
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
+            event_id: packet.event_id(),
             engine: &self.engine.wasm_engine,
             data_dir: &self.engine.app_data_dir,
             chain_configs: &chain_configs,
