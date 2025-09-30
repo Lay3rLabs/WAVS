@@ -185,7 +185,7 @@ pub enum ComponentCommand {
     SetSourceUrl {
         /// The url of the component to set
         #[clap(long)]
-        url: Url,
+        uri: Url,
     },
     /// Set a component using a digest
     SetSourceDigest {

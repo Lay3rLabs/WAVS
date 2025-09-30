@@ -329,8 +329,8 @@ pub async fn update_component(
             })
         }
 
-        ComponentCommand::SetSourceUrl { url } => {
-            let resp = reqwest::get(url.clone())
+        ComponentCommand::SetSourceUrl { uri } => {
+            let resp = reqwest::get(uri.clone())
                 .await
                 .context("Failed to download from URL")?;
             if !resp.status().is_success() {
@@ -350,13 +350,13 @@ pub async fn update_component(
                 match get_target_component(workflow, &context)? {
                     ComponentTarget::Direct(component) => {
                         component.source = ComponentSource::Download {
-                            url: url.to_string(),
+                            uri: uri.to_string(),
                             digest: digest.clone(),
                         };
                     }
                     ComponentTarget::Json(component_json) => {
                         let source = ComponentSource::Download {
-                            url: url.to_string(),
+                            uri: uri.to_string(),
                             digest: digest.clone(),
                         };
                         let new_component = Component::new(source);
@@ -369,7 +369,7 @@ pub async fn update_component(
 
             Ok(ComponentOperationResult::SourceUrl {
                 context,
-                url: url.to_string(),
+                uri: uri.to_string(),
                 digest,
                 file_path: file_path.to_path_buf(),
             })

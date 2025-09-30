@@ -198,11 +198,11 @@ impl ServiceJson {
 
                     match &component.source {
                         ComponentSource::Digest(_digest) => {}
-                        ComponentSource::Download { url, digest: _ } => {
-                            if reqwest::Url::parse(url).is_err() {
+                        ComponentSource::Download { uri, digest: _ } => {
+                            if reqwest::Url::parse(uri).is_err() {
                                 errors.push(format!(
-                                    "Workflow '{}' has an aggregator component with invalid download URL: {}",
-                                    workflow_id, url
+                                    "Workflow '{}' has an aggregator component with invalid download URI: {}",
+                                    workflow_id, uri
                                 ));
                             }
                         }

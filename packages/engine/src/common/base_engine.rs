@@ -116,8 +116,8 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
             Ok(component) => Ok(component),
             Err(_) => {
                 let bytes: Vec<u8> = match source {
-                    ComponentSource::Download { url, .. } => {
-                        let resp = reqwest::get(url).await.map_err(|e| {
+                    ComponentSource::Download { uri, .. } => {
+                        let resp = reqwest::get(uri).await.map_err(|e| {
                             EngineError::StorageError(format!("Failed to download from url: {}", e))
                         })?;
 

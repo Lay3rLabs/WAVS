@@ -201,10 +201,10 @@ impl From<wavs_types::ComponentSource> for component_service::ComponentSource {
             wavs_types::ComponentSource::Digest(digest) => {
                 component_service::ComponentSource::Digest(digest.to_string())
             }
-            wavs_types::ComponentSource::Download { url, digest } => {
+            wavs_types::ComponentSource::Download { uri, digest } => {
                 component_service::ComponentSource::Download(
                     component_service::ComponentSourceDownload {
-                        url: url.to_string(),
+                        url: uri.to_string(),
                         digest: digest.to_string(),
                     },
                 )
@@ -638,10 +638,10 @@ impl From<wavs_types::ComponentSource> for aggregator_service::ComponentSource {
             wavs_types::ComponentSource::Digest(digest) => {
                 aggregator_service::ComponentSource::Digest(digest.to_string())
             }
-            wavs_types::ComponentSource::Download { url, digest } => {
+            wavs_types::ComponentSource::Download { uri, digest } => {
                 aggregator_service::ComponentSource::Download(
                     aggregator_service::ComponentSourceDownload {
-                        url: url.to_string(),
+                        url: uri.to_string(),
                         digest: digest.to_string(),
                     },
                 )

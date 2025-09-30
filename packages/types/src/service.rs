@@ -137,7 +137,7 @@ pub struct Component {
 pub enum ComponentSource {
     /// The wasm bytecode provided at fixed url, digest provided to ensure no tampering
     Download {
-        url: String,
+        uri: String,
         digest: ComponentDigest,
     },
     /// The wasm bytecode downloaded from a standard registry, digest provided to ensure no tampering
