@@ -4,7 +4,10 @@ use alloy_provider::DynProvider;
 use tempfile::TempDir;
 use wavs_types::{ChainKey, Credential};
 
-use crate::evm_client::{EvmSigningClient, EvmSigningClientConfig};
+use crate::{
+    evm_client::{EvmSigningClient, EvmSigningClientConfig},
+    test_utils::anvil::safe_spawn_anvil,
+};
 
 pub mod service_handler {
     use alloy_sol_types::sol;
@@ -36,7 +39,7 @@ pub struct TestContractDeps {
 impl TestContractDeps {
     /// Create a new test environment with Anvil and EVM client
     pub async fn new() -> Self {
-        let anvil = Anvil::new().spawn();
+        let anvil = safe_spawn_anvil();
         let data_dir = tempfile::tempdir().unwrap();
         let chain = ChainKey::new("evm:local").unwrap();
 
