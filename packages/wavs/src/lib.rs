@@ -6,6 +6,7 @@
 pub mod args;
 pub mod config;
 pub mod dispatcher; // where we have the high-level dispatcher
+pub mod health;
 pub mod http;
 pub mod services;
 pub mod subsystems; // subsystems: engine, submission, and trigger // services lookup
