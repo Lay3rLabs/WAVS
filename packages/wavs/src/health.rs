@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -7,7 +6,7 @@ use wavs_types::ChainKey;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HealthStatus {
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: u64,
     pub chains: HashMap<ChainKey, ChainHealthResult>,
 }
 
@@ -19,12 +18,18 @@ pub enum ChainHealthResult {
     Unknown,
 }
 
-impl HealthStatus {
-    pub fn new() -> Self {
+impl Default for HealthStatus {
+    fn default() -> Self {
         Self {
-            timestamp: Utc::now(),
+            timestamp: chrono::Utc::now().timestamp() as u64,
             chains: HashMap::new(),
         }
+    }
+}
+
+impl HealthStatus {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn is_healthy(&self) -> bool {

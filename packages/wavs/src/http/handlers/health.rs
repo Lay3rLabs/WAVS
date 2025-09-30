@@ -12,7 +12,9 @@ use crate::{health::HealthStatus, http::state::HttpState};
     description = "Get health status of chain endpoints"
 )]
 #[instrument(level = "debug", skip(state))]
-pub async fn handle_health(State(state): State<HttpState>) -> Result<Json<HealthStatus>, StatusCode> {
+pub async fn handle_health(
+    State(state): State<HttpState>,
+) -> Result<Json<HealthStatus>, StatusCode> {
     let health_status = state.health_status.read().unwrap().clone();
     Ok(Json(health_status))
 }

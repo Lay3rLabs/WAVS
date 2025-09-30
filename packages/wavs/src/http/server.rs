@@ -21,8 +21,8 @@ use wildmatch::WildMatch;
 use super::{
     handlers::{
         debug::handle_debug_trigger,
-        handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_info,
-        handle_list_services, handle_not_found, handle_upload_component,
+        handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_health,
+        handle_info, handle_list_services, handle_not_found, handle_upload_component,
         openapi::ApiDoc,
         service::{
             get::handle_get_service, key::handle_get_service_signer, save::handle_save_service,
@@ -75,7 +75,14 @@ pub async fn make_router(
     metrics: HttpMetrics,
     health_status: SharedHealthStatus,
 ) -> anyhow::Result<axum::Router> {
-    let state = HttpState::new(config.clone(), dispatcher, is_mock_chain_client, metrics, health_status).await?;
+    let state = HttpState::new(
+        config.clone(),
+        dispatcher,
+        is_mock_chain_client,
+        metrics,
+        health_status,
+    )
+    .await?;
 
     // public routes
     let mut public = axum::Router::new()
@@ -85,7 +92,8 @@ pub async fn make_router(
         .route("/config", get(handle_config))
         .route("/services", get(handle_list_services))
         .route("/services/{chain}/{address}", get(handle_get_service))
-        .route("/info", get(handle_info));
+        .route("/info", get(handle_info))
+        .route("/health", get(handle_health));
 
     // protected routes (POST/DELETE)
     let mut protected = axum::Router::new()

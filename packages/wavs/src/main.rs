@@ -9,7 +9,12 @@ use utils::{
     health::health_check_chains_query,
     telemetry::{setup_metrics, setup_tracing, Metrics},
 };
-use wavs::{args::CliArgs, config::Config, dispatcher::Dispatcher};
+use wavs::{
+    args::CliArgs,
+    config::{Config, HealthCheckMode},
+    dispatcher::Dispatcher,
+    health::{create_shared_health_status, ChainHealthResult},
+};
 
 fn main() {
     let args = CliArgs::parse();
@@ -37,15 +42,78 @@ fn main() {
         None
     };
 
-    ctx.rt.block_on(async {
-        // warn bad health for chains (services may or may not submit to these)
-        let chains = config.chains.all_chain_keys().unwrap();
-        if !chains.is_empty() {
-            if let Err(err) = health_check_chains_query(&config.chains, &chains).await {
-                tracing::warn!("Non-trigger-chain health-check failed: {}", err);
+    let health_status = create_shared_health_status();
+
+    let chains = config.chains.all_chain_keys().unwrap();
+    if !chains.is_empty() {
+        match config.health_check_mode {
+            HealthCheckMode::Bypass => {
+                // Spawn background task to run health checks and log results
+                let health_status_clone = health_status.clone();
+                let chain_configs = config.chains.clone();
+                ctx.rt.spawn(async move {
+                    tracing::info!("Running health checks in background (bypass mode)");
+                    if let Err(err) = health_check_chains_query(&chain_configs, &chains).await {
+                        tracing::warn!("Background health check failed: {}", err);
+                        if let Ok(mut status) = health_status_clone.write() {
+                            for chain in &chains {
+                                status.chains.insert(
+                                    chain.clone(),
+                                    ChainHealthResult::Unhealthy {
+                                        error: err.to_string(),
+                                    },
+                                );
+                            }
+                        }
+                    } else if let Ok(mut status) = health_status_clone.write() {
+                        for chain in &chains {
+                            status
+                                .chains
+                                .insert(chain.clone(), ChainHealthResult::Healthy);
+                        }
+                    }
+                });
+            }
+            HealthCheckMode::Wait => {
+                // Run health checks and warn on failures
+                ctx.rt.block_on(async {
+                    if let Err(err) = health_check_chains_query(&config.chains, &chains).await {
+                        tracing::warn!("Health check failed: {}", err);
+                        if let Ok(mut status) = health_status.write() {
+                            for chain in &chains {
+                                status.chains.insert(
+                                    chain.clone(),
+                                    ChainHealthResult::Unhealthy {
+                                        error: err.to_string(),
+                                    },
+                                );
+                            }
+                        }
+                    } else if let Ok(mut status) = health_status.write() {
+                        for chain in &chains {
+                            status
+                                .chains
+                                .insert(chain.clone(), ChainHealthResult::Healthy);
+                        }
+                    }
+                });
+            }
+            HealthCheckMode::Exit => {
+                // Run health checks and panic on failures
+                ctx.rt.block_on(async {
+                    if let Err(err) = health_check_chains_query(&config.chains, &chains).await {
+                        panic!("Health check failed (exit mode): {err}");
+                    } else if let Ok(mut status) = health_status.write() {
+                        for chain in &chains {
+                            status
+                                .chains
+                                .insert(chain.clone(), ChainHealthResult::Healthy);
+                        }
+                    }
+                });
             }
         }
-    });
+    }
 
     let meter_provider = config.prometheus.as_ref().map(|collector| {
         setup_metrics(
@@ -60,7 +128,7 @@ fn main() {
     let config_clone = config.clone();
     let dispatcher = Arc::new(Dispatcher::new(&config_clone, metrics.wavs).unwrap());
 
-    wavs::run_server(ctx, config, dispatcher, metrics.http);
+    wavs::run_server(ctx, config, dispatcher, metrics.http, health_status);
 
     if let Some(tracer) = tracer_provider {
         if tracer.shutdown().is_err() {
