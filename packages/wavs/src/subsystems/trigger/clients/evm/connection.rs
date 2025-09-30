@@ -4,6 +4,7 @@ use futures::{
     stream::{SplitSink, SplitStream},
     SinkExt, StreamExt,
 };
+use thiserror::Error;
 use tokio::{net::TcpStream, sync::oneshot};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
@@ -34,7 +35,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, Web
 /// ... and so on
 #[allow(dead_code)]
 pub struct Connection {
-    handle: tokio::task::JoinHandle<()>,
+    handle: Option<tokio::task::JoinHandle<()>>,
     // wrapped in a tokio Mutex to allow async access
     current_sink: Arc<
         tokio::sync::Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
@@ -70,20 +71,22 @@ impl Connection {
         ));
 
         Self {
-            handle,
+            handle: Some(handle),
             current_sink,
             current_endpoint,
             shutdown_tx: Some(shutdown_tx),
         }
     }
 
-    pub async fn send_message(&self, msg: Message) -> Result<(), String> {
+    pub async fn send_message(&self, msg: Message) -> Result<(), ConnectionError> {
         let mut guard = self.current_sink.lock().await;
         if let Some(sink) = guard.as_mut() {
-            sink.send(msg).await.map_err(|e| e.to_string())?;
+            sink.send(msg)
+                .await
+                .map_err(|e| ConnectionError::SendError(e.to_string()))?;
             Ok(())
         } else {
-            Err("No active connection".to_string())
+            Err(ConnectionError::NoActiveConnection)
         }
     }
 
@@ -98,7 +101,15 @@ impl Drop for Connection {
             let _ = tx.send(());
         }
 
-        self.handle.abort();
+        if let Some(mut handle) = self.handle.take() {
+            tokio::spawn(async move {
+                if let Err(_) = tokio::time::timeout(Duration::from_millis(500), &mut handle).await
+                {
+                    tracing::warn!("EVM: connection loop did not shut down in time, aborting");
+                    handle.abort();
+                }
+            });
+        }
     }
 }
 
@@ -177,13 +188,13 @@ async fn connection_loop<F>(
 async fn handle_connection<F>(
     mut stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     on_message: &F,
-) -> Result<(), Box<dyn std::error::Error>>
+) -> Result<(), ConnectionError>
 where
     F: Fn(ConnectionData) + Send + Sync + 'static,
 {
     // Keep the connection alive and handle messages
     while let Some(msg) = stream.next().await {
-        match msg? {
+        match msg.map_err(|e| ConnectionError::WebSocketError(e.to_string()))? {
             Message::Text(msg) => {
                 on_message(ConnectionData::Text(msg.to_string()));
             }
@@ -201,6 +212,16 @@ where
     }
 
     Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum ConnectionError {
+    #[error("No active connection")]
+    NoActiveConnection,
+    #[error("Send error: {0}")]
+    SendError(String),
+    #[error("WebSocket error: {0}")]
+    WebSocketError(String),
 }
 
 #[cfg(test)]
