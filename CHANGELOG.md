@@ -5,12 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
-## [unreleased]
-
-### Changed
-
-- move health check to background after WAVS server initialization
-
 ## [v1.0.0]
 
 ### Added
@@ -27,11 +21,9 @@ and this project adheres to [Semantic Versioning].
 ## [v0.5.1]
 
 ### Added
-
 - WASM component engine in Aggregator
 
 ### Fixed
-
 - All endpoints take ServiceManager instead of ServiceID
 
 ## [v0.5.0]
@@ -83,6 +75,7 @@ and this project adheres to [Semantic Versioning].
 - CI-based deploy for cargo packages
 - Multi-aggregator support for services (with retry and distinct responses)
 
+
 ### Changed
 
 - Service type: no more ComponentID indirection, Workflow contains all
@@ -108,7 +101,6 @@ and this project adheres to [Semantic Versioning].
 - Docker building
 
 ## [v0.3.0]
-
 - bumped `WIT`, `@wavs/solidity`, `wavs-types`, `wavs-wasi-chain` and `examples` to `0.3.0`
 
 ## [v0.3.0-rc1]
@@ -155,36 +147,30 @@ and this project adheres to [Semantic Versioning].
 ## [v0.3.0-alpha9]
 
 ### Fixed
-
 - Debug impl for `ByteArray` type
 
 ### Added
-
 - wavs-types bump, includes new `ByteArray` type
 
 ## [v0.3.0-alpha8]
 
 ### Added
-
 - wavs-types bump, includes new `ByteArray` type
 
 ### Changed
-
 - Eth event hash in trigger is now serialized as hex-encoded string (via `ByteArray` type)
 
 ## [v0.3.0-alpha7]
 
 ### Added
-
 - Supports multiple services for the same trigger
 
 ### Removed
-
 - Gets rid of HTTP test service
 
 ### Changed
-
 - Better surfacing of component execution errors
+
 
 ## [v0.3.0-alpha6]
 
@@ -234,6 +220,7 @@ and this project adheres to [Semantic Versioning].
 - CLI removes proprietary example service support (e.g. no longer has an `add-task` command)
 - Removed unused cargo dependencies across the workspace
 
+
 ## [v0.3.0-alpha4]
 
 ### Added
@@ -259,14 +246,12 @@ and this project adheres to [Semantic Versioning].
 - CLI no longer imports `wavs` or `aggregator` packages
 
 <!-- Links -->
-
 [keep a changelog]: https://keepachangelog.com/en/1.0.0/
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v1.0.0...HEAD
-[v1.0.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.5.1...v1.0.0
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v0.6.0...HEAD
+[v0.6.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.5.1...v0.6.0
 [v0.5.1]: https://github.com/Lay3rLabs/WAVS/compare/v0.5.0...v0.5.1
 [v0.5.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.4.0...v0.5.0
 [v0.4.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.3.0...v0.4.0
