@@ -516,7 +516,7 @@ mod test {
     use futures::{stream::FuturesUnordered, StreamExt};
     use std::{
         collections::{BTreeMap, HashSet},
-        sync::{Arc, Mutex},
+        sync::{Arc, Mutex, RwLock},
     };
 
     use alloy_primitives::Address;
@@ -1135,7 +1135,8 @@ mod test {
 
             let metrics =
                 utils::telemetry::AggregatorMetrics::new(opentelemetry::global::meter("test"));
-            let state = HttpState::new_with_engine(config, metrics).unwrap();
+            let chain_configs = Arc::new(RwLock::new(config.chains.clone()));
+            let state = HttpState::new_with_engine(config, chain_configs, metrics).unwrap();
 
             let digest = state
                 .aggregator_engine

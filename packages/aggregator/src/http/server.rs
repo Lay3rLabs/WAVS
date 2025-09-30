@@ -1,4 +1,10 @@
-use crate::{config::Config, http::handlers::handle_register_service, AppContext};
+use std::sync::{Arc, RwLock};
+
+use crate::{
+    config::Config,
+    http::handlers::{handle_add_chain, handle_register_service},
+    AppContext,
+};
 use axum::{
     extract::DefaultBodyLimit,
     middleware,
@@ -6,6 +12,7 @@ use axum::{
 };
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing::instrument;
+use utils::config::ChainConfigs;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use wildmatch::WildMatch;
@@ -24,13 +31,14 @@ const REALM: &str = "aggregator";
 pub fn start(
     ctx: AppContext,
     config: Config,
+    chain_configs: Arc<RwLock<ChainConfigs>>,
     metrics: utils::telemetry::AggregatorMetrics,
 ) -> anyhow::Result<()> {
     let mut shutdown_signal = ctx.get_kill_receiver();
     ctx.rt.block_on(async move {
         let (host, port) = (config.host.clone(), config.port);
 
-        let router = make_router(config, metrics).await?;
+        let router = make_router(config, chain_configs, metrics).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
@@ -50,10 +58,11 @@ pub fn start(
 // this is called from main and tests
 pub async fn make_router(
     config: Config,
+    chain_configs: Arc<RwLock<ChainConfigs>>,
     metrics: utils::telemetry::AggregatorMetrics,
 ) -> anyhow::Result<axum::Router> {
     tracing::info!("Creating HttpState with engine");
-    let state = HttpState::new_with_engine(config.clone(), metrics)?;
+    let state = HttpState::new_with_engine(config.clone(), chain_configs, metrics)?;
     tracing::info!("HttpState created successfully with engine");
 
     // public routes
@@ -71,7 +80,9 @@ pub async fn make_router(
 
     // Only add dev endpoints if enabled
     if config.dev_endpoints_enabled {
-        protected = protected.route("/dev/components", post(handle_upload));
+        protected = protected
+            .route("/dev/components", post(handle_upload))
+            .route("/dev/chains", post(handle_add_chain));
     }
 
     protected = protected.with_state(state.clone());

@@ -1,10 +1,8 @@
 use axum::{extract::State, response::IntoResponse, Json};
+use tracing::instrument;
 use wavs_types::{AddChainRequest, AnyChainConfig, ChainKey};
 
-use crate::{
-    http::{error::HttpResult, state::HttpState},
-    subsystems::trigger::TriggerCommand,
-};
+use crate::http::{error::HttpResult, state::HttpState};
 
 #[utoipa::path(
     post,
@@ -19,6 +17,7 @@ use crate::{
     description = "Dynamically adds a new chain configuration"
 )]
 #[axum::debug_handler]
+#[instrument(skip(state))]
 pub async fn handle_add_chain(
     State(state): State<HttpState>,
     Json(request): Json<AddChainRequest>,
@@ -34,21 +33,11 @@ async fn add_chain_inner(
     chain: ChainKey,
     config: AnyChainConfig,
 ) -> HttpResult<()> {
-    // Update dispatcher's chain configs
     state
-        .dispatcher
         .chain_configs
         .write()
         .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
-        .add_chain(chain.clone(), config)?;
-
-    // Notify trigger manager about the new chain
-    state
-        .dispatcher
-        .trigger_manager
-        .command_sender
-        .send(TriggerCommand::StartListeningChain { chain })
-        .map_err(|_| anyhow::anyhow!("Failed to notify trigger manager"))?;
+        .add_chain(chain.clone(), config.clone())?;
 
     Ok(())
 }

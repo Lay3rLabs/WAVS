@@ -1,3 +1,4 @@
+use std::sync::RwLock;
 use std::{collections::BTreeMap, sync::Arc};
 
 use opentelemetry::global::meter;
@@ -56,7 +57,7 @@ impl SystemSetup {
             file_storage,
             app_storage,
             50, // LRU cache size for components
-            engine_setup.chain_configs.clone(),
+            Arc::new(RwLock::new(engine_setup.chain_configs.clone())),
             None,                // No fuel limit for benchmarks
             None,                // No time limit for benchmarks
             metrics.wavs.engine, // Engine metrics
