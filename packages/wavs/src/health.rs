@@ -15,7 +15,6 @@ pub struct HealthStatus {
 pub enum ChainHealthResult {
     Healthy,
     Unhealthy { error: String },
-    Unknown,
 }
 
 impl Default for HealthStatus {
