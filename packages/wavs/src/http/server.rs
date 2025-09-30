@@ -1,6 +1,7 @@
 use crate::{
     config::Config,
     dispatcher::Dispatcher,
+    health::SharedHealthStatus,
     http::handlers::service::{add::handle_add_service_direct, get::handle_get_service_by_hash},
     AppContext,
 };
@@ -38,6 +39,7 @@ pub fn start(
     config: Config,
     dispatcher: Arc<Dispatcher<FileStorage>>,
     metrics: HttpMetrics,
+    health_status: SharedHealthStatus,
 ) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
     ctx.rt.clone().block_on(async move {
@@ -45,7 +47,7 @@ pub fn start(
 
         let mut shutdown_signal = ctx.get_kill_receiver();
 
-        let router = make_router(config, dispatcher, false, metrics).await?;
+        let router = make_router(config, dispatcher, false, metrics, health_status).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
@@ -71,8 +73,9 @@ pub async fn make_router(
     dispatcher: Arc<Dispatcher<FileStorage>>,
     is_mock_chain_client: bool,
     metrics: HttpMetrics,
+    health_status: SharedHealthStatus,
 ) -> anyhow::Result<axum::Router> {
-    let state = HttpState::new(config.clone(), dispatcher, is_mock_chain_client, metrics).await?;
+    let state = HttpState::new(config.clone(), dispatcher, is_mock_chain_client, metrics, health_status).await?;
 
     // public routes
     let mut public = axum::Router::new()
