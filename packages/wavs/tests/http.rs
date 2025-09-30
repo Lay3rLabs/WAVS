@@ -10,6 +10,7 @@ use utils::{
 };
 use wavs::config::Config;
 mod wavs_systems;
+use wavs::health::HealthStatus;
 use wavs_systems::{
     http::{map_response, TestHttpApp},
     mock_trigger_manager::mock_evm_event_trigger,
@@ -56,6 +57,29 @@ fn http_config() {
     let config: Config = app.ctx.rt.block_on(map_response(response));
 
     assert_eq!(config.port, app.inner.config.port);
+}
+
+#[test]
+fn http_health() {
+    let app = TestHttpApp::new();
+
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/health")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert_eq!(response.status(), 200);
+
+    let health_status: HealthStatus = app.ctx.rt.block_on(map_response(response));
+
+    assert!(health_status.timestamp > 0);
+    assert!(health_status.is_healthy());
 }
 
 #[test]
