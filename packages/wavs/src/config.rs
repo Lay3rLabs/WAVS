@@ -89,6 +89,9 @@ pub struct Config {
     /// Maximum HTTP request body size in megabytes (default: 15MB)
     pub max_body_size_mb: u32,
 
+    /// Health check mode for chain endpoints at startup
+    pub health_check_mode: HealthCheckMode,
+
     /// Disable trigger networking for testing (default: false)
     #[cfg(feature = "dev")]
     pub disable_trigger_networking: bool,
@@ -135,6 +138,7 @@ impl Default for Config {
             bearer_token: None,
             dev_endpoints_enabled: false,
             max_body_size_mb: 15,
+            health_check_mode: HealthCheckMode::default(),
             #[cfg(feature = "dev")]
             disable_trigger_networking: false,
             #[cfg(feature = "dev")]
