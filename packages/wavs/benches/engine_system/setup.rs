@@ -2,6 +2,7 @@ use std::sync::RwLock;
 use std::{collections::BTreeMap, sync::Arc};
 
 use opentelemetry::global::meter;
+use utils::service::DEFAULT_IPFS_GATEWAY;
 use utils::storage::{db::RedbStorage, fs::FileStorage};
 use utils::telemetry::Metrics;
 use wavs::subsystems::engine::EngineCommand;
@@ -62,6 +63,7 @@ impl SystemSetup {
             None,                // No time limit for benchmarks
             metrics.wavs.engine, // Engine metrics
             db_storage.clone(),
+            DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
         let digest = wasm_engine
