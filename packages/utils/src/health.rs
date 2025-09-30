@@ -1,11 +1,10 @@
 use alloy_primitives::U256;
 use alloy_provider::Provider;
 use alloy_rpc_types_eth::SyncStatus;
-use anyhow::Context;
 use thiserror::Error;
 
 use crate::{
-    config::{ChainConfigs, CosmosChainConfig, EvmChainConfig, EvmChainConfigExt},
+    config::{CosmosChainConfig, EvmChainConfig, EvmChainConfigExt},
     error::EvmClientError,
     evm_client::EvmQueryClient,
 };
@@ -23,27 +22,6 @@ pub async fn health_check_single_chain(
         AnyChainConfig::Cosmos(config) => {
             check_cosmos_chain_health_query(key.clone(), config.clone()).await?;
             tracing::info!("Cosmos chain [{key}] is healthy");
-        }
-    }
-    Ok(())
-}
-
-pub async fn health_check_chains_query(configs: &ChainConfigs) -> anyhow::Result<()> {
-    let keys = configs.all_chain_keys()?;
-    for key in &keys {
-        let config = configs
-            .get_chain(key)
-            .context(format!("Failed to get config for chain key: {key}"))?;
-
-        match config {
-            AnyChainConfig::Evm(config) => {
-                check_evm_chain_health_query(key.clone(), config).await?;
-                tracing::info!("Evm chain [{key}] is healthy");
-            }
-            AnyChainConfig::Cosmos(config) => {
-                check_cosmos_chain_health_query(key.clone(), config).await?;
-                tracing::info!("Cosmos chain [{key}] is healthy");
-            }
         }
     }
     Ok(())
