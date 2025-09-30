@@ -7,6 +7,23 @@ use utils::{
 use utoipa::ToSchema;
 use wavs_types::{Credential, Workflow};
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HealthCheckMode {
+    /// Skip health checks, spawn background task to log results
+    Bypass,
+    /// Run health checks before startup, warn on failures (default)
+    Wait,
+    /// Run health checks before startup, panic on failures
+    Exit,
+}
+
+impl Default for HealthCheckMode {
+    fn default() -> Self {
+        Self::Wait
+    }
+}
+
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
 ///
