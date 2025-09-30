@@ -47,9 +47,9 @@ pub fn create_shared_health_status() -> SharedHealthStatus {
 pub async fn update_health_status(
     health_status: &SharedHealthStatus,
     chain_configs: &utils::config::ChainConfigs,
-    chains: &[ChainKey],
 ) -> Result<(), anyhow::Error> {
-    let result = utils::health::health_check_chains_query(chain_configs, chains).await;
+    let chains = chain_configs.all_chain_keys()?;
+    let result = utils::health::health_check_chains_query(chain_configs).await;
 
     if let Ok(mut status) = health_status.write() {
         let health_result = match &result {

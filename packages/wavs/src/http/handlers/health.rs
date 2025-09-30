@@ -25,11 +25,8 @@ pub async fn handle_health(
         .read()
         .unwrap()
         .clone();
-    let chains = chain_configs
-        .all_chain_keys()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    update_health_status(&state.health_status, &chain_configs, &chains)
+    update_health_status(&state.health_status, &chain_configs)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

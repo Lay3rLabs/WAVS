@@ -53,7 +53,7 @@ fn main() {
                 ctx.rt.spawn(async move {
                     tracing::info!("Running health checks in background (bypass mode)");
                     if let Err(err) =
-                        update_health_status(&health_status_clone, &chain_configs, &chains).await
+                        update_health_status(&health_status_clone, &chain_configs).await
                     {
                         tracing::warn!("Background health check failed: {}", err);
                     }
@@ -62,9 +62,7 @@ fn main() {
             HealthCheckMode::Wait => {
                 // Run health checks and warn on failures
                 ctx.rt.block_on(async {
-                    if let Err(err) =
-                        update_health_status(&health_status, &config.chains, &chains).await
-                    {
+                    if let Err(err) = update_health_status(&health_status, &config.chains).await {
                         tracing::warn!("Health check failed: {}", err);
                     }
                 });
@@ -72,9 +70,7 @@ fn main() {
             HealthCheckMode::Exit => {
                 // Run health checks and panic on failures
                 ctx.rt.block_on(async {
-                    if let Err(err) =
-                        update_health_status(&health_status, &config.chains, &chains).await
-                    {
+                    if let Err(err) = update_health_status(&health_status, &config.chains).await {
                         panic!("Health check failed (exit mode): {err}");
                     }
                 });
