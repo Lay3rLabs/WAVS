@@ -6,14 +6,13 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
-    health::health_check_chains_query,
     telemetry::{setup_metrics, setup_tracing, Metrics},
 };
 use wavs::{
     args::CliArgs,
     config::{Config, HealthCheckMode},
     dispatcher::Dispatcher,
-    health::{create_shared_health_status, ChainHealthResult},
+    health::{create_shared_health_status, update_health_status},
 };
 
 fn main() {
@@ -53,62 +52,30 @@ fn main() {
                 let chain_configs = config.chains.clone();
                 ctx.rt.spawn(async move {
                     tracing::info!("Running health checks in background (bypass mode)");
-                    if let Err(err) = health_check_chains_query(&chain_configs, &chains).await {
+                    if let Err(err) =
+                        update_health_status(&health_status_clone, &chain_configs, &chains).await
+                    {
                         tracing::warn!("Background health check failed: {}", err);
-                        if let Ok(mut status) = health_status_clone.write() {
-                            for chain in &chains {
-                                status.chains.insert(
-                                    chain.clone(),
-                                    ChainHealthResult::Unhealthy {
-                                        error: err.to_string(),
-                                    },
-                                );
-                            }
-                        }
-                    } else if let Ok(mut status) = health_status_clone.write() {
-                        for chain in &chains {
-                            status
-                                .chains
-                                .insert(chain.clone(), ChainHealthResult::Healthy);
-                        }
                     }
                 });
             }
             HealthCheckMode::Wait => {
                 // Run health checks and warn on failures
                 ctx.rt.block_on(async {
-                    if let Err(err) = health_check_chains_query(&config.chains, &chains).await {
+                    if let Err(err) =
+                        update_health_status(&health_status, &config.chains, &chains).await
+                    {
                         tracing::warn!("Health check failed: {}", err);
-                        if let Ok(mut status) = health_status.write() {
-                            for chain in &chains {
-                                status.chains.insert(
-                                    chain.clone(),
-                                    ChainHealthResult::Unhealthy {
-                                        error: err.to_string(),
-                                    },
-                                );
-                            }
-                        }
-                    } else if let Ok(mut status) = health_status.write() {
-                        for chain in &chains {
-                            status
-                                .chains
-                                .insert(chain.clone(), ChainHealthResult::Healthy);
-                        }
                     }
                 });
             }
             HealthCheckMode::Exit => {
                 // Run health checks and panic on failures
                 ctx.rt.block_on(async {
-                    if let Err(err) = health_check_chains_query(&config.chains, &chains).await {
+                    if let Err(err) =
+                        update_health_status(&health_status, &config.chains, &chains).await
+                    {
                         panic!("Health check failed (exit mode): {err}");
-                    } else if let Ok(mut status) = health_status.write() {
-                        for chain in &chains {
-                            status
-                                .chains
-                                .insert(chain.clone(), ChainHealthResult::Healthy);
-                        }
                     }
                 });
             }
