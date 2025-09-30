@@ -522,7 +522,7 @@ mod test {
     use alloy_primitives::Address;
     use alloy_provider::DynProvider;
     use utils::{
-        config::ConfigBuilder,
+        config::{ConfigBuilder, EvmChainConfigBuilder},
         filesystem::workspace_path,
         test_utils::{
             address::rand_address_evm,
@@ -1120,6 +1120,16 @@ mod test {
             config.credential = Some(Credential::new(
                 "test test test test test test test test test test test junk".to_string(),
             ));
+            config.chains.write().unwrap().evm.insert(
+                contract_deps.chain.id.clone(),
+                EvmChainConfigBuilder {
+                    http_endpoint: Some(contract_deps._anvil.endpoint()),
+                    ws_endpoint: Some(contract_deps._anvil.ws_endpoint()),
+                    faucet_endpoint: None,
+                    poll_interval_ms: None,
+                    event_channel_size: None,
+                },
+            );
 
             let metrics =
                 utils::telemetry::AggregatorMetrics::new(opentelemetry::global::meter("test"));
