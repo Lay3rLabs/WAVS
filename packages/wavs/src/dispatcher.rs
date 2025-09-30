@@ -114,6 +114,7 @@ impl Dispatcher<FileStorage> {
             Some(config.max_execution_seconds),
             metrics.engine,
             db_storage,
+            config.ipfs_gateway.clone(),
         );
         let engine_manager = EngineManager::new(
             engine,

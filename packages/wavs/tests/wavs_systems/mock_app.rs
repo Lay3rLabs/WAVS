@@ -10,6 +10,7 @@ use tower::Service as _;
 use tracing::instrument;
 use utils::{
     context::AppContext,
+    service::DEFAULT_IPFS_GATEWAY,
     storage::{fs::FileStorage, memory::MemoryStorage},
     telemetry::{EngineMetrics, Metrics},
 };
@@ -55,6 +56,7 @@ impl MockE2ETestRunner {
             None,
             metrics,
             RedbStorage::new(db_dir.path()).unwrap(),
+            DEFAULT_IPFS_GATEWAY.to_owned(),
         )
     }
     #[instrument(skip(_ctx, data_dir))]

@@ -36,6 +36,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         max_execution_seconds: Option<u64>,
         metrics: EngineMetrics,
         db: RedbStorage,
+        ipfs_gateway: String,
     ) -> Self {
         let config = BaseEngineConfig {
             app_data_dir: app_data_dir.as_ref().to_path_buf(),
@@ -43,6 +44,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             lru_size,
             max_wasm_fuel,
             max_execution_seconds,
+            ipfs_gateway,
         };
 
         let engine = BaseEngine::new(config, db, Arc::new(wasm_storage)).unwrap();
@@ -235,7 +237,10 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
 pub mod tests {
     use std::collections::BTreeMap;
 
-    use utils::{storage::memory::MemoryStorage, test_utils::address::rand_address_evm};
+    use utils::{
+        service::DEFAULT_IPFS_GATEWAY, storage::memory::MemoryStorage,
+        test_utils::address::rand_address_evm,
+    };
     use wavs_types::{
         ServiceId, Submit, Trigger, TriggerConfig, TriggerData, Workflow, WorkflowId,
     };
@@ -267,6 +272,7 @@ pub mod tests {
             None,
             metrics(),
             RedbStorage::new(db_dir.path()).unwrap(),
+            DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
         // store two blobs
@@ -299,6 +305,7 @@ pub mod tests {
             None,
             metrics(),
             RedbStorage::new(db_dir.path()).unwrap(),
+            DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
         // store valid wasm
@@ -327,6 +334,7 @@ pub mod tests {
             None,
             metrics(),
             RedbStorage::new(db_dir.path()).unwrap(),
+            DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
         // store echo digest
@@ -389,6 +397,7 @@ pub mod tests {
             None,
             metrics(),
             RedbStorage::new(db_dir.path()).unwrap(),
+            DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
         std::env::set_var("WAVS_ENV_TEST", "testing");
@@ -491,6 +500,7 @@ pub mod tests {
             None,
             metrics(),
             RedbStorage::new(db_dir.path()).unwrap(),
+            DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
         // store square digest
@@ -555,6 +565,7 @@ pub mod tests {
             None,
             metrics(),
             RedbStorage::new(db_dir.path()).unwrap(),
+            DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
         // Create a service ID
@@ -605,6 +616,7 @@ pub mod tests {
             None,
             metrics(),
             RedbStorage::new(db_dir.path()).unwrap(),
+            DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
         let digest = engine

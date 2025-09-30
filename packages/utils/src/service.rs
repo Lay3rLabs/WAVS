@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use cid::Cid;
 use reqwest::Client;
+use serde::de::DeserializeOwned;
 use std::str::FromStr;
 use url::Url;
 use wavs_types::Service;
@@ -9,6 +10,11 @@ pub const DEFAULT_IPFS_GATEWAY: &str = "https://ipfs.io/ipfs/";
 
 /// Fetch a Service definition from a URL, handling both HTTP(S) and IPFS URLs
 pub async fn fetch_service(url_str: &str, ipfs_gateway: &str) -> Result<Service> {
+    fetch_json::<Service>(url_str, ipfs_gateway).await
+}
+
+/// Internal helper to fetch data from a URL, handling both HTTP(S) and IPFS URLs
+async fn fetch_response(url_str: &str, ipfs_gateway: &str) -> Result<reqwest::Response> {
     // Validate URL first
     let url = Url::parse(url_str)?;
 
@@ -27,28 +33,48 @@ pub async fn fetch_service(url_str: &str, ipfs_gateway: &str) -> Result<Service>
         }
     };
 
-    // Fetch the service definition
+    // Fetch the data
     let response = client
         .get(&fetch_url)
         .send()
         .await
-        .map_err(|e| anyhow!("Failed to fetch service definition: {}", e))?;
+        .map_err(|e| anyhow!("Failed to fetch data: {}", e))?;
 
     // Check if the request was successful
     if !response.status().is_success() {
         return Err(anyhow!(
-            "Failed to fetch service definition, status code: {}",
+            "Failed to fetch data, status code: {}",
             response.status()
         ));
     }
 
-    // Parse the JSON response into a Service
-    let service: Service = response
+    Ok(response)
+}
+
+/// Fetch a JSON deserializable type from a URL, handling both HTTP(S) and IPFS URLs
+pub async fn fetch_json<T: DeserializeOwned>(url_str: &str, ipfs_gateway: &str) -> Result<T> {
+    let response = fetch_response(url_str, ipfs_gateway).await?;
+
+    // Parse the JSON response into the target type
+    let data: T = response
         .json()
         .await
-        .map_err(|e| anyhow!("Failed to parse service definition as JSON: {}", e))?;
+        .map_err(|e| anyhow!("Failed to parse response as JSON: {}", e))?;
 
-    Ok(service)
+    Ok(data)
+}
+
+/// Fetch raw bytes from a URL, handling both HTTP(S) and IPFS URLs
+pub async fn fetch_bytes(url_str: &str, ipfs_gateway: &str) -> Result<Vec<u8>> {
+    let response = fetch_response(url_str, ipfs_gateway).await?;
+
+    // Get the raw bytes
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| anyhow!("Failed to read response bytes: {}", e))?;
+
+    Ok(bytes.to_vec())
 }
 
 /// Convert an IPFS URL to an HTTP URL using the specified gateway
