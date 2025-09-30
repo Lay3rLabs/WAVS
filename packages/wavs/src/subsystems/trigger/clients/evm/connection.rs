@@ -230,14 +230,14 @@ mod test {
 
     use super::*;
     use alloy_node_bindings::Anvil;
-    use futures::StreamExt;
     use tokio::time::{timeout, Duration};
+    use utils::test_utils::anvil::safe_spawn_anvil;
 
     #[tokio::test]
     async fn evm_connection_works() {
         init_tracing_tests();
 
-        let anvil = Anvil::new().spawn();
+        let anvil = safe_spawn_anvil();
 
         let endpoints = vec![anvil.ws_endpoint()];
 
@@ -294,7 +294,7 @@ mod test {
     async fn evm_connection_skip_invalid() {
         init_tracing_tests();
 
-        let anvil = Anvil::new().spawn();
+        let anvil = safe_spawn_anvil();
 
         let endpoints = vec![
             "ws://localhost:99999".to_string(), // Will fail - invalid port
@@ -332,8 +332,8 @@ mod test {
     async fn evm_connection_cycles() {
         init_tracing_tests();
 
-        let anvil_1 = Anvil::new().spawn();
-        let anvil_2 = Anvil::new().port(anvil_1.port() + 1).spawn();
+        let anvil_1 = safe_spawn_anvil();
+        let anvil_2 = safe_spawn_anvil();
 
         let endpoints = vec![
             "ws://localhost:99999".to_string(), // Will fail - invalid port
@@ -345,6 +345,7 @@ mod test {
         let anvil_1_endpoint = anvil_1.ws_endpoint();
         let anvil_2_endpoint = anvil_2.ws_endpoint();
         let anvil_1_port = anvil_1.port();
+        let anvil_2_port = anvil_2.port();
 
         let connection = Connection::new(endpoints, |_data| {
             // Message callback - not needed for this test
@@ -412,7 +413,7 @@ mod test {
         tracing::info!("✓ Step 3: Cycled back to recreated anvil_1: {}", connected);
 
         // Step 4: Drop anvil_1 again, should cycle to anvil_2 (need to recreate it first)
-        let anvil_2_recreated = Anvil::new().port(anvil_1_port + 1).spawn();
+        let anvil_2_recreated = Anvil::new().port(anvil_2_port).spawn();
         drop(anvil_1_recreated);
         tokio::time::sleep(Duration::from_millis(100)).await; // Give time for disconnection
 

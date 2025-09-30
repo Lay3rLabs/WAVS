@@ -1,4 +1,5 @@
 mod connection;
+mod subscription;
 mod types;
 
 use connection::Connection;
