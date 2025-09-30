@@ -1,3 +1,4 @@
+pub mod clients;
 pub mod error;
 pub mod lookup;
 pub mod schedulers;

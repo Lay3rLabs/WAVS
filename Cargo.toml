@@ -86,6 +86,9 @@ ctrlc = "3.5.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.89"
 
+# websocket
+tokio-tungstenite = "0.28.0"
+
 # collections
 dashmap = "6.1.0"
 ordermap = "0.5.12"
