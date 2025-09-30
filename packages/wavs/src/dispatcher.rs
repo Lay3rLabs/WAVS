@@ -29,9 +29,8 @@ use std::ops::Bound;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use tracing::instrument;
-use utils::config::{AnyChainConfig, ChainConfigs, EvmChainConfigExt};
+use utils::config::{AnyChainConfig, ChainConfigs};
 use utils::error::EvmClientError;
-use utils::evm_client::EvmQueryClient;
 use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
@@ -553,31 +552,19 @@ async fn check_service_needs_update(
     let service_id = service.id();
     let cached_hash = service.hash()?;
 
-    // Get current ServiceURI from contract
-    let current_service_uri = match &service.manager {
+    // Get current service from contract
+    let current_service = match &service.manager {
         ServiceManager::Evm { chain, address } => {
-            let chain_config = chain_configs.get_chain(chain).ok_or_else(|| {
-                DispatcherError::Config(format!("Could not get chain config for chain {chain}"))
-            })?;
-
-            match chain_config {
-                AnyChainConfig::Evm(evm_config) => {
-                    let endpoint = evm_config.query_client_endpoint()?;
-                    let client = EvmQueryClient::new(endpoint).await?;
-
-                    let contract = IWavsServiceManagerInstance::new(*address, client.provider);
-
-                    contract.getServiceURI().call().await?
-                }
-                AnyChainConfig::Cosmos(_) => {
-                    unimplemented!()
-                }
-            }
+            query_service_from_address(
+                chain.clone(),
+                (*address).into(),
+                chain_configs,
+                ipfs_gateway,
+            )
+            .await?
         }
     };
 
-    // Get current service from the URI and compare hashes
-    let current_service = fetch_service(&current_service_uri, ipfs_gateway).await?;
     let current_hash = current_service.hash()?;
 
     if current_hash != cached_hash {
