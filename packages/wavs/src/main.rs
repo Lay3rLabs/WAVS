@@ -52,8 +52,11 @@ fn main() {
                 ctx.rt.spawn(async move {
                     tracing::info!("Running health checks in background (bypass mode)");
                     health_status_clone.update(&chain_configs).await;
-                    if health_status.any_failing() {
-                        tracing::warn!("Health check failed: {:#?}", health_status.read().unwrap());
+                    if health_status_clone.any_failing() {
+                        tracing::warn!(
+                            "Health check failed: {:#?}",
+                            health_status_clone.read().unwrap()
+                        );
                     }
                 });
             }
