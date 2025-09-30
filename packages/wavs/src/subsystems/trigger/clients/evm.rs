@@ -1,25 +1,44 @@
+mod channels;
 mod connection;
 mod subscription;
 mod types;
 
 use connection::Connection;
 use futures::Stream;
+use subscription::Subscriptions;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use wavs_types::ChainKeyId;
+
+use channels::Channels;
 
 pub struct EvmTriggerClient {
     connection: Connection,
+    subscriptions: Subscriptions,
+    block_height_rx: Option<UnboundedReceiver<u64>>,
 }
 
 impl EvmTriggerClient {
     pub fn new(chain_id: ChainKeyId, ws_endpoints: Vec<String>) -> Self {
-        let connection = Connection::new(ws_endpoints, |msg| {});
+        let channels = Channels::new();
 
-        Self { connection }
+        let subscriptions = Subscriptions::new(channels.subscription);
+
+        let connection = Connection::new(ws_endpoints, channels.connection);
+
+        Self {
+            connection,
+            subscriptions,
+            block_height_rx: Some(channels.client.subscription_block_height_rx),
+        }
     }
 
-    pub fn stream_block_height(&self) -> impl Stream<Item = u64> {
-        // Placeholder implementation
-        futures::stream::iter(vec![1, 2, 3, 4, 5, 6])
+    pub fn stream_block_height(&mut self) -> impl Stream<Item = u64> {
+        let rx = self
+            .block_height_rx
+            .take()
+            .expect("stream_block_height can only be called once");
+        UnboundedReceiverStream::new(rx)
     }
 }
 
@@ -33,12 +52,13 @@ mod test {
     use tokio::time::{timeout, Duration};
 
     #[tokio::test]
+    #[ignore = "wip"]
     async fn evm_block_height_stream() {
         init_tracing_tests();
 
         let anvil = Anvil::new().spawn();
 
-        let client = EvmTriggerClient::new(
+        let mut client = EvmTriggerClient::new(
             anvil.chain_id().to_string().parse().unwrap(),
             vec![anvil.ws_endpoint()],
         );

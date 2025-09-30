@@ -5,8 +5,13 @@ use futures::{
     SinkExt, StreamExt,
 };
 use thiserror::Error;
-use tokio::{net::TcpStream, sync::oneshot};
+use tokio::{
+    net::TcpStream,
+    sync::{mpsc::UnboundedSender, oneshot},
+};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
+
+use crate::subsystems::trigger::clients::evm::{channels::ConnectionChannels, types::RpcRequest};
 
 /// A handle for managing WebSocket connections with intelligent retry logic
 ///
@@ -35,13 +40,9 @@ use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, Web
 /// ... and so on
 #[allow(dead_code)]
 pub struct Connection {
-    handle: Option<tokio::task::JoinHandle<()>>,
-    // wrapped in a tokio Mutex to allow async access
-    current_sink: Arc<
-        tokio::sync::Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
-    >,
+    handles: Option<[tokio::task::JoinHandle<()>; 2]>,
     current_endpoint: Arc<std::sync::RwLock<Option<String>>>,
-    shutdown_tx: Option<oneshot::Sender<()>>,
+    shutdown_txs: Option<[oneshot::Sender<()>; 2]>,
 }
 
 pub enum ConnectionData {
@@ -49,44 +50,47 @@ pub enum ConnectionData {
     Binary(Vec<u8>),
 }
 
+pub enum ConnectionState {
+    Connected(String),
+    Disconnected,
+}
+
 impl Connection {
     pub const BACKOFF_BASE: Duration = Duration::from_secs(1);
     pub const BACKOFF_CAP: Duration = Duration::from_secs(30);
 
-    pub fn new<F>(endpoints: Vec<String>, on_message: F) -> Self
-    where
-        F: Fn(ConnectionData) + Send + Sync + 'static,
-    {
+    pub fn new(endpoints: Vec<String>, channels: ConnectionChannels) -> Self {
+        let ConnectionChannels {
+            connection_send_rx,
+            connection_data_tx,
+            connection_state_tx,
+        } = channels;
+
         let current_sink = Arc::new(tokio::sync::Mutex::new(None));
         let current_endpoint = Arc::new(std::sync::RwLock::new(None));
 
-        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (main_shutdown_tx, main_shutdown_rx) = oneshot::channel();
+        let (message_shutdown_tx, message_shutdown_rx) = oneshot::channel();
 
-        let handle = tokio::spawn(connection_loop(
+        let main_handle = tokio::spawn(connection_loop(
             endpoints,
             current_sink.clone(),
             current_endpoint.clone(),
-            shutdown_rx,
-            on_message,
+            main_shutdown_rx,
+            connection_data_tx,
+            connection_state_tx,
+        ));
+
+        let message_handle = tokio::spawn(message_loop(
+            connection_send_rx,
+            current_sink.clone(),
+            message_shutdown_rx,
         ));
 
         Self {
-            handle: Some(handle),
-            current_sink,
+            handles: Some([main_handle, message_handle]),
             current_endpoint,
-            shutdown_tx: Some(shutdown_tx),
-        }
-    }
-
-    pub async fn send_message(&self, msg: Message) -> Result<(), ConnectionError> {
-        let mut guard = self.current_sink.lock().await;
-        if let Some(sink) = guard.as_mut() {
-            sink.send(msg)
-                .await
-                .map_err(|e| ConnectionError::SendError(e.to_string()))?;
-            Ok(())
-        } else {
-            Err(ConnectionError::NoActiveConnection)
+            shutdown_txs: Some([main_shutdown_tx, message_shutdown_tx]),
         }
     }
 
@@ -97,33 +101,37 @@ impl Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        if let Some(tx) = self.shutdown_tx.take() {
-            let _ = tx.send(());
+        if let Some(txs) = self.shutdown_txs.take() {
+            for tx in txs {
+                let _ = tx.send(());
+            }
         }
 
-        if let Some(mut handle) = self.handle.take() {
-            tokio::spawn(async move {
-                if let Err(_) = tokio::time::timeout(Duration::from_millis(500), &mut handle).await
-                {
-                    tracing::warn!("EVM: connection loop did not shut down in time, aborting");
-                    handle.abort();
-                }
-            });
+        if let Some(handles) = self.handles.take() {
+            for mut handle in handles {
+                tokio::spawn(async move {
+                    if let Err(_) =
+                        tokio::time::timeout(Duration::from_millis(500), &mut handle).await
+                    {
+                        tracing::warn!("EVM: connection loop did not shut down in time, aborting");
+                        handle.abort();
+                    }
+                });
+            }
         }
     }
 }
 
-async fn connection_loop<F>(
+async fn connection_loop(
     endpoints: Vec<String>,
     current_sink: Arc<
         tokio::sync::Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
     >,
     current_endpoint: Arc<std::sync::RwLock<Option<String>>>,
     mut shutdown_rx: oneshot::Receiver<()>,
-    on_message: F,
-) where
-    F: Fn(ConnectionData) + Send + Sync + 'static,
-{
+    connection_data_tx: UnboundedSender<ConnectionData>,
+    connection_state_tx: UnboundedSender<ConnectionState>,
+) {
     let mut endpoint_idx = 0;
     let mut current_backoff = Connection::BACKOFF_BASE;
     let mut failures_in_cycle = 0;
@@ -132,6 +140,7 @@ async fn connection_loop<F>(
         tokio::select! {
             _ = &mut shutdown_rx => {
                 tracing::info!("EVM: shutdown requested, exiting connection loop");
+                connection_state_tx.send(ConnectionState::Disconnected);
                 break;
             }
 
@@ -152,12 +161,15 @@ async fn connection_loop<F>(
                         *current_sink.lock().await = Some(sink);
                         *current_endpoint.write().unwrap() = Some(endpoint.clone());
 
+                        connection_state_tx.send(ConnectionState::Connected(endpoint.clone()));
                         // Handle the connection until it disconnects
-                        if let Err(err) = handle_connection(stream, &on_message).await {
+                        if let Err(err) = handle_connection(stream, connection_data_tx.clone()).await {
                             tracing::error!("EVM connection lost from {endpoint}: {err:?}");
                         } else {
                             tracing::info!("EVM: disconnected {endpoint}");
                         }
+
+                        connection_state_tx.send(ConnectionState::Disconnected);
 
                         *current_sink.lock().await = None;
                         *current_endpoint.write().unwrap() = None;
@@ -165,6 +177,7 @@ async fn connection_loop<F>(
                         endpoint_idx += 1; // cycle to next endpoint on disconnection
                     }
                     Err(err) => {
+                        connection_state_tx.send(ConnectionState::Disconnected);
                         tracing::error!("EVM: connect error to {endpoint}: {err:?}");
                         failures_in_cycle += 1;
                         endpoint_idx += 1; // cycle the endpoints
@@ -185,21 +198,22 @@ async fn connection_loop<F>(
     }
 }
 
-async fn handle_connection<F>(
+async fn handle_connection(
     mut stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-    on_message: &F,
-) -> Result<(), ConnectionError>
-where
-    F: Fn(ConnectionData) + Send + Sync + 'static,
-{
+    connection_data_tx: UnboundedSender<ConnectionData>,
+) -> Result<(), ConnectionError> {
     // Keep the connection alive and handle messages
     while let Some(msg) = stream.next().await {
         match msg.map_err(|e| ConnectionError::WebSocketError(e.to_string()))? {
             Message::Text(msg) => {
-                on_message(ConnectionData::Text(msg.to_string()));
+                connection_data_tx
+                    .send(ConnectionData::Text(msg.to_string()))
+                    .map_err(|e| ConnectionError::SendError(e.to_string()))?;
             }
             Message::Binary(msg) => {
-                on_message(ConnectionData::Binary(msg.into()));
+                connection_data_tx
+                    .send(ConnectionData::Binary(msg.to_vec()))
+                    .map_err(|e| ConnectionError::SendError(e.to_string()))?;
             }
             // tungstenite automatically responds to pings
             Message::Ping(_) => {}
@@ -212,6 +226,45 @@ where
     }
 
     Ok(())
+}
+
+async fn message_loop(
+    mut connection_send_rx: tokio::sync::mpsc::UnboundedReceiver<RpcRequest>,
+    current_sink: Arc<
+        tokio::sync::Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
+    >,
+    mut shutdown_rx: oneshot::Receiver<()>,
+) {
+    loop {
+        tokio::select! {
+            _ = &mut shutdown_rx => {
+                tracing::info!("EVM: shutdown requested, exiting message loop");
+                break;
+            }
+            Some(msg) = connection_send_rx.recv() => {
+                match serde_json::to_string(&msg) {
+                    Ok(msg) => {
+                        let mut guard = current_sink.lock().await;
+                        if let Some(sink) = guard.as_mut() {
+                            match sink.send(Message::Text(msg.into())).await {
+                                Ok(_) => {},
+                                Err(e) => {
+                                    tracing::error!("Failed to send message: {}", e);
+                                }
+                            }
+                        } else {
+                            tracing::error!("{:#?}", ConnectionError::NoActiveConnection);
+                        }
+
+                    },
+                    Err(e) => {
+                        tracing::error!("Failed to serialize message: {}", e);
+                    }
+                }
+            }
+            else => break, // Exit if the channel is closed
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -229,7 +282,10 @@ mod test {
     use crate::init_tracing_tests;
 
     use super::*;
+    use crate::subsystems::trigger::clients::evm::channels::Channels;
+    use crate::subsystems::trigger::clients::evm::types::RpcRequest;
     use alloy_node_bindings::Anvil;
+
     use tokio::time::{timeout, Duration};
     use utils::test_utils::anvil::safe_spawn_anvil;
 
@@ -241,31 +297,33 @@ mod test {
 
         let endpoints = vec![anvil.ws_endpoint()];
 
+        let channels = Channels::new();
+        let mut connection_data_rx = channels.subscription.connection_data_rx;
+        let connection_send_tx = channels.subscription.connection_send_tx;
+
+        let _connection = Connection::new(endpoints, channels.connection);
+
         let message_count = std::sync::Arc::new(tokio::sync::Mutex::new(0u32));
         let message_count_clone = message_count.clone();
 
-        let connection = Connection::new(endpoints, move |_data| {
-            let count = message_count_clone.clone();
-            tokio::spawn(async move {
-                let mut counter = count.lock().await;
+        // Spawn task to count received messages
+        tokio::spawn(async move {
+            while let Some(_data) = connection_data_rx.recv().await {
+                let mut counter = message_count_clone.lock().await;
                 *counter += 1;
                 tracing::info!("Received message, count: {}", *counter);
-            });
+            }
         });
 
         // Wait a bit to allow connection establishment
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Send a subscription request for new block headers
-        let subscription_msg = tokio_tungstenite::tungstenite::Message::Text(
-            r#"{"id":1,"method":"eth_subscribe","params":["newHeads"]}"#
-                .to_string()
-                .into(),
-        );
+        let subscription_request = RpcRequest::blocks();
 
         let result = timeout(Duration::from_secs(5), async {
             // Send subscription message
-            if let Err(e) = connection.send_message(subscription_msg).await {
+            if let Err(e) = connection_send_tx.send(subscription_request) {
                 tracing::error!("Failed to send subscription: {}", e);
             }
 
@@ -301,9 +359,8 @@ mod test {
             anvil.ws_endpoint(),                // Will succeed
         ];
 
-        let connection = Connection::new(endpoints, |_data| {
-            // Message callback - not needed for this test
-        });
+        let channels = Channels::new();
+        let connection = Connection::new(endpoints, channels.connection);
 
         // Wait for connection to be established and current_endpoint to be set
         let result = timeout(Duration::from_secs(10), async {
@@ -347,9 +404,8 @@ mod test {
         let anvil_1_port = anvil_1.port();
         let anvil_2_port = anvil_2.port();
 
-        let connection = Connection::new(endpoints, |_data| {
-            // Message callback - not needed for this test
-        });
+        let channels = Channels::new();
+        let connection = Connection::new(endpoints, channels.connection);
 
         // Step 1: Wait for initial connection to anvil_1
         let result = timeout(Duration::from_secs(10), async {
