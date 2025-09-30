@@ -12,7 +12,7 @@ use wavs::{
     args::CliArgs,
     config::{Config, HealthCheckMode},
     dispatcher::Dispatcher,
-    health::{create_shared_health_status, update_health_status},
+    health::SharedHealthStatus,
 };
 
 fn main() {
@@ -41,37 +41,35 @@ fn main() {
         None
     };
 
-    let health_status = create_shared_health_status();
+    let health_status = SharedHealthStatus::new();
 
     let chains = config.chains.all_chain_keys().unwrap();
     if !chains.is_empty() {
         match config.health_check_mode {
             HealthCheckMode::Bypass => {
-                // Spawn background task to run health checks and log results
                 let health_status_clone = health_status.clone();
                 let chain_configs = config.chains.clone();
                 ctx.rt.spawn(async move {
                     tracing::info!("Running health checks in background (bypass mode)");
-                    if let Err(err) =
-                        update_health_status(&health_status_clone, &chain_configs).await
-                    {
-                        tracing::warn!("Background health check failed: {}", err);
-                    }
+                    health_status_clone.update(&chain_configs).await;
                 });
             }
             HealthCheckMode::Wait => {
-                // Run health checks and warn on failures
                 ctx.rt.block_on(async {
-                    if let Err(err) = update_health_status(&health_status, &config.chains).await {
-                        tracing::warn!("Health check failed: {}", err);
+                    health_status.update(&config.chains).await;
+                    if health_status.any_failing() {
+                        tracing::warn!("Health check failed: {:#?}", health_status.read().unwrap());
                     }
                 });
             }
             HealthCheckMode::Exit => {
-                // Run health checks and panic on failures
                 ctx.rt.block_on(async {
-                    if let Err(err) = update_health_status(&health_status, &config.chains).await {
-                        panic!("Health check failed (exit mode): {err}");
+                    health_status.update(&config.chains).await;
+                    if health_status.any_failing() {
+                        panic!(
+                            "Health check failed (exit mode): {:#?}",
+                            health_status.read().unwrap()
+                        );
                     }
                 });
             }

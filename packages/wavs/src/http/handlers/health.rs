@@ -1,10 +1,7 @@
 use axum::{extract::State, response::IntoResponse, Json};
 use tracing::instrument;
 
-use crate::{
-    health::{update_health_status, HealthStatus},
-    http::state::HttpState,
-};
+use crate::{health::HealthStatus, http::state::HttpState};
 
 #[utoipa::path(
     get,
@@ -25,7 +22,7 @@ pub async fn handle_health(State(state): State<HttpState>) -> impl IntoResponse 
         .unwrap()
         .clone();
 
-    let _ = update_health_status(&state.health_status, &chain_configs).await;
+    state.health_status.update(&chain_configs).await;
 
     let health_status = state.health_status.read().unwrap().clone();
     Json(health_status).into_response()

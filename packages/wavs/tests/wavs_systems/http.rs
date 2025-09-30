@@ -49,7 +49,7 @@ impl TestHttpApp {
         let metrics = HttpMetrics::new(meter);
 
         ctx.clone().rt.block_on(async move {
-            let health_status = wavs::health::create_shared_health_status();
+            let health_status = wavs::health::SharedHealthStatus::new();
             let http_router = wavs::http::server::make_router(
                 inner.config.as_ref().clone(),
                 dispatcher,
