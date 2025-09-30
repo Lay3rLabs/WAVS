@@ -11,6 +11,23 @@ use crate::{
 };
 use wavs_types::{AnyChainConfig, ChainKey};
 
+pub async fn health_check_single_chain(
+    key: &ChainKey,
+    config: &AnyChainConfig,
+) -> anyhow::Result<()> {
+    match config {
+        AnyChainConfig::Evm(config) => {
+            check_evm_chain_health_query(key.clone(), config.clone()).await?;
+            tracing::info!("Evm chain [{key}] is healthy");
+        }
+        AnyChainConfig::Cosmos(config) => {
+            check_cosmos_chain_health_query(key.clone(), config.clone()).await?;
+            tracing::info!("Cosmos chain [{key}] is healthy");
+        }
+    }
+    Ok(())
+}
+
 pub async fn health_check_chains_query(configs: &ChainConfigs) -> anyhow::Result<()> {
     let keys = configs.all_chain_keys()?;
     for key in &keys {

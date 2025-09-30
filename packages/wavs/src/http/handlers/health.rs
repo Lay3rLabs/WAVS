@@ -1,4 +1,4 @@
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, response::IntoResponse, Json};
 use tracing::instrument;
 
 use crate::{
@@ -15,9 +15,8 @@ use crate::{
     description = "Get health status of chain endpoints"
 )]
 #[instrument(level = "debug", skip(state))]
-pub async fn handle_health(
-    State(state): State<HttpState>,
-) -> Result<Json<HealthStatus>, StatusCode> {
+#[axum::debug_handler]
+pub async fn handle_health(State(state): State<HttpState>) -> impl IntoResponse {
     let chain_configs = state
         .dispatcher
         .trigger_manager
@@ -26,10 +25,8 @@ pub async fn handle_health(
         .unwrap()
         .clone();
 
-    update_health_status(&state.health_status, &chain_configs)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let _ = update_health_status(&state.health_status, &chain_configs).await;
 
     let health_status = state.health_status.read().unwrap().clone();
-    Ok(Json(health_status))
+    Json(health_status).into_response()
 }

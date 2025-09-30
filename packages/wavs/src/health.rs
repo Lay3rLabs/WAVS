@@ -49,19 +49,33 @@ pub async fn update_health_status(
     chain_configs: &utils::config::ChainConfigs,
 ) -> Result<(), anyhow::Error> {
     let chains = chain_configs.all_chain_keys()?;
-    let result = utils::health::health_check_chains_query(chain_configs).await;
+    let mut any_unhealthy = false;
+    let mut chain_results = HashMap::new();
 
-    if let Ok(mut status) = health_status.write() {
-        let health_result = match &result {
+    // run all health checks without holding the lock
+    for chain in chains {
+        let config = chain_configs.get_chain(&chain).unwrap();
+        let health_result = match utils::health::health_check_single_chain(&chain, &config).await {
             Ok(()) => ChainHealthResult::Healthy,
-            Err(err) => ChainHealthResult::Unhealthy {
-                error: err.to_string(),
-            },
+            Err(err) => {
+                any_unhealthy = true;
+                ChainHealthResult::Unhealthy {
+                    error: err.to_string(),
+                }
+            }
         };
-        for chain in chains {
-            status.chains.insert(chain.clone(), health_result.clone());
-        }
+        chain_results.insert(chain, health_result);
     }
 
-    result
+    // update the status with all results at once
+    if let Ok(mut status) = health_status.write() {
+        status.timestamp = chrono::Utc::now().timestamp() as u64;
+        status.chains = chain_results;
+    }
+
+    if any_unhealthy {
+        Err(anyhow::anyhow!("One or more chains are unhealthy"))
+    } else {
+        Ok(())
+    }
 }
