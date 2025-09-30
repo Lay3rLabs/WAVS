@@ -156,6 +156,7 @@ impl DevTriggersRuntime {
             move || {
                 let rt = tokio::runtime::Runtime::new().unwrap();
                 rt.block_on(async move {
+                    let health_status = wavs::health::create_shared_health_status();
                     let router = wavs::http::server::make_router(
                         server_config,
                         d_for_server,
@@ -163,6 +164,7 @@ impl DevTriggersRuntime {
                         utils::telemetry::HttpMetrics::new(opentelemetry::global::meter(
                             "wavs-benchmark",
                         )),
+                        health_status,
                     )
                     .await
                     .unwrap();
