@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 use utils::{
     config::{ChainConfigs, ConfigExt},
     service::DEFAULT_IPFS_GATEWAY,
@@ -25,7 +28,7 @@ pub struct Config {
     pub data: PathBuf,
 
     /// All the available chains
-    pub chains: ChainConfigs,
+    pub chains: Arc<RwLock<ChainConfigs>>,
 
     /// The mnemonic to use for submitting transactions on cosmos chains (usually None, set via env var)
     pub cosmos_mnemonic: Option<Credential>,
@@ -55,7 +58,7 @@ impl Default for Config {
             wavs_endpoint: "http://127.0.0.1:8000".to_string(),
             log_level: vec!["info".to_string()],
             data: PathBuf::from("/var/wavs-cli"),
-            chains: ChainConfigs::default(),
+            chains: Arc::new(RwLock::new(ChainConfigs::default())),
             cosmos_mnemonic: None,
             evm_credential: None,
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),

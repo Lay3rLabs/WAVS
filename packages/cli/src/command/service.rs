@@ -820,6 +820,13 @@ pub async fn validate_service(
 
     // All remaining validation needs CliContext, so only do it if ctx is provided
     if let Some(ctx) = ctx {
+        let chains = {
+            ctx.config
+                .chains
+                .read()
+                .map_err(|_| anyhow!("Chains lock is poisoned"))?
+                .clone()
+        };
         validate_registry_availability(&ctx.config.wavs_endpoint, &mut errors).await;
 
         let mut chains_to_validate = HashSet::new();
@@ -857,7 +864,7 @@ pub async fn validate_service(
                         start_block,
                         end_block,
                         ..
-                    } => match ctx.config.chains.get_chain(chain) {
+                    } => match chains.get_chain(chain) {
                         None => {
                             errors.push(format!(
                                 "Workflow '{}' uses chain '{}' in BlockInterval

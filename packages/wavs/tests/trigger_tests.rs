@@ -11,10 +11,7 @@ use layer_climb::prelude::*;
 use utils::{
     storage::db::RedbStorage,
     telemetry::TriggerMetrics,
-    test_utils::{
-        address::{rand_address_evm, rand_event_evm},
-        mock_chain_configs::mock_chain_configs,
-    },
+    test_utils::address::{rand_address_evm, rand_event_evm},
 };
 
 #[test]
@@ -28,7 +25,6 @@ fn core_trigger_lookups() {
     let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
         &config,
-        mock_chain_configs(),
         TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services,
         trigger_to_dispatcher_tx,
@@ -164,7 +160,6 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
     let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
         &config,
-        mock_chain_configs(),
         TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services.clone(),
         trigger_to_dispatcher_tx,
@@ -303,7 +298,6 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
     let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
         &config,
-        mock_chain_configs(),
         TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
         services,
         trigger_to_dispatcher_tx,

@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use anyhow::Result;
@@ -39,7 +42,8 @@ pub struct Config {
     pub cors_allowed_origins: Vec<String>,
 
     /// All the available chains
-    pub chains: ChainConfigs,
+    #[schema(value_type = ChainConfigs)]
+    pub chains: Arc<RwLock<ChainConfigs>>,
 
     /// Mnemonic or private key of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub credential: Option<Credential>,
@@ -98,11 +102,7 @@ impl Default for Config {
             jaeger: None,
             prometheus: None,
             prometheus_push_interval_secs: None,
-            chains: ChainConfigs {
-                cosmos: Default::default(),
-                evm: Default::default(),
-                dev: Default::default(),
-            },
+            chains: Arc::new(RwLock::new(ChainConfigs::default())),
             ipfs_gateway: DEFAULT_IPFS_GATEWAY.to_string(),
             wasm_lru_size: DEFAULT_WASM_LRU_SIZE,
             max_wasm_fuel: None,

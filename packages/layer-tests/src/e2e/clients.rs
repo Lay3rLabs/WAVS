@@ -54,8 +54,10 @@ impl Clients {
         .await
         .unwrap();
 
+        let chains = { configs.chains.read().unwrap().clone() };
+
         // fund all the EVM clients
-        configs.mnemonics.fund(&configs.chains).await;
+        configs.mnemonics.fund(&chains).await;
 
         let cli_ctx = wavs_cli::context::CliContext::new_deployment(
             configs.cli_args.clone(),
@@ -66,9 +68,10 @@ impl Clients {
         .unwrap();
 
         let mut evm_clients = HashMap::new();
+        let mut cosmos_client_pools = HashMap::new();
 
         // Create a client for each EVM chain
-        for chain_config in configs.chains.evm_iter() {
+        for chain_config in chains.evm_iter() {
             let client_config = chain_config
                 .signing_client_config(cli_ctx.config.evm_credential.clone().unwrap())
                 .unwrap();
@@ -78,9 +81,8 @@ impl Clients {
             evm_clients.insert(chain_config.into(), evm_client);
         }
 
-        let mut cosmos_client_pools = HashMap::new();
         // Create a client for each Cosmos chain
-        for chain_config in configs.chains.cosmos_iter() {
+        for chain_config in chains.cosmos_iter() {
             let climb_chain_config = layer_climb::prelude::ChainConfig {
                 chain_id: chain_config.chain_id.clone().into(),
                 rpc_endpoint: chain_config.rpc_endpoint.clone(),

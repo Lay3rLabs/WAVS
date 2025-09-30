@@ -12,11 +12,11 @@ use crate::{
 use wavs_types::{AnyChainConfig, ChainKey};
 
 pub async fn health_check_chains_query(
-    configs: &ChainConfigs,
+    chain_configs: &ChainConfigs,
     keys: &[ChainKey],
 ) -> anyhow::Result<()> {
     for key in keys {
-        let config = configs
+        let config = chain_configs
             .get_chain(key)
             .context(format!("Failed to get config for chain key: {key}"))?;
 

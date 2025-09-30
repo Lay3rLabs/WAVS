@@ -39,9 +39,10 @@ fn main() {
 
     ctx.rt.block_on(async {
         // warn bad health for chains (services may or may not submit to these)
-        let chains = config.chains.all_chain_keys().unwrap();
-        if !chains.is_empty() {
-            if let Err(err) = health_check_chains_query(&config.chains, &chains).await {
+        let chain_configs = { config.chains.read().unwrap().clone() };
+        let chain_keys = chain_configs.all_chain_keys().unwrap();
+        if !chain_keys.is_empty() {
+            if let Err(err) = health_check_chains_query(&chain_configs, &chain_keys).await {
                 tracing::warn!("Non-trigger-chain health-check failed: {}", err);
             }
         }
