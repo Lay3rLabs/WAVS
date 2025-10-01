@@ -11,7 +11,7 @@ use tokio::{
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
-use crate::subsystems::trigger::clients::evm::{channels::ConnectionChannels, types::RpcRequest};
+use crate::subsystems::trigger::clients::evm::{channels::ConnectionChannels, rpc::RpcRequest};
 
 /// A handle for managing WebSocket connections with intelligent retry logic
 ///
@@ -101,6 +101,8 @@ impl Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
+        tracing::debug!("EVM: connection dropped");
+
         if let Some(txs) = self.shutdown_txs.take() {
             for tx in txs {
                 let _ = tx.send(());
@@ -140,7 +142,9 @@ async fn connection_loop(
         tokio::select! {
             _ = &mut shutdown_rx => {
                 tracing::info!("EVM: shutdown requested, exiting connection loop");
-                connection_state_tx.send(ConnectionState::Disconnected);
+                if let Err(e) = connection_state_tx.send(ConnectionState::Disconnected) {
+                    tracing::error!("Failed to send disconnected state: {}", e);
+                }
                 break;
             }
 
@@ -161,7 +165,9 @@ async fn connection_loop(
                         *current_sink.lock().await = Some(sink);
                         *current_endpoint.write().unwrap() = Some(endpoint.clone());
 
-                        connection_state_tx.send(ConnectionState::Connected(endpoint.clone()));
+                        if let Err(e) = connection_state_tx.send(ConnectionState::Connected(endpoint.clone())) {
+                            tracing::error!("Failed to send connected state: {}", e);
+                        }
                         // Handle the connection until it disconnects
                         if let Err(err) = handle_connection(stream, connection_data_tx.clone()).await {
                             tracing::error!("EVM connection lost from {endpoint}: {err:?}");
@@ -169,7 +175,9 @@ async fn connection_loop(
                             tracing::info!("EVM: disconnected {endpoint}");
                         }
 
-                        connection_state_tx.send(ConnectionState::Disconnected);
+                        if let Err(e) = connection_state_tx.send(ConnectionState::Disconnected) {
+                            tracing::error!("Failed to send disconnected state: {}", e);
+                        }
 
                         *current_sink.lock().await = None;
                         *current_endpoint.write().unwrap() = None;
@@ -177,7 +185,9 @@ async fn connection_loop(
                         endpoint_idx += 1; // cycle to next endpoint on disconnection
                     }
                     Err(err) => {
-                        connection_state_tx.send(ConnectionState::Disconnected);
+                        if let Err(e) = connection_state_tx.send(ConnectionState::Disconnected) {
+                            tracing::error!("Failed to send disconnected state: {}", e);
+                        }
                         tracing::error!("EVM: connect error to {endpoint}: {err:?}");
                         failures_in_cycle += 1;
                         endpoint_idx += 1; // cycle the endpoints
@@ -244,6 +254,8 @@ async fn message_loop(
             Some(msg) = connection_send_rx.recv() => {
                 match serde_json::to_string(&msg) {
                     Ok(msg) => {
+
+                        tracing::info!("EVM: sending message: {}", msg);
                         let mut guard = current_sink.lock().await;
                         if let Some(sink) = guard.as_mut() {
                             match sink.send(Message::Text(msg.into())).await {
@@ -283,7 +295,7 @@ mod test {
 
     use super::*;
     use crate::subsystems::trigger::clients::evm::channels::Channels;
-    use crate::subsystems::trigger::clients::evm::types::RpcRequest;
+    use crate::subsystems::trigger::clients::evm::rpc::RpcRequest;
     use alloy_node_bindings::Anvil;
 
     use tokio::time::{timeout, Duration};
@@ -319,7 +331,7 @@ mod test {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Send a subscription request for new block headers
-        let subscription_request = RpcRequest::blocks();
+        let subscription_request = RpcRequest::new_heads();
 
         let result = timeout(Duration::from_secs(5), async {
             // Send subscription message
