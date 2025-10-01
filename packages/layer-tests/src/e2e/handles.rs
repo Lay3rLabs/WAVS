@@ -45,7 +45,8 @@ impl AppHandles {
             let config = configs.wavs.clone();
 
             move || {
-                wavs::run_server(ctx, config, dispatcher, metrics.http);
+                let health_status = wavs::health::SharedHealthStatus::new();
+                wavs::run_server(ctx, config, dispatcher, metrics.http, health_status);
             }
         });
 

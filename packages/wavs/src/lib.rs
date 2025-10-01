@@ -6,12 +6,14 @@
 pub mod args;
 pub mod config;
 pub mod dispatcher; // where we have the high-level dispatcher
+pub mod health;
 pub mod http;
 pub mod services;
 pub mod subsystems; // subsystems: engine, submission, and trigger // services lookup
 
 use config::Config;
 use dispatcher::Dispatcher;
+use health::SharedHealthStatus;
 use utils::storage::fs::FileStorage;
 
 // This section is called from both main and end-to-end tests
@@ -26,6 +28,7 @@ pub fn run_server(
     config: Config,
     dispatcher: Arc<Dispatcher<FileStorage>>,
     metrics: HttpMetrics,
+    health_status: SharedHealthStatus,
 ) {
     let _ = ctrlc::set_handler({
         let ctx = ctx.clone();
@@ -39,7 +42,7 @@ pub fn run_server(
         let dispatcher = dispatcher.clone();
         let ctx = ctx.clone();
         move || {
-            http::server::start(ctx, config, dispatcher, metrics).unwrap();
+            http::server::start(ctx, config, dispatcher, metrics, health_status).unwrap();
         }
     });
 

@@ -6,10 +6,14 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
-    health::health_check_chains_query,
     telemetry::{setup_metrics, setup_tracing, Metrics},
 };
-use wavs::{args::CliArgs, config::Config, dispatcher::Dispatcher};
+use wavs::{
+    args::CliArgs,
+    config::{Config, HealthCheckMode},
+    dispatcher::Dispatcher,
+    health::SharedHealthStatus,
+};
 
 fn main() {
     let args = CliArgs::parse();
@@ -37,16 +41,49 @@ fn main() {
         None
     };
 
-    ctx.rt.block_on(async {
-        // warn bad health for chains (services may or may not submit to these)
-        let chain_configs = { config.chains.read().unwrap().clone() };
-        let chain_keys = chain_configs.all_chain_keys().unwrap();
-        if !chain_keys.is_empty() {
-            if let Err(err) = health_check_chains_query(&chain_configs, &chain_keys).await {
-                tracing::warn!("Non-trigger-chain health-check failed: {}", err);
+    let health_status = SharedHealthStatus::new();
+
+    let (chains, chain_configs) = {
+        let chain_configs = config.chains.read().unwrap().clone();
+        let chains = chain_configs.all_chain_keys().unwrap();
+        (chains, chain_configs)
+    };
+    if !chains.is_empty() {
+        match config.health_check_mode {
+            HealthCheckMode::Bypass => {
+                let health_status_clone = health_status.clone();
+                ctx.rt.spawn(async move {
+                    tracing::info!("Running health checks in background (bypass mode)");
+                    health_status_clone.update(&chain_configs).await;
+                    if health_status_clone.any_failing() {
+                        tracing::warn!(
+                            "Health check failed: {:#?}",
+                            health_status_clone.read().unwrap()
+                        );
+                    }
+                });
+            }
+            HealthCheckMode::Wait => {
+                ctx.rt.block_on(async {
+                    health_status.update(&chain_configs).await;
+                    if health_status.any_failing() {
+                        tracing::warn!("Health check failed: {:#?}", health_status.read().unwrap());
+                    }
+                });
+            }
+            HealthCheckMode::Exit => {
+                ctx.rt.block_on(async {
+                    health_status.update(&chain_configs).await;
+                    if health_status.any_failing() {
+                        panic!(
+                            "Health check failed (exit mode): {:#?}",
+                            health_status.read().unwrap()
+                        );
+                    }
+                });
             }
         }
-    });
+    }
 
     let meter_provider = config.prometheus.as_ref().map(|collector| {
         setup_metrics(
@@ -61,7 +98,7 @@ fn main() {
     let config_clone = config.clone();
     let dispatcher = Arc::new(Dispatcher::new(&config_clone, metrics.wavs).unwrap());
 
-    wavs::run_server(ctx, config, dispatcher, metrics.http);
+    wavs::run_server(ctx, config, dispatcher, metrics.http, health_status);
 
     if let Some(tracer) = tracer_provider {
         if tracer.shutdown().is_err() {

@@ -30,6 +30,7 @@ use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use tracing::instrument;
 use utils::config::{AnyChainConfig, ChainConfigs};
+use utils::error::EvmClientError;
 use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
@@ -210,6 +211,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         // handle incoming commands from trigger manager
         std::thread::spawn({
             let _self = self.clone();
+            let ctx_rt = ctx.rt.clone();
             move || {
                 while let Ok(command) = _self.trigger_to_dispatcher_rx.recv() {
                     match command {
@@ -247,7 +249,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                         }
                         DispatcherCommand::ChangeServiceUri { service_id, uri } => {
                             let _self = _self.clone();
-                            ctx.rt.spawn(async move {
+                            ctx_rt.spawn(async move {
                                 if let Err(err) = _self.change_service(service_id, uri).await {
                                     tracing::error!(
                                         "Error changing service in managers: {:?}",
@@ -285,7 +287,81 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             total_workflows,
             self.list_component_digests()?.len()
         );
-        for service in initial_services {
+
+        // Check ServiceURI for each service at startup and update if needed (bounded concurrency)
+        let chain_configs = self.chain_configs.read().unwrap().clone();
+        let ipfs_gateway = self.ipfs_gateway.clone();
+        let verification_results = ctx.rt.block_on(async {
+            // Limit concurrent ServiceURI checks
+            const MAX_CONCURRENT_CHECKS: usize = 10;
+            let semaphore = Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_CHECKS));
+
+            let futures: Vec<_> = initial_services
+                .iter()
+                .map(|service| {
+                    let chain_configs = chain_configs.clone();
+                    let ipfs_gateway = ipfs_gateway.clone();
+                    let service_clone = service.clone();
+                    let semaphore = semaphore.clone();
+                    async move {
+                        // Acquire semaphore permit before making network request
+                        let _permit = semaphore.acquire().await.unwrap();
+
+                        (
+                            service_clone,
+                            check_service_needs_update(service, &chain_configs, &ipfs_gateway)
+                                .await,
+                        )
+                    }
+                })
+                .collect();
+
+            futures::future::join_all(futures).await
+        });
+
+        // Apply updates for services that need them
+        let updated_services = ctx.rt.block_on(async {
+            let mut updated_services = Vec::new();
+            for (original_service, verification_result) in verification_results {
+                match verification_result {
+                    Ok(Some(current_service)) => {
+                        // Service needs updating - apply the update using change_service_inner
+                        if let Err(err) = self
+                            .change_service_inner(original_service.id(), current_service.clone())
+                            .await
+                        {
+                            tracing::error!(
+                                service_id = %original_service.id(),
+                                error = %err,
+                                "Failed to apply service update at startup"
+                            );
+                            updated_services.push(original_service);
+                        } else {
+                            tracing::info!(
+                                service_id = %current_service.id(),
+                                "ServiceURI updated at startup"
+                            );
+                            updated_services.push(current_service);
+                        }
+                    }
+                    Ok(None) => {
+                        // No update needed
+                        updated_services.push(original_service);
+                    }
+                    Err(err) => {
+                        tracing::error!(
+                            service_id = %original_service.id(),
+                            error = %err,
+                            "Failed to verify ServiceURI at startup, using cached version"
+                        );
+                        updated_services.push(original_service);
+                    }
+                }
+            }
+            updated_services
+        });
+
+        for service in updated_services {
             add_service_to_managers(
                 &service,
                 &self.trigger_manager,
@@ -409,7 +485,15 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         url_str: String,
     ) -> Result<(), DispatcherError> {
         let service = fetch_service(&url_str, &self.ipfs_gateway).await?;
+        self.change_service_inner(service_id, service).await
+    }
 
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    async fn change_service_inner(
+        &self,
+        service_id: ServiceId,
+        service: Service,
+    ) -> Result<(), DispatcherError> {
         if service.id() != service_id {
             return Err(DispatcherError::ChangeIdMismatch {
                 old_id: service_id,
@@ -453,6 +537,45 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         self.services.save(&service)?;
 
         Ok(())
+    }
+}
+
+/// Standalone function to verify service URI without requiring Dispatcher clone
+/// Returns Some(Service) if the service needs updating, None if it's up to date
+async fn check_service_needs_update(
+    service: &Service,
+    chain_configs: &ChainConfigs,
+    ipfs_gateway: &str,
+) -> Result<Option<Service>, DispatcherError> {
+    let service_id = service.id();
+    let cached_hash = service.hash()?;
+
+    // Get current service from contract
+    let current_service = match &service.manager {
+        ServiceManager::Evm { chain, address } => {
+            query_service_from_address(
+                chain.clone(),
+                (*address).into(),
+                chain_configs,
+                ipfs_gateway,
+            )
+            .await?
+        }
+    };
+
+    let current_hash = current_service.hash()?;
+
+    if current_hash != cached_hash {
+        tracing::info!(
+            service_id = %service_id,
+            cached_hash = %cached_hash,
+            current_hash = %current_hash,
+            "Service definition differs from contract, updating"
+        );
+
+        Ok(Some(current_service))
+    } else {
+        Ok(None) // No update needed
     }
 }
 
@@ -520,6 +643,9 @@ fn add_service_to_managers(
 pub enum DispatcherError {
     #[error("Service {0} already registered")]
     ServiceRegistered(ServiceId),
+
+    #[error("Evm: {0}")]
+    EvmClient(#[from] EvmClientError),
 
     #[error("{0:?}")]
     UnknownService(#[from] ServicesError),
