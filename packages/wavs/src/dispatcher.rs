@@ -96,11 +96,9 @@ impl Dispatcher<FileStorage> {
         let db_storage = RedbStorage::new(config.data.join("db"))?;
 
         let services = Services::new(db_storage.clone());
-        let chain_configs = Arc::new(RwLock::new(config.chains.clone()));
 
         let trigger_manager = TriggerManager::new(
             config,
-            chain_configs.clone(),
             metrics.trigger,
             services.clone(),
             trigger_to_dispatcher_tx,
@@ -111,7 +109,7 @@ impl Dispatcher<FileStorage> {
             file_storage,
             app_storage,
             config.wasm_lru_size,
-            chain_configs.clone(),
+            config.chains.clone(),
             Some(config.max_wasm_fuel),
             Some(config.max_execution_seconds),
             metrics.engine,
@@ -136,7 +134,7 @@ impl Dispatcher<FileStorage> {
             engine_manager,
             submission_manager,
             services,
-            chain_configs,
+            chain_configs: config.chains.clone(),
             metrics: metrics.dispatcher.clone(),
             ipfs_gateway: config.ipfs_gateway.clone(),
             trigger_to_dispatcher_rx,

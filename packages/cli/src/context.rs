@@ -2,7 +2,7 @@ use std::{fmt::Display, sync::Mutex};
 
 use crate::{args::CliArgs, config::Config, deploy::CommandDeployResult};
 use alloy_provider::Provider;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use layer_climb::prelude::*;
 use utils::{
     config::{AnyChainConfig, EvmChainConfigExt},
@@ -58,6 +58,8 @@ impl CliContext {
         let chain_config = self
             .config
             .chains
+            .read()
+            .map_err(|_| anyhow!("Chains lock is poisoned"))?
             .evm
             .get(&chain_id)
             .context(format!("chain id {chain_id} not found"))?
@@ -85,6 +87,8 @@ impl CliContext {
         let chain_config = self
             .config
             .chains
+            .read()
+            .map_err(|_| anyhow!("Chains lock is poisoned"))?
             .evm
             .get(&chain_id)
             .context(format!("chain {chain_id} not found"))?
@@ -108,6 +112,8 @@ impl CliContext {
         let chain_config = self
             .config
             .chains
+            .read()
+            .map_err(|_| anyhow!("Chains lock is poisoned"))?
             .cosmos
             .get(&chain_id)
             .context(format!("chain id {chain_id} not found"))?
@@ -131,10 +137,15 @@ impl CliContext {
         chain: &ChainKey,
         address: layer_climb::prelude::Address,
     ) -> Result<bool> {
-        Ok(
-            match self
-                .config
+        let chains = {
+            self.config
                 .chains
+                .read()
+                .map_err(|_| anyhow!("Chains lock is poisoned"))?
+                .clone()
+        };
+        Ok(
+            match chains
                 .get_chain(chain)
                 .context(format!("chain {chain} not found"))?
             {

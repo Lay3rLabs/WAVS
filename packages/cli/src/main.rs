@@ -1,5 +1,6 @@
 use alloy_primitives::FixedBytes;
 use alloy_provider::Provider;
+use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
@@ -33,6 +34,8 @@ pub(crate) async fn new_evm_client(
     let chain_config = ctx
         .config
         .chains
+        .read()
+        .map_err(|_| anyhow!("Chains lock is poisoned"))?
         .evm
         .get(&chain_id)
         .context(format!("chain id {chain_id} not found"))?

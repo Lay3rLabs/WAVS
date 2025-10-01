@@ -23,15 +23,18 @@ impl AppHandles {
         let mut evm_chains = Vec::new();
         let mut cosmos_chains = Vec::new();
 
-        for chain_config in configs.chains.evm_iter() {
-            let handle = EvmInstance::spawn(ctx.clone(), configs, chain_config.clone());
-            evm_chains.push(handle);
-        }
+        {
+            let chains = configs.chains.read().unwrap();
+            for chain_config in chains.evm_iter() {
+                let handle = EvmInstance::spawn(ctx.clone(), configs, chain_config.clone());
+                evm_chains.push(handle);
+            }
 
-        for chain_config in configs.chains.cosmos_iter() {
-            let handle = CosmosInstance::spawn(ctx.clone(), configs, chain_config.clone());
+            for chain_config in chains.cosmos_iter() {
+                let handle = CosmosInstance::spawn(ctx.clone(), configs, chain_config.clone());
 
-            cosmos_chains.push(handle);
+                cosmos_chains.push(handle);
+            }
         }
 
         let dispatcher = Arc::new(Dispatcher::new(&configs.wavs, metrics.wavs).unwrap());

@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use super::http::{map_response, TestHttpApp};
 use axum::{
@@ -50,7 +50,7 @@ impl MockE2ETestRunner {
             memory_storage,
             app_data,
             3,
-            Arc::new(RwLock::new(config.chains.clone())),
+            config.chains.clone(),
             None,
             None,
             metrics,
