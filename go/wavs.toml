@@ -1,0 +1,138 @@
+# This configuration file contains settings for all WAVS components:
+# - General settings (shared across all processes)
+# - WAVS server-specific settings
+# - CLI-specific settings
+# - Aggregator-specific settings
+#
+# Environment variable overrides follow these patterns:
+# - WAVS server settings: WAVS_<UPPERCASE_KEY>
+# - CLI settings: WAVS_CLI_<UPPERCASE_KEY>
+# - Aggregator settings: WAVS_AGGREGATOR_<UPPERCASE_KEY>
+#
+# For arrays, use a comma-separated list in a single string:
+# e.g., WAVS_LOG_LEVEL="info, wavs=debug" or WAVS_CORS_ALLOWED_ORIGINS="https://example.com, https://example2.com"
+
+# ----------------------------
+# Default settings (shared)
+# ----------------------------
+# The log level, in the format of tracing directives. Default is ["info"]
+# See https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
+[default]
+# log_level = ["info", "wavs=debug"]
+
+# jaeger = "http://localhost:4317"
+# prometheus = "http://localhost:9090"
+
+# The IPFS gateway URL used to access IPFS content over HTTP.
+# ipfs_gateway = "https://ipfs.io/ipfs/"
+
+# Chain configurations (shared across components)
+# Each component can override these in its own section if needed
+
+# Cosmos chains
+# [default.chains.cosmos.layer-local]
+# bech32_prefix = "layer"
+# rpc_endpoint = "http://localhost:26657"
+# grpc_endpoint = "http://localhost:9090"
+# gas_price = 0.025
+# gas_denom = "uslay"
+# faucet_endpoint = "http://localhost:8000"
+
+# [default.chains.cosmos.pion-1]
+# bech32_prefix = "neutron"
+# rpc_endpoint = "https://rpc-falcron.pion-1.ntrn.tech"
+# grpc_endpoint = "http://grpc-falcron.pion-1.ntrn.tech:80"
+# gas_price = 0.0053
+# gas_denom = "untrn"
+
+# # EVM chains
+# [default.chains.evm.31337]
+# ws_endpoint = "ws://localhost:8545"
+# http_endpoint = "http://localhost:8545"
+# poll_interval_ms = 7000
+# event_channel_size = 16
+
+# [default.chains.evm.11155111]
+# ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
+# http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
+# poll_interval_ms = 7000
+# event_channel_size = 20000
+
+# [default.chains.evm.17000]
+# ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
+# http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
+# poll_interval_ms = 7000
+
+# [default.chains.dev.holesky-fork]
+# type = "evm"
+# chain_id = "17000"
+# ws_endpoint = "ws://localhost:8545"
+# http_endpoint = "http://localhost:8545"
+# poll_interval_ms = 7000
+
+# ----------------------------
+# WAVS specific settings
+# ----------------------------
+[wavs]
+
+cors_allowed_origins = [
+    "https://lay3rlabs.github.io/*",
+    "http://localhost:*",
+    "http://127.0.0.1:*",
+]
+
+# The port on which the server will listen. Default is 8000
+port = 8000
+
+# The host to serve on. Default is localhost
+# host = "localhost"
+
+# The directory to store the data. Default is "/var/wavs"
+# data = "/var/wavs"
+
+# Optional bearer token to protect mutating HTTP endpoints
+# If set here or via env var `WAVS_BEARER_TOKEN`, POST/DELETE endpoints require `Authorization: Bearer <token>`
+# Generate with `openssl rand -hex 32`
+# bearer_token = "change-me"
+
+# WAVS-specific chain overrides (if needed)
+# Example:
+# [wavs.chains.evm.local]
+# chain_id = "31337"
+# ws_endpoint = "ws://localhost:8545"
+# http_endpoint = "http://localhost:8545"
+
+# ----------------------------
+# CLI specific settings
+# ----------------------------
+[cli]
+# The directory to store the data. Default is "/var/wavs-cli"
+# data = "/var/wavs-cli"
+
+# WAVS endpoint
+# wavs_endpoint = "http://localhost:8000"
+
+# ----------------------------
+# Aggregator specific settings
+# ----------------------------
+[aggregator]
+# The directory to store the data. Default is "/var/wavs-aggregator"
+# data = "/var/wavs-aggregator"
+
+cors_allowed_origins = [
+    "https://lay3rlabs.github.io/*",
+    "http://localhost:*",
+    "http://127.0.0.1:*",
+]
+
+# Optional bearer token to protect mutating HTTP endpoints
+# If set here or via env var `WAVS_AGGREGATOR_BEARER_TOKEN`, POST endpoints require `Authorization: Bearer <token>`
+# Generate with `openssl rand -hex 32`
+# bearer_token = "change-me"
+
+# Aggregator-specific chain overrides (if needed)
+# Example:
+# [aggregator.chains.evm.local]
+# chain_id = "31337"
+# ws_endpoint = "ws://localhost:8545"
+# http_endpoint = "http://localhost:8545"
