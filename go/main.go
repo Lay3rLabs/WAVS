@@ -3,28 +3,86 @@ package main
 
 import (
 	"bufio"
+	_ "embed"
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"os/exec"
 	"sync"
+	"time"
 )
 
-// embed the file located at /Users/reece/.cargo/bin/wavs
+//go:embed bin/wavs
+var wavsBinary []byte
 
-// TODO: change this to be embeded or something with a virtual FS?
-// - cp target/release/wavs ./go/bin
-// - cp wavs.toml ./go
+//go:embed wavs.toml
+var wavsConfig []byte
+
+// runEmbeddedBinary runs the embedded binary using temp files on all platforms
+func runEmbeddedBinary() (*exec.Cmd, error) {
+	// Create data directory
+	dataDir := "./wavs-data"
+	os.MkdirAll(dataDir, 0755)
+
+	// Write binary to temp file
+	tmpBinary, err := os.CreateTemp("", "wavs-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp binary: %v", err)
+	}
+
+	if _, err := tmpBinary.Write(wavsBinary); err != nil {
+		tmpBinary.Close()
+		os.Remove(tmpBinary.Name())
+		return nil, fmt.Errorf("failed to write binary: %v", err)
+	}
+
+	if err := tmpBinary.Chmod(0755); err != nil {
+		tmpBinary.Close()
+		os.Remove(tmpBinary.Name())
+		return nil, fmt.Errorf("failed to chmod binary: %v", err)
+	}
+
+	binaryPath := tmpBinary.Name()
+	tmpBinary.Close()
+
+	// Write config to temp file
+	tmpConfig, err := os.CreateTemp("", "wavs-*.toml")
+	if err != nil {
+		os.Remove(binaryPath)
+		return nil, fmt.Errorf("failed to create temp config: %v", err)
+	}
+
+	if _, err := tmpConfig.Write(wavsConfig); err != nil {
+		tmpConfig.Close()
+		os.Remove(binaryPath)
+		os.Remove(tmpConfig.Name())
+		return nil, fmt.Errorf("failed to write config: %v", err)
+	}
+
+	configPath := tmpConfig.Name()
+	tmpConfig.Close()
+
+	// Schedule cleanup after process starts
+	go func() {
+		// Wait a moment for process to start
+		time.Sleep(100 * time.Millisecond)
+		os.Remove(binaryPath)
+		os.Remove(configPath)
+	}()
+
+	cmd := exec.Command(binaryPath, "--home", configPath, "--data", dataDir)
+	return cmd, nil
+}
 
 func main() {
 	fmt.Println("Main application started.")
 
-	// Create a new command to run the sidecar.
-	// mkdir -p wavs-data
-	cmd := exec.Command("./bin/wavs", "--home", "wavs.toml", "--data", "./wavs-data")
-
-	// Set environment variable to use a local data directory
-	// cmd.Env = append(os.Environ(), "WAVS_DATA_DIR=./wavs-data")
+	// Run the embedded binary
+	cmd, err := runEmbeddedBinary()
+	if err != nil {
+		log.Fatalf("Failed to prepare embedded binary: %v", err)
+	}
 
 	// Get pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
@@ -37,8 +95,7 @@ func main() {
 		log.Fatalf("Failed to get stderr pipe: %v", err)
 	}
 
-	// Start the sidecar process.
-	// Use Start() to run it asynchronously, allowing the main app to continue.
+	// Start the sidecar process
 	err = cmd.Start()
 	if err != nil {
 		log.Fatalf("Failed to start sidecar: %v", err)
@@ -65,7 +122,7 @@ func main() {
 	go readOutput(stdout, "WAVS")
 	go readOutput(stderr, "WAVS-ERR")
 
-	// Do some work in the main application while the sidecar runs.
+	// Do some work in the main application while the sidecar runs
 	fmt.Println("Main application doing its work...")
 
 	// Wait for output readers to finish
@@ -73,9 +130,7 @@ func main() {
 		wg.Wait()
 	}()
 
-	// Wait for the sidecar to finish.
-	// This is important to ensure the sidecar completes its tasks
-	// and to handle any potential errors during its execution.
+	// Wait for the sidecar to finish
 	err = cmd.Wait()
 	if err != nil {
 		log.Printf("Sidecar exited with error: %v", err)
