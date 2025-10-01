@@ -9,7 +9,7 @@ use utils::{
 };
 use wavs_types::{Service, ServiceDigest, ServiceId};
 
-use crate::{config::Config, dispatcher::Dispatcher};
+use crate::{config::Config, dispatcher::Dispatcher, health::SharedHealthStatus};
 
 const LOCAL_SERVICE_BY_HASH_TABLE: Table<&[u8], JSON<Service>> = Table::new("services-by-hash");
 
@@ -21,6 +21,7 @@ pub struct HttpState {
     pub http_client: reqwest::Client,
     pub storage: RedbStorage,
     pub metrics: HttpMetrics,
+    pub health_status: SharedHealthStatus,
 }
 
 impl HttpState {
@@ -29,6 +30,7 @@ impl HttpState {
         dispatcher: Arc<Dispatcher<FileStorage>>,
         is_mock_chain_client: bool,
         metrics: HttpMetrics,
+        health_status: SharedHealthStatus,
     ) -> anyhow::Result<Self> {
         if !config.data.exists() {
             std::fs::create_dir_all(&config.data).map_err(|err| {
@@ -49,6 +51,7 @@ impl HttpState {
             http_client: reqwest::Client::new(),
             storage,
             metrics,
+            health_status,
         })
     }
 

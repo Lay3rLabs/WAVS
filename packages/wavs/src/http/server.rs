@@ -1,6 +1,7 @@
 use crate::{
     config::Config,
     dispatcher::Dispatcher,
+    health::SharedHealthStatus,
     http::handlers::service::{add::handle_add_service_direct, get::handle_get_service_by_hash},
     AppContext,
 };
@@ -20,8 +21,8 @@ use wildmatch::WildMatch;
 use super::{
     handlers::{
         debug::handle_debug_trigger,
-        handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_info,
-        handle_list_services, handle_not_found, handle_upload_component,
+        handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_health,
+        handle_info, handle_list_services, handle_not_found, handle_upload_component,
         openapi::ApiDoc,
         service::{
             get::handle_get_service, key::handle_get_service_signer, save::handle_save_service,
@@ -38,6 +39,7 @@ pub fn start(
     config: Config,
     dispatcher: Arc<Dispatcher<FileStorage>>,
     metrics: HttpMetrics,
+    health_status: SharedHealthStatus,
 ) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
     ctx.rt.clone().block_on(async move {
@@ -45,7 +47,7 @@ pub fn start(
 
         let mut shutdown_signal = ctx.get_kill_receiver();
 
-        let router = make_router(config, dispatcher, false, metrics).await?;
+        let router = make_router(config, dispatcher, false, metrics, health_status).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
 
@@ -71,8 +73,16 @@ pub async fn make_router(
     dispatcher: Arc<Dispatcher<FileStorage>>,
     is_mock_chain_client: bool,
     metrics: HttpMetrics,
+    health_status: SharedHealthStatus,
 ) -> anyhow::Result<axum::Router> {
-    let state = HttpState::new(config.clone(), dispatcher, is_mock_chain_client, metrics).await?;
+    let state = HttpState::new(
+        config.clone(),
+        dispatcher,
+        is_mock_chain_client,
+        metrics,
+        health_status,
+    )
+    .await?;
 
     // public routes
     let mut public = axum::Router::new()
@@ -82,7 +92,8 @@ pub async fn make_router(
         .route("/config", get(handle_config))
         .route("/services", get(handle_list_services))
         .route("/services/{chain}/{address}", get(handle_get_service))
-        .route("/info", get(handle_info));
+        .route("/info", get(handle_info))
+        .route("/health", get(handle_health));
 
     // protected routes (POST/DELETE)
     let mut protected = axum::Router::new()

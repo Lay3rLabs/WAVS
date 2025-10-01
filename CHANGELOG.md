@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning].
 
 - new metrics in both wavs and aggregator with configuration that sends alerts to Slack
 - full support for custom aggregator components, and with timeout callbacks
+- new `/health` entry point in wavs server checking for chain status
 
 ### Changed
 
