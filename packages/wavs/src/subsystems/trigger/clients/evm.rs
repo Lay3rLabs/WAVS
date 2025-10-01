@@ -1,7 +1,7 @@
 mod channels;
 mod connection;
+mod rpc;
 mod subscription;
-mod types;
 
 use connection::Connection;
 use futures::Stream;
@@ -42,6 +42,12 @@ impl EvmTriggerClient {
     }
 }
 
+impl Drop for EvmTriggerClient {
+    fn drop(&mut self) {
+        tracing::debug!("EVM: client dropped");
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::init_tracing_tests;
@@ -50,13 +56,14 @@ mod test {
     use alloy_node_bindings::Anvil;
     use futures::StreamExt;
     use tokio::time::{timeout, Duration};
+    use utils::test_utils::anvil::safe_spawn_anvil;
 
     #[tokio::test]
-    #[ignore = "wip"]
-    async fn evm_block_height_stream() {
+    async fn evm_client_blocks() {
         init_tracing_tests();
 
-        let anvil = Anvil::new().spawn();
+        // TODO - probably need to make this auto-mine blocks
+        let anvil = safe_spawn_anvil();
 
         let mut client = EvmTriggerClient::new(
             anvil.chain_id().to_string().parse().unwrap(),
