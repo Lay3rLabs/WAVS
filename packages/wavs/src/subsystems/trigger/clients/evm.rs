@@ -1,3 +1,5 @@
+// TODO - make subscription ids a lookup map
+// - in theory we should only have one at a time, but we might end up unsubscribing while a subscribe is also in flight, and we don't want to miss any inbetween
 // TODO - event logs
 // - imperative setting filter
 // - remember filter for re-subscribe/re-connect

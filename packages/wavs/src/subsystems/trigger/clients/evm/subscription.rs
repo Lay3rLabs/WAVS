@@ -144,6 +144,8 @@ impl Subscriptions {
 
                         match result {
                             LocalResult::Rpc { id, response } => {
+                                // since we clear the rpc ids (and sub ids) on disconnect,
+                                // we can be sure that any new subscription id we get is for this connection
                                 let kind = match id.kind() {
                                     Some(kind) => kind,
                                     None => {
