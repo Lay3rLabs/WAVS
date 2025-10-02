@@ -11,7 +11,9 @@ use tokio::{
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
-use crate::subsystems::trigger::clients::evm::{channels::ConnectionChannels, rpc::RpcRequest};
+use crate::subsystems::trigger::clients::evm::{
+    channels::ConnectionChannels, rpc::outbound::RpcRequest,
+};
 
 /// A handle for managing WebSocket connections with intelligent retry logic
 ///
@@ -295,14 +297,13 @@ mod test {
 
     use super::*;
     use crate::subsystems::trigger::clients::evm::channels::Channels;
-    use crate::subsystems::trigger::clients::evm::rpc::RpcRequest;
     use alloy_node_bindings::Anvil;
 
     use tokio::time::{timeout, Duration};
     use utils::test_utils::anvil::safe_spawn_anvil;
 
     #[tokio::test]
-    async fn evm_connection_works() {
+    async fn connection_works() {
         init_tracing_tests();
 
         let anvil = safe_spawn_anvil();
@@ -361,7 +362,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn evm_connection_skip_invalid() {
+    async fn connection_skip_invalid() {
         init_tracing_tests();
 
         let anvil = safe_spawn_anvil();
@@ -398,7 +399,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn evm_connection_cycles() {
+    async fn connection_cycles() {
         init_tracing_tests();
 
         let anvil_1 = safe_spawn_anvil();
