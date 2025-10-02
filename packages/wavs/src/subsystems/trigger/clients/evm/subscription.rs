@@ -181,6 +181,10 @@ impl Subscriptions {
                             },
                             LocalResult::Subscription { id: subscription_id, event } => match event {
                                 RpcSubscriptionEvent::NewHeads(header) => {
+                                    if !sub_ids.new_heads_eq(&subscription_id) {
+                                        tracing::warn!("EVM: received newHeads event for unknown subscription id {}", subscription_id);
+                                        continue;
+                                    }
                                     if let Err(e) = subscription_block_height_tx.send(header.number) {
                                         tracing::error!("EVM: failed to send new block height: {}", e);
                                     }
@@ -188,10 +192,17 @@ impl Subscriptions {
 
                                 },
                                 RpcSubscriptionEvent::Logs(log) => {
+                                    if !sub_ids.logs_eq(&subscription_id) {
+                                        tracing::warn!("EVM: received logs event for unknown subscription id {}", subscription_id);
+                                        continue;
+                                    }
 
                                 },
                                 RpcSubscriptionEvent::NewPendingTransaction(fixed_bytes) => {
-
+                                    if !sub_ids.new_pending_transactions_eq(&subscription_id) {
+                                        tracing::warn!("EVM: received newPendingTransaction event for unknown subscription id {}", subscription_id);
+                                        continue;
+                                    }
                                 },
                             },
                         }
