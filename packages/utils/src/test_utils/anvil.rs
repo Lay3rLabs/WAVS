@@ -4,6 +4,10 @@ use alloy_node_bindings::{Anvil, AnvilInstance};
 use rand::Rng;
 
 pub fn safe_spawn_anvil() -> AnvilInstance {
+    safe_spawn_anvil_extra(|anvil| anvil)
+}
+
+pub fn safe_spawn_anvil_extra(f: impl Fn(Anvil) -> Anvil) -> AnvilInstance {
     let mut attempted_ports = HashSet::new();
     loop {
         // If the port is already in use, try a different one
@@ -16,7 +20,7 @@ pub fn safe_spawn_anvil() -> AnvilInstance {
         if attempted_ports.len() > 1000 {
             panic!("Failed to spawn Anvil after 1000 attempts");
         }
-        if let Ok(instance) = Anvil::new().port(port).try_spawn() {
+        if let Ok(instance) = f(Anvil::new()).port(port).try_spawn() {
             return instance;
         }
     }

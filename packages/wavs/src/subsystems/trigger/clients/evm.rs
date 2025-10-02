@@ -1,3 +1,8 @@
+// TODO - event logs
+// - imperative setting filter
+// - remember filter for re-subscribe/re-connect
+// - test that it works across filter changes
+// - test that it works across re-connects
 mod channels;
 mod connection;
 mod rpc;
@@ -53,17 +58,15 @@ mod test {
     use crate::init_tracing_tests;
 
     use super::*;
-    use alloy_node_bindings::Anvil;
     use futures::StreamExt;
     use tokio::time::{timeout, Duration};
-    use utils::test_utils::anvil::safe_spawn_anvil;
+    use utils::test_utils::anvil::safe_spawn_anvil_extra;
 
     #[tokio::test]
-    async fn evm_client_blocks() {
+    async fn client_blocks() {
         init_tracing_tests();
 
-        // TODO - probably need to make this auto-mine blocks
-        let anvil = safe_spawn_anvil();
+        let anvil = safe_spawn_anvil_extra(|anvil| anvil.block_time_f64(0.02));
 
         let mut client = EvmTriggerClient::new(
             anvil.chain_id().to_string().parse().unwrap(),
@@ -74,16 +77,20 @@ mod test {
 
         let mut collected_heights = Vec::new();
 
+        const BLOCKS_TO_COLLECT: usize = 5;
         timeout(Duration::from_secs(5), async {
             while let Some(height) = stream.next().await {
                 collected_heights.push(height);
+                if collected_heights.len() >= BLOCKS_TO_COLLECT {
+                    break;
+                }
             }
         })
         .await
         .unwrap();
 
         assert!(
-            collected_heights.len() > 5,
+            collected_heights.len() >= BLOCKS_TO_COLLECT,
             "only got {} blocks, not enough to test",
             collected_heights.len()
         );

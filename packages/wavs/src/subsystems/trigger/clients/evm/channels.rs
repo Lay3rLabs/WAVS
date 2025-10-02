@@ -1,6 +1,8 @@
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::subsystems::trigger::clients::evm::{connection::ConnectionState, rpc::RpcRequest};
+use crate::subsystems::trigger::clients::evm::{
+    connection::ConnectionState, rpc::outbound::RpcRequest,
+};
 
 use super::connection::ConnectionData;
 

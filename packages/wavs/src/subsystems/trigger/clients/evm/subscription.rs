@@ -1,14 +1,16 @@
-use std::{
-    sync::{atomic::AtomicUsize, Arc},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
+use slotmap::Key;
 use tokio::{sync::oneshot, task::JoinHandle};
 
 use crate::subsystems::trigger::clients::evm::{
     channels::SubscriptionChannels,
     connection::{ConnectionData, ConnectionState},
-    rpc::{RpcRequest, RpcResponse, RpcResponsePayload, RpcResult},
+    rpc::{
+        id::{RpcId, RpcRequestKind},
+        inbound::{RpcInbound, RpcResponse, RpcSubscriptionEvent},
+        outbound::RpcRequest,
+    },
 };
 
 #[derive(Clone)]
@@ -65,50 +67,6 @@ impl SubscriptionIds {
     }
 }
 
-#[derive(Clone, Default)]
-struct RpcIds {
-    _new_heads: Arc<AtomicUsize>,
-    _logs: Arc<AtomicUsize>,
-    _new_pending_transactions: Arc<AtomicUsize>,
-}
-
-impl RpcIds {
-    pub fn clear(&self) {
-        self._new_heads
-            .store(0, std::sync::atomic::Ordering::SeqCst);
-        self._logs.store(0, std::sync::atomic::Ordering::SeqCst);
-        self._new_pending_transactions
-            .store(0, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    pub fn set_new_heads(&self, id: usize) {
-        self._new_heads
-            .store(id, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    pub fn new_heads(&self) -> usize {
-        self._new_heads.load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    pub fn set_logs(&self, id: usize) {
-        self._logs.store(id, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    pub fn logs(&self) -> usize {
-        self._logs.load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    pub fn set_new_pending_transactions(&self, id: usize) {
-        self._new_pending_transactions
-            .store(id, std::sync::atomic::Ordering::SeqCst);
-    }
-
-    pub fn new_pending_transactions(&self) -> usize {
-        self._new_pending_transactions
-            .load(std::sync::atomic::Ordering::SeqCst)
-    }
-}
-
 impl Subscriptions {
     pub fn new(channels: SubscriptionChannels) -> Self {
         let SubscriptionChannels {
@@ -121,7 +79,6 @@ impl Subscriptions {
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
 
         let sub_ids = SubscriptionIds::default();
-        let rpc_ids = RpcIds::default();
 
         let handle = tokio::spawn(async move {
             loop {
@@ -132,26 +89,44 @@ impl Subscriptions {
                     }
 
                     Some(msg) = connection_data_rx.recv() => {
-                        let (result, response_id) = match msg {
+                        enum LocalResult {
+                            Rpc {
+                                id: RpcId,
+                                response: RpcResponse
+                            },
+                            Subscription {
+                                id: String,
+                                event: RpcSubscriptionEvent
+                            }
+                        }
+                        let result = match msg {
                             ConnectionData::Text(text) => {
-                                match serde_json::from_str::<RpcResponse>(&text) {
-                                    Ok(response) => {
-                                        match response.id.parse::<usize>() {
-                                            Ok(id) => {
-                                                match response.payload {
-                                                    RpcResponsePayload::Success { result } => {
-                                                        (result, id)
+                                match serde_json::from_str::<RpcInbound>(&text) {
+                                    Ok(inbound) => {
+                                        match inbound {
+                                            RpcInbound::Response {id, result} => {
+                                                match result {
+                                                    Ok(response) => {
+                                                        LocalResult::Rpc { id, response }
                                                     }
-                                                    RpcResponsePayload::Error { error } => {
-                                                        tracing::error!("EVM: RPC error: code {}, message: {}", error.code, error.message);
+                                                    Err(err) => {
+                                                        tracing::error!("EVM: RPC error for id {}: {:?}", id.data().as_ffi(), err);
                                                         continue;
                                                     }
                                                 }
-                                            }
-                                            Err(e) => {
-                                                tracing::error!("EVM: failed to parse response id {}: {}", response.id, e);
-                                                continue;
-                                            }
+                                            },
+                                            RpcInbound::Subscription{id, result } => {
+                                                match result {
+                                                    Ok(event) => {
+                                                        LocalResult::Subscription { id, event }
+                                                    }
+                                                    Err(err) => {
+                                                        tracing::error!("EVM: Subscription error for id {}: {:?}", id, err);
+                                                        continue;
+                                                    }
+                                                }
+                                            },
+
                                         }
                                     },
                                     Err(e) => {
@@ -168,54 +143,64 @@ impl Subscriptions {
                         };
 
                         match result {
-                            RpcResult::SubscriptionId(subscription_id) => {
-                                if response_id == rpc_ids.new_heads() {
-                                    tracing::info!("EVM: subscribed to newHeads with subscription id {}", subscription_id);
-                                    sub_ids.set_new_heads(subscription_id);
-                                } else if response_id == rpc_ids.logs() {
-                                    tracing::info!("EVM: subscribed to logs with subscription id {}", subscription_id);
-                                    sub_ids.set_logs(subscription_id);
-                                } else if response_id == rpc_ids.new_pending_transactions() {
-                                    tracing::info!("EVM: subscribed to newPendingTransactions with subscription id {}", subscription_id);
-                                    sub_ids.set_new_pending_transactions(subscription_id);
-                                } else {
-                                    tracing::warn!("EVM: received unknown subscription id {} for response id {}", subscription_id, response_id);
+                            LocalResult::Rpc { id, response } => {
+                                let kind = match id.kind() {
+                                    Some(kind) => kind,
+                                    None => {
+                                        tracing::warn!("EVM: received response for unknown RPC id {}", id.data().as_ffi());
+                                        continue;
+                                    },
+                                };
+                                match response {
+                                    RpcResponse::NewSubscription { subscription_id } => {
+                                        match kind {
+                                            RpcRequestKind::SubscribeNewHeads => {
+                                                tracing::info!("EVM: subscribed to newHeads with subscription id {}", subscription_id);
+                                                sub_ids.set_new_heads(subscription_id);
+                                            },
+                                            RpcRequestKind::SubscribeLogs => {
+                                                tracing::info!("EVM: subscribed to logs with subscription id {}", subscription_id);
+                                                sub_ids.set_logs(subscription_id);
+                                            },
+                                            RpcRequestKind::SubscribeNewPendingTransactions => {
+                                                tracing::info!("EVM: subscribed to newPendingTransactions with subscription id {}", subscription_id);
+                                                sub_ids.set_new_pending_transactions(subscription_id);
+                                            },
+                                            RpcRequestKind::Unsubscribe => {
+                                                tracing::error!("EVM: received newSubscription response for unsubscribe request id {}", id.data().as_ffi());
+                                            },
+                                        }
+                                    },
+                                    RpcResponse::UnsubscribeAck(success) => {
+
+                                    },
+                                    RpcResponse::Other(value) => {
+
+                                    },
                                 }
                             },
-                            RpcResult::UnsubscribeSuccess(_) => {
-
-                            },
-                            RpcResult::SubscriptionData { subscription, result } => {
-                                if sub_ids.new_heads_eq(&subscription) {
-
-                                    // Handle new block header
-                                    // TODO - deserialize the block header and extract the block number
-                                    if let Err(e) = subscription_block_height_tx.send(42) {
+                            LocalResult::Subscription { id: subscription_id, event } => match event {
+                                RpcSubscriptionEvent::NewHeads(header) => {
+                                    if let Err(e) = subscription_block_height_tx.send(header.number) {
                                         tracing::error!("EVM: failed to send new block height: {}", e);
                                     }
-                                    tracing::info!("Got new block header!")
-                                } else if sub_ids.logs_eq(&subscription) {
-                                    // Handle log event
-                                    tracing::info!("EVM: received log event: {:?}", result);
-                                } else if sub_ids.new_pending_transactions_eq(&subscription) {
-                                    // Handle new pending transaction
-                                    tracing::info!("EVM: received new pending transaction: {:?}", result);
-                                } else {
-                                    tracing::warn!("EVM: received data for unknown subscription id {}", subscription);
-                                }
+                                    tracing::debug!("Got new block header ({})!", header.number)
 
+                                },
+                                RpcSubscriptionEvent::Logs(log) => {
+
+                                },
+                                RpcSubscriptionEvent::NewPendingTransaction(fixed_bytes) => {
+
+                                },
                             },
                         }
-                        // Handle incoming messages and route them to the appropriate subscription
-                        // like maybe we get a new block height and need to send it to subscription_block_height_tx
                     }
                     Some(state) = connection_state_rx.recv() => {
                         match state {
                             ConnectionState::Connected(_endpoint) => {
                                 tracing::info!("EVM connected on {}", _endpoint);
-                                let req = RpcRequest::new_heads();
-                                rpc_ids.set_new_heads(req.id());
-                                if let Err(e) = connection_send_tx.send(req) {
+                                if let Err(e) = connection_send_tx.send(RpcRequest::new_heads()) {
                                     tracing::error!("EVM: failed to send newHeads subscription request: {}", e);
                                 } else {
                                     tracing::info!("EVM: sent newHeads subscription request");
@@ -225,7 +210,7 @@ impl Subscriptions {
                             },
                             ConnectionState::Disconnected => {
                                 sub_ids.clear();
-                                rpc_ids.clear();
+                                RpcId::clear_all();
                             },
                         }
                     }

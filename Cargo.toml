@@ -93,6 +93,7 @@ tokio-tungstenite = "0.28.0"
 dashmap = "6.1.0"
 ordermap = "0.5.12"
 bimap = { version = "0.6.3", features = ["serde"] }
+slotmap = "1.0.7"
 
 # fs
 tempfile = "3.23.0"

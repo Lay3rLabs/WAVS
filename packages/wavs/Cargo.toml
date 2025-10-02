@@ -59,6 +59,7 @@ bimap = { workspace = true }
 crossbeam = { workspace = true }
 iri-string = { workspace = true }
 tokio-tungstenite = { workspace = true }
+slotmap = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
