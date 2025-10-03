@@ -1,6 +1,7 @@
 use crate::{clients::HttpClient, context::CliContext, deploy::CommandDeployResult};
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
+use iri_string::types::UriString;
 use wavs_types::{Service, ServiceManager};
 
 pub struct DeployService {
@@ -12,7 +13,7 @@ impl std::fmt::Display for DeployService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "New Service deployed to wavs")?;
         if let Some(save_service_args) = &self.args.set_service_url_args {
-            write!(f, "\n\n{:#?}", save_service_args.service_url)?;
+            write!(f, "\n\n{:#?}", save_service_args.service_uri)?;
         }
         write!(f, "\n\n{:#?}", self.args.service_manager)
     }
@@ -29,13 +30,13 @@ impl CommandDeployResult for DeployService {
 #[derive(Clone)]
 pub struct DeployServiceArgs {
     pub service_manager: ServiceManager,
-    pub set_service_url_args: Option<SetServiceUrlArgs>,
+    pub set_service_url_args: Option<SetServiceUriArgs>,
 }
 
 #[derive(Clone)]
-pub struct SetServiceUrlArgs {
+pub struct SetServiceUriArgs {
     pub provider: DynProvider,
-    pub service_url: String,
+    pub service_uri: UriString,
 }
 
 impl DeployService {

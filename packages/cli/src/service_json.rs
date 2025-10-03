@@ -3,8 +3,7 @@ use std::{collections::BTreeMap, num::NonZeroU64, str::FromStr};
 use serde::{Deserialize, Serialize};
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_types::{
-    Component, ComponentSource, ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp,
-    Trigger, WorkflowId,
+    Component, ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp, Trigger, WorkflowId,
 };
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -194,19 +193,6 @@ impl ServiceJson {
                                 workflow_id, key, WAVS_ENV_PREFIX
                             ));
                         }
-                    }
-
-                    match &component.source {
-                        ComponentSource::Digest(_digest) => {}
-                        ComponentSource::Download { uri, digest: _ } => {
-                            if reqwest::Url::parse(uri).is_err() {
-                                errors.push(format!(
-                                    "Workflow '{}' has an aggregator component with invalid download URI: {}",
-                                    workflow_id, uri
-                                ));
-                            }
-                        }
-                        ComponentSource::Registry { registry: _ } => {}
                     }
                 }
             }

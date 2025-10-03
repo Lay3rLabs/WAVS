@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, str::FromStr};
 
+use iri_string::types::UriString;
 use wavs_types::WorkflowId;
 
 use crate::{
@@ -133,7 +134,7 @@ impl TryFrom<component_service::ComponentSource> for wavs_types::ComponentSource
             }
             component_service::ComponentSource::Download(download) => {
                 wavs_types::ComponentSource::Download {
-                    uri: download.url,
+                    uri: UriString::try_from(download.url)?,
                     digest: wavs_types::ComponentDigest::from_str(&download.digest)?,
                 }
             }

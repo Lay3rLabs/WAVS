@@ -57,6 +57,7 @@ utoipa-swagger-ui = { workspace = true }
 dashmap = { workspace = true }
 bimap = { workspace = true }
 crossbeam = { workspace = true }
+iri-string = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
