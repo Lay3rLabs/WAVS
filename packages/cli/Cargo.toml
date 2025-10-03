@@ -36,3 +36,4 @@ alloy-json-abi = { workspace = true }
 cron = { workspace = true }
 rand = { workspace = true }
 opentelemetry = { workspace = true }
+iri-string = { workspace = true }

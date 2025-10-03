@@ -51,6 +51,7 @@ tracing-opentelemetry = { workspace = true }
 url = { workspace = true }
 cid = { workspace = true }
 reqwest = { workspace = true }
+iri-string = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 tempfile = { workspace = true }

@@ -1,4 +1,5 @@
 use alloy_primitives::{hex, LogData};
+use iri_string::types::UriString;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -137,7 +138,8 @@ pub struct Component {
 pub enum ComponentSource {
     /// The wasm bytecode provided at fixed url, digest provided to ensure no tampering
     Download {
-        uri: String,
+        #[schema(value_type = String)]
+        uri: UriString,
         digest: ComponentDigest,
     },
     /// The wasm bytecode downloaded from a standard registry, digest provided to ensure no tampering

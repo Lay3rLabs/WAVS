@@ -1,6 +1,6 @@
 use alloy_primitives::{Address, LogData};
 use clap::{arg, Parser, Subcommand};
-use reqwest::Url;
+use iri_string::types::UriString;
 use serde::{Deserialize, Serialize};
 use std::{
     num::{NonZeroU32, NonZeroU64},
@@ -38,15 +38,15 @@ pub enum Command {
     /// - Operators must already be registered on the contracts
     ///
     /// # Parameters
-    /// * `service_url`: URL pointing to the JSON service definition
-    /// * `set_url`: Boolean indicating whether to also set the URL on the service manager
+    /// * `service_uri`: URI pointing to the JSON service definition
+    /// * `set_uri`: Boolean indicating whether to also set the URL on the service manager
     /// * `args`: Additional CLI arguments for the deployment operation
     DeployService {
         #[clap(long)]
-        service_url: String,
+        service_uri: UriString,
 
         #[clap(long)]
-        set_url: bool,
+        set_uri: bool,
 
         #[clap(flatten)]
         args: CliArgs,
@@ -182,10 +182,10 @@ pub enum ServiceCommand {
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum ComponentCommand {
     /// Set a component using a url
-    SetSourceUrl {
+    SetSourceUri {
         /// The url of the component to set
         #[clap(long)]
-        uri: Url,
+        uri: UriString,
     },
     /// Set a component using a digest
     SetSourceDigest {

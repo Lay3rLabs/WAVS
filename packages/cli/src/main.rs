@@ -13,7 +13,7 @@ use utils::{
 use wavs_cli::{
     args::Command,
     command::{
-        deploy_service::{DeployService, DeployServiceArgs, SetServiceUrlArgs},
+        deploy_service::{DeployService, DeployServiceArgs, SetServiceUriArgs},
         exec_aggregator::{ExecAggregator, ExecAggregatorArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
         service::handle_service_command,
@@ -87,26 +87,26 @@ async fn main() {
 
     match command {
         Command::DeployService {
-            service_url,
-            set_url,
+            service_uri,
+            set_uri,
             args: _,
         } => {
-            let service = fetch_service(&service_url, &ctx.config.ipfs_gateway)
+            let service = fetch_service(&service_uri, &ctx.config.ipfs_gateway)
                 .await
                 .context(format!(
                     "Failed to fetch service from URL '{}' using gateway '{}'",
-                    service_url, ctx.config.ipfs_gateway
+                    service_uri, ctx.config.ipfs_gateway
                 ))
                 .unwrap();
 
-            let set_service_url_args = if set_url {
+            let set_service_url_args = if set_uri {
                 let provider = new_evm_client(&ctx, service.manager.chain().id.clone())
                     .await
                     .unwrap()
                     .provider;
-                Some(SetServiceUrlArgs {
+                Some(SetServiceUriArgs {
                     provider,
-                    service_url,
+                    service_uri,
                 })
             } else {
                 None

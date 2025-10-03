@@ -270,7 +270,7 @@ fn build_component_result(
         },
         ComponentCommand::SetSourceDigest { .. }
         | ComponentCommand::SetSourceRegistry { .. }
-        | ComponentCommand::SetSourceUrl { .. } => {
+        | ComponentCommand::SetSourceUri { .. } => {
             unreachable!("Source commands should be handled separately")
         }
     };
@@ -334,8 +334,8 @@ pub async fn update_component(
             })
         }
 
-        ComponentCommand::SetSourceUrl { uri } => {
-            let bytes = fetch_bytes(uri.as_str(), ipfs_gateway).await?;
+        ComponentCommand::SetSourceUri { uri } => {
+            let bytes = fetch_bytes(uri, ipfs_gateway).await?;
             let digest = ComponentDigest::hash(&bytes);
 
             modify_service_file(file_path, |mut service| {
@@ -346,13 +346,13 @@ pub async fn update_component(
                 match get_target_component(workflow, &context)? {
                     ComponentTarget::Direct(component) => {
                         component.source = ComponentSource::Download {
-                            uri: uri.to_string(),
+                            uri: uri.clone(),
                             digest: digest.clone(),
                         };
                     }
                     ComponentTarget::Json(component_json) => {
                         let source = ComponentSource::Download {
-                            uri: uri.to_string(),
+                            uri: uri.clone(),
                             digest: digest.clone(),
                         };
                         let new_component = Component::new(source);
@@ -425,7 +425,7 @@ fn apply_component_command(component: &mut Component, command: ComponentCommand)
     match command {
         ComponentCommand::SetSourceDigest { .. }
         | ComponentCommand::SetSourceRegistry { .. }
-        | ComponentCommand::SetSourceUrl { .. } => {
+        | ComponentCommand::SetSourceUri { .. } => {
             unreachable!("This should be handled in caller")
         }
         ComponentCommand::Permissions {
