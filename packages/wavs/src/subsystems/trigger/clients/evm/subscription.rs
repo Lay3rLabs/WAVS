@@ -173,13 +173,19 @@ impl Subscriptions {
                                         }
                                     },
                                     RpcSubscriptionEvent::Logs(log) => {
+                                        tracing::info!("EVM: received log event for subscription id {}", subscription_id);
+                                        tracing::debug!("EVM: log event details: address={:?}, topics={:?}", log.address(), log.topics());
+
                                         if !active.ids.eq(&subscription_id, SubscriptionKind::Logs) {
                                             tracing::warn!("EVM: received logs event for unknown subscription id {}", subscription_id);
                                             continue;
                                         }
 
+                                        tracing::info!("EVM: forwarding log event to channel");
                                         if let Err(e) = subscription_log_tx.send(log) {
                                             tracing::error!("EVM: failed to send log: {}", e);
+                                        } else {
+                                            tracing::info!("EVM: successfully sent log event to channel");
                                         }
 
                                     },
