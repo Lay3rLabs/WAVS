@@ -29,6 +29,7 @@ use std::{
 };
 use utils::{
     config::{AnyChainConfig, WAVS_ENV_PREFIX},
+    service::fetch_bytes,
     wkg::WkgClient,
 };
 use uuid::Uuid;
@@ -73,7 +74,8 @@ pub async fn handle_service_command(
                 display_result(ctx, result, json)?;
             }
             WorkflowCommand::Component { id, command } => {
-                let result = update_workflow_component(&file, id, command).await?;
+                let result =
+                    update_workflow_component(&ctx.config.ipfs_gateway, &file, id, command).await?;
                 display_result(ctx, result, json)?;
             }
             WorkflowCommand::Trigger { id, command } => match command {
@@ -130,7 +132,9 @@ pub async fn handle_service_command(
                     display_result(ctx, result, json)?;
                 }
                 SubmitCommand::Component { component } => {
-                    let result = modify_aggregator_component(&file, id, component).await?;
+                    let result =
+                        modify_aggregator_component(&ctx.config.ipfs_gateway, &file, id, component)
+                            .await?;
                     display_result(ctx, result, json)?;
                 }
             },
@@ -275,6 +279,7 @@ fn build_component_result(
 
 /// Unified component operation handler for both workflow and aggregator components
 pub async fn update_component(
+    ipfs_gateway: &str,
     file_path: &Path,
     workflow_id: WorkflowId,
     context: ComponentContext,
@@ -330,16 +335,7 @@ pub async fn update_component(
         }
 
         ComponentCommand::SetSourceUrl { uri } => {
-            let resp = reqwest::get(uri.clone())
-                .await
-                .context("Failed to download from URL")?;
-            if !resp.status().is_success() {
-                return Err(anyhow!(
-                    "Failed to download from URL: HTTP {}",
-                    resp.status()
-                ));
-            }
-            let bytes = resp.bytes().await.context("Failed to read response body")?;
+            let bytes = fetch_bytes(uri.as_str(), ipfs_gateway).await?;
             let digest = ComponentDigest::hash(&bytes);
 
             modify_service_file(file_path, |mut service| {
@@ -755,6 +751,7 @@ pub fn set_cron_trigger(
 
 /// Update workflow component using unified logic
 pub async fn update_workflow_component(
+    ipfs_gateway: &str,
     file_path: &Path,
     workflow_id: WorkflowId,
     command: ComponentCommand,
@@ -764,7 +761,7 @@ pub async fn update_workflow_component(
     let context = ComponentContext::Workflow {
         workflow_id: workflow_id.clone(),
     };
-    update_component(file_path, workflow_id, context, command).await
+    update_component(ipfs_gateway, file_path, workflow_id, context, command).await
 }
 
 /// Set an EVM manager for the service
@@ -1026,6 +1023,7 @@ pub fn set_none_submit(
 
 /// Modify an aggregator component using unified logic
 pub async fn modify_aggregator_component(
+    ipfs_gateway: &str,
     file_path: &Path,
     workflow_id: WorkflowId,
     component_cmd: ComponentCommand,
@@ -1033,5 +1031,5 @@ pub async fn modify_aggregator_component(
     let context = ComponentContext::Aggregator {
         workflow_id: workflow_id.clone(),
     };
-    update_component(file_path, workflow_id, context, component_cmd).await
+    update_component(ipfs_gateway, file_path, workflow_id, context, component_cmd).await
 }

@@ -9,6 +9,7 @@ use layer_climb::prelude::ChainConfig;
 use layer_climb::querier::QueryClient as CosmosQueryClient;
 use tempfile::tempdir;
 use utils::init_tracing_tests;
+use utils::service::DEFAULT_IPFS_GATEWAY;
 use wasm_pkg_client::PackageRef;
 use wavs_types::ComponentDigest;
 use wavs_types::SignatureKind;
@@ -80,6 +81,7 @@ async fn test_workflow_component_operations() {
 
     // Test adding first component using Digest source
     let add_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::SetSourceDigest {
@@ -113,6 +115,7 @@ async fn test_workflow_component_operations() {
     add_workflow(&file_path, Some(workflow_id_2.clone())).unwrap();
 
     let second_add_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id_2.clone(),
         ComponentCommand::SetSourceDigest {
@@ -132,6 +135,7 @@ async fn test_workflow_component_operations() {
 
     // Test updating permissions - allow all HTTP hosts
     let permissions_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::Permissions {
@@ -173,6 +177,7 @@ async fn test_workflow_component_operations() {
     // Test updating to specific HTTP hosts
     let specific_hosts = vec!["example.com".to_string(), "api.example.com".to_string()];
     let specific_hosts_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id_2.clone(),
         ComponentCommand::Permissions {
@@ -218,6 +223,7 @@ async fn test_workflow_component_operations() {
 
     // Test updating to no HTTP hosts
     let no_hosts_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::Permissions {
@@ -258,6 +264,7 @@ async fn test_workflow_component_operations() {
     // Test error handling for permissions update with non-existent component
     let non_existent_id = WorkflowId::new("does-not-exist").unwrap();
     let error_permissions = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         non_existent_id.clone(),
         ComponentCommand::Permissions {
@@ -279,6 +286,7 @@ async fn test_workflow_component_operations() {
     add_workflow(&file_path, Some(workflow_id_3.clone())).unwrap();
 
     let third_add_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id_3.clone(),
         ComponentCommand::SetSourceDigest {
@@ -309,6 +317,7 @@ async fn test_workflow_component_operations() {
     // Test setting a specific fuel limit
     let fuel_limit = 50000u64;
     let fuel_limit_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::FuelLimit {
@@ -344,6 +353,7 @@ async fn test_workflow_component_operations() {
 
     // Test removing a fuel limit (setting to None)
     let no_fuel_limit_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::FuelLimit { fuel: None },
@@ -379,6 +389,7 @@ async fn test_workflow_component_operations() {
         "debug=true".to_string(),
     ];
     let config_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::Config {
@@ -426,6 +437,7 @@ async fn test_workflow_component_operations() {
 
     // Test clearing configuration (set to None)
     let clear_config_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::Config { values: None },
@@ -457,6 +469,7 @@ async fn test_workflow_component_operations() {
     // Test with invalid config format
     let invalid_config = vec!["invalid_format".to_string()];
     let invalid_config_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::Config {
@@ -479,6 +492,7 @@ async fn test_workflow_component_operations() {
     ];
 
     let env_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::Env {
@@ -523,6 +537,7 @@ async fn test_workflow_component_operations() {
     let invalid_env_keys = vec!["WAVS_ENV_VALID".to_string(), "INVALID_PREFIX".to_string()];
 
     let invalid_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::Env {
@@ -538,6 +553,7 @@ async fn test_workflow_component_operations() {
 
     // Test clearing env keys
     let clear_env_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::Env { values: None },
@@ -556,6 +572,7 @@ async fn test_workflow_component_operations() {
     // Test setting a specific max execution time
     let max_exec_time = 120u64;
     let max_exec_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id_2.clone(),
         ComponentCommand::TimeLimit {
@@ -593,6 +610,7 @@ async fn test_workflow_component_operations() {
 
     // Test removing max exec time (setting to None)
     let no_max_exec_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id_2.clone(),
         ComponentCommand::TimeLimit { seconds: None },
@@ -1396,6 +1414,7 @@ async fn test_set_component_source_registry() {
 
     // Call the unified function to set the component source
     let result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
         ComponentCommand::SetSourceRegistry {
@@ -1560,9 +1579,14 @@ async fn test_modify_aggregator_component() {
     let set_digest_cmd = ComponentCommand::SetSourceDigest {
         digest: test_digest.clone(),
     };
-    let result = modify_aggregator_component(&file_path, workflow_id.clone(), set_digest_cmd)
-        .await
-        .unwrap();
+    let result = modify_aggregator_component(
+        DEFAULT_IPFS_GATEWAY,
+        &file_path,
+        workflow_id.clone(),
+        set_digest_cmd,
+    )
+    .await
+    .unwrap();
 
     // Verify result
     assert_eq!(result.file_path(), &file_path);
@@ -1611,9 +1635,14 @@ async fn test_modify_aggregator_component() {
         http_hosts: Some(vec!["*".to_string()]),
         file_system: None,
     };
-    modify_aggregator_component(&file_path, workflow_id.clone(), permissions_cmd)
-        .await
-        .unwrap();
+    modify_aggregator_component(
+        DEFAULT_IPFS_GATEWAY,
+        &file_path,
+        workflow_id.clone(),
+        permissions_cmd,
+    )
+    .await
+    .unwrap();
 
     // Verify permissions were updated
     let service_json = std::fs::read_to_string(&file_path).unwrap();
