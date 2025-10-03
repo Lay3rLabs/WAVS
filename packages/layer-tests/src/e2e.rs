@@ -136,7 +136,7 @@ async fn _run(configs: Configs, mode: TestMode, middleware_instance: MiddlewareI
     // Create test registry from test mode
     let registry = test_registry::TestRegistry::from_test_mode(
         mode,
-        &configs.chains,
+        configs.chains.clone(),
         &clients,
         &cosmos_trigger_code_map,
     )

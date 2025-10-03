@@ -1,7 +1,6 @@
 use alloy_primitives::FixedBytes;
 use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDepsBuilder};
@@ -105,12 +104,7 @@ impl ExecAggregator {
         let data_dir = aggregator_config.data.clone();
         let meter = opentelemetry::global::meter("aggregator_cli");
         let metrics = utils::telemetry::AggregatorMetrics::new(meter);
-        let chain_configs = Arc::new(RwLock::new(aggregator_config.chains.clone()));
-        let state = wavs_aggregator::http::state::HttpState::new(
-            aggregator_config,
-            chain_configs,
-            metrics,
-        )?;
+        let state = wavs_aggregator::http::state::HttpState::new(aggregator_config, metrics)?;
 
         let wasm_bytes = read_component(&component_path)?;
         let digest = state
@@ -144,7 +138,7 @@ impl ExecAggregator {
             event_id: packet.event_id(),
             engine: &engine,
             data_dir: &data_dir,
-            chain_configs: &cli_config.chains,
+            chain_configs: &cli_config.chains.read().unwrap(),
             log: HostComponentLogger::AggregatorHostComponentLogger(
                 |_service_id, _workflow_id, _digest, level, message| {
                     match level {

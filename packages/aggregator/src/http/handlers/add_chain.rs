@@ -34,7 +34,8 @@ async fn add_chain_inner(
     config: AnyChainConfig,
 ) -> HttpResult<()> {
     state
-        .chain_configs
+        .config
+        .chains
         .write()
         .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
         .add_chain(chain.clone(), config.clone())?;

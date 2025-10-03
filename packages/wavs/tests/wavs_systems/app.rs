@@ -32,7 +32,7 @@ impl TestApp {
         .build()
         .unwrap();
 
-        config.chains = mock_chain_configs().read().unwrap().clone();
+        config.chains = mock_chain_configs();
         config.dev_endpoints_enabled = true;
 
         wavs::init_tracing_tests();

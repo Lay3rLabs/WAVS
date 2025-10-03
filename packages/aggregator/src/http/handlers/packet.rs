@@ -516,7 +516,7 @@ mod test {
     use futures::{stream::FuturesUnordered, StreamExt};
     use std::{
         collections::{BTreeMap, HashSet},
-        sync::{Arc, Mutex, RwLock},
+        sync::{Arc, Mutex},
     };
 
     use alloy_primitives::Address;
@@ -1117,8 +1117,10 @@ mod test {
             .build()
             .unwrap();
 
-            // Use the same chain configuration from contract_deps
-            config.chains.evm.insert(
+            config.credential = Some(Credential::new(
+                "test test test test test test test test test test test junk".to_string(),
+            ));
+            config.chains.write().unwrap().evm.insert(
                 contract_deps.chain.id.clone(),
                 EvmChainConfigBuilder {
                     http_endpoint: Some(contract_deps._anvil.endpoint()),
@@ -1129,14 +1131,9 @@ mod test {
                 },
             );
 
-            config.credential = Some(Credential::new(
-                "test test test test test test test test test test test junk".to_string(),
-            ));
-
             let metrics =
                 utils::telemetry::AggregatorMetrics::new(opentelemetry::global::meter("test"));
-            let chain_configs = Arc::new(RwLock::new(config.chains.clone()));
-            let state = HttpState::new_with_engine(config, chain_configs, metrics).unwrap();
+            let state = HttpState::new_with_engine(config, metrics).unwrap();
 
             let digest = state
                 .aggregator_engine

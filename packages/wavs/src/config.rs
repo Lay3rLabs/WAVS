@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 use utils::{
     config::{ChainConfigs, ConfigExt},
     service::DEFAULT_IPFS_GATEWAY,
@@ -53,7 +56,8 @@ pub struct Config {
     pub wasm_lru_size: usize,
 
     /// All the available chains
-    pub chains: ChainConfigs,
+    #[schema(value_type = ChainConfigs)]
+    pub chains: Arc<RwLock<ChainConfigs>>,
 
     /// The mnemonic to use for submitting transactions on EVM chains
     pub submission_mnemonic: Option<Credential>,
@@ -121,11 +125,7 @@ impl Default for Config {
             host: "127.0.0.1".to_string(),
             data: PathBuf::from("/var/wavs"),
             cors_allowed_origins: Vec::new(),
-            chains: ChainConfigs {
-                cosmos: BTreeMap::new(),
-                evm: BTreeMap::new(),
-                dev: BTreeMap::new(),
-            },
+            chains: Arc::new(RwLock::new(ChainConfigs::default())),
             wasm_lru_size: 20,
             submission_mnemonic: None,
             cosmos_submission_mnemonic: None,

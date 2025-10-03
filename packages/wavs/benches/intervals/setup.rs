@@ -1,7 +1,4 @@
-use std::{
-    num::NonZero,
-    sync::{Arc, RwLock},
-};
+use std::{num::NonZero, sync::Arc};
 
 use opentelemetry::global::meter;
 use tempfile::TempDir;
@@ -62,10 +59,8 @@ impl Setup {
         let db_storage = RedbStorage::new(data_dir.path().join("db")).unwrap();
         let (trigger_to_dispatcher_tx, trigger_to_dispatcher_rx) =
             crossbeam::channel::unbounded::<DispatcherCommand>();
-        let chain_configs = Arc::new(RwLock::new(config.chains.clone()));
         let trigger_manager = TriggerManager::new(
             &config,
-            chain_configs,
             metrics.wavs.trigger,
             Services::new(db_storage),
             trigger_to_dispatcher_tx,

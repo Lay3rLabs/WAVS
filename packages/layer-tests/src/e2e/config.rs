@@ -1,4 +1,7 @@
-use std::{num::NonZeroU32, sync::LazyLock};
+use std::{
+    num::NonZeroU32,
+    sync::{Arc, LazyLock, RwLock},
+};
 
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
 use utils::{
@@ -42,7 +45,7 @@ pub struct Configs {
     pub cli: wavs_cli::config::Config,
     pub cli_args: wavs_cli::args::CliArgs,
     pub aggregators: Vec<wavs_aggregator::config::Config>,
-    pub chains: ChainConfigs,
+    pub chains: Arc<RwLock<ChainConfigs>>,
     pub mnemonics: TestMnemonics,
     pub middleware_concurrency: bool,
     pub wavs_concurrency: bool,
@@ -111,7 +114,7 @@ impl From<TestConfig> for Configs {
 
         let mnemonics = TestMnemonics::new();
 
-        let mut chain_configs = ChainConfigs::default();
+        let chain_configs = Arc::new(RwLock::new(ChainConfigs::default()));
 
         let mut evm_port = 8545;
         let mut evm_chain_id = DEFAULT_CHAIN_KEY.id.to_string().parse::<u32>().unwrap();
@@ -129,6 +132,8 @@ impl From<TestConfig> for Configs {
             };
 
             chain_configs
+                .write()
+                .unwrap()
                 .evm
                 .insert(evm_chain_id.to_string().parse().unwrap(), chain_config);
 
@@ -151,7 +156,7 @@ impl From<TestConfig> for Configs {
                 faucet_endpoint: None,
             };
 
-            chain_configs.cosmos.insert(
+            chain_configs.write().unwrap().cosmos.insert(
                 format!("wasmd-{}", cosmos_chain_id).parse().unwrap(),
                 chain_config,
             );

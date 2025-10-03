@@ -43,12 +43,15 @@ fn main() {
 
     let health_status = SharedHealthStatus::new();
 
-    let chains = config.chains.all_chain_keys().unwrap();
+    let (chains, chain_configs) = {
+        let chain_configs = config.chains.read().unwrap().clone();
+        let chains = chain_configs.all_chain_keys().unwrap();
+        (chains, chain_configs)
+    };
     if !chains.is_empty() {
         match config.health_check_mode {
             HealthCheckMode::Bypass => {
                 let health_status_clone = health_status.clone();
-                let chain_configs = config.chains.clone();
                 ctx.rt.spawn(async move {
                     tracing::info!("Running health checks in background (bypass mode)");
                     health_status_clone.update(&chain_configs).await;
@@ -62,7 +65,7 @@ fn main() {
             }
             HealthCheckMode::Wait => {
                 ctx.rt.block_on(async {
-                    health_status.update(&config.chains).await;
+                    health_status.update(&chain_configs).await;
                     if health_status.any_failing() {
                         tracing::warn!("Health check failed: {:#?}", health_status.read().unwrap());
                     }
@@ -70,7 +73,7 @@ fn main() {
             }
             HealthCheckMode::Exit => {
                 ctx.rt.block_on(async {
-                    health_status.update(&config.chains).await;
+                    health_status.update(&chain_configs).await;
                     if health_status.any_failing() {
                         panic!(
                             "Health check failed (exit mode): {:#?}",

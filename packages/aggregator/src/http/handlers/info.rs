@@ -1,4 +1,5 @@
 use crate::http::{error::HttpResult, state::HttpState};
+use anyhow::anyhow;
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
@@ -32,6 +33,11 @@ pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
 #[instrument(skip(state))]
 pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
     Ok(InfoResponse {
-        chains: state.config.chains,
+        chains: state
+            .config
+            .chains
+            .read()
+            .map_err(|_| anyhow!("Chain configs lock is poisoned"))?
+            .clone(),
     })
 }

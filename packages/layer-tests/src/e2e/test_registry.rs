@@ -4,7 +4,7 @@ use example_types::{
     PermissionsResponse, SquareRequest, SquareResponse,
 };
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use wavs_types::aggregator::RegisterServiceRequest;
 
 use super::clients::Clients;
@@ -95,7 +95,7 @@ impl TestRegistry {
     /// Create a registry based on the test mode
     pub async fn from_test_mode(
         test_mode: crate::config::TestMode,
-        chain_configs: &ChainConfigs,
+        chain_configs: Arc<RwLock<ChainConfigs>>,
         clients: &Clients,
         cosmos_trigger_code_map: &CosmosTriggerCodeMap,
     ) -> Self {
@@ -103,7 +103,7 @@ impl TestRegistry {
         let matrix: TestMatrix = test_mode.into();
 
         // Get chain names
-        let chains = ChainKeys::from_config(chain_configs);
+        let chains = ChainKeys::from_config(&chain_configs.read().unwrap());
 
         let mut registry = Self::new();
 
