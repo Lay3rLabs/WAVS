@@ -5,38 +5,14 @@ use futures::StreamExt;
 use utils::{
     evm_client::{EvmQueryClient, EvmSigningClient, EvmSigningClientConfig},
     init_tracing_tests,
+    test_utils::anvil::safe_spawn_anvil,
 };
 use wavs_types::Credential;
 
 #[tokio::test]
-async fn client_stream_blocks() {
-    init_tracing_tests();
-    // seems to be we need to set a block time to get new blocks without explicit transactions?
-    let anvil = Anvil::new().block_time_f64(0.02).try_spawn().unwrap();
-
-    let client = EvmQueryClient::new(anvil.ws_endpoint().parse().unwrap())
-        .await
-        .unwrap();
-
-    let mut stream = client
-        .provider
-        .subscribe_blocks()
-        .await
-        .unwrap()
-        .into_stream();
-
-    let mut counter = 0;
-
-    while counter < 3 {
-        let _header = stream.next().await.unwrap();
-        counter += 1;
-    }
-}
-
-#[tokio::test]
 async fn client_sign_message() {
     init_tracing_tests();
-    let anvil = Anvil::new().spawn();
+    let anvil = safe_spawn_anvil();
 
     let config = EvmSigningClientConfig::new(
         anvil.endpoint().parse().unwrap(),

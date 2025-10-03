@@ -85,10 +85,14 @@ ctrlc = "3.4.7"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.88"
 
+# websocket
+tokio-tungstenite = "0.28.0"
+
 # collections
 dashmap = "6.1.0"
 ordermap = "0.5.8"
 bimap = { version = "0.6.3", features = ["serde"] }
+slotmap = "1.0.7"
 
 # fs
 tempfile = "3.20.0"
