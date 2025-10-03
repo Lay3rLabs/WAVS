@@ -363,7 +363,7 @@ pub enum ComponentOperationResult {
         context: ComponentContext,
         digest: ComponentDigest,
         file_path: PathBuf,
-        url: String,
+        uri: String,
     },
     SourceDigest {
         context: ComponentContext,
@@ -466,10 +466,10 @@ impl std::fmt::Display for ComponentOperationResult {
                 context,
                 digest,
                 file_path,
-                url,
+                uri,
             } => {
                 writeln!(f, "{} source set to url successfully!", context)?;
-                writeln!(f, "  Url:          {}", url)?;
+                writeln!(f, "  Uri:          {}", uri)?;
                 writeln!(f, "  Digest:       {}", digest)?;
                 writeln!(f, "  Updated:      {}", file_path.display())
             }

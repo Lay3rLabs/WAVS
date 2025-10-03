@@ -101,6 +101,7 @@ impl HttpState {
             storage.clone(),
             ca_storage,
             metrics.clone(),
+            config.ipfs_gateway.clone(),
         )
         .map_err(|e| AggregatorError::EngineInitialization(e.to_string()))?;
 
