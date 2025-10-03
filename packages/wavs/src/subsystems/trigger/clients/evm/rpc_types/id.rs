@@ -1,5 +1,6 @@
 use std::sync::{Arc, LazyLock};
 
+use alloy_primitives::{Address, B256};
 use slotmap::{new_key_type, SlotMap};
 
 new_key_type! {
@@ -12,7 +13,7 @@ impl RpcId {
     }
 
     pub fn kind(&self) -> Option<RpcRequestKind> {
-        RPC_REQUEST_ID.read().unwrap().get(*self).copied()
+        RPC_REQUEST_ID.read().unwrap().get(*self).cloned()
     }
 
     pub fn clear_all() {
@@ -20,12 +21,17 @@ impl RpcId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum RpcRequestKind {
     SubscribeNewHeads,
-    SubscribeLogs,
+    SubscribeLogs {
+        address: Vec<Address>,
+        topics: Vec<B256>,
+    },
     SubscribeNewPendingTransactions,
-    Unsubscribe,
+    Unsubscribe {
+        subscription_id: String,
+    },
 }
 
 static RPC_REQUEST_ID: LazyLock<Arc<std::sync::RwLock<SlotMap<RpcId, RpcRequestKind>>>> =

@@ -2,7 +2,7 @@ use alloy_primitives::{Address, B256};
 use serde::ser::{Serialize, SerializeMap, SerializeStruct, Serializer};
 use slotmap::Key;
 
-use crate::subsystems::trigger::clients::evm::rpc::id::{RpcId, RpcRequestKind};
+use crate::subsystems::trigger::clients::evm::rpc_types::id::{RpcId, RpcRequestKind};
 
 /// Outbound JSON-RPC request
 ///
@@ -25,9 +25,11 @@ impl RpcRequest {
     /// Create a new subscribe request with auto-generated ID.
     pub fn subscribe(params: SubscribeParams) -> Self {
         Self::Subscribe {
-            id: RpcId::new(match &params {
+            id: RpcId::new(match params.clone() {
                 SubscribeParams::NewHeads => RpcRequestKind::SubscribeNewHeads,
-                SubscribeParams::Logs { .. } => RpcRequestKind::SubscribeLogs,
+                SubscribeParams::Logs { address, topics } => {
+                    RpcRequestKind::SubscribeLogs { address, topics }
+                }
                 SubscribeParams::NewPendingTransactions => {
                     RpcRequestKind::SubscribeNewPendingTransactions
                 }
@@ -47,14 +49,16 @@ impl RpcRequest {
     }
 
     /// Subscribe to logs with an optional address/topic filter.
-    pub fn logs(address: Option<Vec<Address>>, topics: Option<Vec<Option<B256>>>) -> Self {
+    pub fn logs(address: Vec<Address>, topics: Vec<B256>) -> Self {
         Self::subscribe(SubscribeParams::Logs { address, topics })
     }
 
     /// Create an unsubscribe request.
     pub fn unsubscribe(subscription_id: String) -> Self {
         Self::Unsubscribe {
-            id: RpcId::new(RpcRequestKind::Unsubscribe),
+            id: RpcId::new(RpcRequestKind::Unsubscribe {
+                subscription_id: subscription_id.clone(),
+            }),
             subscription_id,
         }
     }
@@ -62,12 +66,12 @@ impl RpcRequest {
 
 /// Subscription parameters for `eth_subscribe`.
 /// https://docs.metamask.io/services/reference/ethereum/json-rpc-methods/subscription-methods/eth_subscribe
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SubscribeParams {
     NewHeads,
     Logs {
-        address: Option<Vec<Address>>,
-        topics: Option<Vec<Option<B256>>>,
+        address: Vec<Address>,
+        topics: Vec<B256>,
     },
     NewPendingTransactions,
 }
@@ -131,10 +135,10 @@ impl Serialize for SubscribeParams {
             }
             SubscribeParams::Logs { address, topics } => {
                 let mut map = serializer.serialize_map(None)?;
-                if let Some(addresses) = address {
-                    map.serialize_entry("address", addresses)?;
+                if !address.is_empty() {
+                    map.serialize_entry("address", address)?;
                 }
-                if let Some(topics) = topics {
+                if !topics.is_empty() {
                     map.serialize_entry("topics", topics)?;
                 }
                 map.end()
@@ -176,13 +180,10 @@ mod tests {
 
         // Test Logs subscription with address and topics
         let req = RpcRequest::logs(
-            Some(vec![address!("0x1234567890abcdef1234567890abcdef12345678")]),
-            Some(vec![
-                Some(b256!(
-                    "0x00000000000000000000000000000000000000000000000000000000deadbeef"
-                )),
-                None,
-            ]),
+            vec![address!("0x1234567890abcdef1234567890abcdef12345678")],
+            vec![b256!(
+                "0x00000000000000000000000000000000000000000000000000000000deadbeef"
+            )],
         );
         let json = serde_json::to_string(&req).unwrap();
         let parsed: Value = serde_json::from_str(&json).unwrap();
@@ -198,14 +199,13 @@ mod tests {
         assert_eq!(
             parsed["params"][1]["topics"],
             serde_json::json!([
-                "0x00000000000000000000000000000000000000000000000000000000deadbeef",
-                null
+                "0x00000000000000000000000000000000000000000000000000000000deadbeef"
             ])
         );
         assert!(parsed["id"].is_number());
 
         // Test Logs subscription with no filters
-        let req = RpcRequest::logs(None, None);
+        let req = RpcRequest::logs(vec![], vec![]);
         let json = serde_json::to_string(&req).unwrap();
         let parsed: Value = serde_json::from_str(&json).unwrap();
 
@@ -237,7 +237,7 @@ mod tests {
         // Type safety - ensure we can match on the enum variants
         match req1 {
             RpcRequest::Subscribe { id, params } => {
-                assert_eq!(id.kind(), Some(RpcRequestKind::SubscribeNewHeads));
+                assert!(matches!(id.kind(), Some(RpcRequestKind::SubscribeNewHeads)));
                 match params {
                     SubscribeParams::NewHeads => { /* expected */ }
                     _ => panic!("Expected NewHeads params"),
@@ -251,7 +251,12 @@ mod tests {
                 id,
                 subscription_id,
             } => {
-                assert_eq!(id.kind(), Some(RpcRequestKind::Unsubscribe));
+                match id.kind() {
+                    Some(RpcRequestKind::Unsubscribe { subscription_id }) => {
+                        assert_eq!(subscription_id, "test")
+                    }
+                    _ => panic!("Expected Unsubscribe kind"),
+                }
                 assert_eq!(subscription_id, "test");
             }
             RpcRequest::Subscribe { .. } => panic!("Expected Unsubscribe variant"),
