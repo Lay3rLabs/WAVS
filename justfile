@@ -79,12 +79,14 @@ solidity-build CLEAN="":
         rm -rf {{REPO_ROOT}}/out; \
         rm -rf {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi; \
         rm -rf {{REPO_ROOT}}/examples/contracts/solidity/abi; \
+        rm -rf {{REPO_ROOT}}/packages/wavs/tests/contracts/solidity/abi; \
     fi
     mkdir -p {{REPO_ROOT}}/out
     mkdir -p {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi
     mkdir -p {{REPO_ROOT}}/examples/contracts/solidity/abi
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/contracts/solidity;
     forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/examples/contracts/solidity;
+    forge build --root {{REPO_ROOT}} --out {{REPO_ROOT}}/out --contracts {{REPO_ROOT}}/packages/wavs/tests/contracts/solidity;
     # examples
     cp -r {{REPO_ROOT}}/out/SimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/ISimpleTrigger.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
@@ -95,6 +97,9 @@ solidity-build CLEAN="":
     cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
     # layer-tests mock contracts
     cp -r {{REPO_ROOT}}/out/LogSpam.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
+    # wavs tests - some funkiness with it sometimes not creating the .sol directory so make sure to create it first
+    mkdir -p {{REPO_ROOT}}/packages/wavs/tests/contracts/solidity/abi/EventEmitter.sol
+    cp -r {{REPO_ROOT}}/out/EventEmitter.sol {{REPO_ROOT}}/packages/wavs/tests/contracts/solidity/abi/
 
 # compile cosmwasm example contracts
 cosmwasm-build CONTRACT="*":

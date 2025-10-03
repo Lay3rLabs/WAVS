@@ -12,7 +12,7 @@ use tokio::{
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 use crate::subsystems::trigger::clients::evm::{
-    channels::ConnectionChannels, rpc::outbound::RpcRequest,
+    channels::ConnectionChannels, rpc_types::outbound::RpcRequest,
 };
 
 /// A handle for managing WebSocket connections with intelligent retry logic
@@ -63,7 +63,7 @@ impl Connection {
 
     pub fn new(endpoints: Vec<String>, channels: ConnectionChannels) -> Self {
         let ConnectionChannels {
-            connection_send_rx,
+            connection_send_rpc_rx,
             connection_data_tx,
             connection_state_tx,
         } = channels;
@@ -84,7 +84,7 @@ impl Connection {
         ));
 
         let message_handle = tokio::spawn(message_loop(
-            connection_send_rx,
+            connection_send_rpc_rx,
             current_sink.clone(),
             message_shutdown_rx,
         ));
@@ -241,7 +241,7 @@ async fn handle_connection(
 }
 
 async fn message_loop(
-    mut connection_send_rx: tokio::sync::mpsc::UnboundedReceiver<RpcRequest>,
+    mut connection_send_rpc_rx: tokio::sync::mpsc::UnboundedReceiver<RpcRequest>,
     current_sink: Arc<
         tokio::sync::Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
     >,
@@ -253,7 +253,7 @@ async fn message_loop(
                 tracing::info!("EVM: shutdown requested, exiting message loop");
                 break;
             }
-            Some(msg) = connection_send_rx.recv() => {
+            Some(msg) = connection_send_rpc_rx.recv() => {
                 match serde_json::to_string(&msg) {
                     Ok(msg) => {
 
@@ -312,7 +312,7 @@ mod test {
 
         let channels = Channels::new();
         let mut connection_data_rx = channels.subscription.connection_data_rx;
-        let connection_send_tx = channels.subscription.connection_send_tx;
+        let connection_send_rpc_tx = channels.subscription.connection_send_rpc_tx;
 
         let _connection = Connection::new(endpoints, channels.connection);
 
@@ -336,7 +336,7 @@ mod test {
 
         let result = timeout(Duration::from_secs(5), async {
             // Send subscription message
-            if let Err(e) = connection_send_tx.send(subscription_request) {
+            if let Err(e) = connection_send_rpc_tx.send(subscription_request) {
                 tracing::error!("Failed to send subscription: {}", e);
             }
 
