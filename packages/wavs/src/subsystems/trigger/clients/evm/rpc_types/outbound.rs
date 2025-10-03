@@ -1,5 +1,5 @@
 use alloy_primitives::{Address, B256};
-use serde::ser::{Serialize, SerializeMap, SerializeStruct, Serializer};
+use serde::ser::{Serialize, SerializeMap, SerializeSeq, SerializeStruct, Serializer};
 use slotmap::Key;
 
 use crate::subsystems::trigger::clients::evm::rpc_types::id::{RpcId, RpcRequestKind};
@@ -139,7 +139,10 @@ impl Serialize for SubscribeParams {
                     map.serialize_entry("address", address)?;
                 }
                 if !topics.is_empty() {
-                    map.serialize_entry("topics", topics)?;
+                    // Each topic is an AND semantics, so we wrap in an extra array for
+                    // OR semantics with extra embedding
+                    let list = vec![topics];
+                    map.serialize_entry("topics", &list)?;
                 }
                 map.end()
             }
@@ -198,9 +201,9 @@ mod tests {
         // topics contains both a concrete B256 and a null entry
         assert_eq!(
             parsed["params"][1]["topics"],
-            serde_json::json!([
+            serde_json::json!(vec![[
                 "0x00000000000000000000000000000000000000000000000000000000deadbeef"
-            ])
+            ]])
         );
         assert!(parsed["id"].is_number());
 

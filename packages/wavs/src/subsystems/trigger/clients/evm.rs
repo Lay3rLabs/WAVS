@@ -1,8 +1,5 @@
-// TODO - event logs
-// - imperative setting filter
-// - remember filter for re-subscribe/re-connect
-// - test that it works across filter changes
-// - test that it works across re-connects
+// TODO - fix nonce too low issues
+// fix advanced tests
 mod channels;
 mod connection;
 mod rpc_types;
