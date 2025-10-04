@@ -228,9 +228,9 @@ async fn main() {
                     let contract =
                         IWavsServiceHandler::new(handler_address, evm_client.provider.clone());
 
-                    // Get the latest block number for reference
-                    let latest_block = match evm_client.provider.get_block_number().await {
-                        Ok(block_num) => block_num,
+                    // Get the block number just before the latest block for reference
+                    let previous_block = match evm_client.provider.get_block_number().await {
+                        Ok(block_num) => block_num - 1,
                         Err(e) => {
                             eprintln!("Failed to get latest block number: {e}");
                             std::process::exit(1);
@@ -239,7 +239,7 @@ async fn main() {
 
                     // Prepare signature data
                     let signature_data =
-                        match envelope.signature_data(vec![signature], latest_block) {
+                        match envelope.signature_data(vec![signature], previous_block) {
                             Ok(data) => data,
                             Err(e) => {
                                 eprintln!("Failed to prepare signature data: {e}");
