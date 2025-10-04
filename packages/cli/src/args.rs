@@ -88,14 +88,16 @@ pub enum Command {
         output_file: Option<PathBuf>,
 
         /// Submit execution result to this chain via IWavsServiceHandler
-        /// Must be used together with --submit-handler
-        #[clap(long, requires = "submit_handler")]
+        #[clap(long, group = "submit_args")]
         submit_chain: Option<ChainKey>,
 
         /// Contract address of the IWavsServiceHandler to submit results to
-        /// Must be used together with --submit-chain
-        #[clap(long, requires = "submit_chain")]
+        #[clap(long, group = "submit_args")]
         submit_handler: Option<alloy_primitives::Address>,
+
+        /// Operator credential for envelope signing (required for submission)
+        #[clap(long, group = "submit_args")]
+        operator_credential: Option<Credential>,
 
         /// Simulate the transaction execution as actual TriggerData (JSON format)
         #[clap(long)]

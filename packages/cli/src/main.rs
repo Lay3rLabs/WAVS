@@ -25,11 +25,13 @@ use wavs_cli::{
 use wavs_types::SignatureKind;
 use wavs_types::{ChainKeyId, Envelope, EnvelopeExt, IWavsServiceHandler};
 
+// Shared function to create EVM client with any credential
 // duplicated here instead of using the one in CliContext so
 // that we don't end up accidentally using the CliContext one in e2e tests
-pub(crate) async fn new_evm_client(
+async fn new_evm_client_with_credential(
     ctx: &CliContext,
     chain_id: ChainKeyId,
+    credential: &wavs_types::Credential,
 ) -> Result<EvmSigningClient> {
     let chain_config = ctx
         .config
@@ -42,16 +44,25 @@ pub(crate) async fn new_evm_client(
         .clone()
         .build(chain_id);
 
-    let client_config = chain_config.signing_client_config(
-        ctx.config
-            .evm_credential
-            .clone()
-            .context("missing evm_credential")?,
-    )?;
-
+    let client_config = chain_config.signing_client_config(credential.clone())?;
     let evm_client = EvmSigningClient::new(client_config).await?;
 
     Ok(evm_client)
+}
+
+pub(crate) async fn new_evm_client(
+    ctx: &CliContext,
+    chain_id: ChainKeyId,
+) -> Result<EvmSigningClient> {
+    new_evm_client_with_credential(
+        ctx,
+        chain_id,
+        &ctx.config
+            .evm_credential
+            .clone()
+            .context("missing evm_credential")?,
+    )
+    .await
 }
 
 #[tokio::main]
@@ -133,6 +144,7 @@ async fn main() {
             submit_chain,
             submit_handler,
             simulates_trigger,
+            operator_credential,
             args: _,
         } => {
             let config = config
@@ -185,7 +197,9 @@ async fn main() {
             }
 
             // If submit_chain is provided, submit the result to the chain
-            if let (Some(chain_key), Some(handler_address)) = (submit_chain, submit_handler) {
+            if let (Some(chain_key), Some(handler_address), Some(operator_credential)) =
+                (submit_chain, submit_handler, operator_credential)
+            {
                 if let Some(wasm_response) = &res.wasm_response {
                     tracing::info!(
                         "Submitting result to chain {} at address {}",
@@ -209,8 +223,8 @@ async fn main() {
                         },
                     };
 
-                    // Get EVM client for the chain
-                    let evm_client = match new_evm_client(&ctx, chain_key.id).await {
+                    // Get EVM client for the chain (for transaction submission)
+                    let evm_client = match new_evm_client(&ctx, chain_key.id.clone()).await {
                         Ok(client) => client,
                         Err(e) => {
                             eprintln!("Failed to create EVM client: {e}");
@@ -218,9 +232,24 @@ async fn main() {
                         }
                     };
 
-                    // Create signature using the EVM client's signer
+                    // Get operator EVM client for envelope signing
+                    let operator_evm_client = match new_evm_client_with_credential(
+                        &ctx,
+                        chain_key.id,
+                        &operator_credential,
+                    )
+                    .await
+                    {
+                        Ok(client) => client,
+                        Err(e) => {
+                            eprintln!("Failed to create operator EVM client: {e}");
+                            std::process::exit(1);
+                        }
+                    };
+
+                    // Create signature using the operator EVM client's signer
                     let signature = envelope
-                        .sign(&evm_client.signer, SignatureKind::evm_default())
+                        .sign(&operator_evm_client.signer, SignatureKind::evm_default())
                         .await
                         .unwrap();
 
@@ -254,7 +283,7 @@ async fn main() {
                         payload: envelope.payload,
                     };
 
-                    // Submit to chain
+                    // Submit to chain using the original EVM client (as transaction sender)
                     match contract
                         .handleSignedEnvelope(contract_envelope, signature_data)
                         .send()
