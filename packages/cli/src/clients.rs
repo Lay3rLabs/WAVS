@@ -8,7 +8,7 @@ use wavs_types::{
     SignerResponse, UploadComponentResponse,
 };
 
-use crate::command::deploy_service::SetServiceUrlArgs;
+use crate::command::deploy_service::SetServiceUriArgs;
 
 #[derive(Clone)]
 pub struct HttpClient {
@@ -67,13 +67,13 @@ impl HttpClient {
     pub async fn create_service(
         &self,
         service_manager: ServiceManager,
-        save_service_args: Option<SetServiceUrlArgs>,
+        save_service_args: Option<SetServiceUriArgs>,
     ) -> Result<Service> {
         if let Some(save_service) = save_service_args {
             self.set_service_url(
                 save_service.provider,
                 service_manager.evm_address_unchecked(),
-                save_service.service_url,
+                save_service.service_uri.to_string(),
             )
             .await?;
         }

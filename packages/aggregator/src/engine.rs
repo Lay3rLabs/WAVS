@@ -37,6 +37,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         db: RedbStorage,
         storage: Arc<S>,
         metrics: utils::telemetry::AggregatorMetrics,
+        ipfs_gateway: String,
     ) -> AggregatorResult<Self> {
         let config = BaseEngineConfig {
             app_data_dir: app_data_dir.into(),
@@ -44,6 +45,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             lru_size,
             max_wasm_fuel,
             max_execution_seconds,
+            ipfs_gateway,
         };
 
         let engine = BaseEngine::new(config, db, storage)?;

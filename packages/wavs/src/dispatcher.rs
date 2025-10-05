@@ -24,6 +24,7 @@
 
 use alloy_provider::ProviderBuilder;
 use anyhow::Result;
+use iri_string::types::{CreationError, UriString};
 use layer_climb::prelude::Address;
 use std::ops::Bound;
 use std::sync::{Arc, RwLock};
@@ -74,7 +75,10 @@ pub struct Dispatcher<S: CAStorage> {
 #[derive(Debug)]
 pub enum DispatcherCommand {
     Trigger(TriggerAction),
-    ChangeServiceUri { service_id: ServiceId, uri: String },
+    ChangeServiceUri {
+        service_id: ServiceId,
+        uri: UriString,
+    },
 }
 
 impl Dispatcher<FileStorage> {
@@ -114,6 +118,7 @@ impl Dispatcher<FileStorage> {
             Some(config.max_execution_seconds),
             metrics.engine,
             db_storage,
+            config.ipfs_gateway.clone(),
         );
         let engine_manager = EngineManager::new(
             engine,
@@ -482,9 +487,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     async fn change_service(
         &self,
         service_id: ServiceId,
-        url_str: String,
+        uri: UriString,
     ) -> Result<(), DispatcherError> {
-        let service = fetch_service(&url_str, &self.ipfs_gateway).await?;
+        let service = fetch_service(&uri, &self.ipfs_gateway).await?;
         self.change_service_inner(service_id, service).await
     }
 
@@ -606,7 +611,7 @@ async fn query_service_from_address(
 
             let contract = IWavsServiceManagerInstance::new(address.try_into()?, provider);
 
-            let service_uri = contract.getServiceURI().call().await?;
+            let service_uri = UriString::try_from(contract.getServiceURI().call().await?)?;
 
             // Fetch the service JSON from the URI
             let service = fetch_service(&service_uri, ipfs_gateway).await?;
@@ -646,6 +651,9 @@ pub enum DispatcherError {
 
     #[error("Evm: {0}")]
     EvmClient(#[from] EvmClientError),
+
+    #[error("URI creation error: {0}")]
+    URICreation(#[from] CreationError<String>),
 
     #[error("{0:?}")]
     UnknownService(#[from] ServicesError),

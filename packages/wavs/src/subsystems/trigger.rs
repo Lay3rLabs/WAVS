@@ -16,6 +16,7 @@ use alloy_sol_types::SolEvent;
 use anyhow::Result;
 use error::TriggerError;
 use futures::{stream::SelectAll, StreamExt};
+use iri_string::types::UriString;
 use layer_climb::prelude::*;
 use lookup::LookupMaps;
 use std::{
@@ -394,7 +395,8 @@ impl TriggerManager {
                                 log.data(),
                             ) {
                                 Ok(decoded_event) => {
-                                    let service_uri: String = decoded_event.serviceURI;
+                                    let service_uri =
+                                        UriString::try_from(decoded_event.serviceURI)?;
                                     // check if this is a service we're interested in
                                     if let Some(service_id) = self
                                         .lookup_maps

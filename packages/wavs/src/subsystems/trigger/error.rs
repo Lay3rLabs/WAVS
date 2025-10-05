@@ -1,3 +1,4 @@
+use iri_string::types::CreationError;
 use thiserror::Error;
 use utils::error::EvmClientError;
 use wavs_types::{ByteArray, ChainKey, ServiceId, WorkflowId};
@@ -52,4 +53,6 @@ pub enum TriggerError {
     EncodeEventId(anyhow::Error),
     #[error("could not get service {0:?}")]
     Services(ServicesError),
+    #[error("URI creation error: {0}")]
+    URICreation(#[from] CreationError<String>),
 }

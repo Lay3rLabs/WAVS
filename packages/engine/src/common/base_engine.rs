@@ -7,6 +7,7 @@ use lru::LruCache;
 use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
 
 use utils::config::ChainConfigs;
+use utils::service::fetch_bytes;
 use utils::storage::db::RedbStorage;
 use utils::storage::CAStorage;
 use utils::wkg::WkgClient;
@@ -22,6 +23,7 @@ pub struct BaseEngineConfig {
     pub lru_size: usize,
     pub max_wasm_fuel: Option<u64>,
     pub max_execution_seconds: Option<u64>,
+    pub ipfs_gateway: String,
 }
 
 pub struct BaseEngine<S: CAStorage> {
@@ -33,6 +35,7 @@ pub struct BaseEngine<S: CAStorage> {
     pub max_execution_seconds: Option<u64>,
     pub db: RedbStorage,
     pub storage: Arc<S>,
+    pub ipfs_gateway: String,
 }
 
 impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
@@ -76,6 +79,7 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
             max_execution_seconds: config.max_execution_seconds,
             db,
             storage,
+            ipfs_gateway: config.ipfs_gateway,
         })
     }
 
@@ -116,27 +120,10 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
             Ok(component) => Ok(component),
             Err(_) => {
                 let bytes: Vec<u8> = match source {
-                    ComponentSource::Download { url, .. } => {
-                        let resp = reqwest::get(url).await.map_err(|e| {
+                    ComponentSource::Download { uri, .. } => {
+                        fetch_bytes(uri, &self.ipfs_gateway).await.map_err(|e| {
                             EngineError::StorageError(format!("Failed to download from url: {}", e))
-                        })?;
-
-                        if !resp.status().is_success() {
-                            return Err(EngineError::StorageError(format!(
-                                "Failed to download from url: HTTP {}",
-                                resp.status()
-                            )));
-                        }
-
-                        resp.bytes()
-                            .await
-                            .map_err(|e| {
-                                EngineError::StorageError(format!(
-                                    "Failed to read response body: {}",
-                                    e
-                                ))
-                            })?
-                            .into()
+                        })?
                     }
                     ComponentSource::Registry { registry } => {
                         let client =
