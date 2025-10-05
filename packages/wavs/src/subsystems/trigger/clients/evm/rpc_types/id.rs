@@ -1,4 +1,7 @@
-use std::sync::{Arc, LazyLock};
+use std::{
+    collections::HashSet,
+    sync::{Arc, LazyLock},
+};
 
 use alloy_primitives::{Address, B256};
 use slotmap::{new_key_type, SlotMap};
@@ -25,8 +28,8 @@ impl RpcId {
 pub enum RpcRequestKind {
     SubscribeNewHeads,
     SubscribeLogs {
-        address: Vec<Address>,
-        topics: Vec<B256>,
+        address: HashSet<Address>,
+        topics: HashSet<B256>,
     },
     SubscribeNewPendingTransactions,
     Unsubscribe {

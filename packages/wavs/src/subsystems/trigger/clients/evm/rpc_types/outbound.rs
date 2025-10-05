@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use alloy_primitives::{Address, B256};
 use serde::ser::{Serialize, SerializeMap, SerializeSeq, SerializeStruct, Serializer};
 use slotmap::Key;
@@ -49,7 +51,7 @@ impl RpcRequest {
     }
 
     /// Subscribe to logs with an optional address/topic filter.
-    pub fn logs(address: Vec<Address>, topics: Vec<B256>) -> Self {
+    pub fn logs(address: HashSet<Address>, topics: HashSet<B256>) -> Self {
         Self::subscribe(SubscribeParams::Logs { address, topics })
     }
 
@@ -70,8 +72,8 @@ impl RpcRequest {
 pub enum SubscribeParams {
     NewHeads,
     Logs {
-        address: Vec<Address>,
-        topics: Vec<B256>,
+        address: HashSet<Address>,
+        topics: HashSet<B256>,
     },
     NewPendingTransactions,
 }
@@ -183,10 +185,14 @@ mod tests {
 
         // Test Logs subscription with address and topics
         let req = RpcRequest::logs(
-            vec![address!("0x1234567890abcdef1234567890abcdef12345678")],
-            vec![b256!(
+            [address!("0x1234567890abcdef1234567890abcdef12345678")]
+                .into_iter()
+                .collect(),
+            [b256!(
                 "0x00000000000000000000000000000000000000000000000000000000deadbeef"
-            )],
+            )]
+            .into_iter()
+            .collect(),
         );
         let json = serde_json::to_string(&req).unwrap();
         let parsed: Value = serde_json::from_str(&json).unwrap();
@@ -208,7 +214,7 @@ mod tests {
         assert!(parsed["id"].is_number());
 
         // Test Logs subscription with no filters
-        let req = RpcRequest::logs(vec![], vec![]);
+        let req = RpcRequest::logs(HashSet::new(), HashSet::new());
         let json = serde_json::to_string(&req).unwrap();
         let parsed: Value = serde_json::from_str(&json).unwrap();
 
