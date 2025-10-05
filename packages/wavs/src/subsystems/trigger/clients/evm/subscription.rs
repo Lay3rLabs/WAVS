@@ -118,6 +118,15 @@ impl Subscriptions {
                                     };
                                     match response {
                                         RpcResponse::NewSubscription { subscription_id } => {
+                                            // if this rpc id was marked to unsubscribe on landing, do so now
+                                            if inner.rpc_ids_to_unsubscribe_on_landing.write().unwrap().remove(&id) {
+                                                if let Err(e) = inner.send_rpc(RpcRequest::unsubscribe(subscription_id.clone())) {
+                                                    tracing::error!("EVM: failed to send unsubscribe request for subscription id {}: {}", subscription_id, e);
+                                                } else {
+                                                    tracing::info!("EVM: sent unsubscribe request for subscription id {}", subscription_id);
+                                                }
+                                                continue;
+                                            }
                                             match kind {
                                                 RpcRequestKind::SubscribeNewHeads => {
                                                     tracing::info!("EVM: subscribed to newHeads with subscription id {}", subscription_id);
@@ -227,8 +236,8 @@ impl Subscriptions {
         }
     }
 
-    pub fn enable_block_height(&self) {
-        self.inner.set_blocks(true);
+    pub fn toggle_block_height(&self, value: bool) {
+        self.inner.set_blocks(value);
     }
 
     pub fn enable_log(&self, address: Option<Address>, event: Option<B256>) {
@@ -239,8 +248,16 @@ impl Subscriptions {
         self.inner.insert_logs(addresses, events);
     }
 
-    pub fn enable_pending_transactions(&self) {
-        self.inner.set_pending_transactions(true);
+    pub fn disable_log(&self, address: Option<Address>, event: Option<B256>) {
+        self.inner.remove_log(address, event);
+    }
+
+    pub fn disable_logs(&self, addresses: Vec<Address>, events: Vec<B256>) {
+        self.inner.remove_logs(addresses, events);
+    }
+
+    pub fn toggle_pending_transactions(&self, value: bool) {
+        self.inner.set_pending_transactions(value);
     }
 
     pub fn all_rpc_requests_landed(&self) -> bool {
@@ -281,6 +298,7 @@ struct SubscriptionsInner {
     _is_connected: AtomicBool,
     ids: SubscriptionIds,
     rpc_ids_in_flight: std::sync::RwLock<HashSet<RpcId>>,
+    rpc_ids_to_unsubscribe_on_landing: std::sync::RwLock<HashSet<RpcId>>,
     _connection_send_rpc_tx: tokio::sync::mpsc::UnboundedSender<RpcRequest>,
 }
 
@@ -293,6 +311,7 @@ impl SubscriptionsInner {
             _is_connected: AtomicBool::new(false),
             ids: SubscriptionIds::default(),
             rpc_ids_in_flight: std::sync::RwLock::new(HashSet::new()),
+            rpc_ids_to_unsubscribe_on_landing: std::sync::RwLock::new(HashSet::new()),
             _connection_send_rpc_tx: connection_send_rpc_tx,
         }
     }
@@ -301,7 +320,13 @@ impl SubscriptionsInner {
         self._blocks
             .store(value, std::sync::atomic::Ordering::SeqCst);
 
-        self.resubscribe_if_connected();
+        if !value {
+            // no need to resubscribe in this case
+            // logs is different since changing the filter requires a resubscribe
+            self.unsubscribe(SubscriptionKind::NewHeads);
+        } else {
+            self.resubscribe_if_connected();
+        }
     }
 
     pub fn insert_log(&self, addresses: Option<Address>, events: Option<B256>) {
@@ -315,7 +340,22 @@ impl SubscriptionsInner {
                 lock.events.insert(event);
             }
         }
-        self.unsubscribe_logs();
+        self.unsubscribe(SubscriptionKind::Logs);
+        self.resubscribe_if_connected();
+    }
+
+    pub fn remove_log(&self, addresses: Option<Address>, events: Option<B256>) {
+        {
+            let mut lock = self._logs.write().unwrap();
+
+            if let Some(address) = addresses {
+                lock.addresses.remove(&address);
+            }
+            if let Some(event) = events {
+                lock.events.remove(&event);
+            }
+        }
+        self.unsubscribe(SubscriptionKind::Logs);
         self.resubscribe_if_connected();
     }
 
@@ -331,14 +371,36 @@ impl SubscriptionsInner {
                 lock.events.insert(event);
             }
         }
-        self.unsubscribe_logs();
+        self.unsubscribe(SubscriptionKind::Logs);
+        self.resubscribe_if_connected();
+    }
+
+    pub fn remove_logs(&self, addresses: Vec<Address>, events: Vec<B256>) {
+        {
+            let mut lock = self._logs.write().unwrap();
+
+            for address in addresses {
+                lock.addresses.remove(&address);
+            }
+
+            for event in events {
+                lock.events.remove(&event);
+            }
+        }
+        self.unsubscribe(SubscriptionKind::Logs);
         self.resubscribe_if_connected();
     }
 
     pub fn set_pending_transactions(&self, value: bool) {
         self._pending_transactions
             .store(value, std::sync::atomic::Ordering::SeqCst);
-        self.resubscribe_if_connected();
+        if !value {
+            // no need to resubscribe in this case
+            // logs is different since changing the filter requires a resubscribe
+            self.unsubscribe(SubscriptionKind::NewPendingTransactions);
+        } else {
+            self.resubscribe_if_connected();
+        }
     }
 
     pub fn set_is_connected(&self, value: bool) {
@@ -362,21 +424,45 @@ impl SubscriptionsInner {
         self._connection_send_rpc_tx.send(req)
     }
 
-    fn unsubscribe_logs(&self) {
-        let ids = self.ids.list(SubscriptionKind::Logs);
-        tracing::info!("UNSUBSCRIBE IDS: {:?}", ids);
+    fn unsubscribe(&self, kind: SubscriptionKind) {
+        let ids = self.ids.list(kind);
+
+        {
+            let mut rpcs_to_unsubscribe_on_landing =
+                self.rpc_ids_to_unsubscribe_on_landing.write().unwrap();
+            let rpc_ids_in_flight = self.rpc_ids_in_flight.read().unwrap();
+
+            for rpc_id in rpc_ids_in_flight.iter() {
+                let to_unsubscribe = match (kind, rpc_id.kind()) {
+                    (SubscriptionKind::NewHeads, Some(RpcRequestKind::SubscribeNewHeads)) => true,
+                    (SubscriptionKind::Logs, Some(RpcRequestKind::SubscribeLogs { .. })) => true,
+                    (
+                        SubscriptionKind::NewPendingTransactions,
+                        Some(RpcRequestKind::SubscribeNewPendingTransactions),
+                    ) => true,
+                    _ => false,
+                };
+
+                if to_unsubscribe {
+                    rpcs_to_unsubscribe_on_landing.insert(*rpc_id);
+
+                    tracing::info!(
+                        "EVM: Marked RPC id to unsubscribe on landing: {}",
+                        rpc_id.data().as_ffi()
+                    );
+                }
+            }
+        }
+
         for id in ids {
             if let Err(e) = self.send_rpc(RpcRequest::unsubscribe(id.clone())) {
                 tracing::error!(
-                    "EVM: failed to send unsubscribe request for logs subscription id {}: {}",
+                    "EVM: failed to send unsubscribe request for subscription id {}: {}",
                     id,
                     e
                 );
             } else {
-                tracing::info!(
-                    "EVM: sent unsubscribe request for logs subscription id {}",
-                    id
-                );
+                tracing::info!("EVM: sent unsubscribe request for subscription id {}", id);
             }
             self.ids.remove(&id);
         }

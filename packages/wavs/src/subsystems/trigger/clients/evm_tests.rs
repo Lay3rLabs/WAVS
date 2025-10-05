@@ -31,7 +31,7 @@ async fn block_height_stream() {
         ..
     } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
 
-    controller.subscriptions.enable_block_height();
+    controller.subscriptions.toggle_block_height(true);
 
     let mut collected_heights = Vec::new();
 
@@ -531,5 +531,134 @@ async fn fallback_chain_log_stream() {
         }
         assert!(found, "did not find {} in contract_2 logs", expected_value);
         tracing::info!("found {expected_value} in contract_2 events!");
+    }
+}
+
+#[tokio::test]
+async fn unsubscribe_log_stream_wait() {
+    unsubscribe_log_stream(UnsubscribeKind::Wait).await
+}
+
+#[tokio::test]
+async fn unsubscribe_log_stream_nowait() {
+    unsubscribe_log_stream(UnsubscribeKind::NoWait).await
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum UnsubscribeKind {
+    Wait,
+    NoWait,
+}
+async fn unsubscribe_log_stream(kind: UnsubscribeKind) {
+    init_tracing_tests();
+
+    let anvil = safe_spawn_anvil_extra(|anvil| anvil.block_time_f64(0.02));
+
+    let EvmTriggerStreams {
+        controller,
+        mut log_stream,
+        ..
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+
+    let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
+
+    tracing::info!("Deployed contract at {}", contract.address());
+
+    controller.subscriptions.enable_logs(
+        vec![contract.address().clone()],
+        vec![
+            EventEmitter::IntegerEvent::SIGNATURE_HASH,
+            EventEmitter::StringEvent::SIGNATURE_HASH,
+        ],
+    );
+
+    if kind == UnsubscribeKind::Wait {
+        // wait for all subscriptions to be active
+        wait_for_all_rpc_requests_landed(&controller).await;
+    }
+
+    controller
+        .subscriptions
+        .disable_log(None, Some(EventEmitter::StringEvent::SIGNATURE_HASH));
+
+    // in both cases we need to wait here, since we want to ensure the subscription landed
+    wait_for_all_rpc_requests_landed(&controller).await;
+
+    const LOGS_TO_COLLECT: usize = 6;
+
+    let collected_logs = Arc::new(std::sync::Mutex::new(HashSet::new()));
+
+    // First spawn a task to collect the logs into the stream
+    let handle = tokio::spawn({
+        let collected_logs = collected_logs.clone();
+        async move {
+            timeout(Duration::from_secs(5), async {
+                while let Some(log) = log_stream.next().await {
+                    let mut lock = collected_logs.lock().unwrap();
+                    match EventEmitter::IntegerEvent::decode_log(&log.inner) {
+                        Ok(event) => {
+                            tracing::info!("got integer: {}", event.data.value);
+                            lock.insert(event.data.value);
+                        }
+                        Err(_) => {
+                            // Not an integer event, try string event
+                            match EventEmitter::StringEvent::decode_log(&log.inner) {
+                                Ok(_) => {
+                                    panic!("Should not have gotten a string event, we removed the subscription");
+                                }
+                                Err(e) => {
+                                    panic!("Failed to decode log as either IntegerEvent or StringEvent: {e}");
+                                }
+                            }
+                        }
+                    }
+
+                    if lock.len() >= LOGS_TO_COLLECT {
+                        break;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
+    });
+
+    // Now, since we're not blocked, we can emit the events
+    for value in 0..LOGS_TO_COLLECT as u64 {
+        // these shouldn't land, so send them first for early error checking
+        let _ = contract
+            .emitString(format!("test_string_{}", value))
+            .send()
+            .await
+            .unwrap();
+    }
+
+    for value in 0..LOGS_TO_COLLECT as u64 {
+        let _ = contract
+            .emitInteger(U256::from(value))
+            .send()
+            .await
+            .unwrap();
+    }
+
+    // but we do need to wait for the handle to finish
+    handle.await.unwrap();
+
+    let collected_logs = collected_logs.lock().unwrap();
+
+    assert!(
+        collected_logs.len() >= LOGS_TO_COLLECT,
+        "only got {} logs, not enough to test",
+        collected_logs.len()
+    );
+
+    for i in 0..LOGS_TO_COLLECT as u64 {
+        assert!(
+            collected_logs.contains(&U256::from(i)),
+            "did not find {} in integer logs",
+            i
+        );
+
+        tracing::info!("found {i} in integer events!")
     }
 }

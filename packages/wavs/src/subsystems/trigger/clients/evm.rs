@@ -1,7 +1,5 @@
-// TODO - fix nonce too low issues
-// fix advanced tests
-// maintain list of "to unsubscribe" for once it lands
-// - and need to test both cases of unsubscribing (before and after it lands)
+// TODO
+// RUST_LOG=info cargo test evm_tests::unsubscribe_log_stream_nowait --lib -- --nocapture
 mod channels;
 mod connection;
 mod rpc_types;
