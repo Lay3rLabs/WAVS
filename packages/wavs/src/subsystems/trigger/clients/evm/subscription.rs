@@ -5,6 +5,7 @@ use std::{
 };
 
 use alloy_primitives::{Address, B256};
+use alloy_rpc_types_eth::Log;
 use slotmap::Key;
 use tokio::{sync::oneshot, task::JoinHandle};
 
@@ -28,9 +29,9 @@ pub struct Subscriptions {
 impl Subscriptions {
     pub fn new(channels: SubscriptionChannels) -> Self {
         let SubscriptionChannels {
-            subscription_block_height_tx,
-            subscription_log_tx,
-            subscription_new_pending_transaction_tx,
+            mut subscription_block_height_tx,
+            mut subscription_log_tx,
+            mut subscription_new_pending_transaction_tx,
             connection_send_rpc_tx,
             mut connection_state_rx,
             mut connection_data_rx,
@@ -51,17 +52,7 @@ impl Subscriptions {
                         }
 
                         Some(msg) = connection_data_rx.recv() => {
-                            enum LocalResult {
-                                Rpc {
-                                    id: RpcId,
-                                    response: RpcResponse
-                                },
-                                Subscription {
-                                    id: String,
-                                    event: RpcSubscriptionEvent
-                                }
-                            }
-                            let result = match msg {
+                            match msg {
                                 ConnectionData::Text(text) => {
                                     match serde_json::from_str::<RpcInbound>(&text) {
                                         Ok(inbound) => {
@@ -69,22 +60,26 @@ impl Subscriptions {
                                                 RpcInbound::Response {id, result} => {
                                                     match result {
                                                         Ok(response) => {
-                                                            LocalResult::Rpc { id, response }
+                                                            inner.on_received_rpc_response(id, response);
                                                         }
                                                         Err(err) => {
                                                             tracing::error!("EVM: RPC error for id {}: {:?}", id.data().as_ffi(), err);
-                                                            continue;
                                                         }
                                                     }
                                                 },
                                                 RpcInbound::Subscription{id, result } => {
                                                     match result {
                                                         Ok(event) => {
-                                                            LocalResult::Subscription { id, event }
+                                                            inner.on_recieved_subscription_event(
+                                                                &mut subscription_block_height_tx,
+                                                                &mut subscription_log_tx,
+                                                                &mut subscription_new_pending_transaction_tx,
+                                                                id,
+                                                                event
+                                                            );
                                                         }
                                                         Err(err) => {
                                                             tracing::error!("EVM: Subscription error for id {}: {:?}", id, err);
-                                                            continue;
                                                         }
                                                     }
                                                 },
@@ -93,123 +88,12 @@ impl Subscriptions {
                                         },
                                         Err(e) => {
                                             tracing::error!("EVM: failed to parse RPC response: {}", e);
-                                            continue;
                                         }
                                     }
                                 },
                                 ConnectionData::Binary(bin) => {
                                     tracing::debug!("EVM: received binary message: {:x?}", bin);
-                                    continue;
-                                    // TODO - parse the message and route to appropriate subscription
-                                },
-                            };
-
-                            match result {
-                                LocalResult::Rpc { id, response } => {
-                                    inner.rpc_ids_in_flight.write().unwrap().remove(&id);
-                                    // since we clear the rpc ids (and sub ids) on disconnect,
-                                    // we can be sure that any new subscription id we get is for this connection
-                                    let kind = match id.kind() {
-                                        Some(kind) => kind,
-                                        None => {
-                                            tracing::warn!("EVM: received response for unknown RPC id {}", id.data().as_ffi());
-                                            continue;
-                                        },
-                                    };
-                                    match response {
-                                        RpcResponse::NewSubscription { subscription_id } => {
-                                            // if this rpc id was marked to unsubscribe on landing, do so now
-                                            if inner.rpc_ids_to_unsubscribe_on_landing.write().unwrap().remove(&id) {
-                                                if let Err(e) = inner.send_rpc(RpcRequest::unsubscribe(subscription_id.clone())) {
-                                                    tracing::error!("EVM: failed to send unsubscribe request for subscription id {}: {}", subscription_id, e);
-                                                } else {
-                                                    tracing::info!("EVM: sent unsubscribe request for subscription id {}", subscription_id);
-                                                }
-                                                continue;
-                                            }
-                                            match kind {
-                                                RpcRequestKind::SubscribeNewHeads => {
-                                                    tracing::info!("EVM: subscribed to newHeads with subscription id {}", subscription_id);
-                                                    inner.ids.insert(subscription_id, SubscriptionKind::NewHeads, None);
-                                                },
-                                                RpcRequestKind::SubscribeLogs{address, topics} => {
-                                                    tracing::info!("EVM: subscribed to logs with subscription id {}", subscription_id);
-                                                    inner.ids.insert(subscription_id, SubscriptionKind::Logs, Some((address, topics)));
-                                                },
-                                                RpcRequestKind::SubscribeNewPendingTransactions => {
-                                                    tracing::info!("EVM: subscribed to newPendingTransactions with subscription id {}", subscription_id);
-                                                    inner.ids.insert(subscription_id, SubscriptionKind::NewPendingTransactions, None);
-                                                },
-                                                RpcRequestKind::Unsubscribe{subscription_id} => {
-                                                    tracing::error!("EVM: received newSubscription response for unsubscribe request id {} (subscription id: {})", id.data().as_ffi(), subscription_id);
-                                                },
-                                            }
-                                        },
-                                        RpcResponse::UnsubscribeAck(success) => {
-                                            if success {
-                                                match kind {
-                                                    RpcRequestKind::Unsubscribe{subscription_id} => {
-                                                        tracing::info!("EVM: unsubscribed from subscription id {}", subscription_id);
-                                                        inner.ids.remove(&subscription_id);
-                                                    },
-                                                    _ => {
-                                                        tracing::error!("EVM: received unsubscribeAck for non-unsubscribe request id {}", id.data().as_ffi());
-                                                    }
-                                                }
-                                            } else {
-                                                match kind {
-                                                    RpcRequestKind::Unsubscribe{subscription_id} => {
-                                                        tracing::warn!("EVM: failed to unsubscribe from subscription id {}", subscription_id);
-                                                    },
-                                                    _ => {
-                                                        tracing::error!("EVM: received unsubscribeAck for non-unsubscribe request id {}", id.data().as_ffi());
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        RpcResponse::Other(value) => {
-                                            tracing::warn!("EVM: received unexpected RPC response for id {}: {:?}", id.data().as_ffi(), value);
-                                        },
-                                    }
-                                },
-                                LocalResult::Subscription { id: subscription_id, event } => match event {
-                                    RpcSubscriptionEvent::NewHeads(header) => {
-                                        if !inner.ids.eq(&subscription_id, SubscriptionKind::NewHeads) {
-                                            tracing::warn!("EVM: received newHeads event for unknown subscription id {}", subscription_id);
-                                            continue;
-                                        }
-                                        if let Err(e) = subscription_block_height_tx.send(header.number) {
-                                            tracing::error!("EVM: failed to send new block height: {}", e);
-                                        }
-                                    },
-                                    RpcSubscriptionEvent::Logs(log) => {
-                                        tracing::info!("EVM: received log event for subscription id {}", subscription_id);
-                                        tracing::debug!("EVM: log event details: address={:?}, topics={:?}", log.address(), log.topics());
-
-                                        if !inner.ids.eq(&subscription_id, SubscriptionKind::Logs) {
-                                            tracing::warn!("EVM: received logs event for unknown subscription id {}", subscription_id);
-                                            continue;
-                                        }
-
-                                        tracing::info!("EVM: forwarding log event to channel");
-                                        if let Err(e) = subscription_log_tx.send(log) {
-                                            tracing::error!("EVM: failed to send log: {}", e);
-                                        } else {
-                                            tracing::info!("EVM: successfully sent log event to channel");
-                                        }
-
-                                    },
-                                    RpcSubscriptionEvent::NewPendingTransaction(tx) => {
-                                        if !inner.ids.eq(&subscription_id, SubscriptionKind::NewPendingTransactions) {
-                                            tracing::warn!("EVM: received newPendingTransaction event for unknown subscription id {}", subscription_id);
-                                            continue;
-                                        }
-
-                                        if let Err(e) = subscription_new_pending_transaction_tx.send(tx) {
-                                            tracing::error!("EVM: failed to send new pending transaction: {}", e);
-                                        }
-
-                                    },
+                                    // ignore binary messages for now
                                 },
                             }
                         }
@@ -280,7 +164,9 @@ impl Drop for Subscriptions {
 
         if let Some(mut handle) = self.handle.lock().unwrap().take() {
             tokio::spawn(async move {
-                if let Err(_) = tokio::time::timeout(Duration::from_millis(500), &mut handle).await
+                if tokio::time::timeout(Duration::from_millis(500), &mut handle)
+                    .await
+                    .is_err()
                 {
                     tracing::warn!("EVM: subscription loop did not shut down in time, aborting");
                     handle.abort();
@@ -424,6 +310,186 @@ impl SubscriptionsInner {
         self._connection_send_rpc_tx.send(req)
     }
 
+    fn on_received_rpc_response(&self, id: RpcId, response: RpcResponse) {
+        self.rpc_ids_in_flight.write().unwrap().remove(&id);
+        // since we clear the rpc ids (and sub ids) on disconnect,
+        // we can be sure that any new subscription id we get is for this connection
+        let kind = match id.kind() {
+            Some(kind) => kind,
+            None => {
+                tracing::warn!(
+                    "EVM: received response for unknown RPC id {}",
+                    id.data().as_ffi()
+                );
+                return;
+            }
+        };
+        match response {
+            RpcResponse::NewSubscription { subscription_id } => {
+                // if this rpc id was marked to unsubscribe on landing, do so now
+                if self
+                    .rpc_ids_to_unsubscribe_on_landing
+                    .write()
+                    .unwrap()
+                    .remove(&id)
+                {
+                    if let Err(e) = self.send_rpc(RpcRequest::unsubscribe(subscription_id.clone()))
+                    {
+                        tracing::error!(
+                            "EVM: failed to send unsubscribe request for subscription id {}: {}",
+                            subscription_id,
+                            e
+                        );
+                    } else {
+                        tracing::info!(
+                            "EVM: sent unsubscribe request for subscription id {}",
+                            subscription_id
+                        );
+                    }
+                    return;
+                }
+                match kind {
+                    RpcRequestKind::SubscribeNewHeads => {
+                        tracing::info!(
+                            "EVM: subscribed to newHeads with subscription id {}",
+                            subscription_id
+                        );
+                        self.ids
+                            .insert(subscription_id, SubscriptionKind::NewHeads, None);
+                    }
+                    RpcRequestKind::SubscribeLogs { address, topics } => {
+                        tracing::info!(
+                            "EVM: subscribed to logs with subscription id {}",
+                            subscription_id
+                        );
+                        self.ids.insert(
+                            subscription_id,
+                            SubscriptionKind::Logs,
+                            Some((address, topics)),
+                        );
+                    }
+                    RpcRequestKind::SubscribeNewPendingTransactions => {
+                        tracing::info!(
+                            "EVM: subscribed to newPendingTransactions with subscription id {}",
+                            subscription_id
+                        );
+                        self.ids.insert(
+                            subscription_id,
+                            SubscriptionKind::NewPendingTransactions,
+                            None,
+                        );
+                    }
+                    RpcRequestKind::Unsubscribe { subscription_id } => {
+                        tracing::error!("EVM: received newSubscription response for unsubscribe request id {} (subscription id: {})", id.data().as_ffi(), subscription_id);
+                    }
+                }
+            }
+            RpcResponse::UnsubscribeAck(success) => {
+                if success {
+                    match kind {
+                        RpcRequestKind::Unsubscribe { subscription_id } => {
+                            tracing::info!(
+                                "EVM: unsubscribed from subscription id {}",
+                                subscription_id
+                            );
+                            self.ids.remove(&subscription_id);
+                        }
+                        _ => {
+                            tracing::error!(
+                                "EVM: received unsubscribeAck for non-unsubscribe request id {}",
+                                id.data().as_ffi()
+                            );
+                        }
+                    }
+                } else {
+                    match kind {
+                        RpcRequestKind::Unsubscribe { subscription_id } => {
+                            tracing::warn!(
+                                "EVM: failed to unsubscribe from subscription id {}",
+                                subscription_id
+                            );
+                        }
+                        _ => {
+                            tracing::error!(
+                                "EVM: received unsubscribeAck for non-unsubscribe request id {}",
+                                id.data().as_ffi()
+                            );
+                        }
+                    }
+                }
+            }
+            RpcResponse::Other(value) => {
+                tracing::warn!(
+                    "EVM: received unexpected RPC response for id {}: {:?}",
+                    id.data().as_ffi(),
+                    value
+                );
+            }
+        }
+    }
+
+    fn on_recieved_subscription_event(
+        &self,
+        subscription_block_height_tx: &mut tokio::sync::mpsc::UnboundedSender<u64>,
+        subscription_log_tx: &mut tokio::sync::mpsc::UnboundedSender<Log>,
+        subscription_new_pending_transaction_tx: &mut tokio::sync::mpsc::UnboundedSender<B256>,
+        subscription_id: String,
+        event: RpcSubscriptionEvent,
+    ) {
+        match event {
+            RpcSubscriptionEvent::NewHeads(header) => {
+                if !self.ids.eq(&subscription_id, SubscriptionKind::NewHeads) {
+                    tracing::warn!(
+                        "EVM: received newHeads event for unknown subscription id {}",
+                        subscription_id
+                    );
+                } else if let Err(e) = subscription_block_height_tx.send(header.number) {
+                    tracing::error!("EVM: failed to send new block height: {}", e);
+                }
+            }
+            RpcSubscriptionEvent::Logs(log) => {
+                tracing::info!(
+                    "EVM: received log event for subscription id {}",
+                    subscription_id
+                );
+                tracing::debug!(
+                    "EVM: log event details: address={:?}, topics={:?}",
+                    log.address(),
+                    log.topics()
+                );
+
+                if !self.ids.eq(&subscription_id, SubscriptionKind::Logs) {
+                    tracing::warn!(
+                        "EVM: received logs event for unknown subscription id {}",
+                        subscription_id
+                    );
+                } else {
+                    tracing::info!("EVM: forwarding log event to channel");
+                    if let Err(e) = subscription_log_tx.send(log) {
+                        tracing::error!("EVM: failed to send log: {}", e);
+                    } else {
+                        tracing::info!("EVM: successfully sent log event to channel");
+                    }
+                }
+            }
+            RpcSubscriptionEvent::NewPendingTransaction(tx) => {
+                if !self
+                    .ids
+                    .eq(&subscription_id, SubscriptionKind::NewPendingTransactions)
+                {
+                    tracing::warn!(
+                        "EVM: received newPendingTransaction event for unknown subscription id {}",
+                        subscription_id
+                    );
+                }
+
+                if let Err(e) = subscription_new_pending_transaction_tx.send(tx) {
+                    tracing::error!("EVM: failed to send new pending transaction: {}", e);
+                }
+            }
+        }
+    }
+
     fn unsubscribe(&self, kind: SubscriptionKind) {
         let ids = self.ids.list(kind);
 
@@ -433,15 +499,19 @@ impl SubscriptionsInner {
             let rpc_ids_in_flight = self.rpc_ids_in_flight.read().unwrap();
 
             for rpc_id in rpc_ids_in_flight.iter() {
-                let to_unsubscribe = match (kind, rpc_id.kind()) {
-                    (SubscriptionKind::NewHeads, Some(RpcRequestKind::SubscribeNewHeads)) => true,
-                    (SubscriptionKind::Logs, Some(RpcRequestKind::SubscribeLogs { .. })) => true,
+                let to_unsubscribe = matches!(
+                    (kind, rpc_id.kind()),
                     (
+                        SubscriptionKind::NewHeads,
+                        Some(RpcRequestKind::SubscribeNewHeads)
+                    ) | (
+                        SubscriptionKind::Logs,
+                        Some(RpcRequestKind::SubscribeLogs { .. })
+                    ) | (
                         SubscriptionKind::NewPendingTransactions,
                         Some(RpcRequestKind::SubscribeNewPendingTransactions),
-                    ) => true,
-                    _ => false,
-                };
+                    )
+                );
 
                 if to_unsubscribe {
                     rpcs_to_unsubscribe_on_landing.insert(*rpc_id);
@@ -484,10 +554,7 @@ impl SubscriptionsInner {
                     .read()
                     .unwrap()
                     .iter()
-                    .any(|id| match id.kind() {
-                        Some(RpcRequestKind::SubscribeNewHeads) => true,
-                        _ => false,
-                    })
+                    .any(|id| matches!(id.kind(), Some(RpcRequestKind::SubscribeNewHeads)))
             {
                 if let Err(e) = self.send_rpc(RpcRequest::new_heads()) {
                     tracing::error!("EVM: failed to send newHeads subscription request: {}", e);
@@ -539,15 +606,12 @@ impl SubscriptionsInner {
             .load(std::sync::atomic::Ordering::SeqCst)
         {
             if !self.ids.any(SubscriptionKind::NewPendingTransactions)
-                && !self
-                    .rpc_ids_in_flight
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .any(|id| match id.kind() {
-                        Some(RpcRequestKind::SubscribeNewPendingTransactions) => true,
-                        _ => false,
-                    })
+                && !self.rpc_ids_in_flight.read().unwrap().iter().any(|id| {
+                    matches!(
+                        id.kind(),
+                        Some(RpcRequestKind::SubscribeNewPendingTransactions)
+                    )
+                })
             {
                 if let Err(e) = self.send_rpc(RpcRequest::new_pending_transactions()) {
                     tracing::error!(
@@ -650,9 +714,6 @@ impl SubscriptionIds {
     }
 
     fn eq(&self, id: &str, kind: SubscriptionKind) -> bool {
-        match self._lookup.read().unwrap().get(id) {
-            Some(current_kind) if *current_kind == kind => true,
-            _ => false,
-        }
+        matches!(self._lookup.read().unwrap().get(id),  Some(current_kind) if *current_kind == kind)
     }
 }

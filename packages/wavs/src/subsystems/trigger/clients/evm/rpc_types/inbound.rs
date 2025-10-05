@@ -4,12 +4,13 @@ use alloy_primitives::B256;
 use alloy_rpc_types_eth::{Header, Log};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
-use slotmap::{Key, KeyData};
+use slotmap::KeyData;
 
 use crate::subsystems::trigger::clients::evm::rpc_types::id::RpcId;
 
 /// Inbound JSON-RPC messages from an Ethereum node.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum RpcInbound {
     /// Regular response (to a request we sent)
     Response {
@@ -38,6 +39,7 @@ pub enum RpcResponse {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum RpcSubscriptionEvent {
     NewHeads(Header),
     Logs(Log),
@@ -45,6 +47,7 @@ pub enum RpcSubscriptionEvent {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RpcError {
     pub code: i32,
     pub message: String,
@@ -167,7 +170,6 @@ mod tests {
 
     use super::*;
     use alloy_primitives::Address;
-    use serde_json::json;
 
     #[test]
     fn response_new_subscription() {
@@ -301,7 +303,7 @@ mod tests {
             }
         "#;
 
-        let msg: RpcInbound = serde_json::from_str(&json).unwrap();
+        let msg: RpcInbound = serde_json::from_str(json).unwrap();
         match msg {
             RpcInbound::Subscription { id, result } => {
                 assert_eq!(id, "0xabcd1234ef567890abcd1234ef567890");

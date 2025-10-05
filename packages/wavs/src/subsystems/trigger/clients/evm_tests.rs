@@ -76,7 +76,7 @@ async fn simple_log_stream() {
     tracing::info!("Deployed contract at {}", contract.address());
 
     controller.subscriptions.enable_log(
-        Some(contract.address().clone()),
+        Some(*contract.address()),
         Some(EventEmitter::IntegerEvent::SIGNATURE_HASH),
     );
 
@@ -175,7 +175,7 @@ async fn multi_log_stream(add_kind: AddKind) {
 
     match add_kind {
         AddKind::Batch => controller.subscriptions.enable_logs(
-            vec![contract.address().clone()],
+            vec![*contract.address()],
             vec![
                 EventEmitter::IntegerEvent::SIGNATURE_HASH,
                 EventEmitter::StringEvent::SIGNATURE_HASH,
@@ -183,11 +183,11 @@ async fn multi_log_stream(add_kind: AddKind) {
         ),
         AddKind::Serial => {
             controller.subscriptions.enable_log(
-                Some(contract.address().clone()),
+                Some(*contract.address()),
                 Some(EventEmitter::IntegerEvent::SIGNATURE_HASH),
             );
             controller.subscriptions.enable_log(
-                Some(contract.address().clone()),
+                Some(*contract.address()),
                 Some(EventEmitter::StringEvent::SIGNATURE_HASH),
             );
         }
@@ -315,7 +315,7 @@ async fn multi_contract_log_stream() {
     tracing::info!("Deployed contract_2 at {}", contract_2.address());
 
     controller.subscriptions.enable_logs(
-        vec![contract_1.address().clone(), contract_2.address().clone()],
+        vec![*contract_1.address(), *contract_2.address()],
         vec![EventEmitter::IntegerEvent::SIGNATURE_HASH],
     );
 
@@ -340,8 +340,8 @@ async fn multi_contract_log_stream() {
     // First spawn a task to collect the logs into the stream
     let handle = tokio::spawn({
         let collected_logs = collected_logs.clone();
-        let contract_1_address = contract_1.address().clone();
-        let contract_2_address = contract_2.address().clone();
+        let contract_1_address = *contract_1.address();
+        let contract_2_address = *contract_2.address();
         async move {
             timeout(Duration::from_secs(5), async {
                 while let Some(log) = log_stream.next().await {
@@ -451,7 +451,7 @@ async fn fallback_chain_log_stream() {
     );
 
     controller.subscriptions.enable_logs(
-        vec![contract_1.address().clone(), contract_2.address().clone()],
+        vec![*contract_1.address(), *contract_2.address()],
         vec![EventEmitter::IntegerEvent::SIGNATURE_HASH],
     );
 
@@ -485,11 +485,11 @@ async fn fallback_chain_log_stream() {
     // wait for the client to reconnect (otherwise our subscription will just miss the events)
     timeout(Duration::from_secs(10), async {
         loop {
-            if controller.connection.current_endpoint() == Some(anvil_2.ws_endpoint()) {
-                if controller.subscriptions.is_connected() {
-                    wait_for_all_rpc_requests_landed(&controller).await;
-                    break;
-                }
+            if controller.connection.current_endpoint() == Some(anvil_2.ws_endpoint())
+                && controller.subscriptions.is_connected()
+            {
+                wait_for_all_rpc_requests_landed(&controller).await;
+                break;
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
@@ -565,7 +565,7 @@ async fn unsubscribe_log_stream(kind: UnsubscribeKind) {
     tracing::info!("Deployed contract at {}", contract.address());
 
     controller.subscriptions.enable_logs(
-        vec![contract.address().clone()],
+        vec![*contract.address()],
         vec![
             EventEmitter::IntegerEvent::SIGNATURE_HASH,
             EventEmitter::StringEvent::SIGNATURE_HASH,

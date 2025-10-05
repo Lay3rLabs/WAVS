@@ -1,5 +1,3 @@
-// TODO
-// RUST_LOG=info cargo test evm_tests::unsubscribe_log_stream_nowait --lib -- --nocapture
 mod channels;
 mod connection;
 mod rpc_types;
@@ -8,7 +6,6 @@ mod subscription;
 use alloy_primitives::B256;
 use alloy_rpc_types_eth::Log;
 use connection::Connection;
-use futures::Stream;
 use subscription::Subscriptions;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;

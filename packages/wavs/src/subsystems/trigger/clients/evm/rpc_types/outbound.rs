@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use alloy_primitives::{Address, B256};
-use serde::ser::{Serialize, SerializeMap, SerializeSeq, SerializeStruct, Serializer};
+use serde::ser::{Serialize, SerializeMap, SerializeStruct, Serializer};
 use slotmap::Key;
 
 use crate::subsystems::trigger::clients::evm::rpc_types::id::{RpcId, RpcRequestKind};

@@ -15,31 +15,31 @@ use crate::subsystems::trigger::clients::evm::{
     channels::ConnectionChannels, rpc_types::outbound::RpcRequest,
 };
 
-/// A handle for managing WebSocket connections with intelligent retry logic
-///
-/// This loops forever, attempting to connect to one of the provided WebSocket endpoints.
-///
-/// ## Retry Strategy
-///
-/// - **Endpoint Cycling**: When a connection fails, it cycles through all provided endpoints
-///   at the current backoff level before increasing the backoff time
-/// - **Backoff Timing**: Starts with a 1-second backoff, doubles after each complete cycle
-///   of endpoint failures, with a maximum cap of 30 seconds
-/// - **Fair Treatment**: All endpoints within the same retry cycle get the same backoff time
-/// - **Reset on Success**: Both backoff time and cycle tracking reset when any connection succeeds
-///
-/// ## Example Behavior
-///
-/// With endpoints [A, B, C] and failures on all:
-/// 1. Try A (fail) → sleep 1s
-/// 2. Try B (fail) → sleep 1s
-/// 3. Try C (fail) → sleep 1s → increase backoff to 2s for next cycle
-/// 4. Try A (fail) → sleep 2s
-/// 5. Try B (success) → reset backoff to 1s, reset cycle
-/// -> disconnection happens
-/// 6. Try C (fail) → sleep 1s
-/// 7. Try A (success)
-/// ... and so on
+// A handle for managing WebSocket connections with intelligent retry logic
+//
+// This loops forever, attempting to connect to one of the provided WebSocket endpoints.
+//
+// ## Retry Strategy
+//
+// - **Endpoint Cycling**: When a connection fails, it cycles through all provided endpoints
+//   at the current backoff level before increasing the backoff time
+// - **Backoff Timing**: Starts with a 1-second backoff, doubles after each complete cycle
+//   of endpoint failures, with a maximum cap of 30 seconds
+// - **Fair Treatment**: All endpoints within the same retry cycle get the same backoff time
+// - **Reset on Success**: Both backoff time and cycle tracking reset when any connection succeeds
+//
+// ## Example Behavior
+//
+// With endpoints [A, B, C] and failures on all:
+// 1. Try A (fail) → sleep 1s
+// 2. Try B (fail) → sleep 1s
+// 3. Try C (fail) → sleep 1s → increase backoff to 2s for next cycle
+// 4. Try A (fail) → sleep 2s
+// 5. Try B (success) → reset backoff to 1s, reset cycle
+// -> disconnection happens
+// 6. Try C (fail) → sleep 1s
+// 7. Try A (success)
+// ... and so on
 #[allow(dead_code)]
 pub struct Connection {
     handles: Option<[tokio::task::JoinHandle<()>; 2]>,
@@ -114,8 +114,9 @@ impl Drop for Connection {
         if let Some(handles) = self.handles.take() {
             for mut handle in handles {
                 tokio::spawn(async move {
-                    if let Err(_) =
-                        tokio::time::timeout(Duration::from_millis(500), &mut handle).await
+                    if tokio::time::timeout(Duration::from_millis(500), &mut handle)
+                        .await
+                        .is_err()
                     {
                         tracing::warn!("EVM: connection loop did not shut down in time, aborting");
                         handle.abort();

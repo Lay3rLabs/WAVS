@@ -1,4 +1,4 @@
-use alloy_node_bindings::{Anvil, AnvilInstance};
+use alloy_node_bindings::AnvilInstance;
 use alloy_primitives::Address;
 use alloy_provider::DynProvider;
 use tempfile::TempDir;

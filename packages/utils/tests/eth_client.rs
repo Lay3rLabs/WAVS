@@ -1,9 +1,6 @@
-use alloy_node_bindings::Anvil;
-use alloy_provider::Provider;
 use alloy_signer::Signer;
-use futures::StreamExt;
 use utils::{
-    evm_client::{EvmQueryClient, EvmSigningClient, EvmSigningClientConfig},
+    evm_client::{EvmSigningClient, EvmSigningClientConfig},
     init_tracing_tests,
     test_utils::anvil::safe_spawn_anvil,
 };
