@@ -99,6 +99,10 @@ pub enum Command {
         #[clap(long)]
         operator_credential: Option<Credential>,
 
+        /// Operator HD index for envelope signing
+        #[clap(long)]
+        operator_hd_index: Option<u32>,
+
         /// Simulate the transaction execution as actual TriggerData (JSON format)
         #[clap(long)]
         simulates_trigger: Option<TriggerKind>,
