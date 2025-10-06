@@ -1,5 +1,5 @@
 use utils::config::ChainConfigs;
-use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wavs_types::{ComponentDigest, EventId, Service, ServiceId, WorkflowId};
 
@@ -25,19 +25,20 @@ pub struct OperatorHostComponent {
 }
 
 impl WasiView for OperatorHostComponent {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.ctx
-    }
-}
-
-impl IoView for OperatorHostComponent {
-    fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
-        &mut self.table
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.ctx,
+            table: &mut self.table,
+        }
     }
 }
 
 impl WasiHttpView for OperatorHostComponent {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
+    }
+
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+        &mut self.table
     }
 }
