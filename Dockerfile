@@ -1,5 +1,5 @@
 # Base image with common dependencies
-FROM rust:1.88-slim-bookworm AS base
+FROM rust:1.90-slim-bookworm AS base
 RUN apt-get update && apt-get install -y pkg-config libssl-dev ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
 # This whole pile will pre-build and cache the dependencies, so we just recompile local code below
