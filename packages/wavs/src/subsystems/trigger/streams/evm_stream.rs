@@ -1,37 +1,23 @@
-use alloy_provider::Provider;
-use alloy_rpc_types_eth::Filter;
+use alloy_rpc_types_eth::Log;
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
-use utils::{evm_client::EvmQueryClient, telemetry::TriggerMetrics};
+use tokio_stream::wrappers::UnboundedReceiverStream;
+use utils::telemetry::TriggerMetrics;
 use wavs_types::ChainKey;
 
 use crate::subsystems::trigger::error::TriggerError;
 
 use super::StreamTriggers;
 
-const DEFAULT_ALLOY_CHANNEL_SIZE: usize = 16;
-
 pub async fn start_evm_event_stream(
-    query_client: EvmQueryClient,
     chain: ChainKey,
-    channel_size: usize,
+    log_stream: UnboundedReceiverStream<Log>,
     _metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
-    let filter = Filter::new();
-    // Minimum default Alloy configuration
-    let channel_size = channel_size.max(DEFAULT_ALLOY_CHANNEL_SIZE);
-    let stream = query_client
-        .provider
-        .subscribe_logs(&filter)
-        .channel_size(channel_size)
-        .await
-        .map_err(|e| TriggerError::EvmSubscription(e.into()))?
-        .into_stream();
-
     let chain = chain.clone();
 
-    let event_stream = Box::pin(stream.filter_map(move |log| {
+    let event_stream = Box::pin(log_stream.filter_map(move |log| {
         let chain = chain.clone();
         async move {
             if log.removed {
@@ -76,23 +62,15 @@ pub async fn start_evm_event_stream(
 }
 
 pub async fn start_evm_block_stream(
-    query_client: EvmQueryClient,
     chain: ChainKey,
+    block_height_stream: UnboundedReceiverStream<u64>,
     _metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
-    // Start the block stream (for block-based triggers)
-    let stream = query_client
-        .provider
-        .subscribe_blocks()
-        .await
-        .map_err(|e| TriggerError::EvmSubscription(e.into()))?
-        .into_stream();
-
-    let block_stream = Box::pin(stream.map(move |block| {
+    let block_stream = Box::pin(block_height_stream.map(move |block_height| {
         Ok(StreamTriggers::EvmBlock {
             chain: chain.clone(),
-            block_height: block.number,
+            block_height,
         })
     }));
 

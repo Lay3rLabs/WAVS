@@ -13,6 +13,8 @@ pub enum TriggerError {
     Climb(anyhow::Error),
     #[error("EvmClient (chain {0}): {1}")]
     EvmClient(ChainKey, EvmClientError),
+    #[error("EvmClient (chain {0}): missing websocket endpoint")]
+    EvmMissingWebsocket(ChainKey),
     #[error("Evm subscription: {0}")]
     EvmSubscription(anyhow::Error),
     #[error("parse avs payload: {0}")]

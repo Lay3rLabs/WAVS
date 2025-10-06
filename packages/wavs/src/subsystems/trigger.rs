@@ -8,8 +8,9 @@ use crate::{
     config::Config,
     dispatcher::DispatcherCommand,
     services::Services,
-    subsystems::trigger::streams::{
-        cosmos_stream::StreamTriggerCosmosContractEvent, local_command_stream,
+    subsystems::trigger::{
+        clients::evm::EvmTriggerStreams,
+        streams::{cosmos_stream::StreamTriggerCosmosContractEvent, local_command_stream},
     },
     tracing_service_info, AppContext,
 };
@@ -28,8 +29,7 @@ use std::{
 use streams::{cosmos_stream, cron_stream, evm_stream, MultiplexedStream, StreamTriggers};
 use tracing::instrument;
 use utils::{
-    config::{AnyChainConfig, ChainConfigs, EvmChainConfigExt},
-    evm_client::EvmQueryClient,
+    config::{AnyChainConfig, ChainConfigs},
     telemetry::TriggerMetrics,
 };
 use wavs_types::{
@@ -40,21 +40,70 @@ use wavs_types::{
 #[derive(Debug)]
 pub enum TriggerCommand {
     Kill,
-    StartListeningChain { chain: ChainKey },
+    StartListeningChain {
+        chain: ChainKey,
+    },
     StartListeningCron,
+    WatchEvmBlocks {
+        chain: ChainKey,
+    },
+    WatchEvmContractEvents {
+        chain: ChainKey,
+        addresses: Vec<alloy_primitives::Address>,
+        event_hashes: Vec<alloy_primitives::B256>,
+    },
     ManualTrigger(Box<TriggerAction>),
 }
 
 impl TriggerCommand {
-    pub fn new(trigger_config: &TriggerConfig) -> Option<Self> {
+    pub fn map(trigger_config: &TriggerConfig, chain_configs: &ChainConfigs) -> Vec<Self> {
         match &trigger_config.trigger {
-            Trigger::Cron { .. } => Some(Self::StartListeningCron),
-            Trigger::EvmContractEvent { chain, .. }
-            | Trigger::CosmosContractEvent { chain, .. }
-            | Trigger::BlockInterval { chain, .. } => Some(Self::StartListeningChain {
-                chain: chain.clone(),
-            }),
-            Trigger::Manual => None,
+            Trigger::Cron { .. } => vec![Self::StartListeningCron],
+            Trigger::EvmContractEvent {
+                chain,
+                address,
+                event_hash,
+            } => {
+                vec![
+                    Self::StartListeningChain {
+                        chain: chain.clone(),
+                    },
+                    Self::WatchEvmContractEvents {
+                        chain: chain.clone(),
+                        addresses: vec![*address],
+                        event_hashes: vec![event_hash.into_inner().into()],
+                    },
+                ]
+            }
+            Trigger::CosmosContractEvent { chain, .. } => {
+                vec![Self::StartListeningChain {
+                    chain: chain.clone(),
+                }]
+            }
+            Trigger::BlockInterval { chain, .. } => match chain_configs.get_chain(chain) {
+                Some(chain_config) => match chain_config {
+                    AnyChainConfig::Evm(_) => {
+                        vec![
+                            Self::StartListeningChain {
+                                chain: chain.clone(),
+                            },
+                            Self::WatchEvmBlocks {
+                                chain: chain.clone(),
+                            },
+                        ]
+                    }
+                    AnyChainConfig::Cosmos(_) => {
+                        vec![Self::StartListeningChain {
+                            chain: chain.clone(),
+                        }]
+                    }
+                },
+                None => {
+                    tracing::warn!("Block interval set for non-existant chain-config: {chain}");
+                    Vec::new()
+                }
+            },
+            Trigger::Manual => Vec::new(),
         }
     }
 }
@@ -117,6 +166,19 @@ impl TriggerManager {
                 chain: service.manager.chain().clone(),
             })?;
 
+        match service.manager.clone() {
+            wavs_types::ServiceManager::Evm { chain, address } => {
+                self.command_sender
+                    .send(TriggerCommand::WatchEvmContractEvents {
+                        chain,
+                        addresses: vec![address],
+                        event_hashes: vec![IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH],
+                    })?;
+            }
+        }
+
+        let chain_configs = self.chain_configs.read().unwrap().clone();
+
         for (id, workflow) in &service.workflows {
             let config = TriggerConfig {
                 service_id: service.id(),
@@ -124,7 +186,7 @@ impl TriggerManager {
                 trigger: workflow.trigger.clone(),
             };
 
-            if let Some(command) = TriggerCommand::new(&config) {
+            for command in TriggerCommand::map(&config, &chain_configs) {
                 self.command_sender.send(command)?;
             }
         }
@@ -134,7 +196,15 @@ impl TriggerManager {
 
     #[instrument(skip(self), fields(subsys = "TriggerManager"))]
     pub fn remove_service(&self, service_id: ServiceId) -> Result<(), TriggerError> {
-        self.lookup_maps.remove_service(service_id.clone())
+        self.lookup_maps.remove_service(service_id.clone())?;
+
+        // TODO - consider sending commands to:
+        // 1. stop listening to chains if no triggers remain for them
+        // 2. remove any cron jobs if no triggers remain for them
+        // 3. remove any EVM log subscriptions if no triggers remain for them
+        // 4. remove any block subscriptions if no triggers remain for them
+
+        Ok(())
     }
 
     #[instrument(skip(self, ctx), fields(subsys = "TriggerManager"))]
@@ -204,7 +274,7 @@ impl TriggerManager {
         multiplexed_stream.push(local_command_stream);
 
         let mut cosmos_clients = HashMap::new();
-        let mut evm_clients = HashMap::new();
+        let mut evm_controllers = HashMap::new();
 
         let mut listening_chains = HashSet::new();
         let mut has_started_cron_stream = false;
@@ -323,20 +393,25 @@ impl TriggerManager {
                                     }
                                 }
                                 AnyChainConfig::Evm(chain_config) => {
-                                    let endpoint = chain_config
-                                        .query_client_endpoint()
-                                        .map_err(|e| TriggerError::EvmClient(chain.clone(), e))?;
-                                    let evm_client = EvmQueryClient::new(endpoint)
-                                        .await
-                                        .map_err(|e| TriggerError::EvmClient(chain.clone(), e))?;
+                                    let endpoint = chain_config.ws_endpoint.ok_or_else(|| {
+                                        TriggerError::EvmMissingWebsocket(chain.clone())
+                                    })?;
 
-                                    evm_clients.insert(chain.clone(), evm_client.clone());
+                                    let EvmTriggerStreams {
+                                        controller,
+                                        block_height_stream,
+                                        log_stream,
+                                        // ignoring this for now
+                                        new_pending_transaction_stream: _,
+                                    } = EvmTriggerStreams::new(vec![endpoint]);
+
+                                    evm_controllers.insert(chain.clone(), controller);
 
                                     // Start the EVM event stream
+                                    // however, the actual subscription for log filters is set via the controller
                                     match evm_stream::start_evm_event_stream(
-                                        evm_client.clone(),
                                         chain.clone(),
-                                        chain_config.event_channel_size,
+                                        log_stream,
                                         self.metrics.clone(),
                                     )
                                     .await
@@ -354,9 +429,10 @@ impl TriggerManager {
                                     }
 
                                     // Start the EVM block stream
+                                    // however, the actual subscription for blocks is gated via the controller
                                     match evm_stream::start_evm_block_stream(
-                                        evm_client.clone(),
                                         chain.clone(),
+                                        block_height_stream,
                                         self.metrics.clone(),
                                     )
                                     .await
@@ -374,6 +450,38 @@ impl TriggerManager {
                                     }
                                 }
                             }
+                        }
+                        TriggerCommand::WatchEvmContractEvents {
+                            chain,
+                            addresses,
+                            event_hashes,
+                        } => {
+                            let evm_controller = match evm_controllers.get(&chain) {
+                                Some(controller) => controller,
+                                None => {
+                                    tracing::error!(
+                                        "No EVM controller found for chain {chain}, cannot watch contract event"
+                                    );
+                                    continue;
+                                }
+                            };
+
+                            evm_controller
+                                .subscriptions
+                                .enable_logs(addresses, event_hashes);
+                        }
+                        TriggerCommand::WatchEvmBlocks { chain } => {
+                            let evm_controller = match evm_controllers.get(&chain) {
+                                Some(controller) => controller,
+                                None => {
+                                    tracing::error!(
+                                        "No EVM controller found for chain {chain}, cannot watch blocks"
+                                    );
+                                    continue;
+                                }
+                            };
+
+                            evm_controller.subscriptions.toggle_block_height(true);
                         }
                     }
                 }
