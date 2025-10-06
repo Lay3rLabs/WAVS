@@ -9,7 +9,7 @@ use crate::{
     dispatcher::DispatcherCommand,
     services::Services,
     subsystems::trigger::{
-        clients::evm::EvmTriggerStreams,
+        clients::evm::{EvmTriggerStreams, EvmTriggerStreamsController},
         streams::{cosmos_stream::StreamTriggerCosmosContractEvent, local_command_stream},
     },
     tracing_service_info, AppContext,
@@ -120,6 +120,7 @@ pub struct TriggerManager {
     #[cfg(feature = "dev")]
     pub disable_networking: bool,
     pub services: Services,
+    pub evm_controllers: Arc<std::sync::RwLock<HashMap<ChainKey, EvmTriggerStreamsController>>>,
 }
 
 impl TriggerManager {
@@ -143,6 +144,7 @@ impl TriggerManager {
             #[cfg(feature = "dev")]
             disable_networking: config.disable_trigger_networking,
             services,
+            evm_controllers: Arc::new(std::sync::RwLock::new(HashMap::new())),
         })
     }
 
@@ -274,7 +276,6 @@ impl TriggerManager {
         multiplexed_stream.push(local_command_stream);
 
         let mut cosmos_clients = HashMap::new();
-        let mut evm_controllers = HashMap::new();
 
         let mut listening_chains = HashSet::new();
         let mut has_started_cron_stream = false;
@@ -405,7 +406,10 @@ impl TriggerManager {
                                         new_pending_transaction_stream: _,
                                     } = EvmTriggerStreams::new(vec![endpoint]);
 
-                                    evm_controllers.insert(chain.clone(), controller);
+                                    self.evm_controllers
+                                        .write()
+                                        .unwrap()
+                                        .insert(chain.clone(), controller);
 
                                     // Start the EVM event stream
                                     // however, the actual subscription for log filters is set via the controller
@@ -455,33 +459,31 @@ impl TriggerManager {
                             chain,
                             addresses,
                             event_hashes,
-                        } => {
-                            let evm_controller = match evm_controllers.get(&chain) {
-                                Some(controller) => controller,
-                                None => {
-                                    tracing::error!(
+                        } => match self.evm_controllers.read().unwrap().get(&chain) {
+                            Some(evm_controller) => {
+                                evm_controller
+                                    .subscriptions
+                                    .enable_logs(addresses, event_hashes);
+                            }
+                            None => {
+                                tracing::error!(
                                         "No EVM controller found for chain {chain}, cannot watch contract event"
                                     );
-                                    continue;
-                                }
-                            };
-
-                            evm_controller
-                                .subscriptions
-                                .enable_logs(addresses, event_hashes);
-                        }
+                                continue;
+                            }
+                        },
                         TriggerCommand::WatchEvmBlocks { chain } => {
-                            let evm_controller = match evm_controllers.get(&chain) {
-                                Some(controller) => controller,
+                            match self.evm_controllers.read().unwrap().get(&chain) {
+                                Some(evm_controller) => {
+                                    evm_controller.subscriptions.toggle_block_height(true);
+                                }
                                 None => {
                                     tracing::error!(
                                         "No EVM controller found for chain {chain}, cannot watch blocks"
                                     );
                                     continue;
                                 }
-                            };
-
-                            evm_controller.subscriptions.toggle_block_height(true);
+                            }
                         }
                     }
                 }

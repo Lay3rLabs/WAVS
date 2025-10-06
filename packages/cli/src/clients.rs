@@ -3,9 +3,9 @@ use std::time::Duration;
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use wavs_types::{
-    AddServiceRequest, ChainKey, ComponentDigest, DeleteServicesRequest, GetSignerRequest,
-    IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceManager,
-    SignerResponse, UploadComponentResponse,
+    AddServiceRequest, ChainKey, ComponentDigest, DeleteServicesRequest, DevTriggerStreamsInfo,
+    GetSignerRequest, IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse,
+    Service, ServiceManager, SignerResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUriArgs;
@@ -226,6 +226,20 @@ impl HttpClient {
                 text
             )),
         }
+    }
+
+    pub async fn get_trigger_streams_info(&self) -> Result<DevTriggerStreamsInfo> {
+        let url = format!("{}/dev/trigger-streams-info", self.endpoint);
+
+        let text = self.inner.get(&url).send().await?.text().await?;
+
+        serde_json::from_str::<DevTriggerStreamsInfo>(&text).map_err(|err| {
+            anyhow::anyhow!(
+                "Failed to parse response as DevTriggerStreamsInfoResponse [{}]: {}",
+                err,
+                text
+            )
+        })
     }
 
     pub async fn wait_for_service_update(

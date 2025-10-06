@@ -11,6 +11,8 @@ mod service_managers;
 mod test_definition;
 mod test_registry;
 
+use std::time::Duration;
+
 use components::ComponentSources;
 use config::Configs;
 use dashmap::DashMap;
@@ -24,6 +26,7 @@ use utils::{
     telemetry::{setup_metrics, setup_tracing, Metrics},
     test_utils::middleware::MiddlewareInstance,
 };
+use wavs_cli::clients::HttpClient;
 
 use crate::{
     args::TestArgs,
@@ -169,6 +172,9 @@ async fn _run(configs: Configs, mode: TestMode, middleware_instance: MiddlewareI
         )
         .await;
 
+    // Wait for the node to be ready for tests
+    wait_for_trigger_streams_finalize(&clients.http_client).await;
+
     // Create and run the test runner (services will be deployed just-in-time)
     Runner::new(
         clients,
@@ -182,4 +188,21 @@ async fn _run(configs: Configs, mode: TestMode, middleware_instance: MiddlewareI
     .await;
 
     report.print();
+}
+
+async fn wait_for_trigger_streams_finalize(client: &HttpClient) {
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            let info = client.get_trigger_streams_info().await.unwrap();
+
+            if info.finalized() {
+                break;
+            } else {
+                tracing::warn!("Still waiting for trigger streams to finalize");
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .unwrap();
 }

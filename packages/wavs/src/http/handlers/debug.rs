@@ -1,5 +1,10 @@
+use std::collections::HashMap;
+
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use wavs_types::{SimulatedTriggerRequest, TriggerAction, TriggerConfig};
+use wavs_types::{
+    ChainKey, DevTriggerStreamInfo, DevTriggerStreamsInfo, SimulatedTriggerRequest, TriggerAction,
+    TriggerConfig,
+};
 
 use crate::http::{error::HttpResult, state::HttpState};
 
@@ -65,4 +70,36 @@ async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> 
         }
     }
     Ok(())
+}
+
+#[utoipa::path(
+    get,
+    path = "/dev/trigger-streams-info",
+    responses(
+        (status = 200, description = "Trigger streams info", body = DevTriggerStreamsInfo),
+    ),
+    description = "Get health status of chain endpoints"
+)]
+#[axum::debug_handler]
+pub async fn handle_dev_trigger_streams_info(State(state): State<HttpState>) -> impl IntoResponse {
+    let chains = state
+        .dispatcher
+        .trigger_manager
+        .evm_controllers
+        .read()
+        .unwrap()
+        .iter()
+        .map(|(chain, controller)| {
+            (
+                chain.clone(),
+                DevTriggerStreamInfo {
+                    current_endpoint: controller.connection.current_endpoint(),
+                    is_connected: controller.subscriptions.is_connected(),
+                    all_rpc_requests_landed: controller.subscriptions.all_rpc_requests_landed(),
+                },
+            )
+        })
+        .collect::<HashMap<ChainKey, DevTriggerStreamInfo>>();
+
+    Json(DevTriggerStreamsInfo { chains }).into_response()
 }

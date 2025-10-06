@@ -1,4 +1,6 @@
 pub mod aggregator;
+use std::collections::HashMap;
+
 use super::Service;
 use crate::{
     AnyChainConfig, ChainKey, ComponentDigest, ServiceDigest, ServiceId, ServiceManager, Trigger,
@@ -70,4 +72,24 @@ pub struct SimulatedTriggerRequest {
 
 fn default_simulated_trigger_count() -> usize {
     1
+}
+
+#[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+pub struct DevTriggerStreamsInfo {
+    pub chains: HashMap<ChainKey, DevTriggerStreamInfo>,
+}
+
+impl DevTriggerStreamsInfo {
+    pub fn finalized(&self) -> bool {
+        self.chains.values().all(|info| {
+            info.all_rpc_requests_landed && info.is_connected && info.current_endpoint.is_some()
+        })
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+pub struct DevTriggerStreamInfo {
+    pub current_endpoint: Option<String>,
+    pub is_connected: bool,
+    pub all_rpc_requests_landed: bool,
 }

@@ -2,7 +2,10 @@ use crate::{
     config::Config,
     dispatcher::Dispatcher,
     health::SharedHealthStatus,
-    http::handlers::service::{add::handle_add_service_direct, get::handle_get_service_by_hash},
+    http::handlers::{
+        debug::handle_dev_trigger_streams_info,
+        service::{add::handle_add_service_direct, get::handle_get_service_by_hash},
+    },
     AppContext,
 };
 use axum::{
@@ -103,10 +106,15 @@ pub async fn make_router(
 
     // Only add debug routes if debug endpoints are enabled
     if config.dev_endpoints_enabled {
-        public = public.route(
-            "/dev/services/{service_hash}",
-            get(handle_get_service_by_hash),
-        );
+        public = public
+            .route(
+                "/dev/services/{service_hash}",
+                get(handle_get_service_by_hash),
+            )
+            .route(
+                "/dev/trigger-streams-info",
+                get(handle_dev_trigger_streams_info),
+            );
 
         protected = protected
             .route("/dev/triggers", post(handle_debug_trigger))
