@@ -3,7 +3,10 @@
 
 mod helpers;
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::HashSet,
+    sync::{atomic::AtomicUsize, Arc},
+};
 
 use crate::{
     init_tracing_tests,
@@ -661,4 +664,52 @@ async fn unsubscribe_log_stream(kind: UnsubscribeKind) {
 
         tracing::info!("found {i} in integer events!")
     }
+}
+
+#[tokio::test]
+async fn controller_drop() {
+    init_tracing_tests();
+
+    let anvil = safe_spawn_anvil_extra(|anvil| anvil.block_time_f64(0.02));
+
+    let EvmTriggerStreams {
+        controller,
+        mut block_height_stream,
+        ..
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+
+    controller.subscriptions.toggle_block_height(true);
+
+    let height_count = Arc::new(AtomicUsize::new(0));
+
+    const BLOCKS_TO_COLLECT: usize = 5;
+    let handle = tokio::spawn({
+        let height_count = height_count.clone();
+        let controller = Arc::new(std::sync::Mutex::new(Some(controller)));
+
+        async move {
+            timeout(Duration::from_secs(10), async move {
+                while let Some(height) = block_height_stream.next().await {
+                    let count = height_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    tracing::info!("got height: {height}, count: {count}");
+                    if count + 1 >= BLOCKS_TO_COLLECT {
+                        let controller = controller.lock().unwrap().take().unwrap();
+                        std::mem::drop(controller);
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
+    });
+
+    handle.await.unwrap();
+
+    let height_count = height_count.load(std::sync::atomic::Ordering::SeqCst);
+
+    assert!(
+        height_count >= BLOCKS_TO_COLLECT && height_count < BLOCKS_TO_COLLECT + 3, // give a little wiggle room
+        "got {} blocks, not enough to test",
+        height_count
+    );
 }

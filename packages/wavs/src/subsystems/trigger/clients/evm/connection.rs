@@ -41,11 +41,10 @@ use crate::subsystems::trigger::clients::evm::{
 // 7. Try A (success)
 // ... and so on
 #[allow(dead_code)]
-#[derive(Clone)]
 pub struct Connection {
-    handles: Arc<std::sync::Mutex<Option<[tokio::task::JoinHandle<()>; 2]>>>,
+    handles: Option<[tokio::task::JoinHandle<()>; 2]>,
     current_endpoint: Arc<std::sync::RwLock<Option<String>>>,
-    shutdown_txs: Arc<std::sync::Mutex<Option<[oneshot::Sender<()>; 2]>>>,
+    shutdown_txs: Option<[oneshot::Sender<()>; 2]>,
 }
 
 pub enum ConnectionData {
@@ -91,12 +90,9 @@ impl Connection {
         ));
 
         Self {
-            handles: Arc::new(std::sync::Mutex::new(Some([main_handle, message_handle]))),
+            handles: Some([main_handle, message_handle]),
             current_endpoint,
-            shutdown_txs: Arc::new(std::sync::Mutex::new(Some([
-                main_shutdown_tx,
-                message_shutdown_tx,
-            ]))),
+            shutdown_txs: Some([main_shutdown_tx, message_shutdown_tx]),
         }
     }
 
@@ -107,20 +103,15 @@ impl Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        tracing::debug!("EVM: connection dropped");
+        tracing::info!("EVM: connection dropped");
 
-        if let Some(txs) = self
-            .shutdown_txs
-            .lock()
-            .ok()
-            .and_then(|mut lock| lock.take())
-        {
+        if let Some(txs) = self.shutdown_txs.take() {
             for tx in txs {
                 let _ = tx.send(());
             }
         }
 
-        if let Some(handles) = self.handles.lock().ok().and_then(|mut lock| lock.take()) {
+        if let Some(handles) = self.handles.take() {
             for mut handle in handles {
                 tokio::spawn(async move {
                     if tokio::time::timeout(Duration::from_millis(500), &mut handle)

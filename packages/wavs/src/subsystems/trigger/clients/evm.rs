@@ -19,7 +19,6 @@ pub struct EvmTriggerStreams {
     pub new_pending_transaction_stream: UnboundedReceiverStream<B256>,
 }
 
-#[derive(Clone)]
 pub struct EvmTriggerStreamsController {
     pub subscriptions: Subscriptions,
     pub connection: Connection,

@@ -19,10 +19,9 @@ use crate::subsystems::trigger::clients::evm::{
     },
 };
 
-#[derive(Clone)]
 pub struct Subscriptions {
-    handle: Arc<std::sync::Mutex<Option<JoinHandle<()>>>>,
-    shutdown_tx: Arc<std::sync::Mutex<Option<oneshot::Sender<()>>>>,
+    handle: Option<JoinHandle<()>>,
+    shutdown_tx: Option<oneshot::Sender<()>>,
     inner: Arc<SubscriptionsInner>,
 }
 
@@ -114,8 +113,8 @@ impl Subscriptions {
         });
 
         Self {
-            handle: Arc::new(std::sync::Mutex::new(Some(handle))),
-            shutdown_tx: Arc::new(std::sync::Mutex::new(Some(shutdown_tx))),
+            handle: Some(handle),
+            shutdown_tx: Some(shutdown_tx),
             inner,
         }
     }
@@ -157,12 +156,12 @@ impl Subscriptions {
 
 impl Drop for Subscriptions {
     fn drop(&mut self) {
-        tracing::debug!("EVM: subscription dropped");
-        if let Some(tx) = self.shutdown_tx.lock().unwrap().take() {
+        tracing::info!("EVM: subscription dropped");
+        if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());
         }
 
-        if let Some(mut handle) = self.handle.lock().unwrap().take() {
+        if let Some(mut handle) = self.handle.take() {
             tokio::spawn(async move {
                 if tokio::time::timeout(Duration::from_millis(500), &mut handle)
                     .await
