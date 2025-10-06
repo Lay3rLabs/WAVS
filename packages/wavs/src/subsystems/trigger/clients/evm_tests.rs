@@ -708,7 +708,8 @@ async fn controller_drop() {
     let height_count = height_count.load(std::sync::atomic::Ordering::SeqCst);
 
     assert!(
-        height_count >= BLOCKS_TO_COLLECT && height_count < BLOCKS_TO_COLLECT + 3, // give a little wiggle room
+        // give a little wiggle room
+        (BLOCKS_TO_COLLECT..BLOCKS_TO_COLLECT + 3).contains(&height_count),
         "got {} blocks, not enough to test",
         height_count
     );
