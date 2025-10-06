@@ -6,6 +6,7 @@ use std::{collections::BTreeMap, num::NonZero, sync::Arc, time::Duration};
 use utils::evm_client::AnyNonceManager;
 use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
+use wavs_cli::clients::HttpClient;
 
 use wavs_types::{
     AllowedHostPermission, ByteArray, ChainKey, Component, Permissions, Service, ServiceManager,
@@ -538,4 +539,21 @@ pub async fn change_service_for_test(
                 .insert(workflow_id.clone(), deployed_workflow.workflow);
         }
     }
+}
+
+pub async fn wait_for_trigger_streams_to_finalize(client: &HttpClient) {
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            let info = client.get_trigger_streams_info().await.unwrap();
+
+            if info.finalized() {
+                break;
+            } else {
+                tracing::warn!("Still waiting for trigger streams to finalize");
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .unwrap();
 }

@@ -13,7 +13,7 @@ use wavs_types::{
     ChainKey, Service, ServiceId, ServiceManager, ServiceStatus, SignerResponse, Submit,
 };
 
-use crate::deployment::ServiceDeployment;
+use crate::{deployment::ServiceDeployment, e2e::helpers::wait_for_trigger_streams_to_finalize};
 
 use crate::e2e::{
     clients::Clients,
@@ -306,15 +306,22 @@ impl ServiceManagers {
                 .unwrap();
 
             futures.push(async move {
+                // wait for the trigger streams to be ready before we update the service uri
+                wait_for_trigger_streams_to_finalize(&clients.http_client).await;
+
                 mock_service_manager
                     .set_service_uri(service_url)
                     .await
                     .unwrap();
+
                 clients
                     .http_client
                     .wait_for_service_update(&service, None)
                     .await
                     .unwrap();
+
+                // doesn't hurt to wait again in case trigger contract changed
+                wait_for_trigger_streams_to_finalize(&clients.http_client).await;
             });
         }
 
