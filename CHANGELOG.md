@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [unreleased]
+
+### Changed
+
+- minimum required Rust version: 1.89, due to multiple dependency upgrades
+
 ## [v1.4.0]
 
 ### Added
@@ -257,7 +263,8 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v1.4.0...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v1.4.1...HEAD
+[v1.4.1]: https://github.com/Lay3rLabs/WAVS/compare/v1.4.0...v1.4.1
 [v1.4.0]: https://github.com/Lay3rLabs/WAVS/compare/v1.0.0...v1.4.0
 [v1.0.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.6.0...v1.0.0
 [v0.6.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.5.1...v0.6.0
