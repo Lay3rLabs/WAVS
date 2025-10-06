@@ -3,13 +3,13 @@ name: Publish Docker Image
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
     branches:
       - main
   # You can enable the below to build on each PR push for testing,
-  pull_request:
-    branches:
-      - main
+  # pull_request:
+  #   branches:
+  #     - main
 
 env:
   REGISTRY: ghcr.io
