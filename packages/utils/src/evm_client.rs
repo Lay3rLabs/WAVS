@@ -16,7 +16,6 @@ use signing::make_signer;
 use std::{
     str::FromStr,
     sync::{atomic::AtomicU64, Arc},
-    time::Duration,
 };
 use wavs_types::Credential;
 
@@ -154,9 +153,6 @@ pub struct EvmSigningClientConfig {
     /// however the actual gas needed fluctuates, so we can pad it with a multiplier
     /// if unset, it will be 1.25
     pub gas_estimate_multiplier: Option<f32>,
-    /// The interval at which to poll the provider for new blocks
-    /// if unset, will use the default of the provider (which may differ across networks)
-    pub poll_interval: Option<Duration>,
     pub nonce_manager_kind: NonceManagerKind,
 }
 
@@ -197,7 +193,6 @@ impl EvmSigningClientConfig {
             credential,
             hd_index: None,
             gas_estimate_multiplier: None,
-            poll_interval: None,
             nonce_manager_kind: NonceManagerKind::Fast,
         }
     }
@@ -210,7 +205,6 @@ impl EvmSigningClientConfig {
             ),
             hd_index: None,
             gas_estimate_multiplier: None,
-            poll_interval: None,
             nonce_manager_kind: NonceManagerKind::Fast,
         }
     }
@@ -261,10 +255,6 @@ impl EvmSigningClient {
             }
             EvmEndpoint::Http(url) => DynProvider::new(builder.connect_http(url.clone())),
         };
-
-        if let Some(poll_interval) = config.poll_interval {
-            provider.client().set_poll_interval(poll_interval);
-        }
 
         Ok(Self {
             config,

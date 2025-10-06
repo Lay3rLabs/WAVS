@@ -300,8 +300,6 @@ pub struct EvmChainConfigBuilder {
     pub ws_endpoint: Option<String>,
     pub http_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
-    pub poll_interval_ms: Option<u64>,
-    pub event_channel_size: Option<usize>,
 }
 
 impl EvmChainConfigBuilder {
@@ -311,10 +309,6 @@ impl EvmChainConfigBuilder {
             ws_endpoint: self.ws_endpoint,
             http_endpoint: self.http_endpoint,
             faucet_endpoint: self.faucet_endpoint,
-            poll_interval_ms: self.poll_interval_ms,
-            event_channel_size: self
-                .event_channel_size
-                .unwrap_or_else(EvmChainConfig::default_event_channel_size),
         }
     }
 }
@@ -431,8 +425,6 @@ impl ChainConfigs {
                         ws_endpoint: evm_config.ws_endpoint,
                         http_endpoint: evm_config.http_endpoint,
                         faucet_endpoint: evm_config.faucet_endpoint,
-                        poll_interval_ms: evm_config.poll_interval_ms,
-                        event_channel_size: Some(evm_config.event_channel_size),
                     };
                     self.evm.insert(key.id, evm_config);
                 }
@@ -491,10 +483,7 @@ impl EvmChainConfigExt for EvmChainConfig {
             }
         };
 
-        let mut config = EvmSigningClientConfig::new(endpoint, credential);
-        if let Some(poll_interval_ms) = self.poll_interval_ms {
-            config.poll_interval = Some(std::time::Duration::from_millis(poll_interval_ms));
-        }
+        let config = EvmSigningClientConfig::new(endpoint, credential);
 
         Ok(config)
     }
@@ -1323,8 +1312,6 @@ mod test {
                         ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
-                        poll_interval_ms: None,
-                        event_channel_size: None,
                     },
                 ),
                 (
@@ -1333,8 +1320,6 @@ mod test {
                         ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
-                        poll_interval_ms: None,
-                        event_channel_size: None,
                     },
                 ),
             ]
