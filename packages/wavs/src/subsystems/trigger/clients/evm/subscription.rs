@@ -345,7 +345,7 @@ impl SubscriptionsInner {
                             subscription_id
                         );
                     }
-                    return;
+                    return; // we are done here, don't track this subscription
                 }
                 match kind {
                     RpcRequestKind::SubscribeNewHeads => {
@@ -537,6 +537,21 @@ impl SubscriptionsInner {
         }
     }
 
+    fn will_subscribe(&self, kind: RpcRequestKind) -> bool {
+        let rpc_ids_in_flight = self.rpc_ids_in_flight.read().unwrap();
+        let rpc_ids_marked_for_removal = self.rpc_ids_to_unsubscribe_on_landing.read().unwrap();
+
+        rpc_ids_in_flight.iter().any(|id| {
+            // okay, it's in flight and will subscribe if it lands... maybe...
+            if id.kind() == Some(kind.clone()) {
+                // because if it's marked for removal then it will *not* subscribe when it lands
+                !rpc_ids_marked_for_removal.contains(id)
+            } else {
+                false
+            }
+        })
+    }
+
     fn resubscribe_if_connected(&self) {
         // exit early if not connected
         if !self._is_connected.load(std::sync::atomic::Ordering::SeqCst) {
@@ -545,20 +560,18 @@ impl SubscriptionsInner {
 
         // blocks/newHeads
         if self._blocks.load(std::sync::atomic::Ordering::SeqCst) {
-            // only ever allow one subscription for blocks/newHeads
-            // so if we have one - even if it's in flight - don't send another
             if !self.ids.any(SubscriptionKind::NewHeads)
-                && !self
-                    .rpc_ids_in_flight
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .any(|id| matches!(id.kind(), Some(RpcRequestKind::SubscribeNewHeads)))
+                && !self.will_subscribe(RpcRequestKind::SubscribeNewHeads)
             {
-                if let Err(e) = self.send_rpc(RpcRequest::new_heads()) {
+                let req = RpcRequest::new_heads();
+                let req_id = req.id();
+                if let Err(e) = self.send_rpc(req) {
                     tracing::error!("EVM: failed to send newHeads subscription request: {}", e);
                 } else {
-                    tracing::info!("EVM: sent newHeads subscription request");
+                    tracing::info!(
+                        "EVM: sent newHeads subscription request (id: {})",
+                        req_id.data().as_ffi()
+                    );
                 }
             } else {
                 tracing::info!("EVM: already have newHeads subscription or request in flight, not sending another");
@@ -576,22 +589,20 @@ impl SubscriptionsInner {
 
             if !addresses.is_empty() || !events.is_empty() {
                 if !self.ids.any_log_filter(&addresses, &events)
-                    && !self
-                        .rpc_ids_in_flight
-                        .read()
-                        .unwrap()
-                        .iter()
-                        .any(|id| match id.kind() {
-                            Some(RpcRequestKind::SubscribeLogs { address, topics }) => {
-                                address == addresses && topics == events
-                            }
-                            _ => false,
-                        })
+                    && !self.will_subscribe(RpcRequestKind::SubscribeLogs {
+                        address: addresses.clone(),
+                        topics: events.clone(),
+                    })
                 {
-                    if let Err(e) = self.send_rpc(RpcRequest::logs(addresses, events)) {
+                    let req = RpcRequest::logs(addresses, events);
+                    let req_id = req.id();
+                    if let Err(e) = self.send_rpc(req) {
                         tracing::error!("EVM: failed to send logs subscription request: {}", e);
                     } else {
-                        tracing::info!("EVM: sent logs subscription request");
+                        tracing::info!(
+                            "EVM: sent logs subscription request (id: {})",
+                            req_id.data().as_ffi()
+                        );
                     }
                 } else {
                     tracing::info!("EVM: already have logs subscription or request in flight for this filter, not sending another");
@@ -605,20 +616,20 @@ impl SubscriptionsInner {
             .load(std::sync::atomic::Ordering::SeqCst)
         {
             if !self.ids.any(SubscriptionKind::NewPendingTransactions)
-                && !self.rpc_ids_in_flight.read().unwrap().iter().any(|id| {
-                    matches!(
-                        id.kind(),
-                        Some(RpcRequestKind::SubscribeNewPendingTransactions)
-                    )
-                })
+                && !self.will_subscribe(RpcRequestKind::SubscribeNewPendingTransactions)
             {
-                if let Err(e) = self.send_rpc(RpcRequest::new_pending_transactions()) {
+                let req = RpcRequest::new_pending_transactions();
+                let req_id = req.id();
+                if let Err(e) = self.send_rpc(req) {
                     tracing::error!(
                         "EVM: failed to send newPendingTransactions subscription request: {}",
                         e
                     );
                 } else {
-                    tracing::info!("EVM: sent newPendingTransactions subscription request");
+                    tracing::info!(
+                        "EVM: sent newPendingTransactions subscription request (id: {})",
+                        req_id.data().as_ffi()
+                    );
                 }
             } else {
                 tracing::info!("EVM: already have newPendingTransactions subscription or request in flight, not sending another");

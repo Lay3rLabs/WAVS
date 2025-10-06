@@ -74,7 +74,7 @@ fn default_simulated_trigger_count() -> usize {
     1
 }
 
-#[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct DevTriggerStreamsInfo {
     pub chains: HashMap<ChainKey, DevTriggerStreamInfo>,
 }
@@ -87,7 +87,7 @@ impl DevTriggerStreamsInfo {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct DevTriggerStreamInfo {
     pub current_endpoint: Option<String>,
     pub is_connected: bool,

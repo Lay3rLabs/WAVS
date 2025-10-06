@@ -24,7 +24,7 @@ impl RpcId {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RpcRequestKind {
     SubscribeNewHeads,
     SubscribeLogs {
