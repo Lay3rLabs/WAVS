@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7-labs
 
-ARG RUST_VERSION=1.88-slim-bookworm
+ARG RUST_VERSION=1.90-slim-bookworm
 ARG CARGO_COMPONENT_VERSION=0.21.1
 ARG WASM_TOOLS_VERSION=1.238.1
 ARG WKG_VERSION=0.12.0

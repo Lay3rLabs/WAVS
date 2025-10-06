@@ -18,7 +18,7 @@ pub use validate::{
 use alloy_json_abi::Event;
 use alloy_provider::Provider;
 use anyhow::{anyhow, Context as _, Result};
-use layer_climb::{prelude::ConfigAddressExt as _, querier::QueryClient as CosmosQueryClient};
+use layer_climb::querier::QueryClient as CosmosQueryClient;
 use serde::Serialize;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},

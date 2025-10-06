@@ -202,6 +202,7 @@ impl Workflow {
 pub enum Trigger {
     // A contract that emits an event
     CosmosContractEvent {
+        #[schema(value_type = String)]
         address: layer_climb_address::Address,
         chain: ChainKey,
         event_type: String,
@@ -242,6 +243,7 @@ pub enum Trigger {
 pub enum TriggerData {
     CosmosContractEvent {
         /// The address of the contract that emitted the event
+        #[schema(value_type = String)]
         contract_address: layer_climb_address::Address,
         /// The chain where the event was emitted
         chain: ChainKey,

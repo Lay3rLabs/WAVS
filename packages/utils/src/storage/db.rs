@@ -1,6 +1,8 @@
 use std::{path::Path, sync::Arc};
 
-use redb::{AccessGuard, Database, Key, ReadOnlyTable, TableError, TypeName, Value};
+use redb::{
+    AccessGuard, Database, Key, ReadOnlyTable, ReadableDatabase, TableError, TypeName, Value,
+};
 use serde::{de::Deserialize, Serialize};
 use std::any::type_name;
 use tracing::instrument;
