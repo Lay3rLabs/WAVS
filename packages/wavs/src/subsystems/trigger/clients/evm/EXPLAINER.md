@@ -185,6 +185,30 @@ streams.controller.subscriptions.disable_log(
 );
 ```
 
+### Resource Management
+
+**Important**: The `controller` handle controls the lifecycle of all background tasks and streams. When the controller is dropped, all associated streams will be automatically disconnected and terminated.
+
+```rust
+{
+    let mut streams = EvmTriggerStreams::new(endpoints);
+    streams.controller.subscriptions.toggle_block_height(true);
+    
+    // Streams are active and receiving data
+    while let Some(height) = streams.block_height_stream.next().await {
+        println!("New block: {}", height);
+    }
+} // <- Controller dropped here
+
+// At this point:
+// - All WebSocket connections are closed
+// - All background tasks are cancelled
+// - All streams (block_height_stream, log_stream, pending_tx_stream) will terminate
+// - No further events will be received
+```
+
+This design ensures proper resource cleanup and prevents resource leaks when the client is no longer needed. If you need to keep streams active, ensure the `controller` remains in scope for the lifetime of your application.
+
 ## Resilience
 
 ### Connection Failures
