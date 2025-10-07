@@ -275,6 +275,23 @@ impl MiddlewareInstanceInner {
         service_manager: &MiddlewareServiceManager,
         config: &MiddlewareServiceManagerConfig,
     ) -> Result<()> {
+        match self.middleware_type {
+            MiddlewareType::Eigenlayer => {
+                self.configure_eigenlayer_service_manager(service_manager, config)
+                    .await
+            }
+            MiddlewareType::Poa => {
+                self.configure_poa_service_manager(service_manager, config)
+                    .await
+            }
+        }
+    }
+
+    async fn configure_eigenlayer_service_manager(
+        &self,
+        service_manager: &MiddlewareServiceManager,
+        config: &MiddlewareServiceManagerConfig,
+    ) -> Result<()> {
         let filename = middleware_config_filename(&service_manager.id);
         let config_filepath = self.config_dir.path().join(format!("{filename}.json"));
         fs::write(&config_filepath, serde_json::to_string(config)?).await?;
@@ -307,6 +324,114 @@ impl MiddlewareInstanceInner {
 
         if !res.success() {
             bail!("Failed to deploy service manager");
+        }
+
+        Ok(())
+    }
+
+    async fn configure_poa_service_manager(
+        &self,
+        service_manager: &MiddlewareServiceManager,
+        config: &MiddlewareServiceManagerConfig,
+    ) -> Result<()> {
+        for (operator, signer, weight) in config
+            .operators
+            .iter()
+            .zip(&config.signing_key_addresses)
+            .zip(&config.weights)
+            .map(|((o, s), w)| (o, s, w))
+        {
+            let res = tokio::time::timeout(
+                Self::DEFAULT_TIMEOUT,
+                Command::new("docker")
+                    .args([
+                        "exec",
+                        "-e",
+                        &format!("FUNDED_KEY={}", service_manager.deployer_key_hex),
+                        "-e",
+                        &format!("RPC_URL={}", service_manager.rpc_url),
+                        "-e",
+                        "DEPLOY_ENV=LOCAL",
+                        "-e",
+                        &format!("POA_STAKER_REGISTRY_ADDRESS={}", service_manager.address),
+                        &self.container_id,
+                        "/wavs/scripts/cli.sh",
+                        "owner_operation",
+                        "registerOperator",
+                        &format!("{:?}", operator),
+                        &weight.to_string(),
+                    ])
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .spawn()?
+                    .wait(),
+            )
+            .await??;
+
+            if !res.success() {
+                bail!("Failed to register operator");
+            }
+
+            let res = tokio::time::timeout(
+                Self::DEFAULT_TIMEOUT,
+                Command::new("docker")
+                    .args([
+                        "exec",
+                        "-e",
+                        &format!("OPERATOR_KEY={}", service_manager.deployer_key_hex),
+                        "-e",
+                        &format!("RPC_URL={}", service_manager.rpc_url),
+                        "-e",
+                        "DEPLOY_ENV=LOCAL",
+                        "-e",
+                        &format!("POA_STAKER_REGISTRY_ADDRESS={}", service_manager.address),
+                        &self.container_id,
+                        "/wavs/scripts/cli.sh",
+                        "update_signing_key",
+                        &format!("{:?}", operator),
+                        &format!("{:?}", signer),
+                    ])
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .spawn()?
+                    .wait(),
+            )
+            .await??;
+
+            if !res.success() {
+                bail!("Failed to update signing key");
+            }
+        }
+
+        let res = tokio::time::timeout(
+            Self::DEFAULT_TIMEOUT,
+            Command::new("docker")
+                .args([
+                    "exec",
+                    "-e",
+                    &format!("FUNDED_KEY={}", service_manager.deployer_key_hex),
+                    "-e",
+                    &format!("RPC_URL={}", service_manager.rpc_url),
+                    "-e",
+                    "DEPLOY_ENV=LOCAL",
+                    "-e",
+                    &format!("POA_STAKER_REGISTRY_ADDRESS={}", service_manager.address),
+                    &self.container_id,
+                    "/wavs/scripts/cli.sh",
+                    "owner_operation",
+                    "updateQuorum",
+                    &config.quorum_numerator.to_string(),
+                    &config.quorum_denominator.to_string(),
+                ])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn()?
+                .wait(),
+        )
+        .await??;
+
+        if !res.success() {
+            bail!("Failed to update quorum");
         }
 
         Ok(())
