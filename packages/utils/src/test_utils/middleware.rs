@@ -334,6 +334,9 @@ impl MiddlewareInstanceInner {
         service_manager: &MiddlewareServiceManager,
         config: &MiddlewareServiceManagerConfig,
     ) -> Result<()> {
+        // At the moment poa-middleware doesnt have a batch configuration endpoint
+        // https://github.com/Lay3rLabs/poa-middleware/blob/095670eb3c206f0e6c8c6951f6b81e601f989b39/scripts/ecdsa/owner_operation.sh#L41-L48
+        // register each operator with weight
         for (operator, signer, weight) in config
             .operators
             .iter()
@@ -372,6 +375,7 @@ impl MiddlewareInstanceInner {
                 bail!("Failed to register operator");
             }
 
+            // set signing key for each operator
             let res = tokio::time::timeout(
                 Self::DEFAULT_TIMEOUT,
                 Command::new("docker")
@@ -403,6 +407,7 @@ impl MiddlewareInstanceInner {
             }
         }
 
+        // set quorum
         let res = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
             Command::new("docker")
