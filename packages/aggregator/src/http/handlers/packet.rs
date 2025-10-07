@@ -526,7 +526,9 @@ mod test {
         filesystem::workspace_path,
         test_utils::{
             address::rand_address_evm,
-            middleware::{AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig},
+            middleware::{
+                AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig, MiddlewareType,
+            },
             mock_engine::COMPONENT_SIMPLE_AGGREGATOR_BYTES,
             mock_service_manager::MockServiceManager,
             test_contracts::{SimpleServiceHandlerInstance, TestContractDeps},
@@ -571,7 +573,9 @@ mod test {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn all_middleware_tests() {
-        let middleware_instance = MiddlewareInstance::new().await.unwrap();
+        let middleware_instance = MiddlewareInstance::new(MiddlewareType::Eigenlayer)
+            .await
+            .unwrap();
 
         let deps = TestDeps::new().await;
         // deploy all service manager serially
