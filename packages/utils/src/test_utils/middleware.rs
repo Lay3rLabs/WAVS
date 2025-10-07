@@ -246,6 +246,7 @@ impl MiddlewareInstanceInner {
             addresses: PoaAddresses,
         }
 
+        // https://github.com/Lay3rLabs/poa-middleware/blob/095670eb3c206f0e6c8c6951f6b81e601f989b39/contracts/script/ecdsa/POAMiddlewareDeployer.s.sol#L79-L91
         #[derive(Deserialize)]
         struct PoaAddresses {
             #[serde(rename = "POAStakeRegistry")]
