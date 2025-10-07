@@ -447,35 +447,42 @@ impl MiddlewareInstanceInner {
         service_manager: &MiddlewareServiceManager,
         service_uri: &str,
     ) -> Result<()> {
-        let res = tokio::time::timeout(
-            Self::DEFAULT_TIMEOUT,
-            Command::new("docker")
-                .args([
-                    "exec",
-                    "-e",
-                    &format!("RPC_URL={}", service_manager.rpc_url),
-                    "-e",
-                    &format!("WAVS_SERVICE_MANAGER_ADDRESS={}", service_manager.address),
-                    "-e",
-                    &format!("FUNDED_KEY={}", service_manager.deployer_key_hex),
-                    "-e",
-                    &format!("SERVICE_URI={}", service_uri),
-                    &self.container_id,
-                    "/wavs/scripts/cli.sh",
-                    "set_service_uri",
-                ])
-                .stdout(Stdio::null())
-                .stderr(Stdio::inherit())
-                .spawn()?
-                .wait(),
-        )
-        .await??;
+        match self.middleware_type {
+            MiddlewareType::Eigenlayer => {
+                let res = tokio::time::timeout(
+                    Self::DEFAULT_TIMEOUT,
+                    Command::new("docker")
+                        .args([
+                            "exec",
+                            "-e",
+                            &format!("RPC_URL={}", service_manager.rpc_url),
+                            "-e",
+                            &format!("WAVS_SERVICE_MANAGER_ADDRESS={}", service_manager.address),
+                            "-e",
+                            &format!("FUNDED_KEY={}", service_manager.deployer_key_hex),
+                            "-e",
+                            &format!("SERVICE_URI={}", service_uri),
+                            &self.container_id,
+                            "/wavs/scripts/cli.sh",
+                            "set_service_uri",
+                        ])
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::inherit())
+                        .spawn()?
+                        .wait(),
+                )
+                .await??;
 
-        if !res.success() {
-            bail!("Failed to set service URI");
+                if !res.success() {
+                    bail!("Failed to set service URI");
+                }
+
+                Ok(())
+            }
+            MiddlewareType::Poa => {
+                unimplemented!("POA middleware does not support setServiceUri")
+            }
         }
-
-        Ok(())
     }
 }
 
