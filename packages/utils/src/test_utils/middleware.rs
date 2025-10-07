@@ -12,6 +12,13 @@ use tokio::fs;
 use tokio::process::Command;
 
 pub const MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/wavs-middleware:0.5.0-beta.10";
+pub const POA_MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/poa-middleware:v1.0.1";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MiddlewareType {
+    Eigenlayer,
+    Poa,
+}
 
 #[derive(Clone)]
 pub struct MiddlewareInstance {
@@ -19,8 +26,8 @@ pub struct MiddlewareInstance {
 }
 
 impl MiddlewareInstance {
-    pub async fn new() -> Result<Self> {
-        let inner = MiddlewareInstanceInner::new().await?;
+    pub async fn new(middleware_type: MiddlewareType) -> Result<Self> {
+        let inner = MiddlewareInstanceInner::new(middleware_type).await?;
         Ok(Self {
             inner: Arc::new(inner),
         })
