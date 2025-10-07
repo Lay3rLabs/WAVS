@@ -32,6 +32,7 @@ async fn new_evm_client_with_credential(
     ctx: &CliContext,
     chain_id: ChainKeyId,
     credential: &wavs_types::Credential,
+    hd_index: Option<u32>,
 ) -> Result<EvmSigningClient> {
     let chain_config = ctx
         .config
@@ -44,7 +45,11 @@ async fn new_evm_client_with_credential(
         .clone()
         .build(chain_id);
 
-    let client_config = chain_config.signing_client_config(credential.clone())?;
+    let mut client_config = chain_config.signing_client_config(credential.clone())?;
+    if let Some(hd_index) = hd_index {
+        client_config.hd_index = Some(hd_index);
+    }
+
     let evm_client = EvmSigningClient::new(client_config).await?;
 
     Ok(evm_client)
@@ -61,6 +66,7 @@ pub(crate) async fn new_evm_client(
             .evm_credential
             .clone()
             .context("missing evm_credential")?,
+        None,
     )
     .await
 }
@@ -145,6 +151,7 @@ async fn main() {
             submit_handler,
             simulates_trigger,
             operator_credential,
+            operator_hd_index,
             args: _,
         } => {
             let config = config
@@ -237,6 +244,7 @@ async fn main() {
                         &ctx,
                         chain_key.id,
                         &operator_credential,
+                        operator_hd_index,
                     )
                     .await
                     {
