@@ -480,7 +480,34 @@ impl MiddlewareInstanceInner {
                 Ok(())
             }
             MiddlewareType::Poa => {
-                unimplemented!("POA middleware does not support setServiceUri")
+                let res = tokio::time::timeout(
+                    Self::DEFAULT_TIMEOUT,
+                    Command::new("docker")
+                        .args([
+                            "exec",
+                            &self.container_id,
+                            "cast",
+                            "send",
+                            &format!("{}", service_manager.address),
+                            "setServiceURI(string)",
+                            service_uri,
+                            "--private-key",
+                            &service_manager.deployer_key_hex,
+                            "--rpc-url",
+                            &service_manager.rpc_url,
+                        ])
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::inherit())
+                        .spawn()?
+                        .wait(),
+                )
+                .await??;
+
+                if !res.success() {
+                    bail!("Failed to set service URI");
+                }
+
+                Ok(())
             }
         }
     }
