@@ -55,14 +55,20 @@ pub struct MiddlewareInstanceInner {
     nodes_dir: TempDir,
     config_dir: TempDir,
     service_manager_count: AtomicUsize,
+    middleware_type: MiddlewareType,
 }
 
 impl MiddlewareInstanceInner {
     pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60); // enough time to pull the image and do things with it
 
-    pub async fn new() -> Result<Self> {
+    pub async fn new(middleware_type: MiddlewareType) -> Result<Self> {
         let nodes_dir = TempDir::new()?;
         let config_dir = TempDir::new()?;
+
+        let image = match middleware_type {
+            MiddlewareType::Eigenlayer => MIDDLEWARE_IMAGE,
+            MiddlewareType::Poa => POA_MIDDLEWARE_IMAGE,
+        };
 
         let output = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
@@ -81,7 +87,7 @@ impl MiddlewareInstanceInner {
                         "{}:/wavs/contracts/deployments",
                         config_dir.path().display()
                     ),
-                    MIDDLEWARE_IMAGE,
+                    image,
                     "tail",
                     "-f",
                     "/dev/null",
@@ -103,6 +109,7 @@ impl MiddlewareInstanceInner {
             nodes_dir,
             config_dir,
             service_manager_count: AtomicUsize::new(0),
+            middleware_type,
         })
     }
 
