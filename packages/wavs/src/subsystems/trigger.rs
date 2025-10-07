@@ -665,6 +665,11 @@ impl TriggerManager {
 
         tracing::debug!("Trigger Manager watcher finished");
 
+        // just a little cleanup to avoid errors in e2e tests
+        for (_, controller) in self.evm_controllers.write().unwrap().drain() {
+            drop(controller);
+        }
+
         Ok(())
     }
 

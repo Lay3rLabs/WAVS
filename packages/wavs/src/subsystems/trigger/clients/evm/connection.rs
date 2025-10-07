@@ -252,6 +252,10 @@ async fn message_loop(
         tokio::select! {
             _ = &mut shutdown_rx => {
                 tracing::info!("EVM: shutdown requested, exiting message loop");
+                let mut guard = current_sink.lock().await;
+                if let Some(sink) = guard.as_mut() {
+                    let _ = sink.close().await;
+                }
                 break;
             }
             Some(msg) = connection_send_rpc_rx.recv() => {
@@ -270,7 +274,6 @@ async fn message_loop(
                         } else {
                             tracing::error!("{:#?}", ConnectionError::NoActiveConnection);
                         }
-
                     },
                     Err(e) => {
                         tracing::error!("Failed to serialize message: {}", e);
