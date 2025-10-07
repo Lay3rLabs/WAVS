@@ -122,6 +122,25 @@ impl MiddlewareInstanceInner {
             .service_manager_count
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             .to_string();
+
+        match self.middleware_type {
+            MiddlewareType::Eigenlayer => {
+                self.deploy_eigenlayer_service_manager(rpc_url, deployer_key_hex, id)
+                    .await
+            }
+            MiddlewareType::Poa => {
+                self.deploy_poa_service_manager(rpc_url, deployer_key_hex, id)
+                    .await
+            }
+        }
+    }
+
+    async fn deploy_eigenlayer_service_manager(
+        &self,
+        rpc_url: String,
+        deployer_key_hex: String,
+        id: String,
+    ) -> Result<MiddlewareServiceManager> {
         let filename = middleware_deploy_filename(&id);
 
         // https://github.com/Lay3rLabs/wavs-middleware?tab=readme-ov-file#2-deploy-empty-mock-contracts
@@ -178,6 +197,76 @@ impl MiddlewareInstanceInner {
         deployment_json.addresses.id = id;
 
         Ok(deployment_json.addresses)
+    }
+
+    async fn deploy_poa_service_manager(
+        &self,
+        rpc_url: String,
+        deployer_key_hex: String,
+        id: String,
+    ) -> Result<MiddlewareServiceManager> {
+        let output = tokio::time::timeout(Self::DEFAULT_TIMEOUT, async {
+            let res = Command::new("docker")
+                .args([
+                    "exec",
+                    "-e",
+                    &format!("FUNDED_KEY={deployer_key_hex}"),
+                    "-e",
+                    &format!("RPC_URL={rpc_url}"),
+                    "-e",
+                    "DEPLOY_ENV=LOCAL",
+                    &self.container_id,
+                    "/wavs/scripts/cli.sh",
+                    "deploy",
+                ])
+                .stdout(Stdio::null())
+                .stderr(Stdio::inherit())
+                .spawn()?
+                .wait()
+                .await?;
+
+            if !res.success() {
+                bail!("Failed to deploy POA middleware");
+            }
+
+            loop {
+                let output = fs::read_to_string(self.nodes_dir.path().join("poa_deploy.json"))
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to read POA deployment JSON: {}", e));
+                if output.is_ok() {
+                    break output;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await??;
+
+        #[derive(Deserialize)]
+        struct PoaDeploymentJson {
+            addresses: PoaAddresses,
+        }
+
+        #[derive(Deserialize)]
+        struct PoaAddresses {
+            #[serde(rename = "POAStakeRegistry")]
+            poa_stake_registry: Address,
+            #[serde(rename = "proxyAdmin")]
+            proxy_admin: Address,
+        }
+
+        let deployment_json: PoaDeploymentJson = serde_json::from_str(&output)
+            .map_err(|e| anyhow::anyhow!("Failed to parse POA deployment JSON: {}", e))?;
+
+        Ok(MiddlewareServiceManager {
+            deployer_key_hex,
+            rpc_url,
+            id,
+            address: deployment_json.addresses.poa_stake_registry,
+            proxy_admin: deployment_json.addresses.proxy_admin,
+            impl_address: deployment_json.addresses.poa_stake_registry,
+            stake_registry_address: deployment_json.addresses.poa_stake_registry,
+            stake_registry_impl_address: deployment_json.addresses.poa_stake_registry,
+        })
     }
 
     pub async fn configure_service_manager(
