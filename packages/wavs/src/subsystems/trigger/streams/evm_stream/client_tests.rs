@@ -5,7 +5,10 @@ mod helpers;
 
 use std::{
     collections::HashSet,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize},
+        Arc,
+    },
 };
 
 use crate::{
@@ -541,20 +544,15 @@ async fn fallback_chain_log_stream() {
 
 #[tokio::test]
 async fn unsubscribe_log_stream_wait() {
-    unsubscribe_log_stream(UnsubscribeKind::Wait).await
+    unsubscribe_log_stream(true).await
 }
 
 #[tokio::test]
 async fn unsubscribe_log_stream_nowait() {
-    unsubscribe_log_stream(UnsubscribeKind::NoWait).await
+    unsubscribe_log_stream(false).await
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum UnsubscribeKind {
-    Wait,
-    NoWait,
-}
-async fn unsubscribe_log_stream(kind: UnsubscribeKind) {
+async fn unsubscribe_log_stream(wait_for_subscriptions: bool) {
     init_tracing_tests();
 
     let anvil = safe_spawn_anvil_extra(|anvil| anvil.block_time_f64(0.02));
@@ -577,7 +575,7 @@ async fn unsubscribe_log_stream(kind: UnsubscribeKind) {
         ],
     );
 
-    if kind == UnsubscribeKind::Wait {
+    if wait_for_subscriptions {
         // wait for all subscriptions to be active
         wait_for_all_rpc_requests_landed(&controller).await;
     }
@@ -715,4 +713,166 @@ async fn controller_drop() {
         "got {} blocks, not enough to test",
         height_count
     );
+}
+
+#[tokio::test]
+async fn all_log_stream() {
+    init_tracing_tests();
+
+    let anvil = safe_spawn_anvil_extra(|anvil| anvil.block_time_f64(0.02));
+
+    let EvmTriggerStreams {
+        controller,
+        mut log_stream,
+        ..
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+
+    let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
+
+    tracing::info!("Deployed contract at {}", contract.address());
+
+    controller.subscriptions.enable_logs(vec![], vec![]);
+
+    const LOGS_TO_COLLECT: usize = 5;
+    let collected_logs = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+    // First spawn a task to collect the logs into the stream
+    let handle = tokio::spawn({
+        let collected_logs = collected_logs.clone();
+        async move {
+            timeout(Duration::from_secs(5), async {
+                while let Some(log) = log_stream.next().await {
+                    let mut lock = collected_logs.lock().unwrap();
+                    lock.push(log);
+                    if lock.len() >= LOGS_TO_COLLECT {
+                        break;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
+    });
+
+    // Now, since we're not blocked, we can emit the events
+    for value in 0..LOGS_TO_COLLECT as u64 {
+        let _ = contract
+            .emitInteger(U256::from(value))
+            .send()
+            .await
+            .unwrap();
+    }
+
+    // but we do need to wait for the handle to finish
+    handle.await.unwrap();
+
+    let collected_logs = collected_logs.lock().unwrap();
+
+    assert!(
+        collected_logs.len() >= LOGS_TO_COLLECT,
+        "only got {} logs, not enough to test",
+        collected_logs.len()
+    );
+
+    // Extract the events
+    let mut collected_values = HashSet::new();
+    for log in collected_logs.iter() {
+        let event = EventEmitter::IntegerEvent::decode_log(&log.inner)
+            .unwrap()
+            .data;
+
+        collected_values.insert(event.value);
+    }
+
+    for value in 0..LOGS_TO_COLLECT as u64 {
+        assert!(
+            collected_values.contains(&U256::from(value)),
+            "did not find emitted value {} in logs",
+            value
+        );
+
+        tracing::info!("found {value} in events!")
+    }
+}
+
+#[tokio::test]
+async fn unsubscribe_all_log_stream_explicit() {
+    unsubscribe_all_log_stream(true).await
+}
+
+#[tokio::test]
+async fn unsubscribe_all_log_stream_implicit() {
+    unsubscribe_all_log_stream(false).await
+}
+
+async fn unsubscribe_all_log_stream(explicit: bool) {
+    init_tracing_tests();
+
+    let anvil = safe_spawn_anvil_extra(|anvil| anvil.block_time_f64(0.02));
+
+    let EvmTriggerStreams {
+        controller,
+        mut log_stream,
+        ..
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+
+    let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
+
+    tracing::info!("Deployed contract at {}", contract.address());
+
+    if explicit {
+        controller.subscriptions.enable_logs(vec![], vec![]);
+        controller.subscriptions.disable_all_logs();
+    } else {
+        controller
+            .subscriptions
+            .enable_logs(vec![*contract.address()], vec![]);
+        controller
+            .subscriptions
+            .disable_logs(&[*contract.address()], &[]);
+    }
+
+    wait_for_all_rpc_requests_landed(&controller).await;
+
+    let got_a_timeout = Arc::new(AtomicBool::new(false));
+    let got_a_log = Arc::new(AtomicBool::new(false));
+
+    // First spawn a task to collect the logs into the stream
+    let handle = tokio::spawn({
+        let got_a_timeout = got_a_timeout.clone();
+        let got_a_log = got_a_log.clone();
+        async move {
+            // 2 seconds is enough to see if we get a log or not
+            let resp = timeout(Duration::from_secs(2), async {
+                if log_stream.next().await.is_some() {
+                    got_a_log.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+            })
+            .await;
+
+            if resp.is_err() {
+                got_a_timeout.store(true, std::sync::atomic::Ordering::SeqCst);
+            };
+        }
+    });
+
+    // Now, since we're not blocked, we can emit the events
+    for value in 0..10u64 {
+        let _ = contract
+            .emitInteger(U256::from(value))
+            .send()
+            .await
+            .unwrap();
+    }
+
+    // but we do need to wait for the handle to finish
+    handle.await.unwrap();
+
+    if !got_a_timeout.load(std::sync::atomic::Ordering::SeqCst) {
+        panic!("Never got the timeout");
+    }
+
+    if got_a_log.load(std::sync::atomic::Ordering::SeqCst) {
+        panic!("Got a log, even though we unsubscribed from all logs");
+    }
 }

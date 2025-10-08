@@ -119,19 +119,23 @@ impl Subscriptions {
     }
 
     pub fn toggle_block_height(&self, value: bool) {
-        self.inner.set_blocks(value);
+        self.inner.toggle_block_height(value);
     }
 
     pub fn enable_logs(&self, addresses: Vec<Address>, events: Vec<B256>) {
-        self.inner.insert_logs(addresses, events);
+        self.inner.enable_logs(addresses, events);
     }
 
     pub fn disable_logs(&self, addresses: &[Address], events: &[B256]) {
-        self.inner.remove_logs(addresses, events);
+        self.inner.disable_logs(addresses, events);
+    }
+
+    pub fn disable_all_logs(&self) {
+        self.inner.disable_all_logs();
     }
 
     pub fn toggle_pending_transactions(&self, value: bool) {
-        self.inner.set_pending_transactions(value);
+        self.inner.toggle_pending_transactions(value);
     }
 
     pub fn any_active_rpcs_in_flight(&self) -> bool {
@@ -168,7 +172,7 @@ impl Drop for Subscriptions {
 
 struct SubscriptionsInner {
     _blocks: AtomicBool,
-    _logs: std::sync::RwLock<LogFilter>,
+    _logs: std::sync::RwLock<Option<LogFilter>>,
     _pending_transactions: AtomicBool,
     // not really a subscription, but used to track connection state
     _is_connected: AtomicBool,
@@ -181,7 +185,7 @@ impl SubscriptionsInner {
     pub fn new(connection_send_rpc_tx: tokio::sync::mpsc::UnboundedSender<RpcRequest>) -> Self {
         Self {
             _blocks: AtomicBool::new(false),
-            _logs: std::sync::RwLock::new(LogFilter::default()),
+            _logs: std::sync::RwLock::new(None),
             _pending_transactions: AtomicBool::new(false),
             _is_connected: AtomicBool::new(false),
             ids: SubscriptionIds::default(),
@@ -190,7 +194,7 @@ impl SubscriptionsInner {
         }
     }
 
-    pub fn set_blocks(&self, toggle: bool) {
+    pub fn toggle_block_height(&self, toggle: bool) {
         self._blocks
             .store(toggle, std::sync::atomic::Ordering::SeqCst);
 
@@ -202,9 +206,11 @@ impl SubscriptionsInner {
         }
     }
 
-    pub fn insert_logs(&self, address: Vec<Address>, topics: Vec<B256>) {
+    pub fn enable_logs(&self, address: Vec<Address>, topics: Vec<B256>) {
         {
             let mut lock = self._logs.write().unwrap();
+
+            let lock = lock.get_or_insert_default();
 
             for address in address {
                 lock.addresses.insert(address);
@@ -220,23 +226,40 @@ impl SubscriptionsInner {
         self.resubscribe();
     }
 
-    pub fn remove_logs(&self, addresses: &[Address], topics: &[B256]) {
+    // disable specific log filters, if no filters remain, it will unsubscribe from all logs
+    // if you want to instead subscribe to all logs, call `enable_logs` with empty vecs
+    pub fn disable_logs(&self, addresses: &[Address], topics: &[B256]) {
         {
             let mut lock = self._logs.write().unwrap();
 
-            for address in addresses {
-                lock.addresses.remove(address);
-            }
+            match lock.as_mut() {
+                None => {} // nothing to do
+                Some(logs) => {
+                    for address in addresses {
+                        logs.addresses.remove(address);
+                    }
 
-            for topic in topics {
-                lock.topics.remove(topic);
+                    for topic in topics {
+                        logs.topics.remove(topic);
+                    }
+
+                    if logs.addresses.is_empty() && logs.topics.is_empty() {
+                        *lock = None;
+                    }
+                }
             }
         }
         self.unsubscribe(UnsubscribeKind::AllLogs);
         self.resubscribe();
     }
 
-    pub fn set_pending_transactions(&self, toggle: bool) {
+    pub fn disable_all_logs(&self) {
+        *self._logs.write().unwrap() = None;
+        self.unsubscribe(UnsubscribeKind::AllLogs);
+        // no need to resubscribe
+    }
+
+    pub fn toggle_pending_transactions(&self, toggle: bool) {
         self._pending_transactions
             .store(toggle, std::sync::atomic::Ordering::SeqCst);
         if !toggle {
@@ -475,15 +498,11 @@ impl SubscriptionsInner {
         }
 
         // logs
-        {
-            // logs is a bit tricky, the test is against the specific log filter, not just the high-level kind
-            // because we can have multiple different log filters active at once while they are still unsubscribed
-            let (addresses, topics) = {
-                let lock = self._logs.read().unwrap();
-                (lock.addresses.clone(), lock.topics.clone())
-            };
-
-            if !addresses.is_empty() || !topics.is_empty() {
+        match self._logs.read().unwrap().clone() {
+            None => {} // no logs to subscribe to
+            Some(LogFilter { addresses, topics }) => {
+                // logs is a bit tricky, the test is against the specific log filter, not just the high-level kind
+                // because we can have multiple different log filters active at once while they are still unsubscribed
                 if !self.ids.any(SubscriptionKind::Logs {
                     addresses: addresses.clone(),
                     topics: topics.clone(),
@@ -540,7 +559,7 @@ impl SubscriptionsInner {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct LogFilter {
     addresses: HashSet<Address>,
     topics: HashSet<B256>,

@@ -145,20 +145,28 @@ impl Serialize for SubscribeParams {
                             map.serialize_entry("address", address)?;
                         }
                         _ => {
-                            // Otherwise, serialize as an array of addresses (still same key)
-                            map.serialize_entry("address", addresses)?;
+                            // Otherwise, serialize as an array of addresses
+                            // address is always OR semantics (i.e. A OR B OR C), unlike topics (see below)
+                            // for the sake of easy debugging, we sort the addresses before serializing
+                            let mut addresses: Vec<&Address> = addresses.iter().collect();
+                            addresses.sort();
+                            map.serialize_entry("address", &addresses)?;
                         }
                     }
                 }
                 if !topics.is_empty() {
-                    // one-dimensional array in the spec means "AND"
+                    // for topics, one-dimensional array in the spec means "AND"
                     // i.e. A AND B AND C, so they must _all_ exist to match the filter
                     // However, within that array, we can have another array to mean "OR"
                     // i.e. [A, [B, C], D] means A AND (B OR C) AND D
                     // Therefore, since we always want only OR semantics, we wrap our topics
                     // in an extra array so we get [[A, B, C]] which means (A OR B OR C)
-                    let list = vec![topics];
-                    map.serialize_entry("topics", &list)?;
+
+                    // for the sake of easier debugging, we sort the topics before serializing
+                    let mut topics: Vec<&B256> = topics.iter().collect();
+                    topics.sort();
+                    let topics = vec![topics];
+                    map.serialize_entry("topics", &topics)?;
                 }
                 map.end()
             }
@@ -216,16 +224,37 @@ mod tests {
         assert_eq!(parsed["params"][0], "logs");
         assert_eq!(
             parsed["params"][1]["address"],
-            serde_json::json!(["0x1234567890abcdef1234567890abcdef12345678"])
+            "0x1234567890abcdef1234567890abcdef12345678"
         );
-        // topics contains both a concrete B256 and a null entry
+
+        // Test Logs subscription with multiple address and topics
+        let req = RpcRequest::logs(
+            [
+                address!("0x1234567890abcdef1234567890abcdef12345678"),
+                address!("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"),
+            ]
+            .into_iter()
+            .collect(),
+            [
+                b256!("0x00000000000000000000000000000000000000000000000000000000cafebabe"),
+                b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef"),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let json = serde_json::to_string(&req).unwrap();
+        let parsed: Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["jsonrpc"], "2.0");
+        assert_eq!(parsed["method"], "eth_subscribe");
+        assert_eq!(parsed["params"][0], "logs");
         assert_eq!(
-            parsed["params"][1]["topics"],
-            serde_json::json!(vec![[
-                "0x00000000000000000000000000000000000000000000000000000000deadbeef"
-            ]])
+            parsed["params"][1]["address"],
+            serde_json::json!(vec![
+                "0x1234567890abcdef1234567890abcdef12345678",
+                "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+            ])
         );
-        assert!(parsed["id"].is_number());
 
         // Test Logs subscription with no filters
         let req = RpcRequest::logs(HashSet::new(), HashSet::new());
