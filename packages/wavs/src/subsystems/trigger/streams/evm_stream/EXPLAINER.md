@@ -47,9 +47,13 @@ For transaction broadcasting, use a separate client (e.g., alloy Provider with H
 ### API Rate Limit Optimization
 **This client is designed to minimize network traffic and respect third-party API rate limits.** It intelligently manages subscriptions to avoid unnecessary requests:
 
-- **Smart Log Filtering**: Automatically consolidates multiple log subscriptions into fewer, more efficient filter requests
-- **Dynamic Subscription Management**: Replaces existing subscriptions on-the-fly when filter parameters change, rather than creating additional subscriptions
-- **Minimal Connection Overhead**: Reuses existing subscriptions where possible and only creates new ones when necessary
+- **Smart Log Filtering**: Automatically consolidates multiple `enable_logs()` calls into a single, optimized subscription request. For example, calling `enable_logs([contract1], [event1])` followed by `enable_logs([contract2], [event1])` results in one subscription for `addresses: [contract1, contract2], topics: [event1]` rather than two separate subscriptions.
+
+- **Dynamic Subscription Management**: When filters change via `enable_logs()` or `disable_logs()`, the system unsubscribes from the current log subscription and creates a new one with the updated filter parameters. This ensures only one active log subscription exists at any time, regardless of how many API calls were made to build up the filter.
+
+- **Efficient Filter Representation**: Empty vectors in `enable_logs(vec![], vec![])` create unfiltered subscriptions that capture all logs, while non-empty vectors create precise filters using Ethereum's native OR semantics for both addresses and topics.
+
+- **Minimal Connection Overhead**: Reuses existing subscriptions where possible and only creates new ones when filter parameters actually change.
 
 This makes it well-suited for use with rate-limited providers like Infura, Alchemy, or QuickNode.
 
@@ -81,9 +85,9 @@ let streams = EvmTriggerStreams::new(vec![
 streams.controller.subscriptions.toggle_block_height(true);
 
 // Subscribe to specific contract logs
-streams.controller.subscriptions.enable_log(
-    Some(contract_address),
-    Some(event_signature)
+streams.controller.subscriptions.enable_logs(
+    vec![contract_address],
+    vec![event_signature]
 );
 ```
 
@@ -101,7 +105,7 @@ sequenceDiagram
     participant Connection
     participant EthNode
 
-    Consumer->>Subscriptions: enable_log(address, event)
+    Consumer->>Subscriptions: enable_logs(addresses, events)
     Subscriptions->>Connection: RpcRequest::logs()
     Connection->>EthNode: eth_subscribe
     EthNode->>Connection: subscription_id
@@ -144,6 +148,69 @@ sequenceDiagram
 - **Structure**: Separates concerns with dedicated channel sets for each component
 - **Flow**: Connection ↔ Subscription ↔ Client streams
 
+## Log Filtering Technical Details
+
+### Filter Consolidation Algorithm
+The system maintains a single `LogFilter` struct containing:
+- `addresses: HashSet<Address>` - Contract addresses to monitor
+- `topics: HashSet<B256>` - Event signature hashes to monitor
+
+**Consolidation Logic:**
+1. **Additive Operations**: Each `enable_logs(addresses, topics)` call adds to the existing filter sets
+2. **Single Subscription**: Only one `eth_subscribe("logs", filter)` is active at any time
+3. **Replace-on-Change**: When filters change, the system unsubscribes from the current subscription and creates a new one
+4. **Empty Set Semantics**: Empty `HashSet` means "match all" for that dimension
+
+### Subscription Lifecycle
+
+```rust
+// Internal state progression:
+// 1. Initial state: LogFilter { addresses: {}, topics: {} } -> No subscription
+enable_logs(vec![addr1], vec![event1]);
+// 2. LogFilter { addresses: {addr1}, topics: {event1} } -> Subscribe with filter
+
+enable_logs(vec![addr2], vec![event2]);  
+// 3. LogFilter { addresses: {addr1, addr2}, topics: {event1, event2} } 
+//    -> Unsubscribe old, subscribe with new consolidated filter
+
+disable_logs(&[addr1], &[event1]);
+// 4. LogFilter { addresses: {addr2}, topics: {event2} }
+//    -> Unsubscribe old, subscribe with reduced filter
+
+disable_logs(&[addr2], &[event2]);
+// 5. LogFilter { addresses: {}, topics: {} } -> Unsubscribe, no new subscription
+```
+
+**Key Behaviors:**
+- **Atomic Updates**: Filter changes trigger immediate unsubscribe/resubscribe cycle
+- **Deduplication**: Multiple calls with same parameters don't create duplicate subscriptions
+- **State Persistence**: Filter state survives reconnection and is automatically reestablished
+- **Thread Safety**: All operations are protected by `RwLock` for concurrent access
+
+### Ethereum JSON-RPC Filter Mapping
+
+The internal `HashSet` structures map to Ethereum's filter specification:
+
+```rust
+// Internal: LogFilter { addresses: {A, B}, topics: {T1, T2} }
+// JSON-RPC: {
+//   "address": ["0xA...", "0xB..."],        // OR semantics: A OR B  
+//   "topics": [["0xT1...", "0xT2..."]]      // OR semantics: T1 OR T2
+// }
+
+// Internal: LogFilter { addresses: {}, topics: {T1} }  
+// JSON-RPC: {
+//   "topics": [["0xT1..."]]                 // No address filter = all addresses
+// }
+
+// Internal: LogFilter { addresses: {}, topics: {} }
+// JSON-RPC: {}                             // No filters = all logs
+```
+
+**Topic Array Structure**: The system wraps topics in a nested array `[[T1, T2]]` to achieve OR semantics. In Ethereum's filter specification:
+- `[T1, T2]` means `T1 AND T2` (both must match)  
+- `[[T1, T2]]` means `T1 OR T2` (either can match)
+
 ## Usage Patterns
 
 ### Basic Block Monitoring
@@ -159,9 +226,9 @@ while let Some(height) = streams.block_height_stream.next().await {
 ### Contract Event Monitoring
 ```rust
 let mut streams = EvmTriggerStreams::new(endpoints);
-streams.controller.subscriptions.enable_log(
-    Some(contract_address),
-    Some(Transfer::SIGNATURE_HASH),
+streams.controller.subscriptions.enable_logs(
+    vec![contract_address],
+    vec![Transfer::SIGNATURE_HASH],
 );
 
 while let Some(log) = streams.log_stream.next().await {
@@ -170,19 +237,105 @@ while let Some(log) = streams.log_stream.next().await {
 }
 ```
 
-### Multiple Subscription Management
+### Log Filtering and Subscription Management
+
+The API supports flexible log filtering with both inclusive and exclusive operations:
+
 ```rust
-// Add multiple contracts/events at once
+// Subscribe to specific contracts and events
 streams.controller.subscriptions.enable_logs(
     vec![contract1, contract2],
     vec![Transfer::SIGNATURE_HASH, Approval::SIGNATURE_HASH],
 );
 
-// Remove specific subscriptions
-streams.controller.subscriptions.disable_log(
-    Some(contract1),
-    Some(Transfer::SIGNATURE_HASH),
+// Subscribe to all logs from specific contracts (any event)
+streams.controller.subscriptions.enable_logs(
+    vec![contract1, contract2],
+    vec![], // empty events = all events
 );
+
+// Subscribe to specific events from any contract
+streams.controller.subscriptions.enable_logs(
+    vec![], // empty addresses = all addresses
+    vec![Transfer::SIGNATURE_HASH, Approval::SIGNATURE_HASH],
+);
+
+// Subscribe to ALL logs (no filtering)
+streams.controller.subscriptions.enable_logs(
+    vec![], // all addresses
+    vec![], // all events
+);
+
+// Remove specific log filters
+streams.controller.subscriptions.disable_logs(
+    &[contract1],
+    &[Transfer::SIGNATURE_HASH],
+);
+
+// Completely disable all log subscriptions
+streams.controller.subscriptions.disable_all_logs();
+```
+
+**Filtering Behavior:**
+- **Empty vectors** (addresses or events) mean "match all" for that dimension
+- **Non-empty vectors** create specific filters using OR logic within each dimension
+- **Multiple calls** to `enable_logs` are additive - filters accumulate
+- **Smart consolidation** automatically combines multiple subscriptions into efficient requests
+- **Automatic resubscription** occurs when filters change, optimizing for minimal network traffic
+
+**Advanced Usage Examples:**
+
+```rust
+// Gradually build up complex filters
+let mut streams = EvmTriggerStreams::new(endpoints);
+
+// Start with one contract and event
+streams.controller.subscriptions.enable_logs(
+    vec![usdc_contract],
+    vec![Transfer::SIGNATURE_HASH],
+);
+
+// Add more contracts (additive)
+streams.controller.subscriptions.enable_logs(
+    vec![usdt_contract, dai_contract],
+    vec![Transfer::SIGNATURE_HASH],
+);
+
+// Add more events for existing contracts (additive)  
+streams.controller.subscriptions.enable_logs(
+    vec![usdc_contract, usdt_contract],
+    vec![Approval::SIGNATURE_HASH],
+);
+
+// Remove specific filters (selective)
+streams.controller.subscriptions.disable_logs(
+    &[dai_contract],
+    &[Transfer::SIGNATURE_HASH],
+);
+
+// At this point we're subscribed to:
+// - USDC: Transfer, Approval events
+// - USDT: Transfer, Approval events  
+// - DAI: Approval events only
+```
+
+**Implicit vs Explicit Disable All:**
+
+```rust
+// Explicit: directly disable all log subscriptions
+streams.controller.subscriptions.enable_logs(vec![], vec![]);
+streams.controller.subscriptions.disable_all_logs();
+
+// Implicit: disable by removing all filters
+streams.controller.subscriptions.enable_logs(
+    vec![some_contract],
+    vec![],
+);
+streams.controller.subscriptions.disable_logs(
+    &[some_contract],
+    &[],
+);
+// This implicitly disables all logs since no filters remain
 ```
 
 ### Resource Management

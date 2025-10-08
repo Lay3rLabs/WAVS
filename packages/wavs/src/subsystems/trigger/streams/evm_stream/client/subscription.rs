@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
@@ -147,6 +147,10 @@ impl Subscriptions {
             ._is_connected
             .load(std::sync::atomic::Ordering::SeqCst)
     }
+
+    pub fn active_subscriptions(&self) -> HashMap<String, SubscriptionKind> {
+        self.inner.ids._lookup.read().unwrap().clone()
+    }
 }
 
 impl Drop for Subscriptions {
@@ -244,6 +248,7 @@ impl SubscriptionsInner {
                     }
 
                     if logs.addresses.is_empty() && logs.topics.is_empty() {
+                        tracing::warn!("No more filters remaining, disabling *all* log filters. If you meant to remove all the filters in order to subractively get a catch-all, call `enable_logs()` with empty vecs instead");
                         *lock = None;
                     }
                 }
@@ -573,7 +578,7 @@ struct SubscriptionIds {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum SubscriptionKind {
+pub enum SubscriptionKind {
     NewHeads,
     Logs {
         addresses: HashSet<Address>,

@@ -3,8 +3,8 @@ use std::collections::HashMap;
 
 use super::Service;
 use crate::{
-    AnyChainConfig, ChainKey, ComponentDigest, ServiceDigest, ServiceId, ServiceManager, Trigger,
-    TriggerData, WorkflowId,
+    AnyChainConfig, ByteArray, ChainKey, ComponentDigest, ServiceDigest, ServiceId, ServiceManager,
+    Trigger, TriggerData, WorkflowId,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -92,4 +92,15 @@ pub struct DevTriggerStreamInfo {
     pub current_endpoint: Option<String>,
     pub is_connected: bool,
     pub any_active_rpcs_in_flight: bool,
+    pub active_subscriptions: HashMap<String, DevTriggerStreamSubscriptionKind>,
+}
+
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub enum DevTriggerStreamSubscriptionKind {
+    NewHeads,
+    Logs {
+        addresses: Vec<ByteArray<20>>,
+        topics: Vec<ByteArray<32>>,
+    },
+    NewPendingTransactions,
 }

@@ -8,6 +8,9 @@ use alloy_rpc_types_eth::Log;
 use connection::Connection;
 use subscription::Subscriptions;
 
+// just for debug/http visibility
+pub use subscription::SubscriptionKind;
+
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use channels::Channels;
