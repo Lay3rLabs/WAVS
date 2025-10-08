@@ -208,18 +208,37 @@ impl ServiceManagers {
 
             let SignerResponse::Secp256k1 {
                 evm_address: avs_signer_address,
-                ..
+                hd_index,
             } = clients
                 .http_client
                 .get_service_signer(service_manager.clone())
                 .await
                 .unwrap();
 
-            let operator_address = clients
-                .get_evm_client(&test.service_manager_chain)
-                .address();
-            let avs_operator =
-                AvsOperator::new(operator_address, avs_signer_address.parse().unwrap());
+            let operator_client = clients.get_evm_client(&test.service_manager_chain);
+            let operator_address = operator_client.address();
+            let operator_private_key = const_hex::encode(operator_client.signer.to_bytes());
+
+            let signing_signer = utils::evm_client::signing::make_signer(
+                &self.configs.mnemonics.wavs,
+                Some(hd_index),
+            )
+            .unwrap();
+            let signing_address = signing_signer.address();
+            let signing_private_key = const_hex::encode(signing_signer.to_bytes());
+
+            assert_eq!(
+                signing_address.to_string().to_lowercase(),
+                avs_signer_address.to_lowercase(),
+                "Derived signing address doesn't match WAVS signer address"
+            );
+
+            let avs_operator = AvsOperator::with_keys(
+                operator_address,
+                signing_address,
+                operator_private_key,
+                signing_private_key,
+            );
 
             futures.push(async move {
                 mock_service_manager
