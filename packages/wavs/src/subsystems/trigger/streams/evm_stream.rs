@@ -1,3 +1,7 @@
+pub mod client;
+#[cfg(test)]
+mod client_tests;
+
 use alloy_rpc_types_eth::Log;
 use futures::{Stream, StreamExt};
 use std::pin::Pin;

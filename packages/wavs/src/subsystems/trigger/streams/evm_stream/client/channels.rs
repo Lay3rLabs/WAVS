@@ -2,9 +2,7 @@ use alloy_primitives::B256;
 use alloy_rpc_types_eth::Log;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::subsystems::trigger::clients::evm::{
-    connection::ConnectionState, rpc_types::outbound::RpcRequest,
-};
+use super::{connection::ConnectionState, rpc_types::outbound::RpcRequest};
 
 use super::connection::ConnectionData;
 

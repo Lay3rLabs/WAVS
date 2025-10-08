@@ -1,5 +1,5 @@
-// Tip, run like: RUST_LOG=info cargo test evm_tests::{SINGLE_TEST} --lib -- --nocapture
-// e.g. RUST_LOG=info cargo test evm_tests::block_height_stream --lib -- --nocapture
+// Tip, run like: RUST_LOG=info cargo test evm_stream::client_tests::{SINGLE_TEST} --lib -- --nocapture
+// e.g. RUST_LOG=info cargo test evm_stream::client_tests::block_height_stream --lib -- --nocapture
 
 mod helpers;
 
@@ -10,9 +10,11 @@ use std::{
 
 use crate::{
     init_tracing_tests,
-    subsystems::trigger::clients::{
-        evm::EvmTriggerStreams,
-        evm_tests::helpers::{wait_for_all_rpc_requests_landed, EventEmitter, EventEmitterClient},
+    subsystems::trigger::streams::evm_stream::{
+        client::EvmTriggerStreams,
+        client_tests::helpers::{
+            wait_for_all_rpc_requests_landed, EventEmitter, EventEmitterClient,
+        },
     },
 };
 
@@ -78,9 +80,9 @@ async fn simple_log_stream() {
 
     tracing::info!("Deployed contract at {}", contract.address());
 
-    controller.subscriptions.enable_log(
-        Some(*contract.address()),
-        Some(EventEmitter::IntegerEvent::SIGNATURE_HASH),
+    controller.subscriptions.enable_logs(
+        vec![*contract.address()],
+        vec![EventEmitter::IntegerEvent::SIGNATURE_HASH],
     );
 
     const LOGS_TO_COLLECT: usize = 5;
@@ -185,13 +187,13 @@ async fn multi_log_stream(add_kind: AddKind) {
             ],
         ),
         AddKind::Serial => {
-            controller.subscriptions.enable_log(
-                Some(*contract.address()),
-                Some(EventEmitter::IntegerEvent::SIGNATURE_HASH),
+            controller.subscriptions.enable_logs(
+                vec![*contract.address()],
+                vec![EventEmitter::IntegerEvent::SIGNATURE_HASH],
             );
-            controller.subscriptions.enable_log(
-                Some(*contract.address()),
-                Some(EventEmitter::StringEvent::SIGNATURE_HASH),
+            controller.subscriptions.enable_logs(
+                vec![*contract.address()],
+                vec![EventEmitter::StringEvent::SIGNATURE_HASH],
             );
         }
     }
@@ -582,7 +584,7 @@ async fn unsubscribe_log_stream(kind: UnsubscribeKind) {
 
     controller
         .subscriptions
-        .disable_log(None, Some(EventEmitter::StringEvent::SIGNATURE_HASH));
+        .disable_logs(&[], &[EventEmitter::StringEvent::SIGNATURE_HASH]);
 
     // in both cases we need to wait here, since we want to ensure the subscription landed
     wait_for_all_rpc_requests_landed(&controller).await;

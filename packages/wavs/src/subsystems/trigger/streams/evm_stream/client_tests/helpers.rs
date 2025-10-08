@@ -3,10 +3,10 @@ use alloy_provider::{DynProvider, ProviderBuilder};
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::sol;
 
-use crate::subsystems::trigger::clients::evm::EvmTriggerStreamsController;
+use crate::subsystems::trigger::evm_stream::client::EvmTriggerStreamsController;
 
 pub async fn wait_for_all_rpc_requests_landed(controller: &EvmTriggerStreamsController) {
-    while !controller.subscriptions.all_rpc_requests_landed() {
+    while controller.subscriptions.any_active_rpcs_in_flight() {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
 }

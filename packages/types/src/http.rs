@@ -82,7 +82,7 @@ pub struct DevTriggerStreamsInfo {
 impl DevTriggerStreamsInfo {
     pub fn finalized(&self) -> bool {
         self.chains.values().all(|info| {
-            info.all_rpc_requests_landed && info.is_connected && info.current_endpoint.is_some()
+            !info.any_active_rpcs_in_flight && info.is_connected && info.current_endpoint.is_some()
         })
     }
 }
@@ -91,5 +91,5 @@ impl DevTriggerStreamsInfo {
 pub struct DevTriggerStreamInfo {
     pub current_endpoint: Option<String>,
     pub is_connected: bool,
-    pub all_rpc_requests_landed: bool,
+    pub any_active_rpcs_in_flight: bool,
 }

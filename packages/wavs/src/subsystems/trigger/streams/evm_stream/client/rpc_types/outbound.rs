@@ -4,7 +4,7 @@ use alloy_primitives::{Address, B256};
 use serde::ser::{Serialize, SerializeMap, SerializeStruct, Serializer};
 use slotmap::Key;
 
-use crate::subsystems::trigger::clients::evm::rpc_types::id::{RpcId, RpcRequestKind};
+use super::id::{RpcId, RpcRequestKind};
 
 /// Outbound JSON-RPC request
 ///
@@ -29,8 +29,8 @@ impl RpcRequest {
         Self::Subscribe {
             id: RpcId::new(match params.clone() {
                 SubscribeParams::NewHeads => RpcRequestKind::SubscribeNewHeads,
-                SubscribeParams::Logs { address, topics } => {
-                    RpcRequestKind::SubscribeLogs { address, topics }
+                SubscribeParams::Logs { addresses, topics } => {
+                    RpcRequestKind::SubscribeLogs { addresses, topics }
                 }
                 SubscribeParams::NewPendingTransactions => {
                     RpcRequestKind::SubscribeNewPendingTransactions
@@ -51,8 +51,8 @@ impl RpcRequest {
     }
 
     /// Subscribe to logs with an optional address/topic filter.
-    pub fn logs(address: HashSet<Address>, topics: HashSet<B256>) -> Self {
-        Self::subscribe(SubscribeParams::Logs { address, topics })
+    pub fn logs(addresses: HashSet<Address>, topics: HashSet<B256>) -> Self {
+        Self::subscribe(SubscribeParams::Logs { addresses, topics })
     }
 
     /// Create an unsubscribe request.
@@ -72,7 +72,7 @@ impl RpcRequest {
 pub enum SubscribeParams {
     NewHeads,
     Logs {
-        address: HashSet<Address>,
+        addresses: HashSet<Address>,
         topics: HashSet<B256>,
     },
     NewPendingTransactions,
@@ -135,14 +135,28 @@ impl Serialize for SubscribeParams {
             SubscribeParams::NewPendingTransactions => {
                 serializer.serialize_str("newPendingTransactions")
             }
-            SubscribeParams::Logs { address, topics } => {
+            SubscribeParams::Logs { addresses, topics } => {
                 let mut map = serializer.serialize_map(None)?;
-                if !address.is_empty() {
-                    map.serialize_entry("address", address)?;
+                if !addresses.is_empty() {
+                    match addresses.len() {
+                        1 => {
+                            // If there's only one address, serialize as a single address
+                            let address = addresses.iter().next().unwrap();
+                            map.serialize_entry("address", address)?;
+                        }
+                        _ => {
+                            // Otherwise, serialize as an array of addresses (still same key)
+                            map.serialize_entry("address", addresses)?;
+                        }
+                    }
                 }
                 if !topics.is_empty() {
-                    // Each topic is an AND semantics, so we wrap in an extra array for
-                    // OR semantics with extra embedding
+                    // one-dimensional array in the spec means "AND"
+                    // i.e. A AND B AND C, so they must _all_ exist to match the filter
+                    // However, within that array, we can have another array to mean "OR"
+                    // i.e. [A, [B, C], D] means A AND (B OR C) AND D
+                    // Therefore, since we always want only OR semantics, we wrap our topics
+                    // in an extra array so we get [[A, B, C]] which means (A OR B OR C)
                     let list = vec![topics];
                     map.serialize_entry("topics", &list)?;
                 }

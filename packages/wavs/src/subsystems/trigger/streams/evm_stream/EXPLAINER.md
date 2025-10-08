@@ -193,7 +193,7 @@ streams.controller.subscriptions.disable_log(
 {
     let mut streams = EvmTriggerStreams::new(endpoints);
     streams.controller.subscriptions.toggle_block_height(true);
-    
+
     // Streams are active and receiving data
     while let Some(height) = streams.block_height_stream.next().await {
         println!("New block: {}", height);

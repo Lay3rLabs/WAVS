@@ -28,7 +28,7 @@ impl RpcId {
 pub enum RpcRequestKind {
     SubscribeNewHeads,
     SubscribeLogs {
-        address: HashSet<Address>,
+        addresses: HashSet<Address>,
         topics: HashSet<B256>,
     },
     SubscribeNewPendingTransactions,

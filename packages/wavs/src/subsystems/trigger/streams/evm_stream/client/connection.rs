@@ -11,9 +11,7 @@ use tokio::{
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
-use crate::subsystems::trigger::clients::evm::{
-    channels::ConnectionChannels, rpc_types::outbound::RpcRequest,
-};
+use super::{channels::ConnectionChannels, rpc_types::outbound::RpcRequest};
 
 // A handle for managing WebSocket connections with intelligent retry logic
 //
@@ -297,10 +295,11 @@ pub enum ConnectionError {
 
 #[cfg(test)]
 mod test {
-    use crate::init_tracing_tests;
+    use crate::{
+        init_tracing_tests, subsystems::trigger::streams::evm_stream::client::channels::Channels,
+    };
 
     use super::*;
-    use crate::subsystems::trigger::clients::evm::channels::Channels;
     use alloy_node_bindings::Anvil;
 
     use tokio::time::{timeout, Duration};

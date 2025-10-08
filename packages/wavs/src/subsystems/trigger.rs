@@ -1,4 +1,3 @@
-pub mod clients;
 pub mod error;
 pub mod lookup;
 pub mod schedulers;
@@ -8,9 +7,10 @@ use crate::{
     config::Config,
     dispatcher::DispatcherCommand,
     services::Services,
-    subsystems::trigger::{
-        clients::evm::{EvmTriggerStreams, EvmTriggerStreamsController},
-        streams::{cosmos_stream::StreamTriggerCosmosContractEvent, local_command_stream},
+    subsystems::trigger::streams::{
+        cosmos_stream::StreamTriggerCosmosContractEvent,
+        evm_stream::client::{EvmTriggerStreams, EvmTriggerStreamsController},
+        local_command_stream,
     },
     tracing_service_info, AppContext,
 };

@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use slotmap::KeyData;
 
-use crate::subsystems::trigger::clients::evm::rpc_types::id::RpcId;
+use super::id::RpcId;
 
 /// Inbound JSON-RPC messages from an Ethereum node.
 #[derive(Debug)]

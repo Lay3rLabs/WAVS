@@ -95,7 +95,7 @@ pub async fn handle_dev_trigger_streams_info(State(state): State<HttpState>) -> 
                 DevTriggerStreamInfo {
                     current_endpoint: controller.connection.current_endpoint(),
                     is_connected: controller.subscriptions.is_connected(),
-                    all_rpc_requests_landed: controller.subscriptions.all_rpc_requests_landed(),
+                    any_active_rpcs_in_flight: controller.subscriptions.any_active_rpcs_in_flight(),
                 },
             )
         })
