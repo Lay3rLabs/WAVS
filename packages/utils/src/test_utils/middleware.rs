@@ -347,13 +347,10 @@ impl MiddlewareInstanceInner {
         // At the moment poa-middleware doesnt have a batch configuration endpoint
         // https://github.com/Lay3rLabs/poa-middleware/blob/095670eb3c206f0e6c8c6951f6b81e601f989b39/scripts/ecdsa/owner_operation.sh#L41-L48
         // register each operator with weight
-        for (operator, signer, weight) in config
-            .operators
-            .iter()
-            .zip(&config.signing_key_addresses)
-            .zip(&config.weights)
-            .map(|((o, s), w)| (o, s, w))
-        {
+        for i in 0..config.operators.len() {
+            let operator = &config.operators[i];
+            let weight = &config.weights[i];
+            let avs_operator = &config.avs_operators[i];
             let res = tokio::time::timeout(
                 Self::DEFAULT_TIMEOUT,
                 Command::new("docker")
@@ -386,13 +383,24 @@ impl MiddlewareInstanceInner {
             }
 
             // set signing key for each operator
+            let operator_key = avs_operator
+                .operator_private_key
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("Operator private key required for POA middleware"))?;
+            let signing_key = avs_operator
+                .signer_private_key
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("Signer private key required for POA middleware"))?;
+
             let res = tokio::time::timeout(
                 Self::DEFAULT_TIMEOUT,
                 Command::new("docker")
                     .args([
                         "exec",
                         "-e",
-                        &format!("OPERATOR_KEY={}", service_manager.deployer_key_hex),
+                        &format!("OPERATOR_KEY={}", operator_key),
+                        "-e",
+                        &format!("SIGNING_KEY={}", signing_key),
                         "-e",
                         &format!("RPC_URL={}", service_manager.rpc_url),
                         "-e",
@@ -402,8 +410,6 @@ impl MiddlewareInstanceInner {
                         &self.container_id,
                         "/wavs/scripts/cli.sh",
                         "update_signing_key",
-                        &format!("{:?}", operator),
-                        &format!("{:?}", signer),
                     ])
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
@@ -490,6 +496,11 @@ impl MiddlewareInstanceInner {
                 Ok(())
             }
             MiddlewareType::Poa => {
+                tracing::debug!(
+                    "Setting service URI for POA: address={}, uri='{}'",
+                    service_manager.address,
+                    service_uri
+                );
                 let res = tokio::time::timeout(
                     Self::DEFAULT_TIMEOUT,
                     Command::new("docker")
@@ -506,7 +517,7 @@ impl MiddlewareInstanceInner {
                             "--rpc-url",
                             &service_manager.rpc_url,
                         ])
-                        .stdout(Stdio::null())
+                        .stdout(Stdio::inherit())
                         .stderr(Stdio::inherit())
                         .spawn()?
                         .wait(),
@@ -514,7 +525,7 @@ impl MiddlewareInstanceInner {
                 .await??;
 
                 if !res.success() {
-                    bail!("Failed to set service URI");
+                    bail!("Failed to set service URI for address {}", service_manager.address);
                 }
 
                 Ok(())
@@ -564,6 +575,8 @@ pub struct MiddlewareServiceManager {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MiddlewareServiceManagerConfig {
+    #[serde(skip)]
+    pub avs_operators: Vec<AvsOperator>,
     pub operators: Vec<alloy_primitives::Address>,
     #[serde(rename = "quorumDenominator")]
     pub quorum_denominator: u64,
@@ -578,6 +591,7 @@ pub struct MiddlewareServiceManagerConfig {
 impl MiddlewareServiceManagerConfig {
     pub fn new(operators: &[AvsOperator], required_to_pass: u64) -> Self {
         Self {
+            avs_operators: operators.to_vec(),
             signing_key_addresses: operators.iter().map(|op| op.signer).collect(),
             operators: operators.iter().map(|op| op.operator).collect(),
             quorum_denominator: (operators.len() as u64).max(1), // gotta have at least one operator
@@ -588,10 +602,13 @@ impl MiddlewareServiceManagerConfig {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct AvsOperator {
     pub operator: Address,
     pub signer: Address,
     pub weight: u64,
+    pub operator_private_key: Option<String>,
+    pub signer_private_key: Option<String>,
 }
 
 impl AvsOperator {
@@ -602,6 +619,23 @@ impl AvsOperator {
             operator,
             signer,
             weight: Self::DEFAULT_WEIGHT,
+            operator_private_key: None,
+            signer_private_key: None,
+        }
+    }
+
+    pub fn with_keys(
+        operator: Address,
+        signer: Address,
+        operator_private_key: String,
+        signer_private_key: String,
+    ) -> Self {
+        Self {
+            operator,
+            signer,
+            weight: Self::DEFAULT_WEIGHT,
+            operator_private_key: Some(operator_private_key),
+            signer_private_key: Some(signer_private_key),
         }
     }
 }
