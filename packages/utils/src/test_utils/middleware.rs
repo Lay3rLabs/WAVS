@@ -12,7 +12,7 @@ use tokio::fs;
 use tokio::process::Command;
 
 pub const MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/wavs-middleware:0.5.0-beta.10";
-pub const POA_MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/poa-middleware:v1.0.1";
+pub const POA_MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/poa-middleware:1.0.1";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MiddlewareType {
@@ -93,16 +93,26 @@ impl MiddlewareInstanceInner {
                     "/dev/null",
                 ])
                 .stdout(Stdio::piped())
-                .stderr(Stdio::null())
+                .stderr(Stdio::piped())
                 .spawn()?
                 .wait_with_output(),
         )
         .await??;
 
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("Failed to start middleware container: {}", stderr);
+        }
+
         let container_id = String::from_utf8(output.stdout)
             .map_err(|e| anyhow::anyhow!("Failed to read container ID: {}", e))?
             .trim()
             .to_string();
+
+        if container_id.is_empty() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("Docker returned empty container ID. stderr: {}", stderr);
+        }
 
         Ok(Self {
             container_id,
