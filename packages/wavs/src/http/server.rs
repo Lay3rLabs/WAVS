@@ -111,10 +111,7 @@ pub async fn make_router(
                 "/dev/services/{service_hash}",
                 get(handle_get_service_by_hash),
             )
-            .route(
-                "/dev/trigger-streams-info",
-                get(handle_dev_trigger_streams_info),
-            );
+            .route("/dev/trigger-streams", get(handle_dev_trigger_streams_info));
 
         protected = protected
             .route("/dev/triggers", post(handle_debug_trigger))

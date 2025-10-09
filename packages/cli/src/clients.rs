@@ -229,7 +229,7 @@ impl HttpClient {
     }
 
     pub async fn get_trigger_streams_info(&self) -> Result<DevTriggerStreamsInfo> {
-        let url = format!("{}/dev/trigger-streams-info", self.endpoint);
+        let url = format!("{}/dev/trigger-streams", self.endpoint);
 
         let text = self.inner.get(&url).send().await?.text().await?;
 

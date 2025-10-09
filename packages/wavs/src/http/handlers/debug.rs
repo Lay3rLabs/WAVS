@@ -74,7 +74,7 @@ async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> 
 
 #[utoipa::path(
     get,
-    path = "/dev/trigger-streams-info",
+    path = "/dev/trigger-streams",
     responses(
         (status = 200, description = "Trigger streams info", body = DevTriggerStreamsInfo),
     ),
