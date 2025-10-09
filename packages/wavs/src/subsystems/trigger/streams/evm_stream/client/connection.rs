@@ -260,7 +260,7 @@ async fn message_loop(
                 match serde_json::to_string(&msg) {
                     Ok(msg) => {
 
-                        tracing::info!("EVM: sending message: {}", msg);
+                        tracing::debug!("EVM: sending message: {}", msg);
                         let mut guard = current_sink.lock().await;
                         if let Some(sink) = guard.as_mut() {
                             match sink.send(Message::Text(msg.into())).await {
