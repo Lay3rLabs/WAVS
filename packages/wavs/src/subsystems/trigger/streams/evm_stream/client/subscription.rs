@@ -388,7 +388,7 @@ impl SubscriptionsInner {
         }
     }
 
-    fn on_recieved_subscription_event(
+    fn on_received_subscription_event(
         &self,
         subscription_block_height_tx: &mut tokio::sync::mpsc::UnboundedSender<u64>,
         subscription_log_tx: &mut tokio::sync::mpsc::UnboundedSender<Log>,
