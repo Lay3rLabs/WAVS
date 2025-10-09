@@ -876,3 +876,256 @@ async fn unsubscribe_all_log_stream(explicit: bool) {
         panic!("Got a log, even though we unsubscribed from all logs");
     }
 }
+
+#[tokio::test]
+async fn multiple_clients() {
+    init_tracing_tests();
+
+    let anvil_1 = safe_spawn_anvil_extra(|anvil| anvil.block_time_f64(0.02));
+    let anvil_2 = safe_spawn_anvil_extra(|anvil| anvil.block_time_f64(0.02));
+
+    let EvmTriggerStreams {
+        controller: controller_1,
+        log_stream: mut log_stream_1,
+        ..
+    } = EvmTriggerStreams::new(vec![anvil_1.ws_endpoint()]);
+
+    let EvmTriggerStreams {
+        controller: controller_2,
+        log_stream: mut log_stream_2,
+        ..
+    } = EvmTriggerStreams::new(vec![anvil_2.ws_endpoint()]);
+
+    let contract_1 = EventEmitterClient::new(&anvil_1, 0).deploy().await;
+    tracing::info!("Deployed contract_1 at {}", contract_1.address());
+
+    let contract_2 = EventEmitterClient::new(&anvil_2, 0).deploy().await;
+    tracing::info!("Deployed contract_2 at {}", contract_2.address());
+
+    controller_1.subscriptions.enable_logs(
+        vec![*contract_1.address()],
+        vec![EventEmitter::IntegerEvent::SIGNATURE_HASH],
+    );
+
+    controller_2.subscriptions.enable_logs(
+        vec![*contract_2.address()],
+        vec![EventEmitter::IntegerEvent::SIGNATURE_HASH],
+    );
+
+    wait_for_all_rpc_requests_landed(&controller_1).await;
+    wait_for_all_rpc_requests_landed(&controller_2).await;
+
+    const LOGS_TO_COLLECT: usize = 5;
+
+    let collected_logs_1 = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let collected_logs_2 = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+    // First spawn a task to collect the logs into the stream
+
+    let handle_1 = tokio::spawn({
+        let collected_logs_1 = collected_logs_1.clone();
+        async move {
+            timeout(Duration::from_secs(5), async {
+                while let Some(log) = log_stream_1.next().await {
+                    let mut lock = collected_logs_1.lock().unwrap();
+                    lock.push(log);
+                    if lock.len() >= LOGS_TO_COLLECT {
+                        break;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
+    });
+
+    let handle_2 = tokio::spawn({
+        let collected_logs_2 = collected_logs_2.clone();
+        async move {
+            timeout(Duration::from_secs(5), async {
+                while let Some(log) = log_stream_2.next().await {
+                    let mut lock = collected_logs_2.lock().unwrap();
+                    lock.push(log);
+                    if lock.len() >= LOGS_TO_COLLECT {
+                        break;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
+    });
+
+    // Now, since we're not blocked, we can emit the events
+
+    for value in 0..LOGS_TO_COLLECT as u64 {
+        let _ = contract_1
+            .emitInteger(U256::from(value))
+            .send()
+            .await
+            .unwrap();
+
+        let _ = contract_2
+            .emitInteger(U256::from(value))
+            .send()
+            .await
+            .unwrap();
+    }
+
+    // but we do need to wait for the handle to finish
+    handle_1.await.unwrap();
+    handle_2.await.unwrap();
+
+    let collected_logs_1 = collected_logs_1.lock().unwrap();
+    let collected_logs_2 = collected_logs_2.lock().unwrap();
+
+    assert!(
+        collected_logs_1.len() >= LOGS_TO_COLLECT,
+        "only got {} logs from client 1, not enough to test",
+        collected_logs_1.len()
+    );
+
+    assert!(
+        collected_logs_2.len() >= LOGS_TO_COLLECT,
+        "only got {} logs from client 2, not enough to test",
+        collected_logs_2.len()
+    );
+
+    // Extract the events
+    let mut collected_values_1 = HashSet::new();
+    for log in collected_logs_1.iter() {
+        let event = EventEmitter::IntegerEvent::decode_log(&log.inner)
+            .unwrap()
+            .data;
+
+        collected_values_1.insert(event.value);
+    }
+    let mut collected_values_2 = HashSet::new();
+    for log in collected_logs_2.iter() {
+        let event = EventEmitter::IntegerEvent::decode_log(&log.inner)
+            .unwrap()
+            .data;
+
+        collected_values_2.insert(event.value);
+    }
+
+    for value in 0..LOGS_TO_COLLECT as u64 {
+        assert!(
+            collected_values_1.contains(&U256::from(value)),
+            "did not find emitted value {} in logs from client 1",
+            value
+        );
+
+        tracing::info!("found {value} in events from client 1!");
+
+        assert!(
+            collected_values_2.contains(&U256::from(value)),
+            "did not find emitted value {} in logs from client 2",
+            value
+        );
+
+        tracing::info!("found {value} in events from client 2!");
+    }
+}
+
+#[tokio::test]
+async fn multiple_clients_drop_one() {
+    init_tracing_tests();
+
+    let anvil_1 = safe_spawn_anvil_extra(|anvil| anvil.block_time_f64(0.02));
+    let anvil_2 = safe_spawn_anvil_extra(|anvil| anvil.block_time_f64(0.02));
+
+    let EvmTriggerStreams {
+        controller: controller_1,
+        ..
+    } = EvmTriggerStreams::new(vec![anvil_1.ws_endpoint()]);
+
+    let EvmTriggerStreams {
+        controller: controller_2,
+        log_stream: mut log_stream_2,
+        ..
+    } = EvmTriggerStreams::new(vec![anvil_2.ws_endpoint()]);
+
+    let contract_1 = EventEmitterClient::new(&anvil_1, 0).deploy().await;
+    tracing::info!("Deployed contract_1 at {}", contract_1.address());
+
+    let contract_2 = EventEmitterClient::new(&anvil_2, 0).deploy().await;
+    tracing::info!("Deployed contract_2 at {}", contract_2.address());
+
+    controller_1.subscriptions.enable_logs(
+        vec![*contract_1.address()],
+        vec![EventEmitter::IntegerEvent::SIGNATURE_HASH],
+    );
+
+    controller_2.subscriptions.enable_logs(
+        vec![*contract_2.address()],
+        vec![EventEmitter::IntegerEvent::SIGNATURE_HASH],
+    );
+
+    drop(controller_1);
+
+    wait_for_all_rpc_requests_landed(&controller_2).await;
+
+    const LOGS_TO_COLLECT: usize = 5;
+
+    let collected_logs = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+    // First spawn a task to collect the logs into the stream
+
+    let handle = tokio::spawn({
+        let collected_logs = collected_logs.clone();
+        async move {
+            timeout(Duration::from_secs(5), async {
+                while let Some(log) = log_stream_2.next().await {
+                    let mut lock = collected_logs.lock().unwrap();
+                    lock.push(log);
+                    if lock.len() >= LOGS_TO_COLLECT {
+                        break;
+                    }
+                }
+            })
+            .await
+            .unwrap();
+        }
+    });
+
+    // Now, since we're not blocked, we can emit the events
+    for value in 0..LOGS_TO_COLLECT as u64 {
+        let _ = contract_2
+            .emitInteger(U256::from(value))
+            .send()
+            .await
+            .unwrap();
+    }
+
+    // but we do need to wait for the handle to finish
+    handle.await.unwrap();
+
+    let collected_logs = collected_logs.lock().unwrap();
+    assert!(
+        collected_logs.len() >= LOGS_TO_COLLECT,
+        "only got {} logs from client 2, not enough to test",
+        collected_logs.len()
+    );
+
+    // Extract the events
+    let mut collected_values = HashSet::new();
+
+    for log in collected_logs.iter() {
+        let event = EventEmitter::IntegerEvent::decode_log(&log.inner)
+            .unwrap()
+            .data;
+
+        collected_values.insert(event.value);
+    }
+
+    for value in 0..LOGS_TO_COLLECT as u64 {
+        assert!(
+            collected_values.contains(&U256::from(value)),
+            "did not find emitted value {} in logs from client 2",
+            value
+        );
+
+        tracing::info!("found {value} in events from client 2!");
+    }
+}
