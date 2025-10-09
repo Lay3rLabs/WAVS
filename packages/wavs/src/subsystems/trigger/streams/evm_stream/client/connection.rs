@@ -11,7 +11,10 @@ use tokio::{
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
-use super::{channels::ConnectionChannels, rpc_types::outbound::RpcRequest};
+use super::{
+    channels::ConnectionChannels,
+    rpc_types::{id::RpcIds, outbound::RpcRequest},
+};
 
 // A handle for managing WebSocket connections with intelligent retry logic
 //
@@ -59,7 +62,7 @@ impl Connection {
     pub const BACKOFF_BASE: Duration = Duration::from_secs(1);
     pub const BACKOFF_CAP: Duration = Duration::from_secs(30);
 
-    pub fn new(endpoints: Vec<String>, channels: ConnectionChannels) -> Self {
+    pub fn new(rpc_ids: RpcIds, endpoints: Vec<String>, channels: ConnectionChannels) -> Self {
         let ConnectionChannels {
             connection_send_rpc_rx,
             connection_data_tx,
@@ -79,6 +82,7 @@ impl Connection {
             main_shutdown_rx,
             connection_data_tx,
             connection_state_tx,
+            rpc_ids,
         ));
 
         let message_handle = tokio::spawn(message_loop(
@@ -134,6 +138,7 @@ async fn connection_loop(
     mut shutdown_rx: oneshot::Receiver<()>,
     connection_data_tx: UnboundedSender<ConnectionData>,
     connection_state_tx: UnboundedSender<ConnectionState>,
+    rpc_ids: RpcIds,
 ) {
     let mut endpoint_idx = 0;
     let mut current_backoff = Connection::BACKOFF_BASE;
@@ -176,6 +181,8 @@ async fn connection_loop(
                             tracing::info!("EVM: disconnected {endpoint}");
                         }
 
+                        rpc_ids.clear_all();
+
                         if let Err(e) = connection_state_tx.send(ConnectionState::Disconnected) {
                             tracing::error!("Failed to send disconnected state: {}", e);
                         }
@@ -192,6 +199,8 @@ async fn connection_loop(
                         tracing::error!("EVM: connect error to {endpoint}: {err:?}");
                         failures_in_cycle += 1;
                         endpoint_idx += 1; // cycle the endpoints
+
+                        rpc_ids.clear_all(); // clear pending requests on failure
 
                         // backoff before trying next endpoint
                         tokio::time::sleep(current_backoff).await;
@@ -317,7 +326,8 @@ mod test {
         let mut connection_data_rx = channels.subscription.connection_data_rx;
         let connection_send_rpc_tx = channels.subscription.connection_send_rpc_tx;
 
-        let _connection = Connection::new(endpoints, channels.connection);
+        let rpc_ids = RpcIds::new();
+        let _connection = Connection::new(rpc_ids.clone(), endpoints, channels.connection);
 
         let message_count = std::sync::Arc::new(tokio::sync::Mutex::new(0u32));
         let message_count_clone = message_count.clone();
@@ -335,7 +345,7 @@ mod test {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Send a subscription request for new block headers
-        let subscription_request = RpcRequest::new_heads();
+        let subscription_request = RpcRequest::new_heads(&rpc_ids);
 
         let result = timeout(Duration::from_secs(5), async {
             // Send subscription message
@@ -376,7 +386,8 @@ mod test {
         ];
 
         let channels = Channels::new();
-        let connection = Connection::new(endpoints, channels.connection);
+        let rpc_ids = RpcIds::new();
+        let connection = Connection::new(rpc_ids, endpoints, channels.connection);
 
         // Wait for connection to be established and current_endpoint to be set
         let result = timeout(Duration::from_secs(10), async {
@@ -421,7 +432,8 @@ mod test {
         let anvil_2_port = anvil_2.port();
 
         let channels = Channels::new();
-        let connection = Connection::new(endpoints, channels.connection);
+        let rpc_ids = RpcIds::new();
+        let connection = Connection::new(rpc_ids, endpoints, channels.connection);
 
         // Step 1: Wait for initial connection to anvil_1
         let result = timeout(Duration::from_secs(10), async {

@@ -4,7 +4,7 @@ use alloy_primitives::{Address, B256};
 use serde::ser::{Serialize, SerializeMap, SerializeStruct, Serializer};
 use slotmap::Key;
 
-use super::id::{RpcId, RpcRequestKind};
+use super::id::{RpcId, RpcIds, RpcRequestKind};
 
 /// Outbound JSON-RPC request
 ///
@@ -24,10 +24,35 @@ impl RpcRequest {
         }
     }
 
+    /// Subscribe to new block headers (`newHeads`).
+    pub fn new_heads(rpc_ids: &RpcIds) -> Self {
+        Self::subscribe(rpc_ids, SubscribeParams::NewHeads)
+    }
+
+    /// Subscribe to new pending transactions (`newPendingTransactions`).
+    pub fn new_pending_transactions(rpc_ids: &RpcIds) -> Self {
+        Self::subscribe(rpc_ids, SubscribeParams::NewPendingTransactions)
+    }
+
+    /// Subscribe to logs with an optional address/topic filter.
+    pub fn logs(rpc_ids: &RpcIds, addresses: HashSet<Address>, topics: HashSet<B256>) -> Self {
+        Self::subscribe(rpc_ids, SubscribeParams::Logs { addresses, topics })
+    }
+
+    /// Create an unsubscribe request.
+    pub fn unsubscribe(rpc_ids: &RpcIds, subscription_id: String) -> Self {
+        Self::Unsubscribe {
+            id: rpc_ids.insert(RpcRequestKind::Unsubscribe {
+                subscription_id: subscription_id.clone(),
+            }),
+            subscription_id,
+        }
+    }
+
     /// Create a new subscribe request with auto-generated ID.
-    pub fn subscribe(params: SubscribeParams) -> Self {
+    fn subscribe(rpc_ids: &RpcIds, params: SubscribeParams) -> Self {
         Self::Subscribe {
-            id: RpcId::new(match params.clone() {
+            id: rpc_ids.insert(match params.clone() {
                 SubscribeParams::NewHeads => RpcRequestKind::SubscribeNewHeads,
                 SubscribeParams::Logs { addresses, topics } => {
                     RpcRequestKind::SubscribeLogs { addresses, topics }
@@ -37,31 +62,6 @@ impl RpcRequest {
                 }
             }),
             params,
-        }
-    }
-
-    /// Subscribe to new block headers (`newHeads`).
-    pub fn new_heads() -> Self {
-        Self::subscribe(SubscribeParams::NewHeads)
-    }
-
-    /// Subscribe to new pending transactions (`newPendingTransactions`).
-    pub fn new_pending_transactions() -> Self {
-        Self::subscribe(SubscribeParams::NewPendingTransactions)
-    }
-
-    /// Subscribe to logs with an optional address/topic filter.
-    pub fn logs(addresses: HashSet<Address>, topics: HashSet<B256>) -> Self {
-        Self::subscribe(SubscribeParams::Logs { addresses, topics })
-    }
-
-    /// Create an unsubscribe request.
-    pub fn unsubscribe(subscription_id: String) -> Self {
-        Self::Unsubscribe {
-            id: RpcId::new(RpcRequestKind::Unsubscribe {
-                subscription_id: subscription_id.clone(),
-            }),
-            subscription_id,
         }
     }
 }
@@ -176,16 +176,21 @@ impl Serialize for SubscribeParams {
 
 #[cfg(test)]
 mod tests {
+    use crate::subsystems::trigger::streams::evm_stream::client::rpc_types::id::RpcIds;
+
     use super::*;
     use alloy_primitives::{address, b256};
     use serde_json::Value;
 
     #[test]
     fn rpc_request_serialization() {
+        let rpc_ids = RpcIds::new();
         // Test NewHeads subscription
-        let req = RpcRequest::new_heads();
+        let req = RpcRequest::new_heads(&rpc_ids);
         let json = serde_json::to_string(&req).unwrap();
         let parsed: Value = serde_json::from_str(&json).unwrap();
+
+        let rpc_ids = RpcIds::new();
 
         assert_eq!(parsed["jsonrpc"], "2.0");
         assert_eq!(parsed["method"], "eth_subscribe");
@@ -193,7 +198,7 @@ mod tests {
         assert!(parsed["id"].is_number());
 
         // Test NewPendingTransactions subscription
-        let req = RpcRequest::new_pending_transactions();
+        let req = RpcRequest::new_pending_transactions(&rpc_ids);
         let json = serde_json::to_string(&req).unwrap();
         let parsed: Value = serde_json::from_str(&json).unwrap();
 
@@ -207,6 +212,7 @@ mod tests {
 
         // Test Logs subscription with address and topics
         let req = RpcRequest::logs(
+            &rpc_ids,
             [address!("0x1234567890abcdef1234567890abcdef12345678")]
                 .into_iter()
                 .collect(),
@@ -229,6 +235,7 @@ mod tests {
 
         // Test Logs subscription with multiple address and topics
         let req = RpcRequest::logs(
+            &rpc_ids,
             [
                 address!("0x1234567890abcdef1234567890abcdef12345678"),
                 address!("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"),
@@ -257,7 +264,7 @@ mod tests {
         );
 
         // Test Logs subscription with no filters
-        let req = RpcRequest::logs(HashSet::new(), HashSet::new());
+        let req = RpcRequest::logs(&rpc_ids, HashSet::new(), HashSet::new());
         let json = serde_json::to_string(&req).unwrap();
         let parsed: Value = serde_json::from_str(&json).unwrap();
 
@@ -268,7 +275,7 @@ mod tests {
         assert!(parsed["id"].is_number());
 
         // Test Unsubscribe
-        let req = RpcRequest::unsubscribe("0x123abc".to_string());
+        let req = RpcRequest::unsubscribe(&rpc_ids, "0x123abc".to_string());
         let json = serde_json::to_string(&req).unwrap();
         let parsed: Value = serde_json::from_str(&json).unwrap();
 
@@ -278,8 +285,8 @@ mod tests {
         assert!(parsed["id"].is_number());
 
         // Test that IDs are unique across requests
-        let req1 = RpcRequest::new_heads();
-        let req2 = RpcRequest::new_heads();
+        let req1 = RpcRequest::new_heads(&rpc_ids);
+        let req2 = RpcRequest::new_heads(&rpc_ids);
         let json1 = serde_json::to_string(&req1).unwrap();
         let json2 = serde_json::to_string(&req2).unwrap();
         let parsed1: Value = serde_json::from_str(&json1).unwrap();
@@ -289,7 +296,10 @@ mod tests {
         // Type safety - ensure we can match on the enum variants
         match req1 {
             RpcRequest::Subscribe { id, params } => {
-                assert!(matches!(id.kind(), Some(RpcRequestKind::SubscribeNewHeads)));
+                assert!(matches!(
+                    rpc_ids.kind(id),
+                    Some(RpcRequestKind::SubscribeNewHeads)
+                ));
                 match params {
                     SubscribeParams::NewHeads => { /* expected */ }
                     _ => panic!("Expected NewHeads params"),
@@ -298,12 +308,12 @@ mod tests {
             RpcRequest::Unsubscribe { .. } => panic!("Expected Subscribe variant"),
         }
 
-        match RpcRequest::unsubscribe("test".to_string()) {
+        match RpcRequest::unsubscribe(&rpc_ids, "test".to_string()) {
             RpcRequest::Unsubscribe {
                 id,
                 subscription_id,
             } => {
-                match id.kind() {
+                match rpc_ids.kind(id) {
                     Some(RpcRequestKind::Unsubscribe { subscription_id }) => {
                         assert_eq!(subscription_id, "test")
                     }

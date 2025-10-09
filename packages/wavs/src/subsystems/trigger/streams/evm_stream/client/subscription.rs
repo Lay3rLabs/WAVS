@@ -15,7 +15,7 @@ use super::{
     channels::SubscriptionChannels,
     connection::{ConnectionData, ConnectionState},
     rpc_types::{
-        id::{RpcId, RpcRequestKind},
+        id::{RpcId, RpcIds, RpcRequestKind},
         inbound::{RpcInbound, RpcResponse, RpcSubscriptionEvent},
         outbound::RpcRequest,
     },
@@ -28,7 +28,7 @@ pub struct Subscriptions {
 }
 
 impl Subscriptions {
-    pub fn new(channels: SubscriptionChannels) -> Self {
+    pub fn new(rpc_ids: RpcIds, channels: SubscriptionChannels) -> Self {
         let SubscriptionChannels {
             mut subscription_block_height_tx,
             mut subscription_log_tx,
@@ -38,7 +38,7 @@ impl Subscriptions {
             mut connection_data_rx,
         } = channels;
 
-        let inner = Arc::new(SubscriptionsInner::new(connection_send_rpc_tx));
+        let inner = Arc::new(SubscriptionsInner::new(rpc_ids, connection_send_rpc_tx));
 
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
 
@@ -183,18 +183,23 @@ struct SubscriptionsInner {
     // not really a subscription, but used to track connection state
     _is_connected: AtomicBool,
     ids: SubscriptionIds,
+    rpc_ids: RpcIds,
     rpc_ids_in_flight: RpcIdsInFlight,
     _connection_send_rpc_tx: tokio::sync::mpsc::UnboundedSender<RpcRequest>,
 }
 
 impl SubscriptionsInner {
-    pub fn new(connection_send_rpc_tx: tokio::sync::mpsc::UnboundedSender<RpcRequest>) -> Self {
+    pub fn new(
+        rpc_ids: RpcIds,
+        connection_send_rpc_tx: tokio::sync::mpsc::UnboundedSender<RpcRequest>,
+    ) -> Self {
         Self {
             _blocks: AtomicBool::new(false),
             _logs: std::sync::RwLock::new(None),
             _pending_transactions: AtomicBool::new(false),
             _is_connected: AtomicBool::new(false),
             ids: SubscriptionIds::default(),
+            rpc_ids,
             rpc_ids_in_flight: RpcIdsInFlight::default(),
             _connection_send_rpc_tx: connection_send_rpc_tx,
         }
@@ -282,7 +287,6 @@ impl SubscriptionsInner {
             .store(value, std::sync::atomic::Ordering::SeqCst);
 
         if !value {
-            RpcId::clear_all();
             self.ids.clear();
             self.rpc_ids_in_flight.clear();
         } else {
@@ -335,15 +339,21 @@ impl SubscriptionsInner {
                 );
             }
         }
-        self.rpc_ids_in_flight.insert(req.id());
-        self._connection_send_rpc_tx.send(req)
+
+        // this should always be Some here, but better safe than sorry
+        if let Some(kind) = self.rpc_ids.kind(req.id()) {
+            self.rpc_ids_in_flight.insert(req.id(), kind);
+            self._connection_send_rpc_tx.send(req)?;
+        };
+
+        Ok(())
     }
 
     fn on_received_rpc_response(&self, id: RpcId, response: RpcResponse) {
         let removed_rpc_in_flight_state = self.rpc_ids_in_flight.remove(&id);
         // since we clear the rpc ids (and sub ids) on disconnect,
         // we can be sure that any new subscription id we get is for this connection
-        let kind = match id.kind() {
+        let kind = match self.rpc_ids.kind(id) {
             Some(kind) => kind,
             None => {
                 tracing::warn!(
@@ -360,8 +370,10 @@ impl SubscriptionsInner {
                     removed_rpc_in_flight_state,
                     Some(RpcFlightState::UnsubscribeOnLand)
                 ) {
-                    if let Err(e) = self.send_rpc(RpcRequest::unsubscribe(subscription_id.clone()))
-                    {
+                    if let Err(e) = self.send_rpc(RpcRequest::unsubscribe(
+                        &self.rpc_ids,
+                        subscription_id.clone(),
+                    )) {
                         tracing::error!(
                             "EVM: failed to send unsubscribe request for subscription id {}: {}",
                             subscription_id,
@@ -497,7 +509,7 @@ impl SubscriptionsInner {
 
         // unsubscribe the active subscriptions
         for id in ids {
-            if let Err(e) = self.send_rpc(RpcRequest::unsubscribe(id.clone())) {
+            if let Err(e) = self.send_rpc(RpcRequest::unsubscribe(&self.rpc_ids, id.clone())) {
                 tracing::error!(
                     "EVM: failed to send unsubscribe request for subscription id {}: {}",
                     id,
@@ -521,7 +533,7 @@ impl SubscriptionsInner {
                     .rpc_ids_in_flight
                     .will_subscribe(RpcRequestKind::SubscribeNewHeads)
             {
-                if let Err(e) = self.send_rpc(RpcRequest::new_heads()) {
+                if let Err(e) = self.send_rpc(RpcRequest::new_heads(&self.rpc_ids)) {
                     tracing::error!("EVM: failed to send newHeads subscription request: {}", e);
                 }
             } else {
@@ -545,7 +557,9 @@ impl SubscriptionsInner {
                         topics: topics.clone(),
                     })
                 {
-                    if let Err(e) = self.send_rpc(RpcRequest::logs(addresses, topics)) {
+                    if let Err(e) =
+                        self.send_rpc(RpcRequest::logs(&self.rpc_ids, addresses, topics))
+                    {
                         tracing::error!("EVM: failed to send logs subscription request: {}", e);
                     }
                 } else {
@@ -564,7 +578,7 @@ impl SubscriptionsInner {
                     .rpc_ids_in_flight
                     .will_subscribe(RpcRequestKind::SubscribeNewPendingTransactions)
             {
-                if let Err(e) = self.send_rpc(RpcRequest::new_pending_transactions()) {
+                if let Err(e) = self.send_rpc(RpcRequest::new_pending_transactions(&self.rpc_ids)) {
                     tracing::error!(
                         "EVM: failed to send newPendingTransactions subscription request: {}",
                         e
@@ -726,14 +740,11 @@ impl RpcIdsInFlight {
         self._lookup.write().unwrap().clear();
     }
 
-    fn insert(&self, id: RpcId) {
-        // this should always be Some, we don't clear_all() before here... but better safe than sorry
-        if let Some(kind) = id.kind() {
-            self._lookup
-                .write()
-                .unwrap()
-                .insert(id, RpcFlightState::ActivateOnLand { kind });
-        }
+    fn insert(&self, id: RpcId, kind: RpcRequestKind) {
+        self._lookup
+            .write()
+            .unwrap()
+            .insert(id, RpcFlightState::ActivateOnLand { kind });
     }
 
     // We want to unsubscribe *all* subscriptions of a given kind, irregardless of log filter

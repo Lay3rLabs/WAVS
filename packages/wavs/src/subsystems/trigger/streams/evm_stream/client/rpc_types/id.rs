@@ -1,27 +1,36 @@
-use std::{
-    collections::HashSet,
-    sync::{Arc, LazyLock},
-};
+use std::{collections::HashSet, sync::Arc};
 
 use alloy_primitives::{Address, B256};
 use slotmap::{new_key_type, SlotMap};
 
-new_key_type! {
-    pub struct RpcId;
+#[derive(Clone)]
+pub struct RpcIds {
+    lookup: Arc<std::sync::RwLock<SlotMap<RpcId, RpcRequestKind>>>,
 }
 
-impl RpcId {
-    pub fn new(kind: RpcRequestKind) -> Self {
-        RPC_REQUEST_ID.write().unwrap().insert(kind)
+impl RpcIds {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        Self {
+            lookup: Arc::new(std::sync::RwLock::new(SlotMap::with_key())),
+        }
     }
 
-    pub fn kind(&self) -> Option<RpcRequestKind> {
-        RPC_REQUEST_ID.read().unwrap().get(*self).cloned()
+    pub fn insert(&self, kind: RpcRequestKind) -> RpcId {
+        self.lookup.write().unwrap().insert(kind)
     }
 
-    pub fn clear_all() {
-        RPC_REQUEST_ID.write().unwrap().clear();
+    pub fn kind(&self, id: RpcId) -> Option<RpcRequestKind> {
+        self.lookup.read().unwrap().get(id).cloned()
     }
+
+    pub fn clear_all(&self) {
+        self.lookup.write().unwrap().clear();
+    }
+}
+
+new_key_type! {
+    pub struct RpcId;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +45,3 @@ pub enum RpcRequestKind {
         subscription_id: String,
     },
 }
-
-static RPC_REQUEST_ID: LazyLock<Arc<std::sync::RwLock<SlotMap<RpcId, RpcRequestKind>>>> =
-    LazyLock::new(|| Arc::new(std::sync::RwLock::new(SlotMap::with_key())));

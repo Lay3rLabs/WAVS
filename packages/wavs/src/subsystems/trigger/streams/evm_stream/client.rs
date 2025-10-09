@@ -15,6 +15,8 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use channels::Channels;
 
+use crate::subsystems::trigger::streams::evm_stream::client::rpc_types::id::RpcIds;
+
 pub struct EvmTriggerStreams {
     pub controller: EvmTriggerStreamsController,
     pub block_height_stream: UnboundedReceiverStream<u64>,
@@ -31,9 +33,11 @@ impl EvmTriggerStreams {
     pub fn new(ws_endpoints: Vec<String>) -> Self {
         let channels = Channels::new();
 
-        let subscriptions = Subscriptions::new(channels.subscription);
+        let rpc_ids = RpcIds::new();
 
-        let connection = Connection::new(ws_endpoints, channels.connection);
+        let subscriptions = Subscriptions::new(rpc_ids.clone(), channels.subscription);
+
+        let connection = Connection::new(rpc_ids, ws_endpoints, channels.connection);
 
         Self {
             controller: EvmTriggerStreamsController {
