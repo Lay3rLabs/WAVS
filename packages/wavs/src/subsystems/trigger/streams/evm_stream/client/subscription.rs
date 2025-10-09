@@ -69,7 +69,7 @@ impl Subscriptions {
                                                 RpcInbound::Subscription{id, result } => {
                                                     match result {
                                                         Ok(event) => {
-                                                            inner.on_recieved_subscription_event(
+                                                            inner.on_received_subscription_event(
                                                                 &mut subscription_block_height_tx,
                                                                 &mut subscription_log_tx,
                                                                 &mut subscription_new_pending_transaction_tx,
