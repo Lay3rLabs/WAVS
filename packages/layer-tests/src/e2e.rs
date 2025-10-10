@@ -78,9 +78,16 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     let meter = opentelemetry::global::meter("wavs_test_metrics");
     let metrics = Metrics::new(meter);
 
+    let middleware_type = match config.middleware_type {
+        crate::config::MiddlewareType::Eigenlayer => {
+            utils::test_utils::middleware::MiddlewareType::Eigenlayer
+        }
+        crate::config::MiddlewareType::Poa => utils::test_utils::middleware::MiddlewareType::Poa,
+    };
+
     let configs: Configs = config.into();
 
-    let handles = AppHandles::start(&ctx, &configs, metrics);
+    let handles = AppHandles::start(&ctx, &configs, metrics, middleware_type);
     tracing::info!("Background processes started");
 
     let mut kill_receiver = ctx.get_kill_receiver();

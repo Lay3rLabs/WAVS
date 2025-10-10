@@ -17,10 +17,19 @@ pub struct TestConfig {
     pub mode: TestMode,
     pub middleware_concurrency: bool,
     pub wavs_concurrency: bool,
+    pub middleware_type: MiddlewareType,
     pub jaeger: Option<String>,
     pub prometheus: Option<String>,
     _log_levels: Vec<String>,
     _data_dir: PathBuf,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MiddlewareType {
+    #[default]
+    Eigenlayer,
+    Poa,
 }
 
 impl ConfigExt for TestConfig {
@@ -48,6 +57,7 @@ impl Default for TestConfig {
                 .collect(),
             wavs_concurrency: true,
             middleware_concurrency: false,
+            middleware_type: MiddlewareType::default(),
             jaeger: None,
             prometheus: None,
             _data_dir: tempfile::tempdir().unwrap().keep(),
