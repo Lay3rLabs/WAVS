@@ -44,6 +44,21 @@ while let Some((chain, log)) = unified_logs.next().await {
 
 For transaction broadcasting, use a separate client (e.g., alloy Provider with HTTP endpoints).
 
+### Potential Duplicate Triggers
+
+To ensure reliable delivery, some RPC providers may **replay recent events** when a WebSocket connection reconnects.  
+This can cause **duplicate triggers** to be delivered even though the events were already processed.  
+This behavior is normal for most Ethereum RPC providers.
+
+**Common scenarios include:**
+- Reconnecting after a brief network interruption  
+- Switching to an RPC endpoint that is still catching up on blocks  
+- Automatic subscription resubmission after a disconnection  
+
+**For component developers:**  
+Use `host::get_event_id()` to obtain a unique identifier for each trigger.  
+If your component needs to handle deduplication, use the available storage buckets to track processed events.
+
 ### API Rate Limit Optimization
 **This client is designed to minimize network traffic and respect third-party API rate limits.** It intelligently manages subscriptions to avoid unnecessary requests:
 
