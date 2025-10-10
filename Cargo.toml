@@ -25,7 +25,7 @@ split-debuginfo = "unpacked"
 
 [workspace.package]
 edition = "2021"
-version = "1.4.1"
+version = "1.5.0"
 license = "GPL-3.0-or-later"
 authors = ["Layer Labs (Cayman)"]
 repository = "https://github.com/Lay3rLabs/WAVS"
@@ -140,7 +140,7 @@ wasmtime = { version = "37.0.1", features = [
 wasmtime-wasi = { version = "37.0.1", default-features = true }
 wasmtime-wasi-http = "37.0.1"
 wit-bindgen = "0.46.0"
-wavs-wasi-utils = "1.2.0"
+wavs-wasi-utils = "1.2.1"
 
 # benchmarking
 criterion = { version = "0.7.0", features = ["async_tokio"] }
