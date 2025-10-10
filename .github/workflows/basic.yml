@@ -19,7 +19,7 @@ env:
 
 jobs:
   test:
-    name: Test Suite
+    name: Test Suite (EigenLayer)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +36,41 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Configure EigenLayer middleware
+        run: |
+          sed -i 's/middleware_type = ".*"/middleware_type = "eigenlayer"/' packages/layer-tests/layer-tests.toml
+
+      - name: Build tests first
+        run: cargo test --workspace --no-run --locked
+
+      - name: Run tests
+        run: cargo test --workspace --locked --all-features -- --nocapture --test-threads=4
+        env:
+          RUST_LOG: info
+
+  test-poa:
+    name: Test Suite (POA)
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.90.0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Configure POA middleware
+        run: |
+          sed -i 's/middleware_type = ".*"/middleware_type = "poa"/' packages/layer-tests/layer-tests.toml
 
       - name: Build tests first
         run: cargo test --workspace --no-run --locked
