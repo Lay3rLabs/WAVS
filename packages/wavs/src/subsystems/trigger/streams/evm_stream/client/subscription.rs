@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
@@ -61,7 +61,17 @@ impl Subscriptions {
                                                 RpcInbound::Response {id, result} => {
                                                     match result {
                                                         Ok(response) => {
-                                                            inner.on_received_rpc_response(id, response);
+                                                            if let Some((subscription_id, mut events)) = inner.on_received_rpc_response(id, response) {
+                                                                while let Some(event) = events.pop_front() {
+                                                                    inner.on_received_subscription_event(
+                                                                        &mut subscription_block_height_tx,
+                                                                        &mut subscription_log_tx,
+                                                                        &mut subscription_new_pending_transaction_tx,
+                                                                        subscription_id.clone(),
+                                                                        event,
+                                                                    );
+                                                                }
+                                                            }
                                                         }
                                                         Err(err) => {
                                                             tracing::error!("EVM: RPC error for id {}: {:?}", id.data().as_ffi(), err);
@@ -151,7 +161,20 @@ impl Subscriptions {
     }
 
     pub fn active_subscriptions(&self) -> HashMap<String, SubscriptionKind> {
-        self.inner.ids._lookup.read().unwrap().clone()
+        self.inner
+            .ids
+            ._lookup
+            .read()
+            .unwrap()
+            .iter()
+            .filter_map(|(id, entry)| {
+                if matches!(entry.state, SubscriptionState::Active) {
+                    Some((id.clone(), entry.kind.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -354,7 +377,11 @@ impl SubscriptionsInner {
         Ok(())
     }
 
-    fn on_received_rpc_response(&self, id: RpcId, response: RpcResponse) {
+    fn on_received_rpc_response(
+        &self,
+        id: RpcId,
+        response: RpcResponse,
+    ) -> Option<(String, VecDeque<RpcSubscriptionEvent>)> {
         let removed_rpc_in_flight_state = self.rpc_ids_in_flight.remove(&id);
         // since we clear the rpc ids (and sub ids) on disconnect,
         // we can be sure that any new subscription id we get is for this connection
@@ -365,7 +392,7 @@ impl SubscriptionsInner {
                     "EVM: received response for unknown RPC id {}",
                     id.data().as_ffi()
                 );
-                return;
+                return None;
             }
         };
         match response {
@@ -385,7 +412,7 @@ impl SubscriptionsInner {
                             e
                         );
                     }
-                    return; // we are done here, don't track this subscription
+                    return None; // we are done here, don't track this subscription
                 }
 
                 match SubscriptionKind::try_from(kind) {
@@ -421,6 +448,9 @@ impl SubscriptionsInner {
                                 "EVM: failed to unsubscribe from subscription id {}",
                                 subscription_id
                             );
+                            if let Some(events) = self.ids.reactivate(&subscription_id) {
+                                return Some((subscription_id, events));
+                            }
                         }
                         _ => {
                             tracing::error!(
@@ -439,6 +469,7 @@ impl SubscriptionsInner {
                 );
             }
         }
+        None
     }
 
     fn on_received_subscription_event(
@@ -451,15 +482,41 @@ impl SubscriptionsInner {
     ) {
         match event {
             RpcSubscriptionEvent::NewHeads(header) => {
-                if !self.ids.compare(&subscription_id, |kind| {
+                match self.ids.compare_with_state(&subscription_id, |kind| {
                     matches!(kind, SubscriptionKind::NewHeads)
                 }) {
-                    tracing::warn!(
-                        "EVM: received newHeads event for unknown subscription id {}",
-                        subscription_id
-                    );
-                } else if let Err(e) = subscription_block_height_tx.send(header.number) {
-                    tracing::error!("EVM: failed to send new block height: {}", e);
+                    SubscriptionCompareResult::Missing => {
+                        tracing::warn!(
+                            "EVM: received newHeads event for unknown subscription id {}",
+                            subscription_id
+                        );
+                    }
+                    SubscriptionCompareResult::KindMismatch => {
+                        tracing::warn!(
+                            "EVM: received newHeads event for subscription id {} with mismatched kind",
+                            subscription_id
+                        );
+                    }
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::Active) => {
+                        if let Err(e) = subscription_block_height_tx.send(header.number) {
+                            tracing::error!("EVM: failed to send new block height: {}", e);
+                        }
+                    }
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::PendingDisable) => {
+                        tracing::debug!(
+                            "EVM: buffering newHeads event for subscription id {} while unsubscribe is pending",
+                            subscription_id
+                        );
+                        if let Err(RpcSubscriptionEvent::NewHeads(_header)) = self
+                            .ids
+                            .buffer_event(&subscription_id, RpcSubscriptionEvent::NewHeads(header))
+                        {
+                            tracing::warn!(
+                                "EVM: failed to buffer newHeads event for subscription id {}",
+                                subscription_id
+                            );
+                        }
+                    }
                 }
             }
             RpcSubscriptionEvent::Logs(log) => {
@@ -473,44 +530,94 @@ impl SubscriptionsInner {
                     log.topics()
                 );
 
-                if !self.ids.compare(&subscription_id, |kind| {
+                match self.ids.compare_with_state(&subscription_id, |kind| {
                     matches!(kind, SubscriptionKind::Logs { .. })
                 }) {
-                    tracing::warn!(
-                        "EVM: received logs event for unknown subscription id {}",
-                        subscription_id
-                    );
-                } else {
-                    tracing::info!("EVM: forwarding log event to channel");
-                    if let Err(e) = subscription_log_tx.send(log) {
-                        tracing::error!("EVM: failed to send log: {}", e);
-                    } else {
-                        tracing::info!("EVM: successfully sent log event to channel");
+                    SubscriptionCompareResult::Missing => {
+                        tracing::warn!(
+                            "EVM: received logs event for unknown subscription id {}",
+                            subscription_id
+                        );
+                    }
+                    SubscriptionCompareResult::KindMismatch => {
+                        tracing::warn!(
+                            "EVM: received logs event for subscription id {} with mismatched kind",
+                            subscription_id
+                        );
+                    }
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::Active) => {
+                        tracing::info!("EVM: forwarding log event to channel");
+                        if let Err(e) = subscription_log_tx.send(log) {
+                            tracing::error!("EVM: failed to send log: {}", e);
+                        } else {
+                            tracing::info!("EVM: successfully sent log event to channel");
+                        }
+                    }
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::PendingDisable) => {
+                        tracing::debug!(
+                            "EVM: buffering log event for subscription id {} while unsubscribe is pending",
+                            subscription_id
+                        );
+                        if let Err(RpcSubscriptionEvent::Logs(_log)) = self
+                            .ids
+                            .buffer_event(&subscription_id, RpcSubscriptionEvent::Logs(log))
+                        {
+                            tracing::warn!(
+                                "EVM: failed to buffer log event for subscription id {}",
+                                subscription_id
+                            );
+                        }
                     }
                 }
             }
             RpcSubscriptionEvent::NewPendingTransaction(tx) => {
-                if !self.ids.compare(&subscription_id, |kind| {
+                match self.ids.compare_with_state(&subscription_id, |kind| {
                     matches!(kind, SubscriptionKind::NewPendingTransactions)
                 }) {
-                    tracing::warn!(
-                        "EVM: received newPendingTransaction event for unknown subscription id {}",
-                        subscription_id
-                    );
-                }
-
-                if let Err(e) = subscription_new_pending_transaction_tx.send(tx) {
-                    tracing::error!("EVM: failed to send new pending transaction: {}", e);
+                    SubscriptionCompareResult::Missing => {
+                        tracing::warn!(
+                            "EVM: received newPendingTransaction event for unknown subscription id {}",
+                            subscription_id
+                        );
+                    }
+                    SubscriptionCompareResult::KindMismatch => {
+                        tracing::warn!(
+                            "EVM: received newPendingTransaction event for subscription id {} with mismatched kind",
+                            subscription_id
+                        );
+                    }
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::Active) => {
+                        if let Err(e) = subscription_new_pending_transaction_tx.send(tx) {
+                            tracing::error!("EVM: failed to send new pending transaction: {}", e);
+                        }
+                    }
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::PendingDisable) => {
+                        tracing::debug!(
+                            "EVM: buffering newPendingTransaction event for subscription id {} while unsubscribe is pending",
+                            subscription_id
+                        );
+                        if let Err(RpcSubscriptionEvent::NewPendingTransaction(_tx)) =
+                            self.ids.buffer_event(
+                                &subscription_id,
+                                RpcSubscriptionEvent::NewPendingTransaction(tx),
+                            )
+                        {
+                            tracing::warn!(
+                                "EVM: failed to buffer newPendingTransaction event for subscription id {}",
+                                subscription_id
+                            );
+                        }
+                    }
                 }
             }
         }
     }
 
     fn unsubscribe(&self, kind: UnsubscribeKind) {
-        let ids = self.ids.list_by_unsubscribe(kind);
-
         // mark the rpcs in flight to unsubscribe when they land
         self.rpc_ids_in_flight.set_unsubscribe(kind);
+
+        let ids = self.ids.mark_pending_disable(kind);
 
         // send the unsubscribe request for the active subscriptions
         // will actually unsubscribe when the ack response lands
@@ -604,9 +711,35 @@ struct LogFilter {
 
 #[derive(Default)]
 struct SubscriptionIds {
-    _lookup: std::sync::RwLock<std::collections::HashMap<String, SubscriptionKind>>,
-    _unsubscribe_lookup:
-        std::sync::RwLock<std::collections::HashMap<UnsubscribeKind, HashSet<String>>>,
+    _lookup: std::sync::RwLock<HashMap<String, SubscriptionEntry>>,
+    _unsubscribe_lookup: std::sync::RwLock<HashMap<UnsubscribeKind, HashSet<String>>>,
+}
+
+struct SubscriptionEntry {
+    kind: SubscriptionKind,
+    state: SubscriptionState,
+}
+
+enum SubscriptionState {
+    Active,
+    PendingDisable {
+        buffered_events: VecDeque<RpcSubscriptionEvent>,
+    },
+}
+
+impl SubscriptionState {
+    fn status(&self) -> SubscriptionEntryStatus {
+        match self {
+            SubscriptionState::Active => SubscriptionEntryStatus::Active,
+            SubscriptionState::PendingDisable { .. } => SubscriptionEntryStatus::PendingDisable,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum SubscriptionEntryStatus {
+    Active,
+    PendingDisable,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -686,29 +819,46 @@ impl SubscriptionIds {
             .or_default()
             .insert(id.clone());
 
-        self._lookup.write().unwrap().insert(id.clone(), kind);
+        self._lookup.write().unwrap().insert(
+            id,
+            SubscriptionEntry {
+                kind,
+                state: SubscriptionState::Active,
+            },
+        );
     }
 
     fn any(&self, kind: SubscriptionKind) -> bool {
-        // small optimization, can check Unsubscribe lookup in some cases and avoid iterating over key by key
-        let unsubscribe_kind = UnsubscribeKind::from(&kind);
-        match unsubscribe_kind {
-            UnsubscribeKind::NewHeads | UnsubscribeKind::NewPendingTransactions => self
-                ._unsubscribe_lookup
-                .read()
-                .unwrap()
-                .get(&unsubscribe_kind)
-                .and_then(|ids| if ids.is_empty() { None } else { Some(()) })
-                .is_some(),
-            _ => self._lookup.read().unwrap().values().any(|k| *k == kind),
-        }
+        self._lookup
+            .read()
+            .unwrap()
+            .values()
+            .any(|entry| entry.kind == kind && matches!(entry.state, SubscriptionState::Active))
     }
 
-    fn list_by_unsubscribe(&self, kind: UnsubscribeKind) -> Vec<String> {
-        match self._unsubscribe_lookup.read().unwrap().get(&kind) {
-            Some(ids) => ids.iter().cloned().collect(),
-            None => vec![],
+    fn mark_pending_disable(&self, kind: UnsubscribeKind) -> Vec<String> {
+        let mut ids_to_unsubscribe = Vec::new();
+
+        if let Some(ids) = self._unsubscribe_lookup.read().unwrap().get(&kind) {
+            ids_to_unsubscribe.extend(ids.iter().cloned());
         }
+
+        if ids_to_unsubscribe.is_empty() {
+            return ids_to_unsubscribe;
+        }
+
+        let mut lookup = self._lookup.write().unwrap();
+        for id in &ids_to_unsubscribe {
+            if let Some(entry) = lookup.get_mut(id) {
+                if matches!(entry.state, SubscriptionState::Active) {
+                    entry.state = SubscriptionState::PendingDisable {
+                        buffered_events: VecDeque::new(),
+                    };
+                }
+            }
+        }
+
+        ids_to_unsubscribe
     }
 
     fn remove(&self, id: &str) {
@@ -718,12 +868,57 @@ impl SubscriptionIds {
         }
     }
 
-    fn compare(&self, id: &str, f: impl FnOnce(&SubscriptionKind) -> bool) -> bool {
+    fn compare_with_state(
+        &self,
+        id: &str,
+        f: impl FnOnce(&SubscriptionKind) -> bool,
+    ) -> SubscriptionCompareResult {
         match self._lookup.read().unwrap().get(id) {
-            None => false,
-            Some(kind) => f(kind),
+            None => SubscriptionCompareResult::Missing,
+            Some(entry) => {
+                if !f(&entry.kind) {
+                    SubscriptionCompareResult::KindMismatch
+                } else {
+                    SubscriptionCompareResult::Status(entry.state.status())
+                }
+            }
         }
     }
+
+    fn buffer_event(
+        &self,
+        id: &str,
+        event: RpcSubscriptionEvent,
+    ) -> Result<(), RpcSubscriptionEvent> {
+        let mut lookup = self._lookup.write().unwrap();
+        match lookup.get_mut(id) {
+            Some(SubscriptionEntry {
+                state: SubscriptionState::PendingDisable { buffered_events },
+                ..
+            }) => {
+                buffered_events.push_back(event);
+                Ok(())
+            }
+            _ => Err(event),
+        }
+    }
+
+    fn reactivate(&self, id: &str) -> Option<VecDeque<RpcSubscriptionEvent>> {
+        let mut lookup = self._lookup.write().unwrap();
+        match lookup.get_mut(id) {
+            Some(entry) => match std::mem::replace(&mut entry.state, SubscriptionState::Active) {
+                SubscriptionState::Active => None,
+                SubscriptionState::PendingDisable { buffered_events } => Some(buffered_events),
+            },
+            None => None,
+        }
+    }
+}
+
+enum SubscriptionCompareResult {
+    Missing,
+    KindMismatch,
+    Status(SubscriptionEntryStatus),
 }
 
 #[derive(Default)]
@@ -789,5 +984,128 @@ impl RpcIdsInFlight {
             .unwrap()
             .values()
             .any(|state| matches!(state, RpcFlightState::ActivateOnLand { .. }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_inner() -> SubscriptionsInner {
+        let rpc_ids = RpcIds::new();
+        let (connection_send_rpc_tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        SubscriptionsInner::new(rpc_ids, connection_send_rpc_tx)
+    }
+
+    #[test]
+    fn buffers_and_replays_events_when_unsubscribe_fails() {
+        let inner = make_inner();
+
+        let subscription_id = "sub-logs-1".to_string();
+        inner.ids.insert(
+            subscription_id.clone(),
+            SubscriptionKind::Logs {
+                addresses: HashSet::new(),
+                topics: HashSet::new(),
+            },
+        );
+
+        let mut marked = inner
+            .ids
+            .mark_pending_disable(UnsubscribeKind::AllLogs)
+            .into_iter()
+            .collect::<Vec<_>>();
+        assert_eq!(marked.len(), 1);
+        assert_eq!(marked.pop().unwrap(), subscription_id);
+
+        let (mut block_tx, _block_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (mut log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (mut pending_tx, _pending_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let sample_log = Log::default();
+
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            subscription_id.clone(),
+            RpcSubscriptionEvent::Logs(sample_log.clone()),
+        );
+
+        assert!(
+            log_rx.try_recv().is_err(),
+            "log should be buffered while unsubscribe pending"
+        );
+
+        let rpc_id = inner.rpc_ids.insert(RpcRequestKind::Unsubscribe {
+            subscription_id: subscription_id.clone(),
+        });
+
+        let replay = inner.on_received_rpc_response(rpc_id, RpcResponse::UnsubscribeAck(false));
+        let (replayed_id, mut events) = replay.expect("unsubscribe failure should replay events");
+        assert_eq!(replayed_id, subscription_id);
+
+        while let Some(event) = events.pop_front() {
+            inner.on_received_subscription_event(
+                &mut block_tx,
+                &mut log_tx,
+                &mut pending_tx,
+                subscription_id.clone(),
+                event,
+            );
+        }
+
+        let forwarded = log_rx
+            .try_recv()
+            .expect("buffered event should be forwarded after unsubscribe fails");
+        assert_eq!(forwarded, sample_log);
+    }
+
+    #[test]
+    fn buffered_events_dropped_after_successful_unsubscribe() {
+        let inner = make_inner();
+
+        let subscription_id = "sub-logs-2".to_string();
+        inner.ids.insert(
+            subscription_id.clone(),
+            SubscriptionKind::Logs {
+                addresses: HashSet::new(),
+                topics: HashSet::new(),
+            },
+        );
+
+        inner.ids.mark_pending_disable(UnsubscribeKind::AllLogs);
+
+        let (mut block_tx, _block_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (mut log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (mut pending_tx, _pending_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            subscription_id.clone(),
+            RpcSubscriptionEvent::Logs(Log::default()),
+        );
+
+        assert!(
+            log_rx.try_recv().is_err(),
+            "log should be buffered while unsubscribe pending"
+        );
+
+        let rpc_id = inner.rpc_ids.insert(RpcRequestKind::Unsubscribe {
+            subscription_id: subscription_id.clone(),
+        });
+
+        let replay = inner.on_received_rpc_response(rpc_id, RpcResponse::UnsubscribeAck(true));
+        assert!(
+            replay.is_none(),
+            "successful unsubscribe should not replay events"
+        );
+
+        assert!(
+            log_rx.try_recv().is_err(),
+            "log should be discarded after successful unsubscribe"
+        );
     }
 }
