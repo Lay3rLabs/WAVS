@@ -85,6 +85,12 @@ impl DevTriggerStreamsInfo {
             !info.any_active_rpcs_in_flight && info.is_connected && info.current_endpoint.is_some()
         })
     }
+
+    pub fn any_active_subscriptions(&self) -> bool {
+        self.chains
+            .values()
+            .any(|info| !info.active_subscriptions.is_empty())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]

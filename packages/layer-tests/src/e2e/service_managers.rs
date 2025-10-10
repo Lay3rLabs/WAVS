@@ -307,7 +307,11 @@ impl ServiceManagers {
 
             futures.push(async move {
                 // wait for the trigger streams to be ready before we update the service uri
-                wait_for_trigger_streams_to_finalize(&clients.http_client).await;
+                wait_for_trigger_streams_to_finalize(
+                    &clients.http_client,
+                    Some(service.manager.clone()),
+                )
+                .await;
 
                 mock_service_manager
                     .set_service_uri(service_url)
@@ -320,8 +324,8 @@ impl ServiceManagers {
                     .await
                     .unwrap();
 
-                // doesn't hurt to wait again in case trigger contract changed
-                wait_for_trigger_streams_to_finalize(&clients.http_client).await;
+                // doesn't hurt to wait again for rpcs at least in case trigger contract changed
+                wait_for_trigger_streams_to_finalize(&clients.http_client, None).await;
             });
         }
 
