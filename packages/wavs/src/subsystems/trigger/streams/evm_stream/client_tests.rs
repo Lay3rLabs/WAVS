@@ -584,8 +584,9 @@ async fn unsubscribe_log_stream(wait_for_subscriptions: bool) {
         .subscriptions
         .disable_logs(&[], &[EventEmitter::StringEvent::SIGNATURE_HASH]);
 
-    // in both cases we need to wait here, since we want to ensure the subscription landed
-    wait_for_all_rpc_requests_landed(&controller).await;
+    if wait_for_subscriptions {
+        wait_for_all_rpc_requests_landed(&controller).await;
+    }
 
     const LOGS_TO_COLLECT: usize = 6;
 

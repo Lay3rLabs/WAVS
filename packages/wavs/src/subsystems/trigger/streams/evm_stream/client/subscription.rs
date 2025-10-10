@@ -344,7 +344,12 @@ impl SubscriptionsInner {
         if let Some(kind) = self.rpc_ids.kind(req.id()) {
             self.rpc_ids_in_flight.insert(req.id(), kind);
             self._connection_send_rpc_tx.send(req)?;
-        };
+        } else {
+            tracing::warn!(
+                "couldn't get in-flight kind for rpc id {}",
+                req.id().data().as_ffi()
+            );
+        }
 
         Ok(())
     }
@@ -507,7 +512,8 @@ impl SubscriptionsInner {
         // mark the rpcs in flight to unsubscribe when they land
         self.rpc_ids_in_flight.set_unsubscribe(kind);
 
-        // unsubscribe the active subscriptions
+        // send the unsubscribe request for the active subscriptions
+        // will actually unsubscribe when the ack response lands
         for id in ids {
             if let Err(e) = self.send_rpc(RpcRequest::unsubscribe(&self.rpc_ids, id.clone())) {
                 tracing::error!(
@@ -516,7 +522,6 @@ impl SubscriptionsInner {
                     e
                 );
             }
-            self.ids.remove(&id);
         }
     }
 
