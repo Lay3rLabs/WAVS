@@ -1,8 +1,10 @@
 pub mod aggregator;
+use std::collections::HashMap;
+
 use super::Service;
 use crate::{
-    AnyChainConfig, ChainKey, ComponentDigest, ServiceDigest, ServiceId, ServiceManager, Trigger,
-    TriggerData, WorkflowId,
+    AnyChainConfig, ByteArray, ChainKey, ComponentDigest, ServiceDigest, ServiceId, ServiceManager,
+    Trigger, TriggerData, WorkflowId,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -70,4 +72,41 @@ pub struct SimulatedTriggerRequest {
 
 fn default_simulated_trigger_count() -> usize {
     1
+}
+
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct DevTriggerStreamsInfo {
+    pub chains: HashMap<ChainKey, DevTriggerStreamInfo>,
+}
+
+impl DevTriggerStreamsInfo {
+    pub fn finalized(&self) -> bool {
+        self.chains.values().all(|info| {
+            !info.any_active_rpcs_in_flight && info.is_connected && info.current_endpoint.is_some()
+        })
+    }
+
+    pub fn any_active_subscriptions(&self) -> bool {
+        self.chains
+            .values()
+            .any(|info| !info.active_subscriptions.is_empty())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct DevTriggerStreamInfo {
+    pub current_endpoint: Option<String>,
+    pub is_connected: bool,
+    pub any_active_rpcs_in_flight: bool,
+    pub active_subscriptions: HashMap<String, DevTriggerStreamSubscriptionKind>,
+}
+
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub enum DevTriggerStreamSubscriptionKind {
+    NewHeads,
+    Logs {
+        addresses: Vec<ByteArray<20>>,
+        topics: Vec<ByteArray<32>>,
+    },
+    NewPendingTransactions,
 }

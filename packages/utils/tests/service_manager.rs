@@ -1,9 +1,9 @@
-use alloy_node_bindings::Anvil;
 use utils::{
     evm_client::EvmSigningClient,
     init_tracing_tests,
     test_utils::{
         address::rand_address_evm,
+        anvil::safe_spawn_anvil,
         middleware::{AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig},
         mock_service_manager::MockServiceManager,
     },
@@ -13,7 +13,7 @@ use utils::{
 async fn service_manager_deployment() {
     init_tracing_tests();
 
-    let anvil = Anvil::new().spawn();
+    let anvil = safe_spawn_anvil();
 
     let client = EvmSigningClient::new_anvil(&anvil.endpoint())
         .await

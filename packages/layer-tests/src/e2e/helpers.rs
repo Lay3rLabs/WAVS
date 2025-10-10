@@ -6,10 +6,11 @@ use std::{collections::BTreeMap, num::NonZero, sync::Arc, time::Duration};
 use utils::evm_client::AnyNonceManager;
 use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
+use wavs_cli::clients::HttpClient;
 
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainKey, Component, Permissions, Service, ServiceManager,
-    ServiceStatus, SignatureKind, Submit, Trigger, Workflow,
+    AllowedHostPermission, ByteArray, ChainKey, Component, DevTriggerStreamSubscriptionKind,
+    Permissions, Service, ServiceManager, ServiceStatus, SignatureKind, Submit, Trigger, Workflow,
 };
 
 use crate::deployment::{ServiceDeployment, WorkflowDeployment};
@@ -538,4 +539,45 @@ pub async fn change_service_for_test(
                 .insert(workflow_id.clone(), deployed_workflow.workflow);
         }
     }
+}
+
+pub async fn wait_for_trigger_streams_to_finalize(
+    client: &HttpClient,
+    service_manager: Option<ServiceManager>,
+) {
+    tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            tracing::info!("Getting trigger stream info...");
+            let info = client.get_trigger_streams_info().await.unwrap();
+
+            if info.finalized() {
+                if let Some(service_manager) = &service_manager {
+                    match service_manager {
+                        ServiceManager::Evm { chain, address } => {
+                            let address = ByteArray::new(address.into_array());
+                            if info.chains.iter().any(|(key, value)| {
+                                key == chain
+                                    && value.active_subscriptions.values().any(|kind| match kind {
+                                        DevTriggerStreamSubscriptionKind::Logs {
+                                            addresses,
+                                            ..
+                                        } => addresses.contains(&address),
+                                        _ => false,
+                                    })
+                            }) {
+                                break;
+                            }
+                        }
+                    }
+                } else if info.any_active_subscriptions() {
+                    break;
+                }
+            } else {
+                tracing::warn!("Still waiting for trigger streams to finalize");
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .unwrap();
 }

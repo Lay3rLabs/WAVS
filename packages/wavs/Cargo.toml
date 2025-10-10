@@ -58,12 +58,15 @@ dashmap = { workspace = true }
 bimap = { workspace = true }
 crossbeam = { workspace = true }
 iri-string = { workspace = true }
+tokio-tungstenite = { workspace = true }
+slotmap = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
 wavs-benchmark-common = { workspace = true }
 utils = { workspace = true, features = ["test-utils"] }
 example-types = { workspace = true }
+alloy-node-bindings = { workspace = true }
 
 [[bench]]
 name = "intervals"

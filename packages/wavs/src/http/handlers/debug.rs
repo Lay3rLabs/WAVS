@@ -1,5 +1,10 @@
+use std::collections::HashMap;
+
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use wavs_types::{SimulatedTriggerRequest, TriggerAction, TriggerConfig};
+use wavs_types::{
+    ByteArray, ChainKey, DevTriggerStreamInfo, DevTriggerStreamSubscriptionKind,
+    DevTriggerStreamsInfo, SimulatedTriggerRequest, TriggerAction, TriggerConfig,
+};
 
 use crate::http::{error::HttpResult, state::HttpState};
 
@@ -65,4 +70,60 @@ async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> 
         }
     }
     Ok(())
+}
+
+#[utoipa::path(
+    get,
+    path = "/dev/trigger-streams",
+    responses(
+        (status = 200, description = "Trigger streams info", body = DevTriggerStreamsInfo),
+    ),
+    description = "Get health status of chain endpoints"
+)]
+#[axum::debug_handler]
+pub async fn handle_dev_trigger_streams_info(State(state): State<HttpState>) -> impl IntoResponse {
+    let chains = state
+        .dispatcher
+        .trigger_manager
+        .evm_controllers
+        .read()
+        .unwrap()
+        .iter()
+        .map(|(chain, controller)| {
+            (
+                chain.clone(),
+                DevTriggerStreamInfo {
+                    current_endpoint: controller.connection.current_endpoint(),
+                    is_connected: controller.subscriptions.is_connected(),
+                    any_active_rpcs_in_flight: controller.subscriptions.any_active_rpcs_in_flight(),
+                    active_subscriptions: controller
+                        .subscriptions
+                        .active_subscriptions()
+                        .iter()
+                        .map(|(id, kind)| {
+                            (
+                                id.clone(),
+                                match kind {
+                                    crate::subsystems::trigger::streams::evm_stream::client::SubscriptionKind::NewHeads => {
+                                        DevTriggerStreamSubscriptionKind::NewHeads
+                                    },
+                                    crate::subsystems::trigger::streams::evm_stream::client::SubscriptionKind::Logs { addresses, topics } => {
+                                        DevTriggerStreamSubscriptionKind::Logs{
+                                            addresses: addresses.iter().map(|a| ByteArray::new(a.into_array())).collect(),
+                                            topics: topics.iter().map(|t| ByteArray::new(t.0)).collect(),
+                                        }
+                                    },
+                                    crate::subsystems::trigger::streams::evm_stream::client::SubscriptionKind::NewPendingTransactions => {
+                                        DevTriggerStreamSubscriptionKind::NewPendingTransactions
+                                    }
+                                },
+                            )
+                        })
+                        .collect(),
+                },
+            )
+        })
+        .collect::<HashMap<ChainKey, DevTriggerStreamInfo>>();
+
+    Json(DevTriggerStreamsInfo { chains }).into_response()
 }
