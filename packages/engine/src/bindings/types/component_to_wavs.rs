@@ -134,7 +134,7 @@ impl TryFrom<component_service::ComponentSource> for wavs_types::ComponentSource
             }
             component_service::ComponentSource::Download(download) => {
                 wavs_types::ComponentSource::Download {
-                    uri: UriString::try_from(download.url)?,
+                    uri: UriString::try_from(download.uri)?,
                     digest: wavs_types::ComponentDigest::from_str(&download.digest)?,
                 }
             }

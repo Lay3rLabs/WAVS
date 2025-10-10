@@ -55,7 +55,7 @@ interface service {
     }
 
     record component-source-download {
-        url: string,
+        uri: string,
         digest: digest,
     }
 

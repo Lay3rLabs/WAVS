@@ -295,3 +295,7 @@ wasi-publish version component="*" flags="":
 	        fi; \
 	    done; \
 	fi
+
+# Convert line endings from DOS to Unix for all shell scripts in tools directory
+dos2unix-tools:
+    find tools -name "*.sh" -type f -exec dos2unix {} \;
