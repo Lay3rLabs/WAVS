@@ -533,10 +533,9 @@ impl SubscriptionsInner {
 
         // blocks/newHeads
         if self._blocks.load(std::sync::atomic::Ordering::SeqCst) {
-            if !self.ids.any(SubscriptionKind::NewHeads)
-                && !self
-                    .rpc_ids_in_flight
-                    .will_subscribe(RpcRequestKind::SubscribeNewHeads)
+            if !self
+                .rpc_ids_in_flight
+                .will_subscribe(RpcRequestKind::SubscribeNewHeads)
             {
                 if let Err(e) = self.send_rpc(RpcRequest::new_heads(&self.rpc_ids)) {
                     tracing::error!("EVM: failed to send newHeads subscription request: {}", e);
@@ -552,10 +551,7 @@ impl SubscriptionsInner {
             Some(LogFilter { addresses, topics }) => {
                 // logs is a bit tricky, the test is against the specific log filter, not just the high-level kind
                 // because we can have multiple different log filters active at once while they are still unsubscribed
-                if !self.ids.any(SubscriptionKind::Logs {
-                    addresses: addresses.clone(),
-                    topics: topics.clone(),
-                }) && !self
+                if !self
                     .rpc_ids_in_flight
                     .will_subscribe(RpcRequestKind::SubscribeLogs {
                         addresses: addresses.clone(),
@@ -578,10 +574,9 @@ impl SubscriptionsInner {
             ._pending_transactions
             .load(std::sync::atomic::Ordering::SeqCst)
         {
-            if !self.ids.any(SubscriptionKind::NewPendingTransactions)
-                && !self
-                    .rpc_ids_in_flight
-                    .will_subscribe(RpcRequestKind::SubscribeNewPendingTransactions)
+            if !self
+                .rpc_ids_in_flight
+                .will_subscribe(RpcRequestKind::SubscribeNewPendingTransactions)
             {
                 if let Err(e) = self.send_rpc(RpcRequest::new_pending_transactions(&self.rpc_ids)) {
                     tracing::error!(
@@ -687,21 +682,6 @@ impl SubscriptionIds {
             .insert(id.clone());
 
         self._lookup.write().unwrap().insert(id.clone(), kind);
-    }
-
-    fn any(&self, kind: SubscriptionKind) -> bool {
-        // small optimization, can check Unsubscribe lookup in some cases and avoid iterating over key by key
-        let unsubscribe_kind = UnsubscribeKind::from(&kind);
-        match unsubscribe_kind {
-            UnsubscribeKind::NewHeads | UnsubscribeKind::NewPendingTransactions => self
-                ._unsubscribe_lookup
-                .read()
-                .unwrap()
-                .get(&unsubscribe_kind)
-                .and_then(|ids| if ids.is_empty() { None } else { Some(()) })
-                .is_some(),
-            _ => self._lookup.read().unwrap().values().any(|k| *k == kind),
-        }
     }
 
     fn list_by_unsubscribe(&self, kind: UnsubscribeKind) -> Vec<String> {
