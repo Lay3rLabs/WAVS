@@ -547,6 +547,7 @@ pub async fn wait_for_trigger_streams_to_finalize(
 ) {
     tokio::time::timeout(Duration::from_secs(30), async {
         loop {
+            tracing::info!("Getting trigger stream info...");
             let info = client.get_trigger_streams_info().await.unwrap();
 
             if info.finalized() {
