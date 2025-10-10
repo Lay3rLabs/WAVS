@@ -1,11 +1,10 @@
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    hash::Hash,
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
 
-use alloy_primitives::{Address, TxHash, B256};
+use alloy_primitives::{Address, B256};
 use alloy_rpc_types_eth::Log;
 use slotmap::Key;
 use tokio::{sync::oneshot, task::JoinHandle};
@@ -209,7 +208,6 @@ struct SubscriptionsInner {
     ids: SubscriptionIds,
     rpc_ids: RpcIds,
     rpc_ids_in_flight: RpcIdsInFlight,
-    dedupe: EventDedupe,
     _connection_send_rpc_tx: tokio::sync::mpsc::UnboundedSender<RpcRequest>,
 }
 
@@ -226,7 +224,6 @@ impl SubscriptionsInner {
             ids: SubscriptionIds::default(),
             rpc_ids,
             rpc_ids_in_flight: RpcIdsInFlight::default(),
-            dedupe: EventDedupe::new(),
             _connection_send_rpc_tx: connection_send_rpc_tx,
         }
     }
@@ -548,51 +545,29 @@ impl SubscriptionsInner {
                             subscription_id
                         );
                     }
-                    SubscriptionCompareResult::Status(status) => match status {
-                        SubscriptionEntryStatus::Active
-                        | SubscriptionEntryStatus::PendingDisable => {
-                            if !self.dedupe.should_forward_log(&log) {
-                                tracing::debug!(
-                                    "EVM: dropping duplicate log event (subscription_id={}, block_hash={:?}, tx_hash={:?}, log_index={:?})",
-                                    subscription_id,
-                                    log.block_hash,
-                                    log.transaction_hash,
-                                    log.log_index
-                                );
-                                return;
-                            }
-
-                            match status {
-                                SubscriptionEntryStatus::Active => {
-                                    tracing::info!("EVM: forwarding log event to channel");
-                                    if let Err(e) = subscription_log_tx.send(log) {
-                                        tracing::error!("EVM: failed to send log: {}", e);
-                                    } else {
-                                        tracing::info!(
-                                            "EVM: successfully sent log event to channel"
-                                        );
-                                    }
-                                }
-                                SubscriptionEntryStatus::PendingDisable => {
-                                    tracing::debug!(
-                                        "EVM: buffering log event for subscription id {} while unsubscribe is pending",
-                                        subscription_id
-                                    );
-                                    if let Err(RpcSubscriptionEvent::Logs(_log)) =
-                                        self.ids.buffer_event(
-                                            &subscription_id,
-                                            RpcSubscriptionEvent::Logs(log),
-                                        )
-                                    {
-                                        tracing::warn!(
-                                            "EVM: failed to buffer log event for subscription id {}",
-                                            subscription_id
-                                        );
-                                    }
-                                }
-                            }
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::Active) => {
+                        tracing::info!("EVM: forwarding log event to channel");
+                        if let Err(e) = subscription_log_tx.send(log) {
+                            tracing::error!("EVM: failed to send log: {}", e);
+                        } else {
+                            tracing::info!("EVM: successfully sent log event to channel");
                         }
-                    },
+                    }
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::PendingDisable) => {
+                        tracing::debug!(
+                            "EVM: buffering log event for subscription id {} while unsubscribe is pending",
+                            subscription_id
+                        );
+                        if let Err(RpcSubscriptionEvent::Logs(_log)) = self
+                            .ids
+                            .buffer_event(&subscription_id, RpcSubscriptionEvent::Logs(log))
+                        {
+                            tracing::warn!(
+                                "EVM: failed to buffer log event for subscription id {}",
+                                subscription_id
+                            );
+                        }
+                    }
                 }
             }
             RpcSubscriptionEvent::NewPendingTransaction(tx) => {
@@ -1012,87 +987,9 @@ impl RpcIdsInFlight {
     }
 }
 
-#[derive(Debug)]
-struct EventDedupe {
-    logs: Mutex<DedupeBuffer<LogIdentity>>,
-}
-
-impl EventDedupe {
-    fn new() -> Self {
-        Self {
-            logs: Mutex::new(DedupeBuffer::new(4096)),
-        }
-    }
-
-    fn should_forward_log(&self, log: &Log) -> bool {
-        let Some(block_hash) = log.block_hash else {
-            return true;
-        };
-        let Some(tx_hash) = log.transaction_hash else {
-            return true;
-        };
-        let Some(log_index) = log.log_index else {
-            return true;
-        };
-
-        let identity = LogIdentity {
-            block_hash,
-            tx_hash,
-            log_index,
-        };
-
-        self.logs.lock().unwrap().record(identity)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct LogIdentity {
-    block_hash: B256,
-    tx_hash: TxHash,
-    log_index: u64,
-}
-
-#[derive(Debug)]
-struct DedupeBuffer<K> {
-    set: HashSet<K>,
-    order: VecDeque<K>,
-    capacity: usize,
-}
-
-impl<K> DedupeBuffer<K>
-where
-    K: Eq + Hash + Clone,
-{
-    fn new(capacity: usize) -> Self {
-        Self {
-            set: HashSet::new(),
-            order: VecDeque::with_capacity(capacity),
-            capacity,
-        }
-    }
-
-    fn record(&mut self, key: K) -> bool {
-        if self.set.contains(&key) {
-            return false;
-        }
-
-        self.set.insert(key.clone());
-        self.order.push_back(key);
-
-        if self.order.len() > self.capacity {
-            if let Some(oldest) = self.order.pop_front() {
-                self.set.remove(&oldest);
-            }
-        }
-
-        true
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::{Address, LogData, TxHash, B256};
 
     fn make_inner() -> SubscriptionsInner {
         let rpc_ids = RpcIds::new();
@@ -1209,86 +1106,6 @@ mod tests {
         assert!(
             log_rx.try_recv().is_err(),
             "log should be discarded after successful unsubscribe"
-        );
-    }
-
-    fn make_test_log(block_hash: B256, tx_hash: TxHash, log_index: u64) -> Log {
-        let mut log = Log::<LogData>::default();
-        log.inner.address = Address::ZERO;
-        log.block_hash = Some(block_hash);
-        log.transaction_hash = Some(tx_hash);
-        log.log_index = Some(log_index);
-        log.transaction_index = Some(0);
-        log
-    }
-
-    #[test]
-    fn duplicate_logs_are_suppressed() {
-        let inner = make_inner();
-
-        let subscription_id = "sub-logs-dedupe".to_string();
-        inner.ids.insert(
-            subscription_id.clone(),
-            SubscriptionKind::Logs {
-                addresses: HashSet::new(),
-                topics: HashSet::new(),
-            },
-        );
-
-        let (mut block_tx, _block_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (mut log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel();
-        let (mut pending_tx, _pending_rx) = tokio::sync::mpsc::unbounded_channel();
-
-        let block_hash = B256::repeat_byte(1);
-        let tx_hash = TxHash::repeat_byte(2);
-
-        let log = make_test_log(block_hash, tx_hash, 5);
-
-        inner.on_received_subscription_event(
-            &mut block_tx,
-            &mut log_tx,
-            &mut pending_tx,
-            subscription_id.clone(),
-            RpcSubscriptionEvent::Logs(log.clone()),
-        );
-
-        assert!(log_rx.try_recv().is_ok(), "first log should be forwarded");
-
-        inner.on_received_subscription_event(
-            &mut block_tx,
-            &mut log_tx,
-            &mut pending_tx,
-            subscription_id.clone(),
-            RpcSubscriptionEvent::Logs(log.clone()),
-        );
-
-        assert!(
-            log_rx.try_recv().is_err(),
-            "duplicate log should be suppressed"
-        );
-
-        // Simulate a new subscription id after resubscribe.
-        inner.ids.remove(&subscription_id);
-        let new_subscription_id = "sub-logs-dedupe-new".to_string();
-        inner.ids.insert(
-            new_subscription_id.clone(),
-            SubscriptionKind::Logs {
-                addresses: HashSet::new(),
-                topics: HashSet::new(),
-            },
-        );
-
-        inner.on_received_subscription_event(
-            &mut block_tx,
-            &mut log_tx,
-            &mut pending_tx,
-            new_subscription_id,
-            RpcSubscriptionEvent::Logs(log),
-        );
-
-        assert!(
-            log_rx.try_recv().is_err(),
-            "duplicate log should still be suppressed after resubscribe"
         );
     }
 }
