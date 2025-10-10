@@ -215,9 +215,11 @@ impl ServiceManagers {
                 .await
                 .unwrap();
 
-            let operator_client = clients.get_evm_client(&test.service_manager_chain);
-            let operator_address = operator_client.address();
-            let operator_private_key = const_hex::encode(operator_client.signer.to_bytes());
+            let operator_signer =
+                utils::evm_client::signing::make_signer(&self.configs.mnemonics.wavs, Some(0))
+                    .unwrap();
+            let operator_address = operator_signer.address();
+            let operator_private_key = const_hex::encode(operator_signer.to_bytes());
 
             let signing_signer = utils::evm_client::signing::make_signer(
                 &self.configs.mnemonics.wavs,

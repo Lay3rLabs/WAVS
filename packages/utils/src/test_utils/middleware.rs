@@ -13,6 +13,9 @@ use tokio::process::Command;
 
 pub const MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/wavs-middleware:0.5.0-beta.10";
 pub const POA_MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/poa-middleware:1.0.1";
+pub const ANVIL_DEPLOYER_KEY: &str =
+    "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+pub const ANVIL_DEPLOYER_ADDRESS: &str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MiddlewareType {
@@ -220,7 +223,7 @@ impl MiddlewareInstanceInner {
                 .args([
                     "exec",
                     "-e",
-                    &format!("FUNDED_KEY={deployer_key_hex}"),
+                    &format!("FUNDED_KEY={}", deployer_key_hex),
                     "-e",
                     &format!("RPC_URL={rpc_url}"),
                     "-e",
@@ -256,7 +259,6 @@ impl MiddlewareInstanceInner {
             addresses: PoaAddresses,
         }
 
-        // https://github.com/Lay3rLabs/poa-middleware/blob/095670eb3c206f0e6c8c6951f6b81e601f989b39/contracts/script/ecdsa/POAMiddlewareDeployer.s.sol#L79-L91
         #[derive(Deserialize)]
         struct PoaAddresses {
             #[serde(rename = "POAStakeRegistry")]
@@ -268,15 +270,44 @@ impl MiddlewareInstanceInner {
         let deployment_json: PoaDeploymentJson = serde_json::from_str(&output)
             .map_err(|e| anyhow::anyhow!("Failed to parse POA deployment JSON: {}", e))?;
 
+        let poa_address = deployment_json.addresses.poa_stake_registry;
+
+        let res = tokio::time::timeout(
+            Self::DEFAULT_TIMEOUT,
+            Command::new("docker")
+                .args([
+                    "exec",
+                    &self.container_id,
+                    "cast",
+                    "send",
+                    &format!("{}", poa_address),
+                    "transferOwnership(address)",
+                    ANVIL_DEPLOYER_ADDRESS,
+                    "--private-key",
+                    &deployer_key_hex,
+                    "--rpc-url",
+                    &rpc_url,
+                ])
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .spawn()?
+                .wait(),
+        )
+        .await??;
+
+        if !res.success() {
+            bail!("Failed to transfer POA ownership to ANVIL deployer");
+        }
+
         Ok(MiddlewareServiceManager {
-            deployer_key_hex,
+            deployer_key_hex: ANVIL_DEPLOYER_KEY.to_string(),
             rpc_url,
             id,
-            address: deployment_json.addresses.poa_stake_registry,
+            address: poa_address,
             proxy_admin: deployment_json.addresses.proxy_admin,
-            impl_address: deployment_json.addresses.poa_stake_registry,
-            stake_registry_address: deployment_json.addresses.poa_stake_registry,
-            stake_registry_impl_address: deployment_json.addresses.poa_stake_registry,
+            impl_address: poa_address,
+            stake_registry_address: poa_address,
+            stake_registry_impl_address: poa_address,
         })
     }
 
@@ -344,9 +375,6 @@ impl MiddlewareInstanceInner {
         service_manager: &MiddlewareServiceManager,
         config: &MiddlewareServiceManagerConfig,
     ) -> Result<()> {
-        // At the moment poa-middleware doesnt have a batch configuration endpoint
-        // https://github.com/Lay3rLabs/poa-middleware/blob/095670eb3c206f0e6c8c6951f6b81e601f989b39/scripts/ecdsa/owner_operation.sh#L41-L48
-        // register each operator with weight
         for i in 0..config.operators.len() {
             let operator = &config.operators[i];
             let weight = &config.weights[i];
@@ -357,7 +385,7 @@ impl MiddlewareInstanceInner {
                     .args([
                         "exec",
                         "-e",
-                        &format!("FUNDED_KEY={}", service_manager.deployer_key_hex),
+                        &format!("FUNDED_KEY={}", ANVIL_DEPLOYER_KEY),
                         "-e",
                         &format!("RPC_URL={}", service_manager.rpc_url),
                         "-e",
@@ -383,10 +411,9 @@ impl MiddlewareInstanceInner {
             }
 
             // set signing key for each operator
-            let operator_key = avs_operator
-                .operator_private_key
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Operator private key required for POA middleware"))?;
+            let operator_key = avs_operator.operator_private_key.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("Operator private key required for POA middleware")
+            })?;
             let signing_key = avs_operator
                 .signer_private_key
                 .as_ref()
@@ -423,14 +450,13 @@ impl MiddlewareInstanceInner {
             }
         }
 
-        // set quorum
         let res = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
             Command::new("docker")
                 .args([
                     "exec",
                     "-e",
-                    &format!("FUNDED_KEY={}", service_manager.deployer_key_hex),
+                    &format!("FUNDED_KEY={}", ANVIL_DEPLOYER_KEY),
                     "-e",
                     &format!("RPC_URL={}", service_manager.rpc_url),
                     "-e",
@@ -513,7 +539,7 @@ impl MiddlewareInstanceInner {
                             "setServiceURI(string)",
                             service_uri,
                             "--private-key",
-                            &service_manager.deployer_key_hex,
+                            ANVIL_DEPLOYER_KEY,
                             "--rpc-url",
                             &service_manager.rpc_url,
                         ])
@@ -525,7 +551,10 @@ impl MiddlewareInstanceInner {
                 .await??;
 
                 if !res.success() {
-                    bail!("Failed to set service URI for address {}", service_manager.address);
+                    bail!(
+                        "Failed to set service URI for address {}",
+                        service_manager.address
+                    );
                 }
 
                 Ok(())
