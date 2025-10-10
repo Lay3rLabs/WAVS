@@ -484,41 +484,44 @@ impl SubscriptionsInner {
         event: RpcSubscriptionEvent,
     ) {
         match event {
-            RpcSubscriptionEvent::NewHeads(header) => match self.ids.entry_info(&subscription_id) {
-                None => {
-                    tracing::warn!(
-                        "EVM: received newHeads event for unknown subscription id {}",
-                        subscription_id
-                    );
-                }
-                Some(SubscriptionInfo::NewHeads(SubscriptionEntryStatus::Active)) => {
-                    if let Err(e) = subscription_block_height_tx.send(header.number) {
-                        tracing::error!("EVM: failed to send new block height: {}", e);
-                    }
-                }
-                Some(SubscriptionInfo::NewHeads(SubscriptionEntryStatus::PendingDisable)) => {
-                    tracing::debug!(
-                        "EVM: buffering newHeads event for subscription id {} while unsubscribe is pending",
-                        subscription_id
-                    );
-                    if let Err(RpcSubscriptionEvent::NewHeads(_header)) = self
-                        .ids
-                        .buffer_event(&subscription_id, RpcSubscriptionEvent::NewHeads(header))
-                    {
+            RpcSubscriptionEvent::NewHeads(header) => {
+                match self.ids.compare_with_state(&subscription_id, |kind| {
+                    matches!(kind, SubscriptionKind::NewHeads)
+                }) {
+                    SubscriptionCompareResult::Missing => {
                         tracing::warn!(
-                            "EVM: failed to buffer newHeads event for subscription id {}",
+                            "EVM: received newHeads event for unknown subscription id {}",
                             subscription_id
                         );
                     }
+                    SubscriptionCompareResult::KindMismatch => {
+                        tracing::warn!(
+                            "EVM: received newHeads event for subscription id {} with mismatched kind",
+                            subscription_id
+                        );
+                    }
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::Active) => {
+                        if let Err(e) = subscription_block_height_tx.send(header.number) {
+                            tracing::error!("EVM: failed to send new block height: {}", e);
+                        }
+                    }
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::PendingDisable) => {
+                        tracing::debug!(
+                            "EVM: buffering newHeads event for subscription id {} while unsubscribe is pending",
+                            subscription_id
+                        );
+                        if let Err(RpcSubscriptionEvent::NewHeads(_header)) = self
+                            .ids
+                            .buffer_event(&subscription_id, RpcSubscriptionEvent::NewHeads(header))
+                        {
+                            tracing::warn!(
+                                "EVM: failed to buffer newHeads event for subscription id {}",
+                                subscription_id
+                            );
+                        }
+                    }
                 }
-                Some(other) => {
-                    tracing::warn!(
-                        "EVM: received newHeads event for subscription id {} with mismatched kind",
-                        subscription_id
-                    );
-                    tracing::debug!("EVM: subscription info mismatch: {:?}", other);
-                }
-            },
+            }
             RpcSubscriptionEvent::Logs(log) => {
                 tracing::info!(
                     "EVM: received log event for subscription id {}",
@@ -530,78 +533,90 @@ impl SubscriptionsInner {
                     log.topics()
                 );
 
-                match self.ids.entry_info(&subscription_id) {
-                    None => {
+                match self.ids.compare_with_state(&subscription_id, |kind| {
+                    matches!(kind, SubscriptionKind::Logs { .. })
+                }) {
+                    SubscriptionCompareResult::Missing => {
                         tracing::warn!(
                             "EVM: received logs event for unknown subscription id {}",
                             subscription_id
                         );
                     }
-                    Some(SubscriptionInfo::Logs {
-                        status,
-                        fingerprint,
-                    }) => match status {
-                        SubscriptionEntryStatus::Active => {
-                            if !self.dedupe.should_forward_log(&fingerprint, &log) {
+                    SubscriptionCompareResult::KindMismatch => {
+                        tracing::warn!(
+                            "EVM: received logs event for subscription id {} with mismatched kind",
+                            subscription_id
+                        );
+                    }
+                    SubscriptionCompareResult::Status(status) => match status {
+                        SubscriptionEntryStatus::Active
+                        | SubscriptionEntryStatus::PendingDisable => {
+                            if !self.dedupe.should_forward_log(&log) {
                                 tracing::debug!(
-                                    "EVM: dropping duplicate log event (fingerprint_len={}, block_hash={:?}, tx_hash={:?}, log_index={:?})",
-                                    fingerprint.len(),
+                                    "EVM: dropping duplicate log event (subscription_id={}, block_hash={:?}, tx_hash={:?}, log_index={:?})",
+                                    subscription_id,
                                     log.block_hash,
                                     log.transaction_hash,
                                     log.log_index
                                 );
                                 return;
                             }
-                            tracing::info!("EVM: forwarding log event to channel");
-                            if let Err(e) = subscription_log_tx.send(log) {
-                                tracing::error!("EVM: failed to send log: {}", e);
-                            } else {
-                                tracing::info!("EVM: successfully sent log event to channel");
-                            }
-                        }
-                        SubscriptionEntryStatus::PendingDisable => {
-                            tracing::debug!(
-                                "EVM: buffering log event for subscription id {} while unsubscribe is pending",
-                                subscription_id
-                            );
-                            if let Err(RpcSubscriptionEvent::Logs(_log)) = self
-                                .ids
-                                .buffer_event(&subscription_id, RpcSubscriptionEvent::Logs(log))
-                            {
-                                tracing::warn!(
-                                    "EVM: failed to buffer log event for subscription id {}",
-                                    subscription_id
-                                );
+
+                            match status {
+                                SubscriptionEntryStatus::Active => {
+                                    tracing::info!("EVM: forwarding log event to channel");
+                                    if let Err(e) = subscription_log_tx.send(log) {
+                                        tracing::error!("EVM: failed to send log: {}", e);
+                                    } else {
+                                        tracing::info!(
+                                            "EVM: successfully sent log event to channel"
+                                        );
+                                    }
+                                }
+                                SubscriptionEntryStatus::PendingDisable => {
+                                    tracing::debug!(
+                                        "EVM: buffering log event for subscription id {} while unsubscribe is pending",
+                                        subscription_id
+                                    );
+                                    if let Err(RpcSubscriptionEvent::Logs(_log)) =
+                                        self.ids.buffer_event(
+                                            &subscription_id,
+                                            RpcSubscriptionEvent::Logs(log),
+                                        )
+                                    {
+                                        tracing::warn!(
+                                            "EVM: failed to buffer log event for subscription id {}",
+                                            subscription_id
+                                        );
+                                    }
+                                }
                             }
                         }
                     },
-                    Some(other) => {
-                        tracing::warn!(
-                            "EVM: received logs event for subscription id {} with mismatched kind",
-                            subscription_id
-                        );
-                        tracing::debug!("EVM: subscription info mismatch: {:?}", other);
-                    }
                 }
             }
             RpcSubscriptionEvent::NewPendingTransaction(tx) => {
-                match self.ids.entry_info(&subscription_id) {
-                    None => {
+                match self.ids.compare_with_state(&subscription_id, |kind| {
+                    matches!(kind, SubscriptionKind::NewPendingTransactions)
+                }) {
+                    SubscriptionCompareResult::Missing => {
                         tracing::warn!(
                             "EVM: received newPendingTransaction event for unknown subscription id {}",
                             subscription_id
                         );
                     }
-                    Some(SubscriptionInfo::NewPendingTransactions(
-                        SubscriptionEntryStatus::Active,
-                    )) => {
+                    SubscriptionCompareResult::KindMismatch => {
+                        tracing::warn!(
+                            "EVM: received newPendingTransaction event for subscription id {} with mismatched kind",
+                            subscription_id
+                        );
+                    }
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::Active) => {
                         if let Err(e) = subscription_new_pending_transaction_tx.send(tx) {
                             tracing::error!("EVM: failed to send new pending transaction: {}", e);
                         }
                     }
-                    Some(SubscriptionInfo::NewPendingTransactions(
-                        SubscriptionEntryStatus::PendingDisable,
-                    )) => {
+                    SubscriptionCompareResult::Status(SubscriptionEntryStatus::PendingDisable) => {
                         tracing::debug!(
                             "EVM: buffering newPendingTransaction event for subscription id {} while unsubscribe is pending",
                             subscription_id
@@ -617,13 +632,6 @@ impl SubscriptionsInner {
                                 subscription_id
                             );
                         }
-                    }
-                    Some(other) => {
-                        tracing::warn!(
-                            "EVM: received newPendingTransaction event for subscription id {} with mismatched kind",
-                            subscription_id
-                        );
-                        tracing::debug!("EVM: subscription info mismatch: {:?}", other);
                     }
                 }
             }
@@ -734,7 +742,6 @@ struct SubscriptionIds {
 
 struct SubscriptionEntry {
     kind: SubscriptionKind,
-    fingerprint: Option<LogSubscriptionFingerprint>,
     state: SubscriptionState,
 }
 
@@ -758,16 +765,6 @@ impl SubscriptionState {
 enum SubscriptionEntryStatus {
     Active,
     PendingDisable,
-}
-
-#[derive(Debug, Clone)]
-enum SubscriptionInfo {
-    NewHeads(SubscriptionEntryStatus),
-    Logs {
-        status: SubscriptionEntryStatus,
-        fingerprint: LogSubscriptionFingerprint,
-    },
-    NewPendingTransactions(SubscriptionEntryStatus),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -847,18 +844,10 @@ impl SubscriptionIds {
             .or_default()
             .insert(id.clone());
 
-        let fingerprint = match &kind {
-            SubscriptionKind::Logs { addresses, topics } => {
-                Some(LogSubscriptionFingerprint::new(addresses, topics))
-            }
-            _ => None,
-        };
-
         self._lookup.write().unwrap().insert(
             id,
             SubscriptionEntry {
                 kind,
-                fingerprint,
                 state: SubscriptionState::Active,
             },
         );
@@ -904,25 +893,21 @@ impl SubscriptionIds {
         }
     }
 
-    fn entry_info(&self, id: &str) -> Option<SubscriptionInfo> {
-        let lookup = self._lookup.read().unwrap();
-        let entry = lookup.get(id)?;
-        let status = entry.state.status();
-
-        Some(match &entry.kind {
-            SubscriptionKind::NewHeads => SubscriptionInfo::NewHeads(status),
-            SubscriptionKind::Logs { .. } => SubscriptionInfo::Logs {
-                status,
-                fingerprint: entry
-                    .fingerprint
-                    .as_ref()
-                    .expect("log subscription missing fingerprint")
-                    .clone(),
-            },
-            SubscriptionKind::NewPendingTransactions => {
-                SubscriptionInfo::NewPendingTransactions(status)
+    fn compare_with_state(
+        &self,
+        id: &str,
+        f: impl FnOnce(&SubscriptionKind) -> bool,
+    ) -> SubscriptionCompareResult {
+        match self._lookup.read().unwrap().get(id) {
+            None => SubscriptionCompareResult::Missing,
+            Some(entry) => {
+                if !f(&entry.kind) {
+                    SubscriptionCompareResult::KindMismatch
+                } else {
+                    SubscriptionCompareResult::Status(entry.state.status())
+                }
             }
-        })
+        }
     }
 
     fn buffer_event(
@@ -953,6 +938,12 @@ impl SubscriptionIds {
             None => None,
         }
     }
+}
+
+enum SubscriptionCompareResult {
+    Missing,
+    KindMismatch,
+    Status(SubscriptionEntryStatus),
 }
 
 #[derive(Default)]
@@ -1033,7 +1024,7 @@ impl EventDedupe {
         }
     }
 
-    fn should_forward_log(&self, fingerprint: &LogSubscriptionFingerprint, log: &Log) -> bool {
+    fn should_forward_log(&self, log: &Log) -> bool {
         let Some(block_hash) = log.block_hash else {
             return true;
         };
@@ -1045,7 +1036,6 @@ impl EventDedupe {
         };
 
         let identity = LogIdentity {
-            fingerprint: fingerprint.clone(),
             block_hash,
             tx_hash,
             log_index,
@@ -1055,40 +1045,8 @@ impl EventDedupe {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct LogSubscriptionFingerprint(Arc<[u8]>);
-
-impl LogSubscriptionFingerprint {
-    fn new(addresses: &HashSet<Address>, topics: &HashSet<B256>) -> Self {
-        let mut encoded = Vec::with_capacity(
-            addresses.len() * Address::len_bytes() + topics.len() * B256::len_bytes() + 1, // +1 for the delimiter
-        );
-
-        let mut address_bytes: Vec<&[u8]> = addresses.iter().map(|addr| addr.as_slice()).collect();
-        address_bytes.sort_unstable();
-        for addr in address_bytes {
-            encoded.extend_from_slice(addr);
-        }
-
-        encoded.push(0xFF); // delimiter between address and topic segments
-
-        let mut topic_bytes: Vec<&[u8]> = topics.iter().map(|topic| topic.as_slice()).collect();
-        topic_bytes.sort_unstable();
-        for topic in topic_bytes {
-            encoded.extend_from_slice(topic);
-        }
-
-        Self(encoded.into())
-    }
-
-    fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct LogIdentity {
-    fingerprint: LogSubscriptionFingerprint,
     block_hash: B256,
     tx_hash: TxHash,
     log_index: u64,
@@ -1134,7 +1092,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::{Address, TxHash, B256};
+    use alloy_primitives::{Address, LogData, TxHash, B256};
 
     fn make_inner() -> SubscriptionsInner {
         let rpc_ids = RpcIds::new();
@@ -1255,7 +1213,7 @@ mod tests {
     }
 
     fn make_test_log(block_hash: B256, tx_hash: TxHash, log_index: u64) -> Log {
-        let mut log = Log::default();
+        let mut log = Log::<LogData>::default();
         log.inner.address = Address::ZERO;
         log.block_hash = Some(block_hash);
         log.transaction_hash = Some(tx_hash);
@@ -1268,28 +1226,11 @@ mod tests {
     fn duplicate_logs_are_suppressed() {
         let inner = make_inner();
 
-        let subscription_id_1 = "sub-logs-dedupe-1".to_string();
-        let subscription_id_2 = "sub-logs-dedupe-2".to_string();
-        let subscription_id_3 = "sub-logs-dedupe-3".to_string();
-
+        let subscription_id = "sub-logs-dedupe".to_string();
         inner.ids.insert(
-            subscription_id_1.clone(),
+            subscription_id.clone(),
             SubscriptionKind::Logs {
                 addresses: HashSet::new(),
-                topics: HashSet::new(),
-            },
-        );
-        inner.ids.insert(
-            subscription_id_2.clone(),
-            SubscriptionKind::Logs {
-                addresses: HashSet::new(),
-                topics: HashSet::new(),
-            },
-        );
-        inner.ids.insert(
-            subscription_id_3.clone(),
-            SubscriptionKind::Logs {
-                addresses: HashSet::from([Address::from([3u8; 20])]),
                 topics: HashSet::new(),
             },
         );
@@ -1307,7 +1248,7 @@ mod tests {
             &mut block_tx,
             &mut log_tx,
             &mut pending_tx,
-            subscription_id_1.clone(),
+            subscription_id.clone(),
             RpcSubscriptionEvent::Logs(log.clone()),
         );
 
@@ -1317,7 +1258,7 @@ mod tests {
             &mut block_tx,
             &mut log_tx,
             &mut pending_tx,
-            subscription_id_1.clone(),
+            subscription_id.clone(),
             RpcSubscriptionEvent::Logs(log.clone()),
         );
 
@@ -1326,30 +1267,28 @@ mod tests {
             "duplicate log should be suppressed"
         );
 
+        // Simulate a new subscription id after resubscribe.
+        inner.ids.remove(&subscription_id);
+        let new_subscription_id = "sub-logs-dedupe-new".to_string();
+        inner.ids.insert(
+            new_subscription_id.clone(),
+            SubscriptionKind::Logs {
+                addresses: HashSet::new(),
+                topics: HashSet::new(),
+            },
+        );
+
         inner.on_received_subscription_event(
             &mut block_tx,
             &mut log_tx,
             &mut pending_tx,
-            subscription_id_2.clone(),
-            RpcSubscriptionEvent::Logs(log.clone()),
-        );
-
-        assert!(
-            log_rx.try_recv().is_err(),
-            "duplicate log should be suppressed when subscription filter is identical"
-        );
-
-        inner.on_received_subscription_event(
-            &mut block_tx,
-            &mut log_tx,
-            &mut pending_tx,
-            subscription_id_3.clone(),
+            new_subscription_id,
             RpcSubscriptionEvent::Logs(log),
         );
 
         assert!(
-            log_rx.try_recv().is_ok(),
-            "log should be forwarded for different subscription filter"
+            log_rx.try_recv().is_err(),
+            "duplicate log should still be suppressed after resubscribe"
         );
     }
 }
