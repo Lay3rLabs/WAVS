@@ -460,20 +460,22 @@ impl SubscriptionsInner {
                 } else {
                     match kind {
                         RpcRequestKind::Unsubscribe { subscription_id } => {
-                            tracing::warn!(
-                                "EVM: failed to unsubscribe from subscription id {}, trying again in {} seconds",
-                                subscription_id,
-                                UNSUBSCRIBE_RETRY_SECS
-                            );
-                            if let Err(e) = self.send_rpc(
-                                RpcRequest::unsubscribe(&self.rpc_ids, subscription_id.clone()),
-                                Some(Duration::from_secs(UNSUBSCRIBE_RETRY_SECS)),
-                            ) {
-                                tracing::error!(
-                                    "EVM: failed to send re-unsubscribe request for subscription id {}: {}",
+                            if self.ids.exists(&subscription_id) {
+                                tracing::warn!(
+                                    "EVM: failed to unsubscribe from subscription id {}, trying again in {} seconds",
                                     subscription_id,
-                                    e
+                                    UNSUBSCRIBE_RETRY_SECS
                                 );
+                                if let Err(e) = self.send_rpc(
+                                    RpcRequest::unsubscribe(&self.rpc_ids, subscription_id.clone()),
+                                    Some(Duration::from_secs(UNSUBSCRIBE_RETRY_SECS)),
+                                ) {
+                                    tracing::error!(
+                                        "EVM: failed to send re-unsubscribe request for subscription id {}: {}",
+                                        subscription_id,
+                                        e
+                                    );
+                                }
                             }
                         }
                         _ => {
@@ -760,6 +762,10 @@ impl SubscriptionIds {
             None => false,
             Some(kind) => f(kind),
         }
+    }
+
+    fn exists(&self, id: &str) -> bool {
+        self._lookup.read().unwrap().contains_key(id)
     }
 }
 
