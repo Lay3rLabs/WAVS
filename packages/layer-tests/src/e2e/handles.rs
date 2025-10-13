@@ -5,7 +5,11 @@ use std::sync::Arc;
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
-use utils::{context::AppContext, telemetry::Metrics, test_utils::middleware::MiddlewareInstance};
+use utils::{
+    context::AppContext,
+    telemetry::Metrics,
+    test_utils::middleware::{MiddlewareInstance, MiddlewareType},
+};
 use wavs::dispatcher::Dispatcher;
 
 use super::config::Configs;
@@ -19,7 +23,12 @@ pub struct AppHandles {
 }
 
 impl AppHandles {
-    pub fn start(ctx: &AppContext, configs: &Configs, metrics: Metrics) -> Self {
+    pub fn start(
+        ctx: &AppContext,
+        configs: &Configs,
+        metrics: Metrics,
+        middleware_type: MiddlewareType,
+    ) -> Self {
         let mut evm_chains = Vec::new();
         let mut cosmos_chains = Vec::new();
 
@@ -66,7 +75,7 @@ impl AppHandles {
 
         let middleware_instance = ctx
             .rt
-            .block_on(async { MiddlewareInstance::new().await.unwrap() });
+            .block_on(async { MiddlewareInstance::new(middleware_type).await.unwrap() });
 
         Self {
             wavs_handle,

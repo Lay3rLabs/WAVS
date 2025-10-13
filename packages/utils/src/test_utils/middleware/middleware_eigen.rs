@@ -1,57 +1,27 @@
-use std::ops::Deref;
 use std::process::Stdio;
 use std::sync::atomic::AtomicUsize;
-use std::sync::Arc;
 use std::time::Duration;
 
-use alloy_primitives::Address;
 use anyhow::{bail, Result};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tempfile::TempDir;
 use tokio::fs;
 use tokio::process::Command;
 
-pub const MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/wavs-middleware:0.5.0-beta.10";
+use super::{
+    middleware_config_filename, middleware_deploy_filename, MiddlewareServiceManager,
+    MiddlewareServiceManagerConfig, MIDDLEWARE_IMAGE,
+};
 
-#[derive(Clone)]
-pub struct MiddlewareInstance {
-    inner: Arc<MiddlewareInstanceInner>,
-}
-
-impl MiddlewareInstance {
-    pub async fn new() -> Result<Self> {
-        let inner = MiddlewareInstanceInner::new().await?;
-        Ok(Self {
-            inner: Arc::new(inner),
-        })
-    }
-}
-
-impl Deref for MiddlewareInstance {
-    type Target = MiddlewareInstanceInner;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-pub fn middleware_config_filename(id: &str) -> String {
-    format!("mock-config-{}.json", id)
-}
-
-pub fn middleware_deploy_filename(id: &str) -> String {
-    format!("mock-deploy-{}.json", id)
-}
-
-pub struct MiddlewareInstanceInner {
+pub struct EigenlayerMiddleware {
     pub container_id: String,
     nodes_dir: TempDir,
     config_dir: TempDir,
     service_manager_count: AtomicUsize,
 }
 
-impl MiddlewareInstanceInner {
-    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60); // enough time to pull the image and do things with it
+impl EigenlayerMiddleware {
+    pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub async fn new() -> Result<Self> {
         let nodes_dir = TempDir::new()?;
@@ -80,16 +50,29 @@ impl MiddlewareInstanceInner {
                     "/dev/null",
                 ])
                 .stdout(Stdio::piped())
-                .stderr(Stdio::null())
+                .stderr(Stdio::piped())
                 .spawn()?
                 .wait_with_output(),
         )
         .await??;
 
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!(
+                "Failed to start EigenLayer middleware container: {}",
+                stderr
+            );
+        }
+
         let container_id = String::from_utf8(output.stdout)
             .map_err(|e| anyhow::anyhow!("Failed to read container ID: {}", e))?
             .trim()
             .to_string();
+
+        if container_id.is_empty() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("Docker returned empty container ID. stderr: {}", stderr);
+        }
 
         Ok(Self {
             container_id,
@@ -108,6 +91,7 @@ impl MiddlewareInstanceInner {
             .service_manager_count
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             .to_string();
+
         let filename = middleware_deploy_filename(&id);
 
         // https://github.com/Lay3rLabs/wavs-middleware?tab=readme-ov-file#2-deploy-empty-mock-contracts
@@ -202,7 +186,7 @@ impl MiddlewareInstanceInner {
         .await??;
 
         if !res.success() {
-            bail!("Failed to deploy service manager");
+            bail!("Failed to configure service manager");
         }
 
         Ok(())
@@ -245,10 +229,10 @@ impl MiddlewareInstanceInner {
     }
 }
 
-impl Drop for MiddlewareInstanceInner {
+impl Drop for EigenlayerMiddleware {
     fn drop(&mut self) {
         tracing::warn!(
-            "Stopping middleware instance with container ID: {}",
+            "Stopping EigenLayer middleware container: {}",
             self.container_id
         );
         if let Err(e) = std::process::Command::new("docker")
@@ -256,74 +240,7 @@ impl Drop for MiddlewareInstanceInner {
             .spawn()
             .and_then(|mut cmd| cmd.wait())
         {
-            tracing::warn!("Failed to remove middleware container: {:?}", e);
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct MiddlewareServiceManager {
-    // not part of the JSON, but used for convenience in Rust
-    #[serde(skip)]
-    pub deployer_key_hex: String,
-    // not part of the JSON, but used for convenience in Rust
-    #[serde(skip)]
-    pub rpc_url: String,
-    #[serde(skip)]
-    // not part of the JSON, but used for convenience in Rust
-    pub id: String,
-    #[serde(rename = "WavsServiceManager")]
-    pub address: alloy_primitives::Address,
-    #[serde(rename = "proxyAdmin")]
-    pub proxy_admin: alloy_primitives::Address,
-    #[serde(rename = "WavsServiceManagerImpl")]
-    pub impl_address: alloy_primitives::Address,
-    #[serde(rename = "stakeRegistry")]
-    pub stake_registry_address: alloy_primitives::Address,
-    #[serde(rename = "stakeRegistryImpl")]
-    pub stake_registry_impl_address: alloy_primitives::Address,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct MiddlewareServiceManagerConfig {
-    pub operators: Vec<alloy_primitives::Address>,
-    #[serde(rename = "quorumDenominator")]
-    pub quorum_denominator: u64,
-    #[serde(rename = "quorumNumerator")]
-    pub quorum_numerator: u64,
-    #[serde(rename = "signingKeyAddresses")]
-    pub signing_key_addresses: Vec<alloy_primitives::Address>,
-    pub threshold: u64,
-    pub weights: Vec<u64>,
-}
-
-impl MiddlewareServiceManagerConfig {
-    pub fn new(operators: &[AvsOperator], required_to_pass: u64) -> Self {
-        Self {
-            signing_key_addresses: operators.iter().map(|op| op.signer).collect(),
-            operators: operators.iter().map(|op| op.operator).collect(),
-            quorum_denominator: (operators.len() as u64).max(1), // gotta have at least one operator
-            quorum_numerator: required_to_pass,
-            threshold: 1,
-            weights: operators.iter().map(|op| op.weight).collect(),
-        }
-    }
-}
-
-pub struct AvsOperator {
-    pub operator: Address,
-    pub signer: Address,
-    pub weight: u64,
-}
-
-impl AvsOperator {
-    pub const DEFAULT_WEIGHT: u64 = 10000;
-
-    pub fn new(operator: Address, signer: Address) -> Self {
-        Self {
-            operator,
-            signer,
-            weight: Self::DEFAULT_WEIGHT,
+            tracing::warn!("Failed to remove EigenLayer middleware container: {:?}", e);
         }
     }
 }
