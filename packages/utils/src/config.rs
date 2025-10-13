@@ -998,11 +998,11 @@ mod test {
     fn chain_configs_toml() {
         let test_config = r#"
             [evm.1]
-            ws_endpoint = "ws://example-1.com"
+            ws_endpoints = ["ws://example-1.com", "ws://example-1-alt.com"]
             http_endpoint = "http://example-1.com"
 
             [evm.2]
-            ws_endpoint = "ws://example-2.com"
+            ws_endpoints = ["ws://example-2.com"]
             http_endpoint = "http://example-2.com"
 
             [cosmos.neutron]
@@ -1022,13 +1022,13 @@ mod test {
             [dev.my-local-evm-1]
             type = "evm"
             chain_id = "1"
-            ws_endpoint = "ws://example-local-evm-1.com"
+            ws_endpoints = ["ws://example-local-evm-1.com", "ws://example-local-evm-1-alt.com"]
             http_endpoint = "http://example-local-evm-1.com"
 
             [dev.my-local-evm-2]
             type = "evm"
             chain_id = "2"
-            ws_endpoint = "ws://example-local-evm-2.com"
+            ws_endpoints = ["ws://example-local-evm-2.com"]
             http_endpoint = "http://example-local-evm-2.com"
 
             [dev.my-local-cosmos-1]
@@ -1093,6 +1093,16 @@ mod test {
                 .unwrap()
                 .to_evm_config()
                 .unwrap()
+                .ws_endpoints,
+            vec!["ws://example-1.com", "ws://example-1-alt.com"]
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("evm:1").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
                 .chain_id
                 .as_str(),
             "1"
@@ -1108,6 +1118,16 @@ mod test {
                 .http_endpoint
                 .unwrap(),
             "http://example-2.com"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("evm:2").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .ws_endpoints,
+            vec!["ws://example-2.com"]
         );
 
         assert_eq!(
@@ -1183,6 +1203,19 @@ mod test {
                 .unwrap()
                 .to_evm_config()
                 .unwrap()
+                .ws_endpoints,
+            vec![
+                "ws://example-local-evm-1.com",
+                "ws://example-local-evm-1-alt.com"
+            ]
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-evm-1").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
                 .chain_id
                 .as_str(),
             "1"
@@ -1198,6 +1231,16 @@ mod test {
                 .http_endpoint
                 .unwrap(),
             "http://example-local-evm-2.com"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-evm-2").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .ws_endpoints,
+            vec!["ws://example-local-evm-2.com"]
         );
 
         assert_eq!(
