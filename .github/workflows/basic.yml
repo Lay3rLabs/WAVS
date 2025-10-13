@@ -18,7 +18,7 @@ env:
 
 
 jobs:
-  test:
+  test-eigenlayer:
     name: Test Suite (EigenLayer)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
@@ -79,6 +79,20 @@ jobs:
         run: cargo test --workspace --locked --all-features -- --nocapture --test-threads=4
         env:
           RUST_LOG: info
+
+  test-suite:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: [test-eigenlayer, test-poa]
+    if: always()
+    steps:
+      - name: Check test results
+        run: |
+          if [ "${{ needs.test-eigenlayer.result }}" != "success" ] || [ "${{ needs.test-poa.result }}" != "success" ]; then
+            echo "One or more test jobs failed"
+            exit 1
+          fi
+          echo "All test jobs passed"
 
   lint:
     name: Lint
