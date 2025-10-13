@@ -1,4 +1,4 @@
-package wavs:types@1.2.1;
+package wavs:types@1.3.0;
 
 interface chain {
   /// A string mostly following the caip-2 format of namespace:reference, e.g. "eip155:1" for Ethereum mainnet or "cosmos:cosmoshub-4" for Cosmos Hub
@@ -63,7 +63,7 @@ interface chain {
 
   record evm-chain-config {
     chain-id: string,
-    ws-endpoint: option<string>,
+    ws-endpoints: list<string>,
     http-endpoint: option<string>,
   }
 }
