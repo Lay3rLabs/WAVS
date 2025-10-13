@@ -353,13 +353,30 @@ impl SubscriptionsInner {
                     tokio::spawn(async move {
                         tokio::time::sleep(d).await;
 
-                        // connection might have been reset during the delay, only send if it's still considered in-flight
-                        if matches!(
-                            rpc_ids_in_flight.get(&req.id()),
-                            Some(RpcFlightState::ActivateOnLand {
-                                kind: RpcRequestKind::Unsubscribe { .. }
-                            })
-                        ) {
+                        // connection might have been reset during the delay
+                        // so only send if it's still considered in-flight
+                        let should_send = match rpc_ids_in_flight.get(&req.id()) {
+                            Some(RpcFlightState::ActivateOnLand { kind }) => {
+                                match kind {
+                                    RpcRequestKind::Unsubscribe {
+                                        subscription_id: sub_id_1,
+                                    } => match &req {
+                                        RpcRequest::Unsubscribe {
+                                            subscription_id: sub_id_2,
+                                            ..
+                                        } => sub_id_1 == *sub_id_2,
+                                        _ => {
+                                            tracing::warn!("Unexpected mismatch when checking for delayed unsubscribe");
+                                            false
+                                        }
+                                    },
+                                    _ => true, // for now, always send other requests too
+                                }
+                            }
+                            _ => false,
+                        };
+
+                        if should_send {
                             if let Err(e) = tx.send(req) {
                                 tracing::error!("EVM: failed to send delayed RPC request: {}", e);
                             }
