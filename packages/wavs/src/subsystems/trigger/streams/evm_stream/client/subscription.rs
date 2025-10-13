@@ -11,6 +11,8 @@ use tokio::{sync::oneshot, task::JoinHandle};
 
 use crate::subsystems::trigger::streams::evm_stream::client::rpc_types::outbound::SubscribeParams;
 
+const UNSUBSCRIBE_RETRY_SECS: u64 = 5;
+
 use super::{
     channels::SubscriptionChannels,
     connection::{ConnectionData, ConnectionState},
@@ -298,6 +300,7 @@ impl SubscriptionsInner {
     fn send_rpc(
         &self,
         req: RpcRequest,
+        delay: Option<Duration>,
     ) -> Result<(), tokio::sync::mpsc::error::SendError<RpcRequest>> {
         match &req {
             RpcRequest::Subscribe { id, params } => match params {
@@ -343,7 +346,30 @@ impl SubscriptionsInner {
         // this should always be Some here, but better safe than sorry
         if let Some(kind) = self.rpc_ids.kind(req.id()) {
             self.rpc_ids_in_flight.insert(req.id(), kind);
-            self._connection_send_rpc_tx.send(req)?;
+            match delay {
+                Some(d) => {
+                    let tx = self._connection_send_rpc_tx.clone();
+                    let rpc_ids_in_flight = self.rpc_ids_in_flight.clone();
+                    tokio::spawn(async move {
+                        tokio::time::sleep(d).await;
+
+                        // connection might have been reset during the delay, only send if it's still considered in-flight
+                        if matches!(
+                            rpc_ids_in_flight.get(&req.id()),
+                            Some(RpcFlightState::ActivateOnLand {
+                                kind: RpcRequestKind::Unsubscribe { .. }
+                            })
+                        ) {
+                            if let Err(e) = tx.send(req) {
+                                tracing::error!("EVM: failed to send delayed RPC request: {}", e);
+                            }
+                        }
+                    });
+                }
+                None => {
+                    self._connection_send_rpc_tx.send(req)?;
+                }
+            }
         } else {
             tracing::warn!(
                 "couldn't get in-flight kind for rpc id {}",
@@ -375,10 +401,10 @@ impl SubscriptionsInner {
                     removed_rpc_in_flight_state,
                     Some(RpcFlightState::UnsubscribeOnLand)
                 ) {
-                    if let Err(e) = self.send_rpc(RpcRequest::unsubscribe(
-                        &self.rpc_ids,
-                        subscription_id.clone(),
-                    )) {
+                    if let Err(e) = self.send_rpc(
+                        RpcRequest::unsubscribe(&self.rpc_ids, subscription_id.clone()),
+                        None,
+                    ) {
                         tracing::error!(
                             "EVM: failed to send unsubscribe request for subscription id {}: {}",
                             subscription_id,
@@ -418,9 +444,20 @@ impl SubscriptionsInner {
                     match kind {
                         RpcRequestKind::Unsubscribe { subscription_id } => {
                             tracing::warn!(
-                                "EVM: failed to unsubscribe from subscription id {}",
-                                subscription_id
+                                "EVM: failed to unsubscribe from subscription id {}, trying again in {} seconds",
+                                subscription_id,
+                                UNSUBSCRIBE_RETRY_SECS
                             );
+                            if let Err(e) = self.send_rpc(
+                                RpcRequest::unsubscribe(&self.rpc_ids, subscription_id.clone()),
+                                Some(Duration::from_secs(UNSUBSCRIBE_RETRY_SECS)),
+                            ) {
+                                tracing::error!(
+                                    "EVM: failed to send re-unsubscribe request for subscription id {}: {}",
+                                    subscription_id,
+                                    e
+                                );
+                            }
                         }
                         _ => {
                             tracing::error!(
@@ -515,7 +552,8 @@ impl SubscriptionsInner {
         // send the unsubscribe request for the active subscriptions
         // will actually unsubscribe when the ack response lands
         for id in ids {
-            if let Err(e) = self.send_rpc(RpcRequest::unsubscribe(&self.rpc_ids, id.clone())) {
+            if let Err(e) = self.send_rpc(RpcRequest::unsubscribe(&self.rpc_ids, id.clone()), None)
+            {
                 tracing::error!(
                     "EVM: failed to send unsubscribe request for subscription id {}: {}",
                     id,
@@ -537,7 +575,7 @@ impl SubscriptionsInner {
                 .rpc_ids_in_flight
                 .will_subscribe(RpcRequestKind::SubscribeNewHeads)
             {
-                if let Err(e) = self.send_rpc(RpcRequest::new_heads(&self.rpc_ids)) {
+                if let Err(e) = self.send_rpc(RpcRequest::new_heads(&self.rpc_ids), None) {
                     tracing::error!("EVM: failed to send newHeads subscription request: {}", e);
                 }
             } else {
@@ -559,7 +597,7 @@ impl SubscriptionsInner {
                     })
                 {
                     if let Err(e) =
-                        self.send_rpc(RpcRequest::logs(&self.rpc_ids, addresses, topics))
+                        self.send_rpc(RpcRequest::logs(&self.rpc_ids, addresses, topics), None)
                     {
                         tracing::error!("EVM: failed to send logs subscription request: {}", e);
                     }
@@ -578,7 +616,9 @@ impl SubscriptionsInner {
                 .rpc_ids_in_flight
                 .will_subscribe(RpcRequestKind::SubscribeNewPendingTransactions)
             {
-                if let Err(e) = self.send_rpc(RpcRequest::new_pending_transactions(&self.rpc_ids)) {
+                if let Err(e) =
+                    self.send_rpc(RpcRequest::new_pending_transactions(&self.rpc_ids), None)
+                {
                     tracing::error!(
                         "EVM: failed to send newPendingTransactions subscription request: {}",
                         e
@@ -706,9 +746,9 @@ impl SubscriptionIds {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct RpcIdsInFlight {
-    _lookup: std::sync::RwLock<std::collections::HashMap<RpcId, RpcFlightState>>,
+    _lookup: Arc<std::sync::RwLock<std::collections::HashMap<RpcId, RpcFlightState>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -761,6 +801,10 @@ impl RpcIdsInFlight {
 
     fn remove(&self, id: &RpcId) -> Option<RpcFlightState> {
         self._lookup.write().unwrap().remove(id)
+    }
+
+    fn get(&self, id: &RpcId) -> Option<RpcFlightState> {
+        self._lookup.read().unwrap().get(id).cloned()
     }
 
     fn any_active_in_flight(&self) -> bool {
