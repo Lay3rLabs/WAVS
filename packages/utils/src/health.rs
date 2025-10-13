@@ -31,45 +31,48 @@ async fn check_evm_chain_health_query(
     key: ChainKey,
     config: EvmChainConfig,
 ) -> Result<(), HealthCheckError> {
-    let endpoint = config
-        .query_client_endpoint()
-        .map_err(|e| HealthCheckError::EvmClientError(key.clone(), e))?;
-    let client = EvmQueryClient::new(endpoint)
-        .await
+    let endpoints = config
+        .query_client_endpoints()
         .map_err(|e| HealthCheckError::EvmClientError(key.clone(), e))?;
 
-    // Check block number
-    client
-        .provider
-        .get_block_number()
-        .await
-        .map_err(|e| HealthCheckError::EvmBlockNumber(key.clone(), e.to_string()))?;
+    for endpoint in endpoints {
+        let client = EvmQueryClient::new(endpoint)
+            .await
+            .map_err(|e| HealthCheckError::EvmClientError(key.clone(), e))?;
 
-    // Check chain ID
-    client
-        .provider
-        .get_chain_id()
-        .await
-        .map_err(|e| HealthCheckError::EvmChainId(key.clone(), e.to_string()))?;
+        // Check block number
+        client
+            .provider
+            .get_block_number()
+            .await
+            .map_err(|e| HealthCheckError::EvmBlockNumber(key.clone(), e.to_string()))?;
 
-    // Check gas price
-    client
-        .provider
-        .get_gas_price()
-        .await
-        .map_err(|e| HealthCheckError::EvmGasPrice(key.clone(), e.to_string()))?;
+        // Check chain ID
+        client
+            .provider
+            .get_chain_id()
+            .await
+            .map_err(|e| HealthCheckError::EvmChainId(key.clone(), e.to_string()))?;
 
-    // Check if the node is syncing
-    let syncing_status = client
-        .provider
-        .syncing()
-        .await
-        .map_err(|e| HealthCheckError::EvmSyncingStatus(key.clone(), e.to_string()))?;
-    if let SyncStatus::Info(sync_info) = syncing_status {
-        return Err(HealthCheckError::EvmStillSyncing(
-            key,
-            sync_info.current_block,
-        ));
+        // Check gas price
+        client
+            .provider
+            .get_gas_price()
+            .await
+            .map_err(|e| HealthCheckError::EvmGasPrice(key.clone(), e.to_string()))?;
+
+        // Check if the node is syncing
+        let syncing_status = client
+            .provider
+            .syncing()
+            .await
+            .map_err(|e| HealthCheckError::EvmSyncingStatus(key.clone(), e.to_string()))?;
+        if let SyncStatus::Info(sync_info) = syncing_status {
+            return Err(HealthCheckError::EvmStillSyncing(
+                key,
+                sync_info.current_block,
+            ));
+        }
     }
 
     Ok(())
