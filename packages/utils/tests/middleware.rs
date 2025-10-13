@@ -11,10 +11,10 @@ async fn middleware_instantiation() {
         .await
         .unwrap();
 
-    tracing::info!("Middleware container ID: {}", middleware.container_id);
+    tracing::info!("Middleware container ID: {}", middleware.container_id());
 
     assert!(
-        !middleware.container_id.is_empty(),
+        !middleware.container_id().is_empty(),
         "Middleware container ID should not be empty"
     );
 }

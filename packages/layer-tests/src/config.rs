@@ -25,14 +25,6 @@ pub struct TestConfig {
     _data_dir: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum MiddlewareType {
-    #[default]
-    Eigenlayer,
-    Poa,
-}
-
 impl ConfigExt for TestConfig {
     const FILENAME: &'static str = "layer-tests.toml";
 
