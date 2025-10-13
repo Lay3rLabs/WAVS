@@ -10,7 +10,7 @@ pub fn mock_chain_configs() -> Arc<RwLock<ChainConfigs>> {
         evm: vec![(
             "31337".try_into().unwrap(),
             EvmChainConfigBuilder {
-                ws_endpoint: Some("ws://localhost:8546".to_string()),
+                ws_endpoints: vec!["ws://localhost:8546".to_string()],
                 http_endpoint: Some("http://localhost:8545".to_string()),
                 faucet_endpoint: None,
             },

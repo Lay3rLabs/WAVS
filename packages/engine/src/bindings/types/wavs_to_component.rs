@@ -135,7 +135,7 @@ impl From<utils::config::EvmChainConfig>
     fn from(config: utils::config::EvmChainConfig) -> Self {
         Self {
             chain_id: config.chain_id.to_string(),
-            ws_endpoint: config.ws_endpoint,
+            ws_endpoints: config.ws_endpoints,
             http_endpoint: config.http_endpoint,
         }
     }
@@ -898,7 +898,7 @@ impl From<utils::config::EvmChainConfig> for aggregator_chain::EvmChainConfig {
     fn from(config: utils::config::EvmChainConfig) -> Self {
         Self {
             chain_id: config.chain_id.to_string(),
-            ws_endpoint: config.ws_endpoint,
+            ws_endpoints: config.ws_endpoints,
             http_endpoint: config.http_endpoint,
         }
     }
