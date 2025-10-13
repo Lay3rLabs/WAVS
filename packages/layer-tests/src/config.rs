@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 use utils::config::ConfigExt;
+use utils::test_utils::middleware::MiddlewareType;
 
 use crate::e2e::{AnyService, CosmosService, CrossChainService, EvmService, TestMatrix};
 
