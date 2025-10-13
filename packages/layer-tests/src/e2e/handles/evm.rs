@@ -14,7 +14,7 @@ impl EvmInstance {
         let port = chain_config
             .http_endpoint
             .as_ref()
-            .unwrap_or_else(|| chain_config.ws_endpoints.iter().next().unwrap())
+            .unwrap_or_else(|| chain_config.ws_endpoints.first().unwrap())
             .split(':')
             .next_back()
             .unwrap()

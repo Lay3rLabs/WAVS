@@ -495,7 +495,7 @@ impl EvmChainConfigExt for EvmChainConfig {
             (false, _) => self
                 .ws_endpoints
                 .iter()
-                .map(|url| EvmEndpoint::new_ws(&url))
+                .map(|url| EvmEndpoint::new_ws(url))
                 .collect(),
             (_, Some(url)) => Ok(vec![EvmEndpoint::new_http(&url)?]),
             _ => Err(EvmClientError::ParseEndpoint(
