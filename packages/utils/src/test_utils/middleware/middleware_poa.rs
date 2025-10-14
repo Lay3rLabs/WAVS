@@ -8,9 +8,7 @@ use tempfile::TempDir;
 use tokio::fs;
 use tokio::process::Command;
 
-use super::{
-    MiddlewareServiceManager, MiddlewareServiceManagerConfig, POA_MIDDLEWARE_IMAGE,
-};
+use super::{MiddlewareServiceManager, MiddlewareServiceManagerConfig, POA_MIDDLEWARE_IMAGE};
 
 const POA_DEPLOY_FILE: &str = "poa_deploy.json";
 
