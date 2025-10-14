@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning].
 - Retry unsubscribe on EVM ack failures
 - Add support for multiple EVM WebSocket endpoints
 
+### Fixed
+
+- Refresh services on startup flow
+
 ## [v1.5.0]
 
 ### Added
