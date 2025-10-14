@@ -87,7 +87,9 @@ temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.89"
 
 # websocket
-tokio-tungstenite = "0.28.0"
+tokio-tungstenite = { version = "0.28.0", features = [
+    "rustls-tls-native-roots",
+] }
 
 # collections
 dashmap = "6.1.0"
