@@ -9,7 +9,45 @@ and this project adheres to [Semantic Versioning].
 
 ### Changed
 
-- minimum required Rust version: 1.89, due to multiple dependency upgrades
+- Retry unsubscribe on EVM ack failures
+- Add support for multiple EVM WebSocket endpoints
+
+## [v1.5.0]
+
+### Added
+
+- New EVM trigger stream implementation
+- Support for URIs
+- Support for IPFS components
+- New `/health` endpoint for checking system status
+- Refresh services on startup
+
+### Changed
+
+- Update WIT to 1.2.1
+- Update all dependencies
+- Minimum required Rust version: 1.89
+
+### Fixed
+
+- wavs-cli simulates tx with separate credentials correctly
+- ChainConfig is propagated across subsystems
+
+### Upgrading
+
+If upgrading from WAVS v1.4.x, you must first run `wavs-cli upgrade-db` due to the redb dependency upgrade from v2.6 → v3.x. This command migrates the database to be compatible with redb 3.x and is available in WAVS v1.4.2.
+
+## [v1.4.2]
+
+### Added
+
+- CLI command `upgrade-db` to migrate databases between redb versions
+
+## [v1.4.1]
+
+### Fixed
+
+- Increase EVM stream channel size
 
 ## [v1.4.0]
 
@@ -263,7 +301,9 @@ and this project adheres to [Semantic Versioning].
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v1.4.1...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v1.5.0...HEAD
+[v1.5.0]: https://github.com/Lay3rLabs/WAVS/compare/v1.4.2...v1.5.0
+[v1.4.2]: https://github.com/Lay3rLabs/WAVS/compare/v1.4.1...v1.4.2
 [v1.4.1]: https://github.com/Lay3rLabs/WAVS/compare/v1.4.0...v1.4.1
 [v1.4.0]: https://github.com/Lay3rLabs/WAVS/compare/v1.0.0...v1.4.0
 [v1.0.0]: https://github.com/Lay3rLabs/WAVS/compare/v0.6.0...v1.0.0
