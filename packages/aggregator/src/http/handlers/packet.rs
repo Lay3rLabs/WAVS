@@ -170,26 +170,36 @@ impl AggregatorProcess<'_> {
             }
         };
 
+        tracing::debug!("Executing aggregator component for packet processing");
         let actions = match state
             .aggregator_engine
             .execute_packet(component, packet)
             .await
         {
-            Ok(actions) => actions,
+            Ok(actions) => {
+                tracing::debug!(
+                    "Component executed successfully, {} actions returned",
+                    actions.len()
+                );
+                actions
+            }
             Err(e) => {
+                tracing::error!("Component execution failed: {}", e);
                 return Ok(vec![AddPacketResponse::Error {
                     reason: format!("ComponentExecution: {}", e),
-                }])
+                }]);
             }
         };
 
         if actions.is_empty() {
+            tracing::info!("Component returned no actions - packet processing complete");
             return Ok(vec![]);
         }
 
         let mut responses = Vec::new();
 
-        for action in actions {
+        for (i, action) in actions.into_iter().enumerate() {
+            tracing::debug!("Processing action {}: {:?}", i + 1, action);
             let queue_id = QuorumQueueId {
                 event_id: event_id.clone(),
                 aggregator_action: action.clone().into(),
@@ -199,10 +209,16 @@ impl AggregatorProcess<'_> {
                 process_action(state.clone(), packet.clone(), queue_id, action, signer).await;
 
             match result {
-                Ok(response) => responses.push(response),
-                Err(e) => responses.push(AddPacketResponse::Error {
-                    reason: format!("{:?}", e),
-                }),
+                Ok(response) => {
+                    tracing::debug!("Action {} processed successfully: {:?}", i + 1, response);
+                    responses.push(response);
+                }
+                Err(e) => {
+                    tracing::error!("Action {} processing failed: {:?}", i + 1, e);
+                    responses.push(AddPacketResponse::Error {
+                        reason: format!("{:?}", e),
+                    });
+                }
             }
         }
 
@@ -231,12 +247,22 @@ async fn process_action(
                     move || async move {
                         let queue = match state.get_quorum_queue(&queue_id).await? {
                             QuorumQueue::Active(queue) => {
+                                tracing::debug!("Adding packet to existing quorum queue (current size: {})", queue.len());
                                 add_packet_to_quorum_queue(&packet, queue, signer)?
                             }
-                            QuorumQueue::Burned => return Ok(AddPacketResponse::Burned),
+                            QuorumQueue::Burned => {
+                                tracing::info!("Quorum queue already burned for this event - packet rejected");
+                                return Ok(AddPacketResponse::Burned);
+                            }
                         };
+                        tracing::info!("Attempting quorum validation with {} signatures", queue.len());
                         match handle_custom_submit(&state, &packet, &queue, submit_action).await {
                             Ok(tx_receipt) => {
+                                tracing::info!(
+                                    "Quorum reached and transaction submitted successfully! Queue size: {}, tx_hash: {:?}",
+                                    queue.len(),
+                                    tx_receipt.transaction_hash
+                                );
                                 state
                                     .save_quorum_queue(&queue_id, QuorumQueue::Burned)
                                     .await?;
@@ -247,15 +273,21 @@ async fn process_action(
                             }
                             Err(e) => {
                                 if let AggregatorError::ServiceManagerValidateKnown(
-                                    ServiceManagerError::InsufficientQuorum(_),
+                                    ServiceManagerError::InsufficientQuorum(required),
                                 ) = &e
                                 {
+                                    tracing::info!(
+                                        "Insufficient quorum: have {}, need {:?}. Keeping packet in queue.",
+                                        queue.len(),
+                                        required
+                                    );
                                     let count = queue.len();
                                     state
                                         .save_quorum_queue(&queue_id, QuorumQueue::Active(queue))
                                         .await?;
                                     Ok(AddPacketResponse::Aggregated { count })
                                 } else {
+                                    tracing::error!("Quorum validation failed: {:?}", e);
                                     Err(e)
                                 }
                             }
@@ -266,7 +298,10 @@ async fn process_action(
         }
         AggregatorAction::Timer(timer_action) => {
             let delay: wavs_types::Duration = timer_action.delay.into();
-            tracing::info!("Starting timer for {} seconds", delay.secs);
+            tracing::info!(
+                "Starting timer for {} seconds - will execute callback on expiry",
+                delay.secs
+            );
 
             // Spawn timer callback as background task to avoid holding the async transaction lock
             tokio::spawn(handle_timer_callback(
@@ -408,8 +443,9 @@ fn handle_timer_callback(
         tokio::time::sleep(delay.into()).await;
 
         tracing::info!(
-            "Timer expired after {} seconds, executing callback",
-            delay.secs
+            "Timer expired after {} seconds, executing callback for event {}",
+            delay.secs,
+            packet.event_id()
         );
 
         let component = match &packet.service.workflows[&packet.workflow_id].submit {
@@ -420,19 +456,31 @@ fn handle_timer_callback(
             }
         };
 
+        tracing::debug!("Executing timer callback component");
         let callback_actions = match state
             .aggregator_engine
             .execute_timer_callback(component, &packet)
             .await
         {
-            Ok(actions) => actions,
+            Ok(actions) => {
+                tracing::info!(
+                    "Timer callback executed successfully, {} actions returned",
+                    actions.len()
+                );
+                actions
+            }
             Err(e) => {
                 tracing::error!("Timer callback execution failed: {}", e);
                 return;
             }
         };
 
-        for callback_action in callback_actions {
+        for (i, callback_action) in callback_actions.into_iter().enumerate() {
+            tracing::debug!(
+                "Processing timer callback action {}: {:?}",
+                i + 1,
+                callback_action
+            );
             let result = process_action(
                 state.clone(),
                 packet.clone(),
@@ -442,8 +490,13 @@ fn handle_timer_callback(
             )
             .await;
 
-            if let Err(e) = result {
-                tracing::error!("Timer callback action processing failed: {:?}", e);
+            match result {
+                Ok(response) => {
+                    tracing::info!("Timer callback action {} completed: {:?}", i + 1, response);
+                }
+                Err(e) => {
+                    tracing::error!("Timer callback action {} failed: {:?}", i + 1, e);
+                }
             }
         }
     }
