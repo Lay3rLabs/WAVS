@@ -16,6 +16,7 @@ use wavs_cli::{
         exec_aggregator::{ExecAggregator, ExecAggregatorArgs},
         exec_component::{ExecComponent, ExecComponentArgs},
         service::handle_service_command,
+        upgrade_db::{UpgradeDb, UpgradeDbArgs},
         upload_component::{UploadComponent, UploadComponentArgs},
     },
     context::CliContext,
@@ -327,6 +328,17 @@ async fn main() {
                 }
             }
 
+            ctx.handle_display_result(res);
+        }
+        Command::UpgradeDb { db_path, .. } => {
+            let res = UpgradeDb::run(
+                &ctx.config,
+                UpgradeDbArgs {
+                    db_path: db_path.unwrap_or("db".to_string()),
+                },
+            )
+            .await
+            .unwrap();
             ctx.handle_display_result(res);
         }
     }

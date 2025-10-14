@@ -146,6 +146,16 @@ pub enum Command {
         #[clap(long = "output", short = 'o')]
         output_file: Option<PathBuf>,
     },
+
+    /// Upgrade the database to the latest version, if needed
+    UpgradeDb {
+        #[clap(flatten)]
+        args: CliArgs,
+
+        /// Path of the database file to upgrade relative to the data directory. Default is "db".
+        #[clap(long)]
+        db_path: Option<String>,
+    },
 }
 
 /// Commands for managing services
@@ -384,6 +394,7 @@ impl Command {
             Self::Exec { args, .. } => args,
             Self::Service { args, .. } => args,
             Self::ExecAggregator { args, .. } => args,
+            Self::UpgradeDb { args, .. } => args,
         };
 
         args.clone()
