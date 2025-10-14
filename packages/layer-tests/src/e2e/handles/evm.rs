@@ -64,6 +64,8 @@ impl LameAnvilInstanceBuilder {
             // during high concurrent load
             "--order".to_string(),
             "fifo".to_string(),
+            "--gas-limit".to_string(),
+            "100000000".to_string(),
         ];
 
         let child = Command::new("anvil")
