@@ -47,26 +47,26 @@
 
 # # EVM chains
 # [default.chains.evm.31337]
-# ws_endpoint = "ws://localhost:8545"
+# ws_endpoints = ["ws://localhost:8545"]
 # http_endpoint = "http://localhost:8545"
 # poll_interval_ms = 7000
 # event_channel_size = 16
 
 # [default.chains.evm.11155111]
-# ws_endpoint = "wss://ethereum-sepolia-rpc.publicnode.com"
+# ws_endpoints = ["wss://ethereum-sepolia-rpc.publicnode.com"]
 # http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
 # poll_interval_ms = 7000
 # event_channel_size = 20000
 
 # [default.chains.evm.17000]
-# ws_endpoint = "wss://ethereum-holesky-rpc.publicnode.com"
+# ws_endpoints = ["wss://ethereum-holesky-rpc.publicnode.com"]
 # http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
 # poll_interval_ms = 7000
 
 # [default.chains.dev.holesky-fork]
 # type = "evm"
 # chain_id = "17000"
-# ws_endpoint = "ws://localhost:8545"
+# ws_endpoints = ["ws://localhost:8545"]
 # http_endpoint = "http://localhost:8545"
 # poll_interval_ms = 7000
 
@@ -99,7 +99,7 @@ port = 8000
 # Example:
 # [wavs.chains.evm.local]
 # chain_id = "31337"
-# ws_endpoint = "ws://localhost:8545"
+# ws_endpoints = ["ws://localhost:8545"]
 # http_endpoint = "http://localhost:8545"
 
 # ----------------------------
@@ -134,5 +134,5 @@ cors_allowed_origins = [
 # Example:
 # [aggregator.chains.evm.local]
 # chain_id = "31337"
-# ws_endpoint = "ws://localhost:8545"
+# ws_endpoints = ["ws://localhost:8545"]
 # http_endpoint = "http://localhost:8545"

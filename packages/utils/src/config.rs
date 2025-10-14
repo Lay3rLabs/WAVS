@@ -297,7 +297,7 @@ impl CosmosChainConfigBuilder {
 
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct EvmChainConfigBuilder {
-    pub ws_endpoint: Option<String>,
+    pub ws_endpoints: Vec<String>,
     pub http_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
 }
@@ -306,7 +306,7 @@ impl EvmChainConfigBuilder {
     pub fn build(self, id: ChainKeyId) -> EvmChainConfig {
         EvmChainConfig {
             chain_id: id,
-            ws_endpoint: self.ws_endpoint,
+            ws_endpoints: self.ws_endpoints,
             http_endpoint: self.http_endpoint,
             faucet_endpoint: self.faucet_endpoint,
         }
@@ -422,7 +422,7 @@ impl ChainConfigs {
                         });
                     }
                     let evm_config = EvmChainConfigBuilder {
-                        ws_endpoint: evm_config.ws_endpoint,
+                        ws_endpoints: evm_config.ws_endpoints,
                         http_endpoint: evm_config.http_endpoint,
                         faucet_endpoint: evm_config.faucet_endpoint,
                     };
@@ -464,7 +464,7 @@ pub trait EvmChainConfigExt {
         &self,
         credential: Credential,
     ) -> std::result::Result<EvmSigningClientConfig, EvmClientError>;
-    fn query_client_endpoint(&self) -> std::result::Result<EvmEndpoint, EvmClientError>;
+    fn query_client_endpoints(&self) -> std::result::Result<Vec<EvmEndpoint>, EvmClientError>;
 }
 
 impl EvmChainConfigExt for EvmChainConfig {
@@ -472,10 +472,11 @@ impl EvmChainConfigExt for EvmChainConfig {
         &self,
         credential: Credential,
     ) -> std::result::Result<EvmSigningClientConfig, EvmClientError> {
-        let endpoint = match (self.ws_endpoint.clone(), self.http_endpoint.clone()) {
+        // TODO: https://github.com/Lay3rLabs/WAVS/issues/1019
+        let endpoint = match (self.ws_endpoints.is_empty(), self.http_endpoint.clone()) {
             // prefer HTTP for signing clients
             (_, Some(url)) => EvmEndpoint::new_http(&url)?,
-            (Some(url), _) => EvmEndpoint::new_ws(&url)?,
+            (false, _) => EvmEndpoint::new_ws(&self.ws_endpoints[0])?,
             _ => {
                 return Err(EvmClientError::ParseEndpoint(
                     "No endpoint provided".to_string(),
@@ -488,11 +489,15 @@ impl EvmChainConfigExt for EvmChainConfig {
         Ok(config)
     }
 
-    fn query_client_endpoint(&self) -> std::result::Result<EvmEndpoint, EvmClientError> {
-        match (self.ws_endpoint.clone(), self.http_endpoint.clone()) {
+    fn query_client_endpoints(&self) -> std::result::Result<Vec<EvmEndpoint>, EvmClientError> {
+        match (self.ws_endpoints.is_empty(), self.http_endpoint.clone()) {
             // prefer WS for query clients
-            (Some(url), _) => EvmEndpoint::new_ws(&url),
-            (_, Some(url)) => EvmEndpoint::new_http(&url),
+            (false, _) => self
+                .ws_endpoints
+                .iter()
+                .map(|url| EvmEndpoint::new_ws(url))
+                .collect(),
+            (_, Some(url)) => Ok(vec![EvmEndpoint::new_http(&url)?]),
             _ => Err(EvmClientError::ParseEndpoint(
                 "No endpoint provided".to_string(),
             )),
@@ -823,7 +828,7 @@ mod test {
         let test_config = r#"
     # Global chain config
     [chains.evm.global_chain]
-    ws_endpoint = "ws://global.example.com"
+    ws_endpoints = ["ws://global.example.com"]
     http_endpoint = "http://global.example.com"
 
     # Service1 specific settings
@@ -832,12 +837,12 @@ mod test {
 
     # Service1 specific chain override
     [service1.chains.evm.global_chain]
-    ws_endpoint = "ws://service1.example.com"
+    ws_endpoints = ["ws://service1.example.com"]
     http_endpoint = "http://service1.example.com"
 
     # Service1 specific chain that doesn't exist in global
     [service1.chains.evm.service1_chain]
-    ws_endpoint = "ws://service1-special.example.com"
+    ws_endpoints = ["ws://service1-special.example.com"]
     http_endpoint = "http://service1-special.example.com"
 
     # Service2 specific settings
@@ -846,7 +851,7 @@ mod test {
 
     # Service2 specific chain override
     [service2.chains.evm.global_chain]
-    ws_endpoint = "ws://service2.example.com"
+    ws_endpoints = ["ws://service2.example.com"]
     http_endpoint = "http://service2.example.com"
     "#;
 
@@ -876,10 +881,7 @@ mod test {
         if let crate::config::AnyChainConfig::Evm(evm_config) = global_chain_config {
             assert_eq!(evm_config.chain_id.as_str(), "global_chain");
             // These should be overridden by service1
-            assert_eq!(
-                evm_config.ws_endpoint.as_deref(),
-                Some("ws://service1.example.com")
-            );
+            assert_eq!(evm_config.ws_endpoints[0], "ws://service1.example.com");
             assert_eq!(
                 evm_config.http_endpoint.as_deref(),
                 Some("http://service1.example.com")
@@ -897,8 +899,8 @@ mod test {
         if let crate::config::AnyChainConfig::Evm(evm_config) = service1_chain_config {
             assert_eq!(evm_config.chain_id.as_str(), "service1_chain");
             assert_eq!(
-                evm_config.ws_endpoint.as_deref(),
-                Some("ws://service1-special.example.com")
+                evm_config.ws_endpoints[0],
+                "ws://service1-special.example.com"
             );
             assert_eq!(
                 evm_config.http_endpoint.as_deref(),
@@ -972,10 +974,7 @@ mod test {
 
         if let crate::config::AnyChainConfig::Evm(evm_config) = global_chain_config {
             assert_eq!(evm_config.chain_id.as_str(), "global_chain");
-            assert_eq!(
-                evm_config.ws_endpoint.as_deref(),
-                Some("ws://service2.example.com")
-            );
+            assert_eq!(evm_config.ws_endpoints[0], "ws://service2.example.com");
             assert_eq!(
                 evm_config.http_endpoint.as_deref(),
                 Some("http://service2.example.com")
@@ -999,11 +998,11 @@ mod test {
     fn chain_configs_toml() {
         let test_config = r#"
             [evm.1]
-            ws_endpoint = "ws://example-1.com"
+            ws_endpoints = ["ws://example-1.com", "ws://example-1-alt.com"]
             http_endpoint = "http://example-1.com"
 
             [evm.2]
-            ws_endpoint = "ws://example-2.com"
+            ws_endpoints = ["ws://example-2.com"]
             http_endpoint = "http://example-2.com"
 
             [cosmos.neutron]
@@ -1023,13 +1022,13 @@ mod test {
             [dev.my-local-evm-1]
             type = "evm"
             chain_id = "1"
-            ws_endpoint = "ws://example-local-evm-1.com"
+            ws_endpoints = ["ws://example-local-evm-1.com", "ws://example-local-evm-1-alt.com"]
             http_endpoint = "http://example-local-evm-1.com"
 
             [dev.my-local-evm-2]
             type = "evm"
             chain_id = "2"
-            ws_endpoint = "ws://example-local-evm-2.com"
+            ws_endpoints = ["ws://example-local-evm-2.com"]
             http_endpoint = "http://example-local-evm-2.com"
 
             [dev.my-local-cosmos-1]
@@ -1094,6 +1093,16 @@ mod test {
                 .unwrap()
                 .to_evm_config()
                 .unwrap()
+                .ws_endpoints,
+            vec!["ws://example-1.com", "ws://example-1-alt.com"]
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("evm:1").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
                 .chain_id
                 .as_str(),
             "1"
@@ -1109,6 +1118,16 @@ mod test {
                 .http_endpoint
                 .unwrap(),
             "http://example-2.com"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("evm:2").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .ws_endpoints,
+            vec!["ws://example-2.com"]
         );
 
         assert_eq!(
@@ -1184,6 +1203,19 @@ mod test {
                 .unwrap()
                 .to_evm_config()
                 .unwrap()
+                .ws_endpoints,
+            vec![
+                "ws://example-local-evm-1.com",
+                "ws://example-local-evm-1-alt.com"
+            ]
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-evm-1").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
                 .chain_id
                 .as_str(),
             "1"
@@ -1199,6 +1231,16 @@ mod test {
                 .http_endpoint
                 .unwrap(),
             "http://example-local-evm-2.com"
+        );
+
+        assert_eq!(
+            chain_configs
+                .get_chain(&ChainKey::try_from("dev:my-local-evm-2").unwrap())
+                .unwrap()
+                .to_evm_config()
+                .unwrap()
+                .ws_endpoints,
+            vec!["ws://example-local-evm-2.com"]
         );
 
         assert_eq!(
@@ -1309,7 +1351,7 @@ mod test {
                 (
                     "anvil".try_into().unwrap(),
                     EvmChainConfigBuilder {
-                        ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
+                        ws_endpoints: vec!["ws://127.0.0.1:8546".to_string()],
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
                     },
@@ -1317,7 +1359,7 @@ mod test {
                 (
                     "polygon".try_into().unwrap(),
                     EvmChainConfigBuilder {
-                        ws_endpoint: Some("ws://127.0.0.1:8546".to_string()),
+                        ws_endpoints: vec!["ws://127.0.0.1:8546".to_string()],
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
                     },

@@ -57,7 +57,7 @@ interface chain {
 
     record evm-chain-config {
         chain-id: string,
-        ws-endpoint: option<string>,
+        ws-endpoints: list<string>,
         http-endpoint: option<string>,
     }
 }

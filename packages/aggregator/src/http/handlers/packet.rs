@@ -1128,7 +1128,7 @@ mod test {
                 contract_deps.chain.id.clone(),
                 EvmChainConfigBuilder {
                     http_endpoint: Some(contract_deps._anvil.endpoint()),
-                    ws_endpoint: Some(contract_deps._anvil.ws_endpoint()),
+                    ws_endpoints: vec![contract_deps._anvil.ws_endpoint()],
                     faucet_endpoint: None,
                 },
             );

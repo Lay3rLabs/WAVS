@@ -394,9 +394,11 @@ impl TriggerManager {
                                     }
                                 }
                                 AnyChainConfig::Evm(chain_config) => {
-                                    let endpoint = chain_config.ws_endpoint.ok_or_else(|| {
-                                        TriggerError::EvmMissingWebsocket(chain.clone())
-                                    })?;
+                                    if chain_config.ws_endpoints.is_empty() {
+                                        return Err(TriggerError::EvmMissingWebsocket(
+                                            chain.clone(),
+                                        ));
+                                    }
 
                                     let EvmTriggerStreams {
                                         controller,
@@ -404,7 +406,7 @@ impl TriggerManager {
                                         log_stream,
                                         // ignoring this for now
                                         new_pending_transaction_stream: _,
-                                    } = EvmTriggerStreams::new(vec![endpoint]);
+                                    } = EvmTriggerStreams::new(chain_config.ws_endpoints);
 
                                     self.evm_controllers
                                         .write()

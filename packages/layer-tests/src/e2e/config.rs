@@ -127,7 +127,7 @@ impl From<TestConfig> for Configs {
 
             let chain_config = EvmChainConfigBuilder {
                 http_endpoint: Some(http_endpoint),
-                ws_endpoint: Some(ws_endpoint),
+                ws_endpoints: vec![ws_endpoint],
                 faucet_endpoint: None,
             };
 

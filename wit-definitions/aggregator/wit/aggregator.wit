@@ -1,9 +1,9 @@
-package wavs:aggregator@1.2.1;
+package wavs:aggregator@1.3.0;
 
-use wavs:types/core@1.2.1 as core-types;
-use wavs:types/service@1.2.1 as service-types;
-use wavs:types/chain@1.2.1 as chain-types;
-use wavs:types/events@1.2.1 as event-types;
+use wavs:types/core@1.3.0 as core-types;
+use wavs:types/service@1.3.0 as service-types;
+use wavs:types/chain@1.3.0 as chain-types;
+use wavs:types/events@1.3.0 as event-types;
 
 interface aggregator {
     use core-types.{duration, u128};

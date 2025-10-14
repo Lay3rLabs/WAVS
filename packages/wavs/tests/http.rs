@@ -188,7 +188,7 @@ fn http_save_service() {
 fn create_test_evm_chain_config() -> AnyChainConfig {
     AnyChainConfig::Evm(EvmChainConfig {
         chain_id: "1337".parse().unwrap(),
-        ws_endpoint: Some("wss://localhost:8546".to_string()),
+        ws_endpoints: vec!["wss://localhost:8546".to_string()],
         http_endpoint: Some("http://localhost:8545".to_string()),
         faucet_endpoint: None,
     })

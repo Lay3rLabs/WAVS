@@ -56,7 +56,7 @@ impl From<CosmosChainConfig> for ChainKey {
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct EvmChainConfig {
     pub chain_id: ChainKeyId,
-    pub ws_endpoint: Option<String>,
+    pub ws_endpoints: Vec<String>,
     pub http_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
 }
