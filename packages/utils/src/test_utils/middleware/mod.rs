@@ -73,7 +73,8 @@ impl MiddlewareInstanceInner {
     pub fn container_id(&self) -> &str {
         match self {
             MiddlewareInstanceInner::Eigenlayer(m) => &m.container_id,
-            MiddlewareInstanceInner::Poa(m) => &m.container_id,
+            // POA uses per-service-manager containers, no shared container
+            MiddlewareInstanceInner::Poa(_) => "",
         }
     }
 
@@ -136,6 +137,12 @@ pub struct MiddlewareServiceManager {
     #[serde(skip)]
     // not part of the JSON, but used for convenience in Rust
     pub id: String,
+    // POA-specific: container ID for this service manager's isolated container
+    #[serde(skip)]
+    pub container_id: Option<String>,
+    // POA-specific: temp directory path for cleanup
+    #[serde(skip)]
+    pub nodes_dir_path: Option<String>,
     #[serde(rename = "WavsServiceManager")]
     pub address: alloy_primitives::Address,
     #[serde(rename = "proxyAdmin")]
@@ -146,6 +153,23 @@ pub struct MiddlewareServiceManager {
     pub stake_registry_address: alloy_primitives::Address,
     #[serde(rename = "stakeRegistryImpl")]
     pub stake_registry_impl_address: alloy_primitives::Address,
+}
+
+impl Drop for MiddlewareServiceManager {
+    fn drop(&mut self) {
+        // Cleanup POA-specific container if present
+        if let Some(container_id) = &self.container_id {
+            tracing::debug!("Cleaning up POA middleware container: {}", container_id);
+            if let Err(e) = std::process::Command::new("docker")
+                .args(["rm", "-f", container_id])
+                .spawn()
+                .and_then(|mut cmd| cmd.wait())
+            {
+                tracing::warn!("Failed to remove POA middleware container: {:?}", e);
+            }
+        }
+        // TempDir cleanup happens automatically when nodes_dir_path is dropped
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

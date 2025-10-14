@@ -3,8 +3,8 @@ log_level = ["info", "wavs=debug"]
 
 [layer-tests]
 wavs_concurrency = true
-middleware_concurrency = false
-middleware_type = "eigenlayer" # or "poa"
+middleware_concurrency = true
+middleware_type = "poa" # or "poa"
 # Run all tests
 mode = "all"
 

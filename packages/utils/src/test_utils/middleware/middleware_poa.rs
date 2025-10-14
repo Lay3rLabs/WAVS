@@ -1,5 +1,4 @@
 use std::process::Stdio;
-use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 
 use alloy_primitives::Address;
@@ -10,21 +9,28 @@ use tokio::fs;
 use tokio::process::Command;
 
 use super::{
-    MiddlewareServiceManager, MiddlewareServiceManagerConfig, ANVIL_DEPLOYER_ADDRESS,
-    ANVIL_DEPLOYER_KEY, POA_MIDDLEWARE_IMAGE,
+    MiddlewareServiceManager, MiddlewareServiceManagerConfig, POA_MIDDLEWARE_IMAGE,
 };
 
-pub struct PoaMiddleware {
-    pub container_id: String,
-    nodes_dir: TempDir,
-    service_manager_count: AtomicUsize,
-}
+const POA_DEPLOY_FILE: &str = "poa_deploy.json";
+
+pub struct PoaMiddleware {}
 
 impl PoaMiddleware {
     pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub async fn new() -> Result<Self> {
+        Ok(Self {})
+    }
+
+    pub async fn deploy_service_manager(
+        &self,
+        rpc_url: String,
+        deployer_key_hex: String,
+    ) -> Result<MiddlewareServiceManager> {
+        // Create isolated container for this service manager
         let nodes_dir = TempDir::new()?;
+        let nodes_dir_path = nodes_dir.path().to_string_lossy().to_string();
 
         let output = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
@@ -65,23 +71,7 @@ impl PoaMiddleware {
             bail!("Docker returned empty container ID. stderr: {}", stderr);
         }
 
-        Ok(Self {
-            container_id,
-            nodes_dir,
-            service_manager_count: AtomicUsize::new(0),
-        })
-    }
-
-    pub async fn deploy_service_manager(
-        &self,
-        rpc_url: String,
-        deployer_key_hex: String,
-    ) -> Result<MiddlewareServiceManager> {
-        let id = self
-            .service_manager_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-            .to_string();
-
+        // Deploy to this isolated container
         let output = tokio::time::timeout(Self::DEFAULT_TIMEOUT, async {
             let res = Command::new("docker")
                 .args([
@@ -92,7 +82,7 @@ impl PoaMiddleware {
                     &format!("RPC_URL={rpc_url}"),
                     "-e",
                     "DEPLOY_ENV=LOCAL",
-                    &self.container_id,
+                    &container_id,
                     "/wavs/scripts/cli.sh",
                     "deploy",
                 ])
@@ -107,7 +97,7 @@ impl PoaMiddleware {
             }
 
             loop {
-                let output = fs::read_to_string(self.nodes_dir.path().join("poa_deploy.json"))
+                let output = fs::read_to_string(nodes_dir.path().join(POA_DEPLOY_FILE))
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to read POA deployment JSON: {}", e));
                 if output.is_ok() {
@@ -136,37 +126,14 @@ impl PoaMiddleware {
 
         let poa_address = deployment_json.addresses.poa_stake_registry;
 
-        let res = tokio::time::timeout(
-            Self::DEFAULT_TIMEOUT,
-            Command::new("docker")
-                .args([
-                    "exec",
-                    &self.container_id,
-                    "cast",
-                    "send",
-                    &format!("{}", poa_address),
-                    "transferOwnership(address)",
-                    ANVIL_DEPLOYER_ADDRESS,
-                    "--private-key",
-                    &deployer_key_hex,
-                    "--rpc-url",
-                    &rpc_url,
-                ])
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .spawn()?
-                .wait(),
-        )
-        .await??;
-
-        if !res.success() {
-            bail!("Failed to transfer POA ownership to ANVIL deployer");
-        }
-
+        // Keep the unique deployer_key_hex as owner (no transferOwnership)
+        // This allows parallel operations across different service managers
         Ok(MiddlewareServiceManager {
-            deployer_key_hex: ANVIL_DEPLOYER_KEY.to_string(),
+            deployer_key_hex,
             rpc_url,
-            id,
+            id: container_id.clone(),
+            container_id: Some(container_id),
+            nodes_dir_path: Some(nodes_dir_path),
             address: poa_address,
             proxy_admin: deployment_json.addresses.proxy_admin,
             impl_address: poa_address,
@@ -180,6 +147,11 @@ impl PoaMiddleware {
         service_manager: &MiddlewareServiceManager,
         config: &MiddlewareServiceManagerConfig,
     ) -> Result<()> {
+        let container_id = service_manager
+            .container_id
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("POA service manager missing container_id"))?;
+
         for i in 0..config.operators.len() {
             let operator = &config.operators[i];
             let weight = &config.weights[i];
@@ -190,14 +162,14 @@ impl PoaMiddleware {
                     .args([
                         "exec",
                         "-e",
-                        &format!("FUNDED_KEY={}", ANVIL_DEPLOYER_KEY),
+                        &format!("FUNDED_KEY={}", service_manager.deployer_key_hex),
                         "-e",
                         &format!("RPC_URL={}", service_manager.rpc_url),
                         "-e",
                         "DEPLOY_ENV=LOCAL",
                         "-e",
                         &format!("POA_STAKER_REGISTRY_ADDRESS={}", service_manager.address),
-                        &self.container_id,
+                        container_id,
                         "/wavs/scripts/cli.sh",
                         "owner_operation",
                         "registerOperator",
@@ -239,7 +211,7 @@ impl PoaMiddleware {
                         "DEPLOY_ENV=LOCAL",
                         "-e",
                         &format!("POA_STAKER_REGISTRY_ADDRESS={}", service_manager.address),
-                        &self.container_id,
+                        container_id,
                         "/wavs/scripts/cli.sh",
                         "update_signing_key",
                     ])
@@ -261,14 +233,14 @@ impl PoaMiddleware {
                 .args([
                     "exec",
                     "-e",
-                    &format!("FUNDED_KEY={}", ANVIL_DEPLOYER_KEY),
+                    &format!("FUNDED_KEY={}", service_manager.deployer_key_hex),
                     "-e",
                     &format!("RPC_URL={}", service_manager.rpc_url),
                     "-e",
                     "DEPLOY_ENV=LOCAL",
                     "-e",
                     &format!("POA_STAKER_REGISTRY_ADDRESS={}", service_manager.address),
-                    &self.container_id,
+                    container_id,
                     "/wavs/scripts/cli.sh",
                     "owner_operation",
                     "updateQuorum",
@@ -294,6 +266,11 @@ impl PoaMiddleware {
         service_manager: &MiddlewareServiceManager,
         service_uri: &str,
     ) -> Result<()> {
+        let container_id = service_manager
+            .container_id
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("POA service manager missing container_id"))?;
+
         tracing::debug!(
             "Setting service URI for POA: address={}, uri='{}'",
             service_manager.address,
@@ -304,14 +281,14 @@ impl PoaMiddleware {
             Command::new("docker")
                 .args([
                     "exec",
-                    &self.container_id,
+                    container_id,
                     "cast",
                     "send",
                     &format!("{}", service_manager.address),
                     "setServiceURI(string)",
                     service_uri,
                     "--private-key",
-                    ANVIL_DEPLOYER_KEY,
+                    &service_manager.deployer_key_hex,
                     "--rpc-url",
                     &service_manager.rpc_url,
                 ])
@@ -330,18 +307,5 @@ impl PoaMiddleware {
         }
 
         Ok(())
-    }
-}
-
-impl Drop for PoaMiddleware {
-    fn drop(&mut self) {
-        tracing::warn!("Stopping POA middleware container: {}", self.container_id);
-        if let Err(e) = std::process::Command::new("docker")
-            .args(["rm", "-f", &self.container_id])
-            .spawn()
-            .and_then(|mut cmd| cmd.wait())
-        {
-            tracing::warn!("Failed to remove POA middleware container: {:?}", e);
-        }
     }
 }
