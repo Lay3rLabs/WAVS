@@ -215,7 +215,7 @@ impl ServiceManagers {
                 .await
                 .unwrap();
 
-            // Use unique HD index per test to avoid nonce collisions during parallel operations
+            // unique HD index per test to avoid nonce collisions during parallel operations
             let operator_hd_index = test_index as u32;
             let operator_signer = utils::evm_client::signing::make_signer(
                 &self.configs.mnemonics.wavs,

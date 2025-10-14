@@ -67,7 +67,6 @@ impl PoaMiddleware {
             bail!("Docker returned empty container ID. stderr: {}", stderr);
         }
 
-        // Deploy to this isolated container
         let output = tokio::time::timeout(Self::DEFAULT_TIMEOUT, async {
             let res = Command::new("docker")
                 .args([
