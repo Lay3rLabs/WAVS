@@ -293,10 +293,22 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             self.list_component_digests()?.len()
         );
 
+        for service in initial_services.iter() {
+            add_service_to_managers(
+                service,
+                &self.trigger_manager,
+                &self.submission_manager,
+                None,
+            )?;
+        }
+
         // Check ServiceURI for each service at startup and update if needed (bounded concurrency)
         let chain_configs = self.chain_configs.read().unwrap().clone();
         let ipfs_gateway = self.ipfs_gateway.clone();
-        let verification_results = ctx.rt.block_on(async {
+        ctx.rt.block_on(async {
+            let ipfs_gateway = ipfs_gateway.as_ref();
+            let chain_configs = &chain_configs;
+
             // Limit concurrent ServiceURI checks
             const MAX_CONCURRENT_CHECKS: usize = 10;
             let semaphore = Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_CHECKS));
@@ -304,76 +316,59 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             let futures: Vec<_> = initial_services
                 .iter()
                 .map(|service| {
-                    let chain_configs = chain_configs.clone();
-                    let ipfs_gateway = ipfs_gateway.clone();
-                    let service_clone = service.clone();
+                    let original_service_id = service.id();
                     let semaphore = semaphore.clone();
                     async move {
                         // Acquire semaphore permit before making network request
                         let _permit = semaphore.acquire().await.unwrap();
 
                         (
-                            service_clone,
-                            check_service_needs_update(service, &chain_configs, &ipfs_gateway)
-                                .await,
+                            original_service_id,
+                            check_service_needs_update(service, chain_configs, ipfs_gateway).await,
                         )
                     }
                 })
                 .collect();
 
-            futures::future::join_all(futures).await
-        });
+            let verification_results = futures::future::join_all(futures).await;
 
-        // Apply updates for services that need them
-        let updated_services = ctx.rt.block_on(async {
-            let mut updated_services = Vec::new();
-            for (original_service, verification_result) in verification_results {
+            // Apply updates for services that need them
+            for (original_service_id, verification_result) in verification_results {
                 match verification_result {
                     Ok(Some(current_service)) => {
                         // Service needs updating - apply the update using change_service_inner
                         if let Err(err) = self
-                            .change_service_inner(original_service.id(), current_service.clone())
+                            .change_service_inner(
+                                original_service_id.clone(),
+                                current_service.clone(),
+                            )
                             .await
                         {
                             tracing::error!(
-                                service_id = %original_service.id(),
+                                service_id = %original_service_id,
                                 error = %err,
                                 "Failed to apply service update at startup"
                             );
-                            updated_services.push(original_service);
                         } else {
                             tracing::info!(
                                 service_id = %current_service.id(),
                                 "ServiceURI updated at startup"
                             );
-                            updated_services.push(current_service);
                         }
                     }
                     Ok(None) => {
                         // No update needed
-                        updated_services.push(original_service);
                     }
                     Err(err) => {
                         tracing::error!(
-                            service_id = %original_service.id(),
+                            service_id = %original_service_id,
                             error = %err,
                             "Failed to verify ServiceURI at startup, using cached version"
                         );
-                        updated_services.push(original_service);
                     }
                 }
             }
-            updated_services
         });
-
-        for service in updated_services {
-            add_service_to_managers(
-                &service,
-                &self.trigger_manager,
-                &self.submission_manager,
-                None,
-            )?;
-        }
 
         for handle in handles {
             if let Err(err) = handle.join() {
@@ -490,6 +485,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         uri: UriString,
     ) -> Result<(), DispatcherError> {
         let service = fetch_service(&uri, &self.ipfs_gateway).await?;
+
         self.change_service_inner(service_id, service).await
     }
 
@@ -545,8 +541,8 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 }
 
-/// Standalone function to verify service URI without requiring Dispatcher clone
-/// Returns Some(Service) if the service needs updating, None if it's up to date
+/// Standalone function to verify service URI
+/// Returns Some(Service) with the new Service if the service needs updating, None if it's up to date
 async fn check_service_needs_update(
     service: &Service,
     chain_configs: &ChainConfigs,
