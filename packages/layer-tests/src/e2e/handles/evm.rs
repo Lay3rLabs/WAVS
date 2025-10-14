@@ -60,6 +60,10 @@ impl LameAnvilInstanceBuilder {
             self.chain_id,
             "--block-time".to_string(),
             "1".to_string(),
+            // process txs in order received instead of by gas price; should prevent dropping txs
+            // during high concurrent load
+            "--order".to_string(),
+            "fifo".to_string(),
         ];
 
         let child = Command::new("anvil")

@@ -113,13 +113,6 @@ impl MiddlewareInstanceInner {
             }
         }
     }
-
-    pub fn container_id(&self) -> &str {
-        match self {
-            MiddlewareInstanceInner::Eigenlayer(m) => &m.container_id,
-            MiddlewareInstanceInner::Poa(_) => "",
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
