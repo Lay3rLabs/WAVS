@@ -147,7 +147,6 @@ impl EigenlayerMiddleware {
         deployment_json.addresses.rpc_url = rpc_url;
         deployment_json.addresses.id = id;
         deployment_json.addresses.container_id = None;
-        deployment_json.addresses.nodes_dir_path = None;
 
         Ok(deployment_json.addresses)
     }

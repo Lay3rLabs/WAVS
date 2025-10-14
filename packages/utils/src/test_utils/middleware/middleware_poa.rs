@@ -26,9 +26,7 @@ impl PoaMiddleware {
         rpc_url: String,
         deployer_key_hex: String,
     ) -> Result<MiddlewareServiceManager> {
-        // Create isolated container for this service manager
         let nodes_dir = TempDir::new()?;
-        let nodes_dir_path = nodes_dir.path().to_string_lossy().to_string();
 
         let output = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
@@ -124,14 +122,11 @@ impl PoaMiddleware {
 
         let poa_address = deployment_json.addresses.poa_stake_registry;
 
-        // Keep the unique deployer_key_hex as owner (no transferOwnership)
-        // This allows parallel operations across different service managers
         Ok(MiddlewareServiceManager {
             deployer_key_hex,
             rpc_url,
             id: container_id.clone(),
             container_id: Some(container_id),
-            nodes_dir_path: Some(nodes_dir_path),
             address: poa_address,
             proxy_admin: deployment_json.addresses.proxy_admin,
             impl_address: poa_address,
