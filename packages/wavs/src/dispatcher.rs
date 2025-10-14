@@ -24,6 +24,7 @@
 
 use alloy_provider::ProviderBuilder;
 use anyhow::Result;
+use futures::{stream, StreamExt};
 use iri_string::types::{CreationError, UriString};
 use layer_climb::prelude::Address;
 use std::ops::Bound;
@@ -311,26 +312,19 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
             // Limit concurrent ServiceURI checks
             const MAX_CONCURRENT_CHECKS: usize = 10;
-            let semaphore = Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_CHECKS));
-
-            let futures: Vec<_> = initial_services
-                .iter()
+            let verification_results = stream::iter(&initial_services)
                 .map(|service| {
                     let original_service_id = service.id();
-                    let semaphore = semaphore.clone();
                     async move {
-                        // Acquire semaphore permit before making network request
-                        let _permit = semaphore.acquire().await.unwrap();
-
                         (
                             original_service_id,
                             check_service_needs_update(service, chain_configs, ipfs_gateway).await,
                         )
                     }
                 })
-                .collect();
-
-            let verification_results = futures::future::join_all(futures).await;
+                .buffer_unordered(MAX_CONCURRENT_CHECKS)
+                .collect::<Vec<_>>()
+                .await;
 
             // Apply updates for services that need them
             for (original_service_id, verification_result) in verification_results {
