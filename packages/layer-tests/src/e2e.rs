@@ -80,7 +80,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let configs: Configs = config.into();
 
-    let handles = AppHandles::start(&ctx, &configs, metrics);
+    let handles = AppHandles::start(&ctx, &configs, metrics, configs.middleware_type);
     tracing::info!("Background processes started");
 
     let mut kill_receiver = ctx.get_kill_receiver();
