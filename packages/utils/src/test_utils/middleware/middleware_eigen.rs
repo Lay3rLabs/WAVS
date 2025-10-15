@@ -169,7 +169,7 @@ impl EigenlayerMiddleware {
 
         let config_dir = TempDir::new()?;
         let filename = middleware_config_filename(container_id);
-        let config_filepath = config_dir.path().join(format!("{filename}.json"));
+        let config_filepath = config_dir.path().join(format!("{filename}"));
         fs::write(&config_filepath, serde_json::to_string(config)?).await?;
 
         let output = Command::new("docker")
