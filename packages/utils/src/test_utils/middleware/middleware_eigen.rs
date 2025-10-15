@@ -191,7 +191,8 @@ impl EigenlayerMiddleware {
             .await?;
 
         if !output.status.success() {
-            bail!("Failed to copy config file to container");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("Failed to copy config file to container: {}", stderr);
         }
 
         let res = tokio::time::timeout(
