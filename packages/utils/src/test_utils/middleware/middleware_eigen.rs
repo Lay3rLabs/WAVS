@@ -29,6 +29,7 @@ impl EigenlayerMiddleware {
         let nodes_dir = TempDir::new()?;
         let config_dir = TempDir::new()?;
 
+        tracing::debug!("EigenLayer: Starting docker container creation");
         let output = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
             Command::new("docker")
@@ -76,11 +77,15 @@ impl EigenlayerMiddleware {
             bail!("Docker returned empty container ID. stderr: {}", stderr);
         }
 
+        tracing::debug!("EigenLayer: Container created: {}", container_id);
+
         let filename = middleware_deploy_filename(&container_id);
 
         // https://github.com/Lay3rLabs/wavs-middleware?tab=readme-ov-file#2-deploy-empty-mock-contracts
-        let output = tokio::time::timeout(Self::DEFAULT_TIMEOUT, async {
-            let res = Command::new("docker")
+        tracing::debug!("EigenLayer [{}]: Starting docker exec deploy", container_id);
+        let res = tokio::time::timeout(
+            Self::DEFAULT_TIMEOUT,
+            Command::new("docker")
                 .args([
                     "exec",
                     "-e",
@@ -98,14 +103,19 @@ impl EigenlayerMiddleware {
                 .stdout(Stdio::null())
                 .stderr(Stdio::inherit())
                 .spawn()?
-                .wait()
-                .await?;
+                .wait(),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("EigenLayer [{}]: Timeout during docker exec deploy", container_id))??;
 
-            if !res.success() {
-                bail!("Failed to deploy service manager");
-            }
+        if !res.success() {
+            bail!("Failed to deploy service manager");
+        }
 
-            // wait for file to land
+        tracing::debug!("EigenLayer [{}]: Docker exec completed, waiting for deployment file", container_id);
+
+        // wait for file to land
+        let output = tokio::time::timeout(Self::DEFAULT_TIMEOUT, async {
             loop {
                 let output = fs::read_to_string(nodes_dir.path().join(format!("{filename}.json")))
                     .await
@@ -116,7 +126,8 @@ impl EigenlayerMiddleware {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         })
-        .await??;
+        .await
+        .map_err(|_| anyhow::anyhow!("EigenLayer [{}]: Timeout waiting for deployment file", container_id))??;
 
         #[derive(Deserialize)]
         struct DeploymentJson {
