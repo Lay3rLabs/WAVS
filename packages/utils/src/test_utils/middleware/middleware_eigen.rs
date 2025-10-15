@@ -12,13 +12,19 @@ use super::{
     MiddlewareServiceManagerConfig, MIDDLEWARE_IMAGE,
 };
 
-pub struct EigenlayerMiddleware {}
+pub struct EigenlayerMiddleware {
+    nodes_dir: TempDir,
+    config_dir: TempDir,
+}
 
 impl EigenlayerMiddleware {
     pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub async fn new() -> Result<Self> {
-        Ok(Self {})
+        Ok(Self {
+            nodes_dir: TempDir::new()?,
+            config_dir: TempDir::new()?,
+        })
     }
 
     pub async fn deploy_service_manager(
@@ -26,9 +32,6 @@ impl EigenlayerMiddleware {
         rpc_url: String,
         deployer_key_hex: String,
     ) -> Result<MiddlewareServiceManager> {
-        let nodes_dir = TempDir::new()?;
-        let config_dir = TempDir::new()?;
-
         tracing::debug!("EigenLayer: Starting docker container creation");
         let output = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
@@ -41,11 +44,11 @@ impl EigenlayerMiddleware {
                     "--entrypoint",
                     "",
                     "-v",
-                    &format!("{}:/root/.nodes", nodes_dir.path().display()),
+                    &format!("{}:/root/.nodes", self.nodes_dir.path().display()),
                     "-v",
                     &format!(
                         "{}:/wavs/contracts/deployments",
-                        config_dir.path().display()
+                        self.config_dir.path().display()
                     ),
                     MIDDLEWARE_IMAGE,
                     "tail",
@@ -125,9 +128,10 @@ impl EigenlayerMiddleware {
         // wait for file to land
         let output = tokio::time::timeout(Self::DEFAULT_TIMEOUT, async {
             loop {
-                let output = fs::read_to_string(nodes_dir.path().join(format!("{filename}.json")))
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to read service manager JSON: {}", e));
+                let output =
+                    fs::read_to_string(self.nodes_dir.path().join(&format!("{filename}.json")))
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Failed to read service manager JSON: {}", e));
                 if output.is_ok() {
                     break output;
                 }
@@ -167,9 +171,8 @@ impl EigenlayerMiddleware {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("EigenLayer service manager missing container_id"))?;
 
-        let config_dir = TempDir::new()?;
         let filename = middleware_config_filename(container_id);
-        let config_filepath = config_dir.path().join(&filename);
+        let config_filepath = self.config_dir.path().join(&format!("{filename}.json"));
 
         fs::write(&config_filepath, serde_json::to_string(config)?).await?;
 
@@ -177,7 +180,10 @@ impl EigenlayerMiddleware {
             .args([
                 "cp",
                 config_filepath.to_string_lossy().as_ref(),
-                &format!("{}:/wavs/contracts/deployments/{}", container_id, filename),
+                &format!(
+                    "{}:/wavs/contracts/deployments/{}.json",
+                    container_id, filename
+                ),
             ])
             .output()
             .await?;
