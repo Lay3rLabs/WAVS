@@ -169,17 +169,15 @@ impl EigenlayerMiddleware {
 
         let config_dir = TempDir::new()?;
         let filename = middleware_config_filename(container_id);
-        let config_filepath = config_dir.path().join(format!("{filename}"));
+        let config_filepath = config_dir.path().join(&filename);
+
         fs::write(&config_filepath, serde_json::to_string(config)?).await?;
 
         let output = Command::new("docker")
             .args([
                 "cp",
                 config_filepath.to_string_lossy().as_ref(),
-                &format!(
-                    "{}:/wavs/contracts/deployments/{}.json",
-                    container_id, filename
-                ),
+                &format!("{}:/wavs/contracts/deployments/{}", container_id, filename),
             ])
             .output()
             .await?;
