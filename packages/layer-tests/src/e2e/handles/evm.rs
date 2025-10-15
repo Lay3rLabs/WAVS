@@ -68,10 +68,9 @@ impl LameAnvilInstanceBuilder {
             // disable base fee and min gas price to avoid txs getting stuck
             "--block-base-fee-per-gas".to_string(),
             "0".to_string(),
-            "--min-gas-price".to_string(),
+            "--gas-price".to_string(),
             "0".to_string(),
-            "--block-gas-limit".to_string(),
-            "0xFFFFFFFFFFFF".to_string(),
+            "--disable-block-gas-limit".to_string(),
         ];
 
         let child = Command::new("anvil")
