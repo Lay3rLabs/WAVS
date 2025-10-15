@@ -26,6 +26,8 @@ impl PoaMiddleware {
         rpc_url: String,
         deployer_key_hex: String,
     ) -> Result<MiddlewareServiceManager> {
+        // unlike eigenlayer, POA needs a fresh temp dir for each deployment, since we can't name the output file
+        // but it also doesn't need to maintain that between commands, just needs it for deployment
         let nodes_dir = TempDir::new()?;
 
         let output = tokio::time::timeout(

@@ -45,11 +45,11 @@ impl Deref for MiddlewareInstance {
 }
 
 pub fn middleware_config_filename(id: &str) -> String {
-    format!("mock-config-{}.json", id)
+    format!("mock-config-{}", id)
 }
 
 pub fn middleware_deploy_filename(id: &str) -> String {
-    format!("mock-deploy-{}.json", id)
+    format!("mock-deploy-{}", id)
 }
 
 pub enum MiddlewareInstanceInner {
