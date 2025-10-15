@@ -63,8 +63,6 @@ impl LameAnvilInstanceBuilder {
             // process txs in order received instead of by gas price
             "--order".to_string(),
             "fifo".to_string(),
-            "--gas-limit".to_string(),
-            "100000000".to_string(),
             // disable base fee and min gas price to avoid txs getting stuck
             "--block-base-fee-per-gas".to_string(),
             "0".to_string(),
