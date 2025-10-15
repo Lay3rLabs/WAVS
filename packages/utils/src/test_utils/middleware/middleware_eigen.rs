@@ -106,13 +106,21 @@ impl EigenlayerMiddleware {
                 .wait(),
         )
         .await
-        .map_err(|_| anyhow::anyhow!("EigenLayer [{}]: Timeout during docker exec deploy", container_id))??;
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "EigenLayer [{}]: Timeout during docker exec deploy",
+                container_id
+            )
+        })??;
 
         if !res.success() {
             bail!("Failed to deploy service manager");
         }
 
-        tracing::debug!("EigenLayer [{}]: Docker exec completed, waiting for deployment file", container_id);
+        tracing::debug!(
+            "EigenLayer [{}]: Docker exec completed, waiting for deployment file",
+            container_id
+        );
 
         // wait for file to land
         let output = tokio::time::timeout(Self::DEFAULT_TIMEOUT, async {
@@ -127,7 +135,12 @@ impl EigenlayerMiddleware {
             }
         })
         .await
-        .map_err(|_| anyhow::anyhow!("EigenLayer [{}]: Timeout waiting for deployment file", container_id))??;
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "EigenLayer [{}]: Timeout waiting for deployment file",
+                container_id
+            )
+        })??;
 
         #[derive(Deserialize)]
         struct DeploymentJson {
