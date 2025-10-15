@@ -11,7 +11,7 @@ env:
 jobs:
   publish_crate:
     name: Verify and Publish Crate
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout the repo
         uses: actions/checkout@v4
@@ -86,7 +86,7 @@ jobs:
 
   publish_wasm:
     name: Publish WASM to wa.dev
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout the repo
         uses: actions/checkout@v4
