@@ -22,6 +22,9 @@ impl EigenlayerMiddleware {
 
     pub async fn new() -> Result<Self> {
         Ok(Self {
+            // for eigenlayer, different commands may need to read/write files in the mounted dirs
+            // so make sure we keep them alive between commands
+            // POA does not have this requirement atm
             nodes_dir: TempDir::new()?,
             config_dir: TempDir::new()?,
         })
@@ -129,7 +132,7 @@ impl EigenlayerMiddleware {
         let output = tokio::time::timeout(Self::DEFAULT_TIMEOUT, async {
             loop {
                 let output =
-                    fs::read_to_string(self.nodes_dir.path().join(&format!("{filename}.json")))
+                    fs::read_to_string(self.nodes_dir.path().join(format!("{filename}.json")))
                         .await
                         .map_err(|e| anyhow::anyhow!("Failed to read service manager JSON: {}", e));
                 if output.is_ok() {
@@ -172,7 +175,7 @@ impl EigenlayerMiddleware {
             .ok_or_else(|| anyhow::anyhow!("EigenLayer service manager missing container_id"))?;
 
         let filename = middleware_config_filename(container_id);
-        let config_filepath = self.config_dir.path().join(&format!("{filename}.json"));
+        let config_filepath = self.config_dir.path().join(format!("{filename}.json"));
 
         fs::write(&config_filepath, serde_json::to_string(config)?).await?;
 

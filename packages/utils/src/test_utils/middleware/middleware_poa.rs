@@ -12,17 +12,13 @@ use super::{MiddlewareServiceManager, MiddlewareServiceManagerConfig, POA_MIDDLE
 
 const POA_DEPLOY_FILE: &str = "poa_deploy.json";
 
-pub struct PoaMiddleware {
-    nodes_dir: TempDir,
-}
+pub struct PoaMiddleware {}
 
 impl PoaMiddleware {
     pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub async fn new() -> Result<Self> {
-        Ok(Self {
-            nodes_dir: TempDir::new()?,
-        })
+        Ok(Self {})
     }
 
     pub async fn deploy_service_manager(
@@ -30,6 +26,10 @@ impl PoaMiddleware {
         rpc_url: String,
         deployer_key_hex: String,
     ) -> Result<MiddlewareServiceManager> {
+        // unlike eigenlayer, POA needs a fresh temp dir for each deployment, since we can't name the output file
+        // but it also doesn't need to maintain that between commands, just needs it for deployment
+        let nodes_dir = TempDir::new()?;
+
         let output = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
             Command::new("docker")
@@ -41,7 +41,7 @@ impl PoaMiddleware {
                     "--entrypoint",
                     "",
                     "-v",
-                    &format!("{}:/root/.nodes", self.nodes_dir.path().display()),
+                    &format!("{}:/root/.nodes", nodes_dir.path().display()),
                     POA_MIDDLEWARE_IMAGE,
                     "tail",
                     "-f",
@@ -94,7 +94,7 @@ impl PoaMiddleware {
             }
 
             loop {
-                let output = fs::read_to_string(self.nodes_dir.path().join(POA_DEPLOY_FILE))
+                let output = fs::read_to_string(nodes_dir.path().join(POA_DEPLOY_FILE))
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to read POA deployment JSON: {}", e));
                 if output.is_ok() {
