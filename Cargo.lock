@@ -1850,7 +1850,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chain-trigger-lookup"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
@@ -2206,7 +2206,7 @@ dependencies = [
 
 [[package]]
 name = "cosmos-query"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -3189,7 +3189,7 @@ dependencies = [
 
 [[package]]
 name = "echo-block-interval"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -3199,14 +3199,14 @@ dependencies = [
 
 [[package]]
 name = "echo-cron-interval"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-data"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "example-helpers",
  "wstd",
@@ -3416,7 +3416,7 @@ dependencies = [
 
 [[package]]
 name = "example-helpers"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -3434,7 +3434,7 @@ dependencies = [
 
 [[package]]
 name = "example-types"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "layer-climb-address",
  "serde",
@@ -4670,7 +4670,7 @@ dependencies = [
 
 [[package]]
 name = "kv-store"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -4825,7 +4825,7 @@ dependencies = [
 
 [[package]]
 name = "layer-tests"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -5884,7 +5884,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissions"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -7581,7 +7581,7 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
 name = "simple-aggregator"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -7683,7 +7683,7 @@ dependencies = [
 
 [[package]]
 name = "square"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -8095,7 +8095,7 @@ dependencies = [
 
 [[package]]
 name = "timer-aggregator"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
@@ -8812,7 +8812,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -9831,7 +9831,7 @@ dependencies = [
 
 [[package]]
 name = "wavs"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9887,7 +9887,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-aggregator"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9922,7 +9922,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-benchmark-common"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "tempfile",
  "utils",
@@ -9933,7 +9933,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-cli"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -9966,7 +9966,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-dev-tools"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-signer-local",
  "clap 4.5.48",
@@ -9980,7 +9980,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-engine"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -10008,7 +10008,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-types"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
