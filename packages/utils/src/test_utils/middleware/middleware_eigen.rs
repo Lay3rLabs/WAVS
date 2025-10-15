@@ -1,5 +1,4 @@
 use std::process::Stdio;
-use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 
 use anyhow::{bail, Result};
@@ -14,19 +13,29 @@ use super::{
 };
 
 pub struct EigenlayerMiddleware {
-    pub container_id: String,
     nodes_dir: TempDir,
     config_dir: TempDir,
-    service_manager_count: AtomicUsize,
 }
 
 impl EigenlayerMiddleware {
     pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub async fn new() -> Result<Self> {
-        let nodes_dir = TempDir::new()?;
-        let config_dir = TempDir::new()?;
+        Ok(Self {
+            // for eigenlayer, different commands may need to read/write files in the mounted dirs
+            // so make sure we keep them alive between commands
+            // POA does not have this requirement atm
+            nodes_dir: TempDir::new()?,
+            config_dir: TempDir::new()?,
+        })
+    }
 
+    pub async fn deploy_service_manager(
+        &self,
+        rpc_url: String,
+        deployer_key_hex: String,
+    ) -> Result<MiddlewareServiceManager> {
+        tracing::debug!("EigenLayer: Starting docker container creation");
         let output = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
             Command::new("docker")
@@ -38,11 +47,11 @@ impl EigenlayerMiddleware {
                     "--entrypoint",
                     "",
                     "-v",
-                    &format!("{}:/root/.nodes", nodes_dir.path().display()),
+                    &format!("{}:/root/.nodes", self.nodes_dir.path().display()),
                     "-v",
                     &format!(
                         "{}:/wavs/contracts/deployments",
-                        config_dir.path().display()
+                        self.config_dir.path().display()
                     ),
                     MIDDLEWARE_IMAGE,
                     "tail",
@@ -74,29 +83,15 @@ impl EigenlayerMiddleware {
             bail!("Docker returned empty container ID. stderr: {}", stderr);
         }
 
-        Ok(Self {
-            container_id,
-            nodes_dir,
-            config_dir,
-            service_manager_count: AtomicUsize::new(0),
-        })
-    }
+        tracing::debug!("EigenLayer: Container created: {}", container_id);
 
-    pub async fn deploy_service_manager(
-        &self,
-        rpc_url: String,
-        deployer_key_hex: String,
-    ) -> Result<MiddlewareServiceManager> {
-        let id = self
-            .service_manager_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-            .to_string();
-
-        let filename = middleware_deploy_filename(&id);
+        let filename = middleware_deploy_filename(&container_id);
 
         // https://github.com/Lay3rLabs/wavs-middleware?tab=readme-ov-file#2-deploy-empty-mock-contracts
-        let output = tokio::time::timeout(Self::DEFAULT_TIMEOUT, async {
-            let res = Command::new("docker")
+        tracing::debug!("EigenLayer [{}]: Starting docker exec deploy", container_id);
+        let res = tokio::time::timeout(
+            Self::DEFAULT_TIMEOUT,
+            Command::new("docker")
                 .args([
                     "exec",
                     "-e",
@@ -105,7 +100,7 @@ impl EigenlayerMiddleware {
                     &format!("MOCK_RPC_URL={rpc_url}"),
                     "-e",
                     &format!("DEPLOY_FILE_MOCK={filename}"),
-                    &self.container_id,
+                    &container_id,
                     "/wavs/scripts/cli.sh",
                     "-m",
                     "mock",
@@ -114,14 +109,27 @@ impl EigenlayerMiddleware {
                 .stdout(Stdio::null())
                 .stderr(Stdio::inherit())
                 .spawn()?
-                .wait()
-                .await?;
+                .wait(),
+        )
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "EigenLayer [{}]: Timeout during docker exec deploy",
+                container_id
+            )
+        })??;
 
-            if !res.success() {
-                bail!("Failed to deploy service manager");
-            }
+        if !res.success() {
+            bail!("Failed to deploy service manager");
+        }
 
-            // wait for file to land
+        tracing::debug!(
+            "EigenLayer [{}]: Docker exec completed, waiting for deployment file",
+            container_id
+        );
+
+        // wait for file to land
+        let output = tokio::time::timeout(Self::DEFAULT_TIMEOUT, async {
             loop {
                 let output =
                     fs::read_to_string(self.nodes_dir.path().join(format!("{filename}.json")))
@@ -133,7 +141,13 @@ impl EigenlayerMiddleware {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         })
-        .await??;
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "EigenLayer [{}]: Timeout waiting for deployment file",
+                container_id
+            )
+        })??;
 
         #[derive(Deserialize)]
         struct DeploymentJson {
@@ -145,7 +159,7 @@ impl EigenlayerMiddleware {
 
         deployment_json.addresses.deployer_key_hex = deployer_key_hex;
         deployment_json.addresses.rpc_url = rpc_url;
-        deployment_json.addresses.id = id;
+        deployment_json.addresses.container_id = Some(container_id);
 
         Ok(deployment_json.addresses)
     }
@@ -155,9 +169,31 @@ impl EigenlayerMiddleware {
         service_manager: &MiddlewareServiceManager,
         config: &MiddlewareServiceManagerConfig,
     ) -> Result<()> {
-        let filename = middleware_config_filename(&service_manager.id);
+        let container_id = service_manager
+            .container_id
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("EigenLayer service manager missing container_id"))?;
+
+        let filename = middleware_config_filename(container_id);
         let config_filepath = self.config_dir.path().join(format!("{filename}.json"));
+
         fs::write(&config_filepath, serde_json::to_string(config)?).await?;
+
+        let output = Command::new("docker")
+            .args([
+                "cp",
+                config_filepath.to_string_lossy().as_ref(),
+                &format!(
+                    "{}:/wavs/contracts/deployments/{}.json",
+                    container_id, filename
+                ),
+            ])
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            bail!("Failed to copy config file to container");
+        }
 
         let res = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
@@ -172,7 +208,7 @@ impl EigenlayerMiddleware {
                     &format!("MOCK_SERVICE_MANAGER_ADDRESS={}", service_manager.address),
                     "-e",
                     &format!("CONFIGURE_FILE={}", filename),
-                    &self.container_id,
+                    container_id,
                     "/wavs/scripts/cli.sh",
                     "-m",
                     "mock",
@@ -197,6 +233,11 @@ impl EigenlayerMiddleware {
         service_manager: &MiddlewareServiceManager,
         service_uri: &str,
     ) -> Result<()> {
+        let container_id = service_manager
+            .container_id
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("EigenLayer service manager missing container_id"))?;
+
         let res = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
             Command::new("docker")
@@ -210,7 +251,7 @@ impl EigenlayerMiddleware {
                     &format!("FUNDED_KEY={}", service_manager.deployer_key_hex),
                     "-e",
                     &format!("SERVICE_URI={}", service_uri),
-                    &self.container_id,
+                    container_id,
                     "/wavs/scripts/cli.sh",
                     "set_service_uri",
                 ])
@@ -226,21 +267,5 @@ impl EigenlayerMiddleware {
         }
 
         Ok(())
-    }
-}
-
-impl Drop for EigenlayerMiddleware {
-    fn drop(&mut self) {
-        tracing::warn!(
-            "Stopping EigenLayer middleware container: {}",
-            self.container_id
-        );
-        if let Err(e) = std::process::Command::new("docker")
-            .args(["rm", "-f", &self.container_id])
-            .spawn()
-            .and_then(|mut cmd| cmd.wait())
-        {
-            tracing::warn!("Failed to remove EigenLayer middleware container: {:?}", e);
-        }
     }
 }

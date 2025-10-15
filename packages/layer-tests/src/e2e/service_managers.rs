@@ -199,7 +199,7 @@ impl ServiceManagers {
     pub async fn register_operators(&self, registry: &TestRegistry, clients: &Clients) {
         let mut futures = Vec::new();
 
-        for test in registry.list_all() {
+        for (test_index, test) in registry.list_all().enumerate() {
             let (mock_service_manager, chain) = self.lookup.get(&test.name).unwrap();
             let service_manager = ServiceManager::Evm {
                 chain: chain.clone(),
@@ -215,9 +215,13 @@ impl ServiceManagers {
                 .await
                 .unwrap();
 
-            let operator_signer =
-                utils::evm_client::signing::make_signer(&self.configs.mnemonics.wavs, Some(0))
-                    .unwrap();
+            // unique HD index per test to avoid nonce collisions during parallel operations
+            let operator_hd_index = test_index as u32;
+            let operator_signer = utils::evm_client::signing::make_signer(
+                &self.configs.mnemonics.wavs,
+                Some(operator_hd_index),
+            )
+            .unwrap();
             let operator_address = operator_signer.address();
             let operator_private_key = const_hex::encode(operator_signer.to_bytes());
 

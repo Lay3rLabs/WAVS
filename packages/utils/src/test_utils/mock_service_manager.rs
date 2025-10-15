@@ -30,16 +30,33 @@ impl MockServiceManager {
             .word_count(24)
             .build_random()?;
 
+        tracing::info!(
+            "Starting transfer_funds for deployer: {:?}",
+            deployer.address()
+        );
         wallet_client
             .transfer_funds(deployer.address(), "1")
             .await?;
+        tracing::info!(
+            "Completed transfer_funds for deployer: {:?}",
+            deployer.address()
+        );
 
         let deployer_key_hex = const_hex::encode(deployer.credential().to_bytes());
         let rpc_url = wallet_client.config.endpoint.to_string();
 
+        tracing::info!(
+            "Starting deploy_service_manager for deployer: {:?}",
+            deployer.address()
+        );
         let service_manager = middleware_instance
             .deploy_service_manager(rpc_url, deployer_key_hex)
             .await?;
+        tracing::info!(
+            "Completed deploy_service_manager for deployer: {:?}, address: {}",
+            deployer.address(),
+            service_manager.address
+        );
 
         Ok(Self {
             deployer,
