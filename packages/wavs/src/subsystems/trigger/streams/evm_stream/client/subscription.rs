@@ -212,7 +212,7 @@ impl SubscriptionsInner {
             .store(toggle, std::sync::atomic::Ordering::SeqCst);
 
         if !toggle {
-            self.unsubscribe(UnsubscribeKind::NewHeads);
+            self.unsubscribe(SubscriptionCategory::NewHeads);
         } else {
             // only need to resubscribe if turning on since we only have one kind of "newHeads" subscription atm
             self.resubscribe();
@@ -233,7 +233,7 @@ impl SubscriptionsInner {
                 lock.topics.insert(topic);
             }
         }
-        self.unsubscribe(UnsubscribeKind::AllLogs);
+        self.unsubscribe(SubscriptionCategory::AllLogs);
 
         // logs is different, needs to resubscribe since different filters are different subscriptions
         self.resubscribe();
@@ -263,13 +263,13 @@ impl SubscriptionsInner {
                 }
             }
         }
-        self.unsubscribe(UnsubscribeKind::AllLogs);
+        self.unsubscribe(SubscriptionCategory::AllLogs);
         self.resubscribe();
     }
 
     pub fn disable_all_logs(&self) {
         *self._logs.write().unwrap() = None;
-        self.unsubscribe(UnsubscribeKind::AllLogs);
+        self.unsubscribe(SubscriptionCategory::AllLogs);
         // no need to resubscribe
     }
 
@@ -277,7 +277,7 @@ impl SubscriptionsInner {
         self._pending_transactions
             .store(toggle, std::sync::atomic::Ordering::SeqCst);
         if !toggle {
-            self.unsubscribe(UnsubscribeKind::NewPendingTransactions);
+            self.unsubscribe(SubscriptionCategory::NewPendingTransactions);
         } else {
             // only need to resubscribe if turning on since we only have one kind of "pending txs" subscription atm
             self.resubscribe();
@@ -562,11 +562,11 @@ impl SubscriptionsInner {
         }
     }
 
-    fn unsubscribe(&self, kind: UnsubscribeKind) {
-        let ids = self.ids.list_by_unsubscribe(kind);
+    fn unsubscribe(&self, category: SubscriptionCategory) {
+        let ids = self.ids.list_by_category(category);
 
         // mark the rpcs in flight to unsubscribe when they land
-        self.rpc_ids_in_flight.set_unsubscribe(kind);
+        self.rpc_ids_in_flight.set_unsubscribe(category);
 
         // send the unsubscribe request for the active subscriptions
         // will actually unsubscribe when the ack response lands
@@ -659,8 +659,8 @@ struct LogFilter {
 #[derive(Default)]
 struct SubscriptionIds {
     _lookup: std::sync::RwLock<std::collections::HashMap<String, SubscriptionKind>>,
-    _unsubscribe_lookup:
-        std::sync::RwLock<std::collections::HashMap<UnsubscribeKind, HashSet<String>>>,
+    _categories:
+        std::sync::RwLock<std::collections::HashMap<SubscriptionCategory, HashSet<String>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -692,35 +692,40 @@ impl TryFrom<RpcRequestKind> for SubscriptionKind {
     }
 }
 
+// this is used to track:
+// * unsubscriptions, since we want to unsubscribe *all* subscriptions of a given kind (e.g. ignore the log filter)
+// * latest-and-greatest subscriptions, since we only ever want one active subscription of a given kind (e.g. newHeads, newPendingTransactions, logs of *any* filter)
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-enum UnsubscribeKind {
+enum SubscriptionCategory {
     NewHeads,
     AllLogs,
     NewPendingTransactions,
 }
 
-impl From<&SubscriptionKind> for UnsubscribeKind {
+impl From<&SubscriptionKind> for SubscriptionCategory {
     fn from(kind: &SubscriptionKind) -> Self {
         match kind {
-            SubscriptionKind::NewHeads => UnsubscribeKind::NewHeads,
-            SubscriptionKind::Logs { .. } => UnsubscribeKind::AllLogs,
-            SubscriptionKind::NewPendingTransactions => UnsubscribeKind::NewPendingTransactions,
+            SubscriptionKind::NewHeads => SubscriptionCategory::NewHeads,
+            SubscriptionKind::Logs { .. } => SubscriptionCategory::AllLogs,
+            SubscriptionKind::NewPendingTransactions => {
+                SubscriptionCategory::NewPendingTransactions
+            }
         }
     }
 }
 
-impl TryFrom<&RpcRequestKind> for UnsubscribeKind {
+impl TryFrom<&RpcRequestKind> for SubscriptionCategory {
     type Error = &'static str;
 
     fn try_from(kind: &RpcRequestKind) -> Result<Self, Self::Error> {
         match kind {
-            RpcRequestKind::SubscribeNewHeads => Ok(UnsubscribeKind::NewHeads),
-            RpcRequestKind::SubscribeLogs { .. } => Ok(UnsubscribeKind::AllLogs),
+            RpcRequestKind::SubscribeNewHeads => Ok(SubscriptionCategory::NewHeads),
+            RpcRequestKind::SubscribeLogs { .. } => Ok(SubscriptionCategory::AllLogs),
             RpcRequestKind::SubscribeNewPendingTransactions => {
-                Ok(UnsubscribeKind::NewPendingTransactions)
+                Ok(SubscriptionCategory::NewPendingTransactions)
             }
             RpcRequestKind::Unsubscribe { .. } => {
-                Err("Cannot convert rpc request for Unsubscribe to UnsubscribeKind")
+                Err("Cannot convert rpc request for Unsubscribe to SubscriptionCategory")
             }
         }
     }
@@ -729,11 +734,11 @@ impl TryFrom<&RpcRequestKind> for UnsubscribeKind {
 impl SubscriptionIds {
     fn clear(&self) {
         self._lookup.write().unwrap().clear();
-        self._unsubscribe_lookup.write().unwrap().clear();
+        self._categories.write().unwrap().clear();
     }
 
     fn insert(&self, id: String, kind: SubscriptionKind) {
-        self._unsubscribe_lookup
+        self._categories
             .write()
             .unwrap()
             .entry((&kind).into())
@@ -743,8 +748,8 @@ impl SubscriptionIds {
         self._lookup.write().unwrap().insert(id.clone(), kind);
     }
 
-    fn list_by_unsubscribe(&self, kind: UnsubscribeKind) -> Vec<String> {
-        match self._unsubscribe_lookup.read().unwrap().get(&kind) {
+    fn list_by_category(&self, category: SubscriptionCategory) -> Vec<String> {
+        match self._categories.read().unwrap().get(&category) {
             Some(ids) => ids.iter().cloned().collect(),
             None => vec![],
         }
@@ -752,7 +757,7 @@ impl SubscriptionIds {
 
     fn remove(&self, id: &str) {
         self._lookup.write().unwrap().remove(id);
-        for (_kind, ids) in self._unsubscribe_lookup.write().unwrap().iter_mut() {
+        for (_kind, ids) in self._categories.write().unwrap().iter_mut() {
             ids.remove(id);
         }
     }
@@ -796,13 +801,13 @@ impl RpcIdsInFlight {
     }
 
     // We want to unsubscribe *all* subscriptions of a given kind, irregardless of log filter
-    fn set_unsubscribe(&self, kind: UnsubscribeKind) {
+    fn set_unsubscribe(&self, category: SubscriptionCategory) {
         let lookup = &mut *self._lookup.write().unwrap();
 
         for (_, state) in lookup.iter_mut() {
             match state {
                 RpcFlightState::ActivateOnLand { kind: req_kind }
-                    if UnsubscribeKind::try_from(&*req_kind) == Ok(kind) =>
+                    if SubscriptionCategory::try_from(&*req_kind) == Ok(category) =>
                 {
                     *state = RpcFlightState::UnsubscribeOnLand;
                 }
