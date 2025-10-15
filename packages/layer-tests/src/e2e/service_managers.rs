@@ -106,7 +106,10 @@ impl ServiceManagers {
             // EigenLayer deploys 5 contracts per service manager (~140 concurrent txs for 28 tests)
             // POA deploys 2 contracts per service manager (~56 concurrent txs for 28 tests)
             // Batch EigenLayer deployments to avoid overwhelming Anvil on CI
-            let is_eigenlayer = matches!(*middleware_instance, utils::test_utils::middleware::MiddlewareInstanceInner::Eigenlayer(_));
+            let is_eigenlayer = matches!(
+                *middleware_instance,
+                utils::test_utils::middleware::MiddlewareInstanceInner::Eigenlayer(_)
+            );
 
             if is_eigenlayer {
                 const BATCH_SIZE: usize = 15;
