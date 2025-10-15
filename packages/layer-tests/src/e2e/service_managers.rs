@@ -103,33 +103,10 @@ impl ServiceManagers {
         tracing::info!("Deploying {} service managers", futures.len());
 
         if self.configs.middleware_concurrency {
-            // EigenLayer deploys 5 contracts per service manager (~140 concurrent txs for 28 tests)
-            // POA deploys 2 contracts per service manager (~56 concurrent txs for 28 tests)
-            // Batch EigenLayer deployments to avoid overwhelming Anvil on CI
-            let is_eigenlayer = matches!(
-                *middleware_instance,
-                utils::test_utils::middleware::MiddlewareInstanceInner::Eigenlayer(_)
-            );
-
-            if is_eigenlayer {
-                const BATCH_SIZE: usize = 15;
-                let mut futures_vec = futures;
-                while !futures_vec.is_empty() {
-                    let batch_size = BATCH_SIZE.min(futures_vec.len());
-                    let batch: Vec<_> = futures_vec.drain(..batch_size).collect();
-                    let mut futures_unordered = FuturesUnordered::from_iter(batch);
-                    while let Some((test_name, value)) = futures_unordered.next().await {
-                        if lookup.insert(test_name.clone(), value).is_some() {
-                            panic!("Service manager for test {} already exists", test_name);
-                        }
-                    }
-                }
-            } else {
-                let mut futures_unordered = FuturesUnordered::from_iter(futures);
-                while let Some((test_name, value)) = futures_unordered.next().await {
-                    if lookup.insert(test_name.clone(), value).is_some() {
-                        panic!("Service manager for test {} already exists", test_name);
-                    }
+            let mut futures_unordered = FuturesUnordered::from_iter(futures);
+            while let Some((test_name, value)) = futures_unordered.next().await {
+                if lookup.insert(test_name.clone(), value).is_some() {
+                    panic!("Service manager for test {} already exists", test_name);
                 }
             }
         } else {
