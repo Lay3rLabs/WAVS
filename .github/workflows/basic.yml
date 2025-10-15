@@ -20,7 +20,7 @@ env:
 jobs:
   test-eigenlayer:
     name: Test Suite (EigenLayer)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +51,7 @@ jobs:
 
   test-poa:
     name: Test Suite (POA)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
 
@@ -83,7 +83,7 @@ jobs:
 
   test-suite:
     name: Test Suite
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     needs: [test-eigenlayer, test-poa]
     if: always()
     steps:
