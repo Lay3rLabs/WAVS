@@ -398,7 +398,8 @@ impl SubscriptionsInner {
     }
 
     fn on_received_rpc_response(&self, id: RpcId, response: RpcResponse) {
-        let removed_rpc_in_flight_state = self.rpc_ids_in_flight.remove(&id);
+        let (removed_rpc_in_flight_state, removed_rpc_latest_subscription_category) =
+            self.rpc_ids_in_flight.remove(&id);
         // since we clear the rpc ids (and sub ids) on disconnect,
         // we can be sure that any new subscription id we get is for this connection
         let kind = match self.rpc_ids.kind(id) {
@@ -433,7 +434,24 @@ impl SubscriptionsInner {
 
                 match SubscriptionKind::try_from(kind) {
                     Ok(kind) => {
-                        self.ids.insert(subscription_id, kind);
+                        let most_recent_category = {
+                            match removed_rpc_latest_subscription_category {
+                                Some(category) => {
+                                    let cat = SubscriptionCategory::from(&kind);
+                                    // just a sanity check
+                                    if cat != category {
+                                        tracing::warn!("EVM: weird, got mismatched subscription category for rpc id {}: expected {:?}, got {:?}", id.data().as_ffi(), cat, category);
+                                    }
+                                    true
+                                }
+                                None => false,
+                            }
+                        };
+
+                        // theoretically we should only ever insert when most_recent_category is true
+                        // but then we would miss events if the less-recent subscription landed first
+                        // and an event fires before the most-recent one lands
+                        self.ids.insert(subscription_id, kind, most_recent_category);
                     }
                     Err(e) => {
                         tracing::error!("EVM: received newSubscription response for unknown subscription (rpc_id {}, subscription_id {}): {}", id.data().as_ffi(), subscription_id, e);
@@ -514,8 +532,15 @@ impl SubscriptionsInner {
                         "EVM: received newHeads event for unknown subscription id {}",
                         subscription_id
                     );
-                } else if let Err(e) = subscription_block_height_tx.send(header.number) {
-                    tracing::error!("EVM: failed to send new block height: {}", e);
+                } else if self
+                    .ids
+                    .is_most_recent(&subscription_id, SubscriptionCategory::NewHeads)
+                {
+                    if let Err(e) = subscription_block_height_tx.send(header.number) {
+                        tracing::error!("EVM: failed to send new block height: {}", e);
+                    }
+                } else {
+                    tracing::info!("EVM: ignoring newHeads event for non-most-recent newHeads subscription id {}", subscription_id);
                 }
             }
             RpcSubscriptionEvent::Logs(log) => {
@@ -536,13 +561,18 @@ impl SubscriptionsInner {
                         "EVM: received logs event for unknown subscription id {}",
                         subscription_id
                     );
-                } else {
-                    tracing::info!("EVM: forwarding log event to channel");
+                } else if self
+                    .ids
+                    .is_most_recent(&subscription_id, SubscriptionCategory::AllLogs)
+                {
                     if let Err(e) = subscription_log_tx.send(log) {
                         tracing::error!("EVM: failed to send log: {}", e);
-                    } else {
-                        tracing::info!("EVM: successfully sent log event to channel");
                     }
+                } else {
+                    tracing::info!(
+                        "EVM: ignoring log event for non-most-recent logs subscription id {}",
+                        subscription_id
+                    );
                 }
             }
             RpcSubscriptionEvent::NewPendingTransaction(tx) => {
@@ -553,10 +583,15 @@ impl SubscriptionsInner {
                         "EVM: received newPendingTransaction event for unknown subscription id {}",
                         subscription_id
                     );
-                }
-
-                if let Err(e) = subscription_new_pending_transaction_tx.send(tx) {
-                    tracing::error!("EVM: failed to send new pending transaction: {}", e);
+                } else if self.ids.is_most_recent(
+                    &subscription_id,
+                    SubscriptionCategory::NewPendingTransactions,
+                ) {
+                    if let Err(e) = subscription_new_pending_transaction_tx.send(tx) {
+                        tracing::error!("EVM: failed to send new pending transaction: {}", e);
+                    }
+                } else {
+                    tracing::info!("EVM: ignoring new pending transaction event for non-most-recent newPendingTransactions subscription id {}", subscription_id);
                 }
             }
         }
@@ -659,8 +694,15 @@ struct LogFilter {
 #[derive(Default)]
 struct SubscriptionIds {
     _lookup: std::sync::RwLock<std::collections::HashMap<String, SubscriptionKind>>,
-    _categories:
-        std::sync::RwLock<std::collections::HashMap<SubscriptionCategory, HashSet<String>>>,
+    _categories: std::sync::RwLock<
+        std::collections::HashMap<SubscriptionCategory, SubscriptionIdCategories>,
+    >,
+}
+
+#[derive(Default)]
+struct SubscriptionIdCategories {
+    ids: HashSet<String>,
+    most_recent: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -737,28 +779,45 @@ impl SubscriptionIds {
         self._categories.write().unwrap().clear();
     }
 
-    fn insert(&self, id: String, kind: SubscriptionKind) {
-        self._categories
-            .write()
-            .unwrap()
-            .entry((&kind).into())
-            .or_default()
-            .insert(id.clone());
+    fn insert(&self, id: String, kind: SubscriptionKind, most_recent_category: bool) {
+        let mut categories = self._categories.write().unwrap();
+        let categories = categories.entry((&kind).into()).or_default();
 
-        self._lookup.write().unwrap().insert(id.clone(), kind);
+        categories.ids.insert(id.clone());
+
+        if most_recent_category {
+            categories.most_recent = Some(id.clone());
+        }
+
+        self._lookup.write().unwrap().insert(id, kind);
     }
 
     fn list_by_category(&self, category: SubscriptionCategory) -> Vec<String> {
         match self._categories.read().unwrap().get(&category) {
-            Some(ids) => ids.iter().cloned().collect(),
+            Some(x) => x.ids.iter().cloned().collect(),
             None => vec![],
+        }
+    }
+
+    fn is_most_recent(&self, id: &str, category: SubscriptionCategory) -> bool {
+        match self._categories.read().unwrap().get(&category) {
+            Some(x) => match &x.most_recent {
+                Some(most_recent_id) => most_recent_id == id,
+                // if we don't have any most-recent id, treat all as most recent
+                // i.e. until one of them lands
+                None => true,
+            },
+            None => false,
         }
     }
 
     fn remove(&self, id: &str) {
         self._lookup.write().unwrap().remove(id);
-        for (_kind, ids) in self._categories.write().unwrap().iter_mut() {
-            ids.remove(id);
+        for (_kind, category) in self._categories.write().unwrap().iter_mut() {
+            category.ids.remove(id);
+            if category.most_recent.as_deref() == Some(id) {
+                category.most_recent = None;
+            }
         }
     }
 
@@ -777,6 +836,8 @@ impl SubscriptionIds {
 #[derive(Clone, Default)]
 struct RpcIdsInFlight {
     _lookup: Arc<std::sync::RwLock<std::collections::HashMap<RpcId, RpcFlightState>>>,
+    _most_recent_subscription_category:
+        Arc<std::sync::RwLock<HashMap<SubscriptionCategory, RpcId>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -791,9 +852,19 @@ enum RpcFlightState {
 impl RpcIdsInFlight {
     fn clear(&self) {
         self._lookup.write().unwrap().clear();
+        self._most_recent_subscription_category
+            .write()
+            .unwrap()
+            .clear();
     }
 
     fn insert(&self, id: RpcId, kind: RpcRequestKind) {
+        if let Ok(category) = SubscriptionCategory::try_from(&kind) {
+            self._most_recent_subscription_category
+                .write()
+                .unwrap()
+                .insert(category, id);
+        }
         self._lookup
             .write()
             .unwrap()
@@ -827,8 +898,35 @@ impl RpcIdsInFlight {
         })
     }
 
-    fn remove(&self, id: &RpcId) -> Option<RpcFlightState> {
-        self._lookup.write().unwrap().remove(id)
+    // returns and removes the state if it existed
+    // also removes and returns the subscription category if this rpc_id was the most recent of its category
+    fn remove(&self, id: &RpcId) -> (Option<RpcFlightState>, Option<SubscriptionCategory>) {
+        let removed_state = self._lookup.write().unwrap().remove(id);
+
+        let category = removed_state.as_ref().and_then(|state| {
+            match state {
+                RpcFlightState::ActivateOnLand { kind } => {
+                    SubscriptionCategory::try_from(kind).ok()
+                }
+                RpcFlightState::UnsubscribeOnLand => None, // we don't care about unsubscribes here
+            }
+        });
+
+        let removed_category = match category {
+            Some(cat) => {
+                let mut categories = self._most_recent_subscription_category.write().unwrap();
+                match categories.get(&cat) {
+                    Some(most_recent_id) if most_recent_id == id => {
+                        categories.remove(&cat);
+                        Some(cat)
+                    }
+                    _ => None,
+                }
+            }
+            None => None,
+        };
+
+        (removed_state, removed_category)
     }
 
     fn get(&self, id: &RpcId) -> Option<RpcFlightState> {
