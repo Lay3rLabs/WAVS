@@ -6,7 +6,7 @@ use thiserror::Error;
 use crate::{
     config::{CosmosChainConfig, EvmChainConfig, EvmChainConfigExt},
     error::EvmClientError,
-    evm_client::EvmQueryClient,
+    evm_client::{EvmEndpoint, EvmQueryClient},
 };
 use wavs_types::{AnyChainConfig, ChainKey};
 
@@ -97,6 +97,51 @@ async fn check_cosmos_chain_health_query(
         .node_info()
         .await
         .map_err(|e| HealthCheckError::CosmosNodeInfo(key.clone(), e))?;
+
+    Ok(())
+}
+
+pub async fn check_evm_chain_endpoint_health_query(
+    key: ChainKey,
+    endpoint: EvmEndpoint,
+) -> Result<(), HealthCheckError> {
+    let client = EvmQueryClient::new(endpoint)
+        .await
+        .map_err(|e| HealthCheckError::EvmClientError(key.clone(), e))?;
+
+    // Check block number
+    client
+        .provider
+        .get_block_number()
+        .await
+        .map_err(|e| HealthCheckError::EvmBlockNumber(key.clone(), e.to_string()))?;
+
+    // Check chain ID
+    client
+        .provider
+        .get_chain_id()
+        .await
+        .map_err(|e| HealthCheckError::EvmChainId(key.clone(), e.to_string()))?;
+
+    // Check gas price
+    client
+        .provider
+        .get_gas_price()
+        .await
+        .map_err(|e| HealthCheckError::EvmGasPrice(key.clone(), e.to_string()))?;
+
+    // Check if the node is syncing
+    let syncing_status = client
+        .provider
+        .syncing()
+        .await
+        .map_err(|e| HealthCheckError::EvmSyncingStatus(key.clone(), e.to_string()))?;
+    if let SyncStatus::Info(sync_info) = syncing_status {
+        return Err(HealthCheckError::EvmStillSyncing(
+            key,
+            sync_info.current_block,
+        ));
+    }
 
     Ok(())
 }
