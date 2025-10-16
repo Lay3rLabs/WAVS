@@ -8,6 +8,8 @@ use tempfile::TempDir;
 use tokio::fs;
 use tokio::process::Command;
 
+use crate::test_utils::middleware::validate_docker_container_id;
+
 use super::{MiddlewareServiceManager, MiddlewareServiceManagerConfig, POA_MIDDLEWARE_IMAGE};
 
 const POA_DEPLOY_FILE: &str = "poa_deploy.json";
@@ -64,10 +66,7 @@ impl PoaMiddleware {
             .trim()
             .to_string();
 
-        if container_id.is_empty() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("Docker returned empty container ID. stderr: {}", stderr);
-        }
+        validate_docker_container_id(&container_id).await?;
 
         let output = tokio::time::timeout(Self::DEFAULT_TIMEOUT, async {
             let res = Command::new("docker")

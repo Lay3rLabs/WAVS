@@ -7,6 +7,8 @@ use tempfile::TempDir;
 use tokio::fs;
 use tokio::process::Command;
 
+use crate::test_utils::middleware::validate_docker_container_id;
+
 use super::{
     middleware_config_filename, middleware_deploy_filename, MiddlewareServiceManager,
     MiddlewareServiceManagerConfig, MIDDLEWARE_IMAGE,
@@ -78,10 +80,7 @@ impl EigenlayerMiddleware {
             .trim()
             .to_string();
 
-        if container_id.is_empty() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("Docker returned empty container ID. stderr: {}", stderr);
-        }
+        validate_docker_container_id(&container_id).await?;
 
         tracing::debug!("EigenLayer: Container created: {}", container_id);
 
@@ -192,7 +191,8 @@ impl EigenlayerMiddleware {
             .await?;
 
         if !output.status.success() {
-            bail!("Failed to copy config file to container");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("Failed to copy config file to container: {}", stderr);
         }
 
         let res = tokio::time::timeout(
