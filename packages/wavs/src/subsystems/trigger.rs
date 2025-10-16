@@ -9,7 +9,7 @@ use crate::{
     services::Services,
     subsystems::trigger::streams::{
         cosmos_stream::StreamTriggerCosmosContractEvent,
-        evm_stream::client::{EvmTriggerStreams, EvmTriggerStreamsController},
+        evm_stream::client::{EvmTriggerStreams, EvmTriggerStreamsController, PriorityEndpoint},
         local_command_stream,
     },
     tracing_service_info, AppContext,
@@ -400,13 +400,19 @@ impl TriggerManager {
                                         ));
                                     }
 
+                                    let chain_key: ChainKey = (&chain_config).into();
                                     let EvmTriggerStreams {
                                         controller,
                                         block_height_stream,
                                         log_stream,
                                         // ignoring this for now
                                         new_pending_transaction_stream: _,
-                                    } = EvmTriggerStreams::new(chain_config.ws_endpoints);
+                                    } = EvmTriggerStreams::new(
+                                        chain_config.ws_endpoints,
+                                        chain_config
+                                            .ws_priority_endpoint_index
+                                            .map(|index| PriorityEndpoint { index, chain_key }),
+                                    );
 
                                     self.evm_controllers
                                         .write()

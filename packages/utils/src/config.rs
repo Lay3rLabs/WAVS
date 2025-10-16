@@ -300,6 +300,7 @@ pub struct EvmChainConfigBuilder {
     pub ws_endpoints: Vec<String>,
     pub http_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
+    pub ws_priority_endpoint_index: Option<usize>,
 }
 
 impl EvmChainConfigBuilder {
@@ -309,6 +310,7 @@ impl EvmChainConfigBuilder {
             ws_endpoints: self.ws_endpoints,
             http_endpoint: self.http_endpoint,
             faucet_endpoint: self.faucet_endpoint,
+            ws_priority_endpoint_index: self.ws_priority_endpoint_index,
         }
     }
 }
@@ -425,6 +427,7 @@ impl ChainConfigs {
                         ws_endpoints: evm_config.ws_endpoints,
                         http_endpoint: evm_config.http_endpoint,
                         faucet_endpoint: evm_config.faucet_endpoint,
+                        ws_priority_endpoint_index: evm_config.ws_priority_endpoint_index,
                     };
                     self.evm.insert(key.id, evm_config);
                 }
@@ -1354,6 +1357,7 @@ mod test {
                         ws_endpoints: vec!["ws://127.0.0.1:8546".to_string()],
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
+                        ws_priority_endpoint_index: None,
                     },
                 ),
                 (
@@ -1362,6 +1366,7 @@ mod test {
                         ws_endpoints: vec!["ws://127.0.0.1:8546".to_string()],
                         http_endpoint: Some("http://127.0.0.1:8545".to_string()),
                         faucet_endpoint: Some("http://127.0.0.1:8000".to_string()),
+                        ws_priority_endpoint_index: None,
                     },
                 ),
             ]

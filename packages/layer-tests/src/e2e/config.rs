@@ -129,6 +129,7 @@ impl From<TestConfig> for Configs {
                 http_endpoint: Some(http_endpoint),
                 ws_endpoints: vec![ws_endpoint],
                 faucet_endpoint: None,
+                ws_priority_endpoint_index: None,
             };
 
             chain_configs
