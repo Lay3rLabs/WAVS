@@ -55,22 +55,75 @@ _install-native HOME DATA:
     @echo "export WAVS_AGGREGATOR_DATA=\"{{DATA}}/wavs-aggregator\""
     @echo "export WAVS_DOTENV=\"{{HOME}}/.env\""
 
-wasi-builder-build TAG="latest":
-    IMAGE_TAG=ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}} bash tools/wasi-builder/build-image.sh
-
-wasi-builder-push TAG="latest":
-    # Build and push a multi-arch manifest (amd64, arm64)
-    export DOCKER_BUILDKIT=1; \
-    if ! docker buildx inspect >/dev/null 2>&1; then docker buildx create --name wavs-bx --use >/dev/null; fi; \
-    docker buildx build \
-      --platform linux/amd64,linux/arm64 \
-      -f tools/wasi-builder/Dockerfile \
-      -t ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}} \
-      --push \
-      tools/wasi-builder
-
 wasi-build COMPONENT="*" TAG="latest":
-    WASI_BUILDER_IMAGE=ghcr.io/lay3rlabs/wavs-wasi-builder:{{TAG}} bash tools/wasi-builder/build-components.sh '{{COMPONENT}}'
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    IMAGE_NAME="ghcr.io/lay3rlabs/wasi-builder:{{TAG}}"
+
+    # Determine which directories to process
+    if [ "{{COMPONENT}}" = "*" ]; then
+        # Find all directories in examples/components that don't start with _
+        COMPONENTS_DIR="examples/components"
+        COMPONENTS=$(find "$COMPONENTS_DIR" -maxdepth 1 -type d -name "[!_]*" | sed 's|^\./||' | sort)
+        if [ -z "$COMPONENTS" ]; then
+            echo "No component directories found in $COMPONENTS_DIR (excluding directories starting with _)"
+            exit 1
+        fi
+    else
+        COMPONENTS="{{COMPONENT}}"
+    fi
+
+    # Create and clean output directory
+    rm -rf "{{WASI_OUT_DIR}}"
+    mkdir -p "{{WASI_OUT_DIR}}"
+
+    # Pull latest
+    docker pull $IMAGE_NAME
+
+    for component_dir in $COMPONENTS; do
+        # Skip if it's not a directory
+        if [ ! -d "$component_dir" ]; then
+            echo "Warning: $component_dir is not a directory, skipping"
+            continue
+        fi
+
+        # Skip if no Cargo.toml
+        if [ ! -f "$component_dir/Cargo.toml" ]; then
+            echo "Warning: $component_dir/Cargo.toml not found, skipping"
+            continue
+        fi
+
+        # Run Docker build
+        docker run --rm \
+            -v "$(pwd):/docker" \
+            -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
+            "$IMAGE_NAME" \
+            "$component_dir"
+    done
+
+    just generate-checksums
+
+# Generate checksums for all WASM files in output directory
+generate-checksums:
+    #!/usr/bin/env bash
+    CHECKSUM_FILE="checksums.txt"
+
+    if [ ! -d "{{WASI_OUT_DIR}}" ]; then
+        echo "Error: Output directory {{WASI_OUT_DIR}} not found"
+        exit 1
+    fi
+
+    if ! ls "{{WASI_OUT_DIR}}"/*.wasm >/dev/null 2>&1; then
+        echo "No WASM files found in {{WASI_OUT_DIR}}"
+        exit 1
+    fi
+
+    echo "Generating checksums for WASM files in {{WASI_OUT_DIR}}..."
+    sha256sum "{{WASI_OUT_DIR}}"/*.wasm > "$CHECKSUM_FILE"
+    echo "Checksums written to $CHECKSUM_FILE"
+    cat "$CHECKSUM_FILE"
+
 
 # compile solidity contracts (including examples) and copy the ABI to contracts/solidity/abi
 # example ABI's will be copied to examples/contracts/solidity/abi
@@ -295,7 +348,3 @@ wasi-publish version component="*" flags="":
 	        fi; \
 	    done; \
 	fi
-
-# Convert line endings from DOS to Unix for all shell scripts in tools directory
-dos2unix-tools:
-    find tools -name "*.sh" -type f -exec dos2unix {} \;
