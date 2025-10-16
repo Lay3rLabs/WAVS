@@ -178,23 +178,6 @@ impl EigenlayerMiddleware {
 
         fs::write(&config_filepath, serde_json::to_string(config)?).await?;
 
-        let output = Command::new("docker")
-            .args([
-                "cp",
-                config_filepath.to_string_lossy().as_ref(),
-                &format!(
-                    "{}:/wavs/contracts/deployments/{}.json",
-                    container_id, filename
-                ),
-            ])
-            .output()
-            .await?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("Failed to copy config file to container: {}", stderr);
-        }
-
         let res = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
             Command::new("docker")
