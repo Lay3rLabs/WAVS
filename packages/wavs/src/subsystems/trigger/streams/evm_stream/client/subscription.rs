@@ -212,7 +212,7 @@ impl SubscriptionsInner {
             .store(toggle, std::sync::atomic::Ordering::SeqCst);
 
         if !toggle {
-            self.unsubscribe(UnsubscribeKind::NewHeads);
+            self.unsubscribe(SubscriptionCategory::NewHeads);
         } else {
             // only need to resubscribe if turning on since we only have one kind of "newHeads" subscription atm
             self.resubscribe();
@@ -233,7 +233,7 @@ impl SubscriptionsInner {
                 lock.topics.insert(topic);
             }
         }
-        self.unsubscribe(UnsubscribeKind::AllLogs);
+        self.unsubscribe(SubscriptionCategory::AllLogs);
 
         // logs is different, needs to resubscribe since different filters are different subscriptions
         self.resubscribe();
@@ -263,13 +263,13 @@ impl SubscriptionsInner {
                 }
             }
         }
-        self.unsubscribe(UnsubscribeKind::AllLogs);
+        self.unsubscribe(SubscriptionCategory::AllLogs);
         self.resubscribe();
     }
 
     pub fn disable_all_logs(&self) {
         *self._logs.write().unwrap() = None;
-        self.unsubscribe(UnsubscribeKind::AllLogs);
+        self.unsubscribe(SubscriptionCategory::AllLogs);
         // no need to resubscribe
     }
 
@@ -277,7 +277,7 @@ impl SubscriptionsInner {
         self._pending_transactions
             .store(toggle, std::sync::atomic::Ordering::SeqCst);
         if !toggle {
-            self.unsubscribe(UnsubscribeKind::NewPendingTransactions);
+            self.unsubscribe(SubscriptionCategory::NewPendingTransactions);
         } else {
             // only need to resubscribe if turning on since we only have one kind of "pending txs" subscription atm
             self.resubscribe();
@@ -398,7 +398,8 @@ impl SubscriptionsInner {
     }
 
     fn on_received_rpc_response(&self, id: RpcId, response: RpcResponse) {
-        let removed_rpc_in_flight_state = self.rpc_ids_in_flight.remove(&id);
+        let (removed_rpc_in_flight_state, removed_rpc_latest_subscription_category) =
+            self.rpc_ids_in_flight.remove(&id);
         // since we clear the rpc ids (and sub ids) on disconnect,
         // we can be sure that any new subscription id we get is for this connection
         let kind = match self.rpc_ids.kind(id) {
@@ -433,7 +434,24 @@ impl SubscriptionsInner {
 
                 match SubscriptionKind::try_from(kind) {
                     Ok(kind) => {
-                        self.ids.insert(subscription_id, kind);
+                        let most_recent_category = {
+                            match removed_rpc_latest_subscription_category {
+                                Some(category) => {
+                                    let cat = SubscriptionCategory::from(&kind);
+                                    // just a sanity check
+                                    if cat != category {
+                                        tracing::warn!("EVM: weird, got mismatched subscription category for rpc id {}: expected {:?}, got {:?}", id.data().as_ffi(), cat, category);
+                                    }
+                                    true
+                                }
+                                None => false,
+                            }
+                        };
+
+                        // theoretically we should only ever insert when most_recent_category is true
+                        // but then we would miss events if the less-recent subscription landed first
+                        // and an event fires before the most-recent one lands
+                        self.ids.insert(subscription_id, kind, most_recent_category);
                     }
                     Err(e) => {
                         tracing::error!("EVM: received newSubscription response for unknown subscription (rpc_id {}, subscription_id {}): {}", id.data().as_ffi(), subscription_id, e);
@@ -514,8 +532,15 @@ impl SubscriptionsInner {
                         "EVM: received newHeads event for unknown subscription id {}",
                         subscription_id
                     );
-                } else if let Err(e) = subscription_block_height_tx.send(header.number) {
-                    tracing::error!("EVM: failed to send new block height: {}", e);
+                } else if self
+                    .ids
+                    .is_most_recent(&subscription_id, SubscriptionCategory::NewHeads)
+                {
+                    if let Err(e) = subscription_block_height_tx.send(header.number) {
+                        tracing::error!("EVM: failed to send new block height: {}", e);
+                    }
+                } else {
+                    tracing::info!("EVM: ignoring newHeads event for non-most-recent newHeads subscription id {}", subscription_id);
                 }
             }
             RpcSubscriptionEvent::Logs(log) => {
@@ -536,13 +561,18 @@ impl SubscriptionsInner {
                         "EVM: received logs event for unknown subscription id {}",
                         subscription_id
                     );
-                } else {
-                    tracing::info!("EVM: forwarding log event to channel");
+                } else if self
+                    .ids
+                    .is_most_recent(&subscription_id, SubscriptionCategory::AllLogs)
+                {
                     if let Err(e) = subscription_log_tx.send(log) {
                         tracing::error!("EVM: failed to send log: {}", e);
-                    } else {
-                        tracing::info!("EVM: successfully sent log event to channel");
                     }
+                } else {
+                    tracing::info!(
+                        "EVM: ignoring log event for non-most-recent logs subscription id {}",
+                        subscription_id
+                    );
                 }
             }
             RpcSubscriptionEvent::NewPendingTransaction(tx) => {
@@ -553,20 +583,25 @@ impl SubscriptionsInner {
                         "EVM: received newPendingTransaction event for unknown subscription id {}",
                         subscription_id
                     );
-                }
-
-                if let Err(e) = subscription_new_pending_transaction_tx.send(tx) {
-                    tracing::error!("EVM: failed to send new pending transaction: {}", e);
+                } else if self.ids.is_most_recent(
+                    &subscription_id,
+                    SubscriptionCategory::NewPendingTransactions,
+                ) {
+                    if let Err(e) = subscription_new_pending_transaction_tx.send(tx) {
+                        tracing::error!("EVM: failed to send new pending transaction: {}", e);
+                    }
+                } else {
+                    tracing::info!("EVM: ignoring new pending transaction event for non-most-recent newPendingTransactions subscription id {}", subscription_id);
                 }
             }
         }
     }
 
-    fn unsubscribe(&self, kind: UnsubscribeKind) {
-        let ids = self.ids.list_by_unsubscribe(kind);
+    fn unsubscribe(&self, category: SubscriptionCategory) {
+        let ids = self.ids.list_by_category(category);
 
         // mark the rpcs in flight to unsubscribe when they land
-        self.rpc_ids_in_flight.set_unsubscribe(kind);
+        self.rpc_ids_in_flight.set_unsubscribe(category);
 
         // send the unsubscribe request for the active subscriptions
         // will actually unsubscribe when the ack response lands
@@ -659,8 +694,15 @@ struct LogFilter {
 #[derive(Default)]
 struct SubscriptionIds {
     _lookup: std::sync::RwLock<std::collections::HashMap<String, SubscriptionKind>>,
-    _unsubscribe_lookup:
-        std::sync::RwLock<std::collections::HashMap<UnsubscribeKind, HashSet<String>>>,
+    _categories: std::sync::RwLock<
+        std::collections::HashMap<SubscriptionCategory, SubscriptionIdCategories>,
+    >,
+}
+
+#[derive(Default)]
+struct SubscriptionIdCategories {
+    ids: HashSet<String>,
+    most_recent: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -692,35 +734,40 @@ impl TryFrom<RpcRequestKind> for SubscriptionKind {
     }
 }
 
+// this is used to track:
+// * unsubscriptions, since we want to unsubscribe *all* subscriptions of a given kind (e.g. ignore the log filter)
+// * latest-and-greatest subscriptions, since we only ever want one active subscription of a given kind (e.g. newHeads, newPendingTransactions, logs of *any* filter)
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-enum UnsubscribeKind {
+enum SubscriptionCategory {
     NewHeads,
     AllLogs,
     NewPendingTransactions,
 }
 
-impl From<&SubscriptionKind> for UnsubscribeKind {
+impl From<&SubscriptionKind> for SubscriptionCategory {
     fn from(kind: &SubscriptionKind) -> Self {
         match kind {
-            SubscriptionKind::NewHeads => UnsubscribeKind::NewHeads,
-            SubscriptionKind::Logs { .. } => UnsubscribeKind::AllLogs,
-            SubscriptionKind::NewPendingTransactions => UnsubscribeKind::NewPendingTransactions,
+            SubscriptionKind::NewHeads => SubscriptionCategory::NewHeads,
+            SubscriptionKind::Logs { .. } => SubscriptionCategory::AllLogs,
+            SubscriptionKind::NewPendingTransactions => {
+                SubscriptionCategory::NewPendingTransactions
+            }
         }
     }
 }
 
-impl TryFrom<&RpcRequestKind> for UnsubscribeKind {
+impl TryFrom<&RpcRequestKind> for SubscriptionCategory {
     type Error = &'static str;
 
     fn try_from(kind: &RpcRequestKind) -> Result<Self, Self::Error> {
         match kind {
-            RpcRequestKind::SubscribeNewHeads => Ok(UnsubscribeKind::NewHeads),
-            RpcRequestKind::SubscribeLogs { .. } => Ok(UnsubscribeKind::AllLogs),
+            RpcRequestKind::SubscribeNewHeads => Ok(SubscriptionCategory::NewHeads),
+            RpcRequestKind::SubscribeLogs { .. } => Ok(SubscriptionCategory::AllLogs),
             RpcRequestKind::SubscribeNewPendingTransactions => {
-                Ok(UnsubscribeKind::NewPendingTransactions)
+                Ok(SubscriptionCategory::NewPendingTransactions)
             }
             RpcRequestKind::Unsubscribe { .. } => {
-                Err("Cannot convert rpc request for Unsubscribe to UnsubscribeKind")
+                Err("Cannot convert rpc request for Unsubscribe to SubscriptionCategory")
             }
         }
     }
@@ -729,31 +776,48 @@ impl TryFrom<&RpcRequestKind> for UnsubscribeKind {
 impl SubscriptionIds {
     fn clear(&self) {
         self._lookup.write().unwrap().clear();
-        self._unsubscribe_lookup.write().unwrap().clear();
+        self._categories.write().unwrap().clear();
     }
 
-    fn insert(&self, id: String, kind: SubscriptionKind) {
-        self._unsubscribe_lookup
-            .write()
-            .unwrap()
-            .entry((&kind).into())
-            .or_default()
-            .insert(id.clone());
+    fn insert(&self, id: String, kind: SubscriptionKind, most_recent_category: bool) {
+        let mut categories = self._categories.write().unwrap();
+        let categories = categories.entry((&kind).into()).or_default();
 
-        self._lookup.write().unwrap().insert(id.clone(), kind);
+        categories.ids.insert(id.clone());
+
+        if most_recent_category {
+            categories.most_recent = Some(id.clone());
+        }
+
+        self._lookup.write().unwrap().insert(id, kind);
     }
 
-    fn list_by_unsubscribe(&self, kind: UnsubscribeKind) -> Vec<String> {
-        match self._unsubscribe_lookup.read().unwrap().get(&kind) {
-            Some(ids) => ids.iter().cloned().collect(),
+    fn list_by_category(&self, category: SubscriptionCategory) -> Vec<String> {
+        match self._categories.read().unwrap().get(&category) {
+            Some(x) => x.ids.iter().cloned().collect(),
             None => vec![],
+        }
+    }
+
+    fn is_most_recent(&self, id: &str, category: SubscriptionCategory) -> bool {
+        match self._categories.read().unwrap().get(&category) {
+            Some(x) => match &x.most_recent {
+                Some(most_recent_id) => most_recent_id == id,
+                // if we don't have any most-recent id, treat all as most recent
+                // i.e. until one of them lands
+                None => true,
+            },
+            None => false,
         }
     }
 
     fn remove(&self, id: &str) {
         self._lookup.write().unwrap().remove(id);
-        for (_kind, ids) in self._unsubscribe_lookup.write().unwrap().iter_mut() {
-            ids.remove(id);
+        for (_kind, category) in self._categories.write().unwrap().iter_mut() {
+            category.ids.remove(id);
+            if category.most_recent.as_deref() == Some(id) {
+                category.most_recent = None;
+            }
         }
     }
 
@@ -772,6 +836,8 @@ impl SubscriptionIds {
 #[derive(Clone, Default)]
 struct RpcIdsInFlight {
     _lookup: Arc<std::sync::RwLock<std::collections::HashMap<RpcId, RpcFlightState>>>,
+    _most_recent_subscription_category:
+        Arc<std::sync::RwLock<HashMap<SubscriptionCategory, RpcId>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -786,9 +852,19 @@ enum RpcFlightState {
 impl RpcIdsInFlight {
     fn clear(&self) {
         self._lookup.write().unwrap().clear();
+        self._most_recent_subscription_category
+            .write()
+            .unwrap()
+            .clear();
     }
 
     fn insert(&self, id: RpcId, kind: RpcRequestKind) {
+        if let Ok(category) = SubscriptionCategory::try_from(&kind) {
+            self._most_recent_subscription_category
+                .write()
+                .unwrap()
+                .insert(category, id);
+        }
         self._lookup
             .write()
             .unwrap()
@@ -796,13 +872,13 @@ impl RpcIdsInFlight {
     }
 
     // We want to unsubscribe *all* subscriptions of a given kind, irregardless of log filter
-    fn set_unsubscribe(&self, kind: UnsubscribeKind) {
+    fn set_unsubscribe(&self, category: SubscriptionCategory) {
         let lookup = &mut *self._lookup.write().unwrap();
 
         for (_, state) in lookup.iter_mut() {
             match state {
                 RpcFlightState::ActivateOnLand { kind: req_kind }
-                    if UnsubscribeKind::try_from(&*req_kind) == Ok(kind) =>
+                    if SubscriptionCategory::try_from(&*req_kind) == Ok(category) =>
                 {
                     *state = RpcFlightState::UnsubscribeOnLand;
                 }
@@ -822,8 +898,35 @@ impl RpcIdsInFlight {
         })
     }
 
-    fn remove(&self, id: &RpcId) -> Option<RpcFlightState> {
-        self._lookup.write().unwrap().remove(id)
+    // returns and removes the state if it existed
+    // also removes and returns the subscription category if this rpc_id was the most recent of its category
+    fn remove(&self, id: &RpcId) -> (Option<RpcFlightState>, Option<SubscriptionCategory>) {
+        let removed_state = self._lookup.write().unwrap().remove(id);
+
+        let category = removed_state.as_ref().and_then(|state| {
+            match state {
+                RpcFlightState::ActivateOnLand { kind } => {
+                    SubscriptionCategory::try_from(kind).ok()
+                }
+                RpcFlightState::UnsubscribeOnLand => None, // we don't care about unsubscribes here
+            }
+        });
+
+        let removed_category = match category {
+            Some(cat) => {
+                let mut categories = self._most_recent_subscription_category.write().unwrap();
+                match categories.get(&cat) {
+                    Some(most_recent_id) if most_recent_id == id => {
+                        categories.remove(&cat);
+                        Some(cat)
+                    }
+                    _ => None,
+                }
+            }
+            None => None,
+        };
+
+        (removed_state, removed_category)
     }
 
     fn get(&self, id: &RpcId) -> Option<RpcFlightState> {
@@ -836,5 +939,415 @@ impl RpcIdsInFlight {
             .unwrap()
             .values()
             .any(|state| matches!(state, RpcFlightState::ActivateOnLand { .. }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy_primitives::{address, b256, Bytes, B256};
+    use alloy_rpc_types_eth::Header;
+    use serde_json::json;
+    use std::collections::HashSet;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    fn new_inner() -> (
+        SubscriptionsInner,
+        tokio::sync::mpsc::UnboundedReceiver<RpcRequest>,
+    ) {
+        let rpc_ids = RpcIds::new();
+        let (connection_tx, connection_rx) = unbounded_channel();
+        // Return the inner subscriptions object alongside the channel we use to inspect outbound RPCs.
+        (
+            SubscriptionsInner::new(rpc_ids, connection_tx),
+            connection_rx,
+        )
+    }
+
+    fn sample_log(address: Address, topic: B256) -> alloy_rpc_types_eth::Log {
+        alloy_rpc_types_eth::Log::<alloy_primitives::LogData> {
+            inner: alloy_primitives::Log::new_unchecked(address, vec![topic], Bytes::new()),
+            ..Default::default()
+        }
+    }
+
+    fn sample_header(number: u64) -> Header {
+        // Build an RPC header without depending on extra crates so tests can emit block events.
+        let value = json!({
+            "hash": format!("0x{:064x}", number + 1),
+            "parentHash": format!("0x{:064x}", number + 2),
+            "sha3Uncles": format!("0x{:064x}", number + 3),
+            "miner": "0x0000000000000000000000000000000000000000",
+            "stateRoot": format!("0x{:064x}", number + 4),
+            "transactionsRoot": format!("0x{:064x}", number + 5),
+            "receiptsRoot": format!("0x{:064x}", number + 6),
+            "logsBloom": format!("0x{}", "00".repeat(256)),
+            "difficulty": "0x1",
+            "number": format!("0x{:x}", number),
+            "gasLimit": "0x1",
+            "gasUsed": "0x1",
+            "timestamp": "0x1",
+            "extraData": "0x",
+            "mixHash": format!("0x{:064x}", number + 7),
+            "nonce": "0x0000000000000000"
+        });
+
+        serde_json::from_value(value).expect("valid header JSON")
+    }
+
+    #[tokio::test]
+    async fn pending_transaction_events_follow_most_recent_subscription() {
+        let (inner, mut connection_rx) = new_inner();
+
+        // Prepare channels used by on_received_subscription_event.
+        let (block_tx, _block_rx) = unbounded_channel();
+        let (log_tx, _log_rx) = unbounded_channel();
+        let (pending_tx, mut pending_rx) = unbounded_channel();
+        let mut block_tx = block_tx;
+        let mut log_tx = log_tx;
+        let mut pending_tx = pending_tx;
+
+        // Send three pending-transaction subscription requests in sequence so the
+        // final request is the most recent one tracked.
+        let req1 = RpcRequest::new_pending_transactions(&inner.rpc_ids);
+        let id1 = req1.id();
+        inner.send_rpc(req1, None).unwrap();
+
+        let req2 = RpcRequest::new_pending_transactions(&inner.rpc_ids);
+        let id2 = req2.id();
+        inner.send_rpc(req2, None).unwrap();
+
+        let req3 = RpcRequest::new_pending_transactions(&inner.rpc_ids);
+        let id3 = req3.id();
+        inner.send_rpc(req3, None).unwrap();
+
+        // Drain the outbound requests – not strictly required for state-tracking,
+        // but ensures the channel stays empty for the remainder of the test.
+        assert!(matches!(
+            connection_rx.recv().await,
+            Some(RpcRequest::Subscribe { .. })
+        ));
+        assert!(matches!(
+            connection_rx.recv().await,
+            Some(RpcRequest::Subscribe { .. })
+        ));
+        assert!(matches!(
+            connection_rx.recv().await,
+            Some(RpcRequest::Subscribe { .. })
+        ));
+
+        // Responses arrive out of order: the two older requests land before the most
+        // recent one. Until the most recent subscription completes we expect events
+        // from the older subscriptions to be forwarded.
+        inner.on_received_rpc_response(
+            id1,
+            RpcResponse::NewSubscription {
+                subscription_id: "sub-1".into(),
+            },
+        );
+        inner.on_received_rpc_response(
+            id2,
+            RpcResponse::NewSubscription {
+                subscription_id: "sub-2".into(),
+            },
+        );
+
+        let first_hash = B256::from([1u8; 32]);
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-1".into(),
+            RpcSubscriptionEvent::NewPendingTransaction(first_hash),
+        );
+        assert_eq!(pending_rx.recv().await.unwrap(), first_hash);
+
+        let second_hash = B256::from([4u8; 32]);
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-2".into(),
+            RpcSubscriptionEvent::NewPendingTransaction(second_hash),
+        );
+        assert_eq!(pending_rx.recv().await.unwrap(), second_hash);
+
+        // The newest subscription finishes last and becomes the active stream.
+        inner.on_received_rpc_response(
+            id3,
+            RpcResponse::NewSubscription {
+                subscription_id: "sub-3".into(),
+            },
+        );
+        assert!(inner
+            .ids
+            .is_most_recent("sub-3", SubscriptionCategory::NewPendingTransactions));
+
+        // Once sub-3 has landed, prior subscriptions should be treated as stale.
+        // Events for older subscriptions are now ignored.
+        let ignored_hash = B256::from([2u8; 32]);
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-1".into(),
+            RpcSubscriptionEvent::NewPendingTransaction(ignored_hash),
+        );
+        assert!(pending_rx.try_recv().is_err());
+
+        // Events for the active subscription still flow through.
+        let latest_hash = B256::from([3u8; 32]);
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-3".into(),
+            RpcSubscriptionEvent::NewPendingTransaction(latest_hash),
+        );
+        assert_eq!(pending_rx.recv().await.unwrap(), latest_hash);
+    }
+
+    #[tokio::test]
+    async fn log_events_follow_most_recent_subscription_per_filter() {
+        let (inner, mut connection_rx) = new_inner();
+
+        let (block_tx, _block_rx) = unbounded_channel();
+        let (log_tx, mut log_rx) = unbounded_channel();
+        let (pending_tx, _pending_rx) = unbounded_channel();
+        let mut block_tx = block_tx;
+        let mut log_tx = log_tx;
+        let mut pending_tx = pending_tx;
+
+        // First filter we subscribe to — represents the “stale” stream once we switch over.
+        let addresses_first: HashSet<_> = [address!("0x0000000000000000000000000000000000000001")]
+            .into_iter()
+            .collect();
+        let topics_first: HashSet<_> = [b256!(
+            "0x0000000000000000000000000000000000000000000000000000000000000001"
+        )]
+        .into_iter()
+        .collect();
+        // Second filter is considered most recent and should ultimately win.
+        let addresses_second: HashSet<_> = [address!("0x0000000000000000000000000000000000000002")]
+            .into_iter()
+            .collect();
+        let topics_second: HashSet<_> = [b256!(
+            "0x0000000000000000000000000000000000000000000000000000000000000002"
+        )]
+        .into_iter()
+        .collect();
+
+        let req1 = RpcRequest::logs(
+            &inner.rpc_ids,
+            addresses_first.clone(),
+            topics_first.clone(),
+        );
+        let id1 = req1.id();
+        inner.send_rpc(req1, None).unwrap();
+
+        let req2 = RpcRequest::logs(
+            &inner.rpc_ids,
+            addresses_second.clone(),
+            topics_second.clone(),
+        );
+        let id2 = req2.id();
+        inner.send_rpc(req2, None).unwrap();
+
+        assert!(matches!(
+            connection_rx.recv().await,
+            Some(RpcRequest::Subscribe { .. })
+        ));
+        assert!(matches!(
+            connection_rx.recv().await,
+            Some(RpcRequest::Subscribe { .. })
+        ));
+
+        let first_log = sample_log(
+            *addresses_first.iter().next().unwrap(),
+            *topics_first.iter().next().unwrap(),
+        );
+        inner.on_received_rpc_response(
+            id1,
+            RpcResponse::NewSubscription {
+                subscription_id: "sub-log-1".into(),
+            },
+        );
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-log-1".into(),
+            RpcSubscriptionEvent::Logs(first_log.clone()),
+        );
+        assert_eq!(log_rx.recv().await.unwrap(), first_log);
+
+        inner.on_received_rpc_response(
+            id2,
+            RpcResponse::NewSubscription {
+                subscription_id: "sub-log-2".into(),
+            },
+        );
+
+        let second_log = sample_log(
+            *addresses_second.iter().next().unwrap(),
+            *topics_second.iter().next().unwrap(),
+        );
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-log-2".into(),
+            RpcSubscriptionEvent::Logs(second_log.clone()),
+        );
+        assert_eq!(log_rx.recv().await.unwrap(), second_log);
+        assert!(log_rx.try_recv().is_err());
+        assert!(inner
+            .ids
+            .is_most_recent("sub-log-2", SubscriptionCategory::AllLogs));
+
+        // Events from the older subscription are ignored once a different filter becomes active.
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-log-1".into(),
+            RpcSubscriptionEvent::Logs(first_log.clone()),
+        );
+        assert!(log_rx.try_recv().is_err());
+
+        // Active subscription continues to flow events so downstream receivers keep working.
+        let third_log = sample_log(
+            *addresses_second.iter().next().unwrap(),
+            *topics_second.iter().next().unwrap(),
+        );
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-log-2".into(),
+            RpcSubscriptionEvent::Logs(third_log.clone()),
+        );
+        assert_eq!(log_rx.recv().await.unwrap(), third_log);
+        assert!(log_rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn new_head_events_follow_most_recent_subscription() {
+        let (inner, mut connection_rx) = new_inner();
+
+        let (block_tx, mut block_rx) = unbounded_channel();
+        let (log_tx, _log_rx) = unbounded_channel();
+        let (pending_tx, _pending_rx) = unbounded_channel();
+        let mut block_tx = block_tx;
+        let mut log_tx = log_tx;
+        let mut pending_tx = pending_tx;
+
+        // Issue two newHeads subscriptions so we can swap from the first to the second.
+        let req1 = RpcRequest::new_heads(&inner.rpc_ids);
+        let id1 = req1.id();
+        inner.send_rpc(req1, None).unwrap();
+
+        let req2 = RpcRequest::new_heads(&inner.rpc_ids);
+        let id2 = req2.id();
+        inner.send_rpc(req2, None).unwrap();
+
+        assert!(matches!(
+            connection_rx.recv().await,
+            Some(RpcRequest::Subscribe { .. })
+        ));
+        assert!(matches!(
+            connection_rx.recv().await,
+            Some(RpcRequest::Subscribe { .. })
+        ));
+
+        // The first subscription lands and immediately emits a height update.
+        inner.on_received_rpc_response(
+            id1,
+            RpcResponse::NewSubscription {
+                subscription_id: "sub-head-1".into(),
+            },
+        );
+        let header1 = sample_header(111);
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-head-1".into(),
+            RpcSubscriptionEvent::NewHeads(header1.clone()),
+        );
+        assert_eq!(block_rx.recv().await.unwrap(), 111);
+
+        // Now the second (most recent) subscription lands and should supersede the first.
+        inner.on_received_rpc_response(
+            id2,
+            RpcResponse::NewSubscription {
+                subscription_id: "sub-head-2".into(),
+            },
+        );
+        let header2 = sample_header(222);
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-head-2".into(),
+            RpcSubscriptionEvent::NewHeads(header2.clone()),
+        );
+        assert_eq!(block_rx.recv().await.unwrap(), 222);
+
+        // The first subscription should no longer deliver events.
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-head-1".into(),
+            RpcSubscriptionEvent::NewHeads(header1),
+        );
+        assert!(block_rx.try_recv().is_err());
+
+        // Most recent subscription still delivers events, proving we only dropped the stale ones.
+        let header3 = sample_header(333);
+        inner.on_received_subscription_event(
+            &mut block_tx,
+            &mut log_tx,
+            &mut pending_tx,
+            "sub-head-2".into(),
+            RpcSubscriptionEvent::NewHeads(header3.clone()),
+        );
+        assert_eq!(block_rx.recv().await.unwrap(), 333);
+        assert!(block_rx.try_recv().is_err());
+    }
+
+    #[tokio::test]
+    async fn unsubscribe_is_sent_when_marked_to_land() {
+        let (inner, mut connection_rx) = new_inner();
+
+        let req = RpcRequest::new_heads(&inner.rpc_ids);
+        let id = req.id();
+        inner.send_rpc(req, None).unwrap();
+
+        let first_outbound = connection_rx.recv().await.unwrap();
+        assert!(matches!(first_outbound, RpcRequest::Subscribe { .. }));
+
+        inner
+            .rpc_ids_in_flight
+            .set_unsubscribe(SubscriptionCategory::NewHeads);
+
+        // When the subscribe response lands the in-flight tracker should immediately emit unsubscribe.
+        inner.on_received_rpc_response(
+            id,
+            RpcResponse::NewSubscription {
+                subscription_id: "sub-head-ephemeral".into(),
+            },
+        );
+
+        match connection_rx.recv().await {
+            Some(RpcRequest::Unsubscribe {
+                subscription_id, ..
+            }) => assert_eq!(subscription_id, "sub-head-ephemeral"),
+            other => panic!("expected unsubscribe request, got {:?}", other),
+        }
+
+        // The subscription id should never be registered because it was queued for removal.
+        assert!(!inner.ids.exists("sub-head-ephemeral"));
     }
 }
