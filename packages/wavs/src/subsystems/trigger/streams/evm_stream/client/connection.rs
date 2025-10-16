@@ -224,7 +224,10 @@ impl Connection {
 
         // Wait for health check task to finish with timeout
         if let Some(health_handle) = self.health_check_handle.take() {
-            if let Err(_) = tokio::time::timeout(Duration::from_millis(500), health_handle).await {
+            if tokio::time::timeout(Duration::from_millis(500), health_handle)
+                .await
+                .is_err()
+            {
                 tracing::warn!("EVM: health check task did not shut down in time");
             }
         }
@@ -232,7 +235,10 @@ impl Connection {
         // Wait for main tasks to finish with timeout
         if let Some(handles) = self.handles.take() {
             for handle in handles {
-                if let Err(_) = tokio::time::timeout(Duration::from_millis(500), handle).await {
+                if tokio::time::timeout(Duration::from_millis(500), handle)
+                    .await
+                    .is_err()
+                {
                     tracing::warn!("EVM: connection task did not shut down in time");
                 }
             }
@@ -263,6 +269,7 @@ impl Drop for Connection {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn connection_loop(
     endpoints: Vec<String>,
     current_sink: Arc<
