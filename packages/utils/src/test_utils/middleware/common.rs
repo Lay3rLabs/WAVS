@@ -233,7 +233,9 @@ pub async fn validate_docker_container_id(container_id: &str) -> Result<()> {
     );
 
     ensure!(
-        container_id.chars().all(|c| c.is_ascii_hexdigit()),
+        container_id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && c.is_ascii_lowercase()),
         "Invalid container ID format: '{}' (must contain only hexadecimal characters)",
         container_id
     );
