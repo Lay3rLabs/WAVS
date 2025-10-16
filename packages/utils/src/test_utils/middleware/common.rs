@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use alloy_primitives::Address;
-use anyhow::{bail, Result};
+use anyhow::{bail, ensure, Result};
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
@@ -226,19 +226,17 @@ impl AvsOperator {
 pub async fn validate_docker_container_id(container_id: &str) -> Result<()> {
     // Validate that container_id is a valid Docker container ID
     // Docker container IDs are hexadecimal strings, typically 12 or 64 characters
-    if container_id.len() < 12 || container_id.len() > 64 {
-        bail!(
-            "Invalid container ID length: {} (expected 12-64 characters)",
-            container_id.len()
-        );
-    }
+    ensure!(
+        container_id.len() >= 12 && container_id.len() <= 64,
+        "Invalid container ID length: {} (expected 12-64 characters)",
+        container_id.len()
+    );
 
-    if !container_id.chars().all(|c| c.is_ascii_hexdigit()) {
-        bail!(
-            "Invalid container ID format: '{}' (must contain only hexadecimal characters)",
-            container_id
-        );
-    }
+    ensure!(
+        container_id.chars().all(|c| c.is_ascii_hexdigit()),
+        "Invalid container ID format: '{}' (must contain only hexadecimal characters)",
+        container_id
+    );
 
     // Verify the container actually exists and get its state information
     let verify_output = Command::new("docker")
@@ -251,25 +249,23 @@ pub async fn validate_docker_container_id(container_id: &str) -> Result<()> {
         .output()
         .await?;
 
-    if !verify_output.status.success() {
-        bail!(
-            "Container verification failed: container '{}' does not exist",
-            container_id
-        );
-    }
+    ensure!(
+        verify_output.status.success(),
+        "Container verification failed: container '{}' does not exist",
+        container_id
+    );
 
     let state_info = String::from_utf8(verify_output.stdout)
         .map_err(|e| anyhow::anyhow!("Failed to parse docker inspect output as UTF-8: {}", e))?;
     let state_info = state_info.trim();
 
     let parts: Vec<&str> = state_info.split(',').collect();
-    if parts.len() != 3 {
-        bail!(
-            "Unexpected docker inspect output format for container '{}': '{}'",
-            container_id,
-            state_info
-        );
-    }
+    ensure!(
+        parts.len() == 3,
+        "Unexpected docker inspect output format for container '{}': '{}'",
+        container_id,
+        state_info
+    );
 
     let (is_running, status, exit_code) = (parts[0], parts[1], parts[2]);
 
