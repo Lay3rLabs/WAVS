@@ -12,7 +12,8 @@ use wildmatch::WildMatch;
 
 use super::{
     handlers::{
-        handle_config, handle_info, handle_not_found, handle_packet, handle_upload, ApiDoc,
+        handle_config, handle_info, handle_not_found, handle_packet, handle_upgrade, handle_upload,
+        ApiDoc,
     },
     state::HttpState,
 };
@@ -71,7 +72,9 @@ pub async fn make_router(
 
     // Only add dev endpoints if enabled
     if config.dev_endpoints_enabled {
-        protected = protected.route("/dev/components", post(handle_upload));
+        protected = protected
+            .route("/dev/components", post(handle_upload))
+            .route("/dev/db/upgrade", post(handle_upgrade));
     }
 
     protected = protected.with_state(state.clone());
