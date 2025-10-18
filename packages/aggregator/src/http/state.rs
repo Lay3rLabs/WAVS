@@ -211,4 +211,18 @@ impl HttpState {
         }
         Ok(())
     }
+
+    /// Upgrade the database to the latest version
+    #[instrument(skip(self))]
+    #[allow(clippy::result_large_err)]
+    pub fn upgrade_database(&self) -> AggregatorResult<bool> {
+        // Create a new storage instance to get mutable access to the database
+        // This is safe because we just created the storage, so we have the only Arc reference
+        let mut storage = RedbStorage::new(self.config.data.join("db"))?;
+        let upgraded = Arc::get_mut(&mut storage.inner)
+            .expect("We just created the storage, so we should have the only Arc reference")
+            .upgrade()
+            .map_err(|e| AggregatorError::DBError(e.into()))?;
+        Ok(upgraded)
+    }
 }
