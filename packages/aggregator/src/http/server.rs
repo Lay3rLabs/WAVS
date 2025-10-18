@@ -12,7 +12,8 @@ use wildmatch::WildMatch;
 
 use super::{
     handlers::{
-        handle_config, handle_info, handle_not_found, handle_packet, handle_upgrade, handle_upload, ApiDoc,
+        handle_config, handle_info, handle_not_found, handle_packet, handle_upgrade, handle_upload,
+        ApiDoc,
     },
     state::HttpState,
 };
