@@ -446,6 +446,16 @@ async fn connection_loop(
                             tracing::error!("Failed to send disconnected state: {}", e);
                         }
                         tracing::error!("EVM: connect error to {endpoint}: {err:?}");
+
+                        // Clear force_switch_flag if we failed to connect to priority endpoint
+                        if let Some(priority_endpoint) = priority_endpoint.as_ref() {
+                            if endpoint_idx % endpoints.len() == priority_endpoint.index {
+                                force_switch_flag.store(false, Ordering::SeqCst);
+                                tracing::info!("EVM: clearing force switch flag due to priority endpoint connection failure");
+                                *is_using_priority.write().await = false;
+                            }
+                        }
+
                         failures_in_cycle += 1;
                         endpoint_idx += 1; // cycle the endpoints
 
