@@ -20,7 +20,7 @@ use super::{
 };
 use utils::evm_client::EvmEndpoint;
 use utils::health::check_evm_chain_endpoint_health_query;
-use wavs_types::ChainKey;
+use wavs_types::{ChainKey, ChainKeyNamespace};
 
 // A handle for managing WebSocket connections with intelligent retry logic
 //
@@ -53,11 +53,7 @@ pub struct Connection {
     shutdown_txs: Option<[oneshot::Sender<()>; 2]>,
     health_check_handle: Option<tokio::task::JoinHandle<()>>,
     health_shutdown_tx: Option<oneshot::Sender<()>>,
-}
-
-pub struct PriorityEndpoint {
-    pub index: usize,
-    pub chain_key: ChainKey,
+    chain_key: ChainKey,
 }
 
 pub enum ConnectionData {
@@ -75,11 +71,13 @@ impl Connection {
     pub const BACKOFF_CAP: Duration = Duration::from_secs(30);
     pub const PRIORITY_HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(5);
 
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM, chain_key = %chain_key))]
     pub fn new(
         rpc_ids: RpcIds,
         endpoints: Vec<String>,
         channels: ConnectionChannels,
-        priority_endpoint: Option<PriorityEndpoint>,
+        chain_key: ChainKey,
+        priority_endpoint_index: Option<usize>,
     ) -> Self {
         let ConnectionChannels {
             connection_send_rpc_rx,
@@ -97,23 +95,23 @@ impl Connection {
         let (health_shutdown_tx, mut health_shutdown_rx) = oneshot::channel();
 
         // Create shared Arc instances for health check and connection loop communication
-        let force_switch_flag = Arc::new(AtomicBool::new(priority_endpoint.is_some()));
+        let force_switch_flag = Arc::new(AtomicBool::new(priority_endpoint_index.is_some()));
         let force_switch_notify = Arc::new(Notify::new());
         let is_using_priority = Arc::new(std::sync::RwLock::new(false));
 
         // Spawn health check task separately
-        let health_check_handle = if let Some(priority_endpoint) = priority_endpoint.as_ref() {
-            if priority_endpoint.index < endpoints.len() {
-                let chain_key = priority_endpoint.chain_key.clone();
-                let priority_endpoint = endpoints[priority_endpoint.index].clone();
+        let health_check_handle = if let Some(priority_index) = priority_endpoint_index {
+            if priority_index < endpoints.len() {
+                let priority_endpoint_url = endpoints[priority_index].clone();
+                let chain_key_clone = chain_key.clone();
 
                 // Validate endpoint once at spawn time
-                let evm_endpoint = match EvmEndpoint::new_ws(&priority_endpoint) {
+                let evm_endpoint = match EvmEndpoint::new_ws(&priority_endpoint_url) {
                     Ok(endpoint) => Some(endpoint),
                     Err(err) => {
                         tracing::error!(
-                            "EVM: failed to construct priority endpoint {}, health check disabled: {:?}",
-                            priority_endpoint,
+                            "failed to construct priority endpoint {}, health check disabled: {:?}",
+                            priority_endpoint_url,
                             err
                         );
                         None
@@ -132,7 +130,7 @@ impl Connection {
                         loop {
                             tokio::select! {
                                 _ = &mut health_shutdown_rx => {
-                                    tracing::info!("EVM: health check task shutdown requested");
+                                    tracing::info!("health check task shutdown requested");
                                     break;
                                 }
                                 _ = interval.tick() => {
@@ -140,13 +138,13 @@ impl Connection {
                                         continue;
                                     }
 
-                                    match check_evm_chain_endpoint_health_query(chain_key.clone(), evm_endpoint.clone())
+                                    match check_evm_chain_endpoint_health_query(chain_key_clone.clone(), evm_endpoint.clone())
                                         .await
                                     {
                                         Ok(_) => {
                                             tracing::info!(
-                                                "EVM: priority endpoint {} is healthy, preparing to switch",
-                                                priority_endpoint
+                                                "priority endpoint {} is healthy, preparing to switch",
+                                                priority_endpoint_url
                                             );
                                             let already_requested =
                                                 force_switch_flag_clone.swap(true, Ordering::SeqCst);
@@ -156,8 +154,8 @@ impl Connection {
                                         }
                                         Err(e) => {
                                             tracing::debug!(
-                                                "EVM: priority endpoint {} health check failed: {:?}",
-                                                priority_endpoint,
+                                                "priority endpoint {} health check failed: {:?}",
+                                                priority_endpoint_url,
                                                 e
                                             );
                                         }
@@ -171,8 +169,8 @@ impl Connection {
                 }
             } else {
                 tracing::warn!(
-                    "EVM: priority endpoint index {} is out of bounds",
-                    priority_endpoint.index
+                    "priority endpoint index {} is out of bounds",
+                    priority_index
                 );
                 None
             }
@@ -188,7 +186,8 @@ impl Connection {
             connection_data_tx,
             connection_state_tx,
             rpc_ids,
-            priority_endpoint,
+            chain_key.clone(),
+            priority_endpoint_index,
             force_switch_flag,
             force_switch_notify,
             is_using_priority,
@@ -198,6 +197,7 @@ impl Connection {
             connection_send_rpc_rx,
             current_sink.clone(),
             message_shutdown_rx,
+            chain_key.clone(),
         ));
 
         Self {
@@ -206,6 +206,7 @@ impl Connection {
             shutdown_txs: Some([main_shutdown_tx, message_shutdown_tx]),
             health_check_handle,
             health_shutdown_tx: Some(health_shutdown_tx),
+            chain_key,
         }
     }
 
@@ -215,8 +216,9 @@ impl Connection {
 
     /// Explicitly shutdown the connection, waiting for all tasks to complete.
     /// This is the preferred way to shutdown a Connection over relying on Drop.
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM, chain_key = %self.chain_key))]
     pub async fn shutdown(mut self) {
-        tracing::info!("EVM: explicit shutdown requested");
+        tracing::info!("explicit shutdown requested");
 
         // Send shutdown signal to health check task first
         if let Some(health_tx) = self.health_shutdown_tx.take() {
@@ -236,7 +238,7 @@ impl Connection {
                 .await
                 .is_err()
             {
-                tracing::warn!("EVM: health check task did not shut down in time");
+                tracing::warn!("health check task did not shut down in time");
             }
         }
 
@@ -247,18 +249,19 @@ impl Connection {
                     .await
                     .is_err()
                 {
-                    tracing::warn!("EVM: connection task did not shut down in time");
+                    tracing::warn!("connection task did not shut down in time");
                 }
             }
         }
 
-        tracing::info!("EVM: explicit shutdown completed");
+        tracing::info!("explicit shutdown completed");
     }
 }
 
 impl Drop for Connection {
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM, chain_key = %self.chain_key))]
     fn drop(&mut self) {
-        tracing::info!("EVM: connection dropped");
+        tracing::info!("connection dropped");
 
         // Just send shutdown signals
         if let Some(health_tx) = self.health_shutdown_tx.take() {
@@ -278,6 +281,7 @@ impl Drop for Connection {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM, chain_key = %chain_key))]
 async fn connection_loop(
     endpoints: Vec<String>,
     current_sink: Arc<
@@ -288,7 +292,8 @@ async fn connection_loop(
     connection_data_tx: UnboundedSender<ConnectionData>,
     connection_state_tx: UnboundedSender<ConnectionState>,
     rpc_ids: RpcIds,
-    priority_endpoint: Option<PriorityEndpoint>,
+    chain_key: ChainKey,
+    priority_endpoint_index: Option<usize>,
     force_switch_flag: Arc<AtomicBool>,
     force_switch_notify: Arc<Notify>,
     is_using_priority: Arc<std::sync::RwLock<bool>>,
@@ -300,7 +305,7 @@ async fn connection_loop(
     'connection_loop: loop {
         tokio::select! {
             _ = &mut shutdown_rx => {
-                tracing::info!("EVM: shutdown requested, exiting connection loop");
+                tracing::info!("shutdown requested, exiting connection loop");
                 if let Err(e) = connection_state_tx.send(ConnectionState::Disconnected) {
                     tracing::error!("Failed to send disconnected state: {}", e);
                 }
@@ -308,33 +313,32 @@ async fn connection_loop(
             }
 
             (result, endpoint) = async {
-                if let Some(priority_endpoint) = priority_endpoint.as_ref() {
+                if let Some(priority_index) = priority_endpoint_index {
                     if force_switch_flag.load(Ordering::SeqCst) {
-                        let desired_index = priority_endpoint.index;
-                        if endpoint_idx != desired_index {
+                        if endpoint_idx != priority_index {
                             tracing::info!(
-                                "EVM: honoring force switch request, prioritizing endpoint index {}",
-                                desired_index
+                                "honoring force switch request, prioritizing endpoint index {}",
+                                priority_index
                             );
                         }
-                        endpoint_idx = desired_index;
+                        endpoint_idx = priority_index;
                     }
                 }
 
                 let endpoint = endpoints[endpoint_idx].clone();
-                tracing::info!("EVM: connecting to {endpoint}");
+                tracing::info!("connecting to {endpoint}");
                 let result = connect_async(&endpoint).await;
                 (result, endpoint)
             } => {
                 match result {
                     Ok((ws, _)) => {
-                        tracing::info!("EVM: connected {endpoint}");
+                        tracing::info!("connected {endpoint}");
                         current_backoff = Connection::BACKOFF_BASE; // reset backoff on success
                         failures_in_cycle = 0; // reset failure count
 
                         // Check if we're connecting to priority endpoint
-                        let using_priority = if let Some(priority_endpoint) = priority_endpoint.as_ref() {
-                            endpoint_idx == priority_endpoint.index
+                        let using_priority = if let Some(priority_index) = priority_endpoint_index {
+                            endpoint_idx == priority_index
                         } else {
                             false
                         };
@@ -342,9 +346,9 @@ async fn connection_loop(
 
                         if using_priority {
                             force_switch_flag.store(false, Ordering::SeqCst);
-                            tracing::info!("EVM: connected to priority endpoint {}", endpoint);
+                            tracing::info!("connected to priority endpoint {}", endpoint);
                         } else {
-                            tracing::info!("EVM: connected to non-priority endpoint {}", endpoint);
+                            tracing::info!("connected to non-priority endpoint {}", endpoint);
                         }
 
                         let (sink, mut stream) = ws.split();
@@ -364,20 +368,20 @@ async fn connection_loop(
                         loop {
                             tokio::select! {
                                 _ = &mut shutdown_rx => {
-                                    tracing::info!("EVM: shutdown requested, exiting connection loop");
+                                    tracing::info!("shutdown requested, exiting connection loop");
                                     break 'connection_loop; // Exit the outer loop directly
                                 }
-                                _ = force_switch_notify.notified(), if priority_endpoint.is_some() => {
-                                    if let Some(priority_endpoint) = priority_endpoint.as_ref() {
+                                _ = force_switch_notify.notified(), if priority_endpoint_index.is_some() => {
+                                    if let Some(priority_index) = priority_endpoint_index {
                                         if force_switch_flag.load(Ordering::SeqCst)
                                             && !*is_using_priority.read().unwrap()
                                         {
                                             tracing::info!(
-                                                "EVM: force switching to priority endpoint at index {}",
-                                                priority_endpoint.index
+                                                "force switching to priority endpoint at index {}",
+                                                priority_index
                                             );
                                             forced_switch = true;
-                                            endpoint_idx = priority_endpoint.index;
+                                            endpoint_idx = priority_index;
                                             current_backoff = Connection::BACKOFF_BASE;
                                             failures_in_cycle = 0;
                                             break;
@@ -402,21 +406,21 @@ async fn connection_loop(
                                         }
                                         // tungstenite automatically responds to pings
                                         Some(Ok(Message::Ping(_))) => {
-                                            tracing::debug!("EVM: Received ping from {}", endpoint);
+                                            tracing::debug!("Received ping from {}", endpoint);
                                         }
                                         Some(Ok(Message::Close(_))) => {
-                                            tracing::info!("EVM: WebSocket closed gracefully from {}", endpoint);
+                                            tracing::info!("WebSocket closed gracefully from {}", endpoint);
                                             break;
                                         }
                                         Some(Ok(_)) => {
-                                            tracing::debug!("EVM: Received unhandled message type from {}", endpoint);
+                                            tracing::debug!("Received unhandled message type from {}", endpoint);
                                         }
                                         Some(Err(err)) => {
                                             tracing::error!("EVM connection lost from {endpoint}: {err:?}");
                                             break;
                                         }
                                         None => {
-                                            tracing::info!("EVM: disconnected {endpoint}");
+                                            tracing::info!("disconnected {endpoint}");
                                             break;
                                         }
                                     }
@@ -430,7 +434,7 @@ async fn connection_loop(
                         };
                         if let Some(mut sink) = sink_opt {
                             if let Err(e) = sink.close().await {
-                                tracing::debug!("EVM: error closing sink for {endpoint}: {}", e);
+                                tracing::debug!("error closing sink for {endpoint}: {}", e);
                             }
                         }
 
@@ -453,13 +457,13 @@ async fn connection_loop(
                         if let Err(e) = connection_state_tx.send(ConnectionState::Disconnected) {
                             tracing::error!("Failed to send disconnected state: {}", e);
                         }
-                        tracing::error!("EVM: connect error to {endpoint}: {err:?}");
+                        tracing::error!("connect error to {endpoint}: {err:?}");
 
                         // Clear force_switch_flag if we failed to connect to priority endpoint
-                        if let Some(priority_endpoint) = priority_endpoint.as_ref() {
-                            if endpoint_idx == priority_endpoint.index {
+                        if let Some(priority_index) = priority_endpoint_index {
+                            if endpoint_idx == priority_index {
                                 force_switch_flag.store(false, Ordering::SeqCst);
-                                tracing::info!("EVM: clearing force switch flag due to priority endpoint connection failure");
+                                tracing::info!("clearing force switch flag due to priority endpoint connection failure");
                                 *is_using_priority.write().unwrap() = false;
                             }
                         }
@@ -485,17 +489,19 @@ async fn connection_loop(
     }
 }
 
+#[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM, chain_key = %chain_key))]
 async fn message_loop(
     mut connection_send_rpc_rx: tokio::sync::mpsc::UnboundedReceiver<RpcRequest>,
     current_sink: Arc<
         tokio::sync::Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
     >,
     mut shutdown_rx: oneshot::Receiver<()>,
+    chain_key: ChainKey,
 ) {
     loop {
         tokio::select! {
             _ = &mut shutdown_rx => {
-                tracing::info!("EVM: shutdown requested, exiting message loop");
+                tracing::info!("shutdown requested, exiting message loop");
                 let sink_opt = {
                     let mut guard = current_sink.lock().await;
                     guard.take()
@@ -509,7 +515,7 @@ async fn message_loop(
                 match serde_json::to_string(&msg) {
                     Ok(msg) => {
 
-                        tracing::debug!("EVM: sending message: {}", msg);
+                        tracing::debug!("sending message: {}", msg);
                         let send_result = {
                             let mut guard = current_sink.lock().await;
                             if let Some(sink) = guard.as_mut() {
@@ -570,7 +576,13 @@ mod test {
         let connection_send_rpc_tx = channels.subscription.connection_send_rpc_tx;
 
         let rpc_ids = RpcIds::new();
-        let _connection = Connection::new(rpc_ids.clone(), endpoints, channels.connection, None);
+        let _connection = Connection::new(
+            rpc_ids.clone(),
+            endpoints,
+            channels.connection,
+            wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
+            None,
+        );
 
         let message_count = std::sync::Arc::new(std::sync::Mutex::new(0u32));
         let message_count_clone = message_count.clone();
@@ -630,7 +642,13 @@ mod test {
 
         let channels = Channels::new();
         let rpc_ids = RpcIds::new();
-        let connection = Connection::new(rpc_ids, endpoints, channels.connection, None);
+        let connection = Connection::new(
+            rpc_ids,
+            endpoints,
+            channels.connection,
+            wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
+            None,
+        );
 
         // Wait for connection to be established and current_endpoint to be set
         let result = timeout(Duration::from_secs(10), async {
@@ -676,7 +694,13 @@ mod test {
 
         let channels = Channels::new();
         let rpc_ids = RpcIds::new();
-        let connection = Connection::new(rpc_ids, endpoints, channels.connection, None);
+        let connection = Connection::new(
+            rpc_ids,
+            endpoints,
+            channels.connection,
+            wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
+            None,
+        );
 
         // Step 1: Wait for initial connection to anvil_1
         let result = timeout(Duration::from_secs(10), async {
@@ -781,16 +805,12 @@ mod test {
         let rpc_ids = RpcIds::new();
 
         // Set anvil_2 (index 1) as priority endpoint
-        let priority_endpoint = PriorityEndpoint {
-            index: 1,
-            chain_key: wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
-        };
-
         let connection = Connection::new(
             rpc_ids,
             endpoints,
             channels.connection,
-            Some(priority_endpoint),
+            wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
+            Some(1),
         );
 
         // Step 1: Should connect to priority endpoint (anvil_2) first
