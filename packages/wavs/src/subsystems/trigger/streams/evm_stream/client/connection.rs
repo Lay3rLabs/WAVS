@@ -402,6 +402,7 @@ async fn connection_loop(
                                                 tracing::error!("Failed to send binary message from {}: {}", endpoint, e);
                                             }
                                         }
+                                        // tungstenite automatically responds to pings
                                         Some(Ok(Message::Ping(_))) => {
                                             tracing::debug!("EVM: Received ping from {}", endpoint);
                                         }
