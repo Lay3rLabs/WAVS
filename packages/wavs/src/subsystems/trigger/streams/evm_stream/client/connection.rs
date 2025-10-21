@@ -311,7 +311,7 @@ async fn connection_loop(
                 if let Some(priority_endpoint) = priority_endpoint.as_ref() {
                     if force_switch_flag.load(Ordering::SeqCst) {
                         let desired_index = priority_endpoint.index;
-                        if endpoint_idx % endpoints.len() != desired_index {
+                        if endpoint_idx != desired_index {
                             tracing::info!(
                                 "EVM: honoring force switch request, prioritizing endpoint index {}",
                                 desired_index
@@ -321,7 +321,7 @@ async fn connection_loop(
                     }
                 }
 
-                let endpoint = endpoints[endpoint_idx % endpoints.len()].clone();
+                let endpoint = endpoints[endpoint_idx].clone();
                 tracing::info!("EVM: connecting to {endpoint}");
                 let result = connect_async(&endpoint).await;
                 (result, endpoint)
@@ -334,7 +334,7 @@ async fn connection_loop(
 
                         // Check if we're connecting to priority endpoint
                         let using_priority = if let Some(priority_endpoint) = priority_endpoint.as_ref() {
-                            endpoint_idx % endpoints.len() == priority_endpoint.index
+                            endpoint_idx == priority_endpoint.index
                         } else {
                             false
                         };
@@ -447,7 +447,7 @@ async fn connection_loop(
                         if forced_switch {
                             continue;
                         } else {
-                            endpoint_idx += 1; // cycle to next endpoint on disconnection
+                            endpoint_idx = (endpoint_idx + 1) % endpoints.len(); // cycle to next endpoint on disconnection
                         }
                     }
                     Err(err) => {
@@ -458,7 +458,7 @@ async fn connection_loop(
 
                         // Clear force_switch_flag if we failed to connect to priority endpoint
                         if let Some(priority_endpoint) = priority_endpoint.as_ref() {
-                            if endpoint_idx % endpoints.len() == priority_endpoint.index {
+                            if endpoint_idx == priority_endpoint.index {
                                 force_switch_flag.store(false, Ordering::SeqCst);
                                 tracing::info!("EVM: clearing force switch flag due to priority endpoint connection failure");
                                 *is_using_priority.write().unwrap() = false;
@@ -466,7 +466,7 @@ async fn connection_loop(
                         }
 
                         failures_in_cycle += 1;
-                        endpoint_idx += 1; // cycle the endpoints
+                        endpoint_idx = (endpoint_idx + 1) % endpoints.len(); // cycle the endpoints
 
                         rpc_ids.clear_all(); // clear pending requests on failure
 
