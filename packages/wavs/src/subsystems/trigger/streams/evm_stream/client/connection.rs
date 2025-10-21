@@ -104,63 +104,69 @@ impl Connection {
             if priority_endpoint.index < endpoints.len() {
                 let chain_key = priority_endpoint.chain_key.clone();
                 let priority_endpoint = endpoints[priority_endpoint.index].clone();
-                let force_switch_flag_clone = force_switch_flag.clone();
-                let force_switch_notify_clone = force_switch_notify.clone();
-                let is_using_priority_clone = is_using_priority.clone();
 
-                Some(tokio::spawn(async move {
-                    let mut interval =
-                        tokio::time::interval(Connection::PRIORITY_HEALTH_CHECK_INTERVAL);
+                // Validate endpoint once at spawn time
+                let evm_endpoint = match EvmEndpoint::new_ws(&priority_endpoint) {
+                    Ok(endpoint) => Some(endpoint),
+                    Err(err) => {
+                        tracing::error!(
+                            "EVM: failed to construct priority endpoint {}, health check disabled: {:?}",
+                            priority_endpoint,
+                            err
+                        );
+                        None
+                    }
+                };
 
-                    loop {
-                        tokio::select! {
-                            _ = &mut health_shutdown_rx => {
-                                tracing::info!("EVM: health check task shutdown requested");
-                                break;
-                            }
-                            _ = interval.tick() => {
-                                if *is_using_priority_clone.read().await {
-                                    continue;
+                if let Some(evm_endpoint) = evm_endpoint {
+                    let force_switch_flag_clone = force_switch_flag.clone();
+                    let force_switch_notify_clone = force_switch_notify.clone();
+                    let is_using_priority_clone = is_using_priority.clone();
+
+                    Some(tokio::spawn(async move {
+                        let mut interval =
+                            tokio::time::interval(Connection::PRIORITY_HEALTH_CHECK_INTERVAL);
+
+                        loop {
+                            tokio::select! {
+                                _ = &mut health_shutdown_rx => {
+                                    tracing::info!("EVM: health check task shutdown requested");
+                                    break;
                                 }
-
-                                let evm_endpoint = match EvmEndpoint::new_ws(&priority_endpoint) {
-                                    Ok(endpoint) => endpoint,
-                                    Err(err) => {
-                                        tracing::debug!(
-                                            "EVM: failed to construct priority endpoint {}: {:?}",
-                                            priority_endpoint,
-                                            err
-                                        );
+                                _ = interval.tick() => {
+                                    if *is_using_priority_clone.read().await {
                                         continue;
                                     }
-                                };
 
-                                match check_evm_chain_endpoint_health_query(chain_key.clone(), evm_endpoint)
-                                    .await
-                                {
-                                    Ok(_) => {
-                                        tracing::info!(
-                                            "EVM: priority endpoint {} is healthy, preparing to switch",
-                                            priority_endpoint
-                                        );
-                                        let already_requested =
-                                            force_switch_flag_clone.swap(true, Ordering::SeqCst);
-                                        if !already_requested {
-                                            force_switch_notify_clone.notify_waiters();
+                                    match check_evm_chain_endpoint_health_query(chain_key.clone(), evm_endpoint.clone())
+                                        .await
+                                    {
+                                        Ok(_) => {
+                                            tracing::info!(
+                                                "EVM: priority endpoint {} is healthy, preparing to switch",
+                                                priority_endpoint
+                                            );
+                                            let already_requested =
+                                                force_switch_flag_clone.swap(true, Ordering::SeqCst);
+                                            if !already_requested {
+                                                force_switch_notify_clone.notify_waiters();
+                                            }
                                         }
-                                    }
-                                    Err(e) => {
-                                        tracing::debug!(
-                                            "EVM: priority endpoint {} health check failed: {:?}",
-                                            priority_endpoint,
-                                            e
-                                        );
+                                        Err(e) => {
+                                            tracing::debug!(
+                                                "EVM: priority endpoint {} health check failed: {:?}",
+                                                priority_endpoint,
+                                                e
+                                            );
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                }))
+                    }))
+                } else {
+                    None
+                }
             } else {
                 tracing::warn!(
                     "EVM: priority endpoint index {} is out of bounds",
