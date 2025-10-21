@@ -97,7 +97,7 @@ impl Connection {
         let (health_shutdown_tx, mut health_shutdown_rx) = oneshot::channel();
 
         // Create shared Arc instances for health check and connection loop communication
-        let force_switch_flag = Arc::new(AtomicBool::new(false));
+        let force_switch_flag = Arc::new(AtomicBool::new(priority_endpoint.is_some()));
         let force_switch_notify = Arc::new(Notify::new());
         let is_using_priority = Arc::new(std::sync::RwLock::new(false));
 
@@ -362,29 +362,27 @@ async fn connection_loop(
                         let mut forced_switch = false;
 
                         loop {
-                            if let Some(priority_endpoint) = priority_endpoint.as_ref() {
-                                if force_switch_flag.load(Ordering::SeqCst)
-                                    && !*is_using_priority.read().unwrap()
-                                {
-                                    tracing::info!(
-                                        "EVM: force switching to priority endpoint at index {}",
-                                        priority_endpoint.index
-                                    );
-                                    forced_switch = true;
-                                    endpoint_idx = priority_endpoint.index;
-                                    current_backoff = Connection::BACKOFF_BASE;
-                                    failures_in_cycle = 0;
-                                    break;
-                                }
-                            }
-
                             tokio::select! {
                                 _ = &mut shutdown_rx => {
                                     tracing::info!("EVM: shutdown requested, exiting connection loop");
                                     break 'connection_loop; // Exit the outer loop directly
                                 }
                                 _ = force_switch_notify.notified(), if priority_endpoint.is_some() => {
-                                    continue;
+                                    if let Some(priority_endpoint) = priority_endpoint.as_ref() {
+                                        if force_switch_flag.load(Ordering::SeqCst)
+                                            && !*is_using_priority.read().unwrap()
+                                        {
+                                            tracing::info!(
+                                                "EVM: force switching to priority endpoint at index {}",
+                                                priority_endpoint.index
+                                            );
+                                            forced_switch = true;
+                                            endpoint_idx = priority_endpoint.index;
+                                            current_backoff = Connection::BACKOFF_BASE;
+                                            failures_in_cycle = 0;
+                                            break;
+                                        }
+                                    }
                                 }
                                 message = stream.next() => {
                                     match message {
