@@ -10,7 +10,7 @@ use futures::{stream::SplitSink, SinkExt, StreamExt};
 use thiserror::Error;
 use tokio::{
     net::TcpStream,
-    sync::{mpsc::UnboundedSender, oneshot, Notify, RwLock},
+    sync::{mpsc::UnboundedSender, oneshot, Notify},
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
@@ -49,7 +49,7 @@ use wavs_types::ChainKey;
 // ... and so on
 pub struct Connection {
     handles: Option<[tokio::task::JoinHandle<()>; 2]>,
-    current_endpoint: Arc<RwLock<Option<String>>>,
+    current_endpoint: Arc<std::sync::RwLock<Option<String>>>,
     shutdown_txs: Option<[oneshot::Sender<()>; 2]>,
     health_check_handle: Option<tokio::task::JoinHandle<()>>,
     health_shutdown_tx: Option<oneshot::Sender<()>>,
@@ -87,8 +87,10 @@ impl Connection {
             connection_state_tx,
         } = channels;
 
+        // Use tokio::sync::Mutex for sink because we need to hold the lock across .await points
+        // when performing async WebSocket operations (sink.send, sink.close)
         let current_sink = Arc::new(tokio::sync::Mutex::new(None));
-        let current_endpoint = Arc::new(RwLock::new(None));
+        let current_endpoint = Arc::new(std::sync::RwLock::new(None));
 
         let (main_shutdown_tx, main_shutdown_rx) = oneshot::channel();
         let (message_shutdown_tx, message_shutdown_rx) = oneshot::channel();
@@ -97,7 +99,7 @@ impl Connection {
         // Create shared Arc instances for health check and connection loop communication
         let force_switch_flag = Arc::new(AtomicBool::new(false));
         let force_switch_notify = Arc::new(Notify::new());
-        let is_using_priority = Arc::new(RwLock::new(false));
+        let is_using_priority = Arc::new(std::sync::RwLock::new(false));
 
         // Spawn health check task separately
         let health_check_handle = if let Some(priority_endpoint) = priority_endpoint.as_ref() {
@@ -134,7 +136,7 @@ impl Connection {
                                     break;
                                 }
                                 _ = interval.tick() => {
-                                    if *is_using_priority_clone.read().await {
+                                    if *is_using_priority_clone.read().unwrap() {
                                         continue;
                                     }
 
@@ -281,7 +283,7 @@ async fn connection_loop(
     current_sink: Arc<
         tokio::sync::Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
     >,
-    current_endpoint: Arc<RwLock<Option<String>>>,
+    current_endpoint: Arc<std::sync::RwLock<Option<String>>>,
     mut shutdown_rx: oneshot::Receiver<()>,
     connection_data_tx: UnboundedSender<ConnectionData>,
     connection_state_tx: UnboundedSender<ConnectionState>,
@@ -289,7 +291,7 @@ async fn connection_loop(
     priority_endpoint: Option<PriorityEndpoint>,
     force_switch_flag: Arc<AtomicBool>,
     force_switch_notify: Arc<Notify>,
-    is_using_priority: Arc<RwLock<bool>>,
+    is_using_priority: Arc<std::sync::RwLock<bool>>,
 ) {
     let mut endpoint_idx = 0;
     let mut current_backoff = Connection::BACKOFF_BASE;
@@ -336,7 +338,7 @@ async fn connection_loop(
                         } else {
                             false
                         };
-                        *is_using_priority.write().await = using_priority;
+                        *is_using_priority.write().unwrap() = using_priority;
 
                         if using_priority {
                             force_switch_flag.store(false, Ordering::SeqCst);
@@ -351,7 +353,7 @@ async fn connection_loop(
                             let mut guard = current_sink.lock().await;
                             *guard = Some(sink);
                         }
-                        *current_endpoint.write().await = Some(endpoint.clone());
+                        *current_endpoint.write().unwrap()= Some(endpoint.clone());
 
                         if let Err(e) = connection_state_tx.send(ConnectionState::Connected(endpoint.clone())) {
                             tracing::error!("Failed to send connected state: {}", e);
@@ -362,7 +364,7 @@ async fn connection_loop(
                         loop {
                             if let Some(priority_endpoint) = priority_endpoint.as_ref() {
                                 if force_switch_flag.load(Ordering::SeqCst)
-                                    && !*is_using_priority.read().await
+                                    && !*is_using_priority.read().unwrap()
                                 {
                                     tracing::info!(
                                         "EVM: force switching to priority endpoint at index {}",
@@ -423,12 +425,13 @@ async fn connection_loop(
                             }
                         }
 
-                        {
+                        let sink_opt = {
                             let mut guard = current_sink.lock().await;
-                            if let Some(mut sink) = guard.take() {
-                                if let Err(e) = sink.close().await {
-                                    tracing::debug!("EVM: error closing sink for {endpoint}: {}", e);
-                                }
+                            guard.take()
+                        };
+                        if let Some(mut sink) = sink_opt {
+                            if let Err(e) = sink.close().await {
+                                tracing::debug!("EVM: error closing sink for {endpoint}: {}", e);
                             }
                         }
 
@@ -438,8 +441,8 @@ async fn connection_loop(
                             tracing::error!("Failed to send disconnected state: {}", e);
                         }
 
-                        *current_endpoint.write().await = None;
-                        *is_using_priority.write().await = false; // reset priority usage
+                        *current_endpoint.write().unwrap() = None;
+                        *is_using_priority.write().unwrap() = false; // reset priority usage
 
                         if forced_switch {
                             continue;
@@ -458,7 +461,7 @@ async fn connection_loop(
                             if endpoint_idx % endpoints.len() == priority_endpoint.index {
                                 force_switch_flag.store(false, Ordering::SeqCst);
                                 tracing::info!("EVM: clearing force switch flag due to priority endpoint connection failure");
-                                *is_using_priority.write().await = false;
+                                *is_using_priority.write().unwrap() = false;
                             }
                         }
 
@@ -494,8 +497,11 @@ async fn message_loop(
         tokio::select! {
             _ = &mut shutdown_rx => {
                 tracing::info!("EVM: shutdown requested, exiting message loop");
-                let mut guard = current_sink.lock().await;
-                if let Some(mut sink) = guard.take() {
+                let sink_opt = {
+                    let mut guard = current_sink.lock().await;
+                    guard.take()
+                };
+                if let Some(mut sink) = sink_opt {
                     let _ = sink.close().await;
                 }
                 break;
@@ -505,16 +511,23 @@ async fn message_loop(
                     Ok(msg) => {
 
                         tracing::debug!("EVM: sending message: {}", msg);
-                        let mut guard = current_sink.lock().await;
-                        if let Some(sink) = guard.as_mut() {
-                            match sink.send(Message::Text(msg.into())).await {
+                        let send_result = {
+                            let mut guard = current_sink.lock().await;
+                            if let Some(sink) = guard.as_mut() {
+                                Some(sink.send(Message::Text(msg.into())).await)
+                            } else {
+                                tracing::error!("{:#?}", ConnectionError::NoActiveConnection);
+                                None
+                            }
+                        };
+
+                        if let Some(result) = send_result {
+                            match result {
                                 Ok(_) => {},
                                 Err(e) => {
                                     tracing::error!("Failed to send message: {}", e);
                                 }
                             }
-                        } else {
-                            tracing::error!("{:#?}", ConnectionError::NoActiveConnection);
                         }
                     },
                     Err(e) => {
@@ -560,13 +573,13 @@ mod test {
         let rpc_ids = RpcIds::new();
         let _connection = Connection::new(rpc_ids.clone(), endpoints, channels.connection, None);
 
-        let message_count = std::sync::Arc::new(tokio::sync::Mutex::new(0u32));
+        let message_count = std::sync::Arc::new(std::sync::Mutex::new(0u32));
         let message_count_clone = message_count.clone();
 
         // Spawn task to count received messages
         tokio::spawn(async move {
             while let Some(_data) = connection_data_rx.recv().await {
-                let mut counter = message_count_clone.lock().await;
+                let mut counter = message_count_clone.lock().unwrap();
                 *counter += 1;
                 tracing::info!("Received message, count: {}", *counter);
             }
@@ -592,7 +605,7 @@ mod test {
         assert!(result.is_ok(), "Test timed out after 5 seconds");
 
         // Verify that we actually received messages (subscription response at minimum)
-        let final_count = *message_count.lock().await;
+        let final_count = *message_count.lock().unwrap();
         assert!(
             final_count > 0,
             "Expected to receive at least a subscription response, but got {}",
