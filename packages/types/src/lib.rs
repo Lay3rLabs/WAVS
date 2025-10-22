@@ -1,6 +1,7 @@
 mod aggregator_types;
 mod bytes;
 mod chain_config;
+pub mod contracts;
 mod credential;
 mod http;
 mod id;

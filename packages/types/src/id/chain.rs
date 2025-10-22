@@ -94,10 +94,10 @@ impl FromStr for ChainKey {
     }
 }
 
-impl From<ChainKey> for layer_climb::prelude::ChainId {
+impl From<ChainKey> for layer_climb_config::ChainId {
     fn from(key: ChainKey) -> Self {
         // climb doesn't care about the namespace at all
-        layer_climb::prelude::ChainId::new(key.id.into_inner())
+        layer_climb_config::ChainId::new(key.id.into_inner())
     }
 }
 
@@ -233,9 +233,9 @@ impl Serialize for ChainKeyId {
     }
 }
 
-impl From<ChainKeyId> for layer_climb::prelude::ChainId {
+impl From<ChainKeyId> for layer_climb_config::ChainId {
     fn from(id: ChainKeyId) -> Self {
-        layer_climb::prelude::ChainId::new(id.into_inner())
+        layer_climb_config::ChainId::new(id.into_inner())
     }
 }
 
