@@ -1,0 +1,17 @@
+[package]
+name = "cw-wavs-mock-api"
+version = "0.0.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wavs-types = { workspace = true }
+cosmwasm-std = {workspace = true}
+anyhow = {workspace = true}
+cosmwasm-schema = {workspace = true}
+serde = {workspace = true}
+bincode = {workspace = true}
+layer-climb-address = {workspace = true}
