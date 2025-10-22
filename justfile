@@ -78,29 +78,17 @@ wasi-build COMPONENT="*" TAG="latest":
     rm -rf "{{WASI_OUT_DIR}}"
     mkdir -p "{{WASI_OUT_DIR}}"
 
-    # Pull latest
-    docker pull $IMAGE_NAME
+    # Pull latest (unless tag is local)
+    if [ "{{TAG}}" != "local" ]; then
+        docker pull $IMAGE_NAME
+    fi
 
-    for component_dir in $COMPONENTS; do
-        # Skip if it's not a directory
-        if [ ! -d "$component_dir" ]; then
-            echo "Warning: $component_dir is not a directory, skipping"
-            continue
-        fi
-
-        # Skip if no Cargo.toml
-        if [ ! -f "$component_dir/Cargo.toml" ]; then
-            echo "Warning: $component_dir/Cargo.toml not found, skipping"
-            continue
-        fi
-
-        # Run Docker build
-        docker run --rm \
-            -v "$(pwd):/docker" \
-            -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
-            "$IMAGE_NAME" \
-            "$component_dir"
-    done
+    # Run Docker build
+    docker run --rm \
+        -v "$(pwd):/docker" \
+        -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
+        -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
+        "$IMAGE_NAME"
 
     just generate-checksums
 
