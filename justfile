@@ -163,12 +163,16 @@ solidity-build CLEAN="":
     cp -r {{REPO_ROOT}}/out/EventEmitter.sol {{REPO_ROOT}}/packages/wavs/tests/contracts/solidity/abi/
 
 # compile cosmwasm example contracts
-cosmwasm-build CONTRACT="**/*":
+cosmwasm-build CONTRACT="*":
     rm -rf ./artifacts/*.wasm
     rm -rf {{COSMWASM_OUT_DIR}}
     mkdir -p {{COSMWASM_OUT_DIR}}
 
     @for C in examples/contracts/cosmwasm/{{CONTRACT}}/Cargo.toml; do \
+        just cosmwasm-build-inner $(dirname $C); \
+    done
+
+    @for C in examples/contracts/cosmwasm/mock/{{CONTRACT}}/Cargo.toml; do \
         just cosmwasm-build-inner $(dirname $C); \
     done
 
