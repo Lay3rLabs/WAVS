@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 wasm-pkg-client = { workspace = true }
-wavs-types = { workspace = true }
+wavs-types = { path = "../types", features = ["full"] }
 wavs-engine = { workspace = true }
 wavs-aggregator = { workspace = true }
 utils = { workspace = true }

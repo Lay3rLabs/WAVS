@@ -17,7 +17,7 @@ use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Credential, Envelope, EnvelopeExt, Packet, ServiceId, SignerResponse, Submit, TriggerData,
+    Credential, Envelope, EnvelopeSigner, Packet, ServiceId, SignerResponse, Submit, TriggerData,
     WorkflowId,
 };
 

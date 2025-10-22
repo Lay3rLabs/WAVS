@@ -14,7 +14,7 @@ test-utils = ["dep:rand", "dep:bip39"]
 
 [dependencies]
 wasm-pkg-client = { workspace = true }
-wavs-types = { workspace = true }
+wavs-types = { path = "../types", features = ["full"] }
 anyhow = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
