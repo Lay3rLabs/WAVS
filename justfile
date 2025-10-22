@@ -55,27 +55,7 @@ _install-native HOME DATA:
     @echo "export WAVS_AGGREGATOR_DATA=\"{{DATA}}/wavs-aggregator\""
     @echo "export WAVS_DOTENV=\"{{HOME}}/.env\""
 
-wasi-build COMPONENT="*":
-    @if [ "{{COMPONENT}}" = "*" ]; then \
-        rm -f ./target/wasm32-wasip1/release/*.wasm; \
-    fi
-
-    @for C in examples/components/{{COMPONENT}}/Cargo.toml; do \
-        if [ "{{COMPONENT}}" != "_helpers" ] && [ "{{COMPONENT}}" != "_types" ]; then \
-            echo "Building WASI component in $(dirname $C)"; \
-            ( cd $(dirname $C) && cargo component build --release && cargo fmt); \
-        fi; \
-    done
-
-    rm -rf {{WASI_OUT_DIR}}
-    mkdir -p {{WASI_OUT_DIR}}
-    @cp ./target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
-    @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt
-
-# FIXME
-# https://github.com/Lay3rLabs/wasi-builder/issues/2
-# https://github.com/Lay3rLabs/wasi-builder/issues/3
-wasi-build-docker COMPONENT="*" TAG="latest":
+wasi-build COMPONENT="*" TAG="latest":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -98,29 +78,17 @@ wasi-build-docker COMPONENT="*" TAG="latest":
     rm -rf "{{WASI_OUT_DIR}}"
     mkdir -p "{{WASI_OUT_DIR}}"
 
-    # Pull latest
-    docker pull $IMAGE_NAME
+    # Pull latest (unless tag is local)
+    if [ "{{TAG}}" != "local" ]; then
+        docker pull $IMAGE_NAME
+    fi
 
-    for component_dir in $COMPONENTS; do
-        # Skip if it's not a directory
-        if [ ! -d "$component_dir" ]; then
-            echo "Warning: $component_dir is not a directory, skipping"
-            continue
-        fi
-
-        # Skip if no Cargo.toml
-        if [ ! -f "$component_dir/Cargo.toml" ]; then
-            echo "Warning: $component_dir/Cargo.toml not found, skipping"
-            continue
-        fi
-
-        # Run Docker build
-        docker run --rm \
-            -v "$(pwd):/docker" \
-            -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
-            "$IMAGE_NAME" \
-            "$component_dir"
-    done
+    # Run Docker build
+    docker run --rm \
+        -v "$(pwd):/docker" \
+        -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
+        -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
+        "$IMAGE_NAME"
 
     just generate-checksums
 
