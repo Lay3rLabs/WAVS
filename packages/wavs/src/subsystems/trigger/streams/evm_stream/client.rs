@@ -9,7 +9,6 @@ use connection::Connection;
 use subscription::Subscriptions;
 
 // just for debug/http visibility
-pub use connection::PriorityEndpoint;
 pub use subscription::SubscriptionKind;
 
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -33,7 +32,8 @@ pub struct EvmTriggerStreamsController {
 impl EvmTriggerStreams {
     pub fn new(
         ws_endpoints: Vec<String>,
-        ws_priority_endpoint_index: Option<PriorityEndpoint>,
+        chain_key: wavs_types::ChainKey,
+        ws_priority_endpoint_index: Option<usize>,
     ) -> Self {
         let channels = Channels::new();
 
@@ -45,6 +45,7 @@ impl EvmTriggerStreams {
             rpc_ids,
             ws_endpoints,
             channels.connection,
+            chain_key,
             ws_priority_endpoint_index,
         );
 
