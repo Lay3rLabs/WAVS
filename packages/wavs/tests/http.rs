@@ -191,6 +191,7 @@ fn create_test_evm_chain_config() -> AnyChainConfig {
         ws_endpoints: vec!["wss://localhost:8546".to_string()],
         http_endpoint: Some("http://localhost:8545".to_string()),
         faucet_endpoint: None,
+        ws_priority_endpoint_index: None,
     })
 }
 

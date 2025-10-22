@@ -37,7 +37,7 @@ async fn block_height_stream() {
         controller,
         mut block_height_stream,
         ..
-    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()], None);
 
     controller.subscriptions.toggle_block_height(true);
 
@@ -77,7 +77,7 @@ async fn simple_log_stream() {
         controller,
         mut log_stream,
         ..
-    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()], None);
 
     let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
 
@@ -175,7 +175,7 @@ async fn multi_log_stream(add_kind: AddKind) {
         controller,
         mut log_stream,
         ..
-    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()], None);
 
     let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
 
@@ -314,7 +314,7 @@ async fn multi_contract_log_stream() {
         controller,
         mut log_stream,
         ..
-    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()], None);
 
     let contract_1 = EventEmitterClient::new(&anvil, 0).deploy().await;
     tracing::info!("Deployed contract_1 at {}", contract_1.address());
@@ -443,7 +443,7 @@ async fn fallback_chain_log_stream() {
         controller,
         mut log_stream,
         ..
-    } = EvmTriggerStreams::new(vec![anvil_1.ws_endpoint(), anvil_2.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil_1.ws_endpoint(), anvil_2.ws_endpoint()], None);
 
     let contract_1 = EventEmitterClient::new(&anvil_1, 0).deploy().await;
     tracing::info!(
@@ -561,7 +561,7 @@ async fn unsubscribe_log_stream(wait_for_subscriptions: bool) {
         controller,
         mut log_stream,
         ..
-    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()], None);
 
     let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
 
@@ -677,7 +677,7 @@ async fn controller_drop() {
         controller,
         mut block_height_stream,
         ..
-    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()], None);
 
     controller.subscriptions.toggle_block_height(true);
 
@@ -726,7 +726,7 @@ async fn all_log_stream() {
         controller,
         mut log_stream,
         ..
-    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()], None);
 
     let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
 
@@ -815,7 +815,7 @@ async fn unsubscribe_all_log_stream(explicit: bool) {
         controller,
         mut log_stream,
         ..
-    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil.ws_endpoint()], None);
 
     let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
 
@@ -889,13 +889,13 @@ async fn multiple_clients() {
         controller: controller_1,
         log_stream: mut log_stream_1,
         ..
-    } = EvmTriggerStreams::new(vec![anvil_1.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil_1.ws_endpoint()], None);
 
     let EvmTriggerStreams {
         controller: controller_2,
         log_stream: mut log_stream_2,
         ..
-    } = EvmTriggerStreams::new(vec![anvil_2.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil_2.ws_endpoint()], None);
 
     let contract_1 = EventEmitterClient::new(&anvil_1, 0).deploy().await;
     tracing::info!("Deployed contract_1 at {}", contract_1.address());
@@ -1039,13 +1039,13 @@ async fn multiple_clients_drop_one() {
     let EvmTriggerStreams {
         controller: controller_1,
         ..
-    } = EvmTriggerStreams::new(vec![anvil_1.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil_1.ws_endpoint()], None);
 
     let EvmTriggerStreams {
         controller: controller_2,
         log_stream: mut log_stream_2,
         ..
-    } = EvmTriggerStreams::new(vec![anvil_2.ws_endpoint()]);
+    } = EvmTriggerStreams::new(vec![anvil_2.ws_endpoint()], None);
 
     let contract_1 = EventEmitterClient::new(&anvil_1, 0).deploy().await;
     tracing::info!("Deployed contract_1 at {}", contract_1.address());
