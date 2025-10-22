@@ -1183,6 +1183,7 @@ mod test {
                     http_endpoint: Some(contract_deps._anvil.endpoint()),
                     ws_endpoints: vec![contract_deps._anvil.ws_endpoint()],
                     faucet_endpoint: None,
+                    ws_priority_endpoint_index: None,
                 },
             );
 

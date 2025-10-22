@@ -8,6 +8,7 @@ use alloy_primitives::{Address, B256};
 use alloy_rpc_types_eth::Log;
 use slotmap::Key;
 use tokio::{sync::oneshot, task::JoinHandle};
+use wavs_types::ChainKeyNamespace;
 
 use crate::subsystems::trigger::streams::evm_stream::client::rpc_types::outbound::SubscribeParams;
 
@@ -30,6 +31,7 @@ pub struct Subscriptions {
 }
 
 impl Subscriptions {
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM))]
     pub fn new(rpc_ids: RpcIds, channels: SubscriptionChannels) -> Self {
         let SubscriptionChannels {
             mut subscription_block_height_tx,
@@ -50,7 +52,7 @@ impl Subscriptions {
                 loop {
                     tokio::select! {
                         _ = &mut shutdown_rx => {
-                            tracing::info!("EVM: shutdown requested, exiting subscription loop");
+                            tracing::info!("shutdown requested, exiting subscription loop");
                             break;
                         }
 
@@ -66,7 +68,7 @@ impl Subscriptions {
                                                             inner.on_received_rpc_response(id, response);
                                                         }
                                                         Err(err) => {
-                                                            tracing::error!("EVM: RPC error for id {}: {:?}", id.data().as_ffi(), err);
+                                                            tracing::error!("RPC error for id {}: {:?}", id.data().as_ffi(), err);
                                                         }
                                                     }
                                                 },
@@ -82,7 +84,7 @@ impl Subscriptions {
                                                             );
                                                         }
                                                         Err(err) => {
-                                                            tracing::error!("EVM: Subscription error for id {}: {:?}", id, err);
+                                                            tracing::error!("Subscription error for id {}: {:?}", id, err);
                                                         }
                                                     }
                                                 },
@@ -90,12 +92,12 @@ impl Subscriptions {
                                             }
                                         },
                                         Err(e) => {
-                                            tracing::error!("EVM: failed to parse RPC response: {}", e);
+                                            tracing::error!("failed to parse RPC response: {}", e);
                                         }
                                     }
                                 },
                                 ConnectionData::Binary(bin) => {
-                                    tracing::debug!("EVM: received binary message: {:x?}", bin);
+                                    tracing::debug!("received binary message: {:x?}", bin);
                                     // ignore binary messages for now
                                 },
                             }
@@ -158,8 +160,9 @@ impl Subscriptions {
 }
 
 impl Drop for Subscriptions {
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM))]
     fn drop(&mut self) {
-        tracing::info!("EVM: subscription dropped");
+        tracing::info!("subscription dropped");
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());
         }
@@ -170,7 +173,7 @@ impl Drop for Subscriptions {
                     .await
                     .is_err()
                 {
-                    tracing::warn!("EVM: subscription loop did not shut down in time, aborting");
+                    tracing::warn!("subscription loop did not shut down in time, aborting");
                     handle.abort();
                 }
             });
@@ -241,6 +244,7 @@ impl SubscriptionsInner {
 
     // disable specific log filters, if no filters remain, it will unsubscribe from all logs
     // if you want to instead subscribe to all logs, call `enable_logs` with empty vecs
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM))]
     pub fn disable_logs(&self, addresses: &[Address], topics: &[B256]) {
         {
             let mut lock = self._logs.write().unwrap();
@@ -297,6 +301,7 @@ impl SubscriptionsInner {
     }
 
     // all requests must go through here so we can track in-flight requests
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM))]
     fn send_rpc(
         &self,
         req: RpcRequest,
@@ -306,19 +311,19 @@ impl SubscriptionsInner {
             RpcRequest::Subscribe { id, params } => match params {
                 SubscribeParams::NewHeads => {
                     tracing::info!(
-                        "EVM: sending newHeads subscription request (rpc id {})",
+                        "sending newHeads subscription request (rpc id {})",
                         id.data().as_ffi()
                     );
                 }
                 SubscribeParams::Logs { addresses, topics } => {
                     tracing::info!(
-                        "EVM: sending logs subscription request (rpc id {}) with {} addresses and {} topics",
+                        "sending logs subscription request (rpc id {}) with {} addresses and {} topics",
                         id.data().as_ffi(),
                         addresses.len(),
                         topics.len()
                     );
                     tracing::debug!(
-                        "EVM: logs subscription request (rpc id {}) details: addresses={:?}, topics={:?}",
+                        "logs subscription request (rpc id {}) details: addresses={:?}, topics={:?}",
                         id.data().as_ffi(),
                         addresses,
                         topics
@@ -326,7 +331,7 @@ impl SubscriptionsInner {
                 }
                 SubscribeParams::NewPendingTransactions => {
                     tracing::info!(
-                        "EVM: sending newPendingTransactions subscription request (rpc id {})",
+                        "sending newPendingTransactions subscription request (rpc id {})",
                         id.data().as_ffi()
                     );
                 }
@@ -336,7 +341,7 @@ impl SubscriptionsInner {
                 subscription_id,
             } => {
                 tracing::info!(
-                    "EVM: sending unsubscribe request (rpc id {}) for subscription id {}",
+                    "sending unsubscribe request (rpc id {}) for subscription id {}",
                     id.data().as_ffi(),
                     subscription_id
                 );
@@ -378,7 +383,7 @@ impl SubscriptionsInner {
 
                         if should_send {
                             if let Err(e) = tx.send(req) {
-                                tracing::error!("EVM: failed to send delayed RPC request: {}", e);
+                                tracing::error!("failed to send delayed RPC request: {}", e);
                             }
                         }
                     });
@@ -397,6 +402,7 @@ impl SubscriptionsInner {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM))]
     fn on_received_rpc_response(&self, id: RpcId, response: RpcResponse) {
         let (removed_rpc_in_flight_state, removed_rpc_latest_subscription_category) =
             self.rpc_ids_in_flight.remove(&id);
@@ -406,7 +412,7 @@ impl SubscriptionsInner {
             Some(kind) => kind,
             None => {
                 tracing::warn!(
-                    "EVM: received response for unknown RPC id {}",
+                    "received response for unknown RPC id {}",
                     id.data().as_ffi()
                 );
                 return;
@@ -424,7 +430,7 @@ impl SubscriptionsInner {
                         None,
                     ) {
                         tracing::error!(
-                            "EVM: failed to send unsubscribe request for subscription id {}: {}",
+                            "failed to send unsubscribe request for subscription id {}: {}",
                             subscription_id,
                             e
                         );
@@ -440,7 +446,7 @@ impl SubscriptionsInner {
                                     let cat = SubscriptionCategory::from(&kind);
                                     // just a sanity check
                                     if cat != category {
-                                        tracing::warn!("EVM: weird, got mismatched subscription category for rpc id {}: expected {:?}, got {:?}", id.data().as_ffi(), cat, category);
+                                        tracing::warn!("weird, got mismatched subscription category for rpc id {}: expected {:?}, got {:?}", id.data().as_ffi(), cat, category);
                                     }
                                     true
                                 }
@@ -454,7 +460,7 @@ impl SubscriptionsInner {
                         self.ids.insert(subscription_id, kind, most_recent_category);
                     }
                     Err(e) => {
-                        tracing::error!("EVM: received newSubscription response for unknown subscription (rpc_id {}, subscription_id {}): {}", id.data().as_ffi(), subscription_id, e);
+                        tracing::error!("received newSubscription response for unknown subscription (rpc_id {}, subscription_id {}): {}", id.data().as_ffi(), subscription_id, e);
                     }
                 }
             }
@@ -462,15 +468,12 @@ impl SubscriptionsInner {
                 if success {
                     match kind {
                         RpcRequestKind::Unsubscribe { subscription_id } => {
-                            tracing::info!(
-                                "EVM: unsubscribed from subscription id {}",
-                                subscription_id
-                            );
+                            tracing::info!("unsubscribed from subscription id {}", subscription_id);
                             self.ids.remove(&subscription_id);
                         }
                         _ => {
                             tracing::error!(
-                                "EVM: received unsubscribeAck for non-unsubscribe request id {}",
+                                "received unsubscribeAck for non-unsubscribe request id {}",
                                 id.data().as_ffi()
                             );
                         }
@@ -480,7 +483,7 @@ impl SubscriptionsInner {
                         RpcRequestKind::Unsubscribe { subscription_id } => {
                             if self.ids.exists(&subscription_id) {
                                 tracing::warn!(
-                                    "EVM: failed to unsubscribe from subscription id {}, trying again in {} seconds",
+                                    "failed to unsubscribe from subscription id {}, trying again in {} seconds",
                                     subscription_id,
                                     UNSUBSCRIBE_RETRY_SECS
                                 );
@@ -489,7 +492,7 @@ impl SubscriptionsInner {
                                     Some(Duration::from_secs(UNSUBSCRIBE_RETRY_SECS)),
                                 ) {
                                     tracing::error!(
-                                        "EVM: failed to send re-unsubscribe request for subscription id {}: {}",
+                                        "failed to send re-unsubscribe request for subscription id {}: {}",
                                         subscription_id,
                                         e
                                     );
@@ -498,7 +501,7 @@ impl SubscriptionsInner {
                         }
                         _ => {
                             tracing::error!(
-                                "EVM: received unsubscribeAck for non-unsubscribe request id {}",
+                                "received unsubscribeAck for non-unsubscribe request id {}",
                                 id.data().as_ffi()
                             );
                         }
@@ -507,7 +510,7 @@ impl SubscriptionsInner {
             }
             RpcResponse::Other(value) => {
                 tracing::warn!(
-                    "EVM: received unexpected RPC response for id {}: {:?}",
+                    "received unexpected RPC response for id {}: {:?}",
                     id.data().as_ffi(),
                     value
                 );
@@ -515,6 +518,7 @@ impl SubscriptionsInner {
         }
     }
 
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM))]
     fn on_received_subscription_event(
         &self,
         subscription_block_height_tx: &mut tokio::sync::mpsc::UnboundedSender<u64>,
@@ -529,7 +533,7 @@ impl SubscriptionsInner {
                     matches!(kind, SubscriptionKind::NewHeads)
                 }) {
                     tracing::warn!(
-                        "EVM: received newHeads event for unknown subscription id {}",
+                        "received newHeads event for unknown subscription id {}",
                         subscription_id
                     );
                 } else if self
@@ -537,19 +541,19 @@ impl SubscriptionsInner {
                     .is_most_recent(&subscription_id, SubscriptionCategory::NewHeads)
                 {
                     if let Err(e) = subscription_block_height_tx.send(header.number) {
-                        tracing::error!("EVM: failed to send new block height: {}", e);
+                        tracing::error!("failed to send new block height: {}", e);
                     }
                 } else {
-                    tracing::info!("EVM: ignoring newHeads event for non-most-recent newHeads subscription id {}", subscription_id);
+                    tracing::info!(
+                        "ignoring newHeads event for non-most-recent newHeads subscription id {}",
+                        subscription_id
+                    );
                 }
             }
             RpcSubscriptionEvent::Logs(log) => {
-                tracing::info!(
-                    "EVM: received log event for subscription id {}",
-                    subscription_id
-                );
+                tracing::info!("received log event for subscription id {}", subscription_id);
                 tracing::debug!(
-                    "EVM: log event details: address={:?}, topics={:?}",
+                    "log event details: address={:?}, topics={:?}",
                     log.address(),
                     log.topics()
                 );
@@ -558,7 +562,7 @@ impl SubscriptionsInner {
                     matches!(kind, SubscriptionKind::Logs { .. })
                 }) {
                     tracing::warn!(
-                        "EVM: received logs event for unknown subscription id {}",
+                        "received logs event for unknown subscription id {}",
                         subscription_id
                     );
                 } else if self
@@ -566,11 +570,11 @@ impl SubscriptionsInner {
                     .is_most_recent(&subscription_id, SubscriptionCategory::AllLogs)
                 {
                     if let Err(e) = subscription_log_tx.send(log) {
-                        tracing::error!("EVM: failed to send log: {}", e);
+                        tracing::error!("failed to send log: {}", e);
                     }
                 } else {
                     tracing::info!(
-                        "EVM: ignoring log event for non-most-recent logs subscription id {}",
+                        "ignoring log event for non-most-recent logs subscription id {}",
                         subscription_id
                     );
                 }
@@ -580,7 +584,7 @@ impl SubscriptionsInner {
                     matches!(kind, SubscriptionKind::NewPendingTransactions)
                 }) {
                     tracing::warn!(
-                        "EVM: received newPendingTransaction event for unknown subscription id {}",
+                        "received newPendingTransaction event for unknown subscription id {}",
                         subscription_id
                     );
                 } else if self.ids.is_most_recent(
@@ -588,15 +592,16 @@ impl SubscriptionsInner {
                     SubscriptionCategory::NewPendingTransactions,
                 ) {
                     if let Err(e) = subscription_new_pending_transaction_tx.send(tx) {
-                        tracing::error!("EVM: failed to send new pending transaction: {}", e);
+                        tracing::error!("failed to send new pending transaction: {}", e);
                     }
                 } else {
-                    tracing::info!("EVM: ignoring new pending transaction event for non-most-recent newPendingTransactions subscription id {}", subscription_id);
+                    tracing::info!("ignoring new pending transaction event for non-most-recent newPendingTransactions subscription id {}", subscription_id);
                 }
             }
         }
     }
 
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM))]
     fn unsubscribe(&self, category: SubscriptionCategory) {
         let ids = self.ids.list_by_category(category);
 
@@ -609,7 +614,7 @@ impl SubscriptionsInner {
             if let Err(e) = self.send_rpc(RpcRequest::unsubscribe(&self.rpc_ids, id.clone()), None)
             {
                 tracing::error!(
-                    "EVM: failed to send unsubscribe request for subscription id {}: {}",
+                    "failed to send unsubscribe request for subscription id {}: {}",
                     id,
                     e
                 );
@@ -617,6 +622,7 @@ impl SubscriptionsInner {
         }
     }
 
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM))]
     fn resubscribe(&self) {
         // exit early if not connected
         if !self._is_connected.load(std::sync::atomic::Ordering::SeqCst) {
@@ -630,10 +636,12 @@ impl SubscriptionsInner {
                 .will_subscribe(RpcRequestKind::SubscribeNewHeads)
             {
                 if let Err(e) = self.send_rpc(RpcRequest::new_heads(&self.rpc_ids), None) {
-                    tracing::error!("EVM: failed to send newHeads subscription request: {}", e);
+                    tracing::error!("failed to send newHeads subscription request: {}", e);
                 }
             } else {
-                tracing::info!("EVM: already have newHeads subscription or request in flight, not sending another");
+                tracing::info!(
+                    "already have newHeads subscription or request in flight, not sending another"
+                );
             }
         }
 
@@ -653,10 +661,10 @@ impl SubscriptionsInner {
                     if let Err(e) =
                         self.send_rpc(RpcRequest::logs(&self.rpc_ids, addresses, topics), None)
                     {
-                        tracing::error!("EVM: failed to send logs subscription request: {}", e);
+                        tracing::error!("failed to send logs subscription request: {}", e);
                     }
                 } else {
-                    tracing::info!("EVM: already have logs subscription or request in flight for this filter, not sending another");
+                    tracing::info!("already have logs subscription or request in flight for this filter, not sending another");
                 }
             }
         }
@@ -674,12 +682,12 @@ impl SubscriptionsInner {
                     self.send_rpc(RpcRequest::new_pending_transactions(&self.rpc_ids), None)
                 {
                     tracing::error!(
-                        "EVM: failed to send newPendingTransactions subscription request: {}",
+                        "failed to send newPendingTransactions subscription request: {}",
                         e
                     );
                 }
             } else {
-                tracing::info!("EVM: already have newPendingTransactions subscription or request in flight, not sending another");
+                tracing::info!("already have newPendingTransactions subscription or request in flight, not sending another");
             }
         }
     }

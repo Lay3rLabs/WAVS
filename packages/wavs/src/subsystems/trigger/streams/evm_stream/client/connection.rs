@@ -1,13 +1,16 @@
-use std::{sync::Arc, time::Duration};
-
-use futures::{
-    stream::{SplitSink, SplitStream},
-    SinkExt, StreamExt,
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
 };
+
+use futures::{stream::SplitSink, SinkExt, StreamExt};
 use thiserror::Error;
 use tokio::{
     net::TcpStream,
-    sync::{mpsc::UnboundedSender, oneshot},
+    sync::{mpsc::UnboundedSender, oneshot, Notify},
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
@@ -15,6 +18,9 @@ use super::{
     channels::ConnectionChannels,
     rpc_types::{id::RpcIds, outbound::RpcRequest},
 };
+use utils::evm_client::EvmEndpoint;
+use utils::health::check_evm_chain_endpoint_health_query;
+use wavs_types::{ChainKey, ChainKeyNamespace};
 
 // A handle for managing WebSocket connections with intelligent retry logic
 //
@@ -41,11 +47,13 @@ use super::{
 // 6. Try C (fail) → sleep 1s
 // 7. Try A (success)
 // ... and so on
-#[allow(dead_code)]
 pub struct Connection {
     handles: Option<[tokio::task::JoinHandle<()>; 2]>,
     current_endpoint: Arc<std::sync::RwLock<Option<String>>>,
     shutdown_txs: Option<[oneshot::Sender<()>; 2]>,
+    health_check_handle: Option<tokio::task::JoinHandle<()>>,
+    health_shutdown_tx: Option<oneshot::Sender<()>>,
+    chain_key: ChainKey,
 }
 
 pub enum ConnectionData {
@@ -61,19 +69,114 @@ pub enum ConnectionState {
 impl Connection {
     pub const BACKOFF_BASE: Duration = Duration::from_secs(1);
     pub const BACKOFF_CAP: Duration = Duration::from_secs(30);
+    pub const PRIORITY_HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(5);
 
-    pub fn new(rpc_ids: RpcIds, endpoints: Vec<String>, channels: ConnectionChannels) -> Self {
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM, chain_key = %chain_key))]
+    pub fn new(
+        rpc_ids: RpcIds,
+        endpoints: Vec<String>,
+        channels: ConnectionChannels,
+        chain_key: ChainKey,
+        priority_endpoint_index: Option<usize>,
+    ) -> Self {
         let ConnectionChannels {
             connection_send_rpc_rx,
             connection_data_tx,
             connection_state_tx,
         } = channels;
 
+        // Use tokio::sync::Mutex for sink because we need to hold the lock across .await points
+        // when performing async WebSocket operations (sink.send, sink.close)
         let current_sink = Arc::new(tokio::sync::Mutex::new(None));
         let current_endpoint = Arc::new(std::sync::RwLock::new(None));
 
         let (main_shutdown_tx, main_shutdown_rx) = oneshot::channel();
         let (message_shutdown_tx, message_shutdown_rx) = oneshot::channel();
+        let (health_shutdown_tx, mut health_shutdown_rx) = oneshot::channel();
+
+        // Create shared Arc instances for health check and connection loop communication
+        let force_switch_flag = Arc::new(AtomicBool::new(priority_endpoint_index.is_some()));
+        let force_switch_notify = Arc::new(Notify::new());
+        let is_using_priority = Arc::new(std::sync::RwLock::new(false));
+
+        // Spawn health check task separately
+        let health_check_handle = if let Some(priority_index) = priority_endpoint_index {
+            if priority_index < endpoints.len() {
+                let priority_endpoint_url = endpoints[priority_index].clone();
+                let chain_key_clone = chain_key.clone();
+
+                // Validate endpoint once at spawn time
+                let evm_endpoint = match EvmEndpoint::new_ws(&priority_endpoint_url) {
+                    Ok(endpoint) => Some(endpoint),
+                    Err(err) => {
+                        tracing::error!(
+                            "failed to construct priority endpoint {}, health check disabled: {:?}",
+                            priority_endpoint_url,
+                            err
+                        );
+                        None
+                    }
+                };
+
+                if let Some(evm_endpoint) = evm_endpoint {
+                    let force_switch_flag_clone = force_switch_flag.clone();
+                    let force_switch_notify_clone = force_switch_notify.clone();
+                    let is_using_priority_clone = is_using_priority.clone();
+
+                    Some(tokio::spawn(async move {
+                        let mut interval =
+                            tokio::time::interval(Connection::PRIORITY_HEALTH_CHECK_INTERVAL);
+
+                        loop {
+                            tokio::select! {
+                                _ = &mut health_shutdown_rx => {
+                                    tracing::info!("health check task shutdown requested");
+                                    break;
+                                }
+                                _ = interval.tick() => {
+                                    if *is_using_priority_clone.read().unwrap() {
+                                        continue;
+                                    }
+
+                                    match check_evm_chain_endpoint_health_query(chain_key_clone.clone(), evm_endpoint.clone())
+                                        .await
+                                    {
+                                        Ok(_) => {
+                                            tracing::info!(
+                                                "priority endpoint {} is healthy, preparing to switch",
+                                                priority_endpoint_url
+                                            );
+                                            let already_requested =
+                                                force_switch_flag_clone.swap(true, Ordering::SeqCst);
+                                            if !already_requested {
+                                                force_switch_notify_clone.notify_waiters();
+                                            }
+                                        }
+                                        Err(e) => {
+                                            tracing::debug!(
+                                                "priority endpoint {} health check failed: {:?}",
+                                                priority_endpoint_url,
+                                                e
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }))
+                } else {
+                    None
+                }
+            } else {
+                tracing::warn!(
+                    "priority endpoint index {} is out of bounds",
+                    priority_index
+                );
+                None
+            }
+        } else {
+            None
+        };
 
         let main_handle = tokio::spawn(connection_loop(
             endpoints,
@@ -83,29 +186,87 @@ impl Connection {
             connection_data_tx,
             connection_state_tx,
             rpc_ids,
+            chain_key.clone(),
+            priority_endpoint_index,
+            force_switch_flag,
+            force_switch_notify,
+            is_using_priority,
         ));
 
         let message_handle = tokio::spawn(message_loop(
             connection_send_rpc_rx,
             current_sink.clone(),
             message_shutdown_rx,
+            chain_key.clone(),
         ));
 
         Self {
             handles: Some([main_handle, message_handle]),
             current_endpoint,
             shutdown_txs: Some([main_shutdown_tx, message_shutdown_tx]),
+            health_check_handle,
+            health_shutdown_tx: Some(health_shutdown_tx),
+            chain_key,
         }
     }
 
     pub fn current_endpoint(&self) -> Option<String> {
-        self.current_endpoint.read().unwrap().clone()
+        self.current_endpoint.try_read().ok()?.clone()
+    }
+
+    /// Explicitly shutdown the connection, waiting for all tasks to complete.
+    /// This is the preferred way to shutdown a Connection over relying on Drop.
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM, chain_key = %self.chain_key))]
+    pub async fn shutdown(mut self) {
+        tracing::info!("explicit shutdown requested");
+
+        // Send shutdown signal to health check task first
+        if let Some(health_tx) = self.health_shutdown_tx.take() {
+            let _ = health_tx.send(());
+        }
+
+        // Send shutdown signals to main tasks
+        if let Some(txs) = self.shutdown_txs.take() {
+            for tx in txs {
+                let _ = tx.send(());
+            }
+        }
+
+        // Wait for health check task to finish with timeout
+        if let Some(health_handle) = self.health_check_handle.take() {
+            if tokio::time::timeout(Duration::from_millis(500), health_handle)
+                .await
+                .is_err()
+            {
+                tracing::warn!("health check task did not shut down in time");
+            }
+        }
+
+        // Wait for main tasks to finish with timeout
+        if let Some(handles) = self.handles.take() {
+            for handle in handles {
+                if tokio::time::timeout(Duration::from_millis(500), handle)
+                    .await
+                    .is_err()
+                {
+                    tracing::warn!("connection task did not shut down in time");
+                }
+            }
+        }
+
+        tracing::info!("explicit shutdown completed");
     }
 }
 
 impl Drop for Connection {
+    #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM, chain_key = %self.chain_key))]
     fn drop(&mut self) {
-        tracing::info!("EVM: connection dropped");
+        tracing::info!("connection dropped");
+
+        // Just send shutdown signals
+        if let Some(health_tx) = self.health_shutdown_tx.take() {
+            let _ = health_tx.send(());
+        }
 
         if let Some(txs) = self.shutdown_txs.take() {
             for tx in txs {
@@ -113,22 +274,14 @@ impl Drop for Connection {
             }
         }
 
-        if let Some(handles) = self.handles.take() {
-            for mut handle in handles {
-                tokio::spawn(async move {
-                    if tokio::time::timeout(Duration::from_millis(500), &mut handle)
-                        .await
-                        .is_err()
-                    {
-                        tracing::warn!("EVM: connection loop did not shut down in time, aborting");
-                        handle.abort();
-                    }
-                });
-            }
-        }
+        // Don't wait, just take the handles to drop them
+        let _ = self.health_check_handle.take();
+        let _ = self.handles.take();
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+#[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM, chain_key = %chain_key))]
 async fn connection_loop(
     endpoints: Vec<String>,
     current_sink: Arc<
@@ -139,46 +292,150 @@ async fn connection_loop(
     connection_data_tx: UnboundedSender<ConnectionData>,
     connection_state_tx: UnboundedSender<ConnectionState>,
     rpc_ids: RpcIds,
+    chain_key: ChainKey,
+    priority_endpoint_index: Option<usize>,
+    force_switch_flag: Arc<AtomicBool>,
+    force_switch_notify: Arc<Notify>,
+    is_using_priority: Arc<std::sync::RwLock<bool>>,
 ) {
     let mut endpoint_idx = 0;
     let mut current_backoff = Connection::BACKOFF_BASE;
     let mut failures_in_cycle = 0;
 
-    loop {
+    'connection_loop: loop {
         tokio::select! {
             _ = &mut shutdown_rx => {
-                tracing::info!("EVM: shutdown requested, exiting connection loop");
+                tracing::info!("shutdown requested, exiting connection loop");
                 if let Err(e) = connection_state_tx.send(ConnectionState::Disconnected) {
                     tracing::error!("Failed to send disconnected state: {}", e);
                 }
-                break;
+                break 'connection_loop;
             }
 
             (result, endpoint) = async {
-                let endpoint = endpoints[endpoint_idx % endpoints.len()].clone();
-                tracing::info!("EVM: connecting to {endpoint}");
+                if let Some(priority_index) = priority_endpoint_index {
+                    if force_switch_flag.load(Ordering::SeqCst) {
+                        if endpoint_idx != priority_index {
+                            tracing::info!(
+                                "honoring force switch request, prioritizing endpoint index {}",
+                                priority_index
+                            );
+                        }
+                        endpoint_idx = priority_index;
+                    }
+                }
+
+                let endpoint = endpoints[endpoint_idx].clone();
+                tracing::info!("connecting to {endpoint}");
                 let result = connect_async(&endpoint).await;
                 (result, endpoint)
             } => {
                 match result {
                     Ok((ws, _)) => {
-                        tracing::info!("EVM: connected {endpoint}");
+                        tracing::info!("connected {endpoint}");
                         current_backoff = Connection::BACKOFF_BASE; // reset backoff on success
                         failures_in_cycle = 0; // reset failure count
 
-                        let (sink, stream) = ws.split();
+                        // Check if we're connecting to priority endpoint
+                        let using_priority = if let Some(priority_index) = priority_endpoint_index {
+                            endpoint_idx == priority_index
+                        } else {
+                            false
+                        };
+                        *is_using_priority.write().unwrap() = using_priority;
 
-                        *current_sink.lock().await = Some(sink);
-                        *current_endpoint.write().unwrap() = Some(endpoint.clone());
+                        if using_priority {
+                            force_switch_flag.store(false, Ordering::SeqCst);
+                            tracing::info!("connected to priority endpoint {}", endpoint);
+                        } else {
+                            tracing::info!("connected to non-priority endpoint {}", endpoint);
+                        }
+
+                        let (sink, mut stream) = ws.split();
+
+                        {
+                            let mut guard = current_sink.lock().await;
+                            *guard = Some(sink);
+                        }
+                        *current_endpoint.write().unwrap()= Some(endpoint.clone());
 
                         if let Err(e) = connection_state_tx.send(ConnectionState::Connected(endpoint.clone())) {
                             tracing::error!("Failed to send connected state: {}", e);
                         }
-                        // Handle the connection until it disconnects
-                        if let Err(err) = handle_connection(stream, connection_data_tx.clone()).await {
-                            tracing::error!("EVM connection lost from {endpoint}: {err:?}");
-                        } else {
-                            tracing::info!("EVM: disconnected {endpoint}");
+
+                        let mut forced_switch = false;
+
+                        loop {
+                            tokio::select! {
+                                _ = &mut shutdown_rx => {
+                                    tracing::info!("shutdown requested, exiting connection loop");
+                                    break 'connection_loop; // Exit the outer loop directly
+                                }
+                                _ = force_switch_notify.notified(), if priority_endpoint_index.is_some() => {
+                                    if let Some(priority_index) = priority_endpoint_index {
+                                        if force_switch_flag.load(Ordering::SeqCst)
+                                            && !*is_using_priority.read().unwrap()
+                                        {
+                                            tracing::info!(
+                                                "force switching to priority endpoint at index {}",
+                                                priority_index
+                                            );
+                                            forced_switch = true;
+                                            endpoint_idx = priority_index;
+                                            current_backoff = Connection::BACKOFF_BASE;
+                                            failures_in_cycle = 0;
+                                            break;
+                                        }
+                                    }
+                                }
+                                message = stream.next() => {
+                                    match message {
+                                        Some(Ok(Message::Text(msg))) => {
+                                            if let Err(e) = connection_data_tx
+                                                .send(ConnectionData::Text(msg.to_string()))
+                                            {
+                                                tracing::error!("Failed to send text message from {}: {}", endpoint, e);
+                                            }
+                                        }
+                                        Some(Ok(Message::Binary(msg))) => {
+                                            if let Err(e) = connection_data_tx
+                                                .send(ConnectionData::Binary(msg.to_vec()))
+                                            {
+                                                tracing::error!("Failed to send binary message from {}: {}", endpoint, e);
+                                            }
+                                        }
+                                        // tungstenite automatically responds to pings
+                                        Some(Ok(Message::Ping(_))) => {
+                                            tracing::debug!("Received ping from {}", endpoint);
+                                        }
+                                        Some(Ok(Message::Close(_))) => {
+                                            tracing::info!("WebSocket closed gracefully from {}", endpoint);
+                                            break;
+                                        }
+                                        Some(Ok(_)) => {
+                                            tracing::debug!("Received unhandled message type from {}", endpoint);
+                                        }
+                                        Some(Err(err)) => {
+                                            tracing::error!("EVM connection lost from {endpoint}: {err:?}");
+                                            break;
+                                        }
+                                        None => {
+                                            tracing::info!("disconnected {endpoint}");
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        let sink_opt = {
+                            let mut guard = current_sink.lock().await;
+                            guard.take()
+                        };
+                        if let Some(mut sink) = sink_opt {
+                            if let Err(e) = sink.close().await {
+                                tracing::debug!("error closing sink for {endpoint}: {}", e);
+                            }
                         }
 
                         rpc_ids.clear_all();
@@ -187,18 +444,32 @@ async fn connection_loop(
                             tracing::error!("Failed to send disconnected state: {}", e);
                         }
 
-                        *current_sink.lock().await = None;
                         *current_endpoint.write().unwrap() = None;
+                        *is_using_priority.write().unwrap() = false; // reset priority usage
 
-                        endpoint_idx += 1; // cycle to next endpoint on disconnection
+                        if forced_switch {
+                            continue;
+                        } else {
+                            endpoint_idx = (endpoint_idx + 1) % endpoints.len(); // cycle to next endpoint on disconnection
+                        }
                     }
                     Err(err) => {
                         if let Err(e) = connection_state_tx.send(ConnectionState::Disconnected) {
                             tracing::error!("Failed to send disconnected state: {}", e);
                         }
-                        tracing::error!("EVM: connect error to {endpoint}: {err:?}");
+                        tracing::error!("connect error to {endpoint}: {err:?}");
+
+                        // Clear force_switch_flag if we failed to connect to priority endpoint
+                        if let Some(priority_index) = priority_endpoint_index {
+                            if endpoint_idx == priority_index {
+                                force_switch_flag.store(false, Ordering::SeqCst);
+                                tracing::info!("clearing force switch flag due to priority endpoint connection failure");
+                                *is_using_priority.write().unwrap() = false;
+                            }
+                        }
+
                         failures_in_cycle += 1;
-                        endpoint_idx += 1; // cycle the endpoints
+                        endpoint_idx = (endpoint_idx + 1) % endpoints.len(); // cycle the endpoints
 
                         rpc_ids.clear_all(); // clear pending requests on failure
 
@@ -218,49 +489,24 @@ async fn connection_loop(
     }
 }
 
-async fn handle_connection(
-    mut stream: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-    connection_data_tx: UnboundedSender<ConnectionData>,
-) -> Result<(), ConnectionError> {
-    // Keep the connection alive and handle messages
-    while let Some(msg) = stream.next().await {
-        match msg.map_err(|e| ConnectionError::WebSocketError(e.to_string()))? {
-            Message::Text(msg) => {
-                connection_data_tx
-                    .send(ConnectionData::Text(msg.to_string()))
-                    .map_err(|e| ConnectionError::SendError(e.to_string()))?;
-            }
-            Message::Binary(msg) => {
-                connection_data_tx
-                    .send(ConnectionData::Binary(msg.to_vec()))
-                    .map_err(|e| ConnectionError::SendError(e.to_string()))?;
-            }
-            // tungstenite automatically responds to pings
-            Message::Ping(_) => {}
-            Message::Close(_) => {
-                tracing::info!("EVM: WebSocket closed gracefully");
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    Ok(())
-}
-
+#[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM, chain_key = %chain_key))]
 async fn message_loop(
     mut connection_send_rpc_rx: tokio::sync::mpsc::UnboundedReceiver<RpcRequest>,
     current_sink: Arc<
         tokio::sync::Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
     >,
     mut shutdown_rx: oneshot::Receiver<()>,
+    chain_key: ChainKey,
 ) {
     loop {
         tokio::select! {
             _ = &mut shutdown_rx => {
-                tracing::info!("EVM: shutdown requested, exiting message loop");
-                let mut guard = current_sink.lock().await;
-                if let Some(sink) = guard.as_mut() {
+                tracing::info!("shutdown requested, exiting message loop");
+                let sink_opt = {
+                    let mut guard = current_sink.lock().await;
+                    guard.take()
+                };
+                if let Some(mut sink) = sink_opt {
                     let _ = sink.close().await;
                 }
                 break;
@@ -269,17 +515,24 @@ async fn message_loop(
                 match serde_json::to_string(&msg) {
                     Ok(msg) => {
 
-                        tracing::debug!("EVM: sending message: {}", msg);
-                        let mut guard = current_sink.lock().await;
-                        if let Some(sink) = guard.as_mut() {
-                            match sink.send(Message::Text(msg.into())).await {
+                        tracing::debug!("sending message: {}", msg);
+                        let send_result = {
+                            let mut guard = current_sink.lock().await;
+                            if let Some(sink) = guard.as_mut() {
+                                Some(sink.send(Message::Text(msg.into())).await)
+                            } else {
+                                tracing::error!("{:#?}", ConnectionError::NoActiveConnection);
+                                None
+                            }
+                        };
+
+                        if let Some(result) = send_result {
+                            match result {
                                 Ok(_) => {},
                                 Err(e) => {
                                     tracing::error!("Failed to send message: {}", e);
                                 }
                             }
-                        } else {
-                            tracing::error!("{:#?}", ConnectionError::NoActiveConnection);
                         }
                     },
                     Err(e) => {
@@ -296,10 +549,6 @@ async fn message_loop(
 pub enum ConnectionError {
     #[error("No active connection")]
     NoActiveConnection,
-    #[error("Send error: {0}")]
-    SendError(String),
-    #[error("WebSocket error: {0}")]
-    WebSocketError(String),
 }
 
 #[cfg(test)]
@@ -327,15 +576,21 @@ mod test {
         let connection_send_rpc_tx = channels.subscription.connection_send_rpc_tx;
 
         let rpc_ids = RpcIds::new();
-        let _connection = Connection::new(rpc_ids.clone(), endpoints, channels.connection);
+        let _connection = Connection::new(
+            rpc_ids.clone(),
+            endpoints,
+            channels.connection,
+            wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
+            None,
+        );
 
-        let message_count = std::sync::Arc::new(tokio::sync::Mutex::new(0u32));
+        let message_count = std::sync::Arc::new(std::sync::Mutex::new(0u32));
         let message_count_clone = message_count.clone();
 
         // Spawn task to count received messages
         tokio::spawn(async move {
             while let Some(_data) = connection_data_rx.recv().await {
-                let mut counter = message_count_clone.lock().await;
+                let mut counter = message_count_clone.lock().unwrap();
                 *counter += 1;
                 tracing::info!("Received message, count: {}", *counter);
             }
@@ -361,7 +616,7 @@ mod test {
         assert!(result.is_ok(), "Test timed out after 5 seconds");
 
         // Verify that we actually received messages (subscription response at minimum)
-        let final_count = *message_count.lock().await;
+        let final_count = *message_count.lock().unwrap();
         assert!(
             final_count > 0,
             "Expected to receive at least a subscription response, but got {}",
@@ -387,7 +642,13 @@ mod test {
 
         let channels = Channels::new();
         let rpc_ids = RpcIds::new();
-        let connection = Connection::new(rpc_ids, endpoints, channels.connection);
+        let connection = Connection::new(
+            rpc_ids,
+            endpoints,
+            channels.connection,
+            wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
+            None,
+        );
 
         // Wait for connection to be established and current_endpoint to be set
         let result = timeout(Duration::from_secs(10), async {
@@ -433,7 +694,13 @@ mod test {
 
         let channels = Channels::new();
         let rpc_ids = RpcIds::new();
-        let connection = Connection::new(rpc_ids, endpoints, channels.connection);
+        let connection = Connection::new(
+            rpc_ids,
+            endpoints,
+            channels.connection,
+            wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
+            None,
+        );
 
         // Step 1: Wait for initial connection to anvil_1
         let result = timeout(Duration::from_secs(10), async {
@@ -522,6 +789,105 @@ mod test {
         tracing::info!("🎉 Connection cycling test completed successfully!");
 
         // Cleanup
+        drop(anvil_2_recreated);
+    }
+
+    #[tokio::test]
+    async fn priority_endpoint_basic_logic() {
+        init_tracing_tests();
+
+        let anvil_1 = safe_spawn_anvil();
+        let anvil_2 = safe_spawn_anvil();
+
+        let endpoints = vec![anvil_1.ws_endpoint(), anvil_2.ws_endpoint()];
+
+        let channels = Channels::new();
+        let rpc_ids = RpcIds::new();
+
+        // Set anvil_2 (index 1) as priority endpoint
+        let connection = Connection::new(
+            rpc_ids,
+            endpoints,
+            channels.connection,
+            wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
+            Some(1),
+        );
+
+        // Step 1: Should connect to priority endpoint (anvil_2) first
+        let result = timeout(Duration::from_secs(10), async {
+            loop {
+                if let Some(endpoint) = connection.current_endpoint() {
+                    if endpoint == anvil_2.ws_endpoint() {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        if connection.current_endpoint().as_ref() == Some(&endpoint) {
+                            return endpoint;
+                        }
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        let initial_connection = result.expect("Should connect to priority endpoint first");
+        assert_eq!(anvil_2.ws_endpoint(), initial_connection);
+        tracing::info!("✓ Connected to priority endpoint (anvil_2) first");
+
+        // Step 2: Drop priority endpoint to simulate connection loss
+        let anvil_2_port = anvil_2.port();
+        drop(anvil_2);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Should fallback to anvil_1
+        let result = timeout(Duration::from_secs(10), async {
+            loop {
+                if let Some(endpoint) = connection.current_endpoint() {
+                    if endpoint == anvil_1.ws_endpoint() {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        if connection.current_endpoint().as_ref() == Some(&endpoint) {
+                            return endpoint;
+                        }
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await;
+
+        let fallback_connection = result.expect("Should fallback to non-priority endpoint");
+        assert_eq!(anvil_1.ws_endpoint(), fallback_connection);
+        tracing::info!(
+            "✓ Fell back to non-priority endpoint: {}",
+            fallback_connection
+        );
+
+        // Step 3: Recreate priority endpoint and verify reconnection
+        let anvil_2_recreated = Anvil::new().port(anvil_2_port).spawn();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Wait for health check to detect the priority endpoint and force reconnection
+        let result = timeout(Duration::from_secs(15), async {
+            loop {
+                if let Some(endpoint) = connection.current_endpoint() {
+                    if endpoint == anvil_2_recreated.ws_endpoint() {
+                        tokio::time::sleep(Duration::from_millis(200)).await;
+                        if connection.current_endpoint().as_ref() == Some(&endpoint) {
+                            return endpoint;
+                        }
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await;
+
+        let reconnected_endpoint = result.expect("Should reconnect to priority endpoint");
+        assert_eq!(anvil_2_recreated.ws_endpoint(), reconnected_endpoint);
+        tracing::info!(
+            "✓ Successfully reconnected to priority endpoint: {}",
+            reconnected_endpoint
+        );
+
         drop(anvil_2_recreated);
     }
 }
