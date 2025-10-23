@@ -1,3 +1,5 @@
+use layer_climb::prelude::CosmosAddr;
+
 use super::world::wavs::types::chain as component_chain;
 
 impl From<component_chain::CosmosEvent> for cosmwasm_std::Event {
@@ -46,29 +48,24 @@ impl From<component_chain::EvmEventLogData> for alloy_primitives::LogData {
     }
 }
 
-impl TryFrom<layer_climb::prelude::Address> for component_chain::CosmosAddress {
-    type Error = anyhow::Error;
-
-    fn try_from(addr: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
-        match addr {
-            layer_climb::prelude::Address::Cosmos {
-                bech32_addr,
-                prefix_len,
-            } => Ok(component_chain::CosmosAddress {
-                bech32_addr,
-                prefix_len: prefix_len as u32,
-            }),
-            _ => Err(anyhow::anyhow!("Cannot convert to CosmosAddr")),
+impl From<CosmosAddr> for component_chain::CosmosAddress {
+    fn from(addr: CosmosAddr) -> Self {
+        component_chain::CosmosAddress {
+            bech32_addr: addr.to_string(),
+            prefix_len: addr.prefix().len() as u32,
         }
+    }
+}
+
+impl From<component_chain::CosmosAddress> for CosmosAddr {
+    fn from(addr: component_chain::CosmosAddress) -> Self {
+        CosmosAddr::new_unchecked(addr.bech32_addr, addr.prefix_len as usize)
     }
 }
 
 impl From<component_chain::CosmosAddress> for layer_climb::prelude::Address {
     fn from(addr: component_chain::CosmosAddress) -> Self {
-        layer_climb::prelude::Address::Cosmos {
-            bech32_addr: addr.bech32_addr,
-            prefix_len: addr.prefix_len as usize,
-        }
+        CosmosAddr::new_unchecked(addr.bech32_addr, addr.prefix_len as usize).into()
     }
 }
 

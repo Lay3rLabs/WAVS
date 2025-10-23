@@ -47,12 +47,18 @@ impl TryFrom<component_service::Trigger> for wavs_types::Trigger {
     }
 }
 
+impl From<component_chain::CosmosAddress> for layer_climb::prelude::CosmosAddr {
+    fn from(address: component_chain::CosmosAddress) -> Self {
+        layer_climb::prelude::CosmosAddr::new_unchecked(
+            address.bech32_addr,
+            address.prefix_len as usize,
+        )
+    }
+}
+
 impl From<component_chain::CosmosAddress> for layer_climb::prelude::Address {
     fn from(address: component_chain::CosmosAddress) -> Self {
-        layer_climb::prelude::Address::Cosmos {
-            bech32_addr: address.bech32_addr,
-            prefix_len: address.prefix_len as usize,
-        }
+        layer_climb::prelude::CosmosAddr::from(address).into()
     }
 }
 
@@ -201,6 +207,12 @@ impl TryFrom<component_service::ServiceManager> for wavs_types::ServiceManager {
                 chain: evm.chain.parse()?,
                 address: evm.address.into(),
             },
+            component_service::ServiceManager::Cosmos(cosmos) => {
+                wavs_types::ServiceManager::Cosmos {
+                    chain: cosmos.chain.parse()?,
+                    address: cosmos.address.into(),
+                }
+            }
         })
     }
 }

@@ -51,6 +51,11 @@ pub enum ServiceManager {
         #[schema(value_type = String)]
         address: alloy_primitives::Address,
     },
+    Cosmos {
+        chain: ChainKey,
+        #[schema(value_type = String)]
+        address: layer_climb_address::CosmosAddr,
+    },
 }
 
 impl From<&ServiceManager> for ServiceId {
@@ -63,6 +68,13 @@ impl From<&ServiceManager> for ServiceId {
                 bytes.extend_from_slice(address.as_slice());
                 ServiceId::hash(bytes)
             }
+            ServiceManager::Cosmos { chain, address } => {
+                let mut bytes = Vec::new();
+                bytes.extend_from_slice(b"cosmos");
+                bytes.extend_from_slice(chain.to_string().as_bytes());
+                bytes.extend_from_slice(&address.to_vec());
+                ServiceId::hash(bytes)
+            }
         }
     }
 }
@@ -71,12 +83,25 @@ impl ServiceManager {
     pub fn chain(&self) -> &ChainKey {
         match self {
             ServiceManager::Evm { chain, .. } => chain,
+            ServiceManager::Cosmos { chain, .. } => chain,
         }
     }
 
     pub fn evm_address_unchecked(&self) -> alloy_primitives::Address {
         match self {
             ServiceManager::Evm { address, .. } => *address,
+            ServiceManager::Cosmos { .. } => {
+                panic!("ServiceManager is not EVM type, cannot get EVM address")
+            }
+        }
+    }
+
+    pub fn cosmos_address_unchecked(&self) -> layer_climb_address::CosmosAddr {
+        match self {
+            ServiceManager::Cosmos { address, .. } => address.clone(),
+            ServiceManager::Evm { .. } => {
+                panic!("ServiceManager is not Cosmos type, cannot get Cosmos address")
+            }
         }
     }
 }
@@ -203,7 +228,7 @@ pub enum Trigger {
     // A contract that emits an event
     CosmosContractEvent {
         #[schema(value_type = String)]
-        address: layer_climb_address::Address,
+        address: layer_climb_address::CosmosAddr,
         chain: ChainKey,
         event_type: String,
     },
@@ -244,7 +269,7 @@ pub enum TriggerData {
     CosmosContractEvent {
         /// The address of the contract that emitted the event
         #[schema(value_type = String)]
-        contract_address: layer_climb_address::Address,
+        contract_address: layer_climb_address::CosmosAddr,
         /// The chain where the event was emitted
         chain: ChainKey,
         /// The data that was emitted by the contract
@@ -542,7 +567,7 @@ mod test_ext {
 
     impl Trigger {
         pub fn cosmos_contract_event(
-            address: layer_climb_address::Address,
+            address: layer_climb_address::CosmosAddr,
             chain: impl TryInto<ChainKey, Error = ChainKeyError>,
             event_type: impl ToString,
         ) -> Self {
@@ -569,7 +594,7 @@ mod test_ext {
         pub fn cosmos_contract_event(
             service_id: ServiceId,
             workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
-            contract_address: layer_climb_address::Address,
+            contract_address: layer_climb_address::CosmosAddr,
             chain: impl TryInto<ChainKey, Error = ChainKeyError>,
             event_type: impl ToString,
         ) -> Self {

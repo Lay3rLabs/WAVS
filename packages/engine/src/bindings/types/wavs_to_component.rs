@@ -30,7 +30,7 @@ impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
                 event_type,
             } => component_service::Trigger::CosmosContractEvent(
                 component_service::TriggerCosmosContractEvent {
-                    address: address.try_into()?,
+                    address: address.into(),
                     chain: chain.to_string(),
                     event_type,
                 },
@@ -77,18 +77,13 @@ impl TryFrom<layer_climb::prelude::Address> for component_chain::CosmosAddress {
     type Error = anyhow::Error;
 
     fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
-        let (bech32_addr, prefix_len) = match address {
-            layer_climb::prelude::Address::Cosmos {
-                bech32_addr,
-                prefix_len,
-            } => (bech32_addr, prefix_len),
-            _ => return Err(anyhow::anyhow!("Not a cosmos address")),
-        };
-
-        Ok(Self {
-            bech32_addr,
-            prefix_len: prefix_len as u32,
-        })
+        match address {
+            layer_climb::prelude::Address::Cosmos(addr) => Ok(Self {
+                bech32_addr: addr.to_string(),
+                prefix_len: addr.prefix().len() as u32,
+            }),
+            _ => Err(anyhow::anyhow!("Not a cosmos address")),
+        }
     }
 }
 
@@ -109,6 +104,15 @@ impl From<alloy_primitives::Address> for component_chain::EvmAddress {
     fn from(address: alloy_primitives::Address) -> Self {
         Self {
             raw_bytes: address.to_vec(),
+        }
+    }
+}
+
+impl From<layer_climb::prelude::CosmosAddr> for component_chain::CosmosAddress {
+    fn from(address: layer_climb::prelude::CosmosAddr) -> Self {
+        component_chain::CosmosAddress {
+            bech32_addr: address.to_string(),
+            prefix_len: address.prefix().len() as u32,
         }
     }
 }
@@ -312,6 +316,12 @@ impl From<wavs_types::ServiceManager> for component_service::ServiceManager {
                     address: address.into(),
                 })
             }
+            wavs_types::ServiceManager::Cosmos { chain, address } => {
+                component_service::ServiceManager::Cosmos(component_service::CosmosManager {
+                    chain: chain.to_string(),
+                    address: address.into(),
+                })
+            }
         }
     }
 }
@@ -411,7 +421,7 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                 block_height,
             } => Ok(component_input::TriggerData::CosmosContractEvent(
                 component_events::TriggerDataCosmosContractEvent {
-                    contract_address: contract_address.try_into()?,
+                    contract_address: contract_address.into(),
                     chain: chain.to_string(),
                     event: component_events::CosmosEvent {
                         ty: event.ty,
@@ -509,6 +519,15 @@ impl From<wavs_types::ServiceManager> for aggregator_service::ServiceManager {
                     },
                 })
             }
+            wavs_types::ServiceManager::Cosmos { chain, address } => {
+                aggregator_service::ServiceManager::Cosmos(aggregator_service::CosmosManager {
+                    chain: chain.to_string(),
+                    address: aggregator_chain::CosmosAddress {
+                        bech32_addr: address.to_string(),
+                        prefix_len: address.prefix().len() as u32,
+                    },
+                })
+            }
         }
     }
 }
@@ -517,6 +536,15 @@ impl From<alloy_primitives::Address> for aggregator_chain::EvmAddress {
     fn from(address: alloy_primitives::Address) -> Self {
         aggregator_chain::EvmAddress {
             raw_bytes: address.to_vec(),
+        }
+    }
+}
+
+impl From<layer_climb::prelude::CosmosAddr> for aggregator_chain::CosmosAddress {
+    fn from(address: layer_climb::prelude::CosmosAddr) -> Self {
+        aggregator_chain::CosmosAddress {
+            bech32_addr: address.to_string(),
+            prefix_len: address.prefix().len() as u32,
         }
     }
 }
@@ -586,7 +614,7 @@ impl TryFrom<wavs_types::TriggerData> for aggregator_types::TriggerData {
                 block_height,
             } => Ok(aggregator_types::TriggerData::CosmosContractEvent(
                 aggregator_events::TriggerDataCosmosContractEvent {
-                    contract_address: contract_address.try_into()?,
+                    contract_address: contract_address.into(),
                     chain: chain.to_string(),
                     event: aggregator_events::CosmosEvent {
                         ty: event.ty,
@@ -766,7 +794,7 @@ impl TryFrom<wavs_types::Trigger> for aggregator_service::Trigger {
                 event_type,
             } => aggregator_service::Trigger::CosmosContractEvent(
                 aggregator_service::TriggerCosmosContractEvent {
-                    address: address.try_into()?,
+                    address: address.into(),
                     chain: chain.to_string(),
                     event_type,
                 },
@@ -801,18 +829,13 @@ impl TryFrom<layer_climb::prelude::Address> for aggregator_chain::CosmosAddress 
     type Error = anyhow::Error;
 
     fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
-        let (bech32_addr, prefix_len) = match address {
-            layer_climb::prelude::Address::Cosmos {
-                bech32_addr,
-                prefix_len,
-            } => (bech32_addr, prefix_len),
-            _ => return Err(anyhow::anyhow!("Not a cosmos address")),
-        };
-
-        Ok(Self {
-            bech32_addr,
-            prefix_len: prefix_len as u32,
-        })
+        match address {
+            layer_climb::prelude::Address::Cosmos(addr) => Ok(Self {
+                bech32_addr: addr.to_string(),
+                prefix_len: addr.prefix().len() as u32,
+            }),
+            _ => Err(anyhow::anyhow!("Not a cosmos address")),
+        }
     }
 }
 
