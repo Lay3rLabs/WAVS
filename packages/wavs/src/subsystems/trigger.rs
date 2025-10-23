@@ -177,6 +177,9 @@ impl TriggerManager {
                         event_hashes: vec![IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH],
                     })?;
             }
+            wavs_types::ServiceManager::Cosmos { .. } => {
+                todo!("finalize cosmos support")
+            }
         }
 
         let chain_configs = self.chain_configs.read().unwrap().clone();

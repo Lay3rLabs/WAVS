@@ -607,7 +607,10 @@ pub fn set_cosmos_trigger(
     event_type: String,
 ) -> Result<WorkflowTriggerResult> {
     // Parse the Cosmos address
-    let address = query_client.chain_config.parse_address(&address_str)?;
+    let address = query_client
+        .chain_config
+        .parse_address(&address_str)?
+        .try_into()?;
 
     modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
@@ -916,6 +919,9 @@ pub async fn validate_service(
             match service_manager {
                 ServiceManager::Evm { chain, .. } => {
                     chains_to_validate.insert((chain.clone(), ChainType::EVM));
+                }
+                ServiceManager::Cosmos { chain, .. } => {
+                    chains_to_validate.insert((chain.clone(), ChainType::Cosmos));
                 }
             }
 

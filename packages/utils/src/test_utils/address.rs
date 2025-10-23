@@ -26,7 +26,7 @@ pub fn rand_event_cosmos() -> String {
     const_hex::encode(rand_event_evm().as_slice())
 }
 
-pub fn rand_address_cosmos() -> Address {
+pub fn rand_address_cosmos() -> CosmosAddr {
     let mut rng = rand::rng();
 
     let entropy: [u8; 32] = rng.random();
@@ -38,5 +38,5 @@ pub fn rand_address_cosmos() -> Address {
     let public_key_bytes = public_key.to_bytes();
     let public_key = PublicKey::from_raw_secp256k1(&public_key_bytes).unwrap();
 
-    Address::new_cosmos_pub_key(&public_key, "layer").unwrap()
+    CosmosAddr::new_pub_key(&public_key, "layer").unwrap()
 }

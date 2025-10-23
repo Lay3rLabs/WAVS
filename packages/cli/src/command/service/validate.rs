@@ -1,6 +1,6 @@
 use alloy_provider::{Provider, RootProvider};
 use anyhow::Result;
-use layer_climb::{prelude::Address, querier::QueryClient as CosmosQueryClient};
+use layer_climb::{prelude::CosmosAddr, querier::QueryClient as CosmosQueryClient};
 use reqwest::Client;
 use std::collections::HashMap;
 use wavs_types::{
@@ -237,6 +237,9 @@ pub async fn validate_contracts_exist(
                     ));
                 }
             }
+            ServiceManager::Cosmos { .. } => {
+                todo!("finalize cosmos support")
+            }
         };
     }
 
@@ -274,14 +277,14 @@ pub async fn check_evm_contract_exists(
 
 /// Check if a Cosmos contract exists at the specified address
 pub async fn check_cosmos_contract_exists(
-    address: &Address,
+    address: &CosmosAddr,
     query_client: &CosmosQueryClient,
     errors: &mut Vec<String>,
     context: &str,
 ) -> Result<bool> {
     // Query contract info to check if it exists
     // This uses CosmWasm-specific query if supported by the chain
-    let result = query_client.contract_info(address).await;
+    let result = query_client.contract_info(&address.clone().into()).await;
 
     match result {
         Ok(_) => {

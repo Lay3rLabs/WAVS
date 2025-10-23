@@ -141,7 +141,7 @@ fn core_trigger_lookups() {
     fn get_trigger_addr(trigger: &Trigger) -> Address {
         match trigger {
             Trigger::EvmContractEvent { address, .. } => (*address).into(),
-            Trigger::CosmosContractEvent { address, .. } => address.clone(),
+            Trigger::CosmosContractEvent { address, .. } => address.clone().into(),
             _ => panic!("unexpected trigger type"),
         }
     }

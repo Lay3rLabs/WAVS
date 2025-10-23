@@ -243,7 +243,7 @@ pub async fn create_trigger_from_config(
 
                     Trigger::CosmosContractEvent {
                         chain: chain.clone(),
-                        address: contract.contract_address,
+                        address: contract.contract_address.try_into().unwrap(),
                         event_type: crate::example_cosmos_client::NewMessageEvent::KEY.to_string(),
                     }
                 }
@@ -567,6 +567,9 @@ pub async fn wait_for_trigger_streams_to_finalize(
                             }) {
                                 break;
                             }
+                        }
+                        ServiceManager::Cosmos { .. } => {
+                            todo!("finalize cosmos support");
                         }
                     }
                 } else if info.any_active_subscriptions() {
