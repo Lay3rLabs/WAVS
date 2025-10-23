@@ -23,11 +23,17 @@ interface service {
 
     variant service-manager {
         evm(evm-manager),
+        cosmos(cosmos-manager),
     }
 
     record evm-manager {
         chain: chain-key,
         address: evm-address,
+    }
+
+    record cosmos-manager {
+        chain: chain-key,
+        address: cosmos-address,
     }
 
 
