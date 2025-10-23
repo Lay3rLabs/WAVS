@@ -1850,7 +1850,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chain-trigger-lookup"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
@@ -2206,7 +2206,7 @@ dependencies = [
 
 [[package]]
 name = "cosmos-query"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -2733,51 +2733,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cw-wavs-mock-api"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "bincode",
- "cosmwasm-schema",
- "cosmwasm-std",
- "layer-climb-address",
- "serde",
- "wavs-types",
-]
-
-[[package]]
-name = "cw-wavs-mock-service-handler"
-version = "0.0.0"
-dependencies = [
- "alloy-primitives",
- "alloy-sol-macro",
- "alloy-sol-types",
- "anyhow",
- "const-hex",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-storage-plus",
- "cw-wavs-mock-api",
- "cw2",
- "wavs-types",
-]
-
-[[package]]
-name = "cw-wavs-mock-service-manager"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "const-hex",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-storage-plus",
- "cw-wavs-mock-api",
- "cw2",
- "layer-climb-address",
- "wavs-types",
-]
-
-[[package]]
 name = "cw2"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3246,7 +3201,7 @@ dependencies = [
 
 [[package]]
 name = "echo-block-interval"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -3256,14 +3211,14 @@ dependencies = [
 
 [[package]]
 name = "echo-cron-interval"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-data"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "example-helpers",
  "wstd",
@@ -3473,7 +3428,7 @@ dependencies = [
 
 [[package]]
 name = "example-helpers"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -3491,7 +3446,7 @@ dependencies = [
 
 [[package]]
 name = "example-types"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "layer-climb-address",
  "serde",
@@ -4727,7 +4682,7 @@ dependencies = [
 
 [[package]]
 name = "kv-store"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -4736,9 +4691,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb"
-version = "0.7.3"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e5d1e3d1d36e32f1fd565b8572541181f8112c6a8bca1649e33ef8b6c3fe359"
+checksum = "3b1e1eeeb1a493135a7b1b5a275882e50114899061a367f784d7faec05dd3dd0"
 dependencies = [
  "layer-climb-address",
  "layer-climb-config",
@@ -4749,9 +4704,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-address"
-version = "0.7.3"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd6cedafe93b64285816d1845d02e5a4b2853895216f5e1da553e2aaf785df5c"
+checksum = "469fed2edf89dfecec532e3e9371d6a64db8d8f574dac528909b8a6a33a2cfec"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -4767,9 +4722,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-cli"
-version = "0.7.3"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feeb3eba7bf898bb38dee71bf9eb9fddf6cf1a3d6fd8dd24081aa54361af2785"
+checksum = "620894a2eea3bb2a5b205567984f424b89348832ca8ee06b97e22ec8738a4e3f"
 dependencies = [
  "anyhow",
  "bip39",
@@ -4788,9 +4743,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-config"
-version = "0.7.3"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb105ec49dd8bd9e01b2dc2eb425b9b0f343a732257cc86c7e963b08a9f629b8"
+checksum = "01f30b996903cb0099634171d08279d3a132159488c68ed87039e1ce01b3ee92"
 dependencies = [
  "anyhow",
  "layer-climb-address",
@@ -4801,9 +4756,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-core"
-version = "0.7.3"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae0b1d6b13a0c3c5f34fe7e01b9ad0452b786866f33bb950981e3dddc2a9dd5f"
+checksum = "5b1a29f60387bd0518b8e335623da95b8abc4e75768887cabe644c71d6e26b0a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4843,9 +4798,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-proto"
-version = "0.7.3"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80df0e09cd3b6a33123fe9dc5f031772c25ef8a88afdd1129c22f6d82570edbe"
+checksum = "b0cbc9772e31f1649e59f9473f296c063666f3d7bd1ddbfc7b8a2f77a8f857db"
 dependencies = [
  "anyhow",
  "cosmos-sdk-proto",
@@ -4856,9 +4811,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-signer"
-version = "0.7.3"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c4a6aa20ed29678535ec724f86be220f63ebbd366e6dd6df12bfa04b1e42ea9"
+checksum = "cd84cf17db3b87924f51631ff6c9e4faf2510727874f3abd60ceb9858fc22c8c"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -4884,7 +4839,7 @@ dependencies = [
 
 [[package]]
 name = "layer-tests"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -5943,7 +5898,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissions"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -7640,7 +7595,7 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
 name = "simple-aggregator"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -7742,7 +7697,7 @@ dependencies = [
 
 [[package]]
 name = "square"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -8154,7 +8109,7 @@ dependencies = [
 
 [[package]]
 name = "timer-aggregator"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
@@ -8871,7 +8826,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -9890,7 +9845,7 @@ dependencies = [
 
 [[package]]
 name = "wavs"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9946,7 +9901,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-aggregator"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9981,7 +9936,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-benchmark-common"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "tempfile",
  "utils",
@@ -9992,7 +9947,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-cli"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -10025,7 +9980,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-dev-tools"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-signer-local",
  "clap 4.5.48",
@@ -10039,7 +9994,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-engine"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -10067,7 +10022,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-types"
-version = "1.5.1"
+version = "2.0.0-alpha.1"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
