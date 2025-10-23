@@ -61,34 +61,25 @@ wasi-build COMPONENT="*" TAG="latest":
 
     IMAGE_NAME="ghcr.io/lay3rlabs/wasi-builder:{{TAG}}"
 
-    # Determine which directories to process
-    if [ "{{COMPONENT}}" = "*" ]; then
-        # Find all directories in examples/components that don't start with _
-        COMPONENTS_DIR="examples/components"
-        COMPONENTS=$(find "$COMPONENTS_DIR" -maxdepth 1 -type d -name "[!_]*" | sed 's|^\./||' | sort)
-        if [ -z "$COMPONENTS" ]; then
-            echo "No component directories found in $COMPONENTS_DIR (excluding directories starting with _)"
-            exit 1
-        fi
-    else
-        COMPONENTS="{{COMPONENT}}"
-    fi
-
-    # Create and clean output directory
-    rm -rf "{{WASI_OUT_DIR}}"
-    mkdir -p "{{WASI_OUT_DIR}}"
-
     # Pull latest (unless tag is local)
     if [ "{{TAG}}" != "local" ]; then
         docker pull $IMAGE_NAME
     fi
 
     # Run Docker build
-    docker run --rm \
-        -v "$(pwd):/docker" \
-        -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
-        -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
-        "$IMAGE_NAME"
+    if [ "{{COMPONENT}}" = "*" ]; then
+        docker run --rm \
+            -v "$(pwd):/docker" \
+            -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
+            -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
+            "$IMAGE_NAME"
+    else
+        docker run --rm \
+            -v "$(pwd):/docker" \
+            -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
+            -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
+            "$IMAGE_NAME" "{{COMPONENT}}"
+    fi
 
     just generate-checksums
 
