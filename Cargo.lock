@@ -1850,7 +1850,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chain-trigger-lookup"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
@@ -2206,7 +2206,7 @@ dependencies = [
 
 [[package]]
 name = "cosmos-query"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -3201,7 +3201,7 @@ dependencies = [
 
 [[package]]
 name = "echo-block-interval"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -3211,14 +3211,14 @@ dependencies = [
 
 [[package]]
 name = "echo-cron-interval"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-data"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "example-helpers",
  "wstd",
@@ -3428,7 +3428,7 @@ dependencies = [
 
 [[package]]
 name = "example-helpers"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -3446,7 +3446,7 @@ dependencies = [
 
 [[package]]
 name = "example-types"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "layer-climb-address",
  "serde",
@@ -4682,7 +4682,7 @@ dependencies = [
 
 [[package]]
 name = "kv-store"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -4691,9 +4691,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b1e1eeeb1a493135a7b1b5a275882e50114899061a367f784d7faec05dd3dd0"
+checksum = "205283555aed448535173e58ca24a45a38be2d371c00f8da29c66b8dfc21c80e"
 dependencies = [
  "layer-climb-address",
  "layer-climb-config",
@@ -4704,9 +4704,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-address"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "469fed2edf89dfecec532e3e9371d6a64db8d8f574dac528909b8a6a33a2cfec"
+checksum = "6905f3537bae54d42fcebb69b1637b5aaf2b83babaf47f8736f7a4b7b2801e98"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -4722,9 +4722,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-cli"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "620894a2eea3bb2a5b205567984f424b89348832ca8ee06b97e22ec8738a4e3f"
+checksum = "d74d6c50b2d8e731b4e30dfabe4b9a75731a184de6ae551b0cec4878b038496d"
 dependencies = [
  "anyhow",
  "bip39",
@@ -4743,9 +4743,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-config"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01f30b996903cb0099634171d08279d3a132159488c68ed87039e1ce01b3ee92"
+checksum = "c2301290d060e2a257a2d1ba87becb7cbe33ad0815572fa748ca094fc3c435cb"
 dependencies = [
  "anyhow",
  "layer-climb-address",
@@ -4756,9 +4756,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-core"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b1a29f60387bd0518b8e335623da95b8abc4e75768887cabe644c71d6e26b0a"
+checksum = "b47999d63711ddfbc5e3d04285517c726a8e7447e929a1dc45798ca8e37d7cdf"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4798,9 +4798,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-proto"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0cbc9772e31f1649e59f9473f296c063666f3d7bd1ddbfc7b8a2f77a8f857db"
+checksum = "748841fd7dd5a5e5ba49e2e9ecbfb50b7e4f9620977e17cc7b1fddeba9f41586"
 dependencies = [
  "anyhow",
  "cosmos-sdk-proto",
@@ -4811,9 +4811,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-signer"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd84cf17db3b87924f51631ff6c9e4faf2510727874f3abd60ceb9858fc22c8c"
+checksum = "f432f4b5415edd7f33ea2dd95c034795966080176e9c0bbd6536ddfe6e37f5b4"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -4839,7 +4839,7 @@ dependencies = [
 
 [[package]]
 name = "layer-tests"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -5898,7 +5898,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissions"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -7595,7 +7595,7 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
 name = "simple-aggregator"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-primitives",
  "serde",
@@ -7697,7 +7697,7 @@ dependencies = [
 
 [[package]]
 name = "square"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -8109,7 +8109,7 @@ dependencies = [
 
 [[package]]
 name = "timer-aggregator"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
@@ -8826,7 +8826,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -9845,7 +9845,7 @@ dependencies = [
 
 [[package]]
 name = "wavs"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9901,7 +9901,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-aggregator"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9936,7 +9936,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-benchmark-common"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "tempfile",
  "utils",
@@ -9947,7 +9947,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-cli"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -9980,7 +9980,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-dev-tools"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-signer-local",
  "clap 4.5.48",
@@ -9994,7 +9994,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-engine"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -10022,7 +10022,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-types"
-version = "2.0.0-alpha.1"
+version = "2.0.0-alpha.2"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
