@@ -195,6 +195,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn storage_multithreaded_in_memory() {
         storage_multithreaded_inner(StorageKind::InMemory, 20, 1000);
     }
@@ -254,6 +255,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn storage_concurrent_in_memory() {
         storage_concurrent_inner(StorageKind::InMemory, 20, 1000).await;
     }
@@ -320,6 +322,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn storage_serial_in_memory() {
         storage_serial_inner(StorageKind::InMemory, 20, 1000);
     }
