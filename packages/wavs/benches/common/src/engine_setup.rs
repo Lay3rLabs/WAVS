@@ -78,7 +78,7 @@ impl EngineSetup {
         let chain_configs = ChainConfigs::default();
 
         let keyvalue_ctx = wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
-            RedbStorage::new(db_dir.path()).unwrap(),
+            RedbStorage::new().unwrap(),
             "engine".to_string(),
         );
 

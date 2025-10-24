@@ -739,8 +739,7 @@ mod tests {
     fn test_add_trigger() {
         let config = Config::default();
 
-        let temp_dir = tempfile::tempdir().unwrap();
-        let db_storage = RedbStorage::new(temp_dir.path().join("db")).unwrap();
+        let db_storage = RedbStorage::new().unwrap();
         let services = Services::new(db_storage);
 
         let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));

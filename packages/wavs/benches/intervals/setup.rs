@@ -56,7 +56,7 @@ impl Setup {
         let data_dir = tempfile::tempdir().unwrap();
         let metrics = Metrics::new(meter("wavs-benchmark"));
 
-        let db_storage = RedbStorage::new(data_dir.path().join("db")).unwrap();
+        let db_storage = RedbStorage::new().unwrap();
         let (trigger_to_dispatcher_tx, trigger_to_dispatcher_rx) =
             crossbeam::channel::unbounded::<DispatcherCommand>();
         let trigger_manager = TriggerManager::new(

@@ -89,7 +89,7 @@ impl HttpState {
         tracing::info!("Creating file storage at: {:?}", config.data);
         let file_storage = FileStorage::new(&config.data)?;
         let ca_storage = Arc::new(file_storage);
-        let storage = RedbStorage::new(config.data.join("db"))?;
+        let storage = RedbStorage::new()?;
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
 
         let engine = AggregatorEngine::new(

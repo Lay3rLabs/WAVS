@@ -20,9 +20,7 @@ pub async fn execute_aggregator_component(
     let engine = WTEngine::new(&wt_config).unwrap();
 
     let data_dir = tempfile::tempdir().unwrap();
-    let db_dir = tempfile::tempdir().unwrap();
-    let keyvalue_ctx =
-        KeyValueCtx::new(RedbStorage::new(db_dir.path()).unwrap(), "test".to_string());
+    let keyvalue_ctx = KeyValueCtx::new(RedbStorage::new().unwrap(), "test".to_string());
 
     let mut instance_deps = InstanceDepsBuilder {
         workflow_id: packet.workflow_id.clone(),

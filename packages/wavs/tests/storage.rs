@@ -28,8 +28,7 @@ const TJ: Table<&str, JSON<Demo>> = Table::new("tj");
 
 #[test]
 fn test_set_once_and_get() {
-    let file = tempfile::NamedTempFile::new().unwrap();
-    let store = RedbStorage::new(file.path()).unwrap();
+    let store = RedbStorage::new().unwrap();
 
     let empty = store.get(T1, 17).unwrap();
     assert!(empty.is_none());
@@ -42,8 +41,7 @@ fn test_set_once_and_get() {
 
 #[test]
 fn test_json_storage() {
-    let file = tempfile::NamedTempFile::new().unwrap();
-    let store = RedbStorage::new(file.path()).unwrap();
+    let store = RedbStorage::new().unwrap();
 
     let empty = store.get(TJ, "john").unwrap();
     assert!(empty.is_none());
@@ -60,8 +58,7 @@ fn test_json_storage() {
 
 #[test]
 fn db_service_store() {
-    let file = tempfile::NamedTempFile::new().unwrap();
-    let storage = RedbStorage::new(file.path()).unwrap();
+    let storage = RedbStorage::new().unwrap();
 
     const SERVICE_TABLE: Table<[u8; 32], JSON<Service>> = Table::new("temp-services");
 
