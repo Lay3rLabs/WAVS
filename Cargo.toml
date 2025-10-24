@@ -14,9 +14,9 @@ members = [
     "examples/components/simple-aggregator",
     "examples/components/timer-aggregator",
     "examples/contracts/cosmwasm/simple",
-    # "examples/contracts/cosmwasm/mock/api",
-    # "examples/contracts/cosmwasm/mock/service-handler",
-    # "examples/contracts/cosmwasm/mock/service-manager",
+    "examples/contracts/cosmwasm/mock/api",
+    "examples/contracts/cosmwasm/mock/service-handler",
+    "examples/contracts/cosmwasm/mock/service-manager",
 ]
 resolver = "2"
 
@@ -206,6 +206,6 @@ wavs-benchmark-common = { path = "packages/wavs/benches/common" }
 example-helpers = { path = "examples/components/_helpers" }
 example-types = { path = "examples/components/_types" }
 example-contract-cosmwasm-simple = { path = "examples/contracts/cosmwasm/simple", package = "simple-example" }
-# cw-wavs-mock-api = {path = "examples/contracts/cosmwasm/mock/api"}
-# cw-wavs-mock-service-handler = {path = "examples/contracts/cosmwasm/mock/service-handler"}
-# cw-wavs-mock-service-manager = {path = "examples/contracts/cosmwasm/mock/service-manager"}
+cw-wavs-mock-api = {path = "examples/contracts/cosmwasm/mock/api"}
+cw-wavs-mock-service-handler = {path = "examples/contracts/cosmwasm/mock/service-handler"}
+cw-wavs-mock-service-manager = {path = "examples/contracts/cosmwasm/mock/service-manager"}
