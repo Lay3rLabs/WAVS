@@ -176,7 +176,10 @@ impl ExecAggregator {
         let time_elapsed = start_time.elapsed().as_millis();
 
         Ok(ExecAggregatorResult::Packet {
-            actions: actions.into_iter().map(|a| a.into()).collect(),
+            actions: actions
+                .into_iter()
+                .map(wavs_types::AggregatorAction::try_from)
+                .collect::<Result<Vec<AggregatorAction>>>()?,
             fuel_used,
             time_elapsed,
         })
@@ -219,6 +222,7 @@ impl std::fmt::Display for ExecAggregatorResult {
 mod test {
     use super::*;
     use alloy_primitives::FixedBytes;
+    use layer_climb::prelude::EvmAddr;
     use std::io::Write;
     use tempfile::NamedTempFile;
     use utils::filesystem::workspace_path;
@@ -330,10 +334,13 @@ mod test {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
                 match &actions[0] {
-                    wavs_types::AggregatorAction::Submit(submit) => {
-                        assert_eq!(submit.chain, "evm:31337");
-                        assert_eq!(submit.contract_address, vec![0u8; 20]);
-                    }
+                    wavs_types::AggregatorAction::Submit(submit) => match submit {
+                        wavs_types::SubmitAction::Evm(evm_submit) => {
+                            assert_eq!(evm_submit.chain, "evm:31337".parse().unwrap());
+                            assert_eq!(evm_submit.address, EvmAddr::new([0u8; 20]));
+                        }
+                        _ => panic!("Expected Evm Submit action, got {:?}", submit),
+                    },
                     _ => panic!("Expected Submit action, got {:?}", actions[0]),
                 }
             }
@@ -376,10 +383,13 @@ mod test {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
                 match &actions[0] {
-                    wavs_types::AggregatorAction::Submit(submit) => {
-                        assert_eq!(submit.chain, "evm:31337");
-                        assert_eq!(submit.contract_address, vec![0u8; 20]);
-                    }
+                    wavs_types::AggregatorAction::Submit(submit) => match submit {
+                        wavs_types::SubmitAction::Evm(evm_submit) => {
+                            assert_eq!(evm_submit.chain, "evm:31337".parse().unwrap());
+                            assert_eq!(evm_submit.address, EvmAddr::new([0u8; 20]));
+                        }
+                        _ => panic!("Expected Evm Submit action, got {:?}", submit),
+                    },
                     _ => panic!("Expected Submit action, got {:?}", actions[0]),
                 }
             }

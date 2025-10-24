@@ -4691,9 +4691,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "205283555aed448535173e58ca24a45a38be2d371c00f8da29c66b8dfc21c80e"
+checksum = "cffc4217ea29770a26cc0ab8f02b1ca8d0f3a547c2c3ee914c4ac0a754526a23"
 dependencies = [
  "layer-climb-address",
  "layer-climb-config",
@@ -4704,12 +4704,13 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-address"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6905f3537bae54d42fcebb69b1637b5aaf2b83babaf47f8736f7a4b7b2801e98"
+checksum = "4eca7d61ee12c1f366a97acb9a1afc3b30691e9394c3c9efcb1e0be7520506ee"
 dependencies = [
  "alloy-primitives",
  "anyhow",
+ "bincode",
  "const-hex",
  "cosmwasm-schema",
  "cosmwasm-std",
@@ -4722,9 +4723,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-cli"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d74d6c50b2d8e731b4e30dfabe4b9a75731a184de6ae551b0cec4878b038496d"
+checksum = "b684aec3a4aa2ee344da771ea89b6701e5f9322ed8e9f3ef10cbd1d03f49292a"
 dependencies = [
  "anyhow",
  "bip39",
@@ -4743,9 +4744,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-config"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2301290d060e2a257a2d1ba87becb7cbe33ad0815572fa748ca094fc3c435cb"
+checksum = "2290c1b025df6d9298473571f679393d3eff2723e9a5218f3c044a1163bff61c"
 dependencies = [
  "anyhow",
  "layer-climb-address",
@@ -4756,9 +4757,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-core"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b47999d63711ddfbc5e3d04285517c726a8e7447e929a1dc45798ca8e37d7cdf"
+checksum = "e8afd9dc3a48551999949f7cf70d0a74039e332ee065e2be63d9b029f2079848"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4798,9 +4799,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-proto"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "748841fd7dd5a5e5ba49e2e9ecbfb50b7e4f9620977e17cc7b1fddeba9f41586"
+checksum = "dd6fd1b0f2f8eccd134ce7697d4cd65c805942a0e4f16802e2103d3a4d15f1ea"
 dependencies = [
  "anyhow",
  "cosmos-sdk-proto",
@@ -4811,9 +4812,9 @@ dependencies = [
 
 [[package]]
 name = "layer-climb-signer"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f432f4b5415edd7f33ea2dd95c034795966080176e9c0bbd6536ddfe6e37f5b4"
+checksum = "5198866eedb10a467079922615d4c23d1bae8eecaa827e36bdde2146364f1e59"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -9915,6 +9916,7 @@ dependencies = [
  "clap 4.5.48",
  "ctrlc",
  "futures",
+ "layer-climb",
  "opentelemetry",
  "reqwest",
  "serde",

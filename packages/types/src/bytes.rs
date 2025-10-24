@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 
 /// A newtype that wraps a `[u8; N]` using const generics.
 /// and is serialized as a `0x` prefixed hex string.
-#[derive(Clone, PartialEq, Eq, Hash, Copy, ToSchema)]
+#[derive(Clone, PartialEq, Eq, Hash, Copy, ToSchema, bincode::Encode, bincode::Decode)]
 pub struct ByteArray<const N: usize>([u8; N]);
 
 impl<const N: usize> ByteArray<N> {

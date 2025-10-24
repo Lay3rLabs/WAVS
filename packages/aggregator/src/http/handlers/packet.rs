@@ -5,8 +5,8 @@ use axum::{extract::State, response::IntoResponse, Json};
 use reqwest::Url;
 use tracing::instrument;
 use wavs_types::{
-    aggregator::{AddPacketRequest, AddPacketResponse},
-    ChainKey, EnvelopeSignature, EnvelopeSigner,
+    aggregator::{AddPacketRequest, AddPacketResponse, AnyTransactionReceipt},
+    ChainKey, EnvelopeSignature, EnvelopeSigner, EvmSubmitAction,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
     Packet, ServiceManagerError,
@@ -200,24 +200,39 @@ impl AggregatorProcess<'_> {
 
         for (i, action) in actions.into_iter().enumerate() {
             tracing::debug!("Processing action {}: {:?}", i + 1, action);
-            let queue_id = QuorumQueueId {
-                event_id: event_id.clone(),
-                aggregator_action: action.clone().into(),
-            };
-
-            let result =
-                process_action(state.clone(), packet.clone(), queue_id, action, signer).await;
-
-            match result {
-                Ok(response) => {
-                    tracing::debug!("Action {} processed successfully: {:?}", i + 1, response);
-                    responses.push(response);
-                }
+            match wavs_types::AggregatorAction::try_from(action.clone()) {
                 Err(e) => {
-                    tracing::error!("Action {} processing failed: {:?}", i + 1, e);
+                    tracing::error!("Action {} conversion failed: {:?}", i + 1, e);
                     responses.push(AddPacketResponse::Error {
-                        reason: format!("{:?}", e),
+                        reason: format!("InvalidAction: {:?}", e),
                     });
+                }
+                Ok(aggregator_action) => {
+                    let queue_id = QuorumQueueId {
+                        event_id: event_id.clone(),
+                        aggregator_action,
+                    };
+
+                    let result =
+                        process_action(state.clone(), packet.clone(), queue_id, action, signer)
+                            .await;
+
+                    match result {
+                        Ok(response) => {
+                            tracing::debug!(
+                                "Action {} processed successfully: {:?}",
+                                i + 1,
+                                response
+                            );
+                            responses.push(response);
+                        }
+                        Err(e) => {
+                            tracing::error!("Action {} processing failed: {:?}", i + 1, e);
+                            responses.push(AddPacketResponse::Error {
+                                reason: format!("{:?}", e),
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -256,18 +271,18 @@ async fn process_action(
                             }
                         };
                         tracing::info!("Attempting quorum validation with {} signatures", queue.len());
-                        match handle_custom_submit(&state, &packet, &queue, submit_action).await {
+                        match handle_contract_submit(&state, &packet, &queue, submit_action).await {
                             Ok(tx_receipt) => {
                                 tracing::info!(
                                     "Quorum reached and transaction submitted successfully! Queue size: {}, tx_hash: {:?}",
                                     queue.len(),
-                                    tx_receipt.transaction_hash
+                                    tx_receipt.tx_hash()
                                 );
                                 state
                                     .save_quorum_queue(&queue_id, QuorumQueue::Burned)
                                     .await?;
                                 Ok(AddPacketResponse::Sent {
-                                    tx_receipt: Box::new(tx_receipt),
+                                    tx_receipt,
                                     count: queue.len(),
                                 })
                             }
@@ -354,14 +369,34 @@ async fn get_submission_service_manager(
     ))
 }
 
-async fn handle_custom_submit(
+async fn handle_contract_submit(
     state: &HttpState,
     packet: &Packet,
     queue: &[QueuedPacket],
     submit_action: SubmitAction,
+) -> AggregatorResult<AnyTransactionReceipt> {
+    let submit_action = wavs_types::SubmitAction::try_from(submit_action)
+        .map_err(|e| PacketValidationError::ParseSubmitAction(format!("{:?}", e)))?;
+
+    match submit_action {
+        wavs_types::SubmitAction::Evm(evm_submit_action) => {
+            let tx_receipt =
+                handle_contract_submit_evm(state, packet, queue, evm_submit_action).await?;
+            Ok(AnyTransactionReceipt::Evm(Box::new(tx_receipt)))
+        }
+        wavs_types::SubmitAction::Cosmos(_) => {
+            todo!("finalize cosmos submission flow");
+        }
+    }
+}
+async fn handle_contract_submit_evm(
+    state: &HttpState,
+    packet: &Packet,
+    queue: &[QueuedPacket],
+    submit_action: EvmSubmitAction,
 ) -> AggregatorResult<TransactionReceipt> {
-    let chain = ChainKey::new(submit_action.chain)?;
-    let contract_address = Address::from_slice(&submit_action.contract_address.raw_bytes);
+    let chain = submit_action.chain;
+    let contract_address = submit_action.address.into();
 
     let service_manager = get_submission_service_manager(state, &chain, contract_address).await?;
 
@@ -419,7 +454,7 @@ async fn handle_custom_submit(
             signature_data,
             contract_address,
             None,
-            submit_action.gas_price.map(|x| x.into()),
+            submit_action.gas_price,
         )
         .await?;
 
@@ -722,11 +757,11 @@ mod test {
                         let queue_id = QuorumQueueId {
                             event_id,
                             aggregator_action: wavs_types::AggregatorAction::Submit(
-                                wavs_types::SubmitAction {
-                                    chain: "evm:test-chain".to_string(),
-                                    contract_address: vec![0u8; 20],
+                                wavs_types::SubmitAction::Evm(wavs_types::EvmSubmitAction {
+                                    chain: "evm:test-chain".parse().unwrap(),
+                                    address: layer_climb::prelude::EvmAddr::new([0u8; 20]),
                                     gas_price: None,
-                                },
+                                }),
                             ),
                         };
 

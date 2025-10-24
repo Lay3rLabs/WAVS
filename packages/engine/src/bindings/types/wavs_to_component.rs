@@ -522,6 +522,14 @@ impl From<alloy_primitives::Address> for aggregator_chain::EvmAddress {
     }
 }
 
+impl From<layer_climb::prelude::EvmAddr> for aggregator_chain::EvmAddress {
+    fn from(address: layer_climb::prelude::EvmAddr) -> Self {
+        aggregator_chain::EvmAddress {
+            raw_bytes: address.as_bytes().to_vec(),
+        }
+    }
+}
+
 impl From<layer_climb::prelude::CosmosAddr> for aggregator_chain::CosmosAddress {
     fn from(address: layer_climb::prelude::CosmosAddr) -> Self {
         aggregator_chain::CosmosAddress {
@@ -838,14 +846,8 @@ impl From<aggregator_core::Duration> for wavs_types::Duration {
 impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
     fn from(action: wavs_types::AggregatorAction) -> Self {
         match action {
-            wavs_types::AggregatorAction::Submit(submit) => {
-                aggregator_types::AggregatorAction::Submit(aggregator_types::SubmitAction {
-                    chain: submit.chain,
-                    contract_address: aggregator_chain::EvmAddress {
-                        raw_bytes: submit.contract_address,
-                    },
-                    gas_price: submit.gas_price.map(|x| x.into()),
-                })
+            wavs_types::AggregatorAction::Submit(action) => {
+                aggregator_types::AggregatorAction::Submit(action.into())
             }
             wavs_types::AggregatorAction::Timer(timer) => {
                 aggregator_types::AggregatorAction::Timer(aggregator_types::TimerAction {
@@ -856,19 +858,21 @@ impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
     }
 }
 
-impl From<aggregator_types::AggregatorAction> for wavs_types::AggregatorAction {
-    fn from(action: aggregator_types::AggregatorAction) -> Self {
+impl From<wavs_types::SubmitAction> for aggregator_types::SubmitAction {
+    fn from(action: wavs_types::SubmitAction) -> Self {
         match action {
-            aggregator_types::AggregatorAction::Submit(submit) => {
-                wavs_types::AggregatorAction::Submit(wavs_types::SubmitAction {
-                    chain: submit.chain,
-                    contract_address: submit.contract_address.raw_bytes,
-                    gas_price: submit.gas_price.map(|x| x.into()),
+            wavs_types::SubmitAction::Evm(action) => {
+                aggregator_types::SubmitAction::Evm(aggregator_types::EvmSubmitAction {
+                    chain: action.chain.to_string(),
+                    address: action.address.into(),
+                    gas_price: action.gas_price.map(|x| x.into()),
                 })
             }
-            aggregator_types::AggregatorAction::Timer(timer) => {
-                wavs_types::AggregatorAction::Timer(wavs_types::TimerAction {
-                    delay: timer.delay.into(),
+            wavs_types::SubmitAction::Cosmos(action) => {
+                aggregator_types::SubmitAction::Cosmos(aggregator_types::CosmosSubmitAction {
+                    chain: action.chain.to_string(),
+                    address: action.address.into(),
+                    gas_price: action.gas_price.map(|x| x.into()),
                 })
             }
         }

@@ -122,13 +122,13 @@ alloy-signer = "1.0.37"
 alloy-signer-local = { version = "1.0.37", features = ["mnemonic"] }
 alloy-network = "1.0.37"
 alloy-rpc-types-eth = "1.0.37"
-layer-climb = "0.8.2"
-layer-climb-address = { version = "0.8.2", features = [
+layer-climb = "0.8.3"
+layer-climb-address = { version = "0.8.3", features = [
   "cw-storage",
   "openapi",
 ] }
-layer-climb-config = "0.8.2"
-layer-climb-cli = "0.8.2"
+layer-climb-config = "0.8.3"
+layer-climb-cli = "0.8.3"
 
 # Cosmos-specific dependencies
 cosmwasm-schema = "3.0.2"

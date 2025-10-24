@@ -10,6 +10,8 @@ use crate::{
     bindings::operator::world::wavs::types::service as component_service,
 };
 
+use crate::bindings::aggregator::world::wavs::aggregator::aggregator::{self as aggregator_types};
+
 impl TryFrom<component_service::Trigger> for wavs_types::Trigger {
     type Error = anyhow::Error;
 
@@ -267,5 +269,68 @@ impl From<component_output::WasmResponse> for wavs_types::WasmResponse {
             payload: src.payload,
             ordering: src.ordering,
         }
+    }
+}
+
+impl TryFrom<aggregator_types::AggregatorAction> for wavs_types::AggregatorAction {
+    type Error = anyhow::Error;
+
+    fn try_from(action: aggregator_types::AggregatorAction) -> Result<Self, Self::Error> {
+        Ok(match action {
+            aggregator_types::AggregatorAction::Submit(action) => {
+                wavs_types::AggregatorAction::Submit(action.try_into()?)
+            }
+            aggregator_types::AggregatorAction::Timer(timer) => {
+                wavs_types::AggregatorAction::Timer(wavs_types::TimerAction {
+                    delay: timer.delay.into(),
+                })
+            }
+        })
+    }
+}
+
+impl TryFrom<aggregator_types::SubmitAction> for wavs_types::SubmitAction {
+    type Error = anyhow::Error;
+
+    fn try_from(action: aggregator_types::SubmitAction) -> Result<Self, Self::Error> {
+        Ok(match action {
+            aggregator_types::SubmitAction::Evm(action) => {
+                wavs_types::SubmitAction::Evm(wavs_types::EvmSubmitAction {
+                    chain: action.chain.parse()?,
+                    address: action.address.try_into()?,
+                    gas_price: action.gas_price.map(|x| x.into()),
+                })
+            }
+            aggregator_types::SubmitAction::Cosmos(action) => {
+                wavs_types::SubmitAction::Cosmos(wavs_types::CosmosSubmitAction {
+                    chain: action.chain.parse()?,
+                    address: action.address.try_into()?,
+                    gas_price: action.gas_price.map(|x| x.into()),
+                })
+            }
+        })
+    }
+}
+
+impl TryFrom<aggregator_types::EvmAddress> for layer_climb::prelude::EvmAddr {
+    type Error = anyhow::Error;
+
+    fn try_from(addr: aggregator_types::EvmAddress) -> Result<Self, Self::Error> {
+        if addr.raw_bytes.len() != 20 {
+            return Err(anyhow::anyhow!(
+                "EVM address must be 20 bytes, got {} bytes",
+                addr.raw_bytes.len()
+            ));
+        }
+        Ok(Self::new(addr.raw_bytes.try_into().unwrap()))
+    }
+}
+
+impl TryFrom<aggregator_types::CosmosAddress> for layer_climb::prelude::CosmosAddr {
+    type Error = anyhow::Error;
+
+    fn try_from(addr: aggregator_types::CosmosAddress) -> Result<Self, Self::Error> {
+        let prefix = &addr.bech32_addr[..addr.prefix_len as usize];
+        layer_climb::prelude::CosmosAddr::new_str(&addr.bech32_addr, Some(prefix))
     }
 }

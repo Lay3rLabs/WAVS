@@ -336,7 +336,7 @@ impl SubmissionManager {
                 AddPacketResponse::Sent { tx_receipt, count } => {
                     tracing::info!(
                         "Successfully submitted to aggregator {}: tx_hash={}, payload_count={}, service_id={}, workflow_id={}",
-                        url, tx_receipt.transaction_hash, count, service_id, workflow_id
+                        url, tx_receipt.tx_hash(), count, service_id, workflow_id
                     );
                 }
                 AddPacketResponse::Aggregated { count } => {
