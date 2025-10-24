@@ -161,7 +161,7 @@ impl ExecAggregator {
                 },
             ),
             keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
-                utils::storage::db::RedbStorage::new(tempfile::tempdir()?.keep())?,
+                utils::storage::db::RedbStorage::new()?,
                 packet.service.id().to_string(),
             ),
         }

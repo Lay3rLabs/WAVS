@@ -42,7 +42,7 @@ impl HttpState {
             })?;
         }
 
-        let storage = RedbStorage::new(config.data.join("http-db"))?;
+        let storage = RedbStorage::new()?;
 
         Ok(Self {
             config,

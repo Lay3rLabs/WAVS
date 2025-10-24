@@ -45,7 +45,6 @@ impl MockE2ETestRunner {
         let app_data = tempfile::tempdir().unwrap();
         let metrics = metrics
             .unwrap_or_else(|| EngineMetrics::new(opentelemetry::global::meter("wavs_metrics")));
-        let db_dir = tempfile::tempdir().unwrap();
 
         WasmEngine::new(
             memory_storage,
@@ -55,7 +54,7 @@ impl MockE2ETestRunner {
             None,
             None,
             metrics,
-            RedbStorage::new(db_dir.path()).unwrap(),
+            RedbStorage::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         )
     }

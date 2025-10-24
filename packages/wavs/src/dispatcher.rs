@@ -98,7 +98,7 @@ impl Dispatcher<FileStorage> {
             crossbeam::channel::unbounded::<SubmissionCommand>();
 
         let file_storage = FileStorage::new(config.data.join("ca"))?;
-        let db_storage = RedbStorage::new(config.data.join("db"))?;
+        let db_storage = RedbStorage::new()?;
 
         let services = Services::new(db_storage.clone());
 

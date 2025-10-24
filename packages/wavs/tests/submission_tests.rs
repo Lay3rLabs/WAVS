@@ -47,9 +47,7 @@ fn collect_messages_with_wait() {
     };
     let meter = opentelemetry::global::meter("wavs_metrics");
     let metrics = SubmissionMetrics::new(meter);
-    let data_dir = tempfile::tempdir().unwrap();
-    let data_dir = data_dir.path().join("db");
-    let services = wavs::services::Services::new(RedbStorage::new(data_dir).unwrap());
+    let services = wavs::services::Services::new(RedbStorage::new().unwrap());
     let (dispatcher_to_submission_tx, dispatcher_to_submission_rx) =
         crossbeam::channel::unbounded::<SubmissionCommand>();
     let submission_manager = SubmissionManager::new(
