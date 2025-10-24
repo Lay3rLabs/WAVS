@@ -326,24 +326,6 @@ impl From<wavs_types::ServiceManager> for component_service::ServiceManager {
     }
 }
 
-impl From<wavs_types::Aggregator> for component_service::Aggregator {
-    fn from(src: wavs_types::Aggregator) -> Self {
-        match src {
-            wavs_types::Aggregator::Evm(evm) => component_service::Aggregator::Evm(evm.into()),
-        }
-    }
-}
-
-impl From<wavs_types::EvmContractSubmission> for component_service::EvmContractSubmission {
-    fn from(src: wavs_types::EvmContractSubmission) -> Self {
-        Self {
-            chain: src.chain.to_string(),
-            address: src.address.into(),
-            max_gas: src.max_gas,
-        }
-    }
-}
-
 impl From<wavs_types::WasmResponse> for component_output::WasmResponse {
     fn from(src: wavs_types::WasmResponse) -> Self {
         Self {
@@ -757,16 +739,6 @@ impl From<wavs_types::SignaturePrefix> for aggregator_service::SignaturePrefix {
     fn from(src: wavs_types::SignaturePrefix) -> Self {
         match src {
             wavs_types::SignaturePrefix::Eip191 => aggregator_service::SignaturePrefix::Eip191,
-        }
-    }
-}
-
-impl From<wavs_types::EvmContractSubmission> for aggregator_service::EvmContractSubmission {
-    fn from(submission: wavs_types::EvmContractSubmission) -> Self {
-        aggregator_service::EvmContractSubmission {
-            chain: submission.chain.to_string(),
-            address: submission.address.into(),
-            max_gas: submission.max_gas,
         }
     }
 }

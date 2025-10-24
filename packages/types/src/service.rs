@@ -445,35 +445,6 @@ pub enum SignaturePrefix {
     Eip191,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum Aggregator {
-    Evm(EvmContractSubmission),
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct EvmContractSubmission {
-    pub chain: ChainKey,
-    /// Should be an IWavsServiceHandler contract
-    #[schema(value_type = String)]
-    pub address: alloy_primitives::Address,
-    /// max gas for the submission
-    /// with an aggregator, that will be for all the signed envelopes combined
-    /// without an aggregator, it's just the single signed envelope
-    pub max_gas: Option<u64>,
-}
-
-impl EvmContractSubmission {
-    pub fn new(chain: ChainKey, address: alloy_primitives::Address, max_gas: Option<u64>) -> Self {
-        Self {
-            chain,
-            address,
-            max_gas,
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceStatus {

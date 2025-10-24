@@ -261,28 +261,6 @@ impl From<component_service::SignaturePrefix> for wavs_types::SignaturePrefix {
     }
 }
 
-impl TryFrom<component_service::Aggregator> for wavs_types::Aggregator {
-    type Error = anyhow::Error;
-
-    fn try_from(src: component_service::Aggregator) -> Result<Self, Self::Error> {
-        Ok(match src {
-            component_service::Aggregator::Evm(evm) => wavs_types::Aggregator::Evm(evm.try_into()?),
-        })
-    }
-}
-
-impl TryFrom<component_service::EvmContractSubmission> for wavs_types::EvmContractSubmission {
-    type Error = anyhow::Error;
-
-    fn try_from(src: component_service::EvmContractSubmission) -> Result<Self, Self::Error> {
-        Ok(Self {
-            chain: src.chain.parse()?,
-            address: src.address.into(),
-            max_gas: src.max_gas,
-        })
-    }
-}
-
 impl From<component_output::WasmResponse> for wavs_types::WasmResponse {
     fn from(src: component_output::WasmResponse) -> Self {
         Self {

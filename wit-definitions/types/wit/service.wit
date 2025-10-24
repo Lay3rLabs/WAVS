@@ -146,16 +146,6 @@ interface service {
     }
 
     // Aggregator types
-    variant aggregator {
-        evm(evm-contract-submission),
-    }
-
-    record evm-contract-submission {
-        chain: chain-key,
-        address: evm-address,
-        max-gas: option<u64>,
-    }
-
     record service-and-workflow-id {
         service: service,
         workflow-id: workflow-id

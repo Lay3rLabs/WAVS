@@ -4,10 +4,7 @@ use std::{
     path::PathBuf,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{
-    Aggregator, ChainKey, ComponentDigest, EvmContractSubmission, Permissions, ServiceStatus,
-    Submit, Trigger, WorkflowId,
-};
+use wavs_types::{ChainKey, ComponentDigest, Permissions, ServiceStatus, Trigger, WorkflowId};
 
 use crate::service_json::ServiceJson;
 
@@ -152,53 +149,6 @@ impl std::fmt::Display for WorkflowTriggerResult {
     }
 }
 
-/// Result of updating a workflow's submit
-#[derive(Debug, Clone, Serialize)]
-pub struct WorkflowSetSubmitAggregatorResult {
-    /// The workflow id that was updated
-    pub workflow_id: WorkflowId,
-    /// The updated submit type
-    pub submit: Submit,
-    /// The aggregator submit
-    pub aggregator_submit: Aggregator,
-    /// The file path where the updated service JSON was saved
-    pub file_path: PathBuf,
-}
-
-impl std::fmt::Display for WorkflowSetSubmitAggregatorResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Workflow submit updated successfully!")?;
-        writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
-
-        match &self.submit {
-            Submit::None => {
-                writeln!(f, "  Submit Type: None")?;
-            }
-            Submit::Aggregator { url, .. } => {
-                writeln!(f, "  Submit Type: Aggregator")?;
-                writeln!(f, "    Url:    {}", url)?;
-                match &self.aggregator_submit {
-                    Aggregator::Evm(EvmContractSubmission {
-                        chain,
-                        address,
-                        max_gas,
-                    }) => writeln!(
-                        f,
-                        "    chain: {}, address: {}, max_gas: {}",
-                        chain,
-                        address,
-                        max_gas
-                            .map(|x| x.to_string())
-                            .unwrap_or("default".to_string())
-                    )?,
-                }
-            }
-        }
-
-        writeln!(f, "  Updated:     {}", self.file_path.display())
-    }
-}
-
 /// Result of setting the submit to None
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkflowSetSubmitNoneResult {
@@ -232,45 +182,6 @@ impl std::fmt::Display for WorkflowSetAggregatorUrlResult {
         writeln!(f, "Workflow aggregator URL set successfully!")?;
         writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
         writeln!(f, "  URL:         {}", self.url)?;
-        writeln!(f, "  Updated:     {}", self.file_path.display())
-    }
-}
-
-/// Result of adding an aggregator handler
-#[derive(Debug, Clone, Serialize)]
-pub struct WorkflowAddAggregatorResult {
-    /// The workflow id that was updated
-    pub workflow_id: WorkflowId,
-    /// The updated submit type
-    pub aggregator_submits: Vec<Aggregator>,
-    /// The file path where the updated service JSON was saved
-    pub file_path: PathBuf,
-}
-
-impl std::fmt::Display for WorkflowAddAggregatorResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Workflow aggregator submit updated successfully!")?;
-        writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
-
-        writeln!(f, "  Aggregators: ")?;
-        for submit in &self.aggregator_submits {
-            match submit {
-                Aggregator::Evm(EvmContractSubmission {
-                    chain,
-                    address,
-                    max_gas,
-                }) => writeln!(
-                    f,
-                    "    chain: {}, address: {}, max_gas: {}",
-                    chain,
-                    address,
-                    max_gas
-                        .map(|x| x.to_string())
-                        .unwrap_or("default".to_string())
-                )?,
-            }
-        }
-
         writeln!(f, "  Updated:     {}", self.file_path.display())
     }
 }

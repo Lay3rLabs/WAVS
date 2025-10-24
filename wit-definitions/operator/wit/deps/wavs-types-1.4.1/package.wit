@@ -1,4 +1,4 @@
-package wavs:types@1.4.0;
+package wavs:types@1.4.1;
 
 interface chain {
   /// A string mostly following the caip-2 format of namespace:reference, e.g. "eip155:1" for Ethereum mainnet or "cosmos:cosmoshub-4" for Cosmos Hub
@@ -282,17 +282,7 @@ interface service {
     manager: service-manager,
   }
 
-  record evm-contract-submission {
-    chain: chain-key,
-    address: evm-address,
-    max-gas: option<u64>,
-  }
-
   /// Aggregator types
-  variant aggregator {
-    evm(evm-contract-submission),
-  }
-
   record service-and-workflow-id {
     service: service,
     workflow-id: workflow-id,
