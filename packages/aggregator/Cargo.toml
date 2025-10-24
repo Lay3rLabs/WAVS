@@ -10,7 +10,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
-wavs-types = { path = "../types", features = ["full"] }
+wavs-types = { workspace = true, features = ["full"] }
 wavs-engine = { workspace = true }
 wasmtime = { workspace = true }
 tokio = { workspace = true }

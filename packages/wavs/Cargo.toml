@@ -14,7 +14,7 @@ test-utils = []
 dev = []
 
 [dependencies]
-wavs-types = { path = "../types", features = ["full"] }
+wavs-types = { workspace = true, features = ["full"] }
 wavs-engine = { workspace = true }
 utils = { workspace = true }
 clap = { workspace = true }

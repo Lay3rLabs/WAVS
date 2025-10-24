@@ -13,7 +13,7 @@ publish = false
 [dev-dependencies]
 wasm-pkg-common = { workspace = true }
 wavs = { workspace = true }
-wavs-types = { path = "../types", features = ["full"] }
+wavs-types = { workspace = true, features = ["full"] }
 utils = { workspace = true, features = ["test-utils"] }
 wavs-cli = { workspace = true }
 wavs-aggregator = { workspace = true }
