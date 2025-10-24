@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 use utils::config::ConfigExt;
-use utils::test_utils::middleware::MiddlewareType;
+use utils::test_utils::middleware::EvmMiddlewareType;
 
 use crate::e2e::{AnyService, CosmosService, CrossChainService, EvmService, TestMatrix};
 
@@ -18,7 +18,7 @@ pub struct TestConfig {
     pub mode: TestMode,
     pub middleware_concurrency: bool,
     pub wavs_concurrency: bool,
-    pub middleware_type: MiddlewareType,
+    pub middleware_type: EvmMiddlewareType,
     pub jaeger: Option<String>,
     pub prometheus: Option<String>,
     _log_levels: Vec<String>,
@@ -50,7 +50,7 @@ impl Default for TestConfig {
                 .collect(),
             wavs_concurrency: true,
             middleware_concurrency: false,
-            middleware_type: MiddlewareType::default(),
+            middleware_type: EvmMiddlewareType::default(),
             jaeger: None,
             prometheus: None,
             _data_dir: tempfile::tempdir().unwrap().keep(),

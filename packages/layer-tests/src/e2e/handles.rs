@@ -8,7 +8,7 @@ use evm::EvmInstance;
 use utils::{
     context::AppContext,
     telemetry::Metrics,
-    test_utils::middleware::{MiddlewareInstance, MiddlewareType},
+    test_utils::middleware::{EvmMiddlewareType, MiddlewareInstance},
 };
 use wavs::dispatcher::Dispatcher;
 
@@ -17,7 +17,8 @@ use super::config::Configs;
 pub struct AppHandles {
     pub wavs_handle: std::thread::JoinHandle<()>,
     pub aggregator_handles: Vec<std::thread::JoinHandle<()>>,
-    pub middleware_instance: MiddlewareInstance,
+    pub evm_middleware_instance: Option<MiddlewareInstance>,
+    pub cosmos_middleware_instance: Option<MiddlewareInstance>,
     _evm_chains: Vec<EvmInstance>,
     _cosmos_chains: Vec<CosmosInstance>,
 }
@@ -27,7 +28,7 @@ impl AppHandles {
         ctx: &AppContext,
         configs: &Configs,
         metrics: Metrics,
-        middleware_type: MiddlewareType,
+        middleware_type: EvmMiddlewareType,
     ) -> Self {
         let mut evm_chains = Vec::new();
         let mut cosmos_chains = Vec::new();
@@ -73,14 +74,29 @@ impl AppHandles {
             }));
         }
 
-        let middleware_instance = ctx
-            .rt
-            .block_on(async { MiddlewareInstance::new(middleware_type).await.unwrap() });
+        let evm_middleware_instance =
+            if evm_chains.is_empty() {
+                None
+            } else {
+                Some(ctx.rt.block_on(async {
+                    MiddlewareInstance::new_evm(middleware_type).await.unwrap()
+                }))
+            };
+
+        let cosmos_middleware_instance = if cosmos_chains.is_empty() {
+            None
+        } else {
+            Some(
+                ctx.rt
+                    .block_on(async { MiddlewareInstance::new_cosmos().await.unwrap() }),
+            )
+        };
 
         Self {
             wavs_handle,
             aggregator_handles,
-            middleware_instance,
+            evm_middleware_instance,
+            cosmos_middleware_instance,
             _evm_chains: evm_chains,
             _cosmos_chains: cosmos_chains,
         }

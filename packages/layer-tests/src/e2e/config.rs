@@ -8,7 +8,7 @@ use utils::{
     config::{ConfigBuilder, EvmChainConfigExt},
     evm_client::EvmSigningClient,
     filesystem::workspace_path,
-    test_utils::middleware::MiddlewareType,
+    test_utils::middleware::EvmMiddlewareType,
 };
 use wavs_types::{
     ChainConfigs, ChainKey, CosmosChainConfigBuilder, Credential, EvmChainConfigBuilder,
@@ -49,7 +49,7 @@ pub struct Configs {
     pub mnemonics: TestMnemonics,
     pub middleware_concurrency: bool,
     pub wavs_concurrency: bool,
-    pub middleware_type: MiddlewareType,
+    pub evm_middleware_type: EvmMiddlewareType,
 }
 
 #[derive(Clone, Debug)]
@@ -241,7 +241,7 @@ impl From<TestConfig> for Configs {
             mnemonics,
             middleware_concurrency: test_config.middleware_concurrency,
             wavs_concurrency: test_config.wavs_concurrency,
-            middleware_type: test_config.middleware_type,
+            evm_middleware_type: test_config.middleware_type,
         }
     }
 }

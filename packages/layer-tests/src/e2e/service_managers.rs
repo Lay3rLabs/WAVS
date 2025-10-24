@@ -6,11 +6,12 @@ use std::{
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::test_utils::{
     middleware::{AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig},
-    mock_service_manager::MockServiceManager,
+    mock_service_manager::MockEvmServiceManager,
 };
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
-    ChainKey, Service, ServiceId, ServiceManager, ServiceStatus, SignerResponse, Submit,
+    ChainKey, ChainKeyNamespace, Service, ServiceId, ServiceManager, ServiceStatus, SignerResponse,
+    Submit,
 };
 
 use crate::{deployment::ServiceDeployment, e2e::helpers::wait_for_trigger_streams_to_finalize};
@@ -26,7 +27,7 @@ use crate::e2e::{
 #[derive(Clone)]
 pub struct ServiceManagers {
     configs: Arc<Configs>,
-    lookup: Arc<HashMap<String, (MockServiceManager, ChainKey)>>,
+    lookup: Arc<HashMap<String, (MockEvmServiceManager, ChainKey)>>,
     aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<(ServiceId, String)>>>,
 }
 
@@ -45,7 +46,8 @@ impl ServiceManagers {
         &mut self,
         registry: &TestRegistry,
         clients: &Clients,
-        middleware_instance: MiddlewareInstance,
+        evm_middleware_instance: Option<MiddlewareInstance>,
+        cosmos_middleware_instance: Option<MiddlewareInstance>,
     ) {
         tracing::warn!("WAVS Concurrency: {}", self.configs.wavs_concurrency);
         tracing::warn!(
@@ -53,8 +55,13 @@ impl ServiceManagers {
             self.configs.middleware_concurrency
         );
         tracing::warn!("Bootstrapping service managers...");
-        self.deploy_service_managers(registry, clients, middleware_instance)
-            .await;
+        self.deploy_service_managers(
+            registry,
+            clients,
+            evm_middleware_instance,
+            cosmos_middleware_instance,
+        )
+        .await;
         tracing::warn!("Bootstrapping initial service uris...");
         self.set_initial_service_uris(registry, clients).await;
         tracing::warn!("Bootstrapping initial services...");
@@ -75,7 +82,8 @@ impl ServiceManagers {
         &mut self,
         registry: &TestRegistry,
         clients: &Clients,
-        middleware_instance: MiddlewareInstance,
+        evm_middleware_instance: Option<MiddlewareInstance>,
+        cosmos_middleware_instance: Option<MiddlewareInstance>,
     ) {
         let mut lookup = HashMap::new();
 
@@ -83,21 +91,31 @@ impl ServiceManagers {
 
         for test in registry.list_all() {
             let chain_name = test.service_manager_chain.clone();
-            let wallet_client = clients.get_evm_client(&chain_name);
-            let test_name = test.name.clone();
-            let middleware_instance = middleware_instance.clone();
-            futures.push(async move {
-                tracing::info!("Deploying service manager for test {}", test_name);
-                let service_manager = MockServiceManager::new(middleware_instance, wallet_client)
-                    .await
-                    .unwrap();
-                tracing::info!(
-                    "Service manager for test {} is {}",
-                    test_name,
-                    service_manager.address()
-                );
-                (test_name, (service_manager, chain_name))
-            });
+            match chain_name.namespace.as_str() {
+                ChainKeyNamespace::EVM => {
+                    let wallet_client = clients.get_evm_client(&chain_name);
+                    let test_name = test.name.clone();
+                    let middleware_instance = evm_middleware_instance.clone().unwrap();
+                    futures.push(async move {
+                        tracing::info!("Deploying service manager for test {}", test_name);
+                        let service_manager =
+                            MockEvmServiceManager::new(middleware_instance, wallet_client)
+                                .await
+                                .unwrap();
+                        tracing::info!(
+                            "Service manager for test {} is {}",
+                            test_name,
+                            service_manager.address()
+                        );
+                        (test_name, (service_manager, chain_name))
+                    });
+                }
+                ChainKeyNamespace::COSMOS => {
+                    let middleware_instance = cosmos_middleware_instance.clone().unwrap();
+                    // TODO
+                }
+                other => panic!("Unsupported chain namespace: {}", other),
+            }
         }
 
         tracing::info!("Deploying {} service managers", futures.len());
