@@ -2763,21 +2763,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cw-wavs-mock-service-manager"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "const-hex",
- "cosmwasm-schema",
- "cosmwasm-std",
- "cw-storage-plus",
- "cw-wavs-mock-api",
- "cw2",
- "layer-climb-address",
- "wavs-types",
-]
-
-[[package]]
 name = "cw2"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7644,7 +7629,9 @@ name = "simple-aggregator"
 version = "2.0.0-alpha.7"
 dependencies = [
  "alloy-primitives",
+ "layer-climb-address",
  "serde",
+ "wavs-types",
  "wavs-wasi-utils",
  "wit-bindgen",
  "wstd",

@@ -341,6 +341,7 @@ download-solidity branch="dev":
     rm -rf temp_clone
 
 # downloads the latest mock cosmwasm contracts from the cw-middleware repo
+# we only need the service-handler and API though, service-manager is handled by middleware
 download-cosmwasm branch="main":
     # Create a temporary directory
     rm -rf temp_clone
@@ -349,12 +350,13 @@ download-cosmwasm branch="main":
     # Clone the specific branch into the temp directory
     git -C temp_clone clone --depth=1 --branch {{branch}} --single-branch https://github.com/Lay3rLabs/cw-middleware.git
 
-    # Clear existing content and create wit directory
+    # Clear existing content and create mock directory
     rm -rf examples/contracts/cosmwasm/mock
     mkdir -p examples/contracts/cosmwasm/mock
 
     # Copy it over
-    cp -r temp_clone/cw-middleware/packages/contracts/mock/* examples/contracts/cosmwasm/mock/
+    cp -r temp_clone/cw-middleware/packages/contracts/mock/api examples/contracts/cosmwasm/mock/api
+    cp -r temp_clone/cw-middleware/packages/contracts/mock/service-handler examples/contracts/cosmwasm/mock/service-handler
 
     # Clean up
     rm -rf temp_clone
