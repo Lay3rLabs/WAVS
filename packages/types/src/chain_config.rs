@@ -238,11 +238,14 @@ impl AnyChainConfig {
 #[serde(rename_all = "snake_case")]
 pub struct ChainConfigs {
     /// Cosmos-style chains (including Layer-SDK)
+    #[serde(default)]
     pub cosmos: BTreeMap<ChainKeyId, CosmosChainConfigBuilder>,
     /// EVM-style chains
+    #[serde(default)]
     pub evm: BTreeMap<ChainKeyId, EvmChainConfigBuilder>,
     /// DEV-only chains
     /// The key here can be different than the chain_id inside the config
+    #[serde(default)]
     pub dev: BTreeMap<ChainKeyId, AnyChainConfig>,
 }
 
