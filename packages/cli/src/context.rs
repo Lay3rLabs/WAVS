@@ -4,11 +4,8 @@ use crate::{args::CliArgs, config::Config, deploy::CommandDeployResult};
 use alloy_provider::Provider;
 use anyhow::{anyhow, Context, Result};
 use layer_climb::prelude::*;
-use utils::{
-    config::{AnyChainConfig, EvmChainConfigExt},
-    evm_client::EvmSigningClient,
-};
-use wavs_types::{ChainKey, ChainKeyId, Credential};
+use utils::{config::EvmChainConfigExt, evm_client::EvmSigningClient};
+use wavs_types::{AnyChainConfig, ChainKey, ChainKeyId, Credential};
 
 use crate::{args::Command, deploy::Deployment};
 

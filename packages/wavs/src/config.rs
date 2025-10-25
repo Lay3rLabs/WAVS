@@ -3,12 +3,9 @@ use std::{
     path::PathBuf,
     sync::{Arc, RwLock},
 };
-use utils::{
-    config::{ChainConfigs, ConfigExt},
-    service::DEFAULT_IPFS_GATEWAY,
-};
+use utils::{config::ConfigExt, service::DEFAULT_IPFS_GATEWAY};
 use utoipa::ToSchema;
-use wavs_types::{Credential, Workflow};
+use wavs_types::{ChainConfigs, Credential, Workflow};
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]

@@ -22,8 +22,7 @@ use crate::e2e::helpers::create_trigger_from_config;
 use crate::e2e::test_definition::{
     ChangeServiceDefinition, ComponentDefinition, ExpectedOutputCallback,
 };
-use utils::config::ChainConfigs;
-use wavs_types::{ChainKey, Service, Trigger, WorkflowId};
+use wavs_types::{ChainConfigs, ChainKey, Service, Trigger, WorkflowId};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id

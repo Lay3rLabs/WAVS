@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::{path::Path, sync::RwLock};
 use tracing::{event, instrument, span};
-use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
 use utils::telemetry::EngineMetrics;
 use wavs_engine::{
@@ -11,8 +10,8 @@ use wavs_engine::{
     worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{
-    ComponentDigest, ComponentSource, EventId, Service, ServiceId, TriggerAction, WasmResponse,
-    WorkflowId,
+    ChainConfigs, ComponentDigest, ComponentSource, EventId, Service, ServiceId, TriggerAction,
+    WasmResponse, WorkflowId,
 };
 
 use utils::storage::CAStorage;

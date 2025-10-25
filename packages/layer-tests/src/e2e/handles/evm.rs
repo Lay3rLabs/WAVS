@@ -1,6 +1,7 @@
 use std::process::{Command, Stdio};
 
-use utils::{config::EvmChainConfig, context::AppContext};
+use utils::context::AppContext;
+use wavs_types::EvmChainConfig;
 
 use crate::e2e::config::Configs;
 

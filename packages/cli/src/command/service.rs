@@ -26,15 +26,12 @@ use std::{
     num::{NonZeroU32, NonZeroU64},
     path::{Path, PathBuf},
 };
-use utils::{
-    config::{AnyChainConfig, WAVS_ENV_PREFIX},
-    service::fetch_bytes,
-    wkg::WkgClient,
-};
+use utils::{config::WAVS_ENV_PREFIX, service::fetch_bytes, wkg::WkgClient};
 use uuid::Uuid;
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainKey, Component, ComponentDigest, ComponentSource,
-    Registry, ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp, Trigger, WorkflowId,
+    AllowedHostPermission, AnyChainConfig, ByteArray, ChainKey, Component, ComponentDigest,
+    ComponentSource, Registry, ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp,
+    Trigger, WorkflowId,
 };
 
 use crate::{

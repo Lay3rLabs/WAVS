@@ -117,10 +117,10 @@ impl From<layer_climb::prelude::CosmosAddr> for component_chain::CosmosAddress {
     }
 }
 
-impl From<utils::config::CosmosChainConfig>
+impl From<wavs_types::CosmosChainConfig>
     for crate::bindings::operator::world::host::CosmosChainConfig
 {
-    fn from(config: utils::config::CosmosChainConfig) -> Self {
+    fn from(config: wavs_types::CosmosChainConfig) -> Self {
         Self {
             chain_id: config.chain_id.as_str().to_string(),
             rpc_endpoint: config.rpc_endpoint,
@@ -133,10 +133,8 @@ impl From<utils::config::CosmosChainConfig>
     }
 }
 
-impl From<utils::config::EvmChainConfig>
-    for crate::bindings::operator::world::host::EvmChainConfig
-{
-    fn from(config: utils::config::EvmChainConfig) -> Self {
+impl From<wavs_types::EvmChainConfig> for crate::bindings::operator::world::host::EvmChainConfig {
+    fn from(config: wavs_types::EvmChainConfig) -> Self {
         Self {
             chain_id: config.chain_id.to_string(),
             ws_endpoints: config.ws_endpoints,
@@ -879,8 +877,8 @@ impl From<wavs_types::SubmitAction> for aggregator_types::SubmitAction {
     }
 }
 
-impl From<utils::config::CosmosChainConfig> for aggregator_chain::CosmosChainConfig {
-    fn from(config: utils::config::CosmosChainConfig) -> Self {
+impl From<wavs_types::CosmosChainConfig> for aggregator_chain::CosmosChainConfig {
+    fn from(config: wavs_types::CosmosChainConfig) -> Self {
         Self {
             chain_id: config.chain_id.as_str().to_string(),
             rpc_endpoint: config.rpc_endpoint,
@@ -893,8 +891,8 @@ impl From<utils::config::CosmosChainConfig> for aggregator_chain::CosmosChainCon
     }
 }
 
-impl From<utils::config::EvmChainConfig> for aggregator_chain::EvmChainConfig {
-    fn from(config: utils::config::EvmChainConfig) -> Self {
+impl From<wavs_types::EvmChainConfig> for aggregator_chain::EvmChainConfig {
+    fn from(config: wavs_types::EvmChainConfig) -> Self {
         Self {
             chain_id: config.chain_id.to_string(),
             ws_endpoints: config.ws_endpoints,

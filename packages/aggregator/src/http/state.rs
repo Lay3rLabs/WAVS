@@ -7,14 +7,14 @@ use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use utils::{
     async_transaction::AsyncTransaction,
-    config::{EvmChainConfig, EvmChainConfigExt},
+    config::EvmChainConfigExt,
     evm_client::EvmSigningClient,
     storage::{
         db::{RedbStorage, Table, JSON},
         fs::FileStorage,
     },
 };
-use wavs_types::{ChainKey, EventId, Packet, ServiceId};
+use wavs_types::{ChainKey, EventId, EvmChainConfig, Packet, ServiceId};
 
 use crate::{
     config::Config,

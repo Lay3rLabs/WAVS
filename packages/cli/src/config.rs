@@ -3,11 +3,8 @@ use std::{
     path::PathBuf,
     sync::{Arc, RwLock},
 };
-use utils::{
-    config::{ChainConfigs, ConfigExt},
-    service::DEFAULT_IPFS_GATEWAY,
-};
-use wavs_types::Credential;
+use utils::{config::ConfigExt, service::DEFAULT_IPFS_GATEWAY};
+use wavs_types::{ChainConfigs, Credential};
 
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):

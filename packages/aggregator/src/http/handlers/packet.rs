@@ -610,7 +610,7 @@ mod test {
     use alloy_primitives::Address;
     use alloy_provider::DynProvider;
     use utils::{
-        config::{ConfigBuilder, EvmChainConfigBuilder},
+        config::ConfigBuilder,
         filesystem::workspace_path,
         test_utils::{
             address::rand_address_evm,
@@ -623,7 +623,9 @@ mod test {
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{ComponentDigest, Credential, Service, SignatureKind, WorkflowId};
+    use wavs_types::{
+        ComponentDigest, Credential, EvmChainConfigBuilder, Service, SignatureKind, WorkflowId,
+    };
 
     #[test]
     fn packet_validation() {

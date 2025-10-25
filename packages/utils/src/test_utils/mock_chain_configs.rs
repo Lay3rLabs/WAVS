@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::config::{ChainConfigs, CosmosChainConfigBuilder, EvmChainConfigBuilder};
+use wavs_types::{ChainConfigs, CosmosChainConfigBuilder, EvmChainConfigBuilder};
 
 pub fn mock_chain_configs() -> Arc<RwLock<ChainConfigs>> {
     Arc::new(RwLock::new(ChainConfigs {

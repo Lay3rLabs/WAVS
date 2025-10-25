@@ -1,12 +1,12 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use tempfile::{tempdir, TempDir};
-use utils::{config::ChainConfigs, filesystem::workspace_path, storage::db::RedbStorage};
+use utils::{filesystem::workspace_path, storage::db::RedbStorage};
 use wasmtime::{component::Component, Engine as WTEngine};
 use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
-    AllowedHostPermission, ComponentDigest, EventId, Service, TriggerAction, TriggerConfig,
-    TriggerData, Workflow, WorkflowId,
+    AllowedHostPermission, ChainConfigs, ComponentDigest, EventId, Service, TriggerAction,
+    TriggerConfig, TriggerData, Workflow, WorkflowId,
 };
 
 /// Handle provides the setup and infrastructure needed for engine benchmarks

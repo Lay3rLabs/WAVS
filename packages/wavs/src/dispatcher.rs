@@ -30,14 +30,14 @@ use std::ops::Bound;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use tracing::instrument;
-use utils::config::{AnyChainConfig, ChainConfigs};
 use utils::error::EvmClientError;
 use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
-    ChainConfigError, ChainKey, ComponentDigest, EventId, ServiceManager, WorkflowIdError,
+    AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, EventId,
+    ServiceManager, WorkflowIdError,
 };
 use wavs_types::{Service, ServiceId, SignerResponse, TriggerAction};
 

@@ -1,7 +1,6 @@
-use utils::config::ChainConfigs;
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-use wavs_types::{ComponentDigest, EventId, Service, ServiceId, WorkflowId};
+use wavs_types::{ChainConfigs, ComponentDigest, EventId, Service, ServiceId, WorkflowId};
 
 use crate::{
     backend::wasi_keyvalue::context::KeyValueCtx, bindings::aggregator::world::host::LogLevel,
