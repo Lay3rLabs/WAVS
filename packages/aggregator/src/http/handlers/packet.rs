@@ -614,11 +614,11 @@ mod test {
         filesystem::workspace_path,
         test_utils::{
             address::rand_address_evm,
-            middleware::{
-                AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig, MiddlewareType,
+            middleware::evm::{
+                AvsOperator, EvmMiddleware, EvmMiddlewareType, MiddlewareServiceManagerConfig,
             },
             mock_engine::COMPONENT_SIMPLE_AGGREGATOR_BYTES,
-            mock_service_manager::MockServiceManager,
+            mock_service_manager::MockEvmServiceManager,
             test_contracts::{SimpleServiceHandlerInstance, TestContractDeps},
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
@@ -663,26 +663,24 @@ mod test {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn all_middleware_tests() {
-        let middleware_instance = MiddlewareInstance::new(MiddlewareType::Eigenlayer)
-            .await
-            .unwrap();
+        let middleware_instance = EvmMiddleware::new(EvmMiddlewareType::Eigenlayer).unwrap();
 
         let deps = TestDeps::new().await;
         // deploy all service manager serially
         let sm_many1 =
-            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+            MockEvmServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
                 .await
                 .unwrap();
         let sm_many2 =
-            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+            MockEvmServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
                 .await
                 .unwrap();
         let sm_mixed =
-            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+            MockEvmServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
                 .await
                 .unwrap();
         let sm_first =
-            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+            MockEvmServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
                 .await
                 .unwrap();
 
@@ -799,7 +797,7 @@ mod test {
 
     async fn process_mixed_responses(
         deps: TestDeps,
-        service_manager: MockServiceManager,
+        service_manager: MockEvmServiceManager,
         service_handler: SimpleServiceHandlerInstance<DynProvider>,
     ) {
         const NUM_SIGNERS: usize = 3;
@@ -951,7 +949,7 @@ mod test {
 
     async fn first_packet_sent(
         deps: TestDeps,
-        service_manager: MockServiceManager,
+        service_manager: MockEvmServiceManager,
         service_handler: SimpleServiceHandlerInstance<DynProvider>,
     ) {
         // Configure the service with a threshold of 1 (first packet sends immediately)
@@ -1000,7 +998,7 @@ mod test {
     async fn process_many_packets(
         concurrent: bool,
         deps: TestDeps,
-        service_manager: MockServiceManager,
+        service_manager: MockEvmServiceManager,
         service_handler: SimpleServiceHandlerInstance<DynProvider>,
     ) {
         const NUM_SIGNERS: usize = 20;

@@ -1,6 +1,7 @@
 mod gas_oracle;
 mod world;
 
+use wavs_types::ChainKey;
 use wavs_wasi_utils::impl_u128_conversions;
 use world::{
     host,
@@ -9,7 +10,9 @@ use world::{
     Guest,
 };
 
-use crate::world::wavs::aggregator::aggregator::{EvmSubmitAction, U128};
+use crate::world::wavs::aggregator::aggregator::{
+    CosmosAddress, CosmosSubmitAction, EvmSubmitAction, U128,
+};
 
 impl_u128_conversions!(U128);
 
@@ -18,24 +21,44 @@ struct Component;
 impl Guest for Component {
     fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
         let chain = host::config_var("chain").ok_or("chain config variable is required")?;
+        let chain =
+            AnyChainKey::from_host(&chain).ok_or(format!("no chain config for {}", chain))?;
+
         let service_handler_str = host::config_var("service_handler")
             .ok_or("service_handler config variable is required")?;
 
-        let address: alloy_primitives::Address = service_handler_str
-            .parse()
-            .map_err(|e| format!("Failed to parse service handler address: {e}"))?;
+        let submit_action = match chain {
+            AnyChainKey::Evm(chain) => {
+                let address: alloy_primitives::Address = service_handler_str
+                    .parse()
+                    .map_err(|e| format!("Failed to parse service handler address: {e}"))?;
 
-        // Get gas price from Etherscan if configured
-        // will fail the entire operation if API key is configured but fetching fails
-        let gas_price = gas_oracle::get_gas_price()?;
+                // Get gas price from Etherscan if configured
+                // will fail the entire operation if API key is configured but fetching fails
+                let gas_price = gas_oracle::get_gas_price()?;
 
-        let submit_action = SubmitAction::Evm(EvmSubmitAction {
-            chain,
-            address: EvmAddress {
-                raw_bytes: address.to_vec(),
-            },
-            gas_price: gas_price.map(|x| x.into()),
-        });
+                SubmitAction::Evm(EvmSubmitAction {
+                    chain: chain.to_string(),
+                    address: EvmAddress {
+                        raw_bytes: address.to_vec(),
+                    },
+                    gas_price: gas_price.map(|x| x.into()),
+                })
+            }
+            AnyChainKey::Cosmos(chain) => {
+                let address = layer_climb_address::CosmosAddr::new_str(&service_handler_str, None)
+                    .map_err(|e| e.to_string())?;
+
+                SubmitAction::Cosmos(CosmosSubmitAction {
+                    chain: chain.to_string(),
+                    address: CosmosAddress {
+                        bech32_addr: address.to_string(),
+                        prefix_len: address.prefix().len() as u32,
+                    },
+                    gas_price: None,
+                })
+            }
+        };
 
         // Sanity check that we can get the event id
         if host::get_event_id().iter().all(|x| *x == 0) {
@@ -56,6 +79,23 @@ impl Guest for Component {
         match tx_result {
             Ok(_) => Ok(()),
             Err(_) => Ok(()),
+        }
+    }
+}
+
+enum AnyChainKey {
+    Evm(ChainKey),
+    Cosmos(ChainKey),
+}
+
+impl AnyChainKey {
+    pub fn from_host(chain: &str) -> Option<Self> {
+        match host::get_evm_chain_config(chain) {
+            Some(_) => Some(AnyChainKey::Evm(chain.parse().ok()?)),
+            None => match host::get_cosmos_chain_config(chain) {
+                Some(_) => Some(AnyChainKey::Cosmos(chain.parse().ok()?)),
+                None => None,
+            },
         }
     }
 }

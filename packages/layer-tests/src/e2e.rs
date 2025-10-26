@@ -80,7 +80,17 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let configs: Configs = config.into();
 
-    let handles = AppHandles::start(&ctx, &configs, metrics, configs.evm_middleware_type);
+    let clients = ctx
+        .rt
+        .block_on(async { clients::Clients::new(&configs).await });
+
+    let handles = AppHandles::start(
+        &ctx,
+        &configs,
+        &clients,
+        metrics,
+        configs.evm_middleware_type,
+    );
     tracing::info!("Background processes started");
 
     let mut kill_receiver = ctx.get_kill_receiver();
@@ -90,7 +100,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
             _ = kill_receiver.recv() => {
                 tracing::debug!("Test runner killed");
             },
-            _ = _run(configs, mode, handles.evm_middleware_instance.clone(), handles.cosmos_middleware_instance.clone()) => {
+            _ = _run(configs, clients, mode, handles.evm_middleware_instance.clone(), handles.cosmos_middleware_instance.clone()) => {
                 tracing::debug!("Test runner completed");
             }
         }
@@ -128,13 +138,12 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
 async fn _run(
     configs: Configs,
+    clients: Clients,
     mode: TestMode,
     evm_middleware_instance: Option<MiddlewareInstance>,
     cosmos_middleware_instance: Option<MiddlewareInstance>,
 ) {
     let report = TestReport::new();
-
-    let clients = clients::Clients::new(&configs).await;
 
     let cosmos_trigger_code_map = CosmosTriggerCodeMap::new(DashMap::new());
 

@@ -8,7 +8,7 @@ use utils::{
     config::{ConfigBuilder, EvmChainConfigExt},
     evm_client::EvmSigningClient,
     filesystem::workspace_path,
-    test_utils::middleware::EvmMiddlewareType,
+    test_utils::middleware::evm::EvmMiddlewareType,
 };
 use wavs_types::{
     ChainConfigs, ChainKey, CosmosChainConfigBuilder, Credential, EvmChainConfigBuilder,

@@ -5,7 +5,7 @@ use std::{
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::test_utils::{
-    middleware::{AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig},
+    middleware::{AvsOperator, EvmMiddleware, MiddlewareServiceManagerConfig},
     mock_service_manager::MockEvmServiceManager,
 };
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
@@ -46,8 +46,8 @@ impl ServiceManagers {
         &mut self,
         registry: &TestRegistry,
         clients: &Clients,
-        evm_middleware_instance: Option<MiddlewareInstance>,
-        cosmos_middleware_instance: Option<MiddlewareInstance>,
+        evm_middleware: Option<EvmMiddleware>,
+        cosmos_middlewares: Option<Arc<HashMap<ChainKey, CosmosMiddleware>>>,
     ) {
         tracing::warn!("WAVS Concurrency: {}", self.configs.wavs_concurrency);
         tracing::warn!(

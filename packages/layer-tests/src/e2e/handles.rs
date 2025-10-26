@@ -1,24 +1,31 @@
 mod cosmos;
 mod evm;
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
 use utils::{
     context::AppContext,
     telemetry::Metrics,
-    test_utils::middleware::{EvmMiddlewareType, MiddlewareInstance},
+    test_utils::middleware::{
+        cosmos::CosmosMiddleware,
+        evm::{EvmMiddleware, EvmMiddlewareType},
+    },
 };
 use wavs::dispatcher::Dispatcher;
+use wavs_types::{ChainKey, ChainKeyNamespace};
+
+use crate::e2e::clients::Clients;
 
 use super::config::Configs;
 
 pub struct AppHandles {
     pub wavs_handle: std::thread::JoinHandle<()>,
     pub aggregator_handles: Vec<std::thread::JoinHandle<()>>,
-    pub evm_middleware_instance: Option<MiddlewareInstance>,
-    pub cosmos_middleware_instance: Option<MiddlewareInstance>,
+    pub evm_middleware: Option<EvmMiddleware>,
+    pub cosmos_middlewares: HashMap<ChainKey, CosmosMiddleware>,
+
     _evm_chains: Vec<EvmInstance>,
     _cosmos_chains: Vec<CosmosInstance>,
 }
@@ -27,12 +34,14 @@ impl AppHandles {
     pub fn start(
         ctx: &AppContext,
         configs: &Configs,
+        clients: &Clients,
         metrics: Metrics,
-        middleware_type: EvmMiddlewareType,
+        evm_middleware_type: EvmMiddlewareType,
     ) -> Self {
         let mut evm_chains = Vec::new();
         let mut cosmos_chains = Vec::new();
 
+        let mut cosmos_middlewares = HashMap::new();
         {
             let chains = configs.chains.read().unwrap();
             for chain_config in chains.evm_iter() {
@@ -43,7 +52,16 @@ impl AppHandles {
             for chain_config in chains.cosmos_iter() {
                 let handle = CosmosInstance::spawn(ctx.clone(), configs, chain_config.clone());
 
-                cosmos_chains.push(handle);
+                let chain_key = ChainKey {
+                    namespace: ChainKeyNamespace::COSMOS.parse().unwrap(),
+                    id: chain_config.chain_id,
+                };
+                let pool = clients.cosmos_client_pools.get(&chain_key).expect(
+                    &format!("Cosmos client pool must exist for chain {}since the chain configs are derived from it", chain_key)
+                );
+                let middleware = CosmosMiddleware::new(pool.clone());
+
+                cosmos_middlewares.insert(chain_key, middleware);
             }
         }
 
@@ -74,29 +92,17 @@ impl AppHandles {
             }));
         }
 
-        let evm_middleware_instance =
-            if evm_chains.is_empty() {
-                None
-            } else {
-                Some(ctx.rt.block_on(async {
-                    MiddlewareInstance::new_evm(middleware_type).await.unwrap()
-                }))
-            };
-
-        let cosmos_middleware_instance = if cosmos_chains.is_empty() {
+        let evm_middleware = if evm_chains.is_empty() {
             None
         } else {
-            Some(
-                ctx.rt
-                    .block_on(async { MiddlewareInstance::new_cosmos().await.unwrap() }),
-            )
+            Some(EvmMiddleware::new(evm_middleware_type).unwrap())
         };
 
         Self {
             wavs_handle,
             aggregator_handles,
-            evm_middleware_instance,
-            cosmos_middleware_instance,
+            evm_middleware,
+            cosmos_middlewares,
             _evm_chains: evm_chains,
             _cosmos_chains: cosmos_chains,
         }
