@@ -227,8 +227,8 @@ mod test {
     use tempfile::NamedTempFile;
     use utils::filesystem::workspace_path;
     use wavs_types::{
-        AllowedHostPermission, Envelope, EnvelopeSignature, Service, ServiceManager, ServiceStatus,
-        Submit, Trigger, Workflow, WorkflowId,
+        AllowedHostPermission, Envelope, EnvelopeSignature, EvmChainConfig, Service,
+        ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowId,
     };
 
     fn create_test_packet(component_path: &str) -> Packet {
@@ -326,9 +326,24 @@ mod test {
             config,
         };
 
-        let result = ExecAggregator::run(&crate::config::Config::default(), args)
-            .await
+        let config = crate::config::Config::default();
+        config
+            .chains
+            .write()
+            .unwrap()
+            .add_chain(
+                "evm:31337".to_string().parse().unwrap(),
+                EvmChainConfig {
+                    chain_id: "31337".to_string().parse().unwrap(),
+                    http_endpoint: Some("http://localhost:8545".to_string()),
+                    faucet_endpoint: None,
+                    ws_endpoints: vec![],
+                    ws_priority_endpoint_index: None,
+                }
+                .into(),
+            )
             .unwrap();
+        let result = ExecAggregator::run(&config, args).await.unwrap();
 
         match result {
             ExecAggregatorResult::Packet { actions, .. } => {
@@ -374,10 +389,24 @@ mod test {
             time_limit: None,
             config,
         };
-
-        let result = ExecAggregator::run(&crate::config::Config::default(), args)
-            .await
+        let config = crate::config::Config::default();
+        config
+            .chains
+            .write()
+            .unwrap()
+            .add_chain(
+                "evm:31337".to_string().parse().unwrap(),
+                EvmChainConfig {
+                    chain_id: "31337".to_string().parse().unwrap(),
+                    http_endpoint: Some("http://localhost:8545".to_string()),
+                    faucet_endpoint: None,
+                    ws_endpoints: vec![],
+                    ws_priority_endpoint_index: None,
+                }
+                .into(),
+            )
             .unwrap();
+        let result = ExecAggregator::run(&config, args).await.unwrap();
 
         match result {
             ExecAggregatorResult::Packet { actions, .. } => {
