@@ -88,7 +88,7 @@ impl ServiceManager {
     }
     pub fn address(&self) -> layer_climb_address::Address {
         match self {
-            ServiceManager::Evm { address, .. } => address.clone().into(),
+            ServiceManager::Evm { address, .. } => (*address).into(),
             ServiceManager::Cosmos { address, .. } => address.clone().into(),
         }
     }

@@ -287,7 +287,7 @@ impl CosmosMiddlewareInner {
 
         let upload_info: ServiceManagerInstantiate = serde_json::from_str(&output_file_content)?;
 
-        Ok(upload_info.address.try_into()?)
+        upload_info.address.try_into()
     }
     async fn ensure_service_manager_uploaded(&self) -> Result<()> {
         if self

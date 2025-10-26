@@ -347,7 +347,7 @@ async fn process_action(
                                     }
                                     _ => {
                                         tracing::error!("Quorum validation failed: {:?}", e);
-                                        return Err(e);
+                                        Err(e)
                                     }
                                 }
                             }
@@ -457,7 +457,7 @@ async fn handle_contract_submit_cosmos(
         .querier
         .block_height()
         .await
-        .map_err(|e| AggregatorError::BlockNumber(e.into()))?
+        .map_err(AggregatorError::BlockNumber)?
         - 1;
 
     let signatures: Vec<EnvelopeSignature> = queue
