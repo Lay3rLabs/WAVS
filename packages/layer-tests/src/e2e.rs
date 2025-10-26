@@ -81,12 +81,13 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let configs: Configs = config.into();
 
+    let handles = AppHandles::start(&ctx, &configs, metrics, configs.evm_middleware_type);
+    tracing::info!("Background processes started");
+
     let clients = ctx
         .rt
         .block_on(async { clients::Clients::new(&configs).await });
-
-    let handles = AppHandles::start(&ctx, &configs, metrics, configs.evm_middleware_type);
-    tracing::info!("Background processes started");
+    tracing::info!("Clients created");
 
     let mut kill_receiver = ctx.get_kill_receiver();
 
