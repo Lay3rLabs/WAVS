@@ -5,7 +5,7 @@ use std::{
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::test_utils::{
-    middleware::{AvsOperator, EvmMiddleware, MiddlewareServiceManagerConfig},
+    middleware::evm::{AvsOperator, EvmMiddleware, MiddlewareServiceManagerConfig},
     mock_service_manager::MockEvmServiceManager,
 };
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
@@ -14,7 +14,10 @@ use wavs_types::{
     Submit,
 };
 
-use crate::{deployment::ServiceDeployment, e2e::helpers::wait_for_trigger_streams_to_finalize};
+use crate::{
+    deployment::ServiceDeployment,
+    e2e::{handles::CosmosMiddlewares, helpers::wait_for_trigger_streams_to_finalize},
+};
 
 use crate::e2e::{
     clients::Clients,
@@ -47,7 +50,7 @@ impl ServiceManagers {
         registry: &TestRegistry,
         clients: &Clients,
         evm_middleware: Option<EvmMiddleware>,
-        cosmos_middlewares: Option<Arc<HashMap<ChainKey, CosmosMiddleware>>>,
+        cosmos_middlewares: CosmosMiddlewares,
     ) {
         tracing::warn!("WAVS Concurrency: {}", self.configs.wavs_concurrency);
         tracing::warn!(
@@ -55,13 +58,8 @@ impl ServiceManagers {
             self.configs.middleware_concurrency
         );
         tracing::warn!("Bootstrapping service managers...");
-        self.deploy_service_managers(
-            registry,
-            clients,
-            evm_middleware_instance,
-            cosmos_middleware_instance,
-        )
-        .await;
+        self.deploy_service_managers(registry, clients, evm_middleware, cosmos_middlewares)
+            .await;
         tracing::warn!("Bootstrapping initial service uris...");
         self.set_initial_service_uris(registry, clients).await;
         tracing::warn!("Bootstrapping initial services...");
@@ -82,8 +80,8 @@ impl ServiceManagers {
         &mut self,
         registry: &TestRegistry,
         clients: &Clients,
-        evm_middleware_instance: Option<MiddlewareInstance>,
-        cosmos_middleware_instance: Option<MiddlewareInstance>,
+        evm_middleware: Option<EvmMiddleware>,
+        cosmos_middlewares: CosmosMiddlewares,
     ) {
         let mut lookup = HashMap::new();
 
@@ -95,13 +93,12 @@ impl ServiceManagers {
                 ChainKeyNamespace::EVM => {
                     let wallet_client = clients.get_evm_client(&chain_name);
                     let test_name = test.name.clone();
-                    let middleware_instance = evm_middleware_instance.clone().unwrap();
+                    let middleware = evm_middleware.clone().unwrap();
                     futures.push(async move {
                         tracing::info!("Deploying service manager for test {}", test_name);
-                        let service_manager =
-                            MockEvmServiceManager::new(middleware_instance, wallet_client)
-                                .await
-                                .unwrap();
+                        let service_manager = MockEvmServiceManager::new(middleware, wallet_client)
+                            .await
+                            .unwrap();
                         tracing::info!(
                             "Service manager for test {} is {}",
                             test_name,
@@ -111,7 +108,7 @@ impl ServiceManagers {
                     });
                 }
                 ChainKeyNamespace::COSMOS => {
-                    let middleware_instance = cosmos_middleware_instance.clone().unwrap();
+                    let _middleware = cosmos_middlewares.clone();
                     // TODO
                 }
                 other => panic!("Unsupported chain namespace: {}", other),

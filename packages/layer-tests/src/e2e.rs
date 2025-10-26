@@ -22,14 +22,15 @@ use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
     telemetry::{setup_metrics, setup_tracing, Metrics},
-    test_utils::middleware::MiddlewareInstance,
+    test_utils::middleware::evm::EvmMiddleware,
 };
 
 use crate::{
     args::TestArgs,
     config::{TestConfig, TestMode},
     e2e::{
-        report::TestReport, service_managers::ServiceManagers, test_registry::CosmosTriggerCodeMap,
+        clients::Clients, handles::CosmosMiddlewares, report::TestReport,
+        service_managers::ServiceManagers, test_registry::CosmosTriggerCodeMap,
     },
 };
 
@@ -100,7 +101,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
             _ = kill_receiver.recv() => {
                 tracing::debug!("Test runner killed");
             },
-            _ = _run(configs, clients, mode, handles.evm_middleware_instance.clone(), handles.cosmos_middleware_instance.clone()) => {
+            _ = _run(configs, clients, mode, handles.evm_middleware.clone(), handles.cosmos_middlewares.clone()) => {
                 tracing::debug!("Test runner completed");
             }
         }
@@ -140,8 +141,8 @@ async fn _run(
     configs: Configs,
     clients: Clients,
     mode: TestMode,
-    evm_middleware_instance: Option<MiddlewareInstance>,
-    cosmos_middleware_instance: Option<MiddlewareInstance>,
+    evm_middleware: Option<EvmMiddleware>,
+    cosmos_middlewares: CosmosMiddlewares,
 ) {
     let report = TestReport::new();
 
@@ -159,12 +160,7 @@ async fn _run(
     // bootstrap service managers
     let mut service_managers = ServiceManagers::new(configs.clone());
     service_managers
-        .bootstrap(
-            &registry,
-            &clients,
-            evm_middleware_instance,
-            cosmos_middleware_instance,
-        )
+        .bootstrap(&registry, &clients, evm_middleware, cosmos_middlewares)
         .await;
 
     // upload components

@@ -14,13 +14,14 @@ use super::{EvmMiddlewareServiceManager, MiddlewareServiceManagerConfig, POA_MID
 
 const POA_DEPLOY_FILE: &str = "poa_deploy.json";
 
+#[derive(Default)]
 pub struct PoaMiddleware {}
 
 impl PoaMiddleware {
     pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 
     pub async fn deploy_service_manager(

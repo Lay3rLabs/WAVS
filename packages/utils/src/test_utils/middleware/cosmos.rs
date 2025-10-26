@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use anyhow::Result;
 use layer_climb::pool::SigningClientPool;
 

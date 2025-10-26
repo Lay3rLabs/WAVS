@@ -24,11 +24,12 @@ pub struct AppHandles {
     pub wavs_handle: std::thread::JoinHandle<()>,
     pub aggregator_handles: Vec<std::thread::JoinHandle<()>>,
     pub evm_middleware: Option<EvmMiddleware>,
-    pub cosmos_middlewares: HashMap<ChainKey, CosmosMiddleware>,
-
+    pub cosmos_middlewares: CosmosMiddlewares,
     _evm_chains: Vec<EvmInstance>,
     _cosmos_chains: Vec<CosmosInstance>,
 }
+
+pub type CosmosMiddlewares = Arc<HashMap<ChainKey, CosmosMiddleware>>;
 
 impl AppHandles {
     pub fn start(
@@ -56,12 +57,13 @@ impl AppHandles {
                     namespace: ChainKeyNamespace::COSMOS.parse().unwrap(),
                     id: chain_config.chain_id,
                 };
-                let pool = clients.cosmos_client_pools.get(&chain_key).expect(
-                    &format!("Cosmos client pool must exist for chain {}since the chain configs are derived from it", chain_key)
+                let pool = clients.cosmos_client_pools.get(&chain_key).unwrap_or_else(||
+                    panic!("Cosmos client pool must exist for chain {}since the chain configs are derived from it", chain_key)
                 );
                 let middleware = CosmosMiddleware::new(pool.clone());
 
                 cosmos_middlewares.insert(chain_key, middleware);
+                cosmos_chains.push(handle);
             }
         }
 
@@ -102,7 +104,7 @@ impl AppHandles {
             wavs_handle,
             aggregator_handles,
             evm_middleware,
-            cosmos_middlewares,
+            cosmos_middlewares: Arc::new(cosmos_middlewares),
             _evm_chains: evm_chains,
             _cosmos_chains: cosmos_chains,
         }
