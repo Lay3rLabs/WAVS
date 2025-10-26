@@ -1,6 +1,6 @@
 use std::{
     num::NonZeroU32,
-    sync::{Arc, LazyLock, RwLock},
+    sync::{Arc, RwLock},
 };
 
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
@@ -10,9 +10,7 @@ use utils::{
     filesystem::workspace_path,
     test_utils::middleware::evm::EvmMiddlewareType,
 };
-use wavs_types::{
-    ChainConfigs, ChainKey, CosmosChainConfigBuilder, Credential, EvmChainConfigBuilder,
-};
+use wavs_types::{ChainConfigs, CosmosChainConfigBuilder, Credential, EvmChainConfigBuilder};
 
 use crate::config::TestConfig;
 
@@ -31,7 +29,6 @@ pub fn aggregator_endpoint_2() -> String {
     format!("http://{}:{}", AGGREGATOR_HOST, AGGREGATOR_PORT_2)
 }
 
-pub static DEFAULT_CHAIN_KEY: LazyLock<ChainKey> = LazyLock::new(|| "evm:31337".parse().unwrap());
 pub const CRON_INTERVAL_DATA: &str = "cron-interval data";
 // we can go down to 1 for small groups of tests, but it currently causes a long wait in the test runner
 // might be a good candidate to use this a a benchmark for increasing throughput
@@ -118,7 +115,7 @@ impl From<TestConfig> for Configs {
         let chain_configs = Arc::new(RwLock::new(ChainConfigs::default()));
 
         let mut evm_port = 8545;
-        let mut evm_chain_id = DEFAULT_CHAIN_KEY.id.to_string().parse::<u32>().unwrap();
+        let mut evm_chain_id = 31337;
 
         let mut push_evm_chain = || {
             let http_endpoint = format!("http://127.0.0.1:{}", evm_port);

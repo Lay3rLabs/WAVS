@@ -61,12 +61,14 @@ impl AppHandles {
                     namespace: ChainKeyNamespace::COSMOS.parse().unwrap(),
                     id: chain_config.chain_id.clone(),
                 };
-                let middleware = CosmosMiddleware::new(
-                    chain_config.clone(),
-                    CosmosMiddlewareKind::Mock,
-                    mnemonic,
-                )
-                .unwrap();
+                let middleware = ctx
+                    .rt
+                    .block_on(CosmosMiddleware::new(
+                        chain_config.clone(),
+                        CosmosMiddlewareKind::Mock,
+                        mnemonic,
+                    ))
+                    .unwrap();
 
                 cosmos_middlewares.insert(chain_key, middleware);
                 cosmos_chains.push(handle);

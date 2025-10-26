@@ -14,8 +14,6 @@ use crate::e2e::components::{
     AggregatorComponent, ComponentName, ComponentSources, OperatorComponent,
 };
 
-use super::config::DEFAULT_CHAIN_KEY;
-
 /// Defines a complete end-to-end test case
 #[derive(Clone, Debug)]
 pub struct TestDefinition {
@@ -34,7 +32,7 @@ pub struct TestDefinition {
     pub change_service: Option<ChangeServiceDefinition>,
 
     /// Service manager chain
-    pub service_manager_chain: ChainKey,
+    pub service_manager_chain: Option<ChainKey>,
 
     /// Execution group (ascending priority)
     pub group: u64,
@@ -271,7 +269,7 @@ impl TestBuilder {
                 name: name.to_string(),
                 description: None,
                 workflows: BTreeMap::new(),
-                service_manager_chain: DEFAULT_CHAIN_KEY.clone(),
+                service_manager_chain: None,
                 change_service: None,
                 group: u64::MAX,
             },
@@ -309,7 +307,7 @@ impl TestBuilder {
 
     /// Set the service manager chain
     pub fn with_service_manager_chain(mut self, chain: &ChainKey) -> Self {
-        self.definition.service_manager_chain = chain.clone();
+        self.definition.service_manager_chain = Some(chain.clone());
         self
     }
 

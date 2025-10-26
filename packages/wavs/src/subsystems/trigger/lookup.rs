@@ -99,8 +99,7 @@ impl LookupMaps {
     }
 
     pub fn add_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
-        let manager_address: layer_climb::prelude::Address =
-            service.manager.evm_address_unchecked().into();
+        let manager_address: layer_climb::prelude::Address = service.manager.address();
 
         self.service_manager
             .write()

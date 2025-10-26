@@ -45,6 +45,9 @@ pub struct Config {
     /// Mnemonic or private key of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub credential: Option<Credential>,
 
+    /// Mnemonic for cosmos chains
+    pub cosmos_credential: Option<Credential>,
+
     /// The hd index of the mnemonic to sign with
     pub hd_index: Option<u32>,
 
@@ -95,6 +98,7 @@ impl Default for Config {
             data: PathBuf::from("/var/aggregator"),
             cors_allowed_origins: Vec::new(),
             credential: None,
+            cosmos_credential: None,
             hd_index: None,
             jaeger: None,
             prometheus: None,

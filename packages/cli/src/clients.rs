@@ -104,9 +104,7 @@ impl HttpClient {
 
         let (chain, address) = match &service_manager {
             ServiceManager::Evm { chain, address } => (chain, address.to_string()),
-            ServiceManager::Cosmos { .. } => {
-                todo!("finalize cosmos support");
-            }
+            ServiceManager::Cosmos { chain, address } => (chain, address.to_string()),
         };
         let service = self.get_service_from_node(chain, &address).await?;
 
@@ -258,9 +256,7 @@ impl HttpClient {
 
                 let (chain, address) = match &service.manager {
                     ServiceManager::Evm { chain, address } => (chain, address.to_string()),
-                    ServiceManager::Cosmos { .. } => {
-                        todo!("finalize cosmos support");
-                    }
+                    ServiceManager::Cosmos { chain, address} => (chain, address.to_string())
                 };
                 if let Ok(current_service) = self.get_service_from_node(chain, &address).await {
                     if current_service.hash()? == service_hash {

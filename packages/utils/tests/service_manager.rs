@@ -4,8 +4,9 @@ use utils::{
     test_utils::{
         address::rand_address_evm,
         anvil::safe_spawn_anvil,
-        middleware::evm::{
-            AvsOperator, EvmMiddleware, EvmMiddlewareType, MiddlewareServiceManagerConfig,
+        middleware::{
+            evm::{EvmMiddleware, EvmMiddlewareType, MiddlewareServiceManagerConfig},
+            operator::AvsOperator,
         },
         mock_service_manager::MockEvmServiceManager,
     },

@@ -26,6 +26,7 @@ use alloy_provider::ProviderBuilder;
 use anyhow::Result;
 use futures::{stream, StreamExt};
 use iri_string::types::{CreationError, UriString};
+use layer_climb::querier::QueryClient;
 use std::ops::Bound;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
@@ -34,6 +35,7 @@ use utils::error::EvmClientError;
 use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
+use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessages;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, EventId,
@@ -394,15 +396,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         service_manager: ServiceManager,
     ) -> Result<Service, DispatcherError> {
         let (chain, address) = match service_manager {
-            ServiceManager::Evm { chain, address } => (chain, address),
-            ServiceManager::Cosmos { .. } => {
-                todo!("finalize cosmos support");
+            ServiceManager::Evm { chain, address } => {
+                (chain, layer_climb::prelude::Address::from(address))
+            }
+            ServiceManager::Cosmos { chain, address } => {
+                (chain, layer_climb::prelude::Address::from(address))
             }
         };
         let chain_configs = self.chain_configs.read().unwrap().clone();
         let service =
-            query_service_from_address(chain, address.into(), &chain_configs, &self.ipfs_gateway)
-                .await?;
+            query_service_from_address(chain, address, &chain_configs, &self.ipfs_gateway).await?;
 
         self.add_service_direct(service.clone()).await?;
 
@@ -558,8 +561,14 @@ async fn check_service_needs_update(
             )
             .await?
         }
-        ServiceManager::Cosmos { .. } => {
-            todo!("finalize cosmos support");
+        ServiceManager::Cosmos { chain, address } => {
+            query_service_from_address(
+                chain.clone(),
+                address.clone().into(),
+                chain_configs,
+                ipfs_gateway,
+            )
+            .await?
         }
     };
 
@@ -591,7 +600,7 @@ async fn query_service_from_address(
     })?;
 
     // Handle different chain types
-    match chain_config {
+    let service_uri = match chain_config {
         AnyChainConfig::Evm(evm_config) => {
             // Get the HTTP endpoint, required for contract calls
             let http_endpoint = evm_config.http_endpoint.clone().ok_or_else(|| {
@@ -606,17 +615,26 @@ async fn query_service_from_address(
 
             let contract = IWavsServiceManagerInstance::new(address.try_into()?, provider);
 
-            let service_uri = UriString::try_from(contract.getServiceURI().call().await?)?;
-
-            // Fetch the service JSON from the URI
-            let service = fetch_service(&service_uri, ipfs_gateway).await?;
-
-            Ok(service)
+            let service_uri = contract.getServiceURI().call().await?;
+            service_uri
         }
-        AnyChainConfig::Cosmos(_) => {
-            todo!("finalize cosmos support")
+        AnyChainConfig::Cosmos(config) => {
+            let query_client = QueryClient::new(config.into(), None).await?;
+
+            let service_uri: String = query_client
+                .contract_smart(&address, &ServiceManagerQueryMessages::WavsServiceUri {})
+                .await?;
+
+            service_uri
         }
-    }
+    };
+
+    let service_uri = UriString::try_from(service_uri)?;
+
+    // Fetch the service JSON from the URI
+    let service = fetch_service(&service_uri, ipfs_gateway).await?;
+
+    Ok(service)
 }
 
 // called at init and when a new service is added

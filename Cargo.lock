@@ -8880,6 +8880,7 @@ dependencies = [
  "bip39",
  "cid",
  "const-hex",
+ "cw-wavs-mock-api",
  "deadpool",
  "dirs 6.0.0",
  "dotenvy",

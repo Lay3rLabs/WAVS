@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use alloy_primitives::Address;
 use anyhow::{bail, ensure, Result};
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
+
+use crate::test_utils::middleware::operator::AvsOperator;
 
 pub use super::middleware_eigen::EigenlayerMiddleware;
 pub use super::middleware_poa::PoaMiddleware;
@@ -161,44 +162,6 @@ impl MiddlewareServiceManagerConfig {
             quorum_numerator: required_to_pass,
             threshold: 1,
             weights: operators.iter().map(|op| op.weight).collect(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct AvsOperator {
-    pub operator: Address,
-    pub signer: Address,
-    pub weight: u64,
-    pub operator_private_key: Option<String>,
-    pub signer_private_key: Option<String>,
-}
-
-impl AvsOperator {
-    pub const DEFAULT_WEIGHT: u64 = 10000;
-
-    pub fn new(operator: Address, signer: Address) -> Self {
-        Self {
-            operator,
-            signer,
-            weight: Self::DEFAULT_WEIGHT,
-            operator_private_key: None,
-            signer_private_key: None,
-        }
-    }
-
-    pub fn with_keys(
-        operator: Address,
-        signer: Address,
-        operator_private_key: String,
-        signer_private_key: String,
-    ) -> Self {
-        Self {
-            operator,
-            signer,
-            weight: Self::DEFAULT_WEIGHT,
-            operator_private_key: Some(operator_private_key),
-            signer_private_key: Some(signer_private_key),
         }
     }
 }

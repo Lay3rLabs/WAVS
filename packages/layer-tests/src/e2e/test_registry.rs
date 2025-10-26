@@ -305,6 +305,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("The times".to_string()))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -366,6 +367,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("The times".to_string()))
                         .build(),
                 })
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -404,6 +406,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("test packet".to_string()))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -446,6 +449,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("test packet".to_string()))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -488,6 +492,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Dropped)
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .with_group(3)
                 .build(),
         )
@@ -538,6 +543,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("gas test".to_string()))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -609,6 +615,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Square(SquareResponse { y: 49 }))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -639,6 +646,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Square(SquareResponse { y: 9 }))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -669,6 +677,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("satoshi".to_string()))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -704,6 +713,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .with_service_manager_chain(evm_chain)
                 .build(),
         )
     }
@@ -734,6 +744,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Callback(PermissionsCallback::new()))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -793,6 +804,7 @@ impl TestRegistry {
                         }))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -841,6 +853,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("hello workflows".to_string()))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -879,6 +892,7 @@ impl TestRegistry {
                     workflow_id,
                     component: ComponentName::Operator(OperatorComponent::EchoData).into(),
                 })
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -924,6 +938,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .build(),
         )
     }
@@ -957,6 +972,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .with_group(4)
                 .build(),
         )
@@ -989,6 +1005,7 @@ impl TestRegistry {
                         )))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .with_group(2)
                 .build(),
         )
@@ -1023,6 +1040,7 @@ impl TestRegistry {
                         )))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .with_group(1)
                 .build(),
         )
@@ -1054,6 +1072,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
                         .build(),
                 )
+                .with_service_manager_chain(chain)
                 .with_group(2)
                 .build(),
         )
@@ -1087,6 +1106,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("on brink".to_string()))
                         .build(),
                 )
+                .with_service_manager_chain(submit_chain)
                 .build(),
         )
     }
@@ -1118,6 +1138,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Square(SquareResponse { y: 9 }))
                         .build(),
                 )
+                .with_service_manager_chain(submit_chain)
                 .build(),
         )
     }
@@ -1149,6 +1170,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text("nakamoto".to_string()))
                         .build(),
                 )
+                .with_service_manager_chain(submit_chain)
                 .build(),
         )
     }
@@ -1184,6 +1206,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .with_service_manager_chain(submit_chain)
                 .build(),
         )
     }
@@ -1219,6 +1242,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .with_service_manager_chain(submit_chain)
                 .build(),
         )
     }
@@ -1251,6 +1275,7 @@ impl TestRegistry {
                         )))
                         .build(),
                 )
+                .with_service_manager_chain(submit_chain)
                 .with_group(2)
                 .build(),
         )
@@ -1286,6 +1311,7 @@ impl TestRegistry {
                         )))
                         .build(),
                 )
+                .with_service_manager_chain(submit_chain)
                 .with_group(1)
                 .build(),
         )
@@ -1318,6 +1344,7 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text(CRON_INTERVAL_DATA.to_owned()))
                         .build(),
                 )
+                .with_service_manager_chain(submit_chain)
                 .with_group(2)
                 .build(),
         )
@@ -1353,6 +1380,7 @@ impl TestRegistry {
                         ))
                         .build(),
                 )
+                .with_service_manager_chain(evm_chain)
                 .build(),
         )
     }

@@ -7,11 +7,13 @@ use std::{
 };
 
 use anyhow::Result;
-use layer_climb::prelude::{Address, CosmosAddr};
+use layer_climb::prelude::*;
 use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
 use tokio::process::Command;
 use wavs_types::{ChainConfigs, ChainKeyNamespace, CosmosChainConfig, CosmosChainConfigBuilder};
+
+use crate::test_utils::middleware::operator::AvsOperator;
 
 #[derive(Clone)]
 pub struct CosmosMiddleware {
@@ -24,6 +26,7 @@ pub struct CosmosMiddlewareInner {
     config_dir: Arc<TempDir>,
     env_dir: Arc<TempDir>,
     service_manager_code_id: Arc<AtomicU64>,
+    signing_client: SigningClient,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -42,17 +45,15 @@ impl CosmosMiddlewareKind {
 }
 
 impl CosmosMiddleware {
-    pub fn new(
+    pub async fn new(
         chain_config: CosmosChainConfig,
         kind: CosmosMiddlewareKind,
         mnemonic: String,
     ) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(tokio::sync::Mutex::new(CosmosMiddlewareInner::new(
-                chain_config,
-                kind,
-                mnemonic,
-            )?)),
+            inner: Arc::new(tokio::sync::Mutex::new(
+                CosmosMiddlewareInner::new(chain_config, kind, mnemonic).await?,
+            )),
         })
     }
 
@@ -73,7 +74,7 @@ impl CosmosMiddlewareInner {
     const DOCKER_IMAGE: &str = "ghcr.io/lay3rlabs/cw-middleware:0.2.0-alpha.4";
     const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
-    pub fn new(
+    pub async fn new(
         chain_config: CosmosChainConfig,
         kind: CosmosMiddlewareKind,
         mnemonic: String,
@@ -81,14 +82,15 @@ impl CosmosMiddlewareInner {
         // Write a pseudo wavs.toml file to a temp dir for our network
         let mut chain_configs = ChainConfigs::default();
 
+        let chain_config_clone = chain_config.clone();
         chain_configs.cosmos.insert(
-            chain_config.chain_id.to_string().parse()?,
+            chain_config_clone.chain_id.to_string().parse()?,
             CosmosChainConfigBuilder {
-                bech32_prefix: chain_config.bech32_prefix,
-                rpc_endpoint: chain_config.rpc_endpoint,
-                grpc_endpoint: chain_config.grpc_endpoint,
-                gas_price: chain_config.gas_price,
-                gas_denom: chain_config.gas_denom,
+                bech32_prefix: chain_config_clone.bech32_prefix,
+                rpc_endpoint: chain_config_clone.rpc_endpoint,
+                grpc_endpoint: chain_config_clone.grpc_endpoint,
+                gas_price: chain_config_clone.gas_price,
+                gas_denom: chain_config_clone.gas_denom,
                 faucet_endpoint: None,
             },
         );
@@ -126,11 +128,17 @@ impl CosmosMiddlewareInner {
         writeln!(env_file, "WAVS_HOME=/wavs-home")?;
         writeln!(env_file, "CLI_MNEMONIC={}", mnemonic)?;
 
+        let key_signer = KeySigner::new_mnemonic_str(&mnemonic, None)?;
+
+        let signing_client =
+            SigningClient::new(chain_config.to_chain_config(), key_signer, None).await?;
+
         Ok(Self {
             kind,
             config_dir: Arc::new(config_dir),
             env_dir: Arc::new(env_dir),
             service_manager_code_id: Arc::new(AtomicU64::new(0)),
+            signing_client,
         })
     }
 
@@ -197,6 +205,33 @@ impl CosmosMiddlewareInner {
         }
 
         Ok(())
+    }
+
+    pub async fn register_operator(
+        &self,
+        service_manager_addr: CosmosAddr,
+        operator: AvsOperator,
+    ) -> Result<()> {
+        match self.kind {
+            CosmosMiddlewareKind::Mock => {
+                self.signing_client
+                    .contract_execute(
+                        &service_manager_addr.into(),
+                        &cw_wavs_mock_api::service_manager::ExecuteMsg::SetSigningKey {
+                            operator: operator.operator.into(),
+                            signing_key: operator.signer.into(),
+                            weight: operator.weight.into(),
+                        },
+                        vec![],
+                        None,
+                    )
+                    .await?;
+                Ok(())
+            }
+            CosmosMiddlewareKind::Mirror => {
+                todo!()
+            }
+        }
     }
 
     async fn instantiate_mock_service_manager(&self, code_id: u64) -> Result<CosmosAddr> {
@@ -328,9 +363,18 @@ pub struct CosmosServiceManager {
 }
 
 impl CosmosServiceManager {
-    pub async fn set_uri(&self, uri: &str) -> Result<()> {
+    // intentionally thin, idea is to guard the lock
+    pub async fn set_service_uri(&self, uri: &str) -> Result<()> {
         let inner = self.middleware.lock().await;
         inner.set_service_manager_uri(&self.address, uri).await
+    }
+
+    // intentionally thin, idea is to guard the lock
+    pub async fn register_operator(&self, operator: AvsOperator) -> Result<()> {
+        let inner = self.middleware.lock().await;
+        inner
+            .register_operator(self.address.clone(), operator)
+            .await
     }
 }
 
@@ -362,11 +406,15 @@ mod tests {
 
         let middleware =
             CosmosMiddleware::new(chain_config.clone(), CosmosMiddlewareKind::Mock, mnemonic)
+                .await
                 .unwrap();
 
         let service_manager = middleware.deploy_service_manager().await.unwrap();
 
-        service_manager.set_uri("http://example.com").await.unwrap();
+        service_manager
+            .set_service_uri("http://example.com")
+            .await
+            .unwrap();
 
         let cosmos_client = QueryClient::new(chain_config.into(), None).await.unwrap();
 

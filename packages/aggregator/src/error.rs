@@ -5,8 +5,8 @@ use utils::{
 };
 use wavs_engine::utils::error::EngineError;
 use wavs_types::{
-    ChainConfigError, ChainKey, ChainKeyError, EnvelopeError, ServiceId, ServiceManagerError,
-    WorkflowId, WorkflowIdError,
+    contracts::cosmwasm::service_manager::error::WavsValidateError, ChainConfigError, ChainKey,
+    ChainKeyError, EnvelopeError, ServiceId, ServiceManagerError, WorkflowId, WorkflowIdError,
 };
 
 pub type AggregatorResult<T> = Result<T, AggregatorError>;
@@ -41,19 +41,25 @@ pub enum AggregatorError {
     CreateEvmClient(anyhow::Error),
 
     #[error("Service manager validate(): {0:?}")]
-    ServiceManagerValidateKnown(ServiceManagerError),
-
-    #[error("Service manager validate(): {0}")]
-    ServiceManagerValidateAnyRevert(String),
+    CosmosServiceManagerValidate(WavsValidateError),
 
     #[error("Service manager validate(): {0:?}")]
-    ServiceManagerValidateUnknown(alloy_contract::Error),
+    EvmServiceManagerValidateKnown(ServiceManagerError),
+
+    #[error("Service manager validate(): {0}")]
+    EvmServiceManagerValidateAnyRevert(String),
+
+    #[error("Service manager validate(): {0:?}")]
+    EvmServiceManagerValidateUnknown(alloy_contract::Error),
 
     #[error("Chain not found: {0}")]
     ChainNotFound(ChainKey),
 
     #[error("Missing EVM credential")]
     MissingEvmCredential,
+
+    #[error("Missing Cosmos credential")]
+    MissingCosmosCredential,
 
     #[error("Unexpected responses length: should be {responses}, got {aggregators}")]
     UnexpectedResponsesLength {
