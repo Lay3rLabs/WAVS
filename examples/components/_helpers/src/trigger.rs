@@ -9,10 +9,10 @@ use crate::bindings::world::wavs::{
 use alloy_provider::RootProvider;
 use alloy_sol_types::SolValue;
 use anyhow::Result;
+use cosmwasm_std::HexBinary;
 use cw_wavs_mock_api::message_with_id::MessageWithId;
 use example_submit::DataWithId;
 use example_trigger::{NewTrigger, SimpleTrigger, TriggerInfo};
-use serde::{Deserialize, Serialize};
 use wavs_wasi_utils::decode_event_log_data;
 
 pub fn decode_trigger_event(trigger_data: component_input::TriggerData) -> Result<(u64, Vec<u8>)> {
@@ -98,28 +98,16 @@ impl ChainQuerierExt for layer_climb::prelude::QueryClient {
         address: layer_climb::prelude::Address,
         trigger_id: u64,
     ) -> Result<Vec<u8>> {
-        #[derive(Serialize, Debug)]
-        #[serde(rename_all = "snake_case")]
-        enum QueryMsg {
-            TriggerData { trigger_id: String },
-        }
-
-        // The response from the contract query
-        #[derive(Deserialize, Debug)]
-        struct TriggerDataResp {
-            pub data: Vec<u8>,
-        }
-
-        let resp: TriggerDataResp = self
+        let resp: HexBinary = self
             .contract_smart(
                 &address,
-                &QueryMsg::TriggerData {
-                    trigger_id: trigger_id.to_string(),
+                &cw_wavs_trigger_api::simple::QueryMsg::TriggerMessage {
+                    trigger_id: trigger_id.into(),
                 },
             )
             .await?;
 
-        Ok(resp.data)
+        Ok(resp.into())
     }
 }
 
