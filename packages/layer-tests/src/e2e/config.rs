@@ -47,6 +47,7 @@ pub struct Configs {
     pub mnemonics: TestMnemonics,
     pub middleware_concurrency: bool,
     pub wavs_concurrency: bool,
+    pub grouping: bool,
     pub evm_middleware_type: EvmMiddlewareType,
 }
 
@@ -263,6 +264,7 @@ impl From<TestConfig> for Configs {
             mnemonics,
             middleware_concurrency: test_config.middleware_concurrency,
             wavs_concurrency: test_config.wavs_concurrency,
+            grouping: test_config.grouping,
             evm_middleware_type: test_config.middleware_type,
         }
     }

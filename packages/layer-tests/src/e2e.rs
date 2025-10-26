@@ -181,6 +181,7 @@ async fn _run(
 
     // Create and run the test runner (services will be deployed just-in-time)
     Runner::new(
+        configs,
         clients,
         registry,
         component_sources,

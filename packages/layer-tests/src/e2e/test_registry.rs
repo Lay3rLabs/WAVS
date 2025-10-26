@@ -57,10 +57,15 @@ impl TestRegistry {
     }
 
     /// Group all test definitions by group (ascending priority)
-    pub fn list_all_grouped(&self) -> BTreeMap<u64, Vec<TestDefinition>> {
+    pub fn list_all_grouped(&self, allow_grouping: bool) -> BTreeMap<u64, Vec<TestDefinition>> {
         let mut map: BTreeMap<u64, Vec<TestDefinition>> = BTreeMap::new();
-        for test in self.tests.iter().cloned() {
-            map.entry(test.group).or_default().push(test);
+
+        for (index, test) in self.tests.iter().cloned().enumerate() {
+            if allow_grouping {
+                map.entry(test.group).or_default().push(test);
+            } else {
+                map.entry(index as u64).or_default().push(test);
+            }
         }
         map
     }

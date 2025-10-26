@@ -1,6 +1,7 @@
 // src/e2e/test_runner.rs
 
 use crate::deployment::ServiceDeployment;
+use crate::e2e::config::Configs;
 use crate::example_evm_client::example_trigger::ISimpleTrigger::TriggerInfo;
 use crate::example_evm_client::example_trigger::NewTrigger;
 use alloy_primitives::U256;
@@ -37,6 +38,7 @@ use super::test_definition::WorkflowDefinition;
 
 /// Simplified test runner that leverages services directly attached to test definitions
 pub struct Runner {
+    configs: Arc<Configs>,
     clients: Arc<Clients>,
     registry: Arc<TestRegistry>,
     component_sources: Arc<ComponentSources>,
@@ -67,6 +69,7 @@ fn extract_aggregator_service_handler(submit: &Submit) -> Option<layer_climb::pr
 
 impl Runner {
     pub fn new(
+        configs: Configs,
         clients: Clients,
         registry: TestRegistry,
         component_sources: ComponentSources,
@@ -75,6 +78,7 @@ impl Runner {
         report: TestReport,
     ) -> Self {
         Self {
+            configs: Arc::new(configs),
             clients: Arc::new(clients),
             registry: Arc::new(registry),
             component_sources: Arc::new(component_sources),
@@ -86,7 +90,7 @@ impl Runner {
 
     /// Run all tests in the registry
     pub async fn run_tests(&self, mut all_services: HashMap<String, ServiceDeployment>) {
-        let test_groups = self.registry.list_all_grouped();
+        let test_groups = self.registry.list_all_grouped(self.configs.grouping);
 
         for (group, mut group_tests) in test_groups {
             let services = group_tests

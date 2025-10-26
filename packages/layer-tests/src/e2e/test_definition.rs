@@ -425,7 +425,7 @@ impl WorkflowBuilder {
             submit,
             input_data: self.input_data,
             expected_output,
-            timeout: self.timeout.unwrap_or(Duration::from_secs(120)),
+            timeout: self.timeout.unwrap_or(Duration::from_secs(30)),
             aggregators: self.aggregators,
             trigger_execution: self.trigger_execution,
         }
