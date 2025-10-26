@@ -68,3 +68,5 @@ toml = { workspace = true }
 utils = { path = ".", features = ["test-utils"] }
 tower = { workspace = true }
 rand = { workspace = true }
+layer-climb-cli = { workspace = true}
+deadpool = { workspace = true}

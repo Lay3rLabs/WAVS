@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::sync::Arc;
 
 use alloy_primitives::Address;
@@ -17,32 +16,10 @@ pub const ANVIL_DEPLOYER_ADDRESS: &str = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb9
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum MiddlewareType {
+pub enum EvmMiddlewareType {
     #[default]
     Eigenlayer,
     Poa,
-}
-
-#[derive(Clone)]
-pub struct MiddlewareInstance {
-    inner: Arc<MiddlewareInstanceInner>,
-}
-
-impl MiddlewareInstance {
-    pub async fn new(middleware_type: MiddlewareType) -> Result<Self> {
-        let inner = MiddlewareInstanceInner::new(middleware_type).await?;
-        Ok(Self {
-            inner: Arc::new(inner),
-        })
-    }
-}
-
-impl Deref for MiddlewareInstance {
-    type Target = MiddlewareInstanceInner;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
 }
 
 pub fn middleware_config_filename(id: &str) -> String {
@@ -53,31 +30,38 @@ pub fn middleware_deploy_filename(id: &str) -> String {
     format!("mock-deploy-{}", id)
 }
 
-pub enum MiddlewareInstanceInner {
-    Eigenlayer(EigenlayerMiddleware),
-    Poa(PoaMiddleware),
+#[derive(Clone)]
+pub enum EvmMiddleware {
+    Eigenlayer(Arc<EigenlayerMiddleware>),
+    Poa(Arc<PoaMiddleware>),
 }
-
-impl MiddlewareInstanceInner {
-    pub async fn new(middleware_type: MiddlewareType) -> Result<Self> {
+impl EvmMiddleware {
+    pub fn new(middleware_type: EvmMiddlewareType) -> Result<Self> {
         match middleware_type {
-            MiddlewareType::Eigenlayer => Ok(MiddlewareInstanceInner::Eigenlayer(
-                EigenlayerMiddleware::new().await?,
-            )),
-            MiddlewareType::Poa => Ok(MiddlewareInstanceInner::Poa(PoaMiddleware::new().await?)),
+            EvmMiddlewareType::Eigenlayer => {
+                Ok(Self::Eigenlayer(Arc::new(EigenlayerMiddleware::new()?)))
+            }
+            EvmMiddlewareType::Poa => Ok(Self::Poa(Arc::new(PoaMiddleware::new()))),
         }
     }
-
     pub async fn deploy_service_manager(
         &self,
         rpc_url: String,
-        deployer_key_hex: String,
-    ) -> Result<MiddlewareServiceManager> {
+        // only needed for EVM middleware
+        // Cosmos middleware uses the pool instead
+        deployer_key_hex: Option<String>,
+    ) -> Result<EvmMiddlewareServiceManager> {
         match self {
-            MiddlewareInstanceInner::Eigenlayer(m) => {
+            Self::Eigenlayer(m) => {
+                let deployer_key_hex = deployer_key_hex.ok_or_else(|| {
+                    anyhow::anyhow!("Deployer key hex is required for EVM middleware")
+                })?;
                 m.deploy_service_manager(rpc_url, deployer_key_hex).await
             }
-            MiddlewareInstanceInner::Poa(m) => {
+            Self::Poa(m) => {
+                let deployer_key_hex = deployer_key_hex.ok_or_else(|| {
+                    anyhow::anyhow!("Deployer key hex is required for EVM middleware")
+                })?;
                 m.deploy_service_manager(rpc_url, deployer_key_hex).await
             }
         }
@@ -85,30 +69,26 @@ impl MiddlewareInstanceInner {
 
     pub async fn configure_service_manager(
         &self,
-        service_manager: &MiddlewareServiceManager,
+        service_manager: &EvmMiddlewareServiceManager,
         config: &MiddlewareServiceManagerConfig,
     ) -> Result<()> {
         match self {
-            MiddlewareInstanceInner::Eigenlayer(m) => {
-                m.configure_service_manager(service_manager, config).await
-            }
-            MiddlewareInstanceInner::Poa(m) => {
-                m.configure_service_manager(service_manager, config).await
-            }
+            Self::Eigenlayer(m) => m.configure_service_manager(service_manager, config).await,
+            Self::Poa(m) => m.configure_service_manager(service_manager, config).await,
         }
     }
 
     pub async fn set_service_manager_uri(
         &self,
-        service_manager: &MiddlewareServiceManager,
+        service_manager: &EvmMiddlewareServiceManager,
         service_uri: &str,
     ) -> Result<()> {
         match self {
-            MiddlewareInstanceInner::Eigenlayer(m) => {
+            Self::Eigenlayer(m) => {
                 m.set_service_manager_uri(service_manager, service_uri)
                     .await
             }
-            MiddlewareInstanceInner::Poa(m) => {
+            Self::Poa(m) => {
                 m.set_service_manager_uri(service_manager, service_uri)
                     .await
             }
@@ -117,7 +97,7 @@ impl MiddlewareInstanceInner {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct MiddlewareServiceManager {
+pub struct EvmMiddlewareServiceManager {
     // not part of the JSON, but used for convenience in Rust
     #[serde(skip)]
     pub deployer_key_hex: String,
@@ -141,7 +121,7 @@ pub struct MiddlewareServiceManager {
     pub stake_registry_impl_address: alloy_primitives::Address,
 }
 
-impl Drop for MiddlewareServiceManager {
+impl Drop for EvmMiddlewareServiceManager {
     fn drop(&mut self) {
         if let Some(container_id) = &self.container_id {
             tracing::debug!("Cleaning up middleware container: {}", container_id);
