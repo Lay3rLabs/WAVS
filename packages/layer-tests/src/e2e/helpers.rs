@@ -244,7 +244,8 @@ pub async fn create_trigger_from_config(
                     Trigger::CosmosContractEvent {
                         chain: chain.clone(),
                         address: contract.contract_address.try_into().unwrap(),
-                        event_type: crate::example_cosmos_client::NewMessageEvent::KEY.to_string(),
+                        event_type: cw_wavs_trigger_api::simple::PushMessageEvent::EVENT_TYPE
+                            .to_string(),
                     }
                 }
             }
@@ -427,7 +428,7 @@ pub async fn get_cosmos_code_id(
                 .join("examples")
                 .join("build")
                 .join("contracts")
-                .join("simple_example.wasm");
+                .join("cw_wavs_trigger_simple.wasm");
 
             if !wasm_path.exists() {
                 panic!(
@@ -543,7 +544,7 @@ pub async fn cosmos_wait_for_task_to_land(
     address: CosmosAddr,
     trigger_id: TriggerId,
     timeout: Duration,
-) -> Result<String> {
+) -> Result<Vec<u8>> {
     let submit_client = SimpleCosmosSubmitClient::new(cosmos_submit_client, address.into());
 
     let trigger_id = trigger_id.u64();

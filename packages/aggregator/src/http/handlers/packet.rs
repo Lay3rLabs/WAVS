@@ -2,13 +2,16 @@ use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
 use alloy_rpc_types_eth::TransactionReceipt;
 use axum::{extract::State, response::IntoResponse, Json};
-use layer_climb::prelude::EvmAddr;
+use layer_climb::prelude::{CosmosAddr, EvmAddr};
 use reqwest::Url;
 use tracing::instrument;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse, AnyTransactionReceipt},
     contracts::cosmwasm::{
-        service_handler::ServiceHandlerExecuteMessages,
+        service_handler::{
+            ServiceHandlerExecuteMessages, ServiceHandlerQueryMessages, WavsEnvelope,
+            WavsSignatureData,
+        },
         service_manager::{
             error::WavsValidateError, ServiceManagerQueryMessages, WavsValidateResult,
         },
@@ -442,6 +445,14 @@ async fn handle_contract_submit_cosmos(
 ) -> AggregatorResult<String> {
     let client = state.get_cosmos_client(&submit_action.chain).await?;
 
+    let service_manager_addr: CosmosAddr = client
+        .querier
+        .contract_smart(
+            &submit_action.address.clone().into(),
+            &ServiceHandlerQueryMessages::WavsServiceManager {},
+        )
+        .await?;
+
     let block_height_minus_one = client
         .querier
         .block_height()
@@ -454,17 +465,20 @@ async fn handle_contract_submit_cosmos(
         .map(|queued| queued.packet.signature.clone())
         .collect();
 
-    let signature_data = packet
+    let signature_data: WavsSignatureData = packet
         .envelope
-        .signature_data(signatures, block_height_minus_one)?;
+        .signature_data(signatures, block_height_minus_one)?
+        .into();
+
+    let envelope: WavsEnvelope = packet.envelope.clone().into();
 
     let result: WavsValidateResult = client
         .querier
         .contract_smart(
-            &submit_action.address.clone().into(),
+            &service_manager_addr.into(),
             &ServiceManagerQueryMessages::WavsValidate {
-                envelope: packet.envelope.clone().into(),
-                signature_data: signature_data.clone().into(),
+                envelope: envelope.clone(),
+                signature_data: signature_data.clone(),
             },
         )
         .await?;
@@ -487,8 +501,8 @@ async fn handle_contract_submit_cosmos(
         .contract_execute(
             &submit_action.address.into(),
             &ServiceHandlerExecuteMessages::WavsHandleSignedEnvelope {
-                envelope: packet.envelope.clone().into(),
-                signature_data: signature_data.into(),
+                envelope,
+                signature_data,
             },
             vec![],
             None,

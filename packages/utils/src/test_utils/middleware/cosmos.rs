@@ -15,6 +15,8 @@ use wavs_types::{ChainConfigs, ChainKeyNamespace, CosmosChainConfig, CosmosChain
 
 use crate::test_utils::middleware::operator::AvsOperator;
 
+const DOCKER_IMAGE: &str = "ghcr.io/lay3rlabs/cw-middleware:0.2.0-alpha.5";
+
 #[derive(Clone)]
 pub struct CosmosMiddleware {
     // behind a tokio mutex so we are only ever doing one operation at a time
@@ -71,7 +73,6 @@ impl CosmosMiddleware {
 }
 
 impl CosmosMiddlewareInner {
-    const DOCKER_IMAGE: &str = "ghcr.io/lay3rlabs/cw-middleware:0.2.0-alpha.4";
     const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
     pub async fn new(
@@ -182,7 +183,7 @@ impl CosmosMiddlewareInner {
                     self.env_path().as_str(),
                     "-v",
                     &format!("{}:/wavs-home", self.config_dir.path().display()),
-                    Self::DOCKER_IMAGE,
+                    DOCKER_IMAGE,
                     "service-manager",
                     "set-service-uri",
                     "--address",
@@ -251,7 +252,7 @@ impl CosmosMiddlewareInner {
                     &format!("{}:/wavs-home", self.config_dir.path().display()),
                     "-v",
                     &format!("{}:/output", output_dir.path().display()),
-                    Self::DOCKER_IMAGE,
+                    DOCKER_IMAGE,
                     "service-manager",
                     "instantiate-mock",
                     "--code-id",
@@ -313,7 +314,7 @@ impl CosmosMiddlewareInner {
                     &format!("{}:/wavs-home", self.config_dir.path().display()),
                     "-v",
                     &format!("{}:/output", output_dir.path().display()),
-                    Self::DOCKER_IMAGE,
+                    DOCKER_IMAGE,
                     "service-manager",
                     "upload",
                     "--contract-kind",

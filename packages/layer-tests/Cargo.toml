@@ -18,6 +18,7 @@ utils = { workspace = true, features = ["test-utils"] }
 wavs-cli = { workspace = true }
 wavs-aggregator = { workspace = true }
 cw-wavs-mock-api = { workspace = true }
+cw-wavs-trigger-api = {workspace = true}
 clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
@@ -44,7 +45,6 @@ uuid = { workspace = true }
 reqwest = { workspace = true }
 dashmap = { workspace = true }
 example-types = { workspace = true}
-example-contract-cosmwasm-simple = { workspace = true }
 ordermap = { workspace = true }
 regex = { workspace = true }
 deadpool = { workspace = true }

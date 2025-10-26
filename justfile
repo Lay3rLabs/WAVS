@@ -168,13 +168,8 @@ cosmwasm-build CONTRACT="*":
     rm -rf {{COSMWASM_OUT_DIR}}
     mkdir -p {{COSMWASM_OUT_DIR}}
 
-    @for C in examples/contracts/cosmwasm/{{CONTRACT}}/Cargo.toml; do \
-        just cosmwasm-build-inner $(dirname $C); \
-    done
-
-    @for C in examples/contracts/cosmwasm/mock/{{CONTRACT}}/Cargo.toml; do \
-        just cosmwasm-build-inner $(dirname $C); \
-    done
+    just cosmwasm-build-inner examples/contracts/cosmwasm/trigger/simple
+    just cosmwasm-build-inner examples/contracts/cosmwasm/mock/service-handler
 
     cp ./artifacts/*.wasm {{COSMWASM_OUT_DIR}}
 
@@ -350,13 +345,15 @@ download-cosmwasm branch="main":
     # Clone the specific branch into the temp directory
     git -C temp_clone clone --depth=1 --branch {{branch}} --single-branch https://github.com/Lay3rLabs/cw-middleware.git
 
-    # Clear existing content and create mock directory
-    rm -rf examples/contracts/cosmwasm/mock
+    # Clear existing content and directories
+    rm -rf examples/contracts/cosmwasm
     mkdir -p examples/contracts/cosmwasm/mock
+    mkdir -p examples/contracts/cosmwasm/trigger
 
     # Copy it over
     cp -r temp_clone/cw-middleware/packages/contracts/mock/api examples/contracts/cosmwasm/mock/api
     cp -r temp_clone/cw-middleware/packages/contracts/mock/service-handler examples/contracts/cosmwasm/mock/service-handler
+    cp -r temp_clone/cw-middleware/packages/contracts/trigger examples/contracts/cosmwasm/
 
     # Clean up
     rm -rf temp_clone

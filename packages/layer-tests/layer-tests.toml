@@ -6,8 +6,7 @@ wavs_concurrency = true
 middleware_concurrency = true
 evm_middleware_type = "eigenlayer" # or "poa"
 # Run all tests
-# mode = "all"
-mode = { "isolated" = [{ cosmos = "echo_data" }] }
+mode = "all"
 
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
 # mode = "all_eth"

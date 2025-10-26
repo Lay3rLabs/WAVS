@@ -442,7 +442,7 @@ async fn run_test(
 
                                 tracing::info!("Task result: {:?}", data);
 
-                                data.into_bytes()
+                                data
                             }
                             ChainKeyNamespace::EVM => {
                                 let client = clients.get_evm_client(chain);

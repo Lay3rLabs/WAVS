@@ -63,8 +63,8 @@ pub fn mock_real_trigger_action(
                 data: TriggerData::CosmosContractEvent {
                     contract_address: contract_address.clone(),
                     chain: chain.try_into().unwrap(),
-                    event: cosmwasm_std::Event::new("new-message").add_attributes(vec![
-                        ("id", "1".to_string()),
+                    event: cosmwasm_std::Event::new("push-message").add_attributes(vec![
+                        ("trigger-id", "1".to_string()),
                         ("data", const_hex::encode(data)),
                     ]),
                     block_height: 1,
@@ -114,8 +114,8 @@ pub fn mock_cosmos_event_trigger_data(trigger_id: u64, data: impl AsRef<[u8]>) -
         contract_address: rand_address_cosmos(),
         chain: "cosmos:layer".parse().unwrap(),
         // matches example_cosmos_client::NewMessageEvent
-        event: cosmwasm_std::Event::new("new-message")
-            .add_attribute("id", trigger_id.to_string())
+        event: cosmwasm_std::Event::new("push-message")
+            .add_attribute("trigger-id", trigger_id.to_string())
             .add_attribute("data", const_hex::encode(data.as_ref())),
         block_height: 0,
         event_index: 0,

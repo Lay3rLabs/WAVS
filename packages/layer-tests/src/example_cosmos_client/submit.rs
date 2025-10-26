@@ -68,7 +68,7 @@ impl SimpleCosmosSubmitClient {
             .await
     }
 
-    pub async fn trigger_message(&self, trigger_id: u64) -> Result<String> {
+    pub async fn trigger_message(&self, trigger_id: u64) -> Result<Vec<u8>> {
         let resp: TriggerMessageResponse = self
             .signing_client
             .querier
@@ -80,6 +80,6 @@ impl SimpleCosmosSubmitClient {
             )
             .await?;
 
-        Ok(resp.message)
+        Ok(resp.message.into())
     }
 }

@@ -1,4 +1,5 @@
 use example_helpers::bindings::world::{
+    host,
     wavs::operator::{input::TriggerAction, output::WasmResponse},
     Guest,
 };
@@ -17,7 +18,11 @@ impl Guest for Component {
         let req: SquareRequest = serde_json::from_slice(&req).map_err(|e| e.to_string())?;
         let y = req.x * req.x;
         let resp = serde_json::to_vec(&SquareResponse { y }).map_err(|e| e.to_string())?;
-        Ok(Some(encode_trigger_output(trigger_id, resp)))
+        Ok(Some(encode_trigger_output(
+            trigger_id,
+            resp,
+            host::get_service().service.manager,
+        )))
     }
 }
 
