@@ -10,7 +10,9 @@ use tokio::process::Command;
 
 use crate::test_utils::middleware::evm::validate_docker_container_id;
 
-use super::{EvmMiddlewareServiceManager, MiddlewareServiceManagerConfig, POA_MIDDLEWARE_IMAGE};
+use super::{
+    EvmMiddlewareServiceManager, MiddlewareServiceManagerConfig, EVM_POA_MIDDLEWARE_IMAGE,
+};
 
 const POA_DEPLOY_FILE: &str = "poa_deploy.json";
 
@@ -45,7 +47,7 @@ impl PoaMiddleware {
                     "",
                     "-v",
                     &format!("{}:/root/.nodes", nodes_dir.path().display()),
-                    POA_MIDDLEWARE_IMAGE,
+                    EVM_POA_MIDDLEWARE_IMAGE,
                     "tail",
                     "-f",
                     "/dev/null",

@@ -11,7 +11,7 @@ use crate::test_utils::middleware::evm::validate_docker_container_id;
 
 use super::{
     middleware_config_filename, middleware_deploy_filename, EvmMiddlewareServiceManager,
-    MiddlewareServiceManagerConfig, MIDDLEWARE_IMAGE,
+    MiddlewareServiceManagerConfig, EVM_EIGENLAYER_MIDDLEWARE_IMAGE,
 };
 
 pub struct EigenlayerMiddleware {
@@ -55,7 +55,7 @@ impl EigenlayerMiddleware {
                         "{}:/wavs/contracts/deployments",
                         self.config_dir.path().display()
                     ),
-                    MIDDLEWARE_IMAGE,
+                    EVM_EIGENLAYER_MIDDLEWARE_IMAGE,
                     "tail",
                     "-f",
                     "/dev/null",

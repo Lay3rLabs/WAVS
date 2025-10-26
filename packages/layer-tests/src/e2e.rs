@@ -85,13 +85,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
         .rt
         .block_on(async { clients::Clients::new(&configs).await });
 
-    let handles = AppHandles::start(
-        &ctx,
-        &configs,
-        &clients,
-        metrics,
-        configs.evm_middleware_type,
-    );
+    let handles = AppHandles::start(&ctx, &configs, metrics, configs.evm_middleware_type);
     tracing::info!("Background processes started");
 
     let mut kill_receiver = ctx.get_kill_receiver();

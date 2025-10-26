@@ -48,3 +48,5 @@ ordermap = { workspace = true }
 regex = { workspace = true }
 deadpool = { workspace = true }
 derive-enum-all-values = { workspace = true }
+rand = { workspace = true }
+bip39 = { workspace = true}

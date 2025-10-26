@@ -5,18 +5,17 @@ use std::{collections::HashMap, sync::Arc};
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
+use rand::prelude::*;
 use utils::{
     context::AppContext,
     telemetry::Metrics,
     test_utils::middleware::{
-        cosmos::CosmosMiddleware,
+        cosmos::{CosmosMiddleware, CosmosMiddlewareKind},
         evm::{EvmMiddleware, EvmMiddlewareType},
     },
 };
 use wavs::dispatcher::Dispatcher;
 use wavs_types::{ChainKey, ChainKeyNamespace};
-
-use crate::e2e::clients::Clients;
 
 use super::config::Configs;
 
@@ -35,7 +34,6 @@ impl AppHandles {
     pub fn start(
         ctx: &AppContext,
         configs: &Configs,
-        clients: &Clients,
         metrics: Metrics,
         evm_middleware_type: EvmMiddlewareType,
     ) -> Self {
@@ -51,16 +49,24 @@ impl AppHandles {
             }
 
             for chain_config in chains.cosmos_iter() {
-                let handle = CosmosInstance::spawn(ctx.clone(), configs, chain_config.clone());
+                let mut rng = rand::rng();
+
+                let entropy: [u8; 32] = rng.random();
+                let mnemonic = bip39::Mnemonic::from_entropy(&entropy).unwrap().to_string();
+
+                let handle =
+                    CosmosInstance::spawn(ctx.clone(), configs, chain_config.clone(), &mnemonic);
 
                 let chain_key = ChainKey {
                     namespace: ChainKeyNamespace::COSMOS.parse().unwrap(),
-                    id: chain_config.chain_id,
+                    id: chain_config.chain_id.clone(),
                 };
-                let pool = clients.cosmos_client_pools.get(&chain_key).unwrap_or_else(||
-                    panic!("Cosmos client pool must exist for chain {}since the chain configs are derived from it", chain_key)
-                );
-                let middleware = CosmosMiddleware::new(pool.clone());
+                let middleware = CosmosMiddleware::new(
+                    chain_config.clone(),
+                    CosmosMiddlewareKind::Mock,
+                    mnemonic,
+                )
+                .unwrap();
 
                 cosmos_middlewares.insert(chain_key, middleware);
                 cosmos_chains.push(handle);
