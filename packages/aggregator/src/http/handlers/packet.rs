@@ -2,6 +2,7 @@ use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
 use alloy_rpc_types_eth::TransactionReceipt;
 use axum::{extract::State, response::IntoResponse, Json};
+use layer_climb::prelude::EvmAddr;
 use reqwest::Url;
 use tracing::instrument;
 use wavs_types::{
@@ -15,7 +16,7 @@ use wavs_types::{
     ChainKey, CosmosSubmitAction, EnvelopeSignature, EnvelopeSigner, EvmSubmitAction,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
-    Packet, ServiceManagerError,
+    Packet, ServiceManager, ServiceManagerError,
 };
 
 use crate::{
@@ -124,16 +125,37 @@ async fn process_packet(
     // but drop it after this scope so we don't confuse it with the service manager
     // that is used for the actual submission
     let signer = {
-        let service_manager_client = state.get_evm_client(packet.service.manager.chain()).await?;
-        let service_manager = IWavsServiceManagerInstance::new(
-            packet.service.manager.evm_address_unchecked(),
-            service_manager_client.provider,
-        );
-        service_manager
-            .getLatestOperatorForSigningKey(signing_key)
-            .call()
-            .await
-            .map_err(AggregatorError::OperatorKeyLookup)?
+        match packet.service.manager.clone() {
+            ServiceManager::Evm { chain, address } => {
+                let service_manager_client = state.get_evm_client(&chain).await?;
+                let service_manager =
+                    IWavsServiceManagerInstance::new(address, service_manager_client.provider);
+                service_manager
+                    .getLatestOperatorForSigningKey(signing_key)
+                    .call()
+                    .await
+                    .map_err(AggregatorError::EvmOperatorKeyLookup)?
+            }
+            ServiceManager::Cosmos { chain, address } => {
+                let cosmos_client = state.get_cosmos_client(&chain).await?;
+                let result: Option<EvmAddr> = cosmos_client
+                    .querier
+                    .contract_smart(
+                        &address.into(),
+                        &ServiceManagerQueryMessages::WavsLatestOperatorForSigningKey {
+                            signing_key_addr: signing_key.into(),
+                        },
+                    )
+                    .await?;
+
+                match result {
+                    None => {
+                        return Err(AggregatorError::CosmosOperatorKeyLookup);
+                    }
+                    Some(evm_addr) => evm_addr.into(),
+                }
+            }
+        }
     };
     tracing::debug!("Packet signer address: {:?}", signer);
 
@@ -381,7 +403,7 @@ async fn evm_get_submission_service_manager(
         .getServiceManager()
         .call()
         .await
-        .map_err(AggregatorError::ServiceManagerLookup)?;
+        .map_err(AggregatorError::EvmServiceManagerLookup)?;
 
     Ok(IWavsServiceManagerInstance::new(
         service_manager_address,

@@ -4885,6 +4885,7 @@ dependencies = [
  "clap 4.5.48",
  "const-hex",
  "cosmwasm-std",
+ "cw-wavs-mock-api",
  "dashmap",
  "deadpool",
  "derive-enum-all-values",

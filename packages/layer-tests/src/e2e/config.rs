@@ -1,3 +1,4 @@
+use rand::prelude::*;
 use std::{
     num::NonZeroU32,
     sync::{Arc, RwLock},
@@ -52,9 +53,12 @@ pub struct Configs {
 #[derive(Clone, Debug)]
 pub struct TestMnemonics {
     pub cli: Credential,
+    pub cli_cosmos: Credential,
     pub wavs: Credential,
     pub aggregator: Credential,
     pub aggregator_2: Credential,
+    pub aggregator_cosmos: Credential,
+    pub cosmos_middleware: Vec<Credential>,
 }
 
 impl TestMnemonics {
@@ -64,6 +68,10 @@ impl TestMnemonics {
             // 0x63A513A1c878283BC1fF829d6938f45D714E22A1
             cli: Credential::new(
                 "replace course few short practice end crawl element rather strong text fit"
+                    .to_string(),
+            ),
+            cli_cosmos: Credential::new(
+                "arch forward congress comfort shove palace staff flat concert such double tooth brown buffalo cycle school change exhaust episode ball embody various enroll tenant"
                     .to_string(),
             ),
             // 0x55a8F5cac28c2dA45aFA89c46e47CC4A445570AE
@@ -81,6 +89,11 @@ impl TestMnemonics {
                 "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat"
                     .to_string(),
             ),
+            aggregator_cosmos: Credential::new(
+                "body total lion ritual invest cup destroy kidney fame symptom gasp snake spy between wire style elegant walk furnace total verify clay swamp flavor"
+                    .to_string(),
+            ),
+            cosmos_middleware: vec![],
         }
     }
 
@@ -104,13 +117,21 @@ impl TestMnemonics {
             }
         }
     }
+
+    pub fn push_cosmos_middleware(&mut self) {
+        let mut rng = rand::rng();
+
+        let entropy: [u8; 32] = rng.random();
+        let mnemonic = bip39::Mnemonic::from_entropy(&entropy).unwrap().to_string();
+        self.cosmos_middleware.push(Credential::new(mnemonic));
+    }
 }
 
 impl From<TestConfig> for Configs {
     fn from(test_config: TestConfig) -> Self {
         let matrix: TestMatrix = test_config.mode.into();
 
-        let mnemonics = TestMnemonics::new();
+        let mut mnemonics = TestMnemonics::new();
 
         let chain_configs = Arc::new(RwLock::new(ChainConfigs::default()));
 
@@ -158,6 +179,8 @@ impl From<TestConfig> for Configs {
                 chain_config,
             );
 
+            mnemonics.push_cosmos_middleware();
+
             cosmos_port += 1;
             cosmos_chain_id += 1;
         };
@@ -202,6 +225,7 @@ impl From<TestConfig> for Configs {
 
         aggregator_config.chains = chain_configs.clone();
         aggregator_config.credential = Some(mnemonics.aggregator.clone());
+        aggregator_config.cosmos_credential = Some(mnemonics.aggregator_cosmos.clone());
         aggregator_config.dev_endpoints_enabled = true;
 
         // Create second aggregator config
@@ -226,6 +250,7 @@ impl From<TestConfig> for Configs {
         cli_config.chains = chain_configs.clone();
         // some random mnemonic
         cli_config.evm_credential = Some(mnemonics.cli.clone());
+        cli_config.cosmos_mnemonic = Some(mnemonics.cli_cosmos.clone());
 
         Self {
             matrix,

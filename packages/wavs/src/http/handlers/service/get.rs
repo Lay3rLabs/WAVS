@@ -4,8 +4,10 @@ use crate::http::{
     error::{AnyError, HttpResult},
     state::HttpState,
 };
+use anyhow::anyhow;
 use axum::{extract::State, response::IntoResponse, Json};
-use wavs_types::{ChainKey, ServiceDigest, ServiceId, ServiceManager};
+use layer_climb::prelude::CosmosAddr;
+use wavs_types::{AnyChainConfig, ChainKey, ServiceDigest, ServiceId, ServiceManager};
 
 #[utoipa::path(
     get,
@@ -31,14 +33,35 @@ pub async fn handle_get_service(
         Err(e) => return AnyError::from(e).into_response(),
     };
 
-    let address = match address.parse::<alloy_primitives::Address>() {
-        Ok(addr) => addr,
-        Err(e) => return AnyError::from(e).into_response(),
-    };
+    let service_manager = match state.config.chains.read().unwrap().get_chain(&chain_key) {
+        Some(chain_config) => match chain_config {
+            AnyChainConfig::Cosmos(chain_config) => {
+                let address = match CosmosAddr::new_str(&address, Some(&chain_config.bech32_prefix))
+                {
+                    Ok(addr) => addr,
+                    Err(e) => return AnyError::from(e).into_response(),
+                };
 
-    let service_manager = ServiceManager::Evm {
-        chain: chain_key,
-        address,
+                ServiceManager::Cosmos {
+                    chain: chain_key,
+                    address,
+                }
+            }
+            AnyChainConfig::Evm(_) => {
+                let address = match address.parse::<alloy_primitives::Address>() {
+                    Ok(addr) => addr,
+                    Err(e) => return AnyError::from(e).into_response(),
+                };
+
+                ServiceManager::Evm {
+                    chain: chain_key,
+                    address,
+                }
+            }
+        },
+        None => {
+            return AnyError::from(anyhow!("missing chain config for {chain_key}")).into_response();
+        }
     };
 
     match get_service_inner(&state, service_manager).await {

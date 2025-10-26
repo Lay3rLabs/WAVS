@@ -5,7 +5,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
-use rand::prelude::*;
 use utils::{
     context::AppContext,
     telemetry::Metrics,
@@ -48,14 +47,9 @@ impl AppHandles {
                 evm_chains.push(handle);
             }
 
-            for chain_config in chains.cosmos_iter() {
-                let mut rng = rand::rng();
-
-                let entropy: [u8; 32] = rng.random();
-                let mnemonic = bip39::Mnemonic::from_entropy(&entropy).unwrap().to_string();
-
+            for (index, chain_config) in chains.cosmos_iter().enumerate() {
                 let handle =
-                    CosmosInstance::spawn(ctx.clone(), configs, chain_config.clone(), &mnemonic);
+                    CosmosInstance::spawn(ctx.clone(), configs, chain_config.clone(), index);
 
                 let chain_key = ChainKey {
                     namespace: ChainKeyNamespace::COSMOS.parse().unwrap(),
@@ -66,7 +60,7 @@ impl AppHandles {
                     .block_on(CosmosMiddleware::new(
                         chain_config.clone(),
                         CosmosMiddlewareKind::Mock,
-                        mnemonic,
+                        configs.mnemonics.cosmos_middleware[index].to_string(),
                     ))
                     .unwrap();
 

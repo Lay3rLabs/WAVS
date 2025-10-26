@@ -162,6 +162,11 @@ pub enum CosmosTriggerDefinition {
     SimpleContractEvent { chain: ChainKey },
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum CosmosSubmitDefinition {
+    MockServiceHandler { chain: ChainKey },
+}
+
 #[derive(Clone, Debug)]
 pub enum EvmTriggerDefinition {
     SimpleContractEvent { chain: ChainKey },

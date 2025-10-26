@@ -30,7 +30,7 @@ use crate::{
     config::{TestConfig, TestMode},
     e2e::{
         clients::Clients, handles::CosmosMiddlewares, report::TestReport,
-        service_managers::ServiceManagers, test_registry::CosmosTriggerCodeMap,
+        service_managers::ServiceManagers, test_registry::CosmosCodeMap,
     },
 };
 
@@ -141,14 +141,14 @@ async fn _run(
 ) {
     let report = TestReport::new();
 
-    let cosmos_trigger_code_map = CosmosTriggerCodeMap::new(DashMap::new());
+    let cosmos_code_map = CosmosCodeMap::new(DashMap::new());
 
     // Create test registry from test mode
     let registry = test_registry::TestRegistry::from_test_mode(
         mode,
         configs.chains.clone(),
         &clients,
-        &cosmos_trigger_code_map,
+        &cosmos_code_map,
     )
     .await;
 
@@ -175,7 +175,7 @@ async fn _run(
             &registry,
             &clients,
             &component_sources,
-            cosmos_trigger_code_map.clone(),
+            cosmos_code_map.clone(),
         )
         .await;
 
@@ -185,7 +185,7 @@ async fn _run(
         registry,
         component_sources,
         service_managers,
-        cosmos_trigger_code_map,
+        cosmos_code_map,
         report.clone(),
     )
     .run_tests(services)

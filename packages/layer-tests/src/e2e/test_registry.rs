@@ -20,14 +20,20 @@ use crate::e2e::chains::ChainKeys;
 use crate::e2e::components::ComponentSources;
 use crate::e2e::helpers::create_trigger_from_config;
 use crate::e2e::test_definition::{
-    ChangeServiceDefinition, ComponentDefinition, ExpectedOutputCallback,
+    ChangeServiceDefinition, ComponentDefinition, CosmosSubmitDefinition, ExpectedOutputCallback,
 };
 use wavs_types::{ChainConfigs, ChainKey, Service, Trigger, WorkflowId};
 
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
-pub type CosmosTriggerCodeMap =
-    Arc<DashMap<CosmosTriggerDefinition, Arc<tokio::sync::Mutex<Option<u64>>>>>;
+pub type CosmosCodeMap =
+    Arc<DashMap<CosmosContractDefinition, Arc<tokio::sync::Mutex<Option<u64>>>>>;
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum CosmosContractDefinition {
+    Trigger(CosmosTriggerDefinition),
+    Submit(CosmosSubmitDefinition),
+}
 
 use super::config::{aggregator_endpoint_1, aggregator_endpoint_2};
 
@@ -96,7 +102,7 @@ impl TestRegistry {
         test_mode: crate::config::TestMode,
         chain_configs: Arc<RwLock<ChainConfigs>>,
         clients: &Clients,
-        cosmos_trigger_code_map: &CosmosTriggerCodeMap,
+        cosmos_code_map: &CosmosCodeMap,
     ) -> Self {
         // Convert TestMode to TestMatrix
         let matrix: TestMatrix = test_mode.into();
@@ -152,7 +158,7 @@ impl TestRegistry {
                             },
                         ),
                         clients,
-                        cosmos_trigger_code_map.clone(),
+                        cosmos_code_map.clone(),
                         None,
                     )
                     .await;
@@ -1098,6 +1104,7 @@ impl TestRegistry {
                                 chain: trigger_chain.clone(),
                             },
                         ))
+                        .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),
                             aggregator: Self::simple_aggregator(submit_chain),

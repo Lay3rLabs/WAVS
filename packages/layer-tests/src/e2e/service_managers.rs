@@ -20,7 +20,7 @@ use wavs_types::{
 
 use crate::{
     deployment::ServiceDeployment,
-    e2e::{handles::CosmosMiddlewares, helpers::wait_for_trigger_streams_to_finalize},
+    e2e::{handles::CosmosMiddlewares, helpers::wait_for_evm_trigger_streams_to_finalize},
 };
 
 use crate::e2e::{
@@ -28,7 +28,7 @@ use crate::e2e::{
     components::ComponentSources,
     config::Configs,
     helpers::create_service_for_test,
-    test_registry::{CosmosTriggerCodeMap, TestRegistry},
+    test_registry::{CosmosCodeMap, TestRegistry},
 };
 
 #[derive(Clone)]
@@ -329,7 +329,7 @@ impl ServiceManagers {
         registry: &TestRegistry,
         clients: &Clients,
         component_sources: &ComponentSources,
-        cosmos_trigger_code_map: CosmosTriggerCodeMap,
+        cosmos_code_map: CosmosCodeMap,
     ) -> HashMap<String, ServiceDeployment> {
         let mut futures = Vec::new();
 
@@ -341,7 +341,7 @@ impl ServiceManagers {
                 clients,
                 component_sources,
                 service_manager,
-                cosmos_trigger_code_map.clone(),
+                cosmos_code_map.clone(),
             ));
         }
 
@@ -390,15 +390,14 @@ impl ServiceManagers {
 
             let service_manager_instance = self.lookup.get(&service.name).unwrap();
             futures.push(async move {
-                // wait for the trigger streams to be ready before we update the service uri
-                wait_for_trigger_streams_to_finalize(
-                    &clients.http_client,
-                    Some(service.manager.clone()),
-                )
-                .await;
-
                 match service_manager_instance {
                     AnyServiceManagerInstance::Evm { manager, .. } => {
+                        // wait for the trigger streams to be ready before we update the service uri
+                        wait_for_evm_trigger_streams_to_finalize(
+                            &clients.http_client,
+                            Some(service.manager.clone()),
+                        )
+                        .await;
                         manager.set_service_uri(service_url).await.unwrap();
                     }
                     AnyServiceManagerInstance::Cosmos { manager, .. } => {
@@ -413,7 +412,9 @@ impl ServiceManagers {
                     .unwrap();
 
                 // doesn't hurt to wait again for rpcs at least in case trigger contract changed
-                wait_for_trigger_streams_to_finalize(&clients.http_client, None).await;
+                if let AnyServiceManagerInstance::Evm { .. } = service_manager_instance {
+                    wait_for_evm_trigger_streams_to_finalize(&clients.http_client, None).await;
+                }
             });
         }
 

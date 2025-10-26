@@ -1,8 +1,6 @@
 // src/e2e/test_runner.rs
 
 use crate::deployment::ServiceDeployment;
-use crate::example_evm_client::example_submit::ISimpleSubmit::SignedData;
-use crate::example_evm_client::example_submit::IWavsServiceHandler::{Envelope, SignatureData};
 use crate::example_evm_client::example_trigger::ISimpleTrigger::TriggerInfo;
 use crate::example_evm_client::example_trigger::NewTrigger;
 use alloy_primitives::U256;
@@ -18,13 +16,13 @@ use std::time::{Duration, Instant};
 use utils::alloy_helpers::SolidityEventFinder;
 use wavs_types::{ChainKeyNamespace, Submit, Trigger, Workflow, WorkflowId};
 
-use crate::e2e::helpers::change_service_for_test;
+use crate::e2e::helpers::{change_service_for_test, cosmos_wait_for_task_to_land};
 use crate::e2e::report::TestReport;
 use crate::e2e::service_managers::ServiceManagers;
 use crate::e2e::test_definition::{
     AggregatorDefinition, ChangeServiceDefinition, SubmitDefinition,
 };
-use crate::e2e::test_registry::CosmosTriggerCodeMap;
+use crate::e2e::test_registry::CosmosCodeMap;
 use crate::{
     e2e::{
         clients::Clients, components::ComponentSources, test_definition::TestDefinition,
@@ -43,7 +41,7 @@ pub struct Runner {
     registry: Arc<TestRegistry>,
     component_sources: Arc<ComponentSources>,
     service_managers: ServiceManagers,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosCodeMap,
     report: TestReport,
 }
 
@@ -73,7 +71,7 @@ impl Runner {
         registry: TestRegistry,
         component_sources: ComponentSources,
         service_managers: ServiceManagers,
-        cosmos_trigger_code_map: CosmosTriggerCodeMap,
+        cosmos_code_map: CosmosCodeMap,
         report: TestReport,
     ) -> Self {
         Self {
@@ -81,7 +79,7 @@ impl Runner {
             registry: Arc::new(registry),
             component_sources: Arc::new(component_sources),
             service_managers,
-            cosmos_trigger_code_map,
+            cosmos_code_map,
             report,
         }
     }
@@ -118,7 +116,7 @@ impl Runner {
                             change_service.clone(),
                             &self.clients,
                             &self.component_sources,
-                            self.cosmos_trigger_code_map.clone(),
+                            self.cosmos_code_map.clone(),
                         )
                         .await;
                         (service, change_service)
@@ -411,7 +409,7 @@ async fn run_test(
                     trigger_id,
                     workflow_id
                 );
-                let signed_data = match &workflow.submit {
+                let data = match &workflow.submit {
                     Submit::Aggregator { .. } => {
                         let workflow_def = test.workflows.get(workflow_id).ok_or_else(|| {
                             anyhow!("Could not get workflow definition from id: {}", workflow_id)
@@ -423,7 +421,28 @@ async fn run_test(
 
                         match chain.namespace.as_str() {
                             ChainKeyNamespace::COSMOS => {
-                                unimplemented!("Cosmos aggregators are not implemented");
+                                let client = clients.get_cosmos_client(chain).await;
+                                let submission_contract = service_deployment
+                                    .submission_handlers
+                                    .get(workflow_id)
+                                    .ok_or_else(|| {
+                                        anyhow!(
+                                            "No submission contract found for workflow {}",
+                                            workflow_id
+                                        )
+                                    })?;
+
+                                let data = cosmos_wait_for_task_to_land(
+                                    client,
+                                    submission_contract.clone().try_into().unwrap(),
+                                    trigger_id,
+                                    *timeout,
+                                )
+                                .await?;
+
+                                tracing::info!("Task result: {:?}", data);
+
+                                data.into_bytes()
                             }
                             ChainKeyNamespace::EVM => {
                                 let client = clients.get_evm_client(chain);
@@ -479,27 +498,10 @@ async fn run_test(
                                     .await;
 
                                     match result {
-                                        Ok(signed_data) => signed_data,
-                                        Err(_) => {
-                                            // If we get an error (transaction dropped due to re-org),
-                                            // return mocked signed data with empty content to match ExpectedOutput::Dropped
-                                            tracing::info!("Transaction dropped due to re-org, returning empty signed data");
-                                            SignedData {
-                                                data: vec![].into(), // Empty data indicates dropped transaction
-                                                signatureData: SignatureData {
-                                                    signers: vec![],
-                                                    signatures: vec![],
-                                                    referenceBlock: submit_start_block
-                                                        .try_into()
-                                                        .unwrap(),
-                                                },
-                                                envelope: Envelope {
-                                                    eventId: alloy_primitives::FixedBytes([1; 20]),
-                                                    ordering: alloy_primitives::FixedBytes([0; 12]),
-                                                    payload: vec![].into(),
-                                                },
-                                            }
-                                        }
+                                        Ok(signed_data) => signed_data.data.to_vec(),
+                                        // If we get an error (transaction dropped due to re-org),
+                                        // return mocked signed data with empty content to match ExpectedOutput::Dropped
+                                        Err(_) => Vec::new(),
                                     }
                                 } else {
                                     tracing::info!(
@@ -515,7 +517,7 @@ async fn run_test(
                                     )
                                     .await?;
                                     tracing::info!("Task result (no re-org): {:?}", result.data);
-                                    result
+                                    result.data.to_vec()
                                 }
                             }
                             _ => unimplemented!("Unsupported chain namespace for aggregator"),
@@ -525,7 +527,7 @@ async fn run_test(
                 };
 
                 tracing::info!("Validating expected output for workflow: {}", workflow_id);
-                expected_output.validate(test, clients, component_sources, &signed_data.data)?;
+                expected_output.validate(test, clients, component_sources, &data)?;
                 tracing::info!(
                     "Successfully validated output for workflow: {}",
                     workflow_id
