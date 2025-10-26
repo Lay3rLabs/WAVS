@@ -5,7 +5,7 @@ use wavs_engine::{
     bindings::aggregator::world::{host::LogLevel, wavs::aggregator::aggregator::AggregatorAction},
     worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
-use wavs_types::{ComponentDigest, Packet, ServiceId, WorkflowId};
+use wavs_types::{ChainConfigs, ComponentDigest, EvmChainConfig, Packet, ServiceId, WorkflowId};
 
 #[allow(dead_code)]
 pub async fn execute_aggregator_component(
@@ -22,6 +22,21 @@ pub async fn execute_aggregator_component(
     let data_dir = tempfile::tempdir().unwrap();
     let keyvalue_ctx = KeyValueCtx::new(RedbStorage::new().unwrap(), "test".to_string());
 
+    let mut chain_configs = ChainConfigs::default();
+    chain_configs
+        .add_chain(
+            "evm:31337".to_string().parse().unwrap(),
+            EvmChainConfig {
+                chain_id: "31337".to_string().parse().unwrap(),
+                http_endpoint: Some("http://localhost:8545".to_string()),
+                faucet_endpoint: None,
+                ws_endpoints: vec![],
+                ws_priority_endpoint_index: None,
+            }
+            .into(),
+        )
+        .unwrap();
+
     let mut instance_deps = InstanceDepsBuilder {
         workflow_id: packet.workflow_id.clone(),
         service: packet.service.clone(),
@@ -29,7 +44,7 @@ pub async fn execute_aggregator_component(
         component: WasmtimeComponent::new(&engine, wasm_bytes).unwrap(),
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),
-        chain_configs: &Default::default(),
+        chain_configs: &chain_configs,
         log: HostComponentLogger::AggregatorHostComponentLogger(log_aggregator),
         keyvalue_ctx,
     }
