@@ -1,4 +1,5 @@
-use layer_climb::prelude::*;
+use layer_climb_address::AddrKind;
+use layer_climb_config::ChainConfig;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -145,7 +146,7 @@ impl TryFrom<AnyChainConfig> for EvmChainConfig {
 impl From<CosmosChainConfig> for ChainConfig {
     fn from(config: CosmosChainConfig) -> Self {
         Self {
-            chain_id: layer_climb::prelude::ChainId::new(config.chain_id),
+            chain_id: layer_climb_config::ChainId::new(config.chain_id),
             rpc_endpoint: config.rpc_endpoint,
             grpc_endpoint: config.grpc_endpoint,
             grpc_web_endpoint: None,

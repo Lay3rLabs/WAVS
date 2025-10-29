@@ -1,6 +1,6 @@
 use alloy_signer_local::PrivateKeySigner;
 use wavs_types::{
-    aggregator::AddPacketRequest, Envelope, EnvelopeExt, Packet, SignatureKind, TriggerData,
+    aggregator::AddPacketRequest, Envelope, EnvelopeSigner, Packet, SignatureKind, TriggerData,
     WorkflowId,
 };
 

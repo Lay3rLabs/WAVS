@@ -14,6 +14,9 @@ members = [
     "examples/components/simple-aggregator",
     "examples/components/timer-aggregator",
     "examples/contracts/cosmwasm/simple",
+    "examples/contracts/cosmwasm/mock/api",
+    "examples/contracts/cosmwasm/mock/service-handler",
+    "examples/contracts/cosmwasm/mock/service-manager",
 ]
 resolver = "2"
 
@@ -120,7 +123,11 @@ alloy-signer-local = { version = "1.0.37", features = ["mnemonic"] }
 alloy-network = "1.0.37"
 alloy-rpc-types-eth = "1.0.37"
 layer-climb = "0.7.3"
-layer-climb-address = "0.7.3"
+layer-climb-address = { version = "0.7.3", features = [
+  "cw-storage",
+  "openapi",
+] }
+layer-climb-config = "0.7.3"
 layer-climb-cli = "0.7.3"
 
 # Cosmos-specific dependencies
@@ -199,3 +206,6 @@ wavs-benchmark-common = { path = "packages/wavs/benches/common" }
 example-helpers = { path = "examples/components/_helpers" }
 example-types = { path = "examples/components/_types" }
 example-contract-cosmwasm-simple = { path = "examples/contracts/cosmwasm/simple", package = "simple-example" }
+cw-wavs-mock-api = {path = "examples/contracts/cosmwasm/mock/api"}
+cw-wavs-mock-service-handler = {path = "examples/contracts/cosmwasm/mock/service-handler"}
+cw-wavs-mock-service-manager = {path = "examples/contracts/cosmwasm/mock/service-manager"}

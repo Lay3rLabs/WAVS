@@ -2710,14 +2710,71 @@ dependencies = [
 ]
 
 [[package]]
+name = "cw-storage-macro"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1d48b5f4d188a8df2a856fdb42f9d4ad1cec181220326b4b3cdab795b310574"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
+
+[[package]]
 name = "cw-storage-plus"
 version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75d840d773b4ffd60ff005375e5e15e4be4fda54620574e861bfbb61a074f353"
 dependencies = [
  "cosmwasm-std",
+ "cw-storage-macro",
  "schemars 0.8.22",
  "serde",
+]
+
+[[package]]
+name = "cw-wavs-mock-api"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "layer-climb-address",
+ "serde",
+ "wavs-types",
+]
+
+[[package]]
+name = "cw-wavs-mock-service-handler"
+version = "0.0.0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-sol-macro",
+ "alloy-sol-types",
+ "anyhow",
+ "const-hex",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus",
+ "cw-wavs-mock-api",
+ "cw2",
+ "wavs-types",
+]
+
+[[package]]
+name = "cw-wavs-mock-service-manager"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "const-hex",
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus",
+ "cw-wavs-mock-api",
+ "cw2",
+ "layer-climb-address",
+ "wavs-types",
 ]
 
 [[package]]
@@ -4701,9 +4758,11 @@ dependencies = [
  "const-hex",
  "cosmwasm-schema",
  "cosmwasm-std",
+ "cw-storage-plus",
  "serde",
  "subtle-encoding",
  "tendermint",
+ "utoipa",
 ]
 
 [[package]]
@@ -10022,12 +10081,14 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bincode",
+ "cfg-if",
  "chrono",
  "const-hex",
+ "cosmwasm-schema",
  "cosmwasm-std",
  "iri-string",
- "layer-climb",
  "layer-climb-address",
+ "layer-climb-config",
  "regex",
  "ripemd",
  "semver 1.0.27",

@@ -4,18 +4,21 @@ description = "WAVS Types"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
-rust-version.workspace = true
+rust-version = "1.86.0" # required for cosmwasm: https://github.com/CosmWasm/cosmwasm/issues/2485
 repository.workspace = true
 license.workspace = true
 publish = true
 
 [features]
-default = ["solidity-rpc"]
-solidity-rpc = []
+default = ["cosmwasm"]
+full = ["solidity-rpc", "cosmwasm", "signer", "clock"]
+clock = ["dep:chrono"]
+signer = ["dep:alloy-signer", "dep:alloy-signer-local"]
+solidity-rpc = ["dep:alloy-contract", "dep:alloy-provider"]
+cosmwasm = ["dep:cosmwasm-schema"]
 
 [dependencies]
 anyhow = { workspace = true }
-chrono = { workspace = true }
 serde = { workspace = true }
 wasm-pkg-common = { workspace = true }
 serde_json = { workspace = true }
@@ -23,7 +26,7 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 const-hex = { workspace = true }
 cosmwasm-std = { workspace = true }
-layer-climb = { workspace = true }
+layer-climb-config = { workspace = true }
 layer-climb-address = { workspace = true }
 bincode = { workspace = true }
 ripemd = { workspace = true }
@@ -31,16 +34,19 @@ alloy-rpc-types-eth = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-macro = { workspace = true }
 alloy-sol-types = { workspace = true }
-alloy-signer-local = { workspace = true }
-alloy-provider = { workspace = true }
-alloy-signer = { workspace = true }
-alloy-contract = { workspace = true }
 async-trait = { workspace = true }
 utoipa = { workspace = true }
 semver = { workspace = true }
 regex = { workspace = true }
 zeroize = { workspace = true }
 iri-string = { workspace = true }
+cfg-if = { workspace = true }
+chrono = { workspace = true, optional = true}
+alloy-contract = { workspace = true, optional = true }
+alloy-provider = { workspace = true, optional = true }
+alloy-signer = { workspace = true, optional = true }
+alloy-signer-local = { workspace = true, optional = true }
+cosmwasm-schema = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

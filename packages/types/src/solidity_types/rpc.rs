@@ -1,8 +1,8 @@
-mod service_manager {
+use alloy_provider::DynProvider;
 
+mod service_manager {
     alloy_sol_macro::sol!(
         #[allow(missing_docs)]
-        #[cfg(feature = "solidity-rpc")]
         #[sol(rpc)]
         #[derive(Debug)]
         IWavsServiceManager,
@@ -13,7 +13,6 @@ mod service_manager {
 mod service_handler {
     alloy_sol_macro::sol!(
         #[allow(missing_docs)]
-        #[cfg(feature = "solidity-rpc")]
         #[sol(rpc)]
         #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq, Eq)]
         IWavsServiceHandler,
@@ -32,28 +31,18 @@ pub use service_manager::{
     IWavsServiceHandler::SignatureData as ServiceManagerSignatureData,
 };
 
+pub type IWavsServiceHandlerSigningT =
+    IWavsServiceHandler::IWavsServiceHandlerInstance<DynProvider>;
+
+pub type IWavsServiceHandlerQueryT = IWavsServiceHandler::IWavsServiceHandlerInstance<DynProvider>;
+
+pub type IWavsServiceManagerSigningT =
+    IWavsServiceManager::IWavsServiceManagerInstance<DynProvider>;
+
+pub type IWavsServiceManagerQueryT = IWavsServiceManager::IWavsServiceManagerInstance<DynProvider>;
+
 pub type ServiceManagerError = IWavsServiceManager::IWavsServiceManagerErrors;
 
 pub fn decode_service_manager_error(err: alloy_contract::Error) -> Option<ServiceManagerError> {
     err.as_decoded_interface_error::<ServiceManagerError>()
 }
-
-#[cfg(feature = "solidity-rpc")]
-mod rpc {
-    use alloy_provider::DynProvider;
-
-    pub type IWavsServiceHandlerSigningT =
-        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<DynProvider>;
-
-    pub type IWavsServiceHandlerQueryT =
-        super::service_handler::IWavsServiceHandler::IWavsServiceHandlerInstance<DynProvider>;
-
-    pub type IWavsServiceManagerSigningT =
-        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<DynProvider>;
-
-    pub type IWavsServiceManagerQueryT =
-        super::service_manager::IWavsServiceManager::IWavsServiceManagerInstance<DynProvider>;
-}
-
-#[cfg(feature = "solidity-rpc")]
-pub use rpc::*;

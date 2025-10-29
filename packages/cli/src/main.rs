@@ -22,8 +22,9 @@ use wavs_cli::{
     context::CliContext,
     util::{write_output_file, ComponentInput},
 };
+use wavs_types::EnvelopeSigner;
 use wavs_types::SignatureKind;
-use wavs_types::{ChainKeyId, Envelope, EnvelopeExt, IWavsServiceHandler};
+use wavs_types::{ChainKeyId, Envelope, IWavsServiceHandler};
 
 // Shared function to create EVM client with any credential
 // duplicated here instead of using the one in CliContext so

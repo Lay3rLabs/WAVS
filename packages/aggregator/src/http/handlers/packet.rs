@@ -6,7 +6,7 @@ use reqwest::Url;
 use tracing::instrument;
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    ChainKey, EnvelopeExt, EnvelopeSignature,
+    ChainKey, EnvelopeSignature, EnvelopeSigner,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
     Packet, ServiceManagerError,

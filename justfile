@@ -172,6 +172,10 @@ cosmwasm-build CONTRACT="*":
         just cosmwasm-build-inner $(dirname $C); \
     done
 
+    @for C in examples/contracts/cosmwasm/mock/{{CONTRACT}}/Cargo.toml; do \
+        just cosmwasm-build-inner $(dirname $C); \
+    done
+
     cp ./artifacts/*.wasm {{COSMWASM_OUT_DIR}}
 
 cosmwasm-build-inner CONTRACT_PATH:
@@ -335,6 +339,26 @@ download-solidity branch="dev":
 
     # Clean up
     rm -rf temp_clone
+
+# downloads the latest mock cosmwasm contracts from the cw-middleware repo
+download-cosmwasm branch="main":
+    # Create a temporary directory
+    rm -rf temp_clone
+    mkdir temp_clone
+
+    # Clone the specific branch into the temp directory
+    git -C temp_clone clone --depth=1 --branch {{branch}} --single-branch https://github.com/Lay3rLabs/cw-middleware.git
+
+    # Clear existing content and create wit directory
+    rm -rf examples/contracts/cosmwasm/mock
+    mkdir -p examples/contracts/cosmwasm/mock
+
+    # Copy it over
+    cp -r temp_clone/cw-middleware/packages/contracts/mock/* examples/contracts/cosmwasm/mock/
+
+    # Clean up
+    rm -rf temp_clone
+
 
 wasi-publish version component="*" flags="":
 	if [ "{{component}}" = "*" ]; then \
