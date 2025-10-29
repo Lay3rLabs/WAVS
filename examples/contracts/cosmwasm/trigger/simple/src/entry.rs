@@ -36,6 +36,9 @@ pub fn execute(
                 .may_load(deps.storage)?
                 .unwrap_or_default()
                 + 1;
+
+            state::TRIGGER_MESSAGE_COUNT.save(deps.storage, &trigger_id)?;
+
             let trigger_id = Uint64::new(trigger_id);
 
             state::TRIGGER_MESSAGES.save(deps.storage, trigger_id, &data)?;
