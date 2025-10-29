@@ -187,7 +187,7 @@ impl CosmosMiddlewareInner {
                     "service-manager",
                     "set-service-uri",
                     "--address",
-                    servide_manager_addr.to_string().as_str(),
+                    service_manager_addr.to_string().as_str(),
                     "--uri",
                     uri,
                 ])
