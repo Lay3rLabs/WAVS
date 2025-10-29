@@ -168,7 +168,7 @@ impl CosmosMiddlewareInner {
 
     pub async fn set_service_manager_uri(
         &self,
-        servide_manager_addr: &CosmosAddr,
+        service_manager_addr: &CosmosAddr,
         uri: &str,
     ) -> Result<()> {
         let output = tokio::time::timeout(
