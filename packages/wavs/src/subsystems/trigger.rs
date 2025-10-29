@@ -28,13 +28,10 @@ use std::{
 };
 use streams::{cosmos_stream, cron_stream, evm_stream, MultiplexedStream, StreamTriggers};
 use tracing::instrument;
-use utils::{
-    config::{AnyChainConfig, ChainConfigs},
-    telemetry::TriggerMetrics,
-};
+use utils::telemetry::TriggerMetrics;
 use wavs_types::{
-    ByteArray, ChainKey, EventId, IWavsServiceManager, ServiceId, Trigger, TriggerAction,
-    TriggerConfig, TriggerData,
+    AnyChainConfig, ByteArray, ChainConfigs, ChainKey, EventId, IWavsServiceManager, ServiceId,
+    Trigger, TriggerAction, TriggerConfig, TriggerData,
 };
 
 #[derive(Debug)]
@@ -176,6 +173,9 @@ impl TriggerManager {
                         addresses: vec![address],
                         event_hashes: vec![IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH],
                     })?;
+            }
+            wavs_types::ServiceManager::Cosmos { .. } => {
+                todo!("finalize cosmos support")
             }
         }
 

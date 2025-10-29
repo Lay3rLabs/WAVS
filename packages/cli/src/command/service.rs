@@ -6,9 +6,8 @@ mod tests;
 
 pub use types::{
     ChainType, ComponentContext, ComponentOperationResult, EvmManagerResult, ServiceInitResult,
-    ServiceValidationResult, UpdateStatusResult, WorkflowAddAggregatorResult, WorkflowAddResult,
-    WorkflowDeleteResult, WorkflowSetAggregatorUrlResult, WorkflowSetSubmitAggregatorResult,
-    WorkflowSetSubmitNoneResult, WorkflowTriggerResult,
+    ServiceValidationResult, UpdateStatusResult, WorkflowAddResult, WorkflowDeleteResult,
+    WorkflowSetAggregatorUrlResult, WorkflowSetSubmitNoneResult, WorkflowTriggerResult,
 };
 pub use validate::{
     check_cosmos_contract_exists, check_evm_contract_exists, validate_contracts_exist,
@@ -27,14 +26,10 @@ use std::{
     num::{NonZeroU32, NonZeroU64},
     path::{Path, PathBuf},
 };
-use utils::{
-    config::{AnyChainConfig, WAVS_ENV_PREFIX},
-    service::fetch_bytes,
-    wkg::WkgClient,
-};
+use utils::{config::WAVS_ENV_PREFIX, service::fetch_bytes, wkg::WkgClient};
 use uuid::Uuid;
 use wavs_types::{
-    Aggregator, AllowedHostPermission, ByteArray, ChainKey, Component, ComponentDigest,
+    AllowedHostPermission, AnyChainConfig, ByteArray, ChainKey, Component, ComponentDigest,
     ComponentSource, Registry, ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp,
     Trigger, WorkflowId,
 };
@@ -607,7 +602,10 @@ pub fn set_cosmos_trigger(
     event_type: String,
 ) -> Result<WorkflowTriggerResult> {
     // Parse the Cosmos address
-    let address = query_client.chain_config.parse_address(&address_str)?;
+    let address = query_client
+        .chain_config
+        .parse_address(&address_str)?
+        .try_into()?;
 
     modify_service_file(file_path, |mut service| {
         // Check if the workflow exists
@@ -829,7 +827,6 @@ pub async fn validate_service(
         let mut chains_to_validate = HashSet::new();
         let mut triggers = Vec::new();
         let mut submits = Vec::new();
-        let aggregators: Vec<(&WorkflowId, Aggregator)> = Vec::new();
 
         for (workflow_id, workflow) in &service.workflows {
             if let TriggerJson::Trigger(trigger) = &workflow.trigger {
@@ -917,6 +914,9 @@ pub async fn validate_service(
                 ServiceManager::Evm { chain, .. } => {
                     chains_to_validate.insert((chain.clone(), ChainType::EVM));
                 }
+                ServiceManager::Cosmos { chain, .. } => {
+                    chains_to_validate.insert((chain.clone(), ChainType::Cosmos));
+                }
             }
 
             Some(service_manager)
@@ -949,7 +949,6 @@ pub async fn validate_service(
             if let Err(err) = validate_contracts_exist(
                 &service.name,
                 triggers,
-                aggregators.iter().map(|(id, agg)| (*id, agg)).collect(),
                 service_manager,
                 &evm_providers,
                 &cosmos_clients,

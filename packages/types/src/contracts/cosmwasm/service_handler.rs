@@ -1,7 +1,7 @@
 use alloy_sol_types::SolValue;
 use cosmwasm_schema::{cw_serde, QueryResponses};
 
-/// To extend your contract so that it satisfies the `ServiceHandler` interface,  
+/// To extend your contract so that it satisfies the `ServiceHandler` interface,
 /// include these messages in your contract's `QueryMsg` and `ExecuteMsg` enums
 /// with the `#[serde(untagged)]` attribute
 ///
@@ -84,7 +84,7 @@ impl From<crate::solidity_types::Envelope> for WavsEnvelope {
 /// A CosmWasm-friendly version of the `SignatureData` type from the Solidity interface
 #[cw_serde]
 pub struct WavsSignatureData {
-    pub signers: Vec<layer_climb_address::AddrEvm>,
+    pub signers: Vec<layer_climb_address::EvmAddr>,
     pub signatures: Vec<cosmwasm_std::HexBinary>,
     pub reference_block: u32,
 }
@@ -95,7 +95,7 @@ impl WavsSignatureData {
             signers: signature_data
                 .signers
                 .into_iter()
-                .map(layer_climb_address::AddrEvm::from)
+                .map(layer_climb_address::EvmAddr::from)
                 .collect(),
             signatures: signature_data
                 .signatures

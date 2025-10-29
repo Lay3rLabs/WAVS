@@ -117,4 +117,7 @@ pub enum AggregatorError {
 pub enum PacketValidationError {
     #[error("Unexpected envelope difference")]
     EnvelopeDiff,
+
+    #[error("Could not parse submit action: {0}")]
+    ParseSubmitAction(String),
 }

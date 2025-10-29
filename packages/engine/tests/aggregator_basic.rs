@@ -6,7 +6,10 @@ use crate::helpers::{aggregator_exec::execute_aggregator_component, service::mak
 use alloy_primitives::Address;
 use utils::init_tracing_tests;
 use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::AggregatorAction;
-use wavs_types::{ComponentDigest, Envelope, EnvelopeSignature, Packet, SignatureKind};
+use wavs_types::{
+    ComponentDigest, Envelope, EnvelopeSignature, EvmSubmitAction, Packet, SignatureKind,
+    SubmitAction,
+};
 
 const COMPONENT_SIMPLE_AGGREGATOR_BYTES: &[u8] =
     include_bytes!("../../../examples/build/components/simple_aggregator.wasm");
@@ -48,11 +51,13 @@ async fn basic_aggregator_execution() {
     match &actions[0] {
         // currently hardcoded in the aggregator component
         AggregatorAction::Submit(submit_action) => {
-            assert_eq!(submit_action.chain, expected_chain);
-            assert_eq!(
-                submit_action.contract_address.raw_bytes,
-                expected_address.into_array()
-            );
+            match wavs_types::SubmitAction::try_from(submit_action.clone()).unwrap() {
+                SubmitAction::Evm(EvmSubmitAction { chain, address, .. }) => {
+                    assert_eq!(chain, expected_chain.parse().unwrap());
+                    assert_eq!(address, expected_address.into());
+                }
+                _ => panic!("Expected Evm Submit action, got {:?}", submit_action),
+            }
         }
         _ => panic!("Expected Submit action, got {:?}", &actions[0]),
     }

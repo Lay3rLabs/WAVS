@@ -9,7 +9,7 @@ use world::{
     Guest,
 };
 
-use crate::world::wavs::aggregator::aggregator::U128;
+use crate::world::wavs::aggregator::aggregator::{EvmSubmitAction, U128};
 
 impl_u128_conversions!(U128);
 
@@ -29,13 +29,13 @@ impl Guest for Component {
         // will fail the entire operation if API key is configured but fetching fails
         let gas_price = gas_oracle::get_gas_price()?;
 
-        let submit_action = SubmitAction {
+        let submit_action = SubmitAction::Evm(EvmSubmitAction {
             chain,
-            contract_address: EvmAddress {
+            address: EvmAddress {
                 raw_bytes: address.to_vec(),
             },
             gas_price: gas_price.map(|x| x.into()),
-        };
+        });
 
         // Sanity check that we can get the event id
         if host::get_event_id().iter().all(|x| *x == 0) {

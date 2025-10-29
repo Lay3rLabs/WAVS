@@ -1,8 +1,8 @@
-use alloy_primitives::hex;
+use layer_climb_address::{CosmosAddr, EvmAddr};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::Duration;
+use crate::{ChainKey, Duration};
 
 #[derive(
     Serialize,
@@ -16,10 +16,45 @@ use crate::Duration;
     bincode::Decode,
     ToSchema,
 )]
-pub struct SubmitAction {
-    pub chain: String,
-    #[serde(with = "hex")]
-    pub contract_address: Vec<u8>,
+pub enum SubmitAction {
+    Evm(EvmSubmitAction),
+    Cosmos(CosmosSubmitAction),
+}
+
+#[derive(
+    Serialize,
+    Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    bincode::Encode,
+    bincode::Decode,
+    ToSchema,
+)]
+pub struct EvmSubmitAction {
+    pub chain: ChainKey,
+    // using EvmAddr from climb instead of alloy::primitives::Address for bincode support
+    pub address: EvmAddr,
+    pub gas_price: Option<u128>,
+}
+
+#[derive(
+    Serialize,
+    Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    bincode::Encode,
+    bincode::Decode,
+    ToSchema,
+)]
+pub struct CosmosSubmitAction {
+    pub chain: ChainKey,
+    pub address: CosmosAddr,
     pub gas_price: Option<u128>,
 }
 

@@ -1,11 +1,9 @@
 use alloy_provider::{Provider, RootProvider};
 use anyhow::Result;
-use layer_climb::{prelude::Address, querier::QueryClient as CosmosQueryClient};
+use layer_climb::{prelude::CosmosAddr, querier::QueryClient as CosmosQueryClient};
 use reqwest::Client;
 use std::collections::HashMap;
-use wavs_types::{
-    Aggregator, ChainKey, EvmContractSubmission, ServiceManager, Trigger, WorkflowId,
-};
+use wavs_types::{ChainKey, ServiceManager, Trigger, WorkflowId};
 
 /// Validate a workflow trigger using a Cosmos query client
 pub async fn validate_workflow_trigger(
@@ -97,7 +95,6 @@ pub async fn validate_registry_availability(wavs_endpoint: &str, errors: &mut Ve
 pub async fn validate_contracts_exist(
     service_name: &str,
     triggers: Vec<(&WorkflowId, &Trigger)>,
-    aggregators: Vec<(&WorkflowId, &Aggregator)>,
     service_manager: Option<&ServiceManager>,
     evm_providers: &HashMap<ChainKey, RootProvider>,
     cosmos_clients: &HashMap<ChainKey, CosmosQueryClient>,
@@ -174,41 +171,6 @@ pub async fn validate_contracts_exist(
         }
     }
 
-    // Check all aggregators
-    for (workflow_id, aggregator) in aggregators {
-        match aggregator {
-            Aggregator::Evm(EvmContractSubmission { chain, address, .. }) => {
-                // Check if we have a provider for this chain
-                if let Some(provider) = evm_providers.get(chain) {
-                    // Only check each contract once per chain
-                    let key = (address.to_string(), chain.to_string());
-                    if let std::collections::hash_map::Entry::Vacant(e) =
-                        checked_evm_contracts.entry(key)
-                    {
-                        let context =
-                            format!("Service {} workflow {} submit", service_name, workflow_id);
-                        match check_evm_contract_exists(address, provider, errors, &context).await {
-                            Ok(exists) => {
-                                e.insert(exists);
-                            }
-                            Err(err) => {
-                                errors.push(format!(
-                                    "Error checking EVM contract for workflow {} submit: {}",
-                                    workflow_id, err
-                                ));
-                            }
-                        }
-                    }
-                } else {
-                    errors.push(format!(
-                        "Cannot check EVM contract for workflow {} submit - no provider configured for chain {}",
-                        workflow_id, chain
-                    ));
-                }
-            }
-        }
-    }
-
     if let Some(service_manager) = service_manager {
         match service_manager {
             ServiceManager::Evm { chain, address } => {
@@ -236,6 +198,9 @@ pub async fn validate_contracts_exist(
                         chain
                     ));
                 }
+            }
+            ServiceManager::Cosmos { .. } => {
+                todo!("finalize cosmos support")
             }
         };
     }
@@ -274,14 +239,14 @@ pub async fn check_evm_contract_exists(
 
 /// Check if a Cosmos contract exists at the specified address
 pub async fn check_cosmos_contract_exists(
-    address: &Address,
+    address: &CosmosAddr,
     query_client: &CosmosQueryClient,
     errors: &mut Vec<String>,
     context: &str,
 ) -> Result<bool> {
     // Query contract info to check if it exists
     // This uses CosmWasm-specific query if supported by the chain
-    let result = query_client.contract_info(address).await;
+    let result = query_client.contract_info(&address.clone().into()).await;
 
     match result {
         Ok(_) => {

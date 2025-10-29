@@ -24,8 +24,9 @@ pub struct LookupMaps {
     services: Services,
     metrics: TriggerMetrics,
     /// lookup id by (chain name, contract event address, event type)
-    pub triggers_by_cosmos_contract_event:
-        Arc<RwLock<HashMap<(ChainKey, layer_climb::prelude::Address, String), HashSet<LookupId>>>>,
+    pub triggers_by_cosmos_contract_event: Arc<
+        RwLock<HashMap<(ChainKey, layer_climb::prelude::CosmosAddr, String), HashSet<LookupId>>>,
+    >,
     /// lookup id by (chain id, contract event address, event hash)
     pub triggers_by_evm_contract_event: Arc<
         RwLock<HashMap<(ChainKey, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,

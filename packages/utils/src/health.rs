@@ -4,11 +4,11 @@ use alloy_rpc_types_eth::SyncStatus;
 use thiserror::Error;
 
 use crate::{
-    config::{CosmosChainConfig, EvmChainConfig, EvmChainConfigExt},
+    config::EvmChainConfigExt,
     error::EvmClientError,
     evm_client::{EvmEndpoint, EvmQueryClient},
 };
-use wavs_types::{AnyChainConfig, ChainKey};
+use wavs_types::{AnyChainConfig, ChainKey, CosmosChainConfig, EvmChainConfig};
 
 pub async fn health_check_single_chain(
     key: &ChainKey,

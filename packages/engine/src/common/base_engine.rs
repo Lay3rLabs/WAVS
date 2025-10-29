@@ -6,12 +6,11 @@ use std::time::Duration;
 use lru::LruCache;
 use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
 
-use utils::config::ChainConfigs;
 use utils::service::fetch_bytes;
 use utils::storage::db::RedbStorage;
 use utils::storage::CAStorage;
 use utils::wkg::WkgClient;
-use wavs_types::{ComponentDigest, ComponentSource};
+use wavs_types::{ChainConfigs, ComponentDigest, ComponentSource};
 
 use crate::utils::error::EngineError;
 

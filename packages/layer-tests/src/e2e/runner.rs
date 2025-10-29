@@ -366,7 +366,7 @@ async fn run_test(
             } => {
                 let client = SimpleCosmosTriggerClient::new(
                     clients.get_cosmos_client(chain).await,
-                    address.clone(),
+                    address.clone().into(),
                 );
 
                 let trigger_id = client

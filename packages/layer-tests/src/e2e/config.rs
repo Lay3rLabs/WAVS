@@ -5,15 +5,14 @@ use std::{
 
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
 use utils::{
-    config::{
-        ChainConfigs, ConfigBuilder, CosmosChainConfigBuilder, EvmChainConfigBuilder,
-        EvmChainConfigExt,
-    },
+    config::{ConfigBuilder, EvmChainConfigExt},
     evm_client::EvmSigningClient,
     filesystem::workspace_path,
     test_utils::middleware::MiddlewareType,
 };
-use wavs_types::{ChainKey, Credential};
+use wavs_types::{
+    ChainConfigs, ChainKey, CosmosChainConfigBuilder, Credential, EvmChainConfigBuilder,
+};
 
 use crate::config::TestConfig;
 

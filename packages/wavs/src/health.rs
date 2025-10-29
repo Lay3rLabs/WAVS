@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use utoipa::ToSchema;
-use wavs_types::ChainKey;
+use wavs_types::{ChainConfigs, ChainKey};
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HealthStatus {
@@ -52,7 +52,7 @@ impl SharedHealthStatus {
         Self::default()
     }
 
-    pub async fn update(&self, chain_configs: &utils::config::ChainConfigs) {
+    pub async fn update(&self, chain_configs: &ChainConfigs) {
         let Ok(chains) = chain_configs.all_chain_keys() else {
             return;
         };

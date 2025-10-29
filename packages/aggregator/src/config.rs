@@ -6,12 +6,9 @@ use std::{
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use utils::{
-    config::{ChainConfigs, ConfigExt},
-    service::DEFAULT_IPFS_GATEWAY,
-};
+use utils::{config::ConfigExt, service::DEFAULT_IPFS_GATEWAY};
 use utoipa::ToSchema;
-use wavs_types::Credential;
+use wavs_types::{ChainConfigs, Credential};
 
 /// Default LRU cache size for compiled WASM components
 const DEFAULT_WASM_LRU_SIZE: usize = 20;

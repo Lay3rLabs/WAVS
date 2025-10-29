@@ -25,18 +25,18 @@ pub fn mock_real_trigger_action(
 ) -> TriggerAction {
     let data = serde_json::to_vec(data).unwrap();
     match contract_address {
-        layer_climb::prelude::Address::Evm(_) => {
+        layer_climb::prelude::Address::Evm(contract_address) => {
             let event = rand_event_evm();
             TriggerAction {
                 config: TriggerConfig::evm_contract_event(
                     service_id,
                     workflow_id,
-                    contract_address.clone().try_into().unwrap(),
+                    contract_address.clone().into(),
                     chain.clone(),
                     event,
                 ),
                 data: TriggerData::EvmContractEvent {
-                    contract_address: contract_address.clone().try_into().unwrap(),
+                    contract_address: contract_address.clone().into(),
                     chain: chain.try_into().unwrap(),
                     // FIXME: this should be a proper EVM event, this is just a placeholder
                     log_data: LogData::new(vec![event.into_inner().into()], data.into()).unwrap(),
@@ -49,7 +49,7 @@ pub fn mock_real_trigger_action(
                 },
             }
         }
-        layer_climb::prelude::Address::Cosmos { .. } => {
+        layer_climb::prelude::Address::Cosmos(contract_address) => {
             let event = rand_event_cosmos();
 
             TriggerAction {

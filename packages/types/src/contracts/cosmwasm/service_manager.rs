@@ -3,14 +3,14 @@ pub mod event;
 
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::StdResult;
-use layer_climb_address::AddrEvm;
+use layer_climb_address::EvmAddr;
 
 use crate::contracts::cosmwasm::{
     service_handler::{WavsEnvelope, WavsSignatureData},
     service_manager::error::WavsValidateError,
 };
 
-/// To extend your contract so that it satisfies the `ServiceManager` interface,  
+/// To extend your contract so that it satisfies the `ServiceManager` interface,
 /// include these messages in your contract's `QueryMsg` and `ExecuteMsg` enums
 /// with the `#[serde(untagged)]` attribute
 ///
@@ -57,7 +57,7 @@ pub enum ServiceManagerExecuteMessages {
 pub enum ServiceManagerQueryMessages {
     /// Get the given operator's current weight
     #[returns(cosmwasm_std::Uint256)]
-    WavsOperatorWeight { operator_address: AddrEvm },
+    WavsOperatorWeight { operator_address: EvmAddr },
 
     /// Validate a signed envelope
     #[returns(WavsValidateResult)]
@@ -71,8 +71,8 @@ pub enum ServiceManagerQueryMessages {
     WavsServiceUri {},
 
     /// Get the latest operator address for a given signing key address
-    #[returns(Option<AddrEvm>)]
-    WavsLatestOperatorForSigningKey { signing_key_addr: AddrEvm },
+    #[returns(Option<EvmAddr>)]
+    WavsLatestOperatorForSigningKey { signing_key_addr: EvmAddr },
 }
 
 /// The result of validating a signed envelope
