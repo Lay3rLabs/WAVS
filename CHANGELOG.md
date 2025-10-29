@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning].
 
 ## [unreleased]
 
+## [v2.0.0]
+
+### Added
+
+- CosmWasm middleware support (contracts, types, and implementation)
+- In-memory database option for testing
+- Priority WebSocket endpoint handling with automatic failover
+- Standalone WASI builder tool
+
+### Changed
+
+- Chain key is now first-class in connection handling
+- Update WIT types to 1.4.1
+- Update all dependencies
+- Improved subscription handling to deduplicate overlapping subscriptions
+- One priority subscription per service
+
+### Fixed
+
+- Docker container copy command
+- Container ID validation with explicit lowercase requirement
+- WASI build regression issues
+
+## [v1.5.1]
+
 ### Changed
 
 - Retry unsubscribe on EVM ack failures
@@ -305,7 +330,9 @@ If upgrading from WAVS v1.4.x, you must first run `wavs-cli upgrade-db` due to t
 [semantic versioning]: https://semver.org/spec/v2.0.0.html
 
 <!-- Versions -->
-[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v1.5.0...HEAD
+[unreleased]: https://github.com/Lay3rLabs/WAVS/compare/v2.0.0...HEAD
+[v2.0.0]: https://github.com/Lay3rLabs/WAVS/compare/v1.5.1...v2.0.0
+[v1.5.1]: https://github.com/Lay3rLabs/WAVS/compare/v1.5.0...v1.5.1
 [v1.5.0]: https://github.com/Lay3rLabs/WAVS/compare/v1.4.2...v1.5.0
 [v1.4.2]: https://github.com/Lay3rLabs/WAVS/compare/v1.4.1...v1.4.2
 [v1.4.1]: https://github.com/Lay3rLabs/WAVS/compare/v1.4.0...v1.4.1
