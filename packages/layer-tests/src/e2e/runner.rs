@@ -1,8 +1,7 @@
 // src/e2e/test_runner.rs
 
 use crate::deployment::ServiceDeployment;
-use crate::example_evm_client::example_submit::ISimpleSubmit::SignedData;
-use crate::example_evm_client::example_submit::IWavsServiceHandler::{Envelope, SignatureData};
+use crate::e2e::config::Configs;
 use crate::example_evm_client::example_trigger::ISimpleTrigger::TriggerInfo;
 use crate::example_evm_client::example_trigger::NewTrigger;
 use alloy_primitives::U256;
@@ -16,15 +15,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use utils::alloy_helpers::SolidityEventFinder;
-use wavs_types::{Submit, Trigger, Workflow, WorkflowId};
+use wavs_types::{ChainKeyNamespace, Submit, Trigger, Workflow, WorkflowId};
 
-use crate::e2e::helpers::change_service_for_test;
+use crate::e2e::helpers::{change_service_for_test, cosmos_wait_for_task_to_land};
 use crate::e2e::report::TestReport;
 use crate::e2e::service_managers::ServiceManagers;
 use crate::e2e::test_definition::{
     AggregatorDefinition, ChangeServiceDefinition, SubmitDefinition,
 };
-use crate::e2e::test_registry::CosmosTriggerCodeMap;
+use crate::e2e::test_registry::CosmosCodeMap;
 use crate::{
     e2e::{
         clients::Clients, components::ComponentSources, test_definition::TestDefinition,
@@ -34,52 +33,64 @@ use crate::{
     example_evm_client::{LogSpamClient, SimpleEvmTriggerClient, TriggerId},
 };
 
-use super::helpers::{simulate_anvil_reorg, wait_for_task_to_land};
+use super::helpers::{evm_wait_for_task_to_land, simulate_anvil_reorg};
 use super::test_definition::WorkflowDefinition;
 
 /// Simplified test runner that leverages services directly attached to test definitions
 pub struct Runner {
+    configs: Arc<Configs>,
     clients: Arc<Clients>,
     registry: Arc<TestRegistry>,
     component_sources: Arc<ComponentSources>,
     service_managers: ServiceManagers,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosCodeMap,
     report: TestReport,
 }
 
 /// Extract service handler address from an aggregator submit configuration
-fn extract_aggregator_service_handler(submit: &Submit) -> Option<alloy_primitives::Address> {
+fn extract_aggregator_service_handler(submit: &Submit) -> Option<layer_climb::prelude::Address> {
     match submit {
-        Submit::Aggregator { component, .. } => component
-            .config
-            .get("service_handler")
-            .and_then(|addr_str| addr_str.parse::<alloy_primitives::Address>().ok()),
+        Submit::Aggregator { component, .. } => {
+            component
+                .config
+                .get("service_handler")
+                .and_then(|addr_str| {
+                    match layer_climb::prelude::CosmosAddr::new_str(addr_str, None) {
+                        Ok(cosmos_addr) => Some(layer_climb::prelude::Address::Cosmos(cosmos_addr)),
+                        Err(_) => layer_climb::prelude::EvmAddr::new_str(addr_str)
+                            .ok()
+                            .map(layer_climb::prelude::Address::from),
+                    }
+                })
+        }
         _ => None,
     }
 }
 
 impl Runner {
     pub fn new(
+        configs: Configs,
         clients: Clients,
         registry: TestRegistry,
         component_sources: ComponentSources,
         service_managers: ServiceManagers,
-        cosmos_trigger_code_map: CosmosTriggerCodeMap,
+        cosmos_code_map: CosmosCodeMap,
         report: TestReport,
     ) -> Self {
         Self {
+            configs: Arc::new(configs),
             clients: Arc::new(clients),
             registry: Arc::new(registry),
             component_sources: Arc::new(component_sources),
             service_managers,
-            cosmos_trigger_code_map,
+            cosmos_code_map,
             report,
         }
     }
 
     /// Run all tests in the registry
     pub async fn run_tests(&self, mut all_services: HashMap<String, ServiceDeployment>) {
-        let test_groups = self.registry.list_all_grouped();
+        let test_groups = self.registry.list_all_grouped(self.configs.grouping);
 
         for (group, mut group_tests) in test_groups {
             let services = group_tests
@@ -109,7 +120,7 @@ impl Runner {
                             change_service.clone(),
                             &self.clients,
                             &self.component_sources,
-                            self.cosmos_trigger_code_map.clone(),
+                            self.cosmos_code_map.clone(),
                         )
                         .await;
                         (service, change_service)
@@ -402,7 +413,7 @@ async fn run_test(
                     trigger_id,
                     workflow_id
                 );
-                let signed_data = match &workflow.submit {
+                let data = match &workflow.submit {
                     Submit::Aggregator { .. } => {
                         let workflow_def = test.workflows.get(workflow_id).ok_or_else(|| {
                             anyhow!("Could not get workflow definition from id: {}", workflow_id)
@@ -412,95 +423,115 @@ async fn run_test(
                         let AggregatorDefinition::ComponentBasedAggregator { chain, .. } =
                             aggregator;
 
-                        let client = clients.get_evm_client(chain);
-                        tracing::info!("Getting submit start block for workflow: {}", workflow_id);
-                        let submit_start_block = client
-                            .provider
-                            .get_block_number()
-                            .await
-                            .map_err(|e| anyhow!("Failed to get block number: {}", e))?;
-                        tracing::info!("Submit start block: {}", submit_start_block);
+                        match chain.namespace.as_str() {
+                            ChainKeyNamespace::COSMOS => {
+                                let client = clients.get_cosmos_client(chain).await;
+                                let submission_contract = service_deployment
+                                    .submission_handlers
+                                    .get(workflow_id)
+                                    .ok_or_else(|| {
+                                        anyhow!(
+                                            "No submission contract found for workflow {}",
+                                            workflow_id
+                                        )
+                                    })?;
 
-                        let submission_contract = service_deployment
-                            .submission_handlers
-                            .get(workflow_id)
-                            .ok_or_else(|| {
-                                anyhow!("No submission contract found for workflow {}", workflow_id)
-                            })?;
-                        tracing::info!(
-                            "Submission contract for workflow {}: {}",
-                            workflow_id,
-                            submission_contract
-                        );
+                                let data = cosmos_wait_for_task_to_land(
+                                    client,
+                                    submission_contract.clone().try_into().unwrap(),
+                                    trigger_id,
+                                    *timeout,
+                                )
+                                .await?;
 
-                        if first_workflow.expects_reorg() {
-                            tracing::info!("Test '{}' will simulate re-org", test.name);
+                                tracing::info!("Task result: {:?}", data);
 
-                            // Simulate re-org before waiting for task
-                            simulate_anvil_reorg(
-                                &client,
-                                reorg_snapshot
-                                    .expect("Expected a reorg snapshot when simulating reorg"),
-                            )
-                            .await?;
+                                data
+                            }
+                            ChainKeyNamespace::EVM => {
+                                let client = clients.get_evm_client(chain);
+                                tracing::info!(
+                                    "Getting submit start block for workflow: {}",
+                                    workflow_id
+                                );
+                                let submit_start_block =
+                                    client.provider.get_block_number().await.map_err(|e| {
+                                        anyhow!("Failed to get block number: {}", e)
+                                    })?;
+                                tracing::info!("Submit start block: {}", submit_start_block);
 
-                            // Wait for task - should return empty data on error due to re-org
-                            tracing::info!(
-                                "Waiting for task to land after re-org for trigger_id: {}",
-                                trigger_id
-                            );
-                            let result = wait_for_task_to_land(
-                                client,
-                                *submission_contract,
-                                trigger_id,
-                                submit_start_block,
-                                *timeout,
-                            )
-                            .await;
+                                let submission_contract = service_deployment
+                                    .submission_handlers
+                                    .get(workflow_id)
+                                    .ok_or_else(|| {
+                                        anyhow!(
+                                            "No submission contract found for workflow {}",
+                                            workflow_id
+                                        )
+                                    })?;
+                                tracing::info!(
+                                    "Submission contract for workflow {}: {}",
+                                    workflow_id,
+                                    submission_contract
+                                );
 
-                            match result {
-                                Ok(signed_data) => signed_data,
-                                Err(_) => {
-                                    // If we get an error (transaction dropped due to re-org),
-                                    // return mocked signed data with empty content to match ExpectedOutput::Dropped
-                                    tracing::info!("Transaction dropped due to re-org, returning empty signed data");
-                                    SignedData {
-                                        data: vec![].into(), // Empty data indicates dropped transaction
-                                        signatureData: SignatureData {
-                                            signers: vec![],
-                                            signatures: vec![],
-                                            referenceBlock: submit_start_block.try_into().unwrap(),
-                                        },
-                                        envelope: Envelope {
-                                            eventId: alloy_primitives::FixedBytes([1; 20]),
-                                            ordering: alloy_primitives::FixedBytes([0; 12]),
-                                            payload: vec![].into(),
-                                        },
+                                if first_workflow.expects_reorg() {
+                                    tracing::info!("Test '{}' will simulate re-org", test.name);
+
+                                    // Simulate re-org before waiting for task
+                                    simulate_anvil_reorg(
+                                        &client,
+                                        reorg_snapshot.expect(
+                                            "Expected a reorg snapshot when simulating reorg",
+                                        ),
+                                    )
+                                    .await?;
+
+                                    // Wait for task - should return empty data on error due to re-org
+                                    tracing::info!(
+                                        "Waiting for task to land after re-org for trigger_id: {}",
+                                        trigger_id
+                                    );
+                                    let result = evm_wait_for_task_to_land(
+                                        client,
+                                        submission_contract.clone().try_into().unwrap(),
+                                        trigger_id,
+                                        submit_start_block,
+                                        *timeout,
+                                    )
+                                    .await;
+
+                                    match result {
+                                        Ok(signed_data) => signed_data.data.to_vec(),
+                                        // If we get an error (transaction dropped due to re-org),
+                                        // return mocked signed data with empty content to match ExpectedOutput::Dropped
+                                        Err(_) => Vec::new(),
                                     }
+                                } else {
+                                    tracing::info!(
+                                        "Waiting for task to land (no re-org) for trigger_id: {}",
+                                        trigger_id
+                                    );
+                                    let result = evm_wait_for_task_to_land(
+                                        client,
+                                        submission_contract.clone().try_into().unwrap(),
+                                        trigger_id,
+                                        submit_start_block,
+                                        *timeout,
+                                    )
+                                    .await?;
+                                    tracing::info!("Task result (no re-org): {:?}", result.data);
+                                    result.data.to_vec()
                                 }
                             }
-                        } else {
-                            tracing::info!(
-                                "Waiting for task to land (no re-org) for trigger_id: {}",
-                                trigger_id
-                            );
-                            let result = wait_for_task_to_land(
-                                client,
-                                *submission_contract,
-                                trigger_id,
-                                submit_start_block,
-                                *timeout,
-                            )
-                            .await?;
-                            tracing::info!("Task result (no re-org): {:?}", result.data);
-                            result
+                            _ => unimplemented!("Unsupported chain namespace for aggregator"),
                         }
                     }
                     Submit::None => unimplemented!("Submit::None is not implemented"),
                 };
 
                 tracing::info!("Validating expected output for workflow: {}", workflow_id);
-                expected_output.validate(test, clients, component_sources, &signed_data.data)?;
+                expected_output.validate(test, clients, component_sources, &data)?;
                 tracing::info!(
                     "Successfully validated output for workflow: {}",
                     workflow_id

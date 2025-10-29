@@ -4,6 +4,9 @@ use anyhow::anyhow;
 use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
+use layer_climb::prelude::cosmos_hub_derivation;
+use layer_climb::prelude::KeySigner;
+use layer_climb::signing::SigningClient;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigExt, EvmChainConfigExt},
@@ -56,11 +59,55 @@ async fn new_evm_client_with_credential(
     Ok(evm_client)
 }
 
+async fn new_cosmos_client_with_credential(
+    ctx: &CliContext,
+    chain_id: ChainKeyId,
+    credential: &wavs_types::Credential,
+    hd_index: Option<u32>,
+) -> Result<SigningClient> {
+    let chain_config = ctx
+        .config
+        .chains
+        .read()
+        .map_err(|_| anyhow!("Chains lock is poisoned"))?
+        .cosmos
+        .get(&chain_id)
+        .context(format!("chain id {chain_id} not found"))?
+        .clone()
+        .build(chain_id);
+
+    let derivation = match hd_index {
+        Some(hd_index) => Some(cosmos_hub_derivation(hd_index)?),
+        None => None,
+    };
+    let signer = KeySigner::new_mnemonic_str(credential, derivation.as_ref())?;
+
+    let cosmos_client = SigningClient::new(chain_config.into(), signer, None).await?;
+
+    Ok(cosmos_client)
+}
+
 pub(crate) async fn new_evm_client(
     ctx: &CliContext,
     chain_id: ChainKeyId,
 ) -> Result<EvmSigningClient> {
     new_evm_client_with_credential(
+        ctx,
+        chain_id,
+        &ctx.config
+            .evm_credential
+            .clone()
+            .context("missing evm_credential")?,
+        None,
+    )
+    .await
+}
+
+pub(crate) async fn new_cosmos_client(
+    ctx: &CliContext,
+    chain_id: ChainKeyId,
+) -> Result<SigningClient> {
+    new_cosmos_client_with_credential(
         ctx,
         chain_id,
         &ctx.config
@@ -107,14 +154,19 @@ async fn main() {
                 .unwrap();
 
             let set_service_url_args = if set_uri {
-                let provider = new_evm_client(&ctx, service.manager.chain().id.clone())
-                    .await
-                    .unwrap()
-                    .provider;
-                Some(SetServiceUriArgs {
-                    provider,
-                    service_uri,
-                })
+                match service.manager {
+                    wavs_types::ServiceManager::Evm { ref chain, .. } => {
+                        let provider = new_evm_client(&ctx, chain.id.clone())
+                            .await
+                            .unwrap()
+                            .provider;
+                        Some(SetServiceUriArgs::new_evm(provider, service_uri.clone()))
+                    }
+                    wavs_types::ServiceManager::Cosmos { ref chain, .. } => {
+                        let client = new_cosmos_client(&ctx, chain.id.clone()).await.unwrap();
+                        Some(SetServiceUriArgs::new_cosmos(client, service_uri.clone()))
+                    }
+                }
             } else {
                 None
             };

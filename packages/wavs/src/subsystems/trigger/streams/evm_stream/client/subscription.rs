@@ -544,7 +544,7 @@ impl SubscriptionsInner {
                         tracing::error!("failed to send new block height: {}", e);
                     }
                 } else {
-                    tracing::info!(
+                    tracing::debug!(
                         "ignoring newHeads event for non-most-recent newHeads subscription id {}",
                         subscription_id
                     );
@@ -573,7 +573,7 @@ impl SubscriptionsInner {
                         tracing::error!("failed to send log: {}", e);
                     }
                 } else {
-                    tracing::info!(
+                    tracing::debug!(
                         "ignoring log event for non-most-recent logs subscription id {}",
                         subscription_id
                     );
@@ -595,7 +595,7 @@ impl SubscriptionsInner {
                         tracing::error!("failed to send new pending transaction: {}", e);
                     }
                 } else {
-                    tracing::info!("ignoring new pending transaction event for non-most-recent newPendingTransactions subscription id {}", subscription_id);
+                    tracing::debug!("ignoring new pending transaction event for non-most-recent newPendingTransactions subscription id {}", subscription_id);
                 }
             }
         }

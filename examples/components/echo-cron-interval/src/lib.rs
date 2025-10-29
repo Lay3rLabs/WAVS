@@ -1,4 +1,5 @@
 use example_helpers::bindings::world::{
+    host,
     wavs::operator::{
         input::{TriggerAction, TriggerData},
         output::WasmResponse,
@@ -17,7 +18,11 @@ impl Guest for Component {
         let trigger_id = 1338;
         let return_data = b"cron-interval data";
         if let TriggerData::Cron(_data) = trigger_action.data {
-            Ok(Some(encode_trigger_output(trigger_id, return_data)))
+            Ok(Some(encode_trigger_output(
+                trigger_id,
+                return_data,
+                host::get_service().service.manager,
+            )))
         } else {
             Err("Invalid trigger data".to_string())
         }

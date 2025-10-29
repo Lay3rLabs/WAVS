@@ -1,11 +1,11 @@
 use bincode::error::{DecodeError, EncodeError};
-use cosmwasm_std::Uint64;
+use cosmwasm_std::{HexBinary, Uint64};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct MessageWithId {
     pub trigger_id: Uint64,
-    pub message: String,
+    pub message: HexBinary,
 }
 
 impl MessageWithId {

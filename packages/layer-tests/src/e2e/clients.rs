@@ -130,18 +130,41 @@ impl Clients {
     }
 
     pub fn get_evm_client(&self, chain: &ChainKey) -> EvmSigningClient {
-        self.evm_clients.get(chain).cloned().unwrap()
+        match self.evm_clients.get(chain).cloned() {
+            Some(client) => client,
+            None => match self.cosmos_client_pools.get(chain).is_some() {
+                false => panic!(
+                    "No EVM or Cosmos client found for chain: {} (no Cosmos either, fwiw)",
+                    chain
+                ),
+                true => {
+                    panic!(
+                        "No EVM client found for chain: {} (Cosmos client exists though... maybe you meant that?)",
+                        chain
+                    )
+                }
+            },
+        }
     }
 
     pub async fn get_cosmos_client(
         &self,
         chain: &ChainKey,
     ) -> deadpool::managed::Object<SigningClientPoolManager> {
-        self.cosmos_client_pools
-            .get(chain)
-            .unwrap()
-            .get()
-            .await
-            .unwrap()
+        match self.cosmos_client_pools.get(chain).unwrap().get().await {
+            Ok(client) => client,
+            Err(_) => match self.evm_clients.get(chain).is_some() {
+                false => panic!(
+                    "No Cosmos or EVM client found for chain: {} (no EVM either, fwiw)",
+                    chain
+                ),
+                true => {
+                    panic!(
+                            "No Cosmos client found for chain: {} (EVM client exists though... maybe you meant that?)",
+                            chain
+                        )
+                }
+            },
+        }
     }
 }

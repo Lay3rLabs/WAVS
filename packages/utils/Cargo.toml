@@ -10,7 +10,7 @@ license.workspace = true
 publish = false
 
 [features]
-test-utils = ["dep:rand", "dep:bip39"]
+test-utils = ["dep:rand", "dep:bip39", "dep:toml", "dep:cw-wavs-mock-api"]
 
 [dependencies]
 wasm-pkg-client = { workspace = true }
@@ -58,13 +58,17 @@ tempfile = { workspace = true }
 rand = { workspace = true, optional = true }
 bip39 = { workspace = true, optional = true }
 subtle = { workspace = true }
+toml = { workspace = true, optional = true }
+cw-wavs-mock-api = { workspace = true, optional = true }
 
 [dev-dependencies]
+toml = { workspace = true}
 tokio = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 temp-env = { workspace = true }
-toml = { workspace = true }
 utils = { path = ".", features = ["test-utils"] }
 tower = { workspace = true }
 rand = { workspace = true }
+layer-climb-cli = { workspace = true}
+deadpool = { workspace = true}

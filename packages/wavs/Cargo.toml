@@ -68,6 +68,7 @@ utils = { workspace = true, features = ["test-utils"] }
 example-types = { workspace = true }
 alloy-node-bindings = { workspace = true }
 
+
 [[bench]]
 name = "intervals"
 harness = false

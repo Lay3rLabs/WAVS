@@ -22,14 +22,15 @@ use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
     telemetry::{setup_metrics, setup_tracing, Metrics},
-    test_utils::middleware::MiddlewareInstance,
+    test_utils::middleware::evm::EvmMiddleware,
 };
 
 use crate::{
     args::TestArgs,
     config::{TestConfig, TestMode},
     e2e::{
-        report::TestReport, service_managers::ServiceManagers, test_registry::CosmosTriggerCodeMap,
+        clients::Clients, handles::CosmosMiddlewares, report::TestReport,
+        service_managers::ServiceManagers, test_registry::CosmosCodeMap,
     },
 };
 
@@ -80,8 +81,13 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let configs: Configs = config.into();
 
-    let handles = AppHandles::start(&ctx, &configs, metrics, configs.middleware_type);
+    let handles = AppHandles::start(&ctx, &configs, metrics, configs.evm_middleware_type);
     tracing::info!("Background processes started");
+
+    let clients = ctx
+        .rt
+        .block_on(async { clients::Clients::new(&configs).await });
+    tracing::info!("Clients created");
 
     let mut kill_receiver = ctx.get_kill_receiver();
 
@@ -90,7 +96,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
             _ = kill_receiver.recv() => {
                 tracing::debug!("Test runner killed");
             },
-            _ = _run(configs, mode, handles.middleware_instance.clone()) => {
+            _ = _run(configs, clients, mode, handles.evm_middleware.clone(), handles.cosmos_middlewares.clone()) => {
                 tracing::debug!("Test runner completed");
             }
         }
@@ -126,26 +132,30 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     }
 }
 
-async fn _run(configs: Configs, mode: TestMode, middleware_instance: MiddlewareInstance) {
+async fn _run(
+    configs: Configs,
+    clients: Clients,
+    mode: TestMode,
+    evm_middleware: Option<EvmMiddleware>,
+    cosmos_middlewares: CosmosMiddlewares,
+) {
     let report = TestReport::new();
 
-    let clients = clients::Clients::new(&configs).await;
-
-    let cosmos_trigger_code_map = CosmosTriggerCodeMap::new(DashMap::new());
+    let cosmos_code_map = CosmosCodeMap::new(DashMap::new());
 
     // Create test registry from test mode
     let registry = test_registry::TestRegistry::from_test_mode(
         mode,
         configs.chains.clone(),
         &clients,
-        &cosmos_trigger_code_map,
+        &cosmos_code_map,
     )
     .await;
 
     // bootstrap service managers
     let mut service_managers = ServiceManagers::new(configs.clone());
     service_managers
-        .bootstrap(&registry, &clients, middleware_instance)
+        .bootstrap(&registry, &clients, evm_middleware, cosmos_middlewares)
         .await;
 
     // upload components
@@ -165,17 +175,18 @@ async fn _run(configs: Configs, mode: TestMode, middleware_instance: MiddlewareI
             &registry,
             &clients,
             &component_sources,
-            cosmos_trigger_code_map.clone(),
+            cosmos_code_map.clone(),
         )
         .await;
 
     // Create and run the test runner (services will be deployed just-in-time)
     Runner::new(
+        configs,
         clients,
         registry,
         component_sources,
         service_managers,
-        cosmos_trigger_code_map,
+        cosmos_code_map,
         report.clone(),
     )
     .run_tests(services)

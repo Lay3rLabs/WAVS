@@ -1,5 +1,6 @@
 use anyhow::Result;
 use example_helpers::bindings::world::{
+    host,
     wasi::keyvalue::{atomics, store},
     wavs::{
         operator::{
@@ -26,7 +27,11 @@ impl Guest for Component {
             (Trigger::BlockInterval(config), TriggerData::BlockInterval(data)) => {
                 if let Some(resp) = inner_run_task(config, data).map_err(|e| e.to_string())? {
                     let resp = serde_json::to_vec(&resp).map_err(|e| e.to_string())?;
-                    Ok(Some(encode_trigger_output(trigger_id, resp)))
+                    Ok(Some(encode_trigger_output(
+                        trigger_id,
+                        resp,
+                        host::get_service().service.manager,
+                    )))
                 } else {
                     Ok(None)
                 }

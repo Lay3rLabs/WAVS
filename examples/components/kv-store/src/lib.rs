@@ -66,7 +66,11 @@ impl Guest for Component {
         let resp_bytes =
             serde_json::to_vec(&resp).map_err(|e| format!("Failed to serialize response: {e}"))?;
 
-        Ok(Some(encode_trigger_output(trigger_id, resp_bytes)))
+        Ok(Some(encode_trigger_output(
+            trigger_id,
+            resp_bytes,
+            host::get_service().service.manager,
+        )))
     }
 }
 

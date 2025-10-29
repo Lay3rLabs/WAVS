@@ -40,7 +40,11 @@ impl Guest for Component {
                 serde_json::from_slice(&req).map_err(|e| e.to_string())?;
             let resp = inner_run_task(req).await.map_err(|e| e.to_string())?;
             let resp = serde_json::to_vec(&resp).map_err(|e| e.to_string())?;
-            Ok(Some(encode_trigger_output(trigger_id, resp)))
+            Ok(Some(encode_trigger_output(
+                trigger_id,
+                resp,
+                host::get_service().service.manager,
+            )))
         })
     }
 }

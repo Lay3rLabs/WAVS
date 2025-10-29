@@ -5,25 +5,25 @@ use anyhow::Result;
 
 use crate::{
     evm_client::EvmSigningClient,
-    test_utils::middleware::{
-        MiddlewareInstance, MiddlewareServiceManager, MiddlewareServiceManagerConfig,
+    test_utils::middleware::evm::{
+        EvmMiddleware, EvmMiddlewareServiceManager, MiddlewareServiceManagerConfig,
     },
 };
 
-pub struct MockServiceManager {
+pub struct MockEvmServiceManager {
     #[allow(dead_code)]
     deployer: LocalSigner<SigningKey>,
-    middleware_instance: MiddlewareInstance,
-    service_manager: MiddlewareServiceManager,
+    middleware_instance: EvmMiddleware,
+    service_manager: EvmMiddlewareServiceManager,
 }
 
-impl MockServiceManager {
+impl MockEvmServiceManager {
     // because the client will be used with the docker image
     // and we can't control or even know how the nonce gets used
     // we need to generate a random key and fund it from the wallet
     // otherwise we may try to run transactions in parallel with the same nonce
     pub async fn new(
-        middleware_instance: MiddlewareInstance,
+        middleware_instance: EvmMiddleware,
         wallet_client: EvmSigningClient,
     ) -> Result<Self> {
         let deployer = MnemonicBuilder::<English>::default()
@@ -50,7 +50,7 @@ impl MockServiceManager {
             deployer.address()
         );
         let service_manager = middleware_instance
-            .deploy_service_manager(rpc_url, deployer_key_hex)
+            .deploy_service_manager(rpc_url, Some(deployer_key_hex))
             .await?;
         tracing::info!(
             "Completed deploy_service_manager for deployer: {:?}, address: {}",

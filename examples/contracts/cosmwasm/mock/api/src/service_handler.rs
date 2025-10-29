@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::Uint64;
+use cosmwasm_std::{HexBinary, Uint64};
 use wavs_types::contracts::cosmwasm::service_handler::{
     ServiceHandlerExecuteMessages, ServiceHandlerQueryMessages,
 };
@@ -13,7 +13,10 @@ pub struct InstantiateMsg {
 #[schemaifier(mute_warnings)]
 pub enum ExecuteMsg {
     /// Mock contracts get superpowers
-    SetTriggerMessage { trigger_id: Uint64, message: String },
+    SetTriggerMessage {
+        trigger_id: Uint64,
+        message: HexBinary,
+    },
     #[serde(untagged)]
     Wavs(ServiceHandlerExecuteMessages),
 }
@@ -38,5 +41,5 @@ pub enum QueryMsg {
 
 #[cw_serde]
 pub struct TriggerMessageResponse {
-    pub message: String,
+    pub message: HexBinary,
 }

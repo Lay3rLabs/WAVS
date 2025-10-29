@@ -86,22 +86,10 @@ impl ServiceManager {
             ServiceManager::Cosmos { chain, .. } => chain,
         }
     }
-
-    pub fn evm_address_unchecked(&self) -> alloy_primitives::Address {
+    pub fn address(&self) -> layer_climb_address::Address {
         match self {
-            ServiceManager::Evm { address, .. } => *address,
-            ServiceManager::Cosmos { .. } => {
-                panic!("ServiceManager is not EVM type, cannot get EVM address")
-            }
-        }
-    }
-
-    pub fn cosmos_address_unchecked(&self) -> layer_climb_address::CosmosAddr {
-        match self {
-            ServiceManager::Cosmos { address, .. } => address.clone(),
-            ServiceManager::Evm { .. } => {
-                panic!("ServiceManager is not Cosmos type, cannot get Cosmos address")
-            }
+            ServiceManager::Evm { address, .. } => (*address).into(),
+            ServiceManager::Cosmos { address, .. } => address.clone().into(),
         }
     }
 }

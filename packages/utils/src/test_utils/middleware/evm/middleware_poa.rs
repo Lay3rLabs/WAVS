@@ -8,26 +8,29 @@ use tempfile::TempDir;
 use tokio::fs;
 use tokio::process::Command;
 
-use crate::test_utils::middleware::validate_docker_container_id;
+use crate::test_utils::middleware::evm::validate_docker_container_id;
 
-use super::{MiddlewareServiceManager, MiddlewareServiceManagerConfig, POA_MIDDLEWARE_IMAGE};
+use super::{
+    EvmMiddlewareServiceManager, MiddlewareServiceManagerConfig, EVM_POA_MIDDLEWARE_IMAGE,
+};
 
 const POA_DEPLOY_FILE: &str = "poa_deploy.json";
 
+#[derive(Default)]
 pub struct PoaMiddleware {}
 
 impl PoaMiddleware {
     pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
-    pub async fn new() -> Result<Self> {
-        Ok(Self {})
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub async fn deploy_service_manager(
         &self,
         rpc_url: String,
         deployer_key_hex: String,
-    ) -> Result<MiddlewareServiceManager> {
+    ) -> Result<EvmMiddlewareServiceManager> {
         // unlike eigenlayer, POA needs a fresh temp dir for each deployment, since we can't name the output file
         // but it also doesn't need to maintain that between commands, just needs it for deployment
         let nodes_dir = TempDir::new()?;
@@ -44,7 +47,7 @@ impl PoaMiddleware {
                     "",
                     "-v",
                     &format!("{}:/root/.nodes", nodes_dir.path().display()),
-                    POA_MIDDLEWARE_IMAGE,
+                    EVM_POA_MIDDLEWARE_IMAGE,
                     "tail",
                     "-f",
                     "/dev/null",
@@ -122,7 +125,7 @@ impl PoaMiddleware {
 
         let poa_address = deployment_json.addresses.poa_stake_registry;
 
-        Ok(MiddlewareServiceManager {
+        Ok(EvmMiddlewareServiceManager {
             deployer_key_hex,
             rpc_url,
             id: container_id.clone(),
@@ -137,7 +140,7 @@ impl PoaMiddleware {
 
     pub async fn configure_service_manager(
         &self,
-        service_manager: &MiddlewareServiceManager,
+        service_manager: &EvmMiddlewareServiceManager,
         config: &MiddlewareServiceManagerConfig,
     ) -> Result<()> {
         let container_id = service_manager
@@ -256,7 +259,7 @@ impl PoaMiddleware {
 
     pub async fn set_service_manager_uri(
         &self,
-        service_manager: &MiddlewareServiceManager,
+        service_manager: &EvmMiddlewareServiceManager,
         service_uri: &str,
     ) -> Result<()> {
         let container_id = service_manager

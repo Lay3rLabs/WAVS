@@ -199,9 +199,34 @@ pub async fn validate_contracts_exist(
                     ));
                 }
             }
-            ServiceManager::Cosmos { .. } => {
-                todo!("finalize cosmos support")
-            }
+            ServiceManager::Cosmos { chain, address } => match cosmos_clients.get(chain) {
+                Some(client) => {
+                    let key = (address.to_string(), chain.to_string());
+                    if let std::collections::hash_map::Entry::Vacant(e) =
+                        checked_cosmos_contracts.entry(key)
+                    {
+                        let context = format!("Service {} manager", service_name);
+                        match check_cosmos_contract_exists(address, client, errors, &context).await
+                        {
+                            Ok(exists) => {
+                                e.insert(exists);
+                            }
+                            Err(err) => {
+                                errors.push(format!(
+                                    "Error checking Cosmos contract for service manager: {}",
+                                    err
+                                ));
+                            }
+                        }
+                    }
+                }
+                None => {
+                    errors.push(format!(
+                        "Cannot check service manager contract - no client configured for chain {}",
+                        chain
+                    ));
+                }
+            },
         };
     }
 

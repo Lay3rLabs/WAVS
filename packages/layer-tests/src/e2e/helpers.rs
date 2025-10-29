@@ -1,7 +1,10 @@
-use alloy_primitives::{Address, U256};
+use alloy_primitives::U256;
 use alloy_provider::{ext::AnvilApi, Provider};
 use alloy_sol_types::SolEvent;
 use anyhow::{anyhow, Context, Result};
+use deadpool::managed::Object;
+use layer_climb::pool::SigningClientPoolManager;
+use layer_climb::prelude::CosmosAddr;
 use std::{collections::BTreeMap, num::NonZero, sync::Arc, time::Duration};
 use utils::evm_client::AnyNonceManager;
 use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::workspace_path};
@@ -15,6 +18,9 @@ use wavs_types::{
 
 use crate::deployment::{ServiceDeployment, WorkflowDeployment};
 
+use crate::e2e::test_definition::CosmosSubmitDefinition;
+use crate::e2e::test_registry::CosmosContractDefinition;
+use crate::example_cosmos_client::SimpleCosmosSubmitClient;
 use crate::{
     e2e::{
         clients::Clients,
@@ -34,7 +40,7 @@ use crate::{
 
 use super::{
     test_definition::{CosmosTriggerDefinition, EvmTriggerDefinition, WorkflowDefinition},
-    test_registry::CosmosTriggerCodeMap,
+    test_registry::CosmosCodeMap,
 };
 
 /// Helper function to deploy a service for a test
@@ -43,9 +49,15 @@ pub async fn create_service_for_test(
     clients: &Clients,
     component_sources: &ComponentSources,
     service_manager: ServiceManager,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosCodeMap,
 ) -> ServiceDeployment {
     tracing::info!("Deploying service for test: {}", test.name);
+    tracing::info!("Service manager: {:?}", service_manager);
+    tracing::info!(
+        "[{}] Deploying service manager on chain {}",
+        test.name,
+        service_manager.chain()
+    );
 
     // No need to load the actual service, it was a placeholder
     let mut service = Service {
@@ -57,20 +69,14 @@ pub async fn create_service_for_test(
 
     let mut submission_handlers = BTreeMap::new();
 
-    tracing::info!(
-        "[{}] Deploying service manager on chain {}",
-        test.name,
-        test.service_manager_chain
-    );
-
     for (workflow_id, workflow_definition) in test.workflows.iter() {
         let deployment_result = deploy_workflow(
             &test.name,
             workflow_definition,
-            service.manager.evm_address_unchecked(),
+            service.manager.clone(),
             clients,
             component_sources,
-            cosmos_trigger_code_map.clone(),
+            cosmos_code_map.clone(),
         )
         .await;
 
@@ -122,10 +128,10 @@ fn deploy_component(
 async fn deploy_workflow(
     test_name: &str,
     workflow_definition: &WorkflowDefinition,
-    service_manager_address: alloy_primitives::Address,
+    service_manager: ServiceManager,
     clients: &Clients,
     component_sources: &ComponentSources,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosCodeMap,
 ) -> WorkflowDeployment {
     let component = deploy_component(
         component_sources,
@@ -136,16 +142,10 @@ async fn deploy_workflow(
 
     tracing::info!("[{}] Creating submit from config", test_name);
 
-    // Create the submit based on test configuration
-    let chain = {
-        let SubmitDefinition::Aggregator { aggregator, .. } = &workflow_definition.submit;
-        match aggregator {
-            AggregatorDefinition::ComponentBasedAggregator { chain, .. } => chain,
-        }
-    };
-    let submission_contract = deploy_submit_contract(clients, chain, service_manager_address)
-        .await
-        .unwrap();
+    let submission_contract =
+        deploy_submit_contract(clients, cosmos_code_map.clone(), service_manager)
+            .await
+            .unwrap();
 
     let submit = create_submit_from_config(
         &workflow_definition.submit,
@@ -160,7 +160,7 @@ async fn deploy_workflow(
     let trigger = create_trigger_from_config(
         workflow_definition.trigger.clone(),
         clients,
-        cosmos_trigger_code_map.clone(),
+        cosmos_code_map.clone(),
         Some(workflow_definition),
     )
     .await;
@@ -180,7 +180,7 @@ async fn deploy_workflow(
 pub async fn create_trigger_from_config(
     trigger_definition: TriggerDefinition,
     clients: &Clients,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosCodeMap,
     _workflow_definition: Option<&WorkflowDefinition>,
 ) -> Trigger {
     match trigger_definition {
@@ -207,7 +207,7 @@ pub async fn create_trigger_from_config(
             }
         },
         TriggerDefinition::NewCosmosContract(cosmos_trigger_definition) => {
-            match cosmos_trigger_definition {
+            match cosmos_trigger_definition.clone() {
                 CosmosTriggerDefinition::SimpleContractEvent { ref chain } => {
                     let client = clients.get_cosmos_client(chain).await;
 
@@ -215,8 +215,8 @@ pub async fn create_trigger_from_config(
                     tracing::info!("Getting cosmos code ID for chain {}", chain);
                     let code_id = get_cosmos_code_id(
                         clients,
-                        &cosmos_trigger_definition,
-                        cosmos_trigger_code_map,
+                        &CosmosContractDefinition::Trigger(cosmos_trigger_definition),
+                        cosmos_code_map,
                     )
                     .await;
 
@@ -244,7 +244,8 @@ pub async fn create_trigger_from_config(
                     Trigger::CosmosContractEvent {
                         chain: chain.clone(),
                         address: contract.contract_address.try_into().unwrap(),
-                        event_type: crate::example_cosmos_client::NewMessageEvent::KEY.to_string(),
+                        event_type: cw_wavs_trigger_api::simple::PushMessageEvent::EVENT_TYPE
+                            .to_string(),
                     }
                 }
             }
@@ -284,7 +285,7 @@ pub async fn create_trigger_from_config(
 /// Create a submit based on test configuration
 pub async fn create_submit_from_config(
     submit_config: &SubmitDefinition,
-    submission_contract: &Address,
+    submission_contract: &layer_climb::prelude::Address,
     component_sources: Option<&ComponentSources>,
 ) -> Result<Submit> {
     match submit_config {
@@ -311,7 +312,7 @@ pub async fn create_submit_from_config(
                 if component_def.configs_to_add.service_handler {
                     config_vars.insert(
                         "service_handler".to_string(),
-                        format!("{:#x}", submission_contract),
+                        submission_contract.to_string(),
                     );
                 }
 
@@ -330,28 +331,54 @@ pub async fn create_submit_from_config(
 /// Deploy submit contract and return its address
 pub async fn deploy_submit_contract(
     clients: &Clients,
-    chain: &ChainKey,
-    service_manager_address: alloy_primitives::Address,
-) -> Result<alloy_primitives::Address> {
-    let evm_client = clients.get_evm_client(chain);
+    cosmos_code_map: CosmosCodeMap,
+    service_manager: ServiceManager,
+) -> Result<layer_climb::prelude::Address> {
+    match service_manager {
+        ServiceManager::Cosmos { chain, address } => {
+            let code_id = get_cosmos_code_id(
+                clients,
+                &CosmosContractDefinition::Submit(CosmosSubmitDefinition::MockServiceHandler {
+                    chain: chain.clone(),
+                }),
+                cosmos_code_map,
+            )
+            .await;
 
-    tracing::info!(
-        "Deploying submit contract on chain {} with service manager: {}",
-        chain,
-        service_manager_address
-    );
+            let client = clients.get_cosmos_client(&chain).await;
+            let contract_client =
+                crate::example_cosmos_client::SimpleCosmosSubmitClient::new_code_id(
+                    client,
+                    code_id,
+                    &address,
+                    "Mock service handler",
+                )
+                .await?;
 
-    let result = crate::example_evm_client::example_submit::SimpleSubmit::deploy(
-        evm_client.provider.clone(),
-        service_manager_address,
-    )
-    .await
-    .context("Failed to deploy submit contract")?;
+            Ok(contract_client.contract_address)
+        }
+        ServiceManager::Evm { chain, address } => {
+            let evm_client = clients.get_evm_client(&chain);
 
-    let address = *result.address();
-    tracing::info!("Submit contract deployed at address: {}", address);
+            tracing::info!(
+                "Deploying submit contract on chain {} with service manager: {}",
+                chain,
+                address
+            );
 
-    Ok(address)
+            let result = crate::example_evm_client::example_submit::SimpleSubmit::deploy(
+                evm_client.provider.clone(),
+                address,
+            )
+            .await
+            .context("Failed to deploy submit contract")?;
+
+            let address = *result.address();
+            tracing::info!("Submit contract deployed at address: {}", address);
+
+            Ok(address.into())
+        }
+    }
 }
 
 /// Deploy LogSpam contract and return its address
@@ -375,12 +402,12 @@ pub async fn deploy_log_spam_contract(
 /// Deploy submit contract and create a Submit from it
 pub async fn get_cosmos_code_id(
     clients: &Clients,
-    cosmos_trigger_definition: &CosmosTriggerDefinition,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_contract_definition: &CosmosContractDefinition,
+    cosmos_code_map: CosmosCodeMap,
 ) -> u64 {
     // Get or insert the entry
-    let entry = cosmos_trigger_code_map
-        .entry(cosmos_trigger_definition.clone())
+    let entry = cosmos_code_map
+        .entry(cosmos_contract_definition.clone())
         .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(None)))
         .clone();
 
@@ -393,13 +420,31 @@ pub async fn get_cosmos_code_id(
     }
 
     // Upload since not cached
-    let (chain, cosmos_bytecode) = match cosmos_trigger_definition {
-        CosmosTriggerDefinition::SimpleContractEvent { chain } => {
+    let (chain, cosmos_bytecode) = match cosmos_contract_definition {
+        CosmosContractDefinition::Trigger(CosmosTriggerDefinition::SimpleContractEvent {
+            chain,
+        }) => {
             let wasm_path = workspace_path()
                 .join("examples")
                 .join("build")
                 .join("contracts")
-                .join("simple_example.wasm");
+                .join("cw_wavs_trigger_simple.wasm");
+
+            if !wasm_path.exists() {
+                panic!(
+                    "Cosmos contract WASM file not found at: {}",
+                    wasm_path.display()
+                );
+            }
+
+            (chain, tokio::fs::read(&wasm_path).await.unwrap())
+        }
+        CosmosContractDefinition::Submit(CosmosSubmitDefinition::MockServiceHandler { chain }) => {
+            let wasm_path = workspace_path()
+                .join("examples")
+                .join("build")
+                .join("contracts")
+                .join("cw_wavs_mock_service_handler.wasm");
 
             if !wasm_path.exists() {
                 panic!(
@@ -457,7 +502,7 @@ pub async fn simulate_anvil_reorg(
     Ok(())
 }
 
-pub async fn wait_for_task_to_land(
+pub async fn evm_wait_for_task_to_land(
     evm_submit_client: EvmSigningClient,
     address: alloy_primitives::Address,
     trigger_id: TriggerId,
@@ -494,13 +539,43 @@ pub async fn wait_for_task_to_land(
     .map_err(|_| anyhow::anyhow!("Timeout when waiting for task to land"))?
 }
 
+pub async fn cosmos_wait_for_task_to_land(
+    cosmos_submit_client: Object<SigningClientPoolManager>,
+    address: CosmosAddr,
+    trigger_id: TriggerId,
+    timeout: Duration,
+) -> Result<Vec<u8>> {
+    let submit_client = SimpleCosmosSubmitClient::new(cosmos_submit_client, address.into());
+
+    let trigger_id = trigger_id.u64();
+    tokio::time::timeout(timeout, async move {
+        loop {
+            if submit_client
+                .trigger_validated(trigger_id)
+                .await
+                .unwrap_or(false)
+            {
+                return submit_client
+                    .trigger_message(trigger_id)
+                    .await
+                    .map_err(|e| anyhow!("Failed to get signed data: {e}"));
+            }
+
+            tracing::debug!("Waiting for task response on trigger {}", trigger_id);
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("Timeout when waiting for task to land"))?
+}
+
 /// Helper function to deploy a service for a test
 pub async fn change_service_for_test(
     service: &mut Service,
     change_service: ChangeServiceDefinition,
     clients: &Clients,
     component_sources: &ComponentSources,
-    cosmos_trigger_code_map: CosmosTriggerCodeMap,
+    cosmos_code_map: CosmosCodeMap,
 ) {
     match change_service {
         ChangeServiceDefinition::Component {
@@ -527,10 +602,10 @@ pub async fn change_service_for_test(
             let deployed_workflow = deploy_workflow(
                 &workflow_id,
                 &workflow,
-                service.manager.evm_address_unchecked(),
+                service.manager.clone(),
                 clients,
                 component_sources,
-                cosmos_trigger_code_map,
+                cosmos_code_map,
             )
             .await;
 
@@ -541,7 +616,7 @@ pub async fn change_service_for_test(
     }
 }
 
-pub async fn wait_for_trigger_streams_to_finalize(
+pub async fn wait_for_evm_trigger_streams_to_finalize(
     client: &HttpClient,
     service_manager: Option<ServiceManager>,
 ) {
@@ -569,7 +644,7 @@ pub async fn wait_for_trigger_streams_to_finalize(
                             }
                         }
                         ServiceManager::Cosmos { .. } => {
-                            todo!("finalize cosmos support");
+                            unreachable!("This is only meant for EVM");
                         }
                     }
                 } else if info.any_active_subscriptions() {

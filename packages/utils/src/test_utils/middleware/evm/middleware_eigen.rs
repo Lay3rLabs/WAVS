@@ -7,11 +7,11 @@ use tempfile::TempDir;
 use tokio::fs;
 use tokio::process::Command;
 
-use crate::test_utils::middleware::validate_docker_container_id;
+use crate::test_utils::middleware::evm::validate_docker_container_id;
 
 use super::{
-    middleware_config_filename, middleware_deploy_filename, MiddlewareServiceManager,
-    MiddlewareServiceManagerConfig, MIDDLEWARE_IMAGE,
+    middleware_config_filename, middleware_deploy_filename, EvmMiddlewareServiceManager,
+    MiddlewareServiceManagerConfig, EVM_EIGENLAYER_MIDDLEWARE_IMAGE,
 };
 
 pub struct EigenlayerMiddleware {
@@ -22,7 +22,7 @@ pub struct EigenlayerMiddleware {
 impl EigenlayerMiddleware {
     pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
 
-    pub async fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self {
             // for eigenlayer, different commands may need to read/write files in the mounted dirs
             // so make sure we keep them alive between commands
@@ -36,7 +36,7 @@ impl EigenlayerMiddleware {
         &self,
         rpc_url: String,
         deployer_key_hex: String,
-    ) -> Result<MiddlewareServiceManager> {
+    ) -> Result<EvmMiddlewareServiceManager> {
         tracing::debug!("EigenLayer: Starting docker container creation");
         let output = tokio::time::timeout(
             Self::DEFAULT_TIMEOUT,
@@ -55,7 +55,7 @@ impl EigenlayerMiddleware {
                         "{}:/wavs/contracts/deployments",
                         self.config_dir.path().display()
                     ),
-                    MIDDLEWARE_IMAGE,
+                    EVM_EIGENLAYER_MIDDLEWARE_IMAGE,
                     "tail",
                     "-f",
                     "/dev/null",
@@ -150,7 +150,7 @@ impl EigenlayerMiddleware {
 
         #[derive(Deserialize)]
         struct DeploymentJson {
-            addresses: MiddlewareServiceManager,
+            addresses: EvmMiddlewareServiceManager,
         }
 
         let mut deployment_json: DeploymentJson = serde_json::from_str(&output)
@@ -165,7 +165,7 @@ impl EigenlayerMiddleware {
 
     pub async fn configure_service_manager(
         &self,
-        service_manager: &MiddlewareServiceManager,
+        service_manager: &EvmMiddlewareServiceManager,
         config: &MiddlewareServiceManagerConfig,
     ) -> Result<()> {
         let container_id = service_manager
@@ -213,7 +213,7 @@ impl EigenlayerMiddleware {
 
     pub async fn set_service_manager_uri(
         &self,
-        service_manager: &MiddlewareServiceManager,
+        service_manager: &EvmMiddlewareServiceManager,
         service_uri: &str,
     ) -> Result<()> {
         let container_id = service_manager
