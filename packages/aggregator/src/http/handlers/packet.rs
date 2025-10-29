@@ -303,53 +303,37 @@ async fn process_action(
                         };
                         tracing::info!("Attempting quorum validation with {} signatures", queue.len());
                         match handle_contract_submit(&state, &packet, &queue, submit_action).await {
-                            Ok(tx_receipt) => {
-                                tracing::info!(
-                                    "Quorum reached and transaction submitted successfully! Queue size: {}, tx_hash: {:?}",
-                                    queue.len(),
-                                    tx_receipt.tx_hash()
-                                );
-                                state
-                                    .save_quorum_queue(&queue_id, QuorumQueue::Burned)
-                                    .await?;
-                                Ok(AddPacketResponse::Sent {
-                                    tx_receipt,
-                                    count: queue.len(),
-                                })
+                            Ok(result) => {
+                                match result {
+                                    SubmissionResult::InsufficientQuorum {signer_weight, threshold_weight, total_weight} => {
+                                        tracing::info!(
+                                            "Insufficient quorum: have {signer_weight}, need weight of {total_weight} (threshold is {threshold_weight}). Keeping packet in queue.",
+                                        );
+                                        let count = queue.len();
+                                        state
+                                            .save_quorum_queue(&queue_id, QuorumQueue::Active(queue))
+                                            .await?;
+                                        Ok(AddPacketResponse::Aggregated { count })
+                                    }
+                                    SubmissionResult::Submitted(tx_receipt) => {
+                                        tracing::info!(
+                                            "Quorum reached and transaction submitted successfully! Queue size: {}, tx_hash: {:?}",
+                                            queue.len(),
+                                            tx_receipt.tx_hash()
+                                        );
+                                        state
+                                            .save_quorum_queue(&queue_id, QuorumQueue::Burned)
+                                            .await?;
+                                        Ok(AddPacketResponse::Sent {
+                                            tx_receipt,
+                                            count: queue.len(),
+                                        })
+                                    },
+                                }
                             }
                             Err(e) => {
-                                match e {
-                                    AggregatorError::EvmServiceManagerValidateKnown(
-                                        ServiceManagerError::InsufficientQuorum(required)
-                                    ) => {
-                                        tracing::info!(
-                                            "EVM Insufficient quorum: have {}, need {:?}. Keeping packet in queue.",
-                                            queue.len(),
-                                            required
-                                        );
-                                        let count = queue.len();
-                                        state
-                                            .save_quorum_queue(&queue_id, QuorumQueue::Active(queue))
-                                            .await?;
-                                        Ok(AddPacketResponse::Aggregated { count })
-                                    },
-                                    AggregatorError::CosmosServiceManagerValidate(WavsValidateError::InsufficientQuorum { signer_weight, total_weight, threshold_weight: _ }) => {
-                                        tracing::info!(
-                                            "Cosmos Insufficient quorum: have {}, need weight of {:?}. Keeping packet in queue.",
-                                            signer_weight,
-                                            total_weight
-                                        );
-                                        let count = queue.len();
-                                        state
-                                            .save_quorum_queue(&queue_id, QuorumQueue::Active(queue))
-                                            .await?;
-                                        Ok(AddPacketResponse::Aggregated { count })
-                                    }
-                                    _ => {
-                                        tracing::error!("Quorum validation failed: {:?}", e);
-                                        Err(e)
-                                    }
-                                }
+                                tracing::error!("Quorum validation failed: {:?}", e);
+                                Err(e)
                             }
                         }
                     }
@@ -414,25 +398,63 @@ async fn evm_get_submission_service_manager(
     ))
 }
 
+enum SubmissionResult {
+    InsufficientQuorum {
+        // unified as string types from different contract results
+        // since we only need this for logging/reporting purposes
+        signer_weight: String,
+        threshold_weight: String,
+        total_weight: String,
+    },
+    Submitted(AnyTransactionReceipt),
+}
 async fn handle_contract_submit(
     state: &HttpState,
     packet: &Packet,
     queue: &[QueuedPacket],
     submit_action: SubmitAction,
-) -> AggregatorResult<AnyTransactionReceipt> {
+) -> AggregatorResult<SubmissionResult> {
     let submit_action = wavs_types::SubmitAction::try_from(submit_action)
         .map_err(|e| PacketValidationError::ParseSubmitAction(format!("{:?}", e)))?;
 
     match submit_action {
         wavs_types::SubmitAction::Evm(evm_submit_action) => {
-            let tx_receipt =
-                handle_contract_submit_evm(state, packet, queue, evm_submit_action).await?;
-            Ok(AnyTransactionReceipt::Evm(Box::new(tx_receipt)))
+            let resp = handle_contract_submit_evm(state, packet, queue, evm_submit_action).await;
+            match resp {
+                Err(AggregatorError::EvmServiceManagerValidateKnown(
+                    ServiceManagerError::InsufficientQuorum(info),
+                )) => Ok(SubmissionResult::InsufficientQuorum {
+                    signer_weight: info.signerWeight.to_string(),
+                    threshold_weight: info.thresholdWeight.to_string(),
+                    total_weight: info.totalWeight.to_string(),
+                }),
+                Err(e) => Err(e),
+                Ok(tx_receipt) => Ok(SubmissionResult::Submitted(AnyTransactionReceipt::Evm(
+                    Box::new(tx_receipt),
+                ))),
+            }
         }
         wavs_types::SubmitAction::Cosmos(cosmos_submit_action) => {
-            let tx_hash =
-                handle_contract_submit_cosmos(state, packet, queue, cosmos_submit_action).await?;
-            Ok(AnyTransactionReceipt::Cosmos(tx_hash))
+            let resp =
+                handle_contract_submit_cosmos(state, packet, queue, cosmos_submit_action).await;
+
+            match resp {
+                Err(AggregatorError::CosmosServiceManagerValidate(
+                    WavsValidateError::InsufficientQuorum {
+                        signer_weight,
+                        threshold_weight,
+                        total_weight,
+                    },
+                )) => Ok(SubmissionResult::InsufficientQuorum {
+                    signer_weight: signer_weight.to_string(),
+                    threshold_weight: threshold_weight.to_string(),
+                    total_weight: total_weight.to_string(),
+                }),
+                Err(e) => Err(e),
+                Ok(tx_hash) => Ok(SubmissionResult::Submitted(AnyTransactionReceipt::Cosmos(
+                    tx_hash,
+                ))),
+            }
         }
     }
 }
