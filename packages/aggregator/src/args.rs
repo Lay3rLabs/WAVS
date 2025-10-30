@@ -67,7 +67,7 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub credential: Option<Credential>,
 
-    /// Mnemonic for cosmos chains
+    /// Mnemonic for cosmos chains (usually leave this as None and override in env)
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cosmos_credential: Option<Credential>,
