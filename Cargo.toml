@@ -124,8 +124,8 @@ alloy-network = "1.0.37"
 alloy-rpc-types-eth = "1.0.37"
 layer-climb = "0.8.3"
 layer-climb-address = { version = "0.8.3", features = [
-  "cw-storage",
-  "openapi",
+    "cw-storage",
+    "openapi",
 ] }
 layer-climb-config = "0.8.3"
 layer-climb-cli = "0.8.3"
@@ -205,5 +205,5 @@ wavs-aggregator = { path = "packages/aggregator" }
 wavs-benchmark-common = { path = "packages/wavs/benches/common" }
 example-helpers = { path = "examples/components/_helpers" }
 example-types = { path = "examples/components/_types" }
-cw-wavs-mock-api = {path = "examples/contracts/cosmwasm/mock/api"}
-cw-wavs-trigger-api = {path = "examples/contracts/cosmwasm/trigger/api"}
+cw-wavs-mock-api = { path = "examples/contracts/cosmwasm/mock/api" }
+cw-wavs-trigger-api = { path = "examples/contracts/cosmwasm/trigger/api" }
