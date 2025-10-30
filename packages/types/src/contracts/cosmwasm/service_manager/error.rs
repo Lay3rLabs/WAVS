@@ -23,6 +23,12 @@ pub enum WavsValidateError {
     },
     #[error("Invalid quorum parameters")]
     InvalidQuorumParameters,
+    #[error("Registry not found")]
+    MissingRegistry,
+    #[error("Unable to decode envelope")]
+    EnvelopeDecode,
+    #[error("Could not parse signature")]
+    SignatureParse,
 }
 
 impl TryFrom<StdError> for WavsValidateError {
