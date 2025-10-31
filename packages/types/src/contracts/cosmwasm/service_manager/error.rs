@@ -11,8 +11,8 @@ pub enum WavsValidateError {
     InvalidSignatureBlock,
     #[error("Invalid signature order")]
     InvalidSignatureOrder,
-    #[error("Invalid signature")]
-    InvalidSignature,
+    #[error("Invalid signature: {0}")]
+    InvalidSignature(String),
     #[error("Insufficient quorum: zero signers")]
     InsufficientQuorumZero,
     #[error("Insufficient quorum: signer weight {signer_weight} is below threshold {threshold_weight} of total weight {total_weight}")]
