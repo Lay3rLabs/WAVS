@@ -20,7 +20,7 @@ use error::TriggerError;
 use futures::{stream::SelectAll, StreamExt};
 use iri_string::types::UriString;
 use layer_climb::prelude::*;
-use lookup::LookupMaps;
+use lookup::{LookupId, LookupMaps};
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroU64,
@@ -667,14 +667,22 @@ impl TriggerManager {
                     dispatcher_commands.extend(self.process_blocks(chain, block_height));
                 }
                 StreamTriggers::Cron {
-                    trigger_time,
                     lookup_ids,
+                    scheduled_times,
                 } => {
-                    for trigger_config in self.lookup_maps.get_trigger_configs(&lookup_ids) {
-                        dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
-                            data: TriggerData::Cron { trigger_time },
-                            config: trigger_config.clone(),
-                        }));
+                    // Process each lookup ID with its corresponding scheduled time
+                    for (lookup_id, scheduled_time) in lookup_ids.iter().zip(scheduled_times.iter())
+                    {
+                        if let Some(trigger_config) =
+                            self.lookup_maps.get_trigger_config(*lookup_id)
+                        {
+                            dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
+                                data: TriggerData::Cron {
+                                    trigger_time: *scheduled_time,
+                                },
+                                config: trigger_config.clone(),
+                            }));
+                        }
                     }
                 }
             }
@@ -728,10 +736,15 @@ impl TriggerManager {
             }
         };
         // Get the triggers that should fire at this block height
-        let firing_lookup_ids = match self.lookup_maps.block_schedulers.get_mut(&chain) {
-            Some(mut scheduler) => scheduler.tick(block_height.into()),
-            None => Vec::new(),
-        };
+        let firing_lookup_ids: Vec<LookupId> =
+            match self.lookup_maps.block_schedulers.get_mut(&chain) {
+                Some(mut scheduler) => scheduler
+                    .tick(block_height.into())
+                    .into_iter()
+                    .map(|(id, _)| id)
+                    .collect(),
+                None => Vec::new(),
+            };
 
         // Convert lookup_ids to TriggerActions
         if !firing_lookup_ids.is_empty() {
