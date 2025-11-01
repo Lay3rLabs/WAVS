@@ -43,11 +43,13 @@ pub enum StreamTriggers {
         block_height: u64,
     },
     Cron {
-        /// Unix timestamp (in nanos) when these triggers were processed
-        trigger_time: Timestamp,
         /// Vector of lookup IDs for all triggers that are due at this time.
         /// Multiple triggers can fire simultaneously in a single tick.
         lookup_ids: Vec<LookupId>,
+        /// Vector of scheduled times for each corresponding lookup ID.
+        /// These are the actual scheduled times from the cron schedule,
+        /// not the current execution time.
+        scheduled_times: Vec<Timestamp>,
     },
     LocalCommand(TriggerCommand),
 }
