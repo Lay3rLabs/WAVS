@@ -666,22 +666,22 @@ impl TriggerManager {
                 } => {
                     dispatcher_commands.extend(self.process_blocks(chain, block_height));
                 }
-                StreamTriggers::Cron {
-                    lookup_ids,
-                    scheduled_times,
-                } => {
-                    // Process each lookup ID with its corresponding scheduled time
-                    for (lookup_id, scheduled_time) in lookup_ids.iter().zip(scheduled_times.iter())
-                    {
-                        if let Some(trigger_config) =
-                            self.lookup_maps.get_trigger_config(*lookup_id)
-                        {
-                            dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
-                                data: TriggerData::Cron {
-                                    trigger_time: *scheduled_time,
-                                },
-                                config: trigger_config.clone(),
-                            }));
+                StreamTriggers::Cron { hits } => {
+                    // Process each cron hit (group of triggers at the same scheduled time)
+                    for hit in hits {
+                        for lookup_id in &hit.lookup_ids {
+                            if let Some(trigger_config) =
+                                self.lookup_maps.get_trigger_config(*lookup_id)
+                            {
+                                dispatcher_commands.push(DispatcherCommand::Trigger(
+                                    TriggerAction {
+                                        data: TriggerData::Cron {
+                                            trigger_time: hit.scheduled_time,
+                                        },
+                                        config: trigger_config.clone(),
+                                    },
+                                ));
+                            }
                         }
                     }
                 }

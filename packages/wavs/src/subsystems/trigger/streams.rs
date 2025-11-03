@@ -12,6 +12,16 @@ use futures::{stream::SelectAll, Stream};
 use std::pin::Pin;
 use wavs_types::{ChainKey, Timestamp};
 
+/// Represents a cron trigger firing event at a specific scheduled time.
+/// Multiple lookup IDs can fire at the same timestamp.
+#[derive(Debug, Clone)]
+pub struct CronHit {
+    /// All lookup IDs that are scheduled to fire at this timestamp
+    pub lookup_ids: Vec<LookupId>,
+    /// The scheduled time when these triggers should fire
+    pub scheduled_time: Timestamp,
+}
+
 pub type MultiplexedStream = SelectAll<
     Pin<Box<dyn Stream<Item = std::result::Result<StreamTriggers, TriggerError>> + Send>>,
 >;
@@ -43,13 +53,10 @@ pub enum StreamTriggers {
         block_height: u64,
     },
     Cron {
-        /// Vector of lookup IDs for all triggers that are due at this time.
-        /// Multiple triggers can fire simultaneously in a single tick.
-        lookup_ids: Vec<LookupId>,
-        /// Vector of scheduled times for each corresponding lookup ID.
-        /// These are the actual scheduled times from the cron schedule,
-        /// not the current execution time.
-        scheduled_times: Vec<Timestamp>,
+        /// Vector of cron hits for this tick.
+        /// Each hit represents a specific scheduled time with all lookup IDs
+        /// that should fire at that time.
+        hits: Vec<CronHit>,
     },
     LocalCommand(TriggerCommand),
 }
