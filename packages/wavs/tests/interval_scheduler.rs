@@ -121,15 +121,27 @@ fn tick_only_processes_up_to_current_time() {
 
     // Tick at time 15, which should only process t1 (scheduled for time 10)
     let hits = sched.tick(15.into());
-    assert_eq!(hits, vec![1], "Only trigger 1 should hit at time 15");
+    assert_eq!(
+        hits,
+        vec![(1, DummyTime(10))],
+        "Only trigger 1 should hit at time 15"
+    );
 
     // Tick at time 25, which should only process t2 (scheduled for time 20)
     let hits = sched.tick(25.into());
-    assert_eq!(hits, vec![2], "Only trigger 2 should hit at time 25");
+    assert_eq!(
+        hits,
+        vec![(2, DummyTime(20))],
+        "Only trigger 2 should hit at time 25"
+    );
 
     // Tick at time 35, which should only process t3 (scheduled for time 30)
     let hits = sched.tick(35.into());
-    assert_eq!(hits, vec![3], "Only trigger 3 should hit at time 35");
+    assert_eq!(
+        hits,
+        vec![(3, DummyTime(30))],
+        "Only trigger 3 should hit at time 35"
+    );
 
     // Tick at time 50, which should not process any triggers
     // (t4 is scheduled for time 100, which is beyond the current time)
@@ -138,7 +150,11 @@ fn tick_only_processes_up_to_current_time() {
 
     // Tick at time 150, which should process t4 (scheduled for time 100)
     let hits = sched.tick(150.into());
-    assert_eq!(hits, vec![4], "Only trigger 4 should hit at time 150");
+    assert_eq!(
+        hits,
+        vec![(4, DummyTime(100))],
+        "Only trigger 4 should hit at time 150"
+    );
 
     // This demonstrates that the scheduler only processes triggers up to the current time
     // and doesn't walk the entire BTreeMap
