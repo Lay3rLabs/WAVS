@@ -25,9 +25,6 @@ pub enum EngineError {
     #[error("No registry configured")]
     NoRegistry,
 
-    #[error("{0}")]
-    RegistryError(#[from] anyhow::Error),
-
     #[error("could not encode EventId {0:?}")]
     EncodeEventId(anyhow::Error),
 
