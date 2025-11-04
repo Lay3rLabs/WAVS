@@ -5,8 +5,8 @@ use utils::{
 };
 use wavs_engine::utils::error::EngineError;
 use wavs_types::{
-    ChainConfigError, ChainKey, ChainKeyError, EnvelopeError, ServiceId, ServiceManagerError,
-    WorkflowId, WorkflowIdError,
+    contracts::cosmwasm::service_manager::error::WavsValidateError, ChainConfigError, ChainKey,
+    ChainKeyError, EnvelopeError, ServiceId, ServiceManagerError, WorkflowId, WorkflowIdError,
 };
 
 pub type AggregatorResult<T> = Result<T, AggregatorError>;
@@ -41,19 +41,25 @@ pub enum AggregatorError {
     CreateEvmClient(anyhow::Error),
 
     #[error("Service manager validate(): {0:?}")]
-    ServiceManagerValidateKnown(ServiceManagerError),
-
-    #[error("Service manager validate(): {0}")]
-    ServiceManagerValidateAnyRevert(String),
+    CosmosServiceManagerValidate(WavsValidateError),
 
     #[error("Service manager validate(): {0:?}")]
-    ServiceManagerValidateUnknown(alloy_contract::Error),
+    EvmServiceManagerValidateKnown(ServiceManagerError),
+
+    #[error("Service manager validate(): {0}")]
+    EvmServiceManagerValidateAnyRevert(String),
+
+    #[error("Service manager validate(): {0:?}")]
+    EvmServiceManagerValidateUnknown(alloy_contract::Error),
 
     #[error("Chain not found: {0}")]
     ChainNotFound(ChainKey),
 
     #[error("Missing EVM credential")]
     MissingEvmCredential,
+
+    #[error("Missing Cosmos credential")]
+    MissingCosmosCredential,
 
     #[error("Unexpected responses length: should be {responses}, got {aggregators}")]
     UnexpectedResponsesLength {
@@ -73,11 +79,14 @@ pub enum AggregatorError {
     #[error("Unable to fetch service: {0:?}")]
     FetchService(anyhow::Error),
 
-    #[error("Unable to look up operator key from signing key: {0:?}")]
-    OperatorKeyLookup(alloy_contract::Error),
+    #[error("Evm: Unable to look up operator key from signing key: {0:?}")]
+    EvmOperatorKeyLookup(alloy_contract::Error),
+
+    #[error("Cosmos: Unable to look up operator key from signing key")]
+    CosmosOperatorKeyLookup,
 
     #[error("Unable to look up service manager from service handler: {0:?}")]
-    ServiceManagerLookup(alloy_contract::Error),
+    EvmServiceManagerLookup(alloy_contract::Error),
 
     #[error("Service already registered: {0}")]
     RepeatService(ServiceId),
@@ -117,4 +126,7 @@ pub enum AggregatorError {
 pub enum PacketValidationError {
     #[error("Unexpected envelope difference")]
     EnvelopeDiff,
+
+    #[error("Could not parse submit action: {0}")]
+    ParseSubmitAction(String),
 }

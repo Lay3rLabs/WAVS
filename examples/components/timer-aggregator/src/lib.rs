@@ -9,6 +9,8 @@ use world::{
     Guest,
 };
 
+use crate::world::wavs::aggregator::aggregator::EvmSubmitAction;
+
 struct Component;
 
 impl Guest for Component {
@@ -36,13 +38,13 @@ impl Guest for Component {
         let address: alloy_primitives::Address = service_handler_str
             .parse()
             .map_err(|e| format!("Failed to parse service handler address: {e}"))?;
-        let submit_action = SubmitAction {
+        let submit_action = SubmitAction::Evm(EvmSubmitAction {
             chain,
-            contract_address: EvmAddress {
+            address: EvmAddress {
                 raw_bytes: address.to_vec(),
             },
             gas_price: None,
-        };
+        });
 
         if !utils::is_valid_tx(packet.trigger_data)? {
             return Ok(vec![]);

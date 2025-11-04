@@ -1,14 +1,18 @@
 // Helpers to work with "trigger id" flows - which our example components do
 use crate::bindings::world::wavs::{
     operator::{input as component_input, output as component_output},
-    types::events::{TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent},
+    types::{
+        events::{TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent},
+        service::ServiceManager,
+    },
 };
 use alloy_provider::RootProvider;
 use alloy_sol_types::SolValue;
 use anyhow::Result;
+use cosmwasm_std::HexBinary;
+use cw_wavs_mock_api::message_with_id::MessageWithId;
 use example_submit::DataWithId;
 use example_trigger::{NewTrigger, SimpleTrigger, TriggerInfo};
-use serde::{Deserialize, Serialize};
 use wavs_wasi_utils::decode_event_log_data;
 
 pub fn decode_trigger_event(trigger_data: component_input::TriggerData) -> Result<(u64, Vec<u8>)> {
@@ -18,9 +22,9 @@ pub fn decode_trigger_event(trigger_data: component_input::TriggerData) -> Resul
             ..
         }) => {
             let event = cosmwasm_std::Event::from(event);
-            let event = cosmos_contract_simple_example::event::NewMessageEvent::try_from(event)?;
+            let event = cw_wavs_trigger_api::simple::PushMessageEvent::try_from(&event)?;
 
-            Ok((event.id.u64(), event.data))
+            Ok((event.trigger_id.u64(), event.data.to_vec()))
         }
         component_input::TriggerData::EvmContractEvent(TriggerDataEvmContractEvent {
             log, ..
@@ -38,6 +42,17 @@ pub fn decode_trigger_event(trigger_data: component_input::TriggerData) -> Resul
 pub fn encode_trigger_output(
     trigger_id: u64,
     output: impl AsRef<[u8]>,
+    service_manager: ServiceManager,
+) -> component_output::WasmResponse {
+    match service_manager {
+        ServiceManager::Evm(_) => evm_encode_trigger_output(trigger_id, output),
+        ServiceManager::Cosmos(_) => cosmos_encode_trigger_output(trigger_id, output),
+    }
+}
+// For EVM ServiceHandler contracts, encode output using DataWithId struct
+fn evm_encode_trigger_output(
+    trigger_id: u64,
+    output: impl AsRef<[u8]>,
 ) -> component_output::WasmResponse {
     component_output::WasmResponse {
         payload: DataWithId {
@@ -45,6 +60,22 @@ pub fn encode_trigger_output(
             data: output.as_ref().to_vec().into(),
         }
         .abi_encode(),
+        ordering: None,
+    }
+}
+
+// For Cosmos ServiceHandler contracts, encode output using MessageWithId struct
+fn cosmos_encode_trigger_output(
+    trigger_id: u64,
+    output: impl AsRef<[u8]>,
+) -> component_output::WasmResponse {
+    component_output::WasmResponse {
+        payload: MessageWithId {
+            trigger_id: cosmwasm_std::Uint64::from(trigger_id),
+            message: cosmwasm_std::HexBinary::from(output.as_ref().to_vec()),
+        }
+        .to_bytes()
+        .unwrap(),
         ordering: None,
     }
 }
@@ -67,28 +98,16 @@ impl ChainQuerierExt for layer_climb::prelude::QueryClient {
         address: layer_climb::prelude::Address,
         trigger_id: u64,
     ) -> Result<Vec<u8>> {
-        #[derive(Serialize, Debug)]
-        #[serde(rename_all = "snake_case")]
-        enum QueryMsg {
-            TriggerData { trigger_id: String },
-        }
-
-        // The response from the contract query
-        #[derive(Deserialize, Debug)]
-        struct TriggerDataResp {
-            pub data: Vec<u8>,
-        }
-
-        let resp: TriggerDataResp = self
+        let resp: HexBinary = self
             .contract_smart(
                 &address,
-                &QueryMsg::TriggerData {
-                    trigger_id: trigger_id.to_string(),
+                &cw_wavs_trigger_api::simple::QueryMsg::TriggerMessage {
+                    trigger_id: trigger_id.into(),
                 },
             )
             .await?;
 
-        Ok(resp.data)
+        Ok(resp.into())
     }
 }
 

@@ -14,7 +14,7 @@ test-utils = []
 dev = []
 
 [dependencies]
-wavs-types = { workspace = true }
+wavs-types = { workspace = true, features = ["full"] }
 wavs-engine = { workspace = true }
 utils = { workspace = true }
 clap = { workspace = true }
@@ -67,6 +67,7 @@ wavs-benchmark-common = { workspace = true }
 utils = { workspace = true, features = ["test-utils"] }
 example-types = { workspace = true }
 alloy-node-bindings = { workspace = true }
+
 
 [[bench]]
 name = "intervals"

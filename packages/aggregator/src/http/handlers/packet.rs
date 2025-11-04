@@ -2,14 +2,24 @@ use alloy_primitives::Address;
 use alloy_provider::{DynProvider, Provider};
 use alloy_rpc_types_eth::TransactionReceipt;
 use axum::{extract::State, response::IntoResponse, Json};
+use layer_climb::prelude::{CosmosAddr, EvmAddr};
 use reqwest::Url;
 use tracing::instrument;
 use wavs_types::{
-    aggregator::{AddPacketRequest, AddPacketResponse},
-    ChainKey, EnvelopeExt, EnvelopeSignature,
+    aggregator::{AddPacketRequest, AddPacketResponse, AnyTransactionReceipt},
+    contracts::cosmwasm::{
+        service_handler::{
+            ServiceHandlerExecuteMessages, ServiceHandlerQueryMessages, WavsEnvelope,
+            WavsSignatureData,
+        },
+        service_manager::{
+            error::WavsValidateError, ServiceManagerQueryMessages, WavsValidateResult,
+        },
+    },
+    ChainKey, CosmosSubmitAction, EnvelopeSignature, EnvelopeSigner, EvmSubmitAction,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
-    Packet, ServiceManagerError,
+    Packet, ServiceManager, ServiceManagerError,
 };
 
 use crate::{
@@ -118,16 +128,37 @@ async fn process_packet(
     // but drop it after this scope so we don't confuse it with the service manager
     // that is used for the actual submission
     let signer = {
-        let service_manager_client = state.get_evm_client(packet.service.manager.chain()).await?;
-        let service_manager = IWavsServiceManagerInstance::new(
-            packet.service.manager.evm_address_unchecked(),
-            service_manager_client.provider,
-        );
-        service_manager
-            .getLatestOperatorForSigningKey(signing_key)
-            .call()
-            .await
-            .map_err(AggregatorError::OperatorKeyLookup)?
+        match packet.service.manager.clone() {
+            ServiceManager::Evm { chain, address } => {
+                let service_manager_client = state.get_evm_client(&chain).await?;
+                let service_manager =
+                    IWavsServiceManagerInstance::new(address, service_manager_client.provider);
+                service_manager
+                    .getLatestOperatorForSigningKey(signing_key)
+                    .call()
+                    .await
+                    .map_err(AggregatorError::EvmOperatorKeyLookup)?
+            }
+            ServiceManager::Cosmos { chain, address } => {
+                let cosmos_client = state.get_cosmos_client(&chain).await?;
+                let result: Option<EvmAddr> = cosmos_client
+                    .querier
+                    .contract_smart(
+                        &address.into(),
+                        &ServiceManagerQueryMessages::WavsLatestOperatorForSigningKey {
+                            signing_key_addr: signing_key.into(),
+                        },
+                    )
+                    .await?;
+
+                match result {
+                    None => {
+                        return Err(AggregatorError::CosmosOperatorKeyLookup);
+                    }
+                    Some(evm_addr) => evm_addr.into(),
+                }
+            }
+        }
     };
     tracing::debug!("Packet signer address: {:?}", signer);
 
@@ -200,24 +231,39 @@ impl AggregatorProcess<'_> {
 
         for (i, action) in actions.into_iter().enumerate() {
             tracing::debug!("Processing action {}: {:?}", i + 1, action);
-            let queue_id = QuorumQueueId {
-                event_id: event_id.clone(),
-                aggregator_action: action.clone().into(),
-            };
-
-            let result =
-                process_action(state.clone(), packet.clone(), queue_id, action, signer).await;
-
-            match result {
-                Ok(response) => {
-                    tracing::debug!("Action {} processed successfully: {:?}", i + 1, response);
-                    responses.push(response);
-                }
+            match wavs_types::AggregatorAction::try_from(action.clone()) {
                 Err(e) => {
-                    tracing::error!("Action {} processing failed: {:?}", i + 1, e);
+                    tracing::error!("Action {} conversion failed: {:?}", i + 1, e);
                     responses.push(AddPacketResponse::Error {
-                        reason: format!("{:?}", e),
+                        reason: format!("InvalidAction: {:?}", e),
                     });
+                }
+                Ok(aggregator_action) => {
+                    let queue_id = QuorumQueueId {
+                        event_id: event_id.clone(),
+                        aggregator_action,
+                    };
+
+                    let result =
+                        process_action(state.clone(), packet.clone(), queue_id, action, signer)
+                            .await;
+
+                    match result {
+                        Ok(response) => {
+                            tracing::debug!(
+                                "Action {} processed successfully: {:?}",
+                                i + 1,
+                                response
+                            );
+                            responses.push(response);
+                        }
+                        Err(e) => {
+                            tracing::error!("Action {} processing failed: {:?}", i + 1, e);
+                            responses.push(AddPacketResponse::Error {
+                                reason: format!("{:?}", e),
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -256,40 +302,38 @@ async fn process_action(
                             }
                         };
                         tracing::info!("Attempting quorum validation with {} signatures", queue.len());
-                        match handle_custom_submit(&state, &packet, &queue, submit_action).await {
-                            Ok(tx_receipt) => {
-                                tracing::info!(
-                                    "Quorum reached and transaction submitted successfully! Queue size: {}, tx_hash: {:?}",
-                                    queue.len(),
-                                    tx_receipt.transaction_hash
-                                );
-                                state
-                                    .save_quorum_queue(&queue_id, QuorumQueue::Burned)
-                                    .await?;
-                                Ok(AddPacketResponse::Sent {
-                                    tx_receipt: Box::new(tx_receipt),
-                                    count: queue.len(),
-                                })
+                        match handle_contract_submit(&state, &packet, &queue, submit_action).await {
+                            Ok(result) => {
+                                match result {
+                                    SubmissionResult::InsufficientQuorum {signer_weight, threshold_weight, total_weight} => {
+                                        tracing::info!(
+                                            "Insufficient quorum: have {signer_weight}, need weight of {total_weight} (threshold is {threshold_weight}). Keeping packet in queue.",
+                                        );
+                                        let count = queue.len();
+                                        state
+                                            .save_quorum_queue(&queue_id, QuorumQueue::Active(queue))
+                                            .await?;
+                                        Ok(AddPacketResponse::Aggregated { count })
+                                    }
+                                    SubmissionResult::Submitted(tx_receipt) => {
+                                        tracing::info!(
+                                            "Quorum reached and transaction submitted successfully! Queue size: {}, tx_hash: {:?}",
+                                            queue.len(),
+                                            tx_receipt.tx_hash()
+                                        );
+                                        state
+                                            .save_quorum_queue(&queue_id, QuorumQueue::Burned)
+                                            .await?;
+                                        Ok(AddPacketResponse::Sent {
+                                            tx_receipt,
+                                            count: queue.len(),
+                                        })
+                                    },
+                                }
                             }
                             Err(e) => {
-                                if let AggregatorError::ServiceManagerValidateKnown(
-                                    ServiceManagerError::InsufficientQuorum(required),
-                                ) = &e
-                                {
-                                    tracing::info!(
-                                        "Insufficient quorum: have {}, need {:?}. Keeping packet in queue.",
-                                        queue.len(),
-                                        required
-                                    );
-                                    let count = queue.len();
-                                    state
-                                        .save_quorum_queue(&queue_id, QuorumQueue::Active(queue))
-                                        .await?;
-                                    Ok(AddPacketResponse::Aggregated { count })
-                                } else {
-                                    tracing::error!("Quorum validation failed: {:?}", e);
-                                    Err(e)
-                                }
+                                tracing::error!("Quorum validation failed: {:?}", e);
+                                Err(e)
                             }
                         }
                     }
@@ -319,7 +363,7 @@ async fn process_action(
     }
 }
 
-async fn get_submission_service_manager(
+async fn evm_get_submission_service_manager(
     state: &HttpState,
     chain: &ChainKey,
     service_handler_address: Address,
@@ -346,7 +390,7 @@ async fn get_submission_service_manager(
         .getServiceManager()
         .call()
         .await
-        .map_err(AggregatorError::ServiceManagerLookup)?;
+        .map_err(AggregatorError::EvmServiceManagerLookup)?;
 
     Ok(IWavsServiceManagerInstance::new(
         service_manager_address,
@@ -354,16 +398,155 @@ async fn get_submission_service_manager(
     ))
 }
 
-async fn handle_custom_submit(
+enum SubmissionResult {
+    InsufficientQuorum {
+        // unified as string types from different contract results
+        // since we only need this for logging/reporting purposes
+        signer_weight: String,
+        threshold_weight: String,
+        total_weight: String,
+    },
+    Submitted(AnyTransactionReceipt),
+}
+async fn handle_contract_submit(
     state: &HttpState,
     packet: &Packet,
     queue: &[QueuedPacket],
     submit_action: SubmitAction,
-) -> AggregatorResult<TransactionReceipt> {
-    let chain = ChainKey::new(submit_action.chain)?;
-    let contract_address = Address::from_slice(&submit_action.contract_address.raw_bytes);
+) -> AggregatorResult<SubmissionResult> {
+    let submit_action = wavs_types::SubmitAction::try_from(submit_action)
+        .map_err(|e| PacketValidationError::ParseSubmitAction(format!("{:?}", e)))?;
 
-    let service_manager = get_submission_service_manager(state, &chain, contract_address).await?;
+    match submit_action {
+        wavs_types::SubmitAction::Evm(evm_submit_action) => {
+            let resp = handle_contract_submit_evm(state, packet, queue, evm_submit_action).await;
+            match resp {
+                Err(AggregatorError::EvmServiceManagerValidateKnown(
+                    ServiceManagerError::InsufficientQuorum(info),
+                )) => Ok(SubmissionResult::InsufficientQuorum {
+                    signer_weight: info.signerWeight.to_string(),
+                    threshold_weight: info.thresholdWeight.to_string(),
+                    total_weight: info.totalWeight.to_string(),
+                }),
+                Err(e) => Err(e),
+                Ok(tx_receipt) => Ok(SubmissionResult::Submitted(AnyTransactionReceipt::Evm(
+                    Box::new(tx_receipt),
+                ))),
+            }
+        }
+        wavs_types::SubmitAction::Cosmos(cosmos_submit_action) => {
+            let resp =
+                handle_contract_submit_cosmos(state, packet, queue, cosmos_submit_action).await;
+
+            match resp {
+                Err(AggregatorError::CosmosServiceManagerValidate(
+                    WavsValidateError::InsufficientQuorum {
+                        signer_weight,
+                        threshold_weight,
+                        total_weight,
+                    },
+                )) => Ok(SubmissionResult::InsufficientQuorum {
+                    signer_weight: signer_weight.to_string(),
+                    threshold_weight: threshold_weight.to_string(),
+                    total_weight: total_weight.to_string(),
+                }),
+                Err(e) => Err(e),
+                Ok(tx_hash) => Ok(SubmissionResult::Submitted(AnyTransactionReceipt::Cosmos(
+                    tx_hash,
+                ))),
+            }
+        }
+    }
+}
+
+async fn handle_contract_submit_cosmos(
+    state: &HttpState,
+    packet: &Packet,
+    queue: &[QueuedPacket],
+    submit_action: CosmosSubmitAction,
+) -> AggregatorResult<String> {
+    let client = state.get_cosmos_client(&submit_action.chain).await?;
+
+    let service_manager_addr: CosmosAddr = client
+        .querier
+        .contract_smart(
+            &submit_action.address.clone().into(),
+            &ServiceHandlerQueryMessages::WavsServiceManager {},
+        )
+        .await?;
+
+    let block_height_minus_one = client
+        .querier
+        .block_height()
+        .await
+        .map_err(AggregatorError::BlockNumber)?
+        - 1;
+
+    let signatures: Vec<EnvelopeSignature> = queue
+        .iter()
+        .map(|queued| queued.packet.signature.clone())
+        .collect();
+
+    let signature_data: WavsSignatureData = packet
+        .envelope
+        .signature_data(signatures, block_height_minus_one)?
+        .into();
+
+    let envelope: WavsEnvelope = packet.envelope.clone().into();
+
+    let result: WavsValidateResult = client
+        .querier
+        .contract_smart(
+            &service_manager_addr.into(),
+            &ServiceManagerQueryMessages::WavsValidate {
+                envelope: envelope.clone(),
+                signature_data: signature_data.clone(),
+            },
+        )
+        .await?;
+
+    match result {
+        WavsValidateResult::Ok => {
+            tracing::info!("Service manager validation passed for custom submit");
+        }
+        WavsValidateResult::Err(err) => {
+            return Err(AggregatorError::CosmosServiceManagerValidate(err));
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    if state.config.disable_networking {
+        return Ok("mock-tx-hash-1234567890abcdef".to_string());
+    }
+
+    let resp = client
+        .contract_execute(
+            &submit_action.address.into(),
+            &ServiceHandlerExecuteMessages::WavsHandleSignedEnvelope {
+                envelope,
+                signature_data,
+            },
+            vec![],
+            None,
+        )
+        .await?;
+
+    tracing::info!("Custom submit transaction sent: {:?}", resp.txhash);
+
+    Ok(resp.txhash)
+}
+
+async fn handle_contract_submit_evm(
+    state: &HttpState,
+    packet: &Packet,
+    queue: &[QueuedPacket],
+    submit_action: EvmSubmitAction,
+) -> AggregatorResult<TransactionReceipt> {
+    let chain = submit_action.chain;
+    let contract_address = submit_action.address.into();
+
+    let service_manager =
+        evm_get_submission_service_manager(state, &chain, contract_address).await?;
 
     let block_height_minus_one = service_manager
         .provider()
@@ -395,15 +578,15 @@ async fn handle_custom_submit(
         }
         Err(err) => match err.as_decoded_interface_error::<ServiceManagerError>() {
             Some(err) => {
-                return Err(AggregatorError::ServiceManagerValidateKnown(err));
+                return Err(AggregatorError::EvmServiceManagerValidateKnown(err));
             }
             None => match err.as_revert_data() {
                 Some(raw) => {
-                    return Err(AggregatorError::ServiceManagerValidateAnyRevert(
+                    return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(
                         raw.to_string(),
                     ))
                 }
-                None => return Err(AggregatorError::ServiceManagerValidateUnknown(err)),
+                None => return Err(AggregatorError::EvmServiceManagerValidateUnknown(err)),
             },
         },
     }
@@ -419,7 +602,7 @@ async fn handle_custom_submit(
             signature_data,
             contract_address,
             None,
-            submit_action.gas_price.map(|x| x.into()),
+            submit_action.gas_price,
         )
         .await?;
 
@@ -575,20 +758,23 @@ mod test {
     use alloy_primitives::Address;
     use alloy_provider::DynProvider;
     use utils::{
-        config::{ConfigBuilder, EvmChainConfigBuilder},
+        config::ConfigBuilder,
         filesystem::workspace_path,
         test_utils::{
             address::rand_address_evm,
             middleware::{
-                AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig, MiddlewareType,
+                evm::{EvmMiddleware, EvmMiddlewareType, MiddlewareServiceManagerConfig},
+                operator::AvsOperator,
             },
             mock_engine::COMPONENT_SIMPLE_AGGREGATOR_BYTES,
-            mock_service_manager::MockServiceManager,
+            mock_service_manager::MockEvmServiceManager,
             test_contracts::{SimpleServiceHandlerInstance, TestContractDeps},
             test_packet::{mock_envelope, mock_packet, mock_signer, packet_from_service},
         },
     };
-    use wavs_types::{ComponentDigest, Credential, Service, SignatureKind, WorkflowId};
+    use wavs_types::{
+        ComponentDigest, Credential, EvmChainConfigBuilder, Service, SignatureKind, WorkflowId,
+    };
 
     #[test]
     fn packet_validation() {
@@ -626,26 +812,24 @@ mod test {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn all_middleware_tests() {
-        let middleware_instance = MiddlewareInstance::new(MiddlewareType::Eigenlayer)
-            .await
-            .unwrap();
+        let middleware_instance = EvmMiddleware::new(EvmMiddlewareType::Eigenlayer).unwrap();
 
         let deps = TestDeps::new().await;
         // deploy all service manager serially
         let sm_many1 =
-            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+            MockEvmServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
                 .await
                 .unwrap();
         let sm_many2 =
-            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+            MockEvmServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
                 .await
                 .unwrap();
         let sm_mixed =
-            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+            MockEvmServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
                 .await
                 .unwrap();
         let sm_first =
-            MockServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
+            MockEvmServiceManager::new(middleware_instance.clone(), deps.contracts.client.clone())
                 .await
                 .unwrap();
 
@@ -722,11 +906,11 @@ mod test {
                         let queue_id = QuorumQueueId {
                             event_id,
                             aggregator_action: wavs_types::AggregatorAction::Submit(
-                                wavs_types::SubmitAction {
-                                    chain: "evm:test-chain".to_string(),
-                                    contract_address: vec![0u8; 20],
+                                wavs_types::SubmitAction::Evm(wavs_types::EvmSubmitAction {
+                                    chain: "evm:test-chain".parse().unwrap(),
+                                    address: layer_climb::prelude::EvmAddr::new([0u8; 20]),
                                     gas_price: None,
-                                },
+                                }),
                             ),
                         };
 
@@ -762,7 +946,7 @@ mod test {
 
     async fn process_mixed_responses(
         deps: TestDeps,
-        service_manager: MockServiceManager,
+        service_manager: MockEvmServiceManager,
         service_handler: SimpleServiceHandlerInstance<DynProvider>,
     ) {
         const NUM_SIGNERS: usize = 3;
@@ -914,7 +1098,7 @@ mod test {
 
     async fn first_packet_sent(
         deps: TestDeps,
-        service_manager: MockServiceManager,
+        service_manager: MockEvmServiceManager,
         service_handler: SimpleServiceHandlerInstance<DynProvider>,
     ) {
         // Configure the service with a threshold of 1 (first packet sends immediately)
@@ -963,7 +1147,7 @@ mod test {
     async fn process_many_packets(
         concurrent: bool,
         deps: TestDeps,
-        service_manager: MockServiceManager,
+        service_manager: MockEvmServiceManager,
         service_handler: SimpleServiceHandlerInstance<DynProvider>,
     ) {
         const NUM_SIGNERS: usize = 20;

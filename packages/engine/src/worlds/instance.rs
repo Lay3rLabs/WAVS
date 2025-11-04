@@ -1,12 +1,12 @@
 use std::path::Path;
 
-use utils::config::{ChainConfigs, WAVS_ENV_PREFIX};
+use utils::config::WAVS_ENV_PREFIX;
 use wasmtime::component::HasSelf;
 use wasmtime::Store;
 use wasmtime::{component::Linker, Engine as WTEngine};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-use wavs_types::{AllowedHostPermission, Permissions, Service, Workflow, WorkflowId};
+use wavs_types::{AllowedHostPermission, ChainConfigs, Permissions, Service, Workflow, WorkflowId};
 
 use crate::backend::wasi_keyvalue::context::KeyValueCtxProvider;
 use crate::worlds::aggregator::component::{

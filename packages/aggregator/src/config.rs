@@ -6,12 +6,9 @@ use std::{
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use utils::{
-    config::{ChainConfigs, ConfigExt},
-    service::DEFAULT_IPFS_GATEWAY,
-};
+use utils::{config::ConfigExt, service::DEFAULT_IPFS_GATEWAY};
 use utoipa::ToSchema;
-use wavs_types::Credential;
+use wavs_types::{ChainConfigs, Credential};
 
 /// Default LRU cache size for compiled WASM components
 const DEFAULT_WASM_LRU_SIZE: usize = 20;
@@ -47,6 +44,9 @@ pub struct Config {
 
     /// Mnemonic or private key of the signer (usually leave this as None in config file and cli args, rather override in env)
     pub credential: Option<Credential>,
+
+    /// Mnemonic for cosmos chains
+    pub cosmos_credential: Option<Credential>,
 
     /// The hd index of the mnemonic to sign with
     pub hd_index: Option<u32>,
@@ -98,6 +98,7 @@ impl Default for Config {
             data: PathBuf::from("/var/aggregator"),
             cors_allowed_origins: Vec::new(),
             credential: None,
+            cosmos_credential: None,
             hd_index: None,
             jaeger: None,
             prometheus: None,

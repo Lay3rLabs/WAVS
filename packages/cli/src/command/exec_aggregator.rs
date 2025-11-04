@@ -161,7 +161,7 @@ impl ExecAggregator {
                 },
             ),
             keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
-                utils::storage::db::RedbStorage::new(tempfile::tempdir()?.keep())?,
+                utils::storage::db::RedbStorage::new()?,
                 packet.service.id().to_string(),
             ),
         }
@@ -176,7 +176,10 @@ impl ExecAggregator {
         let time_elapsed = start_time.elapsed().as_millis();
 
         Ok(ExecAggregatorResult::Packet {
-            actions: actions.into_iter().map(|a| a.into()).collect(),
+            actions: actions
+                .into_iter()
+                .map(wavs_types::AggregatorAction::try_from)
+                .collect::<Result<Vec<AggregatorAction>>>()?,
             fuel_used,
             time_elapsed,
         })
@@ -219,12 +222,13 @@ impl std::fmt::Display for ExecAggregatorResult {
 mod test {
     use super::*;
     use alloy_primitives::FixedBytes;
+    use layer_climb::prelude::EvmAddr;
     use std::io::Write;
     use tempfile::NamedTempFile;
     use utils::filesystem::workspace_path;
     use wavs_types::{
-        AllowedHostPermission, Envelope, EnvelopeSignature, Service, ServiceManager, ServiceStatus,
-        Submit, Trigger, Workflow, WorkflowId,
+        AllowedHostPermission, Envelope, EnvelopeSignature, EvmChainConfig, Service,
+        ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowId,
     };
 
     fn create_test_packet(component_path: &str) -> Packet {
@@ -322,18 +326,36 @@ mod test {
             config,
         };
 
-        let result = ExecAggregator::run(&crate::config::Config::default(), args)
-            .await
+        let config = crate::config::Config::default();
+        config
+            .chains
+            .write()
+            .unwrap()
+            .add_chain(
+                "evm:31337".to_string().parse().unwrap(),
+                EvmChainConfig {
+                    chain_id: "31337".to_string().parse().unwrap(),
+                    http_endpoint: Some("http://localhost:8545".to_string()),
+                    faucet_endpoint: None,
+                    ws_endpoints: vec![],
+                    ws_priority_endpoint_index: None,
+                }
+                .into(),
+            )
             .unwrap();
+        let result = ExecAggregator::run(&config, args).await.unwrap();
 
         match result {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
                 match &actions[0] {
-                    wavs_types::AggregatorAction::Submit(submit) => {
-                        assert_eq!(submit.chain, "evm:31337");
-                        assert_eq!(submit.contract_address, vec![0u8; 20]);
-                    }
+                    wavs_types::AggregatorAction::Submit(submit) => match submit {
+                        wavs_types::SubmitAction::Evm(evm_submit) => {
+                            assert_eq!(evm_submit.chain, "evm:31337".parse().unwrap());
+                            assert_eq!(evm_submit.address, EvmAddr::new([0u8; 20]));
+                        }
+                        _ => panic!("Expected Evm Submit action, got {:?}", submit),
+                    },
                     _ => panic!("Expected Submit action, got {:?}", actions[0]),
                 }
             }
@@ -367,19 +389,36 @@ mod test {
             time_limit: None,
             config,
         };
-
-        let result = ExecAggregator::run(&crate::config::Config::default(), args)
-            .await
+        let config = crate::config::Config::default();
+        config
+            .chains
+            .write()
+            .unwrap()
+            .add_chain(
+                "evm:31337".to_string().parse().unwrap(),
+                EvmChainConfig {
+                    chain_id: "31337".to_string().parse().unwrap(),
+                    http_endpoint: Some("http://localhost:8545".to_string()),
+                    faucet_endpoint: None,
+                    ws_endpoints: vec![],
+                    ws_priority_endpoint_index: None,
+                }
+                .into(),
+            )
             .unwrap();
+        let result = ExecAggregator::run(&config, args).await.unwrap();
 
         match result {
             ExecAggregatorResult::Packet { actions, .. } => {
                 assert_eq!(actions.len(), 1);
                 match &actions[0] {
-                    wavs_types::AggregatorAction::Submit(submit) => {
-                        assert_eq!(submit.chain, "evm:31337");
-                        assert_eq!(submit.contract_address, vec![0u8; 20]);
-                    }
+                    wavs_types::AggregatorAction::Submit(submit) => match submit {
+                        wavs_types::SubmitAction::Evm(evm_submit) => {
+                            assert_eq!(evm_submit.chain, "evm:31337".parse().unwrap());
+                            assert_eq!(evm_submit.address, EvmAddr::new([0u8; 20]));
+                        }
+                        _ => panic!("Expected Evm Submit action, got {:?}", submit),
+                    },
                     _ => panic!("Expected Submit action, got {:?}", actions[0]),
                 }
             }

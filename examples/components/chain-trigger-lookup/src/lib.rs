@@ -78,7 +78,11 @@ impl Guest for Component {
                 }
             };
 
-            Ok(encode_trigger_output(trigger_id, resp))
+            Ok(encode_trigger_output(
+                trigger_id,
+                resp,
+                host::get_service().service.manager,
+            ))
         })
         .map_err(|e| e.to_string())
         .map(Some)

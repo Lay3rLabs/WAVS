@@ -2,10 +2,12 @@ use std::time::Duration;
 
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
+use layer_climb::{prelude::CosmosAddr, signing::SigningClient};
 use wavs_types::{
-    AddServiceRequest, ChainKey, ComponentDigest, DeleteServicesRequest, DevTriggerStreamsInfo,
-    GetSignerRequest, IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse,
-    Service, ServiceManager, SignerResponse, UploadComponentResponse,
+    contracts::cosmwasm::service_manager::ServiceManagerExecuteMessages, AddServiceRequest,
+    ChainKey, ComponentDigest, DeleteServicesRequest, DevTriggerStreamsInfo, GetSignerRequest,
+    IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceManager,
+    SignerResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUriArgs;
@@ -70,12 +72,24 @@ impl HttpClient {
         save_service_args: Option<SetServiceUriArgs>,
     ) -> Result<Service> {
         if let Some(save_service) = save_service_args {
-            self.set_service_url(
-                save_service.provider,
-                service_manager.evm_address_unchecked(),
-                save_service.service_uri.to_string(),
-            )
-            .await?;
+            match save_service {
+                SetServiceUriArgs::Evm {
+                    provider,
+                    service_uri,
+                } => {
+                    let address = service_manager.address().try_into()?;
+                    self.evm_set_service_url(provider, address, service_uri.to_string())
+                        .await?;
+                }
+                SetServiceUriArgs::Cosmos {
+                    client,
+                    service_uri,
+                } => {
+                    let address = service_manager.address().try_into()?;
+                    self.cosmos_set_service_url(client, address, service_uri.to_string())
+                        .await?;
+                }
+            }
         }
 
         let body: String = serde_json::to_string(&AddServiceRequest {
@@ -104,13 +118,14 @@ impl HttpClient {
 
         let (chain, address) = match &service_manager {
             ServiceManager::Evm { chain, address } => (chain, address.to_string()),
+            ServiceManager::Cosmos { chain, address } => (chain, address.to_string()),
         };
         let service = self.get_service_from_node(chain, &address).await?;
 
         Ok(service)
     }
 
-    pub async fn set_service_url(
+    pub async fn evm_set_service_url(
         &self,
         provider: DynProvider,
         service_manager_address: alloy_primitives::Address,
@@ -122,6 +137,24 @@ impl HttpClient {
             .send()
             .await?
             .watch()
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn cosmos_set_service_url(
+        &self,
+        client: SigningClient,
+        service_manager_address: CosmosAddr,
+        service_uri: String,
+    ) -> Result<()> {
+        client
+            .contract_execute(
+                &service_manager_address.into(),
+                &ServiceManagerExecuteMessages::WavsSetServiceUri { service_uri },
+                vec![],
+                None,
+            )
             .await?;
 
         Ok(())
@@ -255,6 +288,7 @@ impl HttpClient {
 
                 let (chain, address) = match &service.manager {
                     ServiceManager::Evm { chain, address } => (chain, address.to_string()),
+                    ServiceManager::Cosmos { chain, address} => (chain, address.to_string())
                 };
                 if let Ok(current_service) = self.get_service_from_node(chain, &address).await {
                     if current_service.hash()? == service_hash {

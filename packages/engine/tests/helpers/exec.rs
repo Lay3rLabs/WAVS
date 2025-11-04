@@ -83,10 +83,8 @@ pub async fn try_execute_component_raw(
         .map_err(|e: anyhow::Error| e.to_string())?;
 
     let data_dir = tempfile::tempdir().unwrap();
-    let db_dir = tempfile::tempdir().unwrap();
-    let keyvalue_ctx = keyvalue_ctx.unwrap_or_else(|| {
-        KeyValueCtx::new(RedbStorage::new(db_dir.path()).unwrap(), "test".to_string())
-    });
+    let keyvalue_ctx = keyvalue_ctx
+        .unwrap_or_else(|| KeyValueCtx::new(RedbStorage::new().unwrap(), "test".to_string()));
 
     let mut instance_deps = InstanceDepsBuilder {
         workflow_id: service.workflows.keys().next().cloned().unwrap(),

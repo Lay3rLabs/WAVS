@@ -5,29 +5,48 @@ use std::{
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::test_utils::{
-    middleware::{AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig},
-    mock_service_manager::MockServiceManager,
+    middleware::{
+        cosmos::CosmosServiceManager,
+        evm::{EvmMiddleware, MiddlewareServiceManagerConfig},
+        operator::AvsOperator,
+    },
+    mock_service_manager::MockEvmServiceManager,
 };
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
-    ChainKey, Service, ServiceId, ServiceManager, ServiceStatus, SignerResponse, Submit,
+    ChainKey, ChainKeyNamespace, Service, ServiceId, ServiceManager, ServiceStatus, SignerResponse,
+    Submit,
 };
 
-use crate::{deployment::ServiceDeployment, e2e::helpers::wait_for_trigger_streams_to_finalize};
+use crate::{
+    deployment::ServiceDeployment,
+    e2e::{handles::CosmosMiddlewares, helpers::wait_for_evm_trigger_streams_to_finalize},
+};
 
 use crate::e2e::{
     clients::Clients,
     components::ComponentSources,
     config::Configs,
     helpers::create_service_for_test,
-    test_registry::{CosmosTriggerCodeMap, TestRegistry},
+    test_registry::{CosmosCodeMap, TestRegistry},
 };
 
 #[derive(Clone)]
 pub struct ServiceManagers {
     configs: Arc<Configs>,
-    lookup: Arc<HashMap<String, (MockServiceManager, ChainKey)>>,
+    lookup: Arc<HashMap<String, AnyServiceManagerInstance>>,
     aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<(ServiceId, String)>>>,
+}
+
+pub enum AnyServiceManagerInstance {
+    Evm {
+        chain: ChainKey,
+        manager: MockEvmServiceManager,
+    },
+    Cosmos {
+        chain: ChainKey,
+        manager: CosmosServiceManager,
+    },
 }
 
 impl ServiceManagers {
@@ -45,7 +64,8 @@ impl ServiceManagers {
         &mut self,
         registry: &TestRegistry,
         clients: &Clients,
-        middleware_instance: MiddlewareInstance,
+        evm_middleware: Option<EvmMiddleware>,
+        cosmos_middlewares: CosmosMiddlewares,
     ) {
         tracing::warn!("WAVS Concurrency: {}", self.configs.wavs_concurrency);
         tracing::warn!(
@@ -53,7 +73,7 @@ impl ServiceManagers {
             self.configs.middleware_concurrency
         );
         tracing::warn!("Bootstrapping service managers...");
-        self.deploy_service_managers(registry, clients, middleware_instance)
+        self.deploy_service_managers(registry, clients, evm_middleware, cosmos_middlewares)
             .await;
         tracing::warn!("Bootstrapping initial service uris...");
         self.set_initial_service_uris(registry, clients).await;
@@ -64,10 +84,15 @@ impl ServiceManagers {
     }
 
     pub fn get_service_manager(&self, test_name: &str) -> ServiceManager {
-        let (mock_service_manager, chain) = self.lookup.get(test_name).unwrap();
-        ServiceManager::Evm {
-            chain: chain.clone(),
-            address: mock_service_manager.address(),
+        match self.lookup.get(test_name).unwrap() {
+            AnyServiceManagerInstance::Evm { chain, manager } => ServiceManager::Evm {
+                chain: chain.clone(),
+                address: manager.address(),
+            },
+            AnyServiceManagerInstance::Cosmos { chain, manager } => ServiceManager::Cosmos {
+                chain: chain.clone(),
+                address: manager.address.clone(),
+            },
         }
     }
 
@@ -75,28 +100,54 @@ impl ServiceManagers {
         &mut self,
         registry: &TestRegistry,
         clients: &Clients,
-        middleware_instance: MiddlewareInstance,
+        evm_middleware: Option<EvmMiddleware>,
+        cosmos_middlewares: CosmosMiddlewares,
     ) {
         let mut lookup = HashMap::new();
 
         let mut futures = Vec::new();
 
         for test in registry.list_all() {
-            let chain_name = test.service_manager_chain.clone();
-            let wallet_client = clients.get_evm_client(&chain_name);
-            let test_name = test.name.clone();
-            let middleware_instance = middleware_instance.clone();
-            futures.push(async move {
-                tracing::info!("Deploying service manager for test {}", test_name);
-                let service_manager = MockServiceManager::new(middleware_instance, wallet_client)
-                    .await
-                    .unwrap();
-                tracing::info!(
-                    "Service manager for test {} is {}",
-                    test_name,
-                    service_manager.address()
-                );
-                (test_name, (service_manager, chain_name))
+            let chain = test
+                .service_manager_chain
+                .clone()
+                .unwrap_or_else(|| panic!("missing service manager chain for test {}", test.name));
+            futures.push({
+                let evm_middleware = evm_middleware.clone();
+                let cosmos_middlewares = cosmos_middlewares.clone();
+                async move {
+                    match chain.namespace.as_str() {
+                        ChainKeyNamespace::EVM => {
+                            let wallet_client = clients.get_evm_client(&chain);
+                            let test_name = test.name.clone();
+                            let middleware = evm_middleware.clone().unwrap();
+                            tracing::info!("Deploying service manager for test {}", test_name);
+                            let manager = MockEvmServiceManager::new(middleware, wallet_client)
+                                .await
+                                .unwrap();
+                            tracing::info!(
+                                "EVM Service manager for test {} is {}",
+                                test_name,
+                                manager.address()
+                            );
+                            (test_name, AnyServiceManagerInstance::Evm { manager, chain })
+                        }
+                        ChainKeyNamespace::COSMOS => {
+                            let middleware = cosmos_middlewares.get(&chain).unwrap();
+                            let manager = middleware.deploy_service_manager().await.unwrap();
+                            tracing::info!(
+                                "Cosmos Service manager for test {} is {}",
+                                test.name,
+                                manager.address
+                            );
+                            (
+                                test.name.clone(),
+                                AnyServiceManagerInstance::Cosmos { manager, chain },
+                            )
+                        }
+                        other => panic!("Unsupported chain namespace: {}", other),
+                    }
+                }
             });
         }
 
@@ -125,11 +176,7 @@ impl ServiceManagers {
         let mut futures = Vec::new();
 
         for test in registry.list_all() {
-            let (mock_service_manager, chain) = self.lookup.get(&test.name).unwrap();
-            let service_manager = ServiceManager::Evm {
-                chain: chain.clone(),
-                address: mock_service_manager.address(),
-            };
+            let service_manager = self.get_service_manager(&test.name);
 
             let service = Service {
                 name: test.name.to_string(),
@@ -143,11 +190,17 @@ impl ServiceManagers {
                 .await
                 .unwrap();
 
+            let service_manager_instance = self.lookup.get(&test.name).unwrap();
+
             futures.push(async move {
-                mock_service_manager
-                    .set_service_uri(service_url)
-                    .await
-                    .unwrap();
+                match service_manager_instance {
+                    AnyServiceManagerInstance::Evm { manager, .. } => {
+                        manager.set_service_uri(service_url).await.unwrap();
+                    }
+                    AnyServiceManagerInstance::Cosmos { manager, .. } => {
+                        manager.set_service_uri(&service_url).await.unwrap();
+                    }
+                }
             });
         }
 
@@ -200,11 +253,7 @@ impl ServiceManagers {
         let mut futures = Vec::new();
 
         for (test_index, test) in registry.list_all().enumerate() {
-            let (mock_service_manager, chain) = self.lookup.get(&test.name).unwrap();
-            let service_manager = ServiceManager::Evm {
-                chain: chain.clone(),
-                address: mock_service_manager.address(),
-            };
+            let service_manager = self.get_service_manager(&test.name);
 
             let SignerResponse::Secp256k1 {
                 evm_address: avs_signer_address,
@@ -246,11 +295,22 @@ impl ServiceManagers {
                 signing_private_key,
             );
 
+            let service_manager_instance = self.lookup.get(&test.name).unwrap();
             futures.push(async move {
-                mock_service_manager
-                    .configure(&MiddlewareServiceManagerConfig::new(&[avs_operator], 1))
-                    .await
-                    .unwrap();
+                match service_manager_instance {
+                    AnyServiceManagerInstance::Evm { manager, .. } => {
+                        manager
+                            .configure(&MiddlewareServiceManagerConfig::new(&[avs_operator], 1))
+                            .await
+                            .unwrap();
+                    }
+                    AnyServiceManagerInstance::Cosmos { manager, .. } => {
+                        manager
+                            .register_operator(avs_operator.clone())
+                            .await
+                            .unwrap();
+                    }
+                }
             });
         }
 
@@ -269,7 +329,7 @@ impl ServiceManagers {
         registry: &TestRegistry,
         clients: &Clients,
         component_sources: &ComponentSources,
-        cosmos_trigger_code_map: CosmosTriggerCodeMap,
+        cosmos_code_map: CosmosCodeMap,
     ) -> HashMap<String, ServiceDeployment> {
         let mut futures = Vec::new();
 
@@ -281,7 +341,7 @@ impl ServiceManagers {
                 clients,
                 component_sources,
                 service_manager,
-                cosmos_trigger_code_map.clone(),
+                cosmos_code_map.clone(),
             ));
         }
 
@@ -306,8 +366,6 @@ impl ServiceManagers {
         let mut futures = Vec::new();
 
         for service in services {
-            let (mock_service_manager, _) = self.lookup.get(&service.name).unwrap();
-
             // register the service to the aggregator if needed
             for workflow in service.workflows.values() {
                 if let Submit::Aggregator { url, .. } = &workflow.submit {
@@ -330,18 +388,22 @@ impl ServiceManagers {
                 .await
                 .unwrap();
 
+            let service_manager_instance = self.lookup.get(&service.name).unwrap();
             futures.push(async move {
-                // wait for the trigger streams to be ready before we update the service uri
-                wait_for_trigger_streams_to_finalize(
-                    &clients.http_client,
-                    Some(service.manager.clone()),
-                )
-                .await;
-
-                mock_service_manager
-                    .set_service_uri(service_url)
-                    .await
-                    .unwrap();
+                match service_manager_instance {
+                    AnyServiceManagerInstance::Evm { manager, .. } => {
+                        // wait for the trigger streams to be ready before we update the service uri
+                        wait_for_evm_trigger_streams_to_finalize(
+                            &clients.http_client,
+                            Some(service.manager.clone()),
+                        )
+                        .await;
+                        manager.set_service_uri(service_url).await.unwrap();
+                    }
+                    AnyServiceManagerInstance::Cosmos { manager, .. } => {
+                        manager.set_service_uri(&service_url).await.unwrap();
+                    }
+                }
 
                 clients
                     .http_client
@@ -350,7 +412,9 @@ impl ServiceManagers {
                     .unwrap();
 
                 // doesn't hurt to wait again for rpcs at least in case trigger contract changed
-                wait_for_trigger_streams_to_finalize(&clients.http_client, None).await;
+                if let AnyServiceManagerInstance::Evm { .. } = service_manager_instance {
+                    wait_for_evm_trigger_streams_to_finalize(&clients.http_client, None).await;
+                }
             });
         }
 

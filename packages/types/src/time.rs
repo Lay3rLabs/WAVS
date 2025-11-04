@@ -1,7 +1,13 @@
 use std::{num::ParseIntError, str::FromStr};
 
-use anyhow::{anyhow, Result};
-use chrono::{DateTime, TimeZone, Utc};
+use anyhow::Result;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "clock")] {
+        use chrono::{DateTime, TimeZone, Utc};
+        use anyhow::anyhow;
+    }
+}
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -41,6 +47,7 @@ impl Timestamp {
     }
 
     // Create a new Timestamp from DateTime<Utc>
+    #[cfg(feature = "clock")]
     pub fn from_datetime(dt: DateTime<Utc>) -> Result<Self> {
         let nanos = dt
             .timestamp_nanos_opt()
@@ -53,6 +60,7 @@ impl Timestamp {
         Ok(Timestamp(nanos as u64))
     }
 
+    #[cfg(feature = "clock")]
     pub fn into_datetime(self) -> DateTime<Utc> {
         Utc.timestamp_nanos(self.0 as i64)
     }
@@ -63,6 +71,7 @@ impl Timestamp {
     }
 
     // Create from current time
+    #[cfg(feature = "clock")]
     pub fn now() -> Self {
         // Current time is always after 1970, so this unwrap is safe
         Self::from_datetime(Utc::now()).expect("Current time should always be valid")

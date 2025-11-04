@@ -13,7 +13,10 @@ members = [
     "examples/components/kv-store",
     "examples/components/simple-aggregator",
     "examples/components/timer-aggregator",
-    "examples/contracts/cosmwasm/simple",
+    "examples/contracts/cosmwasm/trigger/api",
+    "examples/contracts/cosmwasm/trigger/simple",
+    "examples/contracts/cosmwasm/mock/api",
+    "examples/contracts/cosmwasm/mock/service-handler",
 ]
 resolver = "2"
 
@@ -25,7 +28,7 @@ split-debuginfo = "unpacked"
 
 [workspace.package]
 edition = "2021"
-version = "1.5.1"
+version = "2.0.0-rc.3"
 license = "GPL-3.0-or-later"
 authors = ["Layer Labs (Cayman)"]
 repository = "https://github.com/Lay3rLabs/WAVS"
@@ -115,9 +118,13 @@ alloy-signer = "1.0.37"
 alloy-signer-local = { version = "1.0.37", features = ["mnemonic"] }
 alloy-network = "1.0.37"
 alloy-rpc-types-eth = "1.0.37"
-layer-climb = "0.7.3"
-layer-climb-address = "0.7.3"
-layer-climb-cli = "0.7.3"
+layer-climb = "0.8.3"
+layer-climb-address = { version = "0.8.3", features = [
+    "cw-storage",
+    "openapi",
+] }
+layer-climb-config = "0.8.3"
+layer-climb-cli = "0.8.3"
 
 # Cosmos-specific dependencies
 cosmwasm-schema = "3.0.2"
@@ -138,7 +145,7 @@ wasmtime = { version = "37.0.1", features = [
 wasmtime-wasi = { version = "37.0.1", default-features = true }
 wasmtime-wasi-http = "37.0.1"
 wit-bindgen = "0.46.0"
-wavs-wasi-utils = "1.2.1"
+wavs-wasi-utils = "2.0.0"
 
 # benchmarking
 criterion = { version = "0.7.0", features = ["async_tokio"] }
@@ -194,4 +201,5 @@ wavs-aggregator = { path = "packages/aggregator" }
 wavs-benchmark-common = { path = "packages/wavs/benches/common" }
 example-helpers = { path = "examples/components/_helpers" }
 example-types = { path = "examples/components/_types" }
-example-contract-cosmwasm-simple = { path = "examples/contracts/cosmwasm/simple", package = "simple-example" }
+cw-wavs-mock-api = { path = "examples/contracts/cosmwasm/mock/api" }
+cw-wavs-trigger-api = { path = "examples/contracts/cosmwasm/trigger/api" }

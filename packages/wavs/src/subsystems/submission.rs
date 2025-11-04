@@ -17,7 +17,7 @@ use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::{
     aggregator::{AddPacketRequest, AddPacketResponse},
-    Credential, Envelope, EnvelopeExt, Packet, ServiceId, SignerResponse, Submit, TriggerData,
+    Credential, Envelope, EnvelopeSigner, Packet, ServiceId, SignerResponse, Submit, TriggerData,
     WorkflowId,
 };
 
@@ -336,7 +336,7 @@ impl SubmissionManager {
                 AddPacketResponse::Sent { tx_receipt, count } => {
                     tracing::info!(
                         "Successfully submitted to aggregator {}: tx_hash={}, payload_count={}, service_id={}, workflow_id={}",
-                        url, tx_receipt.transaction_hash, count, service_id, workflow_id
+                        url, tx_receipt.tx_hash(), count, service_id, workflow_id
                     );
                 }
                 AddPacketResponse::Aggregated { count } => {

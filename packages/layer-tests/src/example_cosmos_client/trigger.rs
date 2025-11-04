@@ -1,7 +1,6 @@
 use anyhow::Result;
 use cosmwasm_std::{Empty, Uint64};
-use example_contract_cosmwasm_simple::entry::execute::ExecuteMsg;
-pub use example_contract_cosmwasm_simple::event::NewMessageEvent;
+use cw_wavs_trigger_api::simple::{ExecuteMsg, PushMessageEvent};
 use layer_climb::prelude::*;
 
 pub struct SimpleCosmosTriggerClient {
@@ -39,7 +38,7 @@ impl SimpleCosmosTriggerClient {
             .signing_client
             .contract_execute(
                 &self.contract_address,
-                &ExecuteMsg::AddMessage { data },
+                &ExecuteMsg::Push { data: data.into() },
                 Vec::new(),
                 None,
             )
@@ -49,8 +48,8 @@ impl SimpleCosmosTriggerClient {
             .events_iter()
             .find_map(|event| {
                 let event: cosmwasm_std::Event = event.into();
-                match NewMessageEvent::try_from(event) {
-                    Ok(event) => Some(event.id),
+                match PushMessageEvent::try_from(&event) {
+                    Ok(event) => Some(event.trigger_id),
                     Err(_) => None,
                 }
             })

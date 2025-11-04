@@ -4,10 +4,7 @@ use axum::{
     http::{Method, Request},
 };
 use tower::Service;
-use utils::{
-    config::{AnyChainConfig, CosmosChainConfig, EvmChainConfig},
-    test_utils::{address::rand_address_evm, mock_engine::COMPONENT_SQUARE_BYTES},
-};
+use utils::test_utils::{address::rand_address_evm, mock_engine::COMPONENT_SQUARE_BYTES};
 use wavs::config::Config;
 mod wavs_systems;
 use wavs::health::HealthStatus;
@@ -16,7 +13,8 @@ use wavs_systems::{
     mock_trigger_manager::mock_evm_event_trigger,
 };
 use wavs_types::{
-    ChainKey, Component, ComponentDigest, ComponentSource, SignatureKind, UploadComponentResponse,
+    AnyChainConfig, ChainKey, Component, ComponentDigest, ComponentSource, CosmosChainConfig,
+    EvmChainConfig, SignatureKind, UploadComponentResponse,
 };
 
 #[test]

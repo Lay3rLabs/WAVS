@@ -51,6 +51,11 @@ pub enum ServiceManager {
         #[schema(value_type = String)]
         address: alloy_primitives::Address,
     },
+    Cosmos {
+        chain: ChainKey,
+        #[schema(value_type = String)]
+        address: layer_climb_address::CosmosAddr,
+    },
 }
 
 impl From<&ServiceManager> for ServiceId {
@@ -63,6 +68,13 @@ impl From<&ServiceManager> for ServiceId {
                 bytes.extend_from_slice(address.as_slice());
                 ServiceId::hash(bytes)
             }
+            ServiceManager::Cosmos { chain, address } => {
+                let mut bytes = Vec::new();
+                bytes.extend_from_slice(b"cosmos");
+                bytes.extend_from_slice(chain.to_string().as_bytes());
+                bytes.extend_from_slice(&address.to_vec());
+                ServiceId::hash(bytes)
+            }
         }
     }
 }
@@ -71,12 +83,13 @@ impl ServiceManager {
     pub fn chain(&self) -> &ChainKey {
         match self {
             ServiceManager::Evm { chain, .. } => chain,
+            ServiceManager::Cosmos { chain, .. } => chain,
         }
     }
-
-    pub fn evm_address_unchecked(&self) -> alloy_primitives::Address {
+    pub fn address(&self) -> layer_climb_address::Address {
         match self {
-            ServiceManager::Evm { address, .. } => *address,
+            ServiceManager::Evm { address, .. } => (*address).into(),
+            ServiceManager::Cosmos { address, .. } => address.clone().into(),
         }
     }
 }
@@ -203,7 +216,7 @@ pub enum Trigger {
     // A contract that emits an event
     CosmosContractEvent {
         #[schema(value_type = String)]
-        address: layer_climb_address::Address,
+        address: layer_climb_address::CosmosAddr,
         chain: ChainKey,
         event_type: String,
     },
@@ -244,7 +257,7 @@ pub enum TriggerData {
     CosmosContractEvent {
         /// The address of the contract that emitted the event
         #[schema(value_type = String)]
-        contract_address: layer_climb_address::Address,
+        contract_address: layer_climb_address::CosmosAddr,
         /// The chain where the event was emitted
         chain: ChainKey,
         /// The data that was emitted by the contract
@@ -420,35 +433,6 @@ pub enum SignaturePrefix {
     Eip191,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum Aggregator {
-    Evm(EvmContractSubmission),
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct EvmContractSubmission {
-    pub chain: ChainKey,
-    /// Should be an IWavsServiceHandler contract
-    #[schema(value_type = String)]
-    pub address: alloy_primitives::Address,
-    /// max gas for the submission
-    /// with an aggregator, that will be for all the signed envelopes combined
-    /// without an aggregator, it's just the single signed envelope
-    pub max_gas: Option<u64>,
-}
-
-impl EvmContractSubmission {
-    pub fn new(chain: ChainKey, address: alloy_primitives::Address, max_gas: Option<u64>) -> Self {
-        Self {
-            chain,
-            address,
-            max_gas,
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceStatus {
@@ -542,7 +526,7 @@ mod test_ext {
 
     impl Trigger {
         pub fn cosmos_contract_event(
-            address: layer_climb_address::Address,
+            address: layer_climb_address::CosmosAddr,
             chain: impl TryInto<ChainKey, Error = ChainKeyError>,
             event_type: impl ToString,
         ) -> Self {
@@ -569,7 +553,7 @@ mod test_ext {
         pub fn cosmos_contract_event(
             service_id: ServiceId,
             workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
-            contract_address: layer_climb_address::Address,
+            contract_address: layer_climb_address::CosmosAddr,
             chain: impl TryInto<ChainKey, Error = ChainKeyError>,
             event_type: impl ToString,
         ) -> Self {

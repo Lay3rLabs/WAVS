@@ -10,7 +10,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
-wavs-types = { workspace = true }
+wavs-types = { workspace = true, features = ["full"] }
 wavs-engine = { workspace = true }
 wasmtime = { workspace = true }
 tokio = { workspace = true }
@@ -36,6 +36,7 @@ reqwest = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 bincode = { workspace = true }
+layer-climb = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

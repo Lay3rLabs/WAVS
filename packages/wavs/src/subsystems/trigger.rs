@@ -28,13 +28,11 @@ use std::{
 };
 use streams::{cosmos_stream, cron_stream, evm_stream, MultiplexedStream, StreamTriggers};
 use tracing::instrument;
-use utils::{
-    config::{AnyChainConfig, ChainConfigs},
-    telemetry::TriggerMetrics,
-};
+use utils::telemetry::TriggerMetrics;
 use wavs_types::{
-    ByteArray, ChainKey, EventId, IWavsServiceManager, ServiceId, Trigger, TriggerAction,
-    TriggerConfig, TriggerData,
+    contracts::cosmwasm::service_manager::event::WavsServiceUriUpdatedEvent, AnyChainConfig,
+    ByteArray, ChainConfigs, ChainKey, EventId, IWavsServiceManager, ServiceId, Trigger,
+    TriggerAction, TriggerConfig, TriggerData,
 };
 
 #[derive(Debug)]
@@ -176,6 +174,9 @@ impl TriggerManager {
                         addresses: vec![address],
                         event_hashes: vec![IWavsServiceManager::ServiceURIUpdated::SIGNATURE_HASH],
                     })?;
+            }
+            wavs_types::ServiceManager::Cosmos { .. } => {
+                /* Nothing to do, Cosmos consumes all events, service URI changes will be handled */
             }
         }
 
@@ -593,6 +594,43 @@ impl TriggerManager {
                             event_index,
                         } in contract_events
                         {
+                            if layer_climb::events::Event::from(&event)
+                                .is_type(WavsServiceUriUpdatedEvent::EVENT_TYPE)
+                            {
+                                let service_uri = event.attributes.iter().find_map(|attr| {
+                                    if attr.key
+                                        == WavsServiceUriUpdatedEvent::EVENT_ATTR_KEY_SERVICE_URI
+                                    {
+                                        UriString::try_from(attr.value.clone()).ok()
+                                    } else {
+                                        None
+                                    }
+                                });
+
+                                let service_uri = match service_uri {
+                                    Some(uri) => uri,
+                                    None => {
+                                        tracing::error!(
+                                            "ServiceURIUpdated event missing {} attribute",
+                                            WavsServiceUriUpdatedEvent::EVENT_ATTR_KEY_SERVICE_URI
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                if let Some(service_id) = self
+                                    .lookup_maps
+                                    .service_manager
+                                    .read()
+                                    .unwrap()
+                                    .get_by_right(&contract_address.clone().into())
+                                {
+                                    dispatcher_commands.push(DispatcherCommand::ChangeServiceUri {
+                                        service_id: service_id.clone(),
+                                        uri: service_uri,
+                                    });
+                                }
+                            }
                             if let Some(lookup_ids) = triggers_by_contract_event_lock.get(&(
                                 chain.clone(),
                                 contract_address.clone(),
@@ -739,8 +777,7 @@ mod tests {
     fn test_add_trigger() {
         let config = Config::default();
 
-        let temp_dir = tempfile::tempdir().unwrap();
-        let db_storage = RedbStorage::new(temp_dir.path().join("db")).unwrap();
+        let db_storage = RedbStorage::new().unwrap();
         let services = Services::new(db_storage);
 
         let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));

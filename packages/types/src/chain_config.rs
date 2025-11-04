@@ -1,4 +1,7 @@
-use layer_climb::prelude::*;
+use std::collections::BTreeMap;
+
+use layer_climb_address::AddrKind;
+use layer_climb_config::ChainConfig;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -145,7 +148,7 @@ impl TryFrom<AnyChainConfig> for EvmChainConfig {
 impl From<CosmosChainConfig> for ChainConfig {
     fn from(config: CosmosChainConfig) -> Self {
         Self {
-            chain_id: layer_climb::prelude::ChainId::new(config.chain_id),
+            chain_id: layer_climb_config::ChainId::new(config.chain_id),
             rpc_endpoint: config.rpc_endpoint,
             grpc_endpoint: config.grpc_endpoint,
             grpc_web_endpoint: None,
@@ -226,5 +229,211 @@ impl AnyChainConfig {
     pub fn from_layer_climb_config(config: ChainConfig) -> Result<Self, ChainConfigError> {
         let cosmos_config = CosmosChainConfig::from_chain_config(config)?;
         Ok(AnyChainConfig::Cosmos(cosmos_config))
+    }
+}
+
+/// Chains are identified by `ChainKey`, which is a combination of a namespace and id
+/// for now - we natively support 3 namespaces: cosmos, evm, and dev
+#[derive(Debug, Default, Deserialize, Serialize, Clone, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct ChainConfigs {
+    /// Cosmos-style chains (including Layer-SDK)
+    #[serde(default)]
+    pub cosmos: BTreeMap<ChainKeyId, CosmosChainConfigBuilder>,
+    /// EVM-style chains
+    #[serde(default)]
+    pub evm: BTreeMap<ChainKeyId, EvmChainConfigBuilder>,
+    /// DEV-only chains
+    /// The key here can be different than the chain_id inside the config
+    #[serde(default)]
+    pub dev: BTreeMap<ChainKeyId, AnyChainConfig>,
+}
+
+impl ChainConfigs {
+    pub fn get_chain(&self, key: &ChainKey) -> Option<AnyChainConfig> {
+        match key.namespace.as_str() {
+            ChainKeyNamespace::COSMOS => self
+                .cosmos
+                .get(&key.id)
+                .map(|c| AnyChainConfig::Cosmos(c.clone().build(key.id.clone()))),
+            ChainKeyNamespace::EVM => self
+                .evm
+                .get(&key.id)
+                .map(|c| AnyChainConfig::Evm(c.clone().build(key.id.clone()))),
+            ChainKeyNamespace::DEV => self.dev.get(&key.id).cloned(),
+            _ => None,
+        }
+    }
+
+    pub fn cosmos_iter(&self) -> impl Iterator<Item = CosmosChainConfig> + '_ {
+        self.cosmos
+            .iter()
+            .map(|(id, config)| config.clone().build(id.clone()))
+    }
+
+    pub fn evm_iter(&self) -> impl Iterator<Item = EvmChainConfig> + '_ {
+        self.evm
+            .iter()
+            .map(|(id, config)| config.clone().build(id.clone()))
+    }
+
+    pub fn dev_iter(&self) -> impl Iterator<Item = AnyChainConfig> + '_ {
+        self.dev.values().cloned()
+    }
+
+    pub fn all_chain_keys(&self) -> Result<Vec<ChainKey>, anyhow::Error> {
+        let mut keys = Vec::new();
+
+        for id in self.evm.keys() {
+            keys.push(ChainKey {
+                namespace: ChainKeyNamespace::EVM.parse()?,
+                id: id.clone(),
+            });
+        }
+        for id in self.cosmos.keys() {
+            keys.push(ChainKey {
+                namespace: ChainKeyNamespace::COSMOS.parse()?,
+                id: id.clone(),
+            });
+        }
+        for id in self.dev.keys() {
+            keys.push(ChainKey {
+                namespace: ChainKeyNamespace::DEV.parse()?,
+                id: id.clone(),
+            });
+        }
+
+        Ok(keys)
+    }
+
+    pub fn chain_keys(&self, namespace: ChainKeyNamespace) -> Vec<ChainKey> {
+        match namespace.as_str() {
+            ChainKeyNamespace::COSMOS => self
+                .cosmos
+                .keys()
+                .map(|id| ChainKey {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                })
+                .collect(),
+            ChainKeyNamespace::EVM => self
+                .evm
+                .keys()
+                .map(|id| ChainKey {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                })
+                .collect(),
+            ChainKeyNamespace::DEV => self
+                .dev
+                .keys()
+                .map(|id| ChainKey {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    pub fn add_chain(
+        &mut self,
+        key: ChainKey,
+        config: AnyChainConfig,
+    ) -> Result<(), ChainConfigError> {
+        if self.get_chain(&key).is_some() {
+            return Err(ChainConfigError::DuplicateChain(key));
+        }
+
+        match key.namespace.as_str() {
+            ChainKeyNamespace::DEV => {
+                self.dev.insert(key.id, config);
+            }
+            ChainKeyNamespace::EVM => match config {
+                AnyChainConfig::Evm(evm_config) => {
+                    if evm_config.chain_id != key.id {
+                        return Err(ChainConfigError::IdMismatch {
+                            expected: key.id,
+                            actual: evm_config.chain_id,
+                        });
+                    }
+                    let evm_config = EvmChainConfigBuilder {
+                        ws_endpoints: evm_config.ws_endpoints,
+                        http_endpoint: evm_config.http_endpoint,
+                        faucet_endpoint: evm_config.faucet_endpoint,
+                        ws_priority_endpoint_index: evm_config.ws_priority_endpoint_index,
+                    };
+                    self.evm.insert(key.id, evm_config);
+                }
+                _ => return Err(ChainConfigError::InvalidNamespaceForEvm(key.namespace)),
+            },
+            ChainKeyNamespace::COSMOS => match config {
+                AnyChainConfig::Cosmos(cosmos_config) => {
+                    if cosmos_config.chain_id != key.id {
+                        return Err(ChainConfigError::IdMismatch {
+                            expected: key.id,
+                            actual: cosmos_config.chain_id,
+                        });
+                    }
+                    let cosmos_config = CosmosChainConfigBuilder {
+                        bech32_prefix: cosmos_config.bech32_prefix,
+                        rpc_endpoint: cosmos_config.rpc_endpoint,
+                        grpc_endpoint: cosmos_config.grpc_endpoint,
+                        gas_price: cosmos_config.gas_price,
+                        gas_denom: cosmos_config.gas_denom,
+                        faucet_endpoint: cosmos_config.faucet_endpoint,
+                    };
+                    self.cosmos.insert(key.id, cosmos_config);
+                }
+                _ => return Err(ChainConfigError::InvalidNamespaceForCosmos(key.namespace)),
+            },
+            _ => return Err(ChainConfigError::InvalidNamespace(key.namespace)),
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+pub struct CosmosChainConfigBuilder {
+    pub bech32_prefix: String,
+    pub rpc_endpoint: Option<String>,
+    pub grpc_endpoint: Option<String>,
+    pub gas_price: f32,
+    pub gas_denom: String,
+    pub faucet_endpoint: Option<String>,
+}
+
+impl CosmosChainConfigBuilder {
+    pub fn build(self, id: ChainKeyId) -> CosmosChainConfig {
+        CosmosChainConfig {
+            chain_id: id,
+            bech32_prefix: self.bech32_prefix,
+            rpc_endpoint: self.rpc_endpoint,
+            grpc_endpoint: self.grpc_endpoint,
+            gas_price: self.gas_price,
+            gas_denom: self.gas_denom,
+            faucet_endpoint: self.faucet_endpoint,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+pub struct EvmChainConfigBuilder {
+    pub ws_endpoints: Vec<String>,
+    pub http_endpoint: Option<String>,
+    pub faucet_endpoint: Option<String>,
+    pub ws_priority_endpoint_index: Option<usize>,
+}
+
+impl EvmChainConfigBuilder {
+    pub fn build(self, id: ChainKeyId) -> EvmChainConfig {
+        EvmChainConfig {
+            chain_id: id,
+            ws_endpoints: self.ws_endpoints,
+            http_endpoint: self.http_endpoint,
+            faucet_endpoint: self.faucet_endpoint,
+            ws_priority_endpoint_index: self.ws_priority_endpoint_index,
+        }
     }
 }

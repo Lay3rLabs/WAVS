@@ -54,14 +54,14 @@ fn mock_e2e_trigger_flow() {
     runner.send_trigger(
         service_id.clone(),
         WorkflowId::default().to_string().as_str(),
-        &task_queue_address.clone(),
+        &task_queue_address.clone().into(),
         &SquareRequest { x: 3 },
         "evm:anvil",
     );
     runner.send_trigger(
         service_id,
         WorkflowId::default().to_string().as_str(),
-        &task_queue_address,
+        &task_queue_address.into(),
         &SquareRequest { x: 21 },
         "evm:anvil",
     );

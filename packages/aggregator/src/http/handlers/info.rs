@@ -3,8 +3,8 @@ use anyhow::anyhow;
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
-use utils::config::ChainConfigs;
 use utoipa::ToSchema;
+use wavs_types::ChainConfigs;
 
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]

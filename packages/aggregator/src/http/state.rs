@@ -3,18 +3,19 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use layer_climb::{prelude::KeySigner, signing::SigningClient};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use utils::{
     async_transaction::AsyncTransaction,
-    config::{EvmChainConfig, EvmChainConfigExt},
+    config::EvmChainConfigExt,
     evm_client::EvmSigningClient,
     storage::{
         db::{RedbStorage, Table, JSON},
         fs::FileStorage,
     },
 };
-use wavs_types::{ChainKey, EventId, Packet, ServiceId};
+use wavs_types::{ChainKey, CosmosChainConfig, EventId, EvmChainConfig, Packet, ServiceId};
 
 use crate::{
     config::Config,
@@ -64,6 +65,7 @@ pub struct HttpState {
     pub queue_transaction: AsyncTransaction<QuorumQueueId>,
     storage: RedbStorage,
     evm_clients: Arc<RwLock<HashMap<ChainKey, EvmSigningClient>>>,
+    cosmos_clients: Arc<RwLock<HashMap<ChainKey, SigningClient>>>,
     pub aggregator_engine: Arc<AggregatorEngine<FileStorage>>,
     pub metrics: utils::telemetry::AggregatorMetrics,
 }
@@ -89,8 +91,9 @@ impl HttpState {
         tracing::info!("Creating file storage at: {:?}", config.data);
         let file_storage = FileStorage::new(&config.data)?;
         let ca_storage = Arc::new(file_storage);
-        let storage = RedbStorage::new(config.data.join("db"))?;
+        let storage = RedbStorage::new()?;
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
+        let cosmos_clients = Arc::new(RwLock::new(HashMap::new()));
 
         let engine = AggregatorEngine::new(
             config.data.join("wasm"),
@@ -109,6 +112,7 @@ impl HttpState {
             config,
             storage,
             evm_clients,
+            cosmos_clients,
             queue_transaction: AsyncTransaction::new(false),
             aggregator_engine: Arc::new(engine),
             metrics,
@@ -154,6 +158,49 @@ impl HttpState {
             .insert(chain.clone(), evm_client.clone());
 
         Ok(evm_client)
+    }
+
+    #[instrument(skip(self), fields(chain = %chain))]
+    pub async fn get_cosmos_client(&self, chain: &ChainKey) -> AggregatorResult<SigningClient> {
+        {
+            let lock = self.cosmos_clients.read().unwrap();
+
+            if let Some(client) = lock.get(chain) {
+                tracing::debug!("Using cached Cosmos client for chain: {chain}");
+                return Ok(client.clone());
+            }
+        }
+
+        let chain_config = self
+            .config
+            .chains
+            .read()
+            .map_err(|_| anyhow::anyhow!("Chain configs lock is poisoned"))?
+            .get_chain(chain)
+            .ok_or(AggregatorError::ChainNotFound(chain.clone()))?;
+
+        let chain_config = CosmosChainConfig::try_from(chain_config)?;
+
+        let key_signer = KeySigner::new_mnemonic_str(
+            &self
+                .config
+                .cosmos_credential
+                .clone()
+                .ok_or(AggregatorError::MissingCosmosCredential)?,
+            None,
+        )?;
+
+        tracing::info!("Creating new Cosmos client for chain: {}", chain);
+        let cosmos_client = SigningClient::new(chain_config.into(), key_signer, None)
+            .await
+            .map_err(AggregatorError::CreateEvmClient)?;
+
+        self.cosmos_clients
+            .write()
+            .unwrap()
+            .insert(chain.clone(), cosmos_client.clone());
+
+        Ok(cosmos_client)
     }
 
     pub async fn get_quorum_queue(&self, id: &QuorumQueueId) -> AggregatorResult<QuorumQueue> {

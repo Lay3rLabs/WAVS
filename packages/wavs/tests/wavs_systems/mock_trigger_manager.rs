@@ -25,18 +25,18 @@ pub fn mock_real_trigger_action(
 ) -> TriggerAction {
     let data = serde_json::to_vec(data).unwrap();
     match contract_address {
-        layer_climb::prelude::Address::Evm(_) => {
+        layer_climb::prelude::Address::Evm(contract_address) => {
             let event = rand_event_evm();
             TriggerAction {
                 config: TriggerConfig::evm_contract_event(
                     service_id,
                     workflow_id,
-                    contract_address.clone().try_into().unwrap(),
+                    contract_address.clone().into(),
                     chain.clone(),
                     event,
                 ),
                 data: TriggerData::EvmContractEvent {
-                    contract_address: contract_address.clone().try_into().unwrap(),
+                    contract_address: contract_address.clone().into(),
                     chain: chain.try_into().unwrap(),
                     // FIXME: this should be a proper EVM event, this is just a placeholder
                     log_data: LogData::new(vec![event.into_inner().into()], data.into()).unwrap(),
@@ -49,7 +49,7 @@ pub fn mock_real_trigger_action(
                 },
             }
         }
-        layer_climb::prelude::Address::Cosmos { .. } => {
+        layer_climb::prelude::Address::Cosmos(contract_address) => {
             let event = rand_event_cosmos();
 
             TriggerAction {
@@ -63,8 +63,8 @@ pub fn mock_real_trigger_action(
                 data: TriggerData::CosmosContractEvent {
                     contract_address: contract_address.clone(),
                     chain: chain.try_into().unwrap(),
-                    event: cosmwasm_std::Event::new("new-message").add_attributes(vec![
-                        ("id", "1".to_string()),
+                    event: cosmwasm_std::Event::new("push-message").add_attributes(vec![
+                        ("trigger-id", "1".to_string()),
                         ("data", const_hex::encode(data)),
                     ]),
                     block_height: 1,
@@ -114,8 +114,8 @@ pub fn mock_cosmos_event_trigger_data(trigger_id: u64, data: impl AsRef<[u8]>) -
         contract_address: rand_address_cosmos(),
         chain: "cosmos:layer".parse().unwrap(),
         // matches example_cosmos_client::NewMessageEvent
-        event: cosmwasm_std::Event::new("new-message")
-            .add_attribute("id", trigger_id.to_string())
+        event: cosmwasm_std::Event::new("push-message")
+            .add_attribute("trigger-id", trigger_id.to_string())
             .add_attribute("data", const_hex::encode(data.as_ref())),
         block_height: 0,
         event_index: 0,

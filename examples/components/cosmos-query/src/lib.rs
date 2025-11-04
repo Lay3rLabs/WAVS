@@ -51,7 +51,9 @@ impl Guest for Component {
 
             serde_json::to_vec(&resp)
                 .map_err(|e| anyhow!("{:?}", e))
-                .map(|output| encode_trigger_output(trigger_id, output))
+                .map(|output| {
+                    encode_trigger_output(trigger_id, output, host::get_service().service.manager)
+                })
         })
         .map_err(|e| e.to_string())
         .map(Some)

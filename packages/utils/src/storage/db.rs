@@ -1,7 +1,8 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use redb::{
-    AccessGuard, Database, Key, ReadOnlyTable, ReadableDatabase, TableError, TypeName, Value,
+    backends::InMemoryBackend, AccessGuard, Database, Key, ReadOnlyTable, ReadableDatabase,
+    TableError, TypeName, Value,
 };
 use serde::{de::Deserialize, Serialize};
 use std::any::type_name;
@@ -16,20 +17,11 @@ pub type Table<K, V> = redb::TableDefinition<'static, K, V>;
 pub type DBError = redb::Error;
 
 impl RedbStorage {
-    #[instrument(skip(path), fields(subsys = "DbStorage"))]
+    #[instrument(fields(subsys = "DbStorage"))]
     #[allow(clippy::result_large_err)]
-    pub fn new(path: impl AsRef<Path>) -> Result<Self, DBError> {
-        let path = if path.as_ref().is_dir() {
-            tracing::warn!(
-                "RedbStorage: Path {} is a directory, creating database in it.",
-                path.as_ref().display()
-            );
+    pub fn new() -> Result<Self, DBError> {
+        let inner = Arc::new(Database::builder().create_with_backend(InMemoryBackend::new())?);
 
-            path.as_ref().join("db").to_path_buf()
-        } else {
-            path.as_ref().to_path_buf()
-        };
-        let inner = Arc::new(redb::Database::create(path)?);
         Ok(RedbStorage { inner })
     }
 }
@@ -142,5 +134,251 @@ where
 
     fn type_name() -> TypeName {
         TypeName::new(&format!("JSON<{}>", type_name::<T>()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use futures::stream::FuturesUnordered;
+    use futures::StreamExt;
+    use redb::backends::InMemoryBackend;
+    use redb::{Database, TableDefinition};
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::thread::{self, sleep};
+    use std::time::Duration;
+    use tempfile::TempDir;
+    use tokio::task::spawn_blocking;
+
+    use crate::storage::db::RedbStorage;
+
+    const TABLE: TableDefinition<'static, u32, u32> = TableDefinition::new("TABLE");
+
+    #[derive(Clone)]
+    struct Counter {
+        counts: Arc<std::sync::Mutex<HashMap<usize, usize>>>,
+    }
+
+    impl Counter {
+        pub fn new() -> Self {
+            Self {
+                counts: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            }
+        }
+
+        pub fn increment(&self, thread_num: usize) {
+            *self.counts.lock().unwrap().entry(thread_num).or_insert(0) += 1;
+        }
+
+        // only true if all threads have reached op_count
+        // and there are thread_count threads
+        pub fn reached(&self, thread_count: usize, op_count: usize) -> bool {
+            let counts = self.counts.lock().unwrap();
+            if counts.len() < thread_count - 1 {
+                return false;
+            }
+            for count in counts.values() {
+                if *count < op_count {
+                    return false;
+                }
+            }
+            true
+        }
+    }
+
+    impl std::fmt::Debug for Counter {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let counts = &*self.counts.lock().unwrap();
+            counts.fmt(f)
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn storage_multithreaded_in_memory() {
+        storage_multithreaded_inner(StorageKind::InMemory, 20, 1000);
+    }
+
+    #[test]
+    #[ignore]
+    fn storage_multithreaded_on_disk() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_db.redb");
+
+        // incresaing the number of ops *dramatically* increases test time
+        storage_multithreaded_inner(StorageKind::OnDisk(db_path), 10, 100);
+
+        // just make sure we didn't drop it
+        let _temp_dir = temp_dir;
+    }
+
+    fn storage_multithreaded_inner(
+        storage_kind: StorageKind,
+        task_target: usize,
+        op_target: usize,
+    ) {
+        let storage = new_storage(storage_kind);
+
+        // stash something at the beginning so we're guaranteed to get a valid read
+        storage.set(TABLE, 1u32, &1u32).unwrap();
+
+        let counter = Counter::new();
+
+        for thread_num in 0..task_target {
+            thread::spawn({
+                let storage = storage.clone();
+                let counter = counter.clone();
+                move || loop {
+                    if thread_num % 2 == 0 {
+                        storage.set(TABLE, 1u32, &1u32).unwrap();
+                    } else {
+                        let value = storage.get(TABLE, 1).unwrap().unwrap().value();
+                        assert_eq!(value, 1u32);
+                    }
+
+                    counter.increment(thread_num);
+                    // give it a little time to let other threads run
+                    sleep(Duration::from_millis(1));
+                }
+            });
+        }
+
+        loop {
+            if counter.reached(task_target, op_target) {
+                break;
+            }
+
+            // give it a little time to let other threads run
+            sleep(Duration::from_millis(1));
+        }
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn storage_concurrent_in_memory() {
+        storage_concurrent_inner(StorageKind::InMemory, 20, 1000).await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn storage_concurrent_on_disk() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_db.redb");
+
+        // incresaing the number of ops *dramatically* increases test time
+        storage_concurrent_inner(StorageKind::OnDisk(db_path), 10, 100).await;
+
+        // just make sure we didn't drop it
+        let _temp_dir = temp_dir;
+    }
+
+    async fn storage_concurrent_inner(
+        storage_kind: StorageKind,
+        task_target: usize,
+        op_target: usize,
+    ) {
+        let storage = new_storage(storage_kind);
+
+        // stash something at the beginning so we're guaranteed to get a valid read
+        storage.set(TABLE, 1u32, &1u32).unwrap();
+
+        let counter = Counter::new();
+
+        let mut futures = FuturesUnordered::new();
+
+        for task_num in 0..task_target {
+            for _ in 0..op_target {
+                futures.push({
+                    let storage = storage.clone();
+                    let counter = counter.clone();
+                    async move {
+                        if task_num % 2 == 0 {
+                            spawn_blocking(move || {
+                                storage.set(TABLE, 1u32, &1u32).unwrap();
+                            })
+                            .await
+                            .unwrap();
+                        } else {
+                            let value = spawn_blocking(move || {
+                                storage.get(TABLE, 1).unwrap().unwrap().value()
+                            })
+                            .await
+                            .unwrap();
+
+                            assert_eq!(value, 1u32);
+                        }
+                        counter.increment(task_num);
+                    }
+                });
+            }
+        }
+
+        while (futures.next().await).is_some() {}
+
+        if !counter.reached(task_target, op_target) {
+            panic!("did not reach expected count")
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn storage_serial_in_memory() {
+        storage_serial_inner(StorageKind::InMemory, 20, 1000);
+    }
+
+    #[test]
+    #[ignore]
+    fn storage_serial_on_disk() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_db.redb");
+
+        // incresaing the number of ops *dramatically* increases test time
+        storage_serial_inner(StorageKind::OnDisk(db_path), 10, 100);
+
+        // just make sure we didn't drop it
+        let _temp_dir = temp_dir;
+    }
+
+    fn storage_serial_inner(storage_kind: StorageKind, task_target: usize, op_target: usize) {
+        let storage = new_storage(storage_kind);
+
+        // stash something at the beginning so we're guaranteed to get a valid read
+        storage.set(TABLE, 1u32, &1u32).unwrap();
+
+        // just to make sure we're a bit closer to the other tests
+        let counter = Counter::new();
+
+        for task_num in 0..task_target {
+            for _ in 0..op_target {
+                if task_num % 2 == 0 {
+                    storage.set(TABLE, 1u32, &1u32).unwrap();
+                } else {
+                    let value = storage.get(TABLE, 1).unwrap().unwrap().value();
+                    assert_eq!(value, 1u32);
+                }
+                counter.increment(task_num);
+            }
+        }
+
+        if !counter.reached(task_target, op_target) {
+            panic!("did not reach expected count")
+        }
+    }
+
+    enum StorageKind {
+        InMemory,
+        OnDisk(std::path::PathBuf),
+    }
+
+    fn new_storage(kind: StorageKind) -> RedbStorage {
+        RedbStorage {
+            inner: Arc::new(match kind {
+                StorageKind::InMemory => Database::builder()
+                    .create_with_backend(InMemoryBackend::new())
+                    .unwrap(),
+                StorageKind::OnDisk(path) => Database::create(path).unwrap(),
+            }),
+        }
     }
 }

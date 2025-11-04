@@ -2,6 +2,7 @@ use crate::{clients::HttpClient, context::CliContext, deploy::CommandDeployResul
 use alloy_provider::DynProvider;
 use anyhow::{Context, Result};
 use iri_string::types::UriString;
+use layer_climb::signing::SigningClient;
 use wavs_types::{Service, ServiceManager};
 
 pub struct DeployService {
@@ -13,7 +14,7 @@ impl std::fmt::Display for DeployService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "New Service deployed to wavs")?;
         if let Some(save_service_args) = &self.args.set_service_url_args {
-            write!(f, "\n\n{:#?}", save_service_args.service_uri)?;
+            write!(f, "\n\n{:#?}", save_service_args.service_uri())?;
         }
         write!(f, "\n\n{:#?}", self.args.service_manager)
     }
@@ -34,9 +35,38 @@ pub struct DeployServiceArgs {
 }
 
 #[derive(Clone)]
-pub struct SetServiceUriArgs {
-    pub provider: DynProvider,
-    pub service_uri: UriString,
+pub enum SetServiceUriArgs {
+    Evm {
+        provider: DynProvider,
+        service_uri: UriString,
+    },
+    Cosmos {
+        client: SigningClient,
+        service_uri: UriString,
+    },
+}
+
+impl SetServiceUriArgs {
+    pub fn new_evm(provider: DynProvider, service_uri: UriString) -> Self {
+        Self::Evm {
+            provider,
+            service_uri,
+        }
+    }
+
+    pub fn new_cosmos(client: SigningClient, service_uri: UriString) -> Self {
+        Self::Cosmos {
+            client,
+            service_uri,
+        }
+    }
+
+    pub fn service_uri(&self) -> &UriString {
+        match self {
+            SetServiceUriArgs::Evm { service_uri, .. } => service_uri,
+            SetServiceUriArgs::Cosmos { service_uri, .. } => service_uri,
+        }
+    }
 }
 
 impl DeployService {

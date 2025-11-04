@@ -30,7 +30,7 @@ impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
                 event_type,
             } => component_service::Trigger::CosmosContractEvent(
                 component_service::TriggerCosmosContractEvent {
-                    address: address.try_into()?,
+                    address: address.into(),
                     chain: chain.to_string(),
                     event_type,
                 },
@@ -77,18 +77,13 @@ impl TryFrom<layer_climb::prelude::Address> for component_chain::CosmosAddress {
     type Error = anyhow::Error;
 
     fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
-        let (bech32_addr, prefix_len) = match address {
-            layer_climb::prelude::Address::Cosmos {
-                bech32_addr,
-                prefix_len,
-            } => (bech32_addr, prefix_len),
-            _ => return Err(anyhow::anyhow!("Not a cosmos address")),
-        };
-
-        Ok(Self {
-            bech32_addr,
-            prefix_len: prefix_len as u32,
-        })
+        match address {
+            layer_climb::prelude::Address::Cosmos(addr) => Ok(Self {
+                bech32_addr: addr.to_string(),
+                prefix_len: addr.prefix().len() as u32,
+            }),
+            _ => Err(anyhow::anyhow!("Not a cosmos address")),
+        }
     }
 }
 
@@ -113,10 +108,19 @@ impl From<alloy_primitives::Address> for component_chain::EvmAddress {
     }
 }
 
-impl From<utils::config::CosmosChainConfig>
+impl From<layer_climb::prelude::CosmosAddr> for component_chain::CosmosAddress {
+    fn from(address: layer_climb::prelude::CosmosAddr) -> Self {
+        component_chain::CosmosAddress {
+            bech32_addr: address.to_string(),
+            prefix_len: address.prefix().len() as u32,
+        }
+    }
+}
+
+impl From<wavs_types::CosmosChainConfig>
     for crate::bindings::operator::world::host::CosmosChainConfig
 {
-    fn from(config: utils::config::CosmosChainConfig) -> Self {
+    fn from(config: wavs_types::CosmosChainConfig) -> Self {
         Self {
             chain_id: config.chain_id.as_str().to_string(),
             rpc_endpoint: config.rpc_endpoint,
@@ -129,10 +133,8 @@ impl From<utils::config::CosmosChainConfig>
     }
 }
 
-impl From<utils::config::EvmChainConfig>
-    for crate::bindings::operator::world::host::EvmChainConfig
-{
-    fn from(config: utils::config::EvmChainConfig) -> Self {
+impl From<wavs_types::EvmChainConfig> for crate::bindings::operator::world::host::EvmChainConfig {
+    fn from(config: wavs_types::EvmChainConfig) -> Self {
         Self {
             chain_id: config.chain_id.to_string(),
             ws_endpoints: config.ws_endpoints,
@@ -312,24 +314,12 @@ impl From<wavs_types::ServiceManager> for component_service::ServiceManager {
                     address: address.into(),
                 })
             }
-        }
-    }
-}
-
-impl From<wavs_types::Aggregator> for component_service::Aggregator {
-    fn from(src: wavs_types::Aggregator) -> Self {
-        match src {
-            wavs_types::Aggregator::Evm(evm) => component_service::Aggregator::Evm(evm.into()),
-        }
-    }
-}
-
-impl From<wavs_types::EvmContractSubmission> for component_service::EvmContractSubmission {
-    fn from(src: wavs_types::EvmContractSubmission) -> Self {
-        Self {
-            chain: src.chain.to_string(),
-            address: src.address.into(),
-            max_gas: src.max_gas,
+            wavs_types::ServiceManager::Cosmos { chain, address } => {
+                component_service::ServiceManager::Cosmos(component_service::CosmosManager {
+                    chain: chain.to_string(),
+                    address: address.into(),
+                })
+            }
         }
     }
 }
@@ -411,7 +401,7 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                 block_height,
             } => Ok(component_input::TriggerData::CosmosContractEvent(
                 component_events::TriggerDataCosmosContractEvent {
-                    contract_address: contract_address.try_into()?,
+                    contract_address: contract_address.into(),
                     chain: chain.to_string(),
                     event: component_events::CosmosEvent {
                         ty: event.ty,
@@ -509,6 +499,15 @@ impl From<wavs_types::ServiceManager> for aggregator_service::ServiceManager {
                     },
                 })
             }
+            wavs_types::ServiceManager::Cosmos { chain, address } => {
+                aggregator_service::ServiceManager::Cosmos(aggregator_service::CosmosManager {
+                    chain: chain.to_string(),
+                    address: aggregator_chain::CosmosAddress {
+                        bech32_addr: address.to_string(),
+                        prefix_len: address.prefix().len() as u32,
+                    },
+                })
+            }
         }
     }
 }
@@ -517,6 +516,23 @@ impl From<alloy_primitives::Address> for aggregator_chain::EvmAddress {
     fn from(address: alloy_primitives::Address) -> Self {
         aggregator_chain::EvmAddress {
             raw_bytes: address.to_vec(),
+        }
+    }
+}
+
+impl From<layer_climb::prelude::EvmAddr> for aggregator_chain::EvmAddress {
+    fn from(address: layer_climb::prelude::EvmAddr) -> Self {
+        aggregator_chain::EvmAddress {
+            raw_bytes: address.as_bytes().to_vec(),
+        }
+    }
+}
+
+impl From<layer_climb::prelude::CosmosAddr> for aggregator_chain::CosmosAddress {
+    fn from(address: layer_climb::prelude::CosmosAddr) -> Self {
+        aggregator_chain::CosmosAddress {
+            bech32_addr: address.to_string(),
+            prefix_len: address.prefix().len() as u32,
         }
     }
 }
@@ -586,7 +602,7 @@ impl TryFrom<wavs_types::TriggerData> for aggregator_types::TriggerData {
                 block_height,
             } => Ok(aggregator_types::TriggerData::CosmosContractEvent(
                 aggregator_events::TriggerDataCosmosContractEvent {
-                    contract_address: contract_address.try_into()?,
+                    contract_address: contract_address.into(),
                     chain: chain.to_string(),
                     event: aggregator_events::CosmosEvent {
                         ty: event.ty,
@@ -733,16 +749,6 @@ impl From<wavs_types::SignaturePrefix> for aggregator_service::SignaturePrefix {
     }
 }
 
-impl From<wavs_types::EvmContractSubmission> for aggregator_service::EvmContractSubmission {
-    fn from(submission: wavs_types::EvmContractSubmission) -> Self {
-        aggregator_service::EvmContractSubmission {
-            chain: submission.chain.to_string(),
-            address: submission.address.into(),
-            max_gas: submission.max_gas,
-        }
-    }
-}
-
 impl TryFrom<wavs_types::Trigger> for aggregator_service::Trigger {
     type Error = anyhow::Error;
 
@@ -766,7 +772,7 @@ impl TryFrom<wavs_types::Trigger> for aggregator_service::Trigger {
                 event_type,
             } => aggregator_service::Trigger::CosmosContractEvent(
                 aggregator_service::TriggerCosmosContractEvent {
-                    address: address.try_into()?,
+                    address: address.into(),
                     chain: chain.to_string(),
                     event_type,
                 },
@@ -801,18 +807,13 @@ impl TryFrom<layer_climb::prelude::Address> for aggregator_chain::CosmosAddress 
     type Error = anyhow::Error;
 
     fn try_from(address: layer_climb::prelude::Address) -> Result<Self, Self::Error> {
-        let (bech32_addr, prefix_len) = match address {
-            layer_climb::prelude::Address::Cosmos {
-                bech32_addr,
-                prefix_len,
-            } => (bech32_addr, prefix_len),
-            _ => return Err(anyhow::anyhow!("Not a cosmos address")),
-        };
-
-        Ok(Self {
-            bech32_addr,
-            prefix_len: prefix_len as u32,
-        })
+        match address {
+            layer_climb::prelude::Address::Cosmos(addr) => Ok(Self {
+                bech32_addr: addr.to_string(),
+                prefix_len: addr.prefix().len() as u32,
+            }),
+            _ => Err(anyhow::anyhow!("Not a cosmos address")),
+        }
     }
 }
 
@@ -843,14 +844,8 @@ impl From<aggregator_core::Duration> for wavs_types::Duration {
 impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
     fn from(action: wavs_types::AggregatorAction) -> Self {
         match action {
-            wavs_types::AggregatorAction::Submit(submit) => {
-                aggregator_types::AggregatorAction::Submit(aggregator_types::SubmitAction {
-                    chain: submit.chain,
-                    contract_address: aggregator_chain::EvmAddress {
-                        raw_bytes: submit.contract_address,
-                    },
-                    gas_price: submit.gas_price.map(|x| x.into()),
-                })
+            wavs_types::AggregatorAction::Submit(action) => {
+                aggregator_types::AggregatorAction::Submit(action.into())
             }
             wavs_types::AggregatorAction::Timer(timer) => {
                 aggregator_types::AggregatorAction::Timer(aggregator_types::TimerAction {
@@ -861,27 +856,29 @@ impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
     }
 }
 
-impl From<aggregator_types::AggregatorAction> for wavs_types::AggregatorAction {
-    fn from(action: aggregator_types::AggregatorAction) -> Self {
+impl From<wavs_types::SubmitAction> for aggregator_types::SubmitAction {
+    fn from(action: wavs_types::SubmitAction) -> Self {
         match action {
-            aggregator_types::AggregatorAction::Submit(submit) => {
-                wavs_types::AggregatorAction::Submit(wavs_types::SubmitAction {
-                    chain: submit.chain,
-                    contract_address: submit.contract_address.raw_bytes,
-                    gas_price: submit.gas_price.map(|x| x.into()),
+            wavs_types::SubmitAction::Evm(action) => {
+                aggregator_types::SubmitAction::Evm(aggregator_types::EvmSubmitAction {
+                    chain: action.chain.to_string(),
+                    address: action.address.into(),
+                    gas_price: action.gas_price.map(|x| x.into()),
                 })
             }
-            aggregator_types::AggregatorAction::Timer(timer) => {
-                wavs_types::AggregatorAction::Timer(wavs_types::TimerAction {
-                    delay: timer.delay.into(),
+            wavs_types::SubmitAction::Cosmos(action) => {
+                aggregator_types::SubmitAction::Cosmos(aggregator_types::CosmosSubmitAction {
+                    chain: action.chain.to_string(),
+                    address: action.address.into(),
+                    gas_price: action.gas_price.map(|x| x.into()),
                 })
             }
         }
     }
 }
 
-impl From<utils::config::CosmosChainConfig> for aggregator_chain::CosmosChainConfig {
-    fn from(config: utils::config::CosmosChainConfig) -> Self {
+impl From<wavs_types::CosmosChainConfig> for aggregator_chain::CosmosChainConfig {
+    fn from(config: wavs_types::CosmosChainConfig) -> Self {
         Self {
             chain_id: config.chain_id.as_str().to_string(),
             rpc_endpoint: config.rpc_endpoint,
@@ -894,8 +891,8 @@ impl From<utils::config::CosmosChainConfig> for aggregator_chain::CosmosChainCon
     }
 }
 
-impl From<utils::config::EvmChainConfig> for aggregator_chain::EvmChainConfig {
-    fn from(config: utils::config::EvmChainConfig) -> Self {
+impl From<wavs_types::EvmChainConfig> for aggregator_chain::EvmChainConfig {
+    fn from(config: wavs_types::EvmChainConfig) -> Self {
         Self {
             chain_id: config.chain_id.to_string(),
             ws_endpoints: config.ws_endpoints,

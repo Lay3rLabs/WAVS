@@ -24,8 +24,9 @@ pub struct LookupMaps {
     services: Services,
     metrics: TriggerMetrics,
     /// lookup id by (chain name, contract event address, event type)
-    pub triggers_by_cosmos_contract_event:
-        Arc<RwLock<HashMap<(ChainKey, layer_climb::prelude::Address, String), HashSet<LookupId>>>>,
+    pub triggers_by_cosmos_contract_event: Arc<
+        RwLock<HashMap<(ChainKey, layer_climb::prelude::CosmosAddr, String), HashSet<LookupId>>>,
+    >,
     /// lookup id by (chain id, contract event address, event hash)
     pub triggers_by_evm_contract_event: Arc<
         RwLock<HashMap<(ChainKey, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
@@ -98,8 +99,7 @@ impl LookupMaps {
     }
 
     pub fn add_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
-        let manager_address: layer_climb::prelude::Address =
-            service.manager.evm_address_unchecked().into();
+        let manager_address: layer_climb::prelude::Address = service.manager.address();
 
         self.service_manager
             .write()

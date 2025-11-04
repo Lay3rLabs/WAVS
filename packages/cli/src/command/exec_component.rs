@@ -191,7 +191,7 @@ impl ExecComponent {
             chain_configs: &cli_config.chains.read().unwrap(),
             log: HostComponentLogger::OperatorHostComponentLogger(log_wasi),
             keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
-                RedbStorage::new(tempfile::tempdir()?.keep()).unwrap(),
+                RedbStorage::new().unwrap(),
                 "exec_component".to_string(),
             ),
         }

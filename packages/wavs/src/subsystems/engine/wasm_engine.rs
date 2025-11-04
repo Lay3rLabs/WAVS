@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::{path::Path, sync::RwLock};
 use tracing::{event, instrument, span};
-use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
 use utils::telemetry::EngineMetrics;
 use wavs_engine::{
@@ -11,8 +10,8 @@ use wavs_engine::{
     worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{
-    ComponentDigest, ComponentSource, EventId, Service, ServiceId, TriggerAction, WasmResponse,
-    WorkflowId,
+    ChainConfigs, ComponentDigest, ComponentSource, EventId, Service, ServiceId, TriggerAction,
+    WasmResponse, WorkflowId,
 };
 
 use utils::storage::CAStorage;
@@ -261,7 +260,6 @@ pub mod tests {
     fn store_and_list_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let db_dir = tempfile::tempdir().unwrap();
 
         let engine = WasmEngine::new(
             storage,
@@ -271,7 +269,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new(db_dir.path()).unwrap(),
+            RedbStorage::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -295,7 +293,6 @@ pub mod tests {
     fn reject_invalid_wasm() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data,
@@ -304,7 +301,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new(db_dir.path()).unwrap(),
+            RedbStorage::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -324,7 +321,6 @@ pub mod tests {
     async fn execute_echo() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data,
@@ -333,7 +329,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new(db_dir.path()).unwrap(),
+            RedbStorage::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -387,7 +383,6 @@ pub mod tests {
     async fn validate_execute_config_environment() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data,
@@ -396,7 +391,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new(db_dir.path()).unwrap(),
+            RedbStorage::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -490,7 +485,6 @@ pub mod tests {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let low_fuel_limit = 1;
-        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data,
@@ -499,7 +493,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new(db_dir.path()).unwrap(),
+            RedbStorage::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -555,7 +549,6 @@ pub mod tests {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
         let app_data_path = app_data.path().to_path_buf();
-        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data_path,
@@ -564,7 +557,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new(db_dir.path()).unwrap(),
+            RedbStorage::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -606,7 +599,6 @@ pub mod tests {
     async fn execute_with_low_time_limit() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();
-        let db_dir = tempfile::tempdir().unwrap();
         let engine = WasmEngine::new(
             storage,
             &app_data,
@@ -615,7 +607,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new(db_dir.path()).unwrap(),
+            RedbStorage::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 

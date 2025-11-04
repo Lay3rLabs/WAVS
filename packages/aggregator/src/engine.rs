@@ -4,7 +4,6 @@ use std::{path::PathBuf, sync::RwLock};
 use anyhow::Result;
 use tracing::instrument;
 
-use utils::config::ChainConfigs;
 use utils::storage::db::RedbStorage;
 use utils::storage::CAStorage;
 
@@ -17,7 +16,7 @@ use wavs_engine::{
     common::base_engine::{BaseEngine, BaseEngineConfig},
     worlds::instance::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder},
 };
-use wavs_types::{Component, ComponentDigest, Packet};
+use wavs_types::{ChainConfigs, Component, ComponentDigest, Packet};
 
 use crate::error::{AggregatorError, AggregatorResult};
 

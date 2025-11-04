@@ -28,8 +28,16 @@ pub async fn start_cosmos_stream(
                     for (index, event) in events.events_iter().enumerate() {
                         if event.ty().starts_with("wasm-") {
                             let contract_address = event.attributes().find_map(|attr| {
-                                if attr.key() == "_contract_address" {
-                                    query_client.chain_config.parse_address(attr.value()).ok()
+                                if attr.key() == "_contract_address"
+                                    || attr.key() == "contract_address"
+                                    || attr.key() == "_contract_addr"
+                                    || attr.key() == "contract_addr"
+                                {
+                                    query_client
+                                        .chain_config
+                                        .parse_address(attr.value())
+                                        .ok()
+                                        .and_then(|addr| CosmosAddr::try_from(addr).ok())
                                 } else {
                                     None
                                 }
@@ -74,7 +82,7 @@ pub async fn start_cosmos_stream(
 
 #[derive(Debug)]
 pub struct StreamTriggerCosmosContractEvent {
-    pub contract_address: layer_climb::prelude::Address,
+    pub contract_address: layer_climb::prelude::CosmosAddr,
     pub event: cosmwasm_std::Event,
     pub event_index: u64,
 }

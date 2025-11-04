@@ -5,9 +5,10 @@ use utils::{
         address::rand_address_evm,
         anvil::safe_spawn_anvil,
         middleware::{
-            AvsOperator, MiddlewareInstance, MiddlewareServiceManagerConfig, MiddlewareType,
+            evm::{EvmMiddleware, EvmMiddlewareType, MiddlewareServiceManagerConfig},
+            operator::AvsOperator,
         },
-        mock_service_manager::MockServiceManager,
+        mock_service_manager::MockEvmServiceManager,
     },
 };
 
@@ -21,12 +22,10 @@ async fn service_manager_deployment() {
         .await
         .unwrap();
 
-    let middleware_instance = MiddlewareInstance::new(MiddlewareType::Eigenlayer)
-        .await
-        .unwrap();
+    let middleware = EvmMiddleware::new(EvmMiddlewareType::Eigenlayer).unwrap();
 
     // deploy
-    let service_manager = MockServiceManager::new(middleware_instance, client)
+    let service_manager = MockEvmServiceManager::new(middleware, client)
         .await
         .unwrap();
 

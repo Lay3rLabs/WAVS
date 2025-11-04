@@ -72,14 +72,14 @@ fn dispatcher_pipeline() {
         mock_real_trigger_action(
             service.id(),
             workflow_id.to_string().as_str(),
-            &contract_address,
+            &contract_address.clone().into(),
             &SquareRequest::new(3),
             service.manager.chain().to_string().as_str(),
         ),
         mock_real_trigger_action(
             service.id(),
             workflow_id.to_string().as_str(),
-            &contract_address,
+            &contract_address.into(),
             &SquareRequest::new(21),
             service.manager.chain().to_string().as_str(),
         ),

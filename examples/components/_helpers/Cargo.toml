@@ -18,7 +18,8 @@ serde = { workspace = true }
 anyhow = { workspace = true }
 cosmwasm-std = { workspace = true }
 wit-bindgen = { workspace = true }
-cosmos-contract-simple-example = { path = "../../contracts/cosmwasm/simple", package = "simple-example" }
+cw-wavs-trigger-api = {workspace = true}
+cw-wavs-mock-api = {workspace = true}
 
 [lib]
 crate-type = ["rlib", "cdylib"]

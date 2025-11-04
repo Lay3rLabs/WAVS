@@ -1,5 +1,6 @@
 use layer_climb::prelude::*;
-use utils::{config::CosmosChainConfig, context::AppContext};
+use utils::context::AppContext;
+use wavs_types::CosmosChainConfig;
 
 use crate::e2e::config::Configs;
 
@@ -8,20 +9,37 @@ pub struct CosmosInstance {
 }
 
 impl CosmosInstance {
-    pub fn spawn(ctx: AppContext, configs: &Configs, chain_config: CosmosChainConfig) -> Self {
-        let mnemonic = configs.cli.cosmos_mnemonic.as_ref().unwrap();
+    pub fn spawn(
+        ctx: AppContext,
+        configs: &Configs,
+        chain_config: CosmosChainConfig,
+        middleware_index: usize,
+    ) -> Self {
+        let mnemonics_to_fund = vec![
+            &configs.mnemonics.cli_cosmos,
+            &configs.mnemonics.aggregator_cosmos,
+            &configs.mnemonics.cosmos_middleware[middleware_index],
+        ];
 
         let chain_config: layer_climb::prelude::ChainConfig =
             chain_config.clone().to_chain_config();
-        let signer = layer_climb::prelude::KeySigner::new_mnemonic_str(mnemonic, None).unwrap();
 
-        let addr = ctx.rt.block_on(async {
-            chain_config
-                .address_from_pub_key(&signer.public_key().await.unwrap())
-                .unwrap()
+        let addrs = ctx.rt.block_on(async {
+            let mut addrs = Vec::new();
+
+            for mnemonic in mnemonics_to_fund {
+                let signer =
+                    layer_climb::prelude::KeySigner::new_mnemonic_str(mnemonic, None).unwrap();
+                let addr = chain_config
+                    .address_from_pub_key(&signer.public_key().await.unwrap())
+                    .unwrap();
+                addrs.push(addr);
+            }
+
+            addrs
         });
 
-        let instance = layer_climb_cli::handle::CosmosInstance::new(chain_config, vec![addr]);
+        let instance = layer_climb_cli::handle::CosmosInstance::new(chain_config, addrs);
 
         tracing::info!(
             "Setting up Cosmos chain: {}",

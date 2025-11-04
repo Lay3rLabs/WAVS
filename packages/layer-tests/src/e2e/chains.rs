@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
-use utils::config::ChainConfigs;
-use wavs_types::{ChainKey, ChainKeyNamespace};
+use wavs_types::{ChainConfigs, ChainKey, ChainKeyNamespace};
 
 /// Structure to hold the different chain keys for test configuration
 #[derive(Debug, Default, Clone)]
