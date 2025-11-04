@@ -3,11 +3,17 @@ use alloy_provider::Provider;
 use alloy_rpc_types_eth::TransactionReceipt;
 use alloy_signer::k256::SecretKey;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
+use std::time::Duration;
+use tokio::time::sleep;
 use wavs_types::{Credential, Envelope, SignatureData};
 
 use crate::{error::EvmClientError, evm_client::AnyNonceManager};
 
 use super::EvmSigningClient;
+
+// Transaction retry configuration
+const MAX_RETRIES: u32 = 3;
+const BASE_RETRY_DELAY_MS: u64 = 100;
 
 pub fn make_signer(
     credentials: &Credential,
@@ -83,7 +89,6 @@ impl EvmSigningClient {
         }
 
         let mut retry_count = 0;
-        const MAX_RETRIES: u32 = 2;
 
         let receipt = loop {
             let send_result = tx_builder.send().await;
@@ -96,12 +101,17 @@ impl EvmSigningClient {
                         .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
                 }
                 Err(e) => {
+                    if retry_count >= MAX_RETRIES {
+                        return Err(EvmClientError::SendTransaction(e.into()));
+                    }
+
+                    retry_count += 1;
+
                     let error_msg = e.to_string().to_lowercase();
                     let is_nonce_error = error_msg.contains("replacement transaction underpriced")
                         || error_msg.contains("nonce");
 
-                    if is_nonce_error && retry_count < MAX_RETRIES {
-                        retry_count += 1;
+                    if is_nonce_error {
                         tracing::warn!(
                             "Nonce error detected (attempt {}/{}), refreshing nonce and retrying: {}",
                             retry_count, MAX_RETRIES, e
@@ -118,9 +128,19 @@ impl EvmSigningClient {
                                 continue;
                             }
                         }
-                    }
+                    } else {
+                        tracing::warn!(
+                            "Transaction failed (attempt {}/{}), retrying: {}",
+                            retry_count,
+                            MAX_RETRIES,
+                            e
+                        );
 
-                    return Err(EvmClientError::SendTransaction(e.into()));
+                        // Add exponential backoff delay for network-related retries
+                        let delay_ms = BASE_RETRY_DELAY_MS * (1 << (retry_count - 1));
+                        sleep(Duration::from_millis(delay_ms)).await;
+                        continue;
+                    }
                 }
             }
         };
