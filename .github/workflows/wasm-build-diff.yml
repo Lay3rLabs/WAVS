@@ -1,0 +1,158 @@
+name: Build WASMs and Show Diffs
+
+on:
+  pull_request:
+    branches: [ main, master ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-wasms:
+    name: Build WASMs and Show Diffs
+    runs-on: macOS-15-arm64
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Build WASMs for current branch
+        run: |
+          echo "Building WASMs for current branch..."
+          just wasi-build
+
+      - name: Store current WASMs
+        run: |
+          mkdir -p /tmp/current-wasms
+          cp -r examples/build/components /tmp/current-wasms/
+          if [ -f "checksums.txt" ]; then
+            cp checksums.txt /tmp/current-wasms/
+          fi
+          echo "Current WASMs built and stored"
+
+      - name: Checkout base branch for comparison
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git checkout -b temp-base-branch origin/${{ github.base_ref }}
+
+      - name: Clean build directory
+        run: |
+          rm -rf examples/build/components
+          mkdir -p examples/build/components
+
+      - name: Build WASMs for base branch
+        run: |
+          echo "Building WASMs for base branch (${{ github.base_ref }})..."
+          just wasi-build
+
+      - name: Store base WASMs
+        run: |
+          mkdir -p /tmp/base-wasms
+          cp -r examples/build/components /tmp/base-wasms/
+          if [ -f "checksums.txt" ]; then
+            cp checksums.txt /tmp/base-wasms/
+          fi
+          echo "Base WASMs built and stored"
+
+      - name: Return to PR branch
+        run: |
+          git checkout -
+          git branch -D temp-base-branch || true
+
+      - name: Restore current WASMs
+        run: |
+          rm -rf examples/build/components
+          cp -r /tmp/current-wasms/components examples/build/
+          if [ -f "/tmp/current-wasms/checksums.txt" ]; then
+            cp /tmp/current-wasms/checksums.txt .
+          fi
+
+      - name: Generate and display diff
+        run: |
+          echo "## WASM Build Diff Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Files in examples/build/components" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # List all files in current build
+          if [ -d "examples/build/components" ]; then
+            echo "**Current branch WASM files:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            ls -la examples/build/components/ || echo "No files found" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Generate file diff
+          echo "### File differences between branches:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -d "/tmp/base-wasms/components" ] && [ -d "examples/build/components" ]; then
+            echo "**Files only in base branch:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            (diff -rq /tmp/base-wasms/components examples/build/components | grep "Only in /tmp/base-wasms") || echo "No files only in base branch" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            echo "**Files only in current branch:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            (diff -rq /tmp/base-wasms/components examples/build/components | grep "Only in examples/build") || echo "No files only in current branch" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            echo "**Files that differ:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            (diff -rq /tmp/base-wasms/components examples/build/components | grep "differ") || echo "No differing files" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Checksum diff
+          echo "### Checksum comparison:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "**Base branch checksums:**" >> $GITHUB_STEP_SUMMARY
+          if [ -f "/tmp/base-wasms/checksums.txt" ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/base-wasms/checksums.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No checksums.txt found in base branch" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "**Current branch checksums:**" >> $GITHUB_STEP_SUMMARY
+          if [ -f "checksums.txt" ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat checksums.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No checksums.txt found in current branch" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Show diff in console output
+        run: |
+          echo "=== WASM Build Diff ==="
+          echo ""
+
+          if [ -d "/tmp/base-wasms/components" ] && [ -d "examples/build/components" ]; then
+            echo "Files comparison:"
+            diff -rq /tmp/base-wasms/components examples/build/components || echo "No differences found"
+            echo ""
+
+            echo "Checksum differences:"
+            if [ -f "/tmp/base-wasms/checksums.txt" ] && [ -f "checksums.txt" ]; then
+              diff /tmp/base-wasms/checksums.txt checksums.txt || echo "No checksum differences"
+            else
+              echo "One or both checksum files missing"
+            fi
+          else
+            echo "One or both build directories missing"
+          fi
