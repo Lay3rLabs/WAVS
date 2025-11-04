@@ -5,7 +5,7 @@ use alloy_signer::k256::SecretKey;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use wavs_types::{Credential, Envelope, SignatureData};
 
-use crate::error::EvmClientError;
+use crate::{error::EvmClientError, evm_client::AnyNonceManager};
 
 use super::EvmSigningClient;
 
@@ -82,13 +82,48 @@ impl EvmSigningClient {
             tx_builder = tx_builder.gas_price(price);
         }
 
-        let receipt = tx_builder
-            .send()
-            .await
-            .map_err(|e| EvmClientError::SendTransaction(e.into()))?
-            .get_receipt()
-            .await
-            .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
+        let mut retry_count = 0;
+        const MAX_RETRIES: u32 = 2;
+
+        let receipt = loop {
+            let send_result = tx_builder.send().await;
+
+            match send_result {
+                Ok(pending_tx) => {
+                    break pending_tx
+                        .get_receipt()
+                        .await
+                        .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
+                }
+                Err(e) => {
+                    let error_msg = e.to_string().to_lowercase();
+                    let is_nonce_error = error_msg.contains("replacement transaction underpriced")
+                        || error_msg.contains("nonce");
+
+                    if is_nonce_error && retry_count < MAX_RETRIES {
+                        retry_count += 1;
+                        tracing::warn!(
+                            "Nonce error detected (attempt {}/{}), refreshing nonce and retrying: {}",
+                            retry_count, MAX_RETRIES, e
+                        );
+
+                        // Refresh nonce if using FastNonceManager
+                        if let AnyNonceManager::Fast(fast_nonce_manager) = &self.nonce_manager {
+                            if fast_nonce_manager
+                                .set_current_nonce(&self.provider)
+                                .await
+                                .is_ok()
+                            {
+                                // Continue with the same tx_builder - it will now use the refreshed nonce
+                                continue;
+                            }
+                        }
+                    }
+
+                    return Err(EvmClientError::SendTransaction(e.into()));
+                }
+            }
+        };
 
         match receipt.status() {
             true => Ok(receipt),
