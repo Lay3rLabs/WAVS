@@ -106,11 +106,7 @@ wildmatch = "2.5.0"
 alloy-node-bindings = "1.0.37"
 alloy-json-abi = "1.4.0"
 alloy-primitives = { version = "1.4.0", features = ["serde"] }
-alloy-provider = { version = "1.0.37", features = [
-    "anvil-node",
-    "ws",
-    "pubsub",
-] }
+alloy-provider = { version = "1.0.37", features = ["ws", "pubsub"] }
 alloy-sol-types = "1.4.0"
 alloy-sol-macro = { version = "1.4.0", features = ["json"] }
 alloy-transport = "1.0.37"

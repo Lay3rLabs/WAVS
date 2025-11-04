@@ -36,13 +36,13 @@ alloy-signer-local = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-sol-types = { workspace = true }
 alloy-primitives = { workspace = true }
-alloy-provider = { workspace = true }
+alloy-provider = { workspace = true, features = ["anvil-node"] }
 alloy-signer = { workspace = true }
 alloy-contract = { workspace = true }
 uuid = { workspace = true }
 reqwest = { workspace = true }
 dashmap = { workspace = true }
-example-types = { workspace = true}
+example-types = { workspace = true }
 example-contract-cosmwasm-simple = { workspace = true }
 ordermap = { workspace = true }
 regex = { workspace = true }

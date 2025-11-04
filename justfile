@@ -1,6 +1,7 @@
 SUDO := if `groups | grep -q docker > /dev/null 2>&1 && echo true || echo false` == "true" { "" } else { "sudo" }
 TAG := env_var_or_default("TAG", "")
 WASI_OUT_DIR := "./examples/build/components"
+COMPONENTS_DIR := "./examples/components"
 COSMWASM_OUT_DIR := "./examples/build/contracts"
 REPO_ROOT := `git rev-parse --show-toplevel`
 DOCKER_WAVS_ID := `docker ps | grep wavs | awk '{print $1}'`
@@ -55,27 +56,7 @@ _install-native HOME DATA:
     @echo "export WAVS_AGGREGATOR_DATA=\"{{DATA}}/wavs-aggregator\""
     @echo "export WAVS_DOTENV=\"{{HOME}}/.env\""
 
-wasi-build-native COMPONENT="*":
-    @if [ "{{COMPONENT}}" = "*" ]; then \
-        rm -f ./target/wasm32-wasip1/release/*.wasm; \
-    fi
-
-    @for C in examples/components/{{COMPONENT}}/Cargo.toml; do \
-        if [ "{{COMPONENT}}" != "_helpers" ] && [ "{{COMPONENT}}" != "_types" ]; then \
-            echo "Building WASI component in $(dirname $C)"; \
-            ( cd $(dirname $C) && cargo component build --release && cargo fmt); \
-        fi; \
-    done
-
-    rm -rf {{WASI_OUT_DIR}}
-    mkdir -p {{WASI_OUT_DIR}}
-    @cp ./target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
-    @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt
-
-# FIXME
-# https://github.com/Lay3rLabs/wasi-builder/issues/2
-# https://github.com/Lay3rLabs/wasi-builder/issues/3
-wasi-build-docker COMPONENT="*" TAG="latest":
+wasi-build COMPONENT="*" TAG="latest":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -92,12 +73,15 @@ wasi-build-docker COMPONENT="*" TAG="latest":
             -v "$(pwd):/docker" \
             -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
             -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
+            -e COMPONENTS_DIR="{{COMPONENTS_DIR}}" \
+            -e EXCLUDE_FOLDERS="_helpers,_types" \
             "$IMAGE_NAME"
     else
         docker run --rm \
             -v "$(pwd):/docker" \
             -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
             -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
+            -e COMPONENTS_DIR="{{COMPONENTS_DIR}}" \
             "$IMAGE_NAME" "{{COMPONENT}}"
     fi
 
