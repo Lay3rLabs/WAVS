@@ -1,5 +1,4 @@
 use thiserror::Error;
-use utils::wkg::WkgClientError;
 use wavs_types::{ComponentDigest, ServiceId, WorkflowId};
 
 #[derive(Error, Debug)]
@@ -50,5 +49,5 @@ pub enum EngineError {
     UnknownDigest(ComponentDigest),
 
     #[error("Registry: {0}")]
-    Registry(#[from] WkgClientError),
+    Registry(#[from] wasm_pkg_client::Error),
 }

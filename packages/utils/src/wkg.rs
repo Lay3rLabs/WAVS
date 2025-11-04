@@ -1,22 +1,12 @@
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use futures::TryStreamExt;
-use thiserror::Error;
 use wasm_pkg_client::{
     caching::{CachingClient, FileCache},
     Client, Config, Error as WkgError, PackageRef, Release, Version,
 };
 use wavs_types::{ComponentDigest, Registry};
-
-#[derive(Error, Debug)]
-pub enum WkgClientError {
-    #[error("Registry: {0}")]
-    Registry(#[from] WkgError),
-
-    #[error("Cache: {0}")]
-    Cache(anyhow::Error),
-}
 
 pub struct WkgClient {
     // due to a bug in the client which can deadlock with the filesystem
@@ -31,7 +21,7 @@ struct InnerWkgClient {
 }
 
 impl WkgClient {
-    pub fn new(domain: String) -> Result<Self, WkgClientError> {
+    pub fn new(domain: String) -> Result<Self, WkgError> {
         let config_toml = &format!(
             r#"default_registry = "{domain}"
 
@@ -56,7 +46,7 @@ url = "http://localhost:8090"
     }
 
     /// Helper function to initialize a client with the appropriate domain
-    async fn get_client(&self, domain: Option<&String>) -> Result<CachingClient<FileCache>> {
+    async fn get_client(&self, domain: Option<&String>) -> CachingClient<FileCache> {
         let mut inner = self.inner.lock().await;
         let config = &inner.config;
 
@@ -66,19 +56,23 @@ url = "http://localhost:8090"
             // new_config.set_package_registry_override if needed
             let client = Client::new(new_config.clone());
             let cache_path =
-                FileCache::global_cache_path().context("couldn't find global cache path")?;
-            let cache = FileCache::new(cache_path).await?;
+                FileCache::global_cache_path().expect("couldn't find global cache path");
+            let cache = FileCache::new(cache_path)
+                .await
+                .expect("failed to initialize file cache");
             CachingClient::new(Some(client), cache)
         } else {
             let client = Client::new(config.clone());
             let cache_path =
-                FileCache::global_cache_path().context("couldn't find global cache path")?;
-            let cache = FileCache::new(cache_path).await?;
+                FileCache::global_cache_path().expect("couldn't find global cache path");
+            let cache = FileCache::new(cache_path)
+                .await
+                .expect("failed to initialize file cache");
             CachingClient::new(Some(client), cache)
         };
 
         inner.client = Some(client.clone());
-        Ok(client)
+        client
     }
 
     /// Helper function to resolve the version to use (provided or latest)
@@ -137,7 +131,7 @@ url = "http://localhost:8090"
         version: Option<&Version>,
     ) -> Result<(ComponentDigest, Version)> {
         // Get the client
-        let client = self.get_client(domain.as_ref()).await?;
+        let client = self.get_client(domain.as_ref()).await;
 
         // Resolve the version
         let resolved_version = self.resolve_version(&client, package, version).await?;
@@ -164,12 +158,9 @@ url = "http://localhost:8090"
     /// latest value.
     /// Finally, checks if the user provided an alternative registry other than WAVS default (currently wa.dev),
     /// before fetching the component from the registry.
-    pub async fn fetch(&self, registry: &Registry) -> Result<Vec<u8>, WkgClientError> {
+    pub async fn fetch(&self, registry: &Registry) -> Result<Vec<u8>, WkgError> {
         // Get the client
-        let client = self
-            .get_client(registry.domain.as_ref())
-            .await
-            .map_err(WkgClientError::Cache)?;
+        let client = self.get_client(registry.domain.as_ref()).await;
 
         // Resolve the version
         let resolved_version = self
