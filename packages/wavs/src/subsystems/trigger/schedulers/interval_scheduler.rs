@@ -79,8 +79,9 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
         }
     }
 
-    /// Call this on each “tick”
-    pub fn tick(&mut self, now: T) -> Vec<LookupId> {
+    /// Call this on each "tick"
+    pub fn tick(&mut self, now: T) -> Vec<(LookupId, T)> {
+        let mut results = Vec::new();
         // Add all the unadded triggers to the scheduler
         for mut state in self.unadded_triggers.drain(..) {
             // initialization is time is "now"
@@ -92,7 +93,6 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
             }
         }
 
-        let mut hits = Vec::new();
         let mut re_add = Vec::new();
 
         // pop all the triggers that are due
@@ -111,7 +111,7 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
             for mut state in states.drain(..) {
                 let mut re_insert_time = match state.interval_hit(now) {
                     Some(new_next_time) => {
-                        hits.push(state.lookup_id());
+                        results.push((state.lookup_id(), next_time));
                         // this is the new next time as determined by the scheduler
                         // and it may be None if the trigger has ended
                         new_next_time
@@ -143,7 +143,7 @@ impl<T: IntervalTime, S: IntervalState<Time = T>> IntervalScheduler<T, S> {
             self.triggers.entry(next_time).or_default().push(state);
         }
 
-        hits
+        results
     }
 
     /// Totally remove a trigger (called from the TriggerManager, as opposed to local expirey)
