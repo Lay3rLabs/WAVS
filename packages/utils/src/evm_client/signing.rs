@@ -124,7 +124,9 @@ impl EvmSigningClient {
                                 .await
                                 .is_ok()
                             {
-                                // Continue with the same tx_builder - it will now use the refreshed nonce
+                                // Add exponential backoff delay after nonce refresh
+                                let delay_ms = BASE_RETRY_DELAY_MS * (1 << (retry_count - 1));
+                                sleep(Duration::from_millis(delay_ms)).await;
                                 continue;
                             }
                         }
