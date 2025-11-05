@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Result};
 use futures::TryStreamExt;
 use wasm_pkg_client::{
     caching::{CachingClient, FileCache},
-    Client, Config, PackageRef, Release, Version,
+    Client, Config, Error as WkgError, PackageRef, Release, Version,
 };
 use wavs_types::{ComponentDigest, Registry};
 
@@ -21,7 +21,7 @@ struct InnerWkgClient {
 }
 
 impl WkgClient {
-    pub fn new(domain: String) -> Result<Self> {
+    pub fn new(domain: String) -> Result<Self, WkgError> {
         let config_toml = &format!(
             r#"default_registry = "{domain}"
 
@@ -46,7 +46,10 @@ url = "http://localhost:8090"
     }
 
     /// Helper function to initialize a client with the appropriate domain
-    async fn get_client(&self, domain: Option<&String>) -> Result<CachingClient<FileCache>> {
+    async fn get_client(
+        &self,
+        domain: Option<&String>,
+    ) -> Result<CachingClient<FileCache>, WkgError> {
         let mut inner = self.inner.lock().await;
         let config = &inner.config;
 
@@ -55,15 +58,19 @@ url = "http://localhost:8090"
             new_config.merge(config.clone());
             // new_config.set_package_registry_override if needed
             let client = Client::new(new_config.clone());
-            let cache_path =
-                FileCache::global_cache_path().context("couldn't find global cache path")?;
-            let cache = FileCache::new(cache_path).await?;
+            let cache_path = FileCache::global_cache_path()
+                .ok_or_else(|| WkgError::CacheError(anyhow!("couldn't find global cache path")))?;
+            let cache = FileCache::new(cache_path)
+                .await
+                .map_err(WkgError::CacheError)?;
             CachingClient::new(Some(client), cache)
         } else {
             let client = Client::new(config.clone());
-            let cache_path =
-                FileCache::global_cache_path().context("couldn't find global cache path")?;
-            let cache = FileCache::new(cache_path).await?;
+            let cache_path = FileCache::global_cache_path()
+                .ok_or_else(|| WkgError::CacheError(anyhow!("couldn't find global cache path")))?;
+            let cache = FileCache::new(cache_path)
+                .await
+                .map_err(WkgError::CacheError)?;
             CachingClient::new(Some(client), cache)
         };
 
@@ -77,18 +84,15 @@ url = "http://localhost:8090"
         client: &CachingClient<FileCache>,
         package: &PackageRef,
         version: Option<&Version>,
-    ) -> Result<Version> {
+    ) -> Result<Version, WkgError> {
         if let Some(v) = version {
             Ok(v.clone())
         } else {
-            let mut versions = client
-                .list_all_versions(package)
-                .await
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            let mut versions = client.list_all_versions(package).await?;
 
             versions.sort_by(|a, b| a.version.cmp_precedence(&b.version));
             if versions.is_empty() {
-                return Err(anyhow::anyhow!("No versions found for package {}", package));
+                return Err(WkgError::PackageNotFound);
             }
             Ok(versions[&versions.len() - 1].version.clone())
         }
@@ -100,11 +104,8 @@ url = "http://localhost:8090"
         client: &CachingClient<FileCache>,
         package: &PackageRef,
         version: &Version,
-    ) -> Result<Release> {
-        client
-            .get_release(package, version)
-            .await
-            .map_err(|e| anyhow::anyhow!("{}", e))
+    ) -> Result<Release, WkgError> {
+        client.get_release(package, version).await
     }
 
     /// Helper function to download content and compute digest
@@ -113,18 +114,11 @@ url = "http://localhost:8090"
         client: &CachingClient<FileCache>,
         package: &PackageRef,
         release: &Release,
-    ) -> Result<(Vec<u8>, ComponentDigest)> {
-        let mut content_stream = client
-            .get_content(package, release)
-            .await
-            .map_err(|e| anyhow::anyhow!("{}", e))?;
+    ) -> Result<(Vec<u8>, ComponentDigest), WkgError> {
+        let mut content_stream = client.get_content(package, release).await?;
 
         let mut content = Vec::new();
-        while let Some(chunk) = content_stream
-            .try_next()
-            .await
-            .map_err(|e| anyhow::anyhow!("{}", e))?
-        {
+        while let Some(chunk) = content_stream.try_next().await? {
             content.append(&mut chunk.to_vec());
         }
 
@@ -138,7 +132,7 @@ url = "http://localhost:8090"
         domain: Option<String>,
         package: &PackageRef,
         version: Option<&Version>,
-    ) -> Result<(ComponentDigest, Version)> {
+    ) -> Result<(ComponentDigest, Version), WkgError> {
         // Get the client
         let client = self.get_client(domain.as_ref()).await?;
 
@@ -167,7 +161,7 @@ url = "http://localhost:8090"
     /// latest value.
     /// Finally, checks if the user provided an alternative registry other than WAVS default (currently wa.dev),
     /// before fetching the component from the registry.
-    pub async fn fetch(&self, registry: &Registry) -> Result<Vec<u8>> {
+    pub async fn fetch(&self, registry: &Registry) -> Result<Vec<u8>, WkgError> {
         // Get the client
         let client = self.get_client(registry.domain.as_ref()).await?;
 

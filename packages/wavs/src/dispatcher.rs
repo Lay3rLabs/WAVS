@@ -41,7 +41,7 @@ use wavs_types::{
     AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, EventId,
     ServiceManager, WorkflowIdError,
 };
-use wavs_types::{Service, ServiceId, SignerResponse, TriggerAction};
+use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction};
 
 use crate::config::Config;
 use crate::services::{Services, ServicesError};
@@ -56,7 +56,6 @@ use crate::subsystems::trigger::{TriggerCommand, TriggerManager};
 use crate::{tracing_service_info, AppContext};
 use utils::storage::db::{DBError, RedbStorage};
 use utils::storage::{CAStorage, CAStorageError};
-use wasm_pkg_common::Error as RegistryError;
 
 #[derive(Clone)]
 pub struct Dispatcher<S: CAStorage> {
@@ -483,7 +482,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         service_id: ServiceId,
         uri: UriString,
     ) -> Result<(), DispatcherError> {
-        let service = fetch_service(&uri, &self.ipfs_gateway).await?;
+        let service = fetch_service(&uri, &self.ipfs_gateway)
+            .await
+            .map_err(DispatcherError::FetchService)?;
 
         self.change_service_inner(service_id, service).await
     }
@@ -613,17 +614,25 @@ async fn query_service_from_address(
                     .unwrap_or_else(|_| panic!("Could not parse http endpoint {}", http_endpoint)),
             );
 
-            let contract = IWavsServiceManagerInstance::new(address.try_into()?, provider);
+            let contract = IWavsServiceManagerInstance::new(
+                address
+                    .try_into()
+                    .map_err(DispatcherError::AddressConversion)?,
+                provider,
+            );
 
             let service_uri = contract.getServiceURI().call().await?;
             service_uri
         }
         AnyChainConfig::Cosmos(config) => {
-            let query_client = QueryClient::new(config.into(), None).await?;
+            let query_client = QueryClient::new(config.into(), None)
+                .await
+                .map_err(DispatcherError::CosmosQuery)?;
 
             let service_uri: String = query_client
                 .contract_smart(&address, &ServiceManagerQueryMessages::WavsServiceUri {})
-                .await?;
+                .await
+                .map_err(DispatcherError::CosmosQuery)?;
 
             service_uri
         }
@@ -632,7 +641,9 @@ async fn query_service_from_address(
     let service_uri = UriString::try_from(service_uri)?;
 
     // Fetch the service JSON from the URI
-    let service = fetch_service(&service_uri, ipfs_gateway).await?;
+    let service = fetch_service(&service_uri, ipfs_gateway)
+        .await
+        .map_err(DispatcherError::FetchService)?;
 
     Ok(service)
 }
@@ -692,14 +703,8 @@ pub enum DispatcherError {
     #[error("Submission: {0}")]
     Submission(#[from] SubmissionError),
 
-    #[error("Registry error: {0}")]
-    Registry(#[from] RegistryError),
-
     #[error("Chain config error: {0}")]
     ChainConfig(#[from] ChainConfigError),
-
-    #[error("Registry cache path error: {0}")]
-    RegistryCachePath(#[from] anyhow::Error),
 
     #[error("Alloy contract error: {0}")]
     AlloyContract(#[from] alloy_contract::Error),
@@ -724,4 +729,16 @@ pub enum DispatcherError {
 
     #[error("could not encode EventId {0:?}")]
     EncodeEventId(anyhow::Error),
+
+    #[error("Failed to fetch service: {0}")]
+    FetchService(anyhow::Error),
+
+    #[error("Service error: {0}")]
+    Service(#[from] ServiceError),
+
+    #[error("Address conversion error: {0}")]
+    AddressConversion(anyhow::Error),
+
+    #[error("Cosmos query error: {0}")]
+    CosmosQuery(anyhow::Error),
 }

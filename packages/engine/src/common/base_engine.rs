@@ -125,21 +125,11 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
                         })?
                     }
                     ComponentSource::Registry { registry } => {
-                        let client =
-                            WkgClient::new(registry.domain.clone().unwrap_or("wa.dev".to_string()))
-                                .map_err(|e| {
-                                    EngineError::StorageError(format!(
-                                        "Failed to create WKG client: {}",
-                                        e
-                                    ))
-                                })?;
+                        let client = WkgClient::new(
+                            registry.domain.clone().unwrap_or("wa.dev".to_string()),
+                        )?;
 
-                        client.fetch(registry).await.map_err(|e| {
-                            EngineError::StorageError(format!(
-                                "Failed to fetch from registry: {}",
-                                e
-                            ))
-                        })?
+                        client.fetch(registry).await?
                     }
                     _ => {
                         return Err(EngineError::UnknownDigest(digest.clone()));
