@@ -6,6 +6,7 @@ use deadpool::managed::Object;
 use layer_climb::pool::SigningClientPoolManager;
 use layer_climb::prelude::CosmosAddr;
 use std::{collections::BTreeMap, num::NonZero, sync::Arc, time::Duration};
+use utils::evm_client::AnyNonceManager;
 use utils::{config::WAVS_ENV_PREFIX, evm_client::EvmSigningClient, filesystem::workspace_path};
 use uuid::Uuid;
 use wavs_cli::clients::HttpClient;
@@ -487,6 +488,14 @@ pub async fn simulate_anvil_reorg(
 ) -> Result<()> {
     // Revert to the specified block using Anvil's revert RPC
     evm_client.provider.anvil_revert(reorg_snapshot).await?;
+
+    // Update nonce
+    if let AnyNonceManager::Fast(fast_nonce_manager) = &evm_client.nonce_manager {
+        fast_nonce_manager
+            .set_current_nonce(&evm_client.provider)
+            .await
+            .unwrap();
+    }
 
     // Mine new blocks to simulate chain reorganization
     evm_client.provider.evm_mine(None).await?;
