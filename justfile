@@ -158,6 +158,7 @@ solidity-build CLEAN="":
     cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
     # layer-tests mock contracts
     cp -r {{REPO_ROOT}}/out/LogSpam.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/TestServiceContracts.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     # wavs tests - some funkiness with it sometimes not creating the .sol directory so make sure to create it first
     mkdir -p {{REPO_ROOT}}/packages/wavs/tests/contracts/solidity/abi/EventEmitter.sol
     cp -r {{REPO_ROOT}}/out/EventEmitter.sol {{REPO_ROOT}}/packages/wavs/tests/contracts/solidity/abi/
