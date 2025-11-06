@@ -316,9 +316,6 @@ mod test {
             tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
         }
 
-        // Allow time for the transfers to be mined.
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
         // Calculate the resulting chain nonce gap.
         let chain_nonce_after_gap = primary_client
             .provider
