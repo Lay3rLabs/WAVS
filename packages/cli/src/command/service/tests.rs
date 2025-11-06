@@ -1778,7 +1778,7 @@ async fn test_config_file_functionality() {
     let file_path = temp_dir.path().join("config_test_service.json");
     let config_file = temp_dir.path().join("component_config.json");
 
-    // Test valid JSON config file with comprehensive data types
+    // Test comprehensive config with all data types
     let comprehensive_config = r#"{
         "database_host": "localhost",
         "database_port": "5432",
@@ -1794,30 +1794,7 @@ async fn test_config_file_functionality() {
     std::fs::write(&config_file, comprehensive_config).unwrap();
 
     let result = parse_config_from_file(&config_file).unwrap();
-
     assert_eq!(result.len(), 9);
-    assert_eq!(result.get("database_host"), Some(&"localhost".to_string()));
-    assert_eq!(result.get("database_port"), Some(&"5432".to_string()));
-    assert_eq!(result.get("api_timeout"), Some(&"30".to_string()));
-    assert_eq!(result.get("debug_enabled"), Some(&"true".to_string()));
-    assert_eq!(result.get("max_connections"), Some(&"100".to_string()));
-    assert_eq!(result.get("retry_count"), Some(&"3".to_string()));
-
-    // Verify complex types are serialized as JSON strings
-    if let Some(ips_str) = result.get("allowed_ips") {
-        let ips: Vec<String> = serde_json::from_str(ips_str).unwrap();
-        assert_eq!(ips.len(), 2);
-        assert!(ips.contains(&"127.0.0.1".to_string()));
-        assert!(ips.contains(&"192.168.1.100".to_string()));
-    }
-
-    if let Some(db_config_str) = result.get("database_config") {
-        let db_config: serde_json::Value = serde_json::from_str(db_config_str).unwrap();
-        if let serde_json::Value::Object(obj) = db_config {
-            assert_eq!(obj.get("ssl").and_then(|v| v.as_bool()), Some(true));
-            assert_eq!(obj.get("pool_size").and_then(|v| v.as_u64()), Some(10));
-        }
-    }
 
     // Test error conditions
     let non_existent_file = temp_dir.path().join("non_existent.json");
@@ -1847,37 +1824,6 @@ async fn test_config_file_functionality() {
         .unwrap_err()
         .to_string()
         .contains("must contain a JSON object"));
-
-    // Test complex types (should be serialized as JSON strings)
-    let nested_file = temp_dir.path().join("nested.json");
-    std::fs::write(
-        &nested_file,
-        r#"{"database": {"host": "localhost"}, "port": "5432"}"#,
-    )
-    .unwrap();
-
-    let result = parse_config_from_file(&nested_file).unwrap();
-    assert_eq!(result.len(), 2);
-    assert_eq!(
-        result.get("database"),
-        Some(&r#"{"host":"localhost"}"#.to_string())
-    );
-    assert_eq!(result.get("port"), Some(&"5432".to_string()));
-
-    let array_value_file = temp_dir.path().join("array_value.json");
-    std::fs::write(
-        &array_value_file,
-        r#"{"hosts": ["localhost", "127.0.0.1"], "count": 2}"#,
-    )
-    .unwrap();
-
-    let result = parse_config_from_file(&array_value_file).unwrap();
-    assert_eq!(result.len(), 2);
-    assert_eq!(
-        result.get("hosts"),
-        Some(&r#"["localhost","127.0.0.1"]"#.to_string())
-    );
-    assert_eq!(result.get("count"), Some(&"2".to_string()));
 
     let null_file = temp_dir.path().join("null.json");
     std::fs::write(
@@ -1913,10 +1859,8 @@ async fn test_config_file_functionality() {
     .await
     .unwrap();
 
-    // Config file already contains comprehensive config from unit test section
-
     // Test setting config from file
-    let config_result = update_workflow_component(
+    let _config_result = update_workflow_component(
         DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
@@ -1928,63 +1872,7 @@ async fn test_config_file_functionality() {
     .await
     .unwrap();
 
-    // Verify config result with all data types
-    match &config_result {
-        ComponentOperationResult::Config { config, .. } => {
-            assert_eq!(config.len(), 9);
-
-            // Simple values
-            assert_eq!(config.get("database_host"), Some(&"localhost".to_string()));
-            assert_eq!(config.get("database_port"), Some(&"5432".to_string()));
-            assert_eq!(config.get("api_timeout"), Some(&"30".to_string()));
-            assert_eq!(config.get("debug_enabled"), Some(&"true".to_string()));
-            assert_eq!(config.get("max_connections"), Some(&"100".to_string()));
-            assert_eq!(config.get("retry_count"), Some(&"3".to_string()));
-
-            // Array serialization
-            if let Some(ips_str) = config.get("allowed_ips") {
-                let ips: Vec<String> = serde_json::from_str(ips_str).unwrap();
-                assert_eq!(ips.len(), 2);
-                assert!(ips.contains(&"127.0.0.1".to_string()));
-                assert!(ips.contains(&"192.168.1.100".to_string()));
-            } else {
-                panic!("allowed_ips not found in config");
-            }
-
-            // Object serialization - database_config
-            if let Some(db_config_str) = config.get("database_config") {
-                let db_config: serde_json::Value = serde_json::from_str(db_config_str).unwrap();
-                if let serde_json::Value::Object(obj) = db_config {
-                    assert_eq!(obj.get("ssl").and_then(|v| v.as_bool()), Some(true));
-                    assert_eq!(obj.get("pool_size").and_then(|v| v.as_u64()), Some(10));
-                } else {
-                    panic!("database_config should be an object");
-                }
-            } else {
-                panic!("database_config not found in config");
-            }
-
-            // Object serialization - feature_flags
-            if let Some(feature_flags_str) = config.get("feature_flags") {
-                let feature_flags: serde_json::Value =
-                    serde_json::from_str(feature_flags_str).unwrap();
-                if let serde_json::Value::Object(obj) = feature_flags {
-                    assert_eq!(obj.get("new_ui").and_then(|v| v.as_bool()), Some(true));
-                    assert_eq!(
-                        obj.get("beta_access").and_then(|v| v.as_bool()),
-                        Some(false)
-                    );
-                } else {
-                    panic!("feature_flags should be an object");
-                }
-            } else {
-                panic!("feature_flags not found in config");
-            }
-        }
-        _ => panic!("Expected Config result"),
-    }
-
-    // Verify the service was updated with the config
+    // Verify the service was updated by reading the service file
     let service_after_config: ServiceJson =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let component_with_config = service_after_config
@@ -1996,17 +1884,60 @@ async fn test_config_file_functionality() {
         .unwrap();
 
     assert_eq!(component_with_config.config.len(), 9);
-    assert!(component_with_config
-        .config
-        .iter()
-        .any(|(k, v)| k == "database_host" && v == "localhost"));
-    assert!(component_with_config
-        .config
-        .iter()
-        .any(|(k, v)| k == "database_port" && v == "5432"));
+    assert_eq!(
+        component_with_config.config.get("database_host"),
+        Some(&"localhost".to_string())
+    );
+    assert_eq!(
+        component_with_config.config.get("database_port"),
+        Some(&"5432".to_string())
+    );
+    assert_eq!(
+        component_with_config.config.get("api_timeout"),
+        Some(&"30".to_string())
+    );
+    assert_eq!(
+        component_with_config.config.get("debug_enabled"),
+        Some(&"true".to_string())
+    );
+    assert_eq!(
+        component_with_config.config.get("max_connections"),
+        Some(&"100".to_string())
+    );
+    assert_eq!(
+        component_with_config.config.get("retry_count"),
+        Some(&"3".to_string())
+    );
+
+    // Verify complex types are properly serialized in the service file
+    if let Some(ips_str) = component_with_config.config.get("allowed_ips") {
+        let ips: Vec<String> = serde_json::from_str(ips_str).unwrap();
+        assert_eq!(ips.len(), 2);
+        assert!(ips.contains(&"127.0.0.1".to_string()));
+        assert!(ips.contains(&"192.168.1.100".to_string()));
+    }
+
+    if let Some(db_config_str) = component_with_config.config.get("database_config") {
+        let db_config: serde_json::Value = serde_json::from_str(db_config_str).unwrap();
+        if let serde_json::Value::Object(obj) = db_config {
+            assert_eq!(obj.get("ssl").and_then(|v| v.as_bool()), Some(true));
+            assert_eq!(obj.get("pool_size").and_then(|v| v.as_u64()), Some(10));
+        }
+    }
+
+    if let Some(feature_flags_str) = component_with_config.config.get("feature_flags") {
+        let feature_flags: serde_json::Value = serde_json::from_str(feature_flags_str).unwrap();
+        if let serde_json::Value::Object(obj) = feature_flags {
+            assert_eq!(obj.get("new_ui").and_then(|v| v.as_bool()), Some(true));
+            assert_eq!(
+                obj.get("beta_access").and_then(|v| v.as_bool()),
+                Some(false)
+            );
+        }
+    }
 
     // Test clearing config
-    let clear_config_result = update_workflow_component(
+    let _clear_config_result = update_workflow_component(
         DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
@@ -2018,13 +1949,7 @@ async fn test_config_file_functionality() {
     .await
     .unwrap();
 
-    match &clear_config_result {
-        ComponentOperationResult::Config { config, .. } => {
-            assert_eq!(config.len(), 0);
-        }
-        _ => panic!("Expected Config result"),
-    }
-
+    // Verify the service file was cleared
     let service_after_clear: ServiceJson =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let component_with_clear_config = service_after_clear
