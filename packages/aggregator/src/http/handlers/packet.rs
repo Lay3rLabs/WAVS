@@ -958,11 +958,12 @@ mod test {
             .iter()
             .map(|signer| AvsOperator::new(signer.address(), signer.address()))
             .collect::<Vec<_>>();
+        let config = MiddlewareServiceManagerConfig::new(&avs_operators, NUM_THRESHOLD as u64);
+        service_manager.configure(&config).await.unwrap();
+
+        // Validate that operators are properly registered before proceeding
         service_manager
-            .configure(&MiddlewareServiceManagerConfig::new(
-                &avs_operators,
-                NUM_THRESHOLD as u64,
-            ))
+            .validate_operator_registration(&config)
             .await
             .unwrap();
 
@@ -1105,8 +1106,12 @@ mod test {
         let signer = mock_signer();
 
         let avs_operators = vec![AvsOperator::new(signer.address(), signer.address())];
+        let config = MiddlewareServiceManagerConfig::new(&avs_operators, 1u64);
+        service_manager.configure(&config).await.unwrap();
+
+        // Validate that operators are properly registered before proceeding
         service_manager
-            .configure(&MiddlewareServiceManagerConfig::new(&avs_operators, 1u64))
+            .validate_operator_registration(&config)
             .await
             .unwrap();
 
@@ -1159,11 +1164,12 @@ mod test {
             .iter()
             .map(|signer| AvsOperator::new(signer.address(), signer.address()))
             .collect::<Vec<_>>();
+        let config = MiddlewareServiceManagerConfig::new(&avs_operators, NUM_THRESHOLD as u64);
+        service_manager.configure(&config).await.unwrap();
+
+        // Validate that operators are properly registered before proceeding
         service_manager
-            .configure(&MiddlewareServiceManagerConfig::new(
-                &avs_operators,
-                NUM_THRESHOLD as u64,
-            ))
+            .validate_operator_registration(&config)
             .await
             .unwrap();
 
