@@ -394,6 +394,7 @@ async fn test_workflow_component_operations() {
         workflow_id.clone(),
         ComponentCommand::Config {
             values: Some(config_values.clone()),
+            config_file: None,
         },
     )
     .await
@@ -440,7 +441,10 @@ async fn test_workflow_component_operations() {
         DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
-        ComponentCommand::Config { values: None },
+        ComponentCommand::Config {
+            values: None,
+            config_file: None,
+        },
     )
     .await
     .unwrap();
@@ -474,6 +478,7 @@ async fn test_workflow_component_operations() {
         workflow_id.clone(),
         ComponentCommand::Config {
             values: Some(invalid_config),
+            config_file: None,
         },
     )
     .await;
@@ -1764,4 +1769,270 @@ fn test_aggregator_validation() {
         .filter(|e| e.contains("doesn't start with"))
         .collect();
     assert_eq!(env_errors.len(), 1, "Should have env key validation error");
+}
+
+#[tokio::test]
+async fn test_config_file_functionality() {
+    // Test comprehensive config file functionality including parsing and end-to-end integration
+    let temp_dir = tempdir().unwrap();
+    let file_path = temp_dir.path().join("config_test_service.json");
+    let config_file = temp_dir.path().join("component_config.json");
+
+    // Test valid JSON config file with comprehensive data types
+    let comprehensive_config = r#"{
+        "database_host": "localhost",
+        "database_port": "5432",
+        "api_timeout": "30",
+        "debug_enabled": "true",
+        "max_connections": "100",
+        "retry_count": "3",
+        "allowed_ips": ["127.0.0.1", "192.168.1.100"],
+        "database_config": {"ssl": true, "pool_size": 10},
+        "feature_flags": {"new_ui": true, "beta_access": false}
+    }"#;
+
+    std::fs::write(&config_file, comprehensive_config).unwrap();
+
+    let result = parse_config_from_file(&config_file).unwrap();
+
+    assert_eq!(result.len(), 9);
+    assert_eq!(result.get("database_host"), Some(&"localhost".to_string()));
+    assert_eq!(result.get("database_port"), Some(&"5432".to_string()));
+    assert_eq!(result.get("api_timeout"), Some(&"30".to_string()));
+    assert_eq!(result.get("debug_enabled"), Some(&"true".to_string()));
+    assert_eq!(result.get("max_connections"), Some(&"100".to_string()));
+    assert_eq!(result.get("retry_count"), Some(&"3".to_string()));
+
+    // Verify complex types are serialized as JSON strings
+    if let Some(ips_str) = result.get("allowed_ips") {
+        let ips: Vec<String> = serde_json::from_str(ips_str).unwrap();
+        assert_eq!(ips.len(), 2);
+        assert!(ips.contains(&"127.0.0.1".to_string()));
+        assert!(ips.contains(&"192.168.1.100".to_string()));
+    }
+
+    if let Some(db_config_str) = result.get("database_config") {
+        let db_config: serde_json::Value = serde_json::from_str(db_config_str).unwrap();
+        if let serde_json::Value::Object(obj) = db_config {
+            assert_eq!(obj.get("ssl").and_then(|v| v.as_bool()), Some(true));
+            assert_eq!(obj.get("pool_size").and_then(|v| v.as_u64()), Some(10));
+        }
+    }
+
+    // Test error conditions
+    let non_existent_file = temp_dir.path().join("non_existent.json");
+    let result = parse_config_from_file(&non_existent_file);
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Failed to read config file"));
+
+    let invalid_json_file = temp_dir.path().join("invalid.json");
+    std::fs::write(&invalid_json_file, "{ invalid json }").unwrap();
+
+    let result = parse_config_from_file(&invalid_json_file);
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Failed to parse JSON"));
+
+    let array_file = temp_dir.path().join("array.json");
+    std::fs::write(&array_file, "[]").unwrap();
+
+    let result = parse_config_from_file(&array_file);
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("must contain a JSON object"));
+
+    // Test complex types (should be serialized as JSON strings)
+    let nested_file = temp_dir.path().join("nested.json");
+    std::fs::write(
+        &nested_file,
+        r#"{"database": {"host": "localhost"}, "port": "5432"}"#,
+    )
+    .unwrap();
+
+    let result = parse_config_from_file(&nested_file).unwrap();
+    assert_eq!(result.len(), 2);
+    assert_eq!(
+        result.get("database"),
+        Some(&r#"{"host":"localhost"}"#.to_string())
+    );
+    assert_eq!(result.get("port"), Some(&"5432".to_string()));
+
+    let array_value_file = temp_dir.path().join("array_value.json");
+    std::fs::write(
+        &array_value_file,
+        r#"{"hosts": ["localhost", "127.0.0.1"], "count": 2}"#,
+    )
+    .unwrap();
+
+    let result = parse_config_from_file(&array_value_file).unwrap();
+    assert_eq!(result.len(), 2);
+    assert_eq!(
+        result.get("hosts"),
+        Some(&r#"["localhost","127.0.0.1"]"#.to_string())
+    );
+    assert_eq!(result.get("count"), Some(&"2".to_string()));
+
+    let null_file = temp_dir.path().join("null.json");
+    std::fs::write(
+        &null_file,
+        r#"{"database_host": "localhost", "optional_value": null}"#,
+    )
+    .unwrap();
+
+    let result = parse_config_from_file(&null_file);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("null value"));
+
+    // Initialize a service
+    init_service(&file_path, "Test Service".to_string()).unwrap();
+
+    // Add a workflow
+    let workflow_id = WorkflowId::new("workflow-config-test").unwrap();
+    add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
+
+    // Set component source first
+    let test_digest = ComponentDigest::from_str(
+        "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    )
+    .unwrap();
+    update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::SetSourceDigest {
+            digest: test_digest.clone(),
+        },
+    )
+    .await
+    .unwrap();
+
+    // Config file already contains comprehensive config from unit test section
+
+    // Test setting config from file
+    let config_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::Config {
+            values: None,
+            config_file: Some(config_file.clone()),
+        },
+    )
+    .await
+    .unwrap();
+
+    // Verify config result with all data types
+    match &config_result {
+        ComponentOperationResult::Config { config, .. } => {
+            assert_eq!(config.len(), 9);
+
+            // Simple values
+            assert_eq!(config.get("database_host"), Some(&"localhost".to_string()));
+            assert_eq!(config.get("database_port"), Some(&"5432".to_string()));
+            assert_eq!(config.get("api_timeout"), Some(&"30".to_string()));
+            assert_eq!(config.get("debug_enabled"), Some(&"true".to_string()));
+            assert_eq!(config.get("max_connections"), Some(&"100".to_string()));
+            assert_eq!(config.get("retry_count"), Some(&"3".to_string()));
+
+            // Array serialization
+            if let Some(ips_str) = config.get("allowed_ips") {
+                let ips: Vec<String> = serde_json::from_str(ips_str).unwrap();
+                assert_eq!(ips.len(), 2);
+                assert!(ips.contains(&"127.0.0.1".to_string()));
+                assert!(ips.contains(&"192.168.1.100".to_string()));
+            } else {
+                panic!("allowed_ips not found in config");
+            }
+
+            // Object serialization - database_config
+            if let Some(db_config_str) = config.get("database_config") {
+                let db_config: serde_json::Value = serde_json::from_str(db_config_str).unwrap();
+                if let serde_json::Value::Object(obj) = db_config {
+                    assert_eq!(obj.get("ssl").and_then(|v| v.as_bool()), Some(true));
+                    assert_eq!(obj.get("pool_size").and_then(|v| v.as_u64()), Some(10));
+                } else {
+                    panic!("database_config should be an object");
+                }
+            } else {
+                panic!("database_config not found in config");
+            }
+
+            // Object serialization - feature_flags
+            if let Some(feature_flags_str) = config.get("feature_flags") {
+                let feature_flags: serde_json::Value =
+                    serde_json::from_str(feature_flags_str).unwrap();
+                if let serde_json::Value::Object(obj) = feature_flags {
+                    assert_eq!(obj.get("new_ui").and_then(|v| v.as_bool()), Some(true));
+                    assert_eq!(
+                        obj.get("beta_access").and_then(|v| v.as_bool()),
+                        Some(false)
+                    );
+                } else {
+                    panic!("feature_flags should be an object");
+                }
+            } else {
+                panic!("feature_flags not found in config");
+            }
+        }
+        _ => panic!("Expected Config result"),
+    }
+
+    // Verify the service was updated with the config
+    let service_after_config: ServiceJson =
+        serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+    let component_with_config = service_after_config
+        .workflows
+        .get(&workflow_id)
+        .unwrap()
+        .component
+        .as_component()
+        .unwrap();
+
+    assert_eq!(component_with_config.config.len(), 9);
+    assert!(component_with_config
+        .config
+        .iter()
+        .any(|(k, v)| k == "database_host" && v == "localhost"));
+    assert!(component_with_config
+        .config
+        .iter()
+        .any(|(k, v)| k == "database_port" && v == "5432"));
+
+    // Test clearing config
+    let clear_config_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::Config {
+            values: None,
+            config_file: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    match &clear_config_result {
+        ComponentOperationResult::Config { config, .. } => {
+            assert_eq!(config.len(), 0);
+        }
+        _ => panic!("Expected Config result"),
+    }
+
+    let service_after_clear: ServiceJson =
+        serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+    let component_with_clear_config = service_after_clear
+        .workflows
+        .get(&workflow_id)
+        .unwrap()
+        .component
+        .as_component()
+        .unwrap();
+    assert_eq!(component_with_clear_config.config.len(), 0);
 }

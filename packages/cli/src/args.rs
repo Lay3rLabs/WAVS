@@ -241,8 +241,14 @@ pub enum ComponentCommand {
     Config {
         /// Configuration key-value pairs in format 'key=value'
         /// Omit to clear all config values
-        #[clap(long)]
+        #[clap(long, conflicts_with = "config_file")]
         values: Option<Vec<String>>,
+
+        /// Configuration as JSON file containing flat key-value pairs
+        /// Example: --config-file config.json
+        /// Cannot be used together with --values
+        #[clap(long = "config-file", conflicts_with = "values")]
+        config_file: Option<PathBuf>,
     },
     /// Manage the workflow component env
     Env {
