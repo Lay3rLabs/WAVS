@@ -175,6 +175,63 @@ fn print_result_as_json<T: Serialize>(result: T) -> Result<()> {
     Ok(())
 }
 
+/// Parse configuration from a JSON file containing flat key-value pairs
+fn parse_config_from_file<P: AsRef<Path>>(config_file: P) -> Result<BTreeMap<String, String>> {
+    let config_file = config_file.as_ref();
+
+    // Read the config file
+    let config_content = std::fs::read_to_string(config_file)
+        .with_context(|| format!("Failed to read config file: {}", config_file.display()))?;
+
+    // Parse the JSON
+    let config_value: serde_json::Value =
+        serde_json::from_str(&config_content).with_context(|| {
+            format!(
+                "Failed to parse JSON in config file: {}",
+                config_file.display()
+            )
+        })?;
+
+    // Ensure it's a flat object (no nested objects/arrays)
+    let config_obj = match config_value {
+        serde_json::Value::Object(obj) => obj,
+        _ => {
+            return Err(anyhow!(
+                "Config file must contain a JSON object with key-value pairs"
+            ))
+        }
+    };
+
+    let mut config_map = BTreeMap::new();
+
+    for (key, value) in config_obj {
+        // Only allow simple string values (no nested objects or arrays)
+        match value {
+            serde_json::Value::String(s) => {
+                config_map.insert(key, s);
+            }
+            serde_json::Value::Number(n) => {
+                config_map.insert(key, n.to_string());
+            }
+            serde_json::Value::Bool(b) => {
+                config_map.insert(key, b.to_string());
+            }
+            serde_json::Value::Null => {
+                return Err(anyhow!(
+                    "Config key '{}' has null value. All keys must have string values",
+                    key
+                ));
+            }
+            serde_json::Value::Object(_) | serde_json::Value::Array(_) => {
+                // Serialize complex objects/arrays as JSON strings
+                config_map.insert(key, value.to_string());
+            }
+        }
+    }
+
+    Ok(config_map)
+}
+
 /// Helper function to load a service, modify it, and save it back
 pub fn modify_service_file<P, F, R>(file_path: P, modifier: F) -> Result<R>
 where
@@ -452,8 +509,16 @@ fn apply_component_command(component: &mut Component, command: ComponentCommand)
         ComponentCommand::TimeLimit { seconds } => {
             component.time_limit_seconds = seconds;
         }
-        ComponentCommand::Config { values } => {
-            if let Some(values) = values {
+        ComponentCommand::Config {
+            values,
+            config_file,
+        } => {
+            if let Some(config_file) = config_file {
+                // Load config from JSON file
+                let config_map = parse_config_from_file(config_file)?;
+                component.config = config_map;
+            } else if let Some(values) = values {
+                // Parse key=value pairs from command line
                 let mut config_pairs = BTreeMap::new();
                 for value in values {
                     match value.split_once('=') {
@@ -475,6 +540,7 @@ fn apply_component_command(component: &mut Component, command: ComponentCommand)
                 }
                 component.config = config_pairs;
             } else {
+                // Clear all config values
                 component.config.clear();
             }
         }
