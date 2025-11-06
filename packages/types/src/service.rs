@@ -5,12 +5,19 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::{NonZeroU32, NonZeroU64};
 use std::str::FromStr;
+use thiserror::Error;
 use utoipa::ToSchema;
 use wasm_pkg_common::package::PackageRef;
 
 use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
 
 use super::{ChainKey, ServiceId, WorkflowId};
+
+#[derive(Error, Debug)]
+pub enum ServiceError {
+    #[error("Failed to serialize service for hashing: {0}")]
+    SerializationError(#[from] serde_json::Error),
+}
 
 /// Service validation is a runtime check, and depends on:
 ///
@@ -33,7 +40,7 @@ pub struct Service {
 
 impl Service {
     // this is only used for local/tests, but we want to keep it consistent
-    pub fn hash(&self) -> anyhow::Result<ServiceDigest> {
+    pub fn hash(&self) -> Result<ServiceDigest, ServiceError> {
         let service_bytes = serde_json::to_vec(self)?;
         Ok(ServiceDigest::hash(&service_bytes))
     }

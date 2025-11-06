@@ -159,7 +159,9 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
 
-        let event_id: EventId = (&service, &trigger_action).try_into()?;
+        let event_id: EventId = (&service, &trigger_action)
+            .try_into()
+            .map_err(EngineError::EncodeEventId)?;
 
         let mut instance_deps = InstanceDepsBuilder {
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),

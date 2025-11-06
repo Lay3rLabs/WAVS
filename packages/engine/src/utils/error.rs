@@ -47,4 +47,7 @@ pub enum EngineError {
 
     #[error("Unknown digest: {0}")]
     UnknownDigest(ComponentDigest),
+
+    #[error("Registry: {0}")]
+    Registry(#[from] wasm_pkg_client::Error),
 }
