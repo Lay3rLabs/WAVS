@@ -140,14 +140,15 @@ wstd = "0.5.6"
 # WASM and WIT bindings
 wasm-pkg-client = "0.12.0"
 wasm-pkg-common = "0.12.0"
-wasmtime = { version = "37.0.1", features = [
+wasmtime = { version = "38.0.3", features = [
     "cache",
     "component-model",
     "runtime",
     "std",
 ] }
-wasmtime-wasi = { version = "37.0.1", default-features = true }
-wasmtime-wasi-http = "37.0.1"
+wasmtime-wasi = { version = "38.0.3", default-features = true }
+wasmtime-wasi-http = "38.0.3"
+wasmtime-wasi-tls = "38.0.3"
 wit-bindgen = "0.46.0"
 wavs-wasi-utils = "2.0.0"
 

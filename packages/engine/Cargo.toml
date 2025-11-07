@@ -15,6 +15,7 @@ utils = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime-wasi-http = { workspace = true }
+wasmtime-wasi-tls = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 layer-climb = { workspace = true }
