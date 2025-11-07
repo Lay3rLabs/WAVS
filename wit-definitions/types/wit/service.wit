@@ -76,6 +76,8 @@ interface service {
     record permissions {
         allowed-http-hosts: allowed-host-permission,
         file-system: bool,
+        raw-sockets: bool,
+        dns-resolution: bool
     }
 
     variant allowed-host-permission {

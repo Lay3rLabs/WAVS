@@ -24,6 +24,8 @@ fn create_dummy_packet(
         permissions: Permissions {
             allowed_http_hosts: AllowedHostPermission::All,
             file_system: true,
+            raw_sockets: true,
+            dns_resolution: true,
         },
         fuel_limit,
         time_limit_seconds,
@@ -240,6 +242,8 @@ mod test {
             permissions: Permissions {
                 allowed_http_hosts: AllowedHostPermission::All,
                 file_system: true,
+                raw_sockets: true,
+                dns_resolution: true,
             },
             fuel_limit: None,
             time_limit_seconds: None,

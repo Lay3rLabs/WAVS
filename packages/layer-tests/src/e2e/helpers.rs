@@ -109,6 +109,8 @@ fn deploy_component(
     component.permissions = Permissions {
         allowed_http_hosts: AllowedHostPermission::All,
         file_system: true,
+        raw_sockets: true,
+        dns_resolution: true,
     };
     component.config = config_vars;
     // Set env_keys to the actual prefixed env var names that will be read by the component

@@ -169,6 +169,16 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                 .map_err(EngineError::Filesystem)?;
         }
 
+        // conditionally allow raw network access
+        if wavs_component.permissions.raw_sockets {
+            builder.inherit_network();
+        }
+
+        // conditionally allow dns resolution
+        if wavs_component.permissions.dns_resolution {
+            builder.allow_ip_name_lookup(true);
+        }
+
         // read in system env variables that are prefixed with WAVS_ENV and are allowed to access via the component config
         let env: Vec<_> = std::env::vars()
             .filter(|(key, _)| {

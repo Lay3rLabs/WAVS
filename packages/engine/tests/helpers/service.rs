@@ -28,6 +28,8 @@ pub fn make_service(wasm_digest: ComponentDigest, config: BTreeMap<String, Strin
         permissions: Permissions {
             allowed_http_hosts: AllowedHostPermission::All,
             file_system: true,
+            raw_sockets: true,
+            dns_resolution: true,
         },
         fuel_limit: None,
         time_limit_seconds: None,

@@ -173,6 +173,8 @@ impl From<component_service::Permissions> for wavs_types::Permissions {
         Self {
             allowed_http_hosts: src.allowed_http_hosts.into(),
             file_system: src.file_system,
+            raw_sockets: src.raw_sockets,
+            dns_resolution: src.dns_resolution,
         }
     }
 }

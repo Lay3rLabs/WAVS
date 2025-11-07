@@ -234,6 +234,8 @@ impl From<wavs_types::Permissions> for component_service::Permissions {
         Self {
             allowed_http_hosts: src.allowed_http_hosts.into(),
             file_system: src.file_system,
+            raw_sockets: src.raw_sockets,
+            dns_resolution: src.dns_resolution,
         }
     }
 }
@@ -685,6 +687,8 @@ impl From<wavs_types::Permissions> for aggregator_service::Permissions {
         aggregator_service::Permissions {
             allowed_http_hosts: permissions.allowed_http_hosts.into(),
             file_system: permissions.file_system,
+            raw_sockets: permissions.raw_sockets,
+            dns_resolution: permissions.dns_resolution,
         }
     }
 }
