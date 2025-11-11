@@ -151,6 +151,7 @@ wasmtime-wasi-http = "38.0.3"
 wasmtime-wasi-tls = "38.0.3"
 wit-bindgen = "0.46.0"
 wavs-wasi-utils = "2.0.0"
+wasip2 = "1.0.1"
 
 # benchmarking
 criterion = { version = "0.7.0", features = ["async_tokio"] }

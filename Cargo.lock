@@ -3501,6 +3501,7 @@ dependencies = [
  "cw-wavs-trigger-api",
  "layer-climb",
  "serde",
+ "wasip2",
  "wavs-wasi-utils",
  "wit-bindgen",
 ]
@@ -7664,6 +7665,7 @@ dependencies = [
  "alloy-primitives",
  "layer-climb-address",
  "serde",
+ "wasip2",
  "wavs-types",
  "wavs-wasi-utils",
  "wit-bindgen",
@@ -8168,6 +8170,7 @@ dependencies = [
  "alloy-network",
  "alloy-primitives",
  "alloy-provider",
+ "wasip2",
  "wavs-wasi-utils",
  "wit-bindgen",
  "wstd",

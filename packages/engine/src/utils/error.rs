@@ -9,7 +9,7 @@ pub enum EngineError {
     #[error("Wasm exec result: {0}")]
     ExecResult(String),
 
-    #[error("Component returned an error: {0}")]
+    #[error("Component returned an error: {0:?}")]
     ComponentError(anyhow::Error),
 
     #[error("Workflow {workflow_id} not found for service {service_id}")]

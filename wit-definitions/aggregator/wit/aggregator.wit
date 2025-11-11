@@ -1,9 +1,9 @@
-package wavs:aggregator@2.1.0;
+package wavs:aggregator@2.2.0;
 
-use wavs:types/core@2.1.0 as core-types;
-use wavs:types/service@2.1.0 as service-types;
-use wavs:types/chain@2.1.0 as chain-types;
-use wavs:types/events@2.1.0 as event-types;
+use wavs:types/core@2.2.0 as core-types;
+use wavs:types/service@2.2.0 as service-types;
+use wavs:types/chain@2.2.0 as chain-types;
+use wavs:types/events@2.2.0 as event-types;
 
 interface aggregator {
     use core-types.{duration, u128};
@@ -67,6 +67,12 @@ world aggregator-world {
 
     // for key-value store support
     include wasi:keyvalue/imports@0.2.0-draft2;
+
+    // for raw socket support
+    include wasi:sockets/imports@0.2.0;
+
+    // for tls support
+    include wasi:tls/imports@0.2.0-draft;
 
     import host: interface {
         use chain-types.{evm-chain-config, cosmos-chain-config};
