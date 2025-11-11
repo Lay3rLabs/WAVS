@@ -18,7 +18,7 @@ utils = { workspace = true, features = ["test-utils"] }
 wavs-cli = { workspace = true }
 wavs-aggregator = { workspace = true }
 cw-wavs-mock-api = { workspace = true }
-cw-wavs-trigger-api = {workspace = true}
+cw-wavs-trigger-api = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
@@ -38,16 +38,16 @@ alloy-signer-local = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-sol-types = { workspace = true }
 alloy-primitives = { workspace = true }
-alloy-provider = { workspace = true }
+alloy-provider = { workspace = true, features = ["anvil-node"] }
 alloy-signer = { workspace = true }
 alloy-contract = { workspace = true }
 uuid = { workspace = true }
 reqwest = { workspace = true }
 dashmap = { workspace = true }
-example-types = { workspace = true}
+example-types = { workspace = true }
 ordermap = { workspace = true }
 regex = { workspace = true }
 deadpool = { workspace = true }
 derive-enum-all-values = { workspace = true }
 rand = { workspace = true }
-bip39 = { workspace = true}
+bip39 = { workspace = true }
