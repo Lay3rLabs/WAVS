@@ -11,8 +11,8 @@ pub enum WavsValidateError {
     InvalidSignatureBlock,
     #[error("Invalid signature order")]
     InvalidSignatureOrder,
-    #[error("Invalid signature: {0}")]
-    InvalidSignature(String),
+    #[error("Invalid signature")]
+    InvalidSignature,
     #[error("Insufficient quorum: zero signers")]
     InsufficientQuorumZero,
     #[error("Insufficient quorum: signer weight {signer_weight} is below threshold {threshold_weight} of total weight {total_weight}")]
@@ -23,12 +23,6 @@ pub enum WavsValidateError {
     },
     #[error("Invalid quorum parameters")]
     InvalidQuorumParameters,
-    #[error("Registry not found")]
-    MissingRegistry,
-    #[error("Unable to decode envelope")]
-    EnvelopeDecode,
-    #[error("Could not parse signature")]
-    SignatureParse,
 }
 
 impl TryFrom<StdError> for WavsValidateError {
