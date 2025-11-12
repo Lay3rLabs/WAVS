@@ -483,6 +483,66 @@ pub mod tests {
     }
 
     #[tokio::test]
+    async fn execute_custom_event_id() {
+        let storage = MemoryStorage::new();
+        let app_data = tempfile::tempdir().unwrap();
+        let engine = WasmEngine::new(
+            storage,
+            &app_data,
+            3,
+            mock_chain_configs(),
+            None,
+            None,
+            metrics(),
+            RedbStorage::new().unwrap(),
+            DEFAULT_IPFS_GATEWAY.to_owned(),
+        );
+
+        let digest = engine
+            .store_component_bytes(COMPONENT_ECHO_DATA_BYTES)
+            .unwrap();
+        let mut workflow = Workflow {
+            trigger: Trigger::Manual,
+            component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
+            submit: Submit::None,
+        };
+
+        workflow.component.config =
+            [("event-id-data".to_string(), "hello world!".to_string())].into();
+
+        let service = wavs_types::Service {
+            name: "Exec Service".to_string(),
+            workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
+            status: wavs_types::ServiceStatus::Active,
+            manager: wavs_types::ServiceManager::Evm {
+                chain: "evm:anvil".parse().unwrap(),
+                address: Default::default(),
+            },
+        };
+
+        let service_id = service.id();
+
+        let result = engine
+            .execute(
+                service.clone(),
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: service_id.clone(),
+                        workflow_id: WorkflowId::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"custom-event-id"#),
+                },
+            )
+            .await
+            .unwrap();
+
+        let expected_event_id: EventId = EventId::new_hash("hello world!".as_bytes());
+
+        assert_eq!(result.unwrap().event_id.unwrap(), expected_event_id);
+    }
+
+    #[tokio::test]
     async fn execute_without_enough_fuel() {
         let storage = MemoryStorage::new();
         let app_data = tempfile::tempdir().unwrap();

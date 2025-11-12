@@ -139,16 +139,30 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         // If Ok(Some(x)), send the result down the pipeline to the submit processor
         // If Ok(None), just end early here, performing no action (but updating local state if needed)
         if let Some(wasm_response) = wasm_response {
-            tracing::info!(service.name = %service.name, service.manager = ?service.manager, workflow_id = %trigger_config.workflow_id, payload_size = %wasm_response.payload.len(), "Component execution produced result: service={} [{:?}], workflow_id={}, payload_size={}", service.name, service.manager, trigger_config.workflow_id, wasm_response.payload.len());
+            let event_id = match wasm_response.event_id {
+                Some(event_id) => event_id,
+                None => {
+                    EventId::try_from((&service, &action)).map_err(EngineError::EncodeEventId)?
+                }
+            };
+            tracing::info!(
+                service_id = %trigger_config.service_id,
+                service.name = %service.name,
+                service.manager = ?service.manager,
+                workflow_id = %trigger_config.workflow_id,
+                payload_size = %wasm_response.payload.len(),
+                event_id = %event_id,
+                "Service {} (workflow {}) component execution completed",
+                service.name,
+                trigger_config.workflow_id
+            );
 
             let msg = ChainMessage {
                 service_id: trigger_config.service_id,
                 workflow_id: trigger_config.workflow_id,
                 envelope: Envelope {
                     payload: wasm_response.payload.into(),
-                    eventId: EventId::try_from((&service, &action))
-                        .map_err(EngineError::EncodeEventId)?
-                        .into(),
+                    eventId: event_id.into(),
                     ordering: match wasm_response.ordering {
                         Some(ordering) => EventOrder::new_u64(ordering).into(),
                         None => FixedBytes::default(),
@@ -163,8 +177,12 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
             Ok(Some(msg))
         } else {
             tracing::info!(
-                "Component execution produced no result: service_id={}, workflow_id={}",
-                trigger_config.service_id,
+                service_id = %trigger_config.service_id,
+                service.name = %service.name,
+                service.manager = ?service.manager,
+                workflow_id = %trigger_config.workflow_id,
+                "Service {} (workflow {}) component execution produced no result",
+                service.name,
                 trigger_config.workflow_id
             );
             Ok(None)

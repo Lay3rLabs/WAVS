@@ -699,14 +699,14 @@ impl TriggerManager {
                             .services
                             .get(&action.config.service_id)
                             .map_err(TriggerError::Services)?;
-                        let event_id = EventId::try_from((&service, action))
+                        let default_event_id = EventId::try_from((&service, action))
                             .map_err(TriggerError::EncodeEventId)?;
                         tracing::debug!(
                             batch = idx + 1,
                             service_id = %action.config.service_id,
                             workflow_id = %action.config.workflow_id,
                             trigger_data = ?action.data,
-                            event_id = %event_id,
+                            default_event_id = %default_event_id,
                             "Trigger action (in this batch)"
                         );
                     }

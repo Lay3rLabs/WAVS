@@ -1,4 +1,4 @@
-use alloy_primitives::{hex, LogData};
+use alloy_primitives::LogData;
 use iri_string::types::UriString;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use wasm_pkg_common::package::PackageRef;
 
-use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
+use crate::{ByteArray, ComponentDigest, EventId, ServiceDigest, Timestamp};
 
 use super::{ChainKey, ServiceId, WorkflowId};
 
@@ -503,9 +503,10 @@ pub enum AllowedHostPermission {
 #[serde(default, rename_all = "snake_case")]
 #[derive(Default)]
 pub struct WasmResponse {
-    #[serde(with = "hex")]
+    #[serde(with = "const_hex")]
     pub payload: Vec<u8>,
     pub ordering: Option<u64>,
+    pub event_id: Option<EventId>,
 }
 
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
