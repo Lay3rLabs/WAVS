@@ -56,6 +56,8 @@ impl EngineSetup {
                 permissions: wavs_types::Permissions {
                     file_system: false,
                     allowed_http_hosts: AllowedHostPermission::None,
+                    raw_sockets: false,
+                    dns_resolution: false,
                 },
                 fuel_limit: None,
                 time_limit_seconds: None,

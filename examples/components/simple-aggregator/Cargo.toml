@@ -14,6 +14,7 @@ wavs-wasi-utils = { workspace = true }
 wstd = { workspace = true }
 layer-climb-address = { workspace = true }
 wavs-types = { workspace = true }
+wasip2 = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

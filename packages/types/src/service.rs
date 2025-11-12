@@ -469,6 +469,10 @@ pub struct Permissions {
     pub allowed_http_hosts: AllowedHostPermission,
     /// If it can write to it's own local directory in the filesystem
     pub file_system: bool,
+    /// If it can use the host's raw sockets (not needed for http)
+    pub raw_sockets: bool,
+    /// If it can perform DNS resolution (not needed for http)
+    pub dns_resolution: bool,
 }
 
 #[test]

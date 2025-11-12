@@ -107,6 +107,8 @@ impl ExecComponent {
                 permissions: Permissions {
                     allowed_http_hosts: AllowedHostPermission::All,
                     file_system: true,
+                    raw_sockets: true,
+                    dns_resolution: true,
                 },
                 fuel_limit,
                 time_limit_seconds: time_limit,

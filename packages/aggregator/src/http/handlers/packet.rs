@@ -1298,6 +1298,8 @@ mod test {
         component.permissions = wavs_types::Permissions {
             allowed_http_hosts: wavs_types::AllowedHostPermission::All,
             file_system: false,
+            raw_sockets: false,
+            dns_resolution: false,
         };
 
         mock_service_with_submit(

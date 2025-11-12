@@ -1,5 +1,6 @@
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_tls::WasiTlsCtx;
 use wavs_types::{ChainConfigs, ComponentDigest, EventId, Service, ServiceId, WorkflowId};
 
 use crate::{
@@ -16,7 +17,8 @@ pub struct AggregatorHostComponent {
     pub event_id: EventId,
     pub(crate) table: wasmtime::component::ResourceTable,
     pub(crate) ctx: WasiCtx,
-    pub(crate) http: WasiHttpCtx,
+    pub(crate) http_ctx: WasiHttpCtx,
+    pub(crate) tls_ctx: WasiTlsCtx,
     pub(crate) keyvalue_ctx: KeyValueCtx,
     pub(crate) inner_log: AggregatorHostComponentLogger,
 }
@@ -32,7 +34,7 @@ impl WasiView for AggregatorHostComponent {
 
 impl WasiHttpView for AggregatorHostComponent {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.http
+        &mut self.http_ctx
     }
 
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
