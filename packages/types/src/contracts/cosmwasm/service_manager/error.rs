@@ -7,12 +7,10 @@ use cosmwasm_std::{StdError, Uint256};
 pub enum WavsValidateError {
     #[error("Invalid signature length")]
     InvalidSignatureLength,
-    #[error("Invalid signature block")]
-    InvalidSignatureBlock,
     #[error("Invalid signature order")]
     InvalidSignatureOrder,
-    #[error("Invalid signature")]
-    InvalidSignature,
+    #[error("Invalid signature: {0}")]
+    InvalidSignature(String),
     #[error("Insufficient quorum: zero signers")]
     InsufficientQuorumZero,
     #[error("Insufficient quorum: signer weight {signer_weight} is below threshold {threshold_weight} of total weight {total_weight}")]
