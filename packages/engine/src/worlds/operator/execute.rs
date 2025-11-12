@@ -21,7 +21,7 @@ pub async fn execute(
         let service_id = service_id.clone();
         let workflow_id = workflow_id.clone();
         async move {
-            crate::bindings::operator::world::WavsWorld::instantiate_async(
+            let res = crate::bindings::operator::world::WavsWorld::instantiate_async(
                 deps.store.as_operator_mut(),
                 &deps.component,
                 deps.linker.as_operator_ref(),
@@ -35,8 +35,14 @@ pub async fn execute(
                 Some(t) if *t == Trap::Interrupt => EngineError::OutOfTime(service_id, workflow_id),
                 _ => EngineError::ComponentError(e),
             })?
-            .map_err(EngineError::ExecResult)
-            .map(|res| res.map(|r| r.into()))
+            .map_err(EngineError::ExecResult)?;
+
+            match res {
+                None => Ok(None),
+                Some(r) => Ok(Some(
+                    r.try_into().map_err(EngineError::WasmResponseMalformed)?,
+                )),
+            }
         }
     })
     .await

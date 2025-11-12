@@ -2,7 +2,7 @@ use wavs_types::ChainKey;
 
 use crate::worlds::operator::component::OperatorHostComponent;
 
-use super::world::host::{LogLevel, ServiceAndWorkflowId, WorkflowAndWorkflowId};
+use super::world::host::{EventId, LogLevel, ServiceAndWorkflowId, WorkflowAndWorkflowId};
 
 impl super::world::host::Host for OperatorHostComponent {
     fn get_cosmos_chain_config(
@@ -67,6 +67,10 @@ impl super::world::host::Host for OperatorHostComponent {
             .get(&self.workflow_id)
             .and_then(|workflow| workflow.component.config.get(&key))
             .cloned()
+    }
+
+    fn hash_event_id(&mut self, bytes: Vec<u8>) -> EventId {
+        wavs_types::EventId::new_hash(&bytes).as_bytes().to_vec()
     }
 
     fn log(&mut self, level: LogLevel, message: String) {

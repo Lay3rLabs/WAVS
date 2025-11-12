@@ -96,7 +96,24 @@ impl Packet {
     PartialOrd,
 )]
 #[serde(transparent)]
-pub struct EventId([u8; 20]);
+pub struct EventId(#[serde(with = "const_hex")] [u8; 20]);
+
+impl EventId {
+    pub fn new_raw(bytes: [u8; 20]) -> Self {
+        Self(bytes)
+    }
+
+    pub fn new_hash(data: &[u8]) -> Self {
+        let mut hasher = Ripemd160::new();
+        hasher.update(data);
+        let result = hasher.finalize();
+        Self(result.into())
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 20] {
+        &self.0
+    }
+}
 
 impl From<FixedBytes<20>> for EventId {
     fn from(value: FixedBytes<20>) -> Self {

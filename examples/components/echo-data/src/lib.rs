@@ -44,7 +44,7 @@ impl Guest for Component {
             }
         }
 
-        // Sanity check that we can get the event id
+        // Sanity check that we can get the default event id
         if host::get_event_id().iter().all(|x| *x == 0) {
             return Err("event id is all zeros".to_string());
         }
@@ -74,6 +74,7 @@ impl Guest for Component {
                     return Ok(Some(WasmResponse {
                         payload: value.as_bytes().to_vec(),
                         ordering: None,
+                        event_id: None,
                     }));
                 } else {
                     return Err(format!("env var {env_var} not found"));
@@ -91,10 +92,19 @@ impl Guest for Component {
                     return Ok(Some(WasmResponse {
                         payload: value.as_bytes().to_vec(),
                         ordering: None,
+                        event_id: None,
                     }));
                 } else {
                     return Err(format!("config var {config_var} not found"));
                 }
+            } else if input_str == "custom-event-id" {
+                return Ok(Some(WasmResponse {
+                    payload: Vec::new(),
+                    ordering: None,
+                    event_id: Some(host::hash_event_id(
+                        host::config_var("event-id-data").unwrap().as_bytes(),
+                    )),
+                }));
             }
         }
 
@@ -108,6 +118,7 @@ impl Guest for Component {
         Ok(Some(WasmResponse {
             payload: data,
             ordering: None,
+            event_id: None,
         }))
     }
 }

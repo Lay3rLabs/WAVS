@@ -331,6 +331,7 @@ impl From<wavs_types::WasmResponse> for component_output::WasmResponse {
         Self {
             payload: src.payload,
             ordering: src.ordering,
+            event_id: src.event_id.map(|event_id| event_id.as_bytes().to_vec()),
         }
     }
 }
