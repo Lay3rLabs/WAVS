@@ -183,9 +183,7 @@ impl ExecComponent {
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
             component: WasmtimeComponent::new(&engine, &wasm_bytes)?,
-            data: InstanceData::Operator {
-                trigger_data: trigger_action.data.clone(),
-            },
+            data: InstanceData::new_operator(trigger_action.data.clone()),
             engine: &engine,
             data_dir: tempfile::tempdir()?.keep(),
             chain_configs: &cli_config.chains.read().unwrap(),

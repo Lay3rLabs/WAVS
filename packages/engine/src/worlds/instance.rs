@@ -89,8 +89,20 @@ pub struct InstanceDepsBuilder<'a, P> {
 }
 
 pub enum InstanceData {
-    Operator { trigger_data: TriggerData },
+    Operator { trigger_data: Box<TriggerData> },
     Aggregator { event_id: EventId },
+}
+
+impl InstanceData {
+    pub fn new_operator(trigger_data: TriggerData) -> Self {
+        InstanceData::Operator {
+            trigger_data: Box::new(trigger_data),
+        }
+    }
+
+    pub fn new_aggregator(event_id: EventId) -> Self {
+        InstanceData::Aggregator { event_id }
+    }
 }
 
 pub struct InstanceDeps {
@@ -235,7 +247,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                 let host = OperatorHostComponent {
                     service,
                     workflow_id,
-                    trigger_data,
+                    trigger_data: *trigger_data,
                     chain_configs: chain_configs.clone(),
                     table: wasmtime::component::ResourceTable::new(),
                     ctx,

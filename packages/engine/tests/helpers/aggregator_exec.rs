@@ -40,9 +40,8 @@ pub async fn execute_aggregator_component(
     let mut instance_deps = InstanceDepsBuilder {
         workflow_id: packet.workflow_id.clone(),
         service: packet.service.clone(),
-        data: InstanceData::Aggregator {
-            event_id: packet.event_id(),
-        },
+        data: InstanceData::new_aggregator(packet.event_id()),
+
         component: WasmtimeComponent::new(&engine, wasm_bytes).unwrap(),
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),

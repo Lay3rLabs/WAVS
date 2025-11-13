@@ -85,9 +85,7 @@ pub async fn try_execute_component_raw(
     let mut instance_deps = InstanceDepsBuilder {
         workflow_id: service.workflows.keys().next().cloned().unwrap(),
         service,
-        data: InstanceData::Operator {
-            trigger_data: trigger_action.data.clone(),
-        },
+        data: InstanceData::new_operator(trigger_action.data.clone()),
         component: WasmtimeComponent::new(&engine, wasm_bytes).unwrap(),
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),

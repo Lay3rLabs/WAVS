@@ -110,7 +110,7 @@ impl EventId {
         match salt {
             EventIdSalt::WasmResponse(bytes) => hasher.update(bytes),
             EventIdSalt::Trigger(trigger_data) => hasher.update(bincode::serde::encode_to_vec(
-                &trigger_data,
+                trigger_data,
                 bincode::config::standard(),
             )?),
         }

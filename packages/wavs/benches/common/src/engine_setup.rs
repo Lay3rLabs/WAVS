@@ -116,9 +116,7 @@ impl EngineSetup {
 
         let builder = InstanceDepsBuilder {
             component: self.component.clone(),
-            data: InstanceData::Operator {
-                trigger_data: trigger_action.data.clone(),
-            },
+            data: InstanceData::new_operator(trigger_action.data.clone()),
             service: self.service.clone(),
             workflow_id: self.workflow_id.clone(),
             engine: &self.engine,

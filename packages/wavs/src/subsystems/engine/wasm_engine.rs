@@ -164,9 +164,9 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
             component,
-            data: wavs_engine::worlds::instance::InstanceData::Operator {
-                trigger_data: trigger_action.data.clone(),
-            },
+            data: wavs_engine::worlds::instance::InstanceData::new_operator(
+                trigger_action.data.clone(),
+            ),
             engine: &self.engine.wasm_engine,
             data_dir: self
                 .engine

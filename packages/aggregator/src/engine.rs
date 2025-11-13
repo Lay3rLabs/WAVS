@@ -66,9 +66,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             component: wasm_component,
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
-            data: InstanceData::Aggregator {
-                event_id: packet.event_id(),
-            },
+            data: InstanceData::new_aggregator(packet.event_id()),
             engine: &self.engine.wasm_engine,
             data_dir: &self.engine.app_data_dir,
             chain_configs: &chain_configs,
