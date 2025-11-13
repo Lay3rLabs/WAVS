@@ -31,8 +31,8 @@ use tracing::instrument;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::{
     contracts::cosmwasm::service_manager::event::WavsServiceUriUpdatedEvent, AnyChainConfig,
-    ByteArray, ChainConfigs, ChainKey, EventId, IWavsServiceManager, ServiceId, Trigger,
-    TriggerAction, TriggerConfig, TriggerData,
+    ByteArray, ChainConfigs, ChainKey, IWavsServiceManager, ServiceId, Trigger, TriggerAction,
+    TriggerConfig, TriggerData,
 };
 
 #[derive(Debug)]
@@ -694,19 +694,11 @@ impl TriggerManager {
                 );
                 for (idx, command) in dispatcher_commands.iter().enumerate() {
                     if let DispatcherCommand::Trigger(action) = command {
-                        // Log the trigger action details
-                        let service = self
-                            .services
-                            .get(&action.config.service_id)
-                            .map_err(TriggerError::Services)?;
-                        let default_event_id = EventId::try_from((&service, action))
-                            .map_err(TriggerError::EncodeEventId)?;
                         tracing::debug!(
                             batch = idx + 1,
                             service_id = %action.config.service_id,
                             workflow_id = %action.config.workflow_id,
                             trigger_data = ?action.data,
-                            default_event_id = %default_event_id,
                             "Trigger action (in this batch)"
                         );
                     }

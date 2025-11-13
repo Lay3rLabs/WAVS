@@ -6,6 +6,7 @@ mod credential;
 mod http;
 mod id;
 mod packet;
+mod serde_helpers;
 mod service;
 mod solidity_types;
 mod time;

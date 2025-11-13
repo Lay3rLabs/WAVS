@@ -7,7 +7,10 @@ use wasmtime::{component::Linker, Engine as WTEngine};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wasmtime_wasi_tls::{WasiTls, WasiTlsCtxBuilder};
-use wavs_types::{AllowedHostPermission, ChainConfigs, Permissions, Service, Workflow, WorkflowId};
+use wavs_types::{
+    AllowedHostPermission, ChainConfigs, EventId, Permissions, Service, TriggerData, Workflow,
+    WorkflowId,
+};
 
 use crate::backend::wasi_keyvalue::context::KeyValueCtxProvider;
 use crate::worlds::aggregator::component::{
@@ -77,12 +80,17 @@ pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
     pub service: Service,
     pub workflow_id: WorkflowId,
-    pub event_id: wavs_types::EventId,
+    pub data: InstanceData,
     pub engine: &'a WTEngine,
     pub data_dir: P,
     pub chain_configs: &'a ChainConfigs,
     pub log: HostComponentLogger,
     pub keyvalue_ctx: KeyValueCtx,
+}
+
+pub enum InstanceData {
+    Operator { trigger_data: TriggerData },
+    Aggregator { event_id: EventId },
 }
 
 pub struct InstanceDeps {
@@ -98,7 +106,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             component,
             service,
             workflow_id,
-            event_id,
+            data,
             engine,
             data_dir,
             chain_configs,
@@ -222,19 +230,22 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
         let tls_ctx = WasiTlsCtxBuilder::new().build();
 
         // create host (what is this actually? some state needed for the linker?)
-        let store = match log {
-            HostComponentLogger::OperatorHostComponentLogger(log) => {
+        let store = match data {
+            InstanceData::Operator { trigger_data } => {
                 let host = OperatorHostComponent {
                     service,
                     workflow_id,
-                    event_id,
+                    trigger_data,
                     chain_configs: chain_configs.clone(),
                     table: wasmtime::component::ResourceTable::new(),
                     ctx,
                     keyvalue_ctx,
                     http_ctx: WasiHttpCtx::new(),
                     tls_ctx,
-                    inner_log: log,
+                    inner_log: match log {
+                        HostComponentLogger::OperatorHostComponentLogger(log) => log,
+                        _ => unreachable!(),
+                    },
                 };
                 let mut store = wasmtime::Store::new(engine, host);
 
@@ -242,18 +253,21 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
                 ComponentStore::OperatorComponentStore(store)
             }
-            HostComponentLogger::AggregatorHostComponentLogger(log) => {
+            InstanceData::Aggregator { event_id } => {
                 let host = AggregatorHostComponent {
                     service,
                     workflow_id,
-                    event_id,
                     chain_configs: chain_configs.clone(),
                     table: wasmtime::component::ResourceTable::new(),
+                    event_id,
                     ctx,
                     keyvalue_ctx,
                     http_ctx: WasiHttpCtx::new(),
                     tls_ctx,
-                    inner_log: log,
+                    inner_log: match log {
+                        HostComponentLogger::AggregatorHostComponentLogger(log) => log,
+                        _ => unreachable!(),
+                    },
                 };
                 let mut store = wasmtime::Store::new(engine, host);
 

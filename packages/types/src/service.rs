@@ -9,7 +9,7 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use wasm_pkg_common::package::PackageRef;
 
-use crate::{ByteArray, ComponentDigest, EventId, ServiceDigest, Timestamp};
+use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
 
 use super::{ChainKey, ServiceId, WorkflowId};
 
@@ -506,7 +506,8 @@ pub struct WasmResponse {
     #[serde(with = "const_hex")]
     pub payload: Vec<u8>,
     pub ordering: Option<u64>,
-    pub event_id: Option<EventId>,
+    #[serde(with = "crate::serde_helpers::option_const_hex")]
+    pub event_id_salt: Option<Vec<u8>>,
 }
 
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`

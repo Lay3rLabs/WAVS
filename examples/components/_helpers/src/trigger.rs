@@ -61,7 +61,7 @@ fn evm_encode_trigger_output(
         }
         .abi_encode(),
         ordering: None,
-        event_id: None,
+        event_id_salt: None,
     }
 }
 
@@ -78,7 +78,7 @@ fn cosmos_encode_trigger_output(
         .to_bytes()
         .unwrap(),
         ordering: None,
-        event_id: None,
+        event_id_salt: None,
     }
 }
 

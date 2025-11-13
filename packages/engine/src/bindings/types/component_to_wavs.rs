@@ -265,27 +265,13 @@ impl From<component_service::SignaturePrefix> for wavs_types::SignaturePrefix {
     }
 }
 
-impl TryFrom<component_output::WasmResponse> for wavs_types::WasmResponse {
-    type Error = anyhow::Error;
-
-    fn try_from(src: component_output::WasmResponse) -> Result<Self, Self::Error> {
-        let event_id = match src.event_id {
-            Some(event_id) => {
-                if event_id.len() != 20 {
-                    return Err(anyhow::anyhow!(
-                        "event id must be 20 bytes, got {} bytes",
-                        event_id.len()
-                    ));
-                }
-                Some(wavs_types::EventId::new_raw(event_id.try_into().unwrap()))
-            }
-            None => None,
-        };
-        Ok(Self {
+impl From<component_output::WasmResponse> for wavs_types::WasmResponse {
+    fn from(src: component_output::WasmResponse) -> Self {
+        Self {
             payload: src.payload,
             ordering: src.ordering,
-            event_id,
-        })
+            event_id_salt: src.event_id_salt,
+        }
     }
 }
 

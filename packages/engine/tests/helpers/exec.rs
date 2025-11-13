@@ -8,9 +8,9 @@ use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     bindings::operator::world::host::LogLevel,
     utils::error::EngineError,
-    worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
+    worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder},
 };
-use wavs_types::{ComponentDigest, EventId, ServiceId, WorkflowId};
+use wavs_types::{ComponentDigest, ServiceId, WorkflowId};
 
 use crate::helpers::service::{make_service, make_trigger_action};
 
@@ -78,10 +78,6 @@ pub async fn try_execute_component_raw(
     let service = make_service(ComponentDigest::hash(wasm_bytes), config);
     let trigger_action = make_trigger_action(&service, None, input);
 
-    let event_id: EventId = (&service, &trigger_action)
-        .try_into()
-        .map_err(|e: anyhow::Error| e.to_string())?;
-
     let data_dir = tempfile::tempdir().unwrap();
     let keyvalue_ctx = keyvalue_ctx
         .unwrap_or_else(|| KeyValueCtx::new(WavsDb::new().unwrap(), "test".to_string()));
@@ -89,7 +85,9 @@ pub async fn try_execute_component_raw(
     let mut instance_deps = InstanceDepsBuilder {
         workflow_id: service.workflows.keys().next().cloned().unwrap(),
         service,
-        event_id,
+        data: InstanceData::Operator {
+            trigger_data: trigger_action.data.clone(),
+        },
         component: WasmtimeComponent::new(&engine, wasm_bytes).unwrap(),
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),

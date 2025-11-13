@@ -10,6 +10,7 @@ use utils::storage::CAStorage;
 pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
     AggregatorAction, SubmitAction,
 };
+use wavs_engine::worlds::instance::InstanceData;
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     bindings::aggregator::world::wavs::types::{chain::AnyTxHash, core::LogLevel},
@@ -65,7 +66,9 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
             component: wasm_component,
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
-            event_id: packet.event_id(),
+            data: InstanceData::Aggregator {
+                event_id: packet.event_id(),
+            },
             engine: &self.engine.wasm_engine,
             data_dir: &self.engine.app_data_dir,
             chain_configs: &chain_configs,

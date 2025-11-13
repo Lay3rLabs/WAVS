@@ -10,7 +10,7 @@ use wavs_engine::{
     worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{
-    ChainConfigs, ComponentDigest, ComponentSource, EventId, Service, ServiceId, TriggerAction,
+    ChainConfigs, ComponentDigest, ComponentSource, Service, ServiceId, TriggerAction,
     WasmResponse, WorkflowId,
 };
 
@@ -159,16 +159,14 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
 
-        let event_id: EventId = (&service, &trigger_action)
-            .try_into()
-            .map_err(EngineError::EncodeEventId)?;
-
         let mut instance_deps = InstanceDepsBuilder {
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
             component,
-            event_id,
+            data: wavs_engine::worlds::instance::InstanceData::Operator {
+                trigger_data: trigger_action.data.clone(),
+            },
             engine: &self.engine.wasm_engine,
             data_dir: self
                 .engine
@@ -508,7 +506,7 @@ pub mod tests {
         };
 
         workflow.component.config =
-            [("event-id-data".to_string(), "hello world!".to_string())].into();
+            [("event-id-salt".to_string(), "hello world!".to_string())].into();
 
         let service = wavs_types::Service {
             name: "Exec Service".to_string(),
@@ -537,9 +535,10 @@ pub mod tests {
             .await
             .unwrap();
 
-        let expected_event_id: EventId = EventId::new_hash("hello world!".as_bytes());
-
-        assert_eq!(result.unwrap().event_id.unwrap(), expected_event_id);
+        assert_eq!(
+            result.unwrap().event_id_salt.unwrap(),
+            "hello world!".as_bytes()
+        );
     }
 
     #[tokio::test]

@@ -9,7 +9,7 @@ use utils::{config::WAVS_ENV_PREFIX, storage::db::WavsDb};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
     bindings::operator::world::host::LogLevel,
-    worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
+    worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder},
 };
 use wavs_types::{
     AllowedHostPermission, ChainKey, ComponentDigest, ComponentSource, Permissions, ServiceId,
@@ -179,15 +179,13 @@ impl ExecComponent {
             data,
         };
 
-        let event_id = (&service, &trigger_action)
-            .try_into()
-            .context("Failed to create event ID from service and trigger action")?;
-
         let mut instance_deps = InstanceDepsBuilder {
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
             component: WasmtimeComponent::new(&engine, &wasm_bytes)?,
-            event_id,
+            data: InstanceData::Operator {
+                trigger_data: trigger_action.data.clone(),
+            },
             engine: &engine,
             data_dir: tempfile::tempdir()?.keep(),
             chain_configs: &cli_config.chains.read().unwrap(),

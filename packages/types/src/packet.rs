@@ -9,8 +9,8 @@ use std::borrow::Borrow;
 
 pub use crate::solidity_types::Envelope;
 use crate::{
-    Service, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, SignatureKind,
-    TriggerAction, TriggerData, WorkflowId,
+    Service, ServiceId, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData,
+    SignatureKind, TriggerData, WorkflowId,
 };
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
 use alloy_sol_types::SolValue;
@@ -99,19 +99,40 @@ impl Packet {
 pub struct EventId(#[serde(with = "const_hex")] [u8; 20]);
 
 impl EventId {
-    pub fn new_raw(bytes: [u8; 20]) -> Self {
-        Self(bytes)
-    }
-
-    pub fn new_hash(data: &[u8]) -> Self {
+    pub fn new(
+        service_id: &ServiceId,
+        workflow_id: &WorkflowId,
+        salt: EventIdSalt<'_>,
+    ) -> Result<Self, bincode::error::EncodeError> {
         let mut hasher = Ripemd160::new();
-        hasher.update(data);
+        hasher.update(service_id.inner());
+        hasher.update(workflow_id.as_bytes());
+        match salt {
+            EventIdSalt::WasmResponse(bytes) => hasher.update(bytes),
+            EventIdSalt::Trigger(trigger_data) => hasher.update(bincode::serde::encode_to_vec(
+                &trigger_data,
+                bincode::config::standard(),
+            )?),
+        }
         let result = hasher.finalize();
-        Self(result.into())
+        Ok(Self(result.into()))
     }
 
     pub fn as_bytes(&self) -> &[u8; 20] {
         &self.0
+    }
+}
+
+pub enum EventIdSalt<'a> {
+    /// Raw data provided from the component
+    WasmResponse(&'a [u8]),
+    /// Data derived from the trigger
+    Trigger(&'a TriggerData),
+}
+
+impl From<[u8; 20]> for EventId {
+    fn from(value: [u8; 20]) -> Self {
+        Self(value)
     }
 }
 
@@ -124,24 +145,6 @@ impl From<FixedBytes<20>> for EventId {
 impl From<EventId> for FixedBytes<20> {
     fn from(value: EventId) -> Self {
         FixedBytes(value.0)
-    }
-}
-
-impl TryFrom<(&Service, &TriggerAction)> for EventId {
-    type Error = anyhow::Error;
-
-    fn try_from(
-        (service, trigger_action): (&Service, &TriggerAction),
-    ) -> std::result::Result<EventId, Self::Error> {
-        let service_digest = service.hash()?;
-        let action_bytes = bincode::encode_to_vec(trigger_action, bincode::config::standard())?;
-
-        let mut hasher = Ripemd160::new();
-        hasher.update(&service_digest);
-        hasher.update(&action_bytes);
-        let result = hasher.finalize();
-
-        Ok(EventId(result.into()))
     }
 }
 

@@ -3,7 +3,7 @@ use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, En
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     bindings::aggregator::world::{host::LogLevel, wavs::aggregator::aggregator::AggregatorAction},
-    worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
+    worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder},
 };
 use wavs_types::{ChainConfigs, ComponentDigest, EvmChainConfig, Packet, ServiceId, WorkflowId};
 
@@ -40,7 +40,9 @@ pub async fn execute_aggregator_component(
     let mut instance_deps = InstanceDepsBuilder {
         workflow_id: packet.workflow_id.clone(),
         service: packet.service.clone(),
-        event_id: packet.event_id(),
+        data: InstanceData::Aggregator {
+            event_id: packet.event_id(),
+        },
         component: WasmtimeComponent::new(&engine, wasm_bytes).unwrap(),
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),

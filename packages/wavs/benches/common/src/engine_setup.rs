@@ -3,10 +3,12 @@ use std::{collections::BTreeMap, sync::Arc};
 use tempfile::{tempdir, TempDir};
 use utils::{filesystem::workspace_path, storage::db::WavsDb};
 use wasmtime::{component::Component, Engine as WTEngine};
-use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
+use wavs_engine::worlds::instance::{
+    HostComponentLogger, InstanceData, InstanceDeps, InstanceDepsBuilder,
+};
 use wavs_types::{
-    AllowedHostPermission, ChainConfigs, ComponentDigest, EventId, Service, TriggerAction,
-    TriggerConfig, TriggerData, Workflow, WorkflowId,
+    AllowedHostPermission, ChainConfigs, ComponentDigest, Service, TriggerAction, TriggerConfig,
+    TriggerData, Workflow, WorkflowId,
 };
 
 /// Handle provides the setup and infrastructure needed for engine benchmarks
@@ -112,11 +114,11 @@ impl EngineSetup {
             },
         );
 
-        let event_id: EventId = (&self.service, trigger_action).try_into().unwrap();
-
         let builder = InstanceDepsBuilder {
             component: self.component.clone(),
-            event_id,
+            data: InstanceData::Operator {
+                trigger_data: trigger_action.data.clone(),
+            },
             service: self.service.clone(),
             workflow_id: self.workflow_id.clone(),
             engine: &self.engine,
