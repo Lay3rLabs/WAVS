@@ -30,7 +30,7 @@ impl batch::Host for KeyValueState<'_> {
 
         for (i, original_key) in original_keys.into_iter().enumerate() {
             let key = keys[i].to_string();
-            match self.db.get(handles::KV_STORE, key) {
+            match self.db.get(&handles::KV_STORE, key) {
                 Ok(Some(value)) => results.push(Some((original_key, value))),
                 Ok(None) => results.push(None),
                 Err(e) => {
@@ -55,7 +55,7 @@ impl batch::Host for KeyValueState<'_> {
         for (key, value) in key_values {
             let key = Key::new(prefix.clone(), key).to_string();
             self.db
-                .set(handles::KV_STORE, key, &value)
+                .set(&handles::KV_STORE, key, value)
                 .map_err(|e| batch::Error::Other(format!("Failed to set key: {}", e)))?;
         }
 
@@ -72,7 +72,7 @@ impl batch::Host for KeyValueState<'_> {
         for key in keys {
             let key = key.to_string();
             self.db
-                .remove(handles::KV_STORE, key)
+                .remove(&handles::KV_STORE, key)
                 .map(|_| ())
                 .map_err(|e| batch::Error::Other(format!("Failed to delete key: {}", e)))?;
         }

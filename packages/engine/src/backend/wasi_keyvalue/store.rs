@@ -4,7 +4,6 @@ use wasmtime::component::Resource;
 use super::bucket_keys::{Key, KeyPrefix, KeyValueBucket};
 use super::context::KeyValueState;
 use crate::bindings::operator::world::wasi::keyvalue::store::{self, KeyResponse};
-use serde_json;
 
 pub type StoreResult<T> = std::result::Result<T, store::Error>;
 
@@ -19,12 +18,12 @@ impl<'a> KeyValueState<'a> {
 
     pub fn set_store_value(&self, key: &Key, value: Vec<u8>) -> StoreResult<()> {
         self.db
-            .set(handles::KV_STORE, key.to_string(), &value)
+            .set(&handles::KV_STORE, key.to_string(), value)
             .map_err(|e| store::Error::Other(format!("Failed to set key in keyvalue store: {}", e)))
     }
 
     pub fn get_store_value(&self, key: &Key) -> StoreResult<Option<Vec<u8>>> {
-        match self.db.get(handles::KV_STORE, key.to_string()) {
+        match self.db.get(&handles::KV_STORE, key.to_string()) {
             Ok(Some(kv)) => Ok(Some(kv)),
             Ok(None) => Ok(None),
             Err(err) => Err(store::Error::Other(format!(
@@ -66,7 +65,7 @@ impl store::HostBucket for KeyValueState<'_> {
     fn delete(&mut self, bucket: Resource<KeyValueBucket>, key: String) -> StoreResult<()> {
         let key = self.get_key_store(&bucket, key)?;
         self.db
-            .remove(handles::KV_STORE, key.to_string())
+            .remove(&handles::KV_STORE, key.to_string())
             .map(|_| ())
             .map_err(|e| {
                 store::Error::Other(format!("Failed to delete key from keyvalue store: {}", e))
@@ -87,18 +86,16 @@ impl store::HostBucket for KeyValueState<'_> {
         let prefix = self.get_key_prefix_store(&bucket)?;
         let res = self
             .db
-            .with_table_read(handles::KV_STORE, |table| {
+            .with_table_read(&handles::KV_STORE, |table| {
                 let prefix_str = format!("{prefix}/");
 
                 let mut all_keys: Vec<String> = Vec::new();
 
                 // Collect all keys that match the prefix
                 for entry in table.iter() {
-                    let (key_bytes, _value_bytes) = entry.pair();
-                    if let Ok(key_string) = serde_json::from_slice::<String>(key_bytes) {
-                        if key_string.starts_with(&prefix_str) {
-                            all_keys.push(key_string);
-                        }
+                    let (key_string, _) = entry.pair();
+                    if key_string.starts_with(&prefix_str) {
+                        all_keys.push(key_string.clone());
                     }
                 }
 

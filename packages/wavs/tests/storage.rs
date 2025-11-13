@@ -20,21 +20,21 @@ pub struct Demo {
 }
 
 // basic types - using test tables
-const T1: TableHandle<u32, String> = TableHandle::new(Table::TestU32String);
+const T1: TableHandle<u32, String> = TableHandle::new(Table::Test("t1"));
 
 // json types with &str key - using test tables
-const TJ: TableHandle<String, Demo> = TableHandle::new(Table::TestStrDemo);
+const TJ: TableHandle<String, Demo> = TableHandle::new(Table::Test("tj"));
 
 #[test]
 fn test_set_once_and_get() {
     let store = WavsDb::new().unwrap();
 
-    let empty = store.get(T1, 17).unwrap();
+    let empty = store.get(&T1, 17).unwrap();
     assert!(empty.is_none());
 
     let data = "hello".to_string();
-    store.set(T1, 17, &data).unwrap();
-    let full = store.get(T1, 17).unwrap().unwrap();
+    store.set(&T1, 17, data.clone()).unwrap();
+    let full = store.get(&T1, 17).unwrap().unwrap();
     assert_eq!(data, full);
 }
 
@@ -42,7 +42,7 @@ fn test_set_once_and_get() {
 fn test_json_storage() {
     let store = WavsDb::new().unwrap();
 
-    let empty = store.get(TJ, "john".to_string()).unwrap();
+    let empty = store.get(&TJ, "john".to_string()).unwrap();
     assert!(empty.is_none());
 
     let data = Demo {
@@ -50,8 +50,8 @@ fn test_json_storage() {
         age: 28,
         nicknames: vec!["Johnny".to_string(), "Mr. Rocket".to_string()],
     };
-    store.set(TJ, "john".to_string(), &data).unwrap();
-    let full = store.get(TJ, "john".to_string()).unwrap().unwrap();
+    store.set(&TJ, "john".to_string(), data.clone()).unwrap();
+    let full = store.get(&TJ, "john".to_string()).unwrap().unwrap();
     assert_eq!(data, full);
 }
 
@@ -59,7 +59,8 @@ fn test_json_storage() {
 fn db_service_store() {
     let storage = WavsDb::new().unwrap();
 
-    const SERVICE_TABLE: TableHandle<[u8; 32], Service> = TableHandle::new(Table::TestTempServices);
+    const SERVICE_TABLE: TableHandle<[u8; 32], Service> =
+        TableHandle::new(Table::Test("service_table"));
 
     let workflows: BTreeMap<WorkflowId, Workflow> = [
         (
@@ -96,11 +97,11 @@ fn db_service_store() {
     };
 
     storage
-        .set(SERVICE_TABLE, service.id().inner(), &service)
+        .set(&SERVICE_TABLE, service.id().inner(), service.clone())
         .unwrap();
 
     let service_stored = storage
-        .get(SERVICE_TABLE, service.id().inner())
+        .get(&SERVICE_TABLE, service.id().inner())
         .unwrap()
         .unwrap();
 
@@ -110,12 +111,11 @@ fn db_service_store() {
 
     // can read keys via iterator
     let keys = storage
-        .with_table_read(SERVICE_TABLE, |table| {
+        .with_table_read(&SERVICE_TABLE, |table| {
             let mut keys = Vec::new();
             for entry in table.iter() {
-                let (key_bytes, _value_bytes) = entry.pair();
-                let key_array: [u8; 32] = serde_json::from_slice(key_bytes)?;
-                keys.push(ServiceId::from(key_array));
+                let (key_bytes, _) = entry.pair();
+                keys.push(ServiceId::from(*key_bytes));
             }
             Ok(keys)
         })
@@ -124,19 +124,18 @@ fn db_service_store() {
     assert_eq!(vec![service.id()], keys);
 
     let values = storage
-        .with_table_read(SERVICE_TABLE, |table| {
-            let mut values = Vec::new();
-            for entry in table.iter() {
-                let (_key_bytes, value_bytes) = entry.pair();
-                let service: Service = serde_json::from_slice(value_bytes)?;
-                values.push(service);
-            }
-            Ok(values)
+        .with_table_read(&SERVICE_TABLE, |table| {
+            Ok(table
+                .iter()
+                .map(|entry| entry.pair().1.clone())
+                .collect::<Vec<Service>>())
         })
-        .unwrap()
+        .unwrap();
+
+    let values_serialized = values
         .into_iter()
         .map(|service| serde_json::to_vec(&service).unwrap())
         .collect::<Vec<Vec<u8>>>();
 
-    assert_eq!(vec![expected_service_serialized], values);
+    assert_eq!(vec![expected_service_serialized], values_serialized);
 }

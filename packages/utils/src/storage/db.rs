@@ -1,13 +1,13 @@
+use std::any::Any;
 use std::fmt;
+use std::hash::Hash;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use dashmap::mapref::entry::Entry;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use serde_json;
 use tracing::instrument;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -18,10 +18,7 @@ pub enum Table {
     QuorumQueues,
     KvStore,
     KvAtomicsCounter,
-    // Test tables
-    TestU32String,
-    TestStrDemo,
-    TestTempServices,
+    Test(&'static str),
 }
 
 impl Table {
@@ -33,9 +30,7 @@ impl Table {
             Table::QuorumQueues => "quorum_queues",
             Table::KvStore => "kv_store",
             Table::KvAtomicsCounter => "kv_atomics_counter",
-            Table::TestU32String => "t1",
-            Table::TestStrDemo => "tj",
-            Table::TestTempServices => "temp-services",
+            Table::Test(name) => name,
         }
     }
 }
@@ -44,14 +39,6 @@ impl Table {
 pub struct TableHandle<K, V> {
     table: Table,
     _marker: PhantomData<(K, V)>,
-}
-
-impl<K, V> fmt::Debug for TableHandle<K, V> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TableHandle")
-            .field("table", &self.table)
-            .finish()
-    }
 }
 
 impl<K, V> TableHandle<K, V> {
@@ -64,6 +51,14 @@ impl<K, V> TableHandle<K, V> {
 
     pub const fn table(&self) -> Table {
         self.table
+    }
+}
+
+impl<K, V> fmt::Debug for TableHandle<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TableHandle")
+            .field("table", &self.table)
+            .finish()
     }
 }
 
@@ -83,14 +78,11 @@ pub mod handles {
 
 pub type DBError = anyhow::Error;
 
-type RawKey = Vec<u8>;
-type RawValue = Vec<u8>;
-type TableMap = DashMap<RawKey, RawValue>;
+type AnyMap = Arc<dyn Any + Send + Sync>;
 
-/// Multi-table in-memory DB with JSON serialization for typed callers.
 #[derive(Clone, Default)]
 pub struct WavsDb {
-    tables: Arc<DashMap<Table, Arc<TableMap>>>,
+    tables: Arc<DashMap<Table, AnyMap>>,
 }
 
 impl WavsDb {
@@ -102,139 +94,133 @@ impl WavsDb {
     }
 
     #[instrument(skip(self, key, value), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn set<K, V>(&self, handle: TableHandle<K, V>, key: K, value: &V) -> Result<(), DBError>
+    pub fn set<K, V>(&self, handle: &TableHandle<K, V>, key: K, value: V) -> Result<(), DBError>
     where
-        K: Serialize,
-        V: Serialize,
+        K: Eq + Hash + Clone + Send + Sync + 'static,
+        V: Clone + Send + Sync + 'static,
     {
-        let key_bytes = serde_json::to_vec(&key)?;
-        let value_bytes = serde_json::to_vec(value)?;
-        self.table(handle.table()).insert(key_bytes, value_bytes);
+        let map = self.table_map(handle)?;
+        map.insert(key, value);
         Ok(())
     }
 
     #[instrument(skip(self, key), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn get<K, V>(&self, handle: TableHandle<K, V>, key: K) -> Result<Option<V>, DBError>
+    pub fn get<K, V>(&self, handle: &TableHandle<K, V>, key: K) -> Result<Option<V>, DBError>
     where
-        K: Serialize,
-        V: DeserializeOwned,
+        K: Eq + Hash + Clone + Send + Sync + 'static,
+        V: Clone + Send + Sync + 'static,
     {
-        let key_bytes = serde_json::to_vec(&key)?;
-        let table = match self.try_table(handle.table()) {
-            Some(inner) => inner,
-            None => return Ok(None),
-        };
-
-        Ok(table
-            .get(&key_bytes)
-            .map(|value| serde_json::from_slice::<V>(value.value()))
-            .transpose()?)
+        let map = self.table_map(handle)?;
+        Ok(map.get(&key).map(|v| v.clone()))
     }
 
     #[instrument(skip(self, key), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn remove<K, V>(&self, handle: TableHandle<K, V>, key: K) -> Result<Option<V>, DBError>
+    pub fn remove<K, V>(&self, handle: &TableHandle<K, V>, key: K) -> Result<Option<V>, DBError>
     where
-        K: Serialize,
-        V: DeserializeOwned,
+        K: Eq + Hash + Clone + Send + Sync + 'static,
+        V: Clone + Send + Sync + 'static,
     {
-        let key_bytes = serde_json::to_vec(&key)?;
-        let table = match self.try_table(handle.table()) {
-            Some(inner) => inner,
-            None => return Ok(None),
-        };
-
-        Ok(table
-            .remove(&key_bytes)
-            .map(|(_, value)| serde_json::from_slice::<V>(&value))
-            .transpose()?)
+        let map = self.table_map(handle)?;
+        Ok(map.remove(&key).map(|(_, v)| v))
     }
 
     #[instrument(skip(self, key), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn contains_key<K, V>(&self, handle: TableHandle<K, V>, key: K) -> Result<bool, DBError>
+    pub fn contains_key<K, V>(&self, handle: &TableHandle<K, V>, key: K) -> Result<bool, DBError>
     where
-        K: Serialize,
+        K: Eq + Hash + Clone + Send + Sync + 'static,
+        V: Clone + Send + Sync + 'static,
     {
-        let key_bytes = serde_json::to_vec(&key)?;
-        Ok(self
-            .try_table(handle.table())
-            .map(|inner| inner.contains_key(&key_bytes))
-            .unwrap_or(false))
+        let map = self.table_map(handle)?;
+        Ok(map.contains_key(&key))
     }
 
     #[instrument(skip(self), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn clear_table<K, V>(&self, handle: TableHandle<K, V>) -> Result<(), DBError> {
-        if let Some(inner) = self.try_table(handle.table()) {
-            inner.clear();
-        }
+    pub fn clear_table<K, V>(&self, handle: &TableHandle<K, V>) -> Result<(), DBError>
+    where
+        K: Eq + Hash + Clone + Send + Sync + 'static,
+        V: Clone + Send + Sync + 'static,
+    {
+        let map = self.table_map(handle)?;
+        map.clear();
         Ok(())
     }
 
-    /// Provide an immutable view into a table's serialized bytes.
     #[instrument(skip(self, f), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn with_table_read<K, V, F, R>(&self, handle: TableHandle<K, V>, f: F) -> Result<R, DBError>
+    pub fn with_table_read<K, V, F, R>(
+        &self,
+        handle: &TableHandle<K, V>,
+        f: F,
+    ) -> Result<R, DBError>
     where
-        K: Serialize + DeserializeOwned,
-        V: Serialize + DeserializeOwned,
-        F: for<'a> FnOnce(&TableReadGuard<'a>) -> Result<R, DBError>,
+        K: Eq + Hash + Clone + Send + Sync + 'static,
+        V: Clone + Send + Sync + 'static,
+        F: FnOnce(&TableReadGuard<K, V>) -> Result<R, DBError>,
     {
-        let _ = PhantomData::<(K, V)>;
-        let table_arc = self.table(handle.table());
-        let result = {
-            let guard = TableReadGuard::new(&table_arc);
-            f(&guard)
-        };
-        result
+        let map = self.table_map(handle)?;
+        let guard = TableReadGuard { map };
+        f(&guard)
     }
 
-    fn table(&self, table: Table) -> Arc<TableMap> {
-        match self.tables.entry(table) {
-            Entry::Occupied(entry) => entry.get().clone(),
+    fn table_map<K, V>(&self, handle: &TableHandle<K, V>) -> Result<Arc<DashMap<K, V>>, DBError>
+    where
+        K: Eq + Hash + Clone + Send + Sync + 'static,
+        V: Clone + Send + Sync + 'static,
+    {
+        match self.tables.entry(handle.table()) {
+            Entry::Occupied(entry) => {
+                let existing = entry.get().clone();
+                existing
+                    .downcast::<DashMap<K, V>>()
+                    .map_err(|_| anyhow!("table {:?} type mismatch", handle.table()))
+            }
             Entry::Vacant(entry) => {
-                let table = Arc::new(DashMap::new());
-                entry.insert(table.clone());
-                table
+                let map: Arc<DashMap<K, V>> = Arc::new(DashMap::new());
+                let erased: AnyMap = map.clone();
+                entry.insert(erased);
+                Ok(map)
             }
         }
     }
-
-    fn try_table(&self, table: Table) -> Option<Arc<TableMap>> {
-        self.tables.get(&table).map(|entry| entry.clone())
-    }
 }
 
-pub struct TableReadGuard<'a> {
-    table: &'a TableMap,
+pub struct TableReadGuard<K, V> {
+    map: Arc<DashMap<K, V>>,
 }
 
-impl<'a> TableReadGuard<'a> {
-    fn new(table: &'a TableMap) -> Self {
-        Self { table }
-    }
-
-    pub fn iter(&'a self) -> TableIter<'a> {
+impl<K, V> TableReadGuard<K, V>
+where
+    K: Eq + Hash,
+{
+    pub fn iter(&self) -> TableIter<'_, K, V> {
         TableIter {
-            inner: self.table.iter(),
+            inner: self.map.iter(),
         }
     }
 }
 
-pub struct TableIter<'a> {
-    inner: dashmap::iter::Iter<'a, RawKey, RawValue>,
+pub struct TableIter<'a, K, V> {
+    inner: dashmap::iter::Iter<'a, K, V>,
 }
 
-impl<'a> Iterator for TableIter<'a> {
-    type Item = TableEntry<'a>;
+impl<'a, K, V> Iterator for TableIter<'a, K, V>
+where
+    K: Eq + Hash,
+{
+    type Item = TableEntry<'a, K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next().map(TableEntry)
     }
 }
 
-pub struct TableEntry<'a>(RefMulti<'a, RawKey, RawValue>);
+pub struct TableEntry<'a, K, V>(RefMulti<'a, K, V>);
 
-impl<'a> TableEntry<'a> {
-    pub fn pair(&self) -> (&[u8], &[u8]) {
-        (self.0.key().as_slice(), self.0.value().as_slice())
+impl<'a, K, V> TableEntry<'a, K, V>
+where
+    K: Eq + Hash,
+{
+    pub fn pair(&self) -> (&K, &V) {
+        (self.0.key(), self.0.value())
     }
 }
 
@@ -242,9 +228,8 @@ impl<'a> TableEntry<'a> {
 mod tests {
     use super::*;
     use serde::{Deserialize, Serialize};
-    use serde_json;
 
-    #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
     struct TestStruct {
         name: String,
         value: i32,
@@ -253,54 +238,52 @@ mod tests {
     #[test]
     fn set_get_round_trip() {
         let db = WavsDb::new().unwrap();
+        let handle: TableHandle<u32, TestStruct> =
+            TableHandle::new(Table::Test("test_u32_teststruct"));
         let key = 7u32;
         let value = TestStruct {
             name: "demo".to_string(),
             value: 99,
         };
-        const HANDLE: TableHandle<u32, TestStruct> = TableHandle::new(Table::TestU32String);
 
-        assert!(db.get(HANDLE, key).unwrap().is_none());
-
-        db.set(HANDLE, key, &value).unwrap();
-
-        let round_trip = db.get(HANDLE, key).unwrap().unwrap();
-        assert_eq!(round_trip, value);
+        assert!(db.get(&handle, key).unwrap().is_none());
+        db.set(&handle, key, value.clone()).unwrap();
+        assert_eq!(db.get(&handle, key).unwrap(), Some(value));
     }
 
     #[test]
     fn remove_and_contains() {
         let db = WavsDb::new().unwrap();
-        let key = "counter1".to_string();
-        const HANDLE: TableHandle<String, i64> = TableHandle::new(Table::KvAtomicsCounter);
+        let handle: TableHandle<String, i64> = TableHandle::new(Table::KvAtomicsCounter);
+        let key = "counter".to_string();
 
-        assert!(!db.contains_key(HANDLE, key.clone()).unwrap());
+        assert!(!db.contains_key(&handle, key.clone()).unwrap());
+        db.set(&handle, key.clone(), 5).unwrap();
+        assert!(db.contains_key(&handle, key.clone()).unwrap());
 
-        db.set(HANDLE, key.clone(), &41i64).unwrap();
-        assert!(db.contains_key(HANDLE, key.clone()).unwrap());
-
-        let removed = db.remove(HANDLE, key.clone()).unwrap().unwrap();
-        assert_eq!(removed, 41);
-        assert!(db.get(HANDLE, key).unwrap().is_none());
+        let removed = db.remove(&handle, key.clone()).unwrap();
+        assert_eq!(removed, Some(5));
+        assert!(db.get(&handle, key).unwrap().is_none());
     }
 
     #[test]
-    fn table_iteration_surface_raw_bytes() {
+    fn table_iteration() {
         let db = WavsDb::new().unwrap();
-        const HANDLE: TableHandle<String, TestStruct> = TableHandle::new(Table::TestStrDemo);
+        let handle: TableHandle<String, TestStruct> =
+            TableHandle::new(Table::Test("test_string_teststruct"));
         db.set(
-            HANDLE,
+            &handle,
             "alpha".to_string(),
-            &TestStruct {
+            TestStruct {
                 name: "a".to_string(),
                 value: 1,
             },
         )
         .unwrap();
         db.set(
-            HANDLE,
+            &handle,
             "beta".to_string(),
-            &TestStruct {
+            TestStruct {
                 name: "b".to_string(),
                 value: 2,
             },
@@ -308,20 +291,16 @@ mod tests {
         .unwrap();
 
         let mut seen = Vec::new();
-        db.with_table_read(HANDLE, |table| {
+        db.with_table_read(&handle, |table| {
             for entry in table.iter() {
-                let (key_bytes, value_bytes) = entry.pair();
-                let key: String = serde_json::from_slice(key_bytes)?;
-                let value: TestStruct = serde_json::from_slice(value_bytes)?;
-                seen.push((key, value));
+                let (key, value) = entry.pair();
+                seen.push((key.clone(), value.value));
             }
             Ok(())
         })
         .unwrap();
 
-        seen.sort_by(|a, b| a.0.cmp(&b.0));
-        assert_eq!(seen.len(), 2);
-        assert_eq!(seen[0].0, "alpha");
-        assert_eq!(seen[1].0, "beta");
+        seen.sort();
+        assert_eq!(seen, vec![("alpha".into(), 1), ("beta".into(), 2)]);
     }
 }

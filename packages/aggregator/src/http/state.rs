@@ -205,7 +205,7 @@ impl HttpState {
 
         tokio::task::spawn_blocking(move || {
             Ok(storage
-                .get(QUORUM_QUEUE_TABLE, id_bytes)?
+                .get(&QUORUM_QUEUE_TABLE, id_bytes)?
                 .unwrap_or_else(|| QuorumQueue::Active(Vec::new())))
         })
         .await
@@ -221,7 +221,7 @@ impl HttpState {
         let storage = self.storage.clone();
         let id_bytes = id.to_bytes()?;
 
-        tokio::task::spawn_blocking(move || storage.set(QUORUM_QUEUE_TABLE, id_bytes, &queue))
+        tokio::task::spawn_blocking(move || storage.set(&QUORUM_QUEUE_TABLE, id_bytes, queue))
             .await
             .map_err(|e| AggregatorError::JoinError(e.to_string()))?
             .map_err(Into::into)
@@ -233,7 +233,7 @@ impl HttpState {
 
         tokio::task::spawn_blocking(move || {
             storage
-                .get(handles::AGGREGATOR_SERVICES, service_id.inner())
+                .get(&handles::AGGREGATOR_SERVICES, service_id.inner())
                 .ok()
                 .flatten()
                 .is_some()
@@ -248,13 +248,13 @@ impl HttpState {
     pub fn register_service(&self, service_id: &ServiceId) -> AggregatorResult<()> {
         if self
             .storage
-            .get(handles::AGGREGATOR_SERVICES, service_id.inner())?
+            .get(&handles::AGGREGATOR_SERVICES, service_id.inner())?
             .is_none()
         {
             tracing::info!("Registering aggregator for service {}", service_id);
 
             self.storage
-                .set(handles::AGGREGATOR_SERVICES, service_id.inner(), &())?;
+                .set(&handles::AGGREGATOR_SERVICES, service_id.inner(), ())?;
         } else {
             tracing::warn!("Attempted to register duplicate service: {}", service_id);
             return Err(AggregatorError::RepeatService(service_id.clone()));
