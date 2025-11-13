@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::helpers::exec::{execute_component, try_execute_component};
 use example_types::{KvStoreError, KvStoreRequest, KvStoreResponse};
 use utils::{
-    init_tracing_tests, storage::db::RedbStorage, test_utils::mock_engine::COMPONENT_KV_STORE_BYTES,
+    init_tracing_tests, storage::db::WavsDb, test_utils::mock_engine::COMPONENT_KV_STORE_BYTES,
 };
 use wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx;
 
@@ -17,7 +17,7 @@ async fn keyvalue_basic() {
     const KEY: &str = "test_key";
     const VALUE: &[u8] = b"hello";
 
-    let db = RedbStorage::new().unwrap();
+    let db = WavsDb::new().unwrap();
     let keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
 
     // Write a value to the key-value store
@@ -63,7 +63,7 @@ async fn keyvalue_wrong_context() {
     const KEY: &str = "test_key";
     const VALUE: &[u8] = b"hello";
 
-    let db = RedbStorage::new().unwrap();
+    let db = WavsDb::new().unwrap();
     let keyvalue_ctx_1 = KeyValueCtx::new(db.clone(), "test-1".to_string());
     let keyvalue_ctx_2 = KeyValueCtx::new(db.clone(), "test-2".to_string());
 
@@ -114,7 +114,7 @@ async fn keyvalue_wrong_key() {
     const BAD_KEY: &str = "bad_test_key";
     const VALUE: &[u8] = b"hello";
 
-    let db = RedbStorage::new().unwrap();
+    let db = WavsDb::new().unwrap();
     let keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
 
     // Write a value to the key-value store
@@ -163,7 +163,7 @@ async fn keyvalue_atomic_increment() {
     const KEY_1: &str = "test_key_1";
     const KEY_2: &str = "test_key_2";
 
-    let db = RedbStorage::new().unwrap();
+    let db = WavsDb::new().unwrap();
     let keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
 
     // Increment the key (without setting it first)
@@ -237,7 +237,7 @@ async fn keyvalue_atomic_swap() {
     const VALUE_AFTER_SWAP_1: &[u8] = b"cruel";
     const VALUE_AFTER_SWAP_2: &[u8] = b"world";
 
-    let db = RedbStorage::new().unwrap();
+    let db = WavsDb::new().unwrap();
     let keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
 
     // Write a value to the key-value store
@@ -329,7 +329,7 @@ async fn keyvalue_batch() {
     init_tracing_tests();
 
     const BUCKET: &str = "test_bucket";
-    let db = RedbStorage::new().unwrap();
+    let db = WavsDb::new().unwrap();
     let keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
 
     // Prepare batch data
@@ -474,7 +474,7 @@ async fn keyvalue_list() {
     init_tracing_tests();
 
     const BUCKET: &str = "test_bucket";
-    let db = RedbStorage::new().unwrap();
+    let db = WavsDb::new().unwrap();
     let mut keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
 
     // Prepare batch data

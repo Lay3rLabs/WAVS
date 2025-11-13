@@ -4,7 +4,7 @@ use std::{path::PathBuf, sync::RwLock};
 use anyhow::Result;
 use tracing::instrument;
 
-use utils::storage::db::RedbStorage;
+use utils::storage::db::WavsDb;
 use utils::storage::CAStorage;
 
 pub use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::{
@@ -33,7 +33,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         lru_size: usize,
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
-        db: RedbStorage,
+        db: WavsDb,
         storage: Arc<S>,
         metrics: utils::telemetry::AggregatorMetrics,
         ipfs_gateway: String,

@@ -779,7 +779,7 @@ mod tests {
 
     use crate::{config::Config, services::Services};
     use utils::{
-        storage::db::RedbStorage, telemetry::TriggerMetrics, test_utils::address::rand_address_evm,
+        storage::db::WavsDb, telemetry::TriggerMetrics, test_utils::address::rand_address_evm,
     };
     use wavs_types::{
         Component, ComponentDigest, ComponentSource, ServiceManager, SignatureKind, Submit,
@@ -790,7 +790,7 @@ mod tests {
     fn test_add_trigger() {
         let config = Config::default();
 
-        let db_storage = RedbStorage::new().unwrap();
+        let db_storage = WavsDb::new().unwrap();
         let services = Services::new(db_storage);
 
         let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));

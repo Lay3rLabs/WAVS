@@ -1,14 +1,13 @@
 #![cfg(feature = "dev")]
 use std::collections::BTreeMap;
 
-use utils::storage::db::{RedbStorage, Table, JSON};
+use utils::storage::db::{Table, TableHandle, WavsDb};
 use utils::test_utils::address::rand_address_evm;
 use wavs_types::{
     Component, ComponentDigest, ComponentSource, Service, ServiceId, ServiceManager, ServiceStatus,
     Submit, Workflow, WorkflowId,
 };
 
-use redb::ReadableTable;
 use serde::{Deserialize, Serialize};
 mod wavs_systems;
 use wavs_systems::mock_trigger_manager::mock_evm_event_trigger;
@@ -20,15 +19,15 @@ pub struct Demo {
     pub nicknames: Vec<String>,
 }
 
-// basic types
-const T1: Table<u32, String> = Table::new("t1");
+// basic types - using test tables
+const T1: TableHandle<u32, String> = TableHandle::new(Table::TestU32String);
 
-// json types with &str key
-const TJ: Table<&str, JSON<Demo>> = Table::new("tj");
+// json types with &str key - using test tables
+const TJ: TableHandle<String, Demo> = TableHandle::new(Table::TestStrDemo);
 
 #[test]
 fn test_set_once_and_get() {
-    let store = RedbStorage::new().unwrap();
+    let store = WavsDb::new().unwrap();
 
     let empty = store.get(T1, 17).unwrap();
     assert!(empty.is_none());
@@ -36,14 +35,14 @@ fn test_set_once_and_get() {
     let data = "hello".to_string();
     store.set(T1, 17, &data).unwrap();
     let full = store.get(T1, 17).unwrap().unwrap();
-    assert_eq!(data, full.value());
+    assert_eq!(data, full);
 }
 
 #[test]
 fn test_json_storage() {
-    let store = RedbStorage::new().unwrap();
+    let store = WavsDb::new().unwrap();
 
-    let empty = store.get(TJ, "john").unwrap();
+    let empty = store.get(TJ, "john".to_string()).unwrap();
     assert!(empty.is_none());
 
     let data = Demo {
@@ -51,16 +50,16 @@ fn test_json_storage() {
         age: 28,
         nicknames: vec!["Johnny".to_string(), "Mr. Rocket".to_string()],
     };
-    store.set(TJ, "john", &data).unwrap();
-    let full = store.get(TJ, "john").unwrap().unwrap();
-    assert_eq!(data, full.value());
+    store.set(TJ, "john".to_string(), &data).unwrap();
+    let full = store.get(TJ, "john".to_string()).unwrap().unwrap();
+    assert_eq!(data, full);
 }
 
 #[test]
 fn db_service_store() {
-    let storage = RedbStorage::new().unwrap();
+    let storage = WavsDb::new().unwrap();
 
-    const SERVICE_TABLE: Table<[u8; 32], JSON<Service>> = Table::new("temp-services");
+    const SERVICE_TABLE: TableHandle<[u8; 32], Service> = TableHandle::new(Table::TestTempServices);
 
     let workflows: BTreeMap<WorkflowId, Workflow> = [
         (
@@ -106,37 +105,33 @@ fn db_service_store() {
         .unwrap();
 
     let expected_service_serialized = serde_json::to_vec(&service).unwrap();
-    let service_stored_serialized = serde_json::to_vec(&service_stored.value()).unwrap();
+    let service_stored_serialized = serde_json::to_vec(&service_stored).unwrap();
     assert_eq!(expected_service_serialized, service_stored_serialized);
 
     // can read keys via iterator
     let keys = storage
-        .map_table_read(SERVICE_TABLE, |table| {
-            Ok(table
-                .unwrap()
-                .iter()
-                .unwrap()
-                .map(|entry| {
-                    let (k, _) = entry.unwrap();
-                    ServiceId::from(k.value())
-                })
-                .collect::<Vec<ServiceId>>())
+        .with_table_read(SERVICE_TABLE, |table| {
+            let mut keys = Vec::new();
+            for entry in table.iter() {
+                let (key_bytes, _value_bytes) = entry.pair();
+                let key_array: [u8; 32] = serde_json::from_slice(key_bytes)?;
+                keys.push(ServiceId::from(key_array));
+            }
+            Ok(keys)
         })
         .unwrap();
 
     assert_eq!(vec![service.id()], keys);
 
     let values = storage
-        .map_table_read(SERVICE_TABLE, |table| {
-            Ok(table
-                .unwrap()
-                .iter()
-                .unwrap()
-                .map(|entry| {
-                    let (_, v) = entry.unwrap();
-                    v.value()
-                })
-                .collect::<Vec<Service>>())
+        .with_table_read(SERVICE_TABLE, |table| {
+            let mut values = Vec::new();
+            for entry in table.iter() {
+                let (_key_bytes, value_bytes) = entry.pair();
+                let service: Service = serde_json::from_slice(value_bytes)?;
+                values.push(service);
+            }
+            Ok(values)
         })
         .unwrap()
         .into_iter()

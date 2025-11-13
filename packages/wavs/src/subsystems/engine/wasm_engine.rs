@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::{path::Path, sync::RwLock};
 use tracing::{event, instrument, span};
-use utils::storage::db::RedbStorage;
+use utils::storage::db::WavsDb;
 use utils::telemetry::EngineMetrics;
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
@@ -34,7 +34,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         max_wasm_fuel: Option<u64>,
         max_execution_seconds: Option<u64>,
         metrics: EngineMetrics,
-        db: RedbStorage,
+        db: WavsDb,
         ipfs_gateway: String,
     ) -> Self {
         let config = BaseEngineConfig {
@@ -271,7 +271,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -303,7 +303,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -331,7 +331,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -393,7 +393,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -494,7 +494,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -555,7 +555,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -619,7 +619,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 
@@ -669,7 +669,7 @@ pub mod tests {
             None,
             None,
             metrics(),
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         );
 

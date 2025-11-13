@@ -22,12 +22,13 @@ layer-climb = { workspace = true }
 alloy-primitives = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-redb = { workspace = true }
+dashmap = { workspace = true }
 lru = { workspace = true }
 wavs-wasi-utils = { workspace = true }
 reqwest = { workspace = true }
 iri-string = { workspace = true }
 wasm-pkg-client = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }
