@@ -8,6 +8,9 @@ env:
   CRATE_NAME: wavs-types
   CRATE_PATH: packages/types
 
+permissions:
+  id-token: write # Required for OIDC
+
 jobs:
   publish_crate:
     name: Verify and Publish Crate
