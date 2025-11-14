@@ -1,31 +1,27 @@
+use std::collections::BTreeMap;
 use std::ops::Bound;
 
-use redb::ReadableTable;
 use thiserror::Error;
 use tracing::instrument;
-use utils::storage::db::{DBError, RedbStorage, Table, JSON};
+use utils::storage::db::{handles, DBError, WavsDb};
 use wavs_types::{Service, ServiceId, ServiceStatus, Workflow, WorkflowId};
-
-// key is ServiceId
-// TODO - use CAStorage instead?
-const SERVICE_TABLE: Table<[u8; 32], JSON<Service>> = Table::new("services");
 
 type Result<T> = std::result::Result<T, ServicesError>;
 
 #[derive(Clone)]
 pub struct Services {
-    db_storage: RedbStorage,
+    db_storage: WavsDb,
 }
 
 impl Services {
-    pub fn new(db_storage: RedbStorage) -> Self {
+    pub fn new(db_storage: WavsDb) -> Self {
         Self { db_storage }
     }
 
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn try_get(&self, id: &ServiceId) -> Result<Option<Service>> {
-        match self.db_storage.get(SERVICE_TABLE, id.inner()) {
-            Ok(Some(service)) => Ok(Some(service.value())),
+        match self.db_storage.get(&handles::SERVICES, id) {
+            Ok(Some(service)) => Ok(Some(service)),
             Ok(None) => Ok(None),
             Err(err) => Err(err.into()),
         }
@@ -59,7 +55,7 @@ impl Services {
 
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn exists(&self, service_id: &ServiceId) -> Result<bool> {
-        match self.db_storage.get(SERVICE_TABLE, service_id.inner())? {
+        match self.db_storage.get(&handles::SERVICES, service_id)? {
             Some(_) => Ok(true),
             None => Ok(false),
         }
@@ -77,14 +73,15 @@ impl Services {
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn remove(&self, service_id: &ServiceId) -> Result<()> {
         self.db_storage
-            .remove(SERVICE_TABLE, service_id.inner())
+            .remove(&handles::SERVICES, service_id)
+            .map(|_| ())
             .map_err(|e| e.into())
     }
 
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn save(&self, service: &Service) -> Result<()> {
         self.db_storage
-            .set(SERVICE_TABLE, service.id().inner(), service)
+            .set(&handles::SERVICES, service.id(), service.clone())
             .map_err(|e| e.into())
     }
 
@@ -94,91 +91,32 @@ impl Services {
         bounds_start: Bound<&ServiceId>,
         bounds_end: Bound<&ServiceId>,
     ) -> Result<Vec<Service>> {
-        let res = self
+        let services = self
             .db_storage
-            .map_table_read(SERVICE_TABLE, |table| match table {
-                // TODO: try to refactor. There's a couple areas of improvement:
-                //
-                // 1. just taking in a RangeBounds<&str> instead of two Bound<&str>
-                // 2. just calling `.range()` on the range once
-                Some(table) => match (bounds_start, bounds_end) {
-                    (Bound::Unbounded, Bound::Unbounded) => {
-                        let res = table
-                            .iter()?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
-                        Ok(res)
-                    }
-                    (Bound::Unbounded, Bound::Included(y)) => {
-                        let res = table
-                            .range(..=y.inner())?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
+            .with_table_read(&handles::SERVICES, |table| {
+                let mut services = BTreeMap::new();
 
-                        Ok(res)
-                    }
-                    (Bound::Unbounded, Bound::Excluded(y)) => {
-                        let res = table
-                            .range(..y.inner())?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
+                for entry in table.iter() {
+                    let (key, value) = entry.pair();
+                    services.insert(key.clone(), value.clone());
+                }
 
-                        Ok(res)
-                    }
-                    (Bound::Included(x), Bound::Unbounded) => {
-                        let res = table
-                            .range(x.inner()..)?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
+                let convert_bound = |bound: Bound<&ServiceId>| match bound {
+                    Bound::Unbounded => Bound::Unbounded,
+                    Bound::Included(id) => Bound::Included(id.clone()),
+                    Bound::Excluded(id) => Bound::Excluded(id.clone()),
+                };
 
-                        Ok(res)
-                    }
-                    (Bound::Excluded(x), Bound::Unbounded) => {
-                        let res = table
-                            .range(x.inner()..)?
-                            .skip(1)
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
+                let start = convert_bound(bounds_start);
+                let end = convert_bound(bounds_end);
 
-                        Ok(res)
-                    }
-                    (Bound::Included(x), Bound::Included(y)) => {
-                        let res = table
-                            .range(x.inner()..=y.inner())?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
-
-                        Ok(res)
-                    }
-                    (Bound::Included(x), Bound::Excluded(y)) => {
-                        let res = table
-                            .range(x.inner()..y.inner())?
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
-
-                        Ok(res)
-                    }
-                    (Bound::Excluded(x), Bound::Included(y)) => {
-                        let res = table
-                            .range(x.inner()..=y.inner())?
-                            .skip(1)
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
-                        Ok(res)
-                    }
-                    (Bound::Excluded(x), Bound::Excluded(y)) => {
-                        let res = table
-                            .range(x.inner()..y.inner())?
-                            .skip(1)
-                            .map(|i| i.map(|(_, value)| value.value()))
-                            .collect::<std::result::Result<Vec<_>, redb::StorageError>>()?;
-                        Ok(res)
-                    }
-                },
-                None => Ok(Vec::new()),
+                Ok(services
+                    .range((start, end))
+                    .map(|(_, service)| service.clone())
+                    .collect())
             })?;
 
-        Ok(res)
+        Ok(services)
     }
 }
 

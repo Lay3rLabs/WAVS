@@ -11,7 +11,7 @@ use utils::{
     config::EvmChainConfigExt,
     evm_client::EvmSigningClient,
     storage::{
-        db::{RedbStorage, Table, JSON},
+        db::{handles, Table, TableHandle, WavsDb},
         fs::FileStorage,
     },
 };
@@ -22,9 +22,6 @@ use crate::{
     engine::AggregatorEngine,
     error::{AggregatorError, AggregatorResult},
 };
-
-// key is QuorumQueueId
-const QUORUM_QUEUES: Table<&[u8], JSON<QuorumQueue>> = Table::new("quorum_queues");
 
 #[derive(
     Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq, bincode::Decode, bincode::Encode,
@@ -63,15 +60,14 @@ pub struct QueuedPacket {
 pub struct HttpState {
     pub config: Config,
     pub queue_transaction: AsyncTransaction<QuorumQueueId>,
-    storage: RedbStorage,
+    storage: WavsDb,
     evm_clients: Arc<RwLock<HashMap<ChainKey, EvmSigningClient>>>,
     cosmos_clients: Arc<RwLock<HashMap<ChainKey, SigningClient>>>,
     pub aggregator_engine: Arc<AggregatorEngine<FileStorage>>,
     pub metrics: utils::telemetry::AggregatorMetrics,
 }
 
-// key is ServiceId
-const SERVICES: Table<[u8; 32], ()> = Table::new("services");
+const QUORUM_QUEUE_TABLE: TableHandle<Vec<u8>, QuorumQueue> = TableHandle::new(Table::QuorumQueues);
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
@@ -91,7 +87,7 @@ impl HttpState {
         tracing::info!("Creating file storage at: {:?}", config.data);
         let file_storage = FileStorage::new(&config.data)?;
         let ca_storage = Arc::new(file_storage);
-        let storage = RedbStorage::new()?;
+        let storage = WavsDb::new()?;
         let evm_clients = Arc::new(RwLock::new(HashMap::new()));
         let cosmos_clients = Arc::new(RwLock::new(HashMap::new()));
 
@@ -209,8 +205,7 @@ impl HttpState {
 
         tokio::task::spawn_blocking(move || {
             Ok(storage
-                .get(QUORUM_QUEUES, &id_bytes)?
-                .map(|queue| queue.value())
+                .get(&QUORUM_QUEUE_TABLE, &id_bytes)?
                 .unwrap_or_else(|| QuorumQueue::Active(Vec::new())))
         })
         .await
@@ -226,7 +221,7 @@ impl HttpState {
         let storage = self.storage.clone();
         let id_bytes = id.to_bytes()?;
 
-        tokio::task::spawn_blocking(move || storage.set(QUORUM_QUEUES, &id_bytes, &queue))
+        tokio::task::spawn_blocking(move || storage.set(&QUORUM_QUEUE_TABLE, id_bytes, queue))
             .await
             .map_err(|e| AggregatorError::JoinError(e.to_string()))?
             .map_err(Into::into)
@@ -238,7 +233,7 @@ impl HttpState {
 
         tokio::task::spawn_blocking(move || {
             storage
-                .get(SERVICES, service_id.inner())
+                .get(&handles::AGGREGATOR_SERVICES, &service_id)
                 .ok()
                 .flatten()
                 .is_some()
@@ -251,10 +246,15 @@ impl HttpState {
     #[instrument(skip(self))]
     #[allow(clippy::result_large_err)]
     pub fn register_service(&self, service_id: &ServiceId) -> AggregatorResult<()> {
-        if self.storage.get(SERVICES, service_id.inner())?.is_none() {
+        if self
+            .storage
+            .get(&handles::AGGREGATOR_SERVICES, service_id)?
+            .is_none()
+        {
             tracing::info!("Registering aggregator for service {}", service_id);
 
-            self.storage.set(SERVICES, service_id.inner(), &())?;
+            self.storage
+                .set(&handles::AGGREGATOR_SERVICES, service_id.clone(), ())?;
         } else {
             tracing::warn!("Attempted to register duplicate service: {}", service_id);
             return Err(AggregatorError::RepeatService(service_id.clone()));

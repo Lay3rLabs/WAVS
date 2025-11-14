@@ -1,4 +1,4 @@
-use utils::storage::db::RedbStorage;
+use utils::storage::db::WavsDb;
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
@@ -20,7 +20,7 @@ pub async fn execute_aggregator_component(
     let engine = WTEngine::new(&wt_config).unwrap();
 
     let data_dir = tempfile::tempdir().unwrap();
-    let keyvalue_ctx = KeyValueCtx::new(RedbStorage::new().unwrap(), "test".to_string());
+    let keyvalue_ctx = KeyValueCtx::new(WavsDb::new().unwrap(), "test".to_string());
 
     let mut chain_configs = ChainConfigs::default();
     chain_configs

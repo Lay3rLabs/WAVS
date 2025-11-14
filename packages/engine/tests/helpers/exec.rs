@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use alloy_sol_types::SolValue;
 use serde::{de::DeserializeOwned, Serialize};
-use utils::{storage::db::RedbStorage, test_utils::test_contracts::ISimpleSubmit::DataWithId};
+use utils::{storage::db::WavsDb, test_utils::test_contracts::ISimpleSubmit::DataWithId};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
@@ -84,7 +84,7 @@ pub async fn try_execute_component_raw(
 
     let data_dir = tempfile::tempdir().unwrap();
     let keyvalue_ctx = keyvalue_ctx
-        .unwrap_or_else(|| KeyValueCtx::new(RedbStorage::new().unwrap(), "test".to_string()));
+        .unwrap_or_else(|| KeyValueCtx::new(WavsDb::new().unwrap(), "test".to_string()));
 
     let mut instance_deps = InstanceDepsBuilder {
         workflow_id: service.workflows.keys().next().cloned().unwrap(),

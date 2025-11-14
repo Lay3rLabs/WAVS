@@ -6637,15 +6637,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "redb"
-version = "3.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae323eb086579a3769daa2c753bb96deb95993c534711e0dbe881b5192906a06"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8901,6 +8892,7 @@ dependencies = [
  "cid",
  "const-hex",
  "cw-wavs-mock-api",
+ "dashmap",
  "deadpool",
  "dirs 6.0.0",
  "dotenvy",
@@ -8914,7 +8906,6 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "rand 0.9.2",
- "redb",
  "reqwest",
  "serde",
  "serde_json",
@@ -9944,7 +9935,6 @@ dependencies = [
  "iri-string",
  "layer-climb",
  "opentelemetry",
- "redb",
  "reqwest",
  "serde",
  "serde_json",
@@ -10071,11 +10061,11 @@ dependencies = [
  "alloy-sol-types",
  "anyhow",
  "crossbeam",
+ "dashmap",
  "example-types",
  "iri-string",
  "layer-climb",
  "lru 0.16.2",
- "redb",
  "reqwest",
  "serde",
  "serde_json",

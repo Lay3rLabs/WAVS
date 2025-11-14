@@ -95,7 +95,7 @@ pub enum AggregatorError {
     MissingService(ServiceId),
 
     #[error("WASM component compilation failed: {0}")]
-    WasmCompilation(#[from] wasmtime::Error),
+    WasmCompilation(#[source] wasmtime::Error),
 
     #[error("Component execution failed: {0}")]
     ComponentExecution(String),
