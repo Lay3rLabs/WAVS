@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::ops::Bound;
 
 use thiserror::Error;
@@ -90,40 +91,32 @@ impl Services {
         bounds_start: Bound<&ServiceId>,
         bounds_end: Bound<&ServiceId>,
     ) -> Result<Vec<Service>> {
-        self.db_storage
+        let services = self
+            .db_storage
             .with_table_read(&handles::SERVICES, |table| {
-                let mut entries = table
-                    .iter()
-                    .map(|entry| {
-                        let (key, value) = entry.pair();
-                        (key.clone(), value.clone())
-                    })
-                    .collect::<Vec<_>>();
+                let mut services = BTreeMap::new();
 
-                entries.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-                let mut services = Vec::with_capacity(entries.len());
-
-                for (key, value) in entries {
-                    let within_bounds = match (bounds_start, bounds_end) {
-                        (Bound::Unbounded, Bound::Unbounded) => true,
-                        (Bound::Unbounded, Bound::Included(y)) => key <= *y,
-                        (Bound::Unbounded, Bound::Excluded(y)) => key < *y,
-                        (Bound::Included(x), Bound::Unbounded) => key >= *x,
-                        (Bound::Excluded(x), Bound::Unbounded) => key > *x,
-                        (Bound::Included(x), Bound::Included(y)) => key >= *x && key <= *y,
-                        (Bound::Included(x), Bound::Excluded(y)) => key >= *x && key < *y,
-                        (Bound::Excluded(x), Bound::Included(y)) => key > *x && key <= *y,
-                        (Bound::Excluded(x), Bound::Excluded(y)) => key > *x && key < *y,
-                    };
-
-                    if within_bounds {
-                        services.push(value);
-                    }
+                for entry in table.iter() {
+                    let (key, value) = entry.pair();
+                    services.insert(key.clone(), value.clone());
                 }
 
-                Ok(services)
-            })
+                let convert_bound = |bound: Bound<&ServiceId>| match bound {
+                    Bound::Unbounded => Bound::Unbounded,
+                    Bound::Included(id) => Bound::Included(id.clone()),
+                    Bound::Excluded(id) => Bound::Excluded(id.clone()),
+                };
+
+                let start = convert_bound(bounds_start);
+                let end = convert_bound(bounds_end);
+
+                Ok(services
+                    .range((start, end))
+                    .map(|(_, service)| service.clone())
+                    .collect())
+            })?;
+
+        Ok(services)
     }
 }
 
