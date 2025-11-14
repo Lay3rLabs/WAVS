@@ -19,8 +19,8 @@ cosmwasm = ["dep:cosmwasm-schema"]
 ts-bindings = ["dep:ts-rs"]
 
 [[bin]]
-name = "generate-ts-index"
-path = "generate_ts_index.rs"
+name = "ts"
+path = "ts.rs"
 
 [dependencies]
 anyhow = { workspace = true }

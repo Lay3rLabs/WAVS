@@ -384,4 +384,4 @@ wasi-publish version component="*" flags="":
 ts-bindings:
     rm -rf packages/types/bindings
     cargo test -p wavs-types --features ts-bindings
-    cargo run --bin generate-ts-index
+    cargo run --bin ts
