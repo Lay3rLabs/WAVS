@@ -9,6 +9,8 @@ cfg_if::cfg_if! {
     }
 }
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "ts-bindings")]
+use ts_rs::TS;
 use utoipa::ToSchema;
 
 #[derive(
@@ -35,6 +37,8 @@ impl From<Duration> for std::time::Duration {
 }
 
 #[repr(transparent)]
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(type = "number"))]
 #[derive(
     Debug, Hash, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ToSchema,
 )]
