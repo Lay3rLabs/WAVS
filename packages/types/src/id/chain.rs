@@ -3,6 +3,8 @@ use std::{str::FromStr, sync::LazyLock};
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
+#[cfg(feature = "ts-bindings")]
+use ts_rs::TS;
 use utoipa::ToSchema;
 
 /// A `ChainKey` represents a blockchain network identifier, consisting of a namespace and a chain id.
@@ -12,6 +14,8 @@ use utoipa::ToSchema;
 /// Mostly follows the specification at https://chainagnostic.org/CAIPs/caip-2
 /// but allows the namespace part to 1 to 32 characters instead of 3 to 8
 /// and changes the naming of chain_id -> chain_key, reference -> chain_id
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, ToSchema, bincode::Decode, bincode::Encode,
 )]
@@ -104,6 +108,8 @@ impl From<ChainKey> for layer_climb_config::ChainId {
 // ----------------------------
 // ChainKeyNamespace
 // ----------------------------
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, ToSchema, bincode::Decode, bincode::Encode,
 )]
@@ -172,6 +178,8 @@ impl Serialize for ChainKeyNamespace {
 // ----------------------------
 // ChainKeyId
 // ----------------------------
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, ToSchema, bincode::Decode, bincode::Encode,
 )]

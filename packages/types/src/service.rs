@@ -9,6 +9,9 @@ use thiserror::Error;
 use utoipa::ToSchema;
 use wasm_pkg_common::package::PackageRef;
 
+#[cfg(feature = "ts-bindings")]
+use ts_rs::TS;
+
 use crate::{ByteArray, ComponentDigest, EventId, ServiceDigest, Timestamp};
 
 use super::{ChainKey, ServiceId, WorkflowId};
@@ -24,6 +27,8 @@ pub enum ServiceError {
 /// 1. All service handlers on a given chain use the same service manager
 /// 2. All service managers on non-source chains properly mirror the operator set of the source
 /// 3. All components are legitimate (e.g. can be downloaded, match the provided digest, execute as expected, etc.)
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Service {
@@ -31,6 +36,7 @@ pub struct Service {
     pub name: String,
 
     /// We support multiple workflows in one service with unique service-scoped IDs.
+    #[cfg_attr(feature = "ts-bindings", ts(type = "Record<string, Workflow>"))]
     pub workflows: BTreeMap<WorkflowId, Workflow>,
 
     pub status: ServiceStatus,
@@ -50,17 +56,21 @@ impl Service {
     }
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceManager {
     Evm {
         chain: ChainKey,
         #[schema(value_type = String)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         address: alloy_primitives::Address,
     },
     Cosmos {
         chain: ChainKey,
         #[schema(value_type = String)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         address: layer_climb_address::CosmosAddr,
     },
 }
@@ -128,6 +138,8 @@ impl Service {
     }
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Component {
@@ -146,20 +158,26 @@ pub struct Component {
     pub time_limit_seconds: Option<u64>,
 
     /// Key-value pairs that are accessible in the components via host bindings.
+    #[cfg_attr(feature = "ts-bindings", ts(type = "Record<string, string>"))]
     pub config: BTreeMap<String, String>,
 
     /// External env variable keys to be read from the system host on execute (i.e. API keys).
     /// Must be prefixed with `WAVS_ENV_`.
+    #[cfg_attr(feature = "ts-bindings", ts(type = "string[]"))]
     pub env_keys: BTreeSet<String>,
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ComponentSource {
     /// The wasm bytecode provided at fixed url, digest provided to ensure no tampering
     Download {
         #[schema(value_type = String)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         uri: UriString,
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         digest: ComponentDigest,
     },
     /// The wasm bytecode downloaded from a standard registry, digest provided to ensure no tampering
@@ -168,11 +186,15 @@ pub enum ComponentSource {
         registry: Registry,
     },
     /// An already deployed component
+    #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
     Digest(ComponentDigest),
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 pub struct Registry {
+    #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
     pub digest: ComponentDigest,
     /// Optional domain to use for a registry (such as ghcr.io)
     /// if default of wa.dev (or whatever wavs uses in the future)
@@ -180,9 +202,11 @@ pub struct Registry {
     pub domain: Option<String>,
     /// Optional semver value, if absent then latest is used
     #[schema(value_type = Option<String>)]
+    #[cfg_attr(feature = "ts-bindings", ts(type = "string | null"))]
     pub version: Option<Version>,
     /// Package identifier of form <namespace>:<packagename>
     #[schema(value_type = String)]
+    #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
     pub package: PackageRef,
 }
 
@@ -198,6 +222,8 @@ impl ComponentSource {
 
 // FIXME: happy for a better name.
 /// This captures the triggers we listen to, the components we run, and how we submit the result
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Workflow {
@@ -217,20 +243,25 @@ impl Workflow {
 }
 
 // The TriggerManager reacts to these triggers
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Trigger {
     // A contract that emits an event
     CosmosContractEvent {
         #[schema(value_type = String)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         address: layer_climb_address::CosmosAddr,
         chain: ChainKey,
         event_type: String,
     },
     EvmContractEvent {
         #[schema(value_type = String)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         address: alloy_primitives::Address,
         chain: ChainKey,
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         event_hash: ByteArray<32>,
     },
     BlockInterval {
@@ -238,12 +269,15 @@ pub enum Trigger {
         chain: ChainKey,
         /// Number of blocks to wait between each execution
         #[schema(value_type = u32)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "number"))]
         n_blocks: NonZeroU32,
         /// Optional start block height indicating when the interval begins.
         #[schema(value_type = Option<u64>)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "number | null"))]
         start_block: Option<NonZeroU64>,
         /// Optional end block height indicating when the interval begins.
         #[schema(value_type = Option<u64>)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "number | null"))]
         end_block: Option<NonZeroU64>,
     },
     Cron {
@@ -367,6 +401,8 @@ pub struct TriggerConfig {
 }
 
 // TODO - rename this? Trigger is a noun, Submit is a verb.. feels a bit weird
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Submit {
@@ -376,6 +412,7 @@ pub enum Submit {
         /// The aggregator endpoint
         url: String,
         /// component dynamically determines the destination
+        #[cfg_attr(feature = "ts-bindings", ts(type = "Component"))]
         component: Box<Component>,
         signature_kind: SignatureKind,
     },
@@ -402,6 +439,8 @@ pub enum Submit {
 /// 3. **Future Extensibility**: As new signature algorithms (BLS12-381, Ed25519, etc.)
 ///    and prefix schemes are added, this structure can accommodate them without
 ///    breaking changes.
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 pub struct SignatureKind {
     /// The cryptographic algorithm used for signature generation and verification.
@@ -427,6 +466,8 @@ impl SignatureKind {
     }
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SignatureAlgorithm {
@@ -434,12 +475,16 @@ pub enum SignatureAlgorithm {
     // Future: Bls12381, Ed25519, Secp256r1, etc.
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SignaturePrefix {
     Eip191,
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceStatus {
@@ -461,9 +506,10 @@ impl FromStr for ServiceStatus {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema, Default)]
 #[serde(default, rename_all = "snake_case")]
-#[derive(Default)]
 pub struct Permissions {
     /// If it can talk to http hosts on the network
     pub allowed_http_hosts: AllowedHostPermission,
@@ -490,6 +536,8 @@ fn permission_defaults() {
 
 // TODO: remove / change defaults?
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AllowedHostPermission {

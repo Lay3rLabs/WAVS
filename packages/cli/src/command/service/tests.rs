@@ -1,7 +1,5 @@
 use std::str::FromStr as _;
 
-use crate::service_json::Json;
-
 use super::*;
 use alloy_primitives::address;
 use alloy_primitives::hex;
@@ -11,9 +9,9 @@ use tempfile::tempdir;
 use utils::init_tracing_tests;
 use utils::service::DEFAULT_IPFS_GATEWAY;
 use wasm_pkg_client::PackageRef;
-use wavs_types::ComponentDigest;
-use wavs_types::SignatureKind;
-use wavs_types::Submit;
+use wavs_types::{ComponentDigest, Json, SignatureKind, Submit};
+
+use crate::service_json::ServiceJsonExt;
 
 #[test]
 fn test_service_init() {

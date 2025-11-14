@@ -4,9 +4,9 @@ use std::{
     path::PathBuf,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainKey, ComponentDigest, Permissions, ServiceStatus, Trigger, WorkflowId};
-
-use crate::service_json::ServiceJson;
+use wavs_types::{
+    ChainKey, ComponentDigest, Permissions, ServiceJson, ServiceStatus, Trigger, WorkflowId,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ChainType {

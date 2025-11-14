@@ -29,9 +29,10 @@ use std::{
 use utils::{config::WAVS_ENV_PREFIX, service::fetch_bytes, wkg::WkgClient};
 use uuid::Uuid;
 use wavs_types::{
-    AllowedHostPermission, AnyChainConfig, ByteArray, ChainKey, Component, ComponentDigest,
-    ComponentSource, Registry, ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp,
-    Trigger, WorkflowId,
+    AggregatorJson, AllowedHostPermission, AnyChainConfig, ByteArray, ChainKey, Component,
+    ComponentDigest, ComponentJson, ComponentSource, Registry, ServiceJson, ServiceManager,
+    ServiceManagerJson, ServiceStatus, SignatureKind, Submit, SubmitJson, Timestamp, Trigger,
+    TriggerJson, WorkflowId, WorkflowJson,
 };
 
 use crate::{
@@ -42,8 +43,7 @@ use crate::{
     context::CliContext,
     service_json::{
         validate_block_interval_config, validate_block_interval_config_on_chain,
-        validate_cron_config, AggregatorJson, ComponentJson, ServiceJson, ServiceManagerJson,
-        SubmitJson, TriggerJson, WorkflowJson,
+        validate_cron_config, ServiceJsonExt,
     },
 };
 
