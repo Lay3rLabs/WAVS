@@ -24,12 +24,12 @@ impl WavsDb {
     #[instrument(fields(subsys = "WavsDb"))]
     pub fn new() -> Result<Self, DBError> {
         Ok(Self {
-            services: WavsDbTable::new("services")?,
-            services_by_hash: WavsDbTable::new("services_by_hash")?,
-            aggregator_services: WavsDbTable::new("aggregator_services")?,
-            quorum_queues: WavsDbTable::new("quorum_queues")?,
-            kv_store: WavsDbTable::new("kv_store")?,
-            kv_atomics_counter: WavsDbTable::new("kv_atomics_counter")?,
+            services: WavsDbTable::new(None::<&str>)?,
+            services_by_hash: WavsDbTable::new(None::<&str>)?,
+            aggregator_services: WavsDbTable::new(None::<&str>)?,
+            quorum_queues: WavsDbTable::new(None::<&str>)?,
+            kv_store: WavsDbTable::new(None::<&str>)?,
+            kv_atomics_counter: WavsDbTable::new(None::<&str>)?,
         })
     }
 }
@@ -43,6 +43,7 @@ where
     V: Clone + Send + Sync + 'static,
 {
     inner: Arc<DashMap<K, V>>,
+    filepath: Option<std::path::PathBuf>,
 }
 
 impl<K, V> Default for WavsDbTable<K, V>
@@ -53,6 +54,7 @@ where
     fn default() -> Self {
         Self {
             inner: Arc::new(DashMap::new()),
+            filepath: None,
         }
     }
 }
@@ -63,11 +65,18 @@ where
     V: Clone + Send + Sync + 'static,
 {
     /// Create a new table. In the future, this will open/load from a file.
-    pub fn new(_filepath: impl AsRef<Path>) -> Result<Self, DBError> {
+    pub fn new(filepath: Option<impl AsRef<Path>>) -> Result<Self, DBError> {
         // TODO LATER: Open a file, load data, keep file handle for writing
+        let filepath = filepath.map(|p| p.as_ref().to_path_buf());
         Ok(Self {
             inner: Arc::new(DashMap::new()),
+            filepath,
         })
+    }
+
+    /// Get the filepath for this table (if any)
+    pub fn filepath(&self) -> Option<&std::path::Path> {
+        self.filepath.as_deref()
     }
 
     /// Get a cloned value from the table
@@ -164,7 +173,7 @@ mod tests {
 
     #[test]
     fn wavsdb_table_basic_operations() {
-        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new("test").unwrap();
+        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new(None::<&str>).unwrap();
         let key = "test_key".to_string();
         let value = TestStruct {
             name: "demo".to_string(),
@@ -191,7 +200,7 @@ mod tests {
 
     #[test]
     fn wavsdb_table_map_ref() {
-        let table: WavsDbTable<String, i32> = WavsDbTable::new("test").unwrap();
+        let table: WavsDbTable<String, i32> = WavsDbTable::new(None::<&str>).unwrap();
         let key = "number".to_string();
         table.insert(key.clone(), 42).unwrap();
 
@@ -206,7 +215,7 @@ mod tests {
 
     #[test]
     fn wavsdb_table_iteration() {
-        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new("test").unwrap();
+        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new(None::<&str>).unwrap();
 
         // Insert test data
         table
@@ -319,7 +328,7 @@ mod tests {
 
     #[test]
     fn table_clear() {
-        let table: WavsDbTable<String, i32> = WavsDbTable::new("test").unwrap();
+        let table: WavsDbTable<String, i32> = WavsDbTable::new(None::<&str>).unwrap();
 
         // Insert some data
         table.insert("a".to_string(), 1).unwrap();
@@ -337,7 +346,7 @@ mod tests {
 
     #[test]
     fn table_with_read() {
-        let table: WavsDbTable<String, i32> = WavsDbTable::new("test").unwrap();
+        let table: WavsDbTable<String, i32> = WavsDbTable::new(None::<&str>).unwrap();
 
         // Insert test data
         table.insert("x".to_string(), 10).unwrap();
