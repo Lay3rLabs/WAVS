@@ -36,7 +36,6 @@ pub struct Service {
     pub name: String,
 
     /// We support multiple workflows in one service with unique service-scoped IDs.
-    #[cfg_attr(feature = "ts-bindings", ts(type = "Record<string, Workflow>"))]
     pub workflows: BTreeMap<WorkflowId, Workflow>,
 
     pub status: ServiceStatus,
@@ -158,12 +157,10 @@ pub struct Component {
     pub time_limit_seconds: Option<u64>,
 
     /// Key-value pairs that are accessible in the components via host bindings.
-    #[cfg_attr(feature = "ts-bindings", ts(type = "Record<string, string>"))]
     pub config: BTreeMap<String, String>,
 
     /// External env variable keys to be read from the system host on execute (i.e. API keys).
     /// Must be prefixed with `WAVS_ENV_`.
-    #[cfg_attr(feature = "ts-bindings", ts(type = "string[]"))]
     pub env_keys: BTreeSet<String>,
 }
 
@@ -194,7 +191,6 @@ pub enum ComponentSource {
 #[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 pub struct Registry {
-    #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
     pub digest: ComponentDigest,
     /// Optional domain to use for a registry (such as ghcr.io)
     /// if default of wa.dev (or whatever wavs uses in the future)
@@ -269,15 +265,12 @@ pub enum Trigger {
         chain: ChainKey,
         /// Number of blocks to wait between each execution
         #[schema(value_type = u32)]
-        #[cfg_attr(feature = "ts-bindings", ts(type = "number"))]
         n_blocks: NonZeroU32,
         /// Optional start block height indicating when the interval begins.
         #[schema(value_type = Option<u64>)]
-        #[cfg_attr(feature = "ts-bindings", ts(type = "number | null"))]
         start_block: Option<NonZeroU64>,
         /// Optional end block height indicating when the interval begins.
         #[schema(value_type = Option<u64>)]
-        #[cfg_attr(feature = "ts-bindings", ts(type = "number | null"))]
         end_block: Option<NonZeroU64>,
     },
     Cron {
@@ -412,7 +405,6 @@ pub enum Submit {
         /// The aggregator endpoint
         url: String,
         /// component dynamically determines the destination
-        #[cfg_attr(feature = "ts-bindings", ts(type = "Component"))]
         component: Box<Component>,
         signature_kind: SignatureKind,
     },

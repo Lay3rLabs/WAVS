@@ -13,7 +13,6 @@ use crate::{Component, ServiceManager, ServiceStatus, SignatureKind, Submit, Tri
 #[serde(rename_all = "snake_case")]
 pub struct ServiceBuilder {
     pub name: String,
-    #[cfg_attr(feature = "ts-bindings", ts(type = "Record<string, WorkflowBuilder>"))]
     pub workflows: BTreeMap<WorkflowId, WorkflowBuilder>,
     pub status: ServiceStatus,
     pub manager: ServiceManagerBuilder,

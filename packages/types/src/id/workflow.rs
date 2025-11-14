@@ -7,7 +7,6 @@ use utoipa::ToSchema;
 
 /// It is a string, but with some strict validation rules. It must be lowercase alphanumeric: `[a-z0-9-_]{3,36}`
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
-#[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
 #[derive(
     Serialize,
     Clone,

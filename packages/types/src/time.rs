@@ -38,7 +38,6 @@ impl From<Duration> for std::time::Duration {
 
 #[repr(transparent)]
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
-#[cfg_attr(feature = "ts-bindings", ts(type = "number"))]
 #[derive(
     Debug, Hash, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ToSchema,
 )]
