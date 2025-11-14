@@ -18,6 +18,10 @@ solidity-rpc = ["dep:alloy-contract", "dep:alloy-provider"]
 cosmwasm = ["dep:cosmwasm-schema"]
 ts-bindings = ["dep:ts-rs"]
 
+[[bin]]
+name = "generate-ts-index"
+path = "generate_ts_index.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 serde = { workspace = true }
