@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use opentelemetry::global::meter;
 use utils::service::DEFAULT_IPFS_GATEWAY;
-use utils::storage::{db::RedbStorage, fs::FileStorage};
+use utils::storage::{db::WavsDb, fs::FileStorage};
 use utils::telemetry::Metrics;
 use wavs::subsystems::engine::EngineCommand;
 use wavs::{
@@ -53,7 +53,7 @@ impl SystemSetup {
 
         // Create a WasmEngine similar to how it's done in CoreDispatcher
         let app_storage = engine_setup.data_dir.path().join("app");
-        let db_storage = RedbStorage::new().unwrap();
+        let db_storage = WavsDb::new().unwrap();
         let wasm_engine = WasmEngine::new(
             file_storage,
             app_storage,

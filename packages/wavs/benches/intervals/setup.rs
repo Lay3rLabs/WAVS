@@ -2,7 +2,7 @@ use std::{num::NonZero, sync::Arc};
 
 use opentelemetry::global::meter;
 use tempfile::TempDir;
-use utils::{storage::db::RedbStorage, telemetry::Metrics};
+use utils::{storage::db::WavsDb, telemetry::Metrics};
 use wavs::{
     dispatcher::DispatcherCommand, services::Services, subsystems::trigger::TriggerManager,
 };
@@ -56,7 +56,7 @@ impl Setup {
         let data_dir = tempfile::tempdir().unwrap();
         let metrics = Metrics::new(meter("wavs-benchmark"));
 
-        let db_storage = RedbStorage::new().unwrap();
+        let db_storage = WavsDb::new().unwrap();
         let (trigger_to_dispatcher_tx, trigger_to_dispatcher_rx) =
             crossbeam::channel::unbounded::<DispatcherCommand>();
         let trigger_manager = TriggerManager::new(

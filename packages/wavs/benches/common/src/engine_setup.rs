@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use tempfile::{tempdir, TempDir};
-use utils::{filesystem::workspace_path, storage::db::RedbStorage};
+use utils::{filesystem::workspace_path, storage::db::WavsDb};
 use wasmtime::{component::Component, Engine as WTEngine};
 use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
 use wavs_types::{
@@ -80,7 +80,7 @@ impl EngineSetup {
         let chain_configs = ChainConfigs::default();
 
         let keyvalue_ctx = wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             "engine".to_string(),
         );
 

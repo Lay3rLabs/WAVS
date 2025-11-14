@@ -9,7 +9,7 @@ use wavs_types::{
 
 use layer_climb::prelude::*;
 use utils::{
-    storage::db::RedbStorage,
+    storage::db::WavsDb,
     telemetry::TriggerMetrics,
     test_utils::address::{rand_address_evm, rand_event_evm},
 };
@@ -18,7 +18,7 @@ use utils::{
 fn core_trigger_lookups() {
     let config = Config::default();
 
-    let services = wavs::services::Services::new(RedbStorage::new().unwrap());
+    let services = wavs::services::Services::new(WavsDb::new().unwrap());
 
     let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
@@ -151,7 +151,7 @@ fn core_trigger_lookups() {
 async fn block_interval_trigger_is_removed_when_config_is_gone() {
     let config = Config::default();
 
-    let services = wavs::services::Services::new(RedbStorage::new().unwrap());
+    let services = wavs::services::Services::new(WavsDb::new().unwrap());
 
     let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
@@ -288,7 +288,7 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
     // Setup configuration and manager
     let config = Config::default();
 
-    let services = wavs::services::Services::new(RedbStorage::new().unwrap());
+    let services = wavs::services::Services::new(WavsDb::new().unwrap());
     let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
     let manager = TriggerManager::new(
         &config,

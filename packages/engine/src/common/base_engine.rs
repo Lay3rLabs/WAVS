@@ -7,7 +7,7 @@ use lru::LruCache;
 use wasmtime::{component::Component as WasmComponent, Config as WTConfig, Engine as WTEngine};
 
 use utils::service::fetch_bytes;
-use utils::storage::db::RedbStorage;
+use utils::storage::db::WavsDb;
 use utils::storage::CAStorage;
 use utils::wkg::WkgClient;
 use wavs_types::{ChainConfigs, ComponentDigest, ComponentSource};
@@ -32,17 +32,13 @@ pub struct BaseEngine<S: CAStorage> {
     pub app_data_dir: PathBuf,
     pub max_wasm_fuel: Option<u64>,
     pub max_execution_seconds: Option<u64>,
-    pub db: RedbStorage,
+    pub db: WavsDb,
     pub storage: Arc<S>,
     pub ipfs_gateway: String,
 }
 
 impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
-    pub fn new(
-        config: BaseEngineConfig,
-        db: RedbStorage,
-        storage: Arc<S>,
-    ) -> Result<Self, EngineError> {
+    pub fn new(config: BaseEngineConfig, db: WavsDb, storage: Arc<S>) -> Result<Self, EngineError> {
         let mut wt_config = WTConfig::new();
         wt_config.wasm_component_model(true);
         wt_config.async_support(true);

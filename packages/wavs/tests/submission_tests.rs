@@ -11,7 +11,7 @@ use wavs_types::{
 };
 
 use utils::{
-    context::AppContext, storage::db::RedbStorage, telemetry::SubmissionMetrics,
+    context::AppContext, storage::db::WavsDb, telemetry::SubmissionMetrics,
     test_utils::address::rand_address_evm,
 };
 
@@ -47,7 +47,7 @@ fn collect_messages_with_wait() {
     };
     let meter = opentelemetry::global::meter("wavs_metrics");
     let metrics = SubmissionMetrics::new(meter);
-    let services = wavs::services::Services::new(RedbStorage::new().unwrap());
+    let services = wavs::services::Services::new(WavsDb::new().unwrap());
     let (dispatcher_to_submission_tx, dispatcher_to_submission_rx) =
         crossbeam::channel::unbounded::<SubmissionCommand>();
     let submission_manager = SubmissionManager::new(

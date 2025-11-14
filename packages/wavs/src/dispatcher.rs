@@ -54,7 +54,7 @@ use crate::subsystems::submission::{SubmissionCommand, SubmissionManager};
 use crate::subsystems::trigger::error::TriggerError;
 use crate::subsystems::trigger::{TriggerCommand, TriggerManager};
 use crate::{tracing_service_info, AppContext};
-use utils::storage::db::{DBError, RedbStorage};
+use utils::storage::db::{DBError, WavsDb};
 use utils::storage::{CAStorage, CAStorageError};
 
 #[derive(Clone)]
@@ -98,7 +98,7 @@ impl Dispatcher<FileStorage> {
             crossbeam::channel::unbounded::<SubmissionCommand>();
 
         let file_storage = FileStorage::new(config.data.join("ca"))?;
-        let db_storage = RedbStorage::new()?;
+        let db_storage = WavsDb::new()?;
 
         let services = Services::new(db_storage.clone());
 
@@ -689,7 +689,7 @@ pub enum DispatcherError {
     DB(#[from] DBError),
 
     #[error("DB Storage: {0}")]
-    DBStorage(#[from] redb::StorageError),
+    DBStorage(#[source] anyhow::Error),
 
     #[error("DB: {0}")]
     CA(#[from] CAStorageError),

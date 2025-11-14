@@ -5,7 +5,7 @@ use std::{
 
 use alloy_primitives::FixedBytes;
 use anyhow::{Context, Result};
-use utils::{config::WAVS_ENV_PREFIX, storage::db::RedbStorage};
+use utils::{config::WAVS_ENV_PREFIX, storage::db::WavsDb};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
     bindings::operator::world::host::LogLevel,
@@ -193,7 +193,7 @@ impl ExecComponent {
             chain_configs: &cli_config.chains.read().unwrap(),
             log: HostComponentLogger::OperatorHostComponentLogger(log_wasi),
             keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
-                RedbStorage::new().unwrap(),
+                WavsDb::new().unwrap(),
                 "exec_component".to_string(),
             ),
         }

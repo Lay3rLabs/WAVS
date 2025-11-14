@@ -14,7 +14,7 @@ use utils::{
     storage::{fs::FileStorage, memory::MemoryStorage},
     telemetry::{EngineMetrics, Metrics},
 };
-use utils::{storage::db::RedbStorage, test_utils::address::rand_address_evm};
+use utils::{storage::db::WavsDb, test_utils::address::rand_address_evm};
 use wavs::{
     dispatcher::{Dispatcher, DispatcherCommand},
     subsystems::engine::wasm_engine::WasmEngine,
@@ -54,7 +54,7 @@ impl MockE2ETestRunner {
             None,
             None,
             metrics,
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
         )
     }
