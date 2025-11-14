@@ -29,10 +29,10 @@ use std::{
 use utils::{config::WAVS_ENV_PREFIX, service::fetch_bytes, wkg::WkgClient};
 use uuid::Uuid;
 use wavs_types::{
-    AggregatorJson, AllowedHostPermission, AnyChainConfig, ByteArray, ChainKey, Component,
-    ComponentDigest, ComponentJson, ComponentSource, Registry, ServiceJson, ServiceManager,
-    ServiceManagerJson, ServiceStatus, SignatureKind, Submit, SubmitJson, Timestamp, Trigger,
-    TriggerJson, WorkflowId, WorkflowJson,
+    AggregatorBuilder, AllowedHostPermission, AnyChainConfig, ByteArray, ChainKey, Component,
+    ComponentBuilder, ComponentDigest, ComponentSource, Registry, ServiceBuilder, ServiceManager,
+    ServiceManagerBuilder, ServiceStatus, SignatureKind, Submit, SubmitBuilder, Timestamp, Trigger,
+    TriggerBuilder, WorkflowBuilder, WorkflowId,
 };
 
 use crate::{
@@ -236,7 +236,7 @@ fn parse_config_from_file<P: AsRef<Path>>(config_file: P) -> Result<BTreeMap<Str
 pub fn modify_service_file<P, F, R>(file_path: P, modifier: F) -> Result<R>
 where
     P: AsRef<Path>,
-    F: FnOnce(ServiceJson) -> Result<(ServiceJson, R)>,
+    F: FnOnce(ServiceBuilder) -> Result<(ServiceBuilder, R)>,
 {
     let file_path = file_path.as_ref();
 
@@ -244,7 +244,7 @@ where
     let service_json = std::fs::read_to_string(file_path)?;
 
     // Parse the service JSON
-    let service: ServiceJson = serde_json::from_str(&service_json)?;
+    let service: ServiceBuilder = serde_json::from_str(&service_json)?;
 
     // Apply the modification and get the result
     let (updated_service, result) = modifier(service)?;
@@ -261,19 +261,19 @@ where
 
 enum ComponentTarget<'a> {
     Direct(&'a mut Component),
-    Json(&'a mut ComponentJson),
+    Json(&'a mut ComponentBuilder),
 }
 
 /// Helper to get mutable Component reference, handling Submit::Aggregator case separately
 fn get_target_component<'a>(
-    workflow: &'a mut WorkflowJson,
+    workflow: &'a mut WorkflowBuilder,
     context: &ComponentContext,
 ) -> Result<ComponentTarget<'a>> {
     match context {
         ComponentContext::Workflow { .. } => Ok(ComponentTarget::Json(&mut workflow.component)),
         ComponentContext::Aggregator { .. } => match &mut workflow.submit {
-            SubmitJson::Submit(Submit::Aggregator { component, .. }) => Ok(ComponentTarget::Direct(component)),
-            SubmitJson::AggregatorJson(AggregatorJson::Aggregator { component, .. }) => Ok(ComponentTarget::Json(component)),
+            SubmitBuilder::Submit(Submit::Aggregator { component, .. }) => Ok(ComponentTarget::Direct(component)),
+            SubmitBuilder::AggregatorBuilder(AggregatorBuilder::Aggregator { component, .. }) => Ok(ComponentTarget::Json(component)),
             _ => anyhow::bail!("Cannot modify aggregator component when the workflow's submit is not set to aggregator"),
         },
     }
@@ -369,7 +369,7 @@ pub async fn update_component(
                     ComponentTarget::Json(component_json) => {
                         let source = ComponentSource::Registry { registry };
                         let new_component = Component::new(source);
-                        *component_json = ComponentJson::Component(new_component);
+                        *component_json = ComponentBuilder::Component(new_component);
                     }
                 }
 
@@ -408,7 +408,7 @@ pub async fn update_component(
                             digest: digest.clone(),
                         };
                         let new_component = Component::new(source);
-                        *component_json = ComponentJson::Component(new_component);
+                        *component_json = ComponentBuilder::Component(new_component);
                     }
                 }
 
@@ -452,7 +452,7 @@ fn execute_sync_command(
                 ComponentTarget::Json(component_json) => {
                     if component_json.is_unset() {
                         let new_component = Component::new(ComponentSource::Digest(digest.clone()));
-                        *component_json = ComponentJson::new(new_component);
+                        *component_json = ComponentBuilder::new(new_component);
                     } else if let Some(component) = component_json.as_component_mut() {
                         component.source = ComponentSource::Digest(digest.clone());
                     }
@@ -573,11 +573,11 @@ fn apply_component_command(component: &mut Component, command: ComponentCommand)
 /// Run the service initialization
 pub fn init_service(file_path: &Path, name: String) -> Result<ServiceInitResult> {
     // Create the service
-    let service = ServiceJson {
+    let service = ServiceBuilder {
         name,
         workflows: BTreeMap::new(),
         status: ServiceStatus::Active,
-        manager: ServiceManagerJson::default(),
+        manager: ServiceManagerBuilder::default(),
     };
 
     // Convert service to JSON
@@ -610,12 +610,12 @@ pub fn add_workflow(file_path: &Path, id: Option<WorkflowId>) -> Result<Workflow
         };
 
         // Create default trigger, component, and submit
-        let trigger = TriggerJson::default();
-        let component = ComponentJson::default();
-        let submit = SubmitJson::default();
+        let trigger = TriggerBuilder::default();
+        let component = ComponentBuilder::default();
+        let submit = SubmitBuilder::default();
 
         // Create a new workflow entry
-        let workflow = WorkflowJson {
+        let workflow = WorkflowBuilder {
             trigger,
             component,
             submit,
@@ -685,7 +685,7 @@ pub fn set_cosmos_trigger(
             chain,
             event_type,
         };
-        workflow.trigger = TriggerJson::Trigger(trigger.clone());
+        workflow.trigger = TriggerBuilder::Trigger(trigger.clone());
 
         Ok((
             service,
@@ -734,7 +734,7 @@ pub fn set_evm_trigger(
             chain,
             event_hash: ByteArray::new(event_hash),
         };
-        workflow.trigger = TriggerJson::Trigger(trigger.clone());
+        workflow.trigger = TriggerBuilder::Trigger(trigger.clone());
 
         Ok((
             service,
@@ -768,7 +768,7 @@ pub fn set_block_interval_trigger(
             start_block,
             end_block,
         };
-        workflow.trigger = TriggerJson::Trigger(trigger.clone());
+        workflow.trigger = TriggerBuilder::Trigger(trigger.clone());
 
         Ok((
             service,
@@ -800,7 +800,7 @@ pub fn set_cron_trigger(
             start_time,
             end_time,
         };
-        workflow.trigger = TriggerJson::Trigger(trigger.clone());
+        workflow.trigger = TriggerBuilder::Trigger(trigger.clone());
 
         Ok((
             service,
@@ -835,7 +835,7 @@ pub fn set_evm_manager(
     chain: ChainKey,
 ) -> Result<EvmManagerResult> {
     modify_service_file(file_path, |mut service| {
-        service.manager = ServiceManagerJson::Manager(ServiceManager::Evm {
+        service.manager = ServiceManagerBuilder::Manager(ServiceManager::Evm {
             chain: chain.clone(),
             address,
         });
@@ -874,7 +874,7 @@ pub async fn validate_service(
     let service_json = std::fs::read_to_string(file_path)?;
 
     // Parse the service JSON
-    let service: ServiceJson = serde_json::from_str(&service_json)?;
+    let service: ServiceBuilder = serde_json::from_str(&service_json)?;
 
     // Get basic validation errors from the ServiceJson::validate method
     let mut errors = service.validate();
@@ -895,7 +895,7 @@ pub async fn validate_service(
         let mut submits = Vec::new();
 
         for (workflow_id, workflow) in &service.workflows {
-            if let TriggerJson::Trigger(trigger) = &workflow.trigger {
+            if let TriggerBuilder::Trigger(trigger) = &workflow.trigger {
                 match trigger {
                     Trigger::CosmosContractEvent { chain, .. } => {
                         chains_to_validate.insert((chain.clone(), ChainType::Cosmos));
@@ -969,26 +969,26 @@ pub async fn validate_service(
                 triggers.push((workflow_id, trigger));
             }
 
-            if let SubmitJson::Submit(submit) = &workflow.submit {
+            if let SubmitBuilder::Submit(submit) = &workflow.submit {
                 submits.push((workflow_id, submit));
             }
         }
 
-        let service_manager = if let ServiceManagerJson::Manager(service_manager) = &service.manager
-        {
-            match service_manager {
-                ServiceManager::Evm { chain, .. } => {
-                    chains_to_validate.insert((chain.clone(), ChainType::EVM));
+        let service_manager =
+            if let ServiceManagerBuilder::Manager(service_manager) = &service.manager {
+                match service_manager {
+                    ServiceManager::Evm { chain, .. } => {
+                        chains_to_validate.insert((chain.clone(), ChainType::EVM));
+                    }
+                    ServiceManager::Cosmos { chain, .. } => {
+                        chains_to_validate.insert((chain.clone(), ChainType::Cosmos));
+                    }
                 }
-                ServiceManager::Cosmos { chain, .. } => {
-                    chains_to_validate.insert((chain.clone(), ChainType::Cosmos));
-                }
-            }
 
-            Some(service_manager)
-        } else {
-            None
-        };
+                Some(service_manager)
+            } else {
+                None
+            };
 
         // Build maps of clients for chains actually used
         let mut cosmos_clients = HashMap::new();
@@ -1046,9 +1046,9 @@ pub fn set_aggregator_submit(
             anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
         })?;
 
-        workflow.submit = SubmitJson::AggregatorJson(AggregatorJson::Aggregator {
+        workflow.submit = SubmitBuilder::AggregatorBuilder(AggregatorBuilder::Aggregator {
             url: url.clone(),
-            component: ComponentJson::new_unset(),
+            component: ComponentBuilder::new_unset(),
             signature_kind: SignatureKind::evm_default(),
         });
 
@@ -1074,7 +1074,7 @@ pub fn set_none_submit(
         })?;
 
         let submit = Submit::None;
-        workflow.submit = SubmitJson::Submit(submit);
+        workflow.submit = SubmitBuilder::Submit(submit);
 
         Ok((
             service,

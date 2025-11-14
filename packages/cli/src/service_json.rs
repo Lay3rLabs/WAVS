@@ -4,15 +4,15 @@ use alloy_primitives::Address;
 use cron::Schedule;
 use reqwest::Url;
 use wavs_types::{
-    AggregatorJson, ServiceJson, ServiceManagerJson, Submit, SubmitJson, Timestamp, Trigger,
-    TriggerJson, WAVS_ENV_PREFIX,
+    AggregatorBuilder, ServiceBuilder, ServiceManagerBuilder, Submit, SubmitBuilder, Timestamp,
+    Trigger, TriggerBuilder, WAVS_ENV_PREFIX,
 };
 
 pub trait ServiceJsonExt {
     fn validate(&self) -> Vec<String>;
 }
 
-impl ServiceJsonExt for ServiceJson {
+impl ServiceJsonExt for ServiceBuilder {
     fn validate(&self) -> Vec<String> {
         let mut errors = Vec::new();
 
@@ -44,10 +44,10 @@ impl ServiceJsonExt for ServiceJson {
             }
 
             match &workflow.trigger {
-                TriggerJson::Json(_) => {
+                TriggerBuilder::Builder(_) => {
                     errors.push(format!("Workflow '{}' has an unset trigger", workflow_id));
                 }
-                TriggerJson::Trigger(trigger) => match trigger {
+                TriggerBuilder::Trigger(trigger) => match trigger {
                     Trigger::CosmosContractEvent { event_type, .. } => {
                         if event_type.is_empty() {
                             errors.push(format!(
@@ -113,11 +113,11 @@ impl ServiceJsonExt for ServiceJson {
             }
 
             match &workflow.submit {
-                SubmitJson::Json(_) => {
+                SubmitBuilder::Builder(_) => {
                     errors.push(format!("Workflow '{}' has an unset submit", workflow_id));
                 }
-                SubmitJson::AggregatorJson(aggregator_json) => match aggregator_json {
-                    AggregatorJson::Aggregator {
+                SubmitBuilder::AggregatorBuilder(aggregator_json) => match aggregator_json {
+                    AggregatorBuilder::Aggregator {
                         url,
                         component,
                         signature_kind: _,
@@ -136,8 +136,8 @@ impl ServiceJsonExt for ServiceJson {
                         }
                     }
                 },
-                SubmitJson::Submit(Submit::None) => {}
-                SubmitJson::Submit(Submit::Aggregator { url, component, .. }) => {
+                SubmitBuilder::Submit(Submit::None) => {}
+                SubmitBuilder::Submit(Submit::Aggregator { url, component, .. }) => {
                     if Url::parse(url).is_err() {
                         errors.push(format!(
                             "Workflow '{}' has an invalid URL: {}",
@@ -166,7 +166,7 @@ impl ServiceJsonExt for ServiceJson {
             }
         }
 
-        if matches!(&self.manager, ServiceManagerJson::Json(_)) {
+        if matches!(&self.manager, ServiceManagerBuilder::Builder(_)) {
             errors.push("Service has an unset service manager".to_owned());
         }
 
