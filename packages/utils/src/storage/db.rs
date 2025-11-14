@@ -1,221 +1,147 @@
-use std::any::Any;
-use std::fmt;
 use std::hash::Hash;
-use std::marker::PhantomData;
+use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::anyhow;
-use dashmap::mapref::entry::Entry;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
 use tracing::instrument;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Table {
-    Services,
-    ServicesByHash,
-    AggregatorServices,
-    QuorumQueues,
-    KvStore,
-    KvAtomicsCounter,
-    Test(&'static str),
-}
+use wavs_types::{QuorumQueue, QuorumQueueId, Service, ServiceId};
 
-impl Table {
-    pub fn name(&self) -> &'static str {
-        match self {
-            Table::Services => "services",
-            Table::ServicesByHash => "services-by-hash",
-            Table::AggregatorServices => "aggregator-services",
-            Table::QuorumQueues => "quorum_queues",
-            Table::KvStore => "kv_store",
-            Table::KvAtomicsCounter => "kv_atomics_counter",
-            Table::Test(name) => name,
-        }
-    }
-}
-
-#[derive(Copy, Clone)]
-pub struct TableHandle<K, V> {
-    table: Table,
-    _marker: PhantomData<(K, V)>,
-}
-
-impl<K, V> TableHandle<K, V> {
-    pub const fn new(table: Table) -> Self {
-        Self {
-            table,
-            _marker: PhantomData,
-        }
-    }
-
-    pub const fn table(&self) -> Table {
-        self.table
-    }
-}
-
-impl<K, V> fmt::Debug for TableHandle<K, V> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TableHandle")
-            .field("table", &self.table)
-            .finish()
-    }
-}
-
-pub mod handles {
-    use super::{Table, TableHandle};
-    use wavs_types::{Service, ServiceId};
-
-    pub const SERVICES: TableHandle<ServiceId, Service> = TableHandle::new(Table::Services);
-    pub const SERVICES_BY_HASH: TableHandle<[u8; 32], Service> =
-        TableHandle::new(Table::ServicesByHash);
-    pub const AGGREGATOR_SERVICES: TableHandle<ServiceId, ()> =
-        TableHandle::new(Table::AggregatorServices);
-    pub const KV_STORE: TableHandle<String, Vec<u8>> = TableHandle::new(Table::KvStore);
-    pub const KV_ATOMICS_COUNTER: TableHandle<String, i64> =
-        TableHandle::new(Table::KvAtomicsCounter);
-}
-
-pub type DBError = anyhow::Error;
-
-type AnyMap = Arc<dyn Any + Send + Sync>;
-
-#[derive(Clone, Default)]
+/// Main database struct with hardcoded tables for better type safety and performance
+#[derive(Clone)]
 pub struct WavsDb {
-    tables: Arc<DashMap<Table, AnyMap>>,
+    pub services: WavsDbTable<ServiceId, Service>,
+    pub services_by_hash: WavsDbTable<[u8; 32], Service>,
+    pub aggregator_services: WavsDbTable<ServiceId, ()>,
+    pub quorum_queues: WavsDbTable<QuorumQueueId, QuorumQueue>,
+    pub kv_store: WavsDbTable<String, Vec<u8>>,
+    pub kv_atomics_counter: WavsDbTable<String, i64>,
 }
 
 impl WavsDb {
+    /// Create a new database with all tables initialized
     #[instrument(fields(subsys = "WavsDb"))]
     pub fn new() -> Result<Self, DBError> {
         Ok(Self {
-            tables: Arc::new(DashMap::new()),
+            services: WavsDbTable::new(None::<&str>)?,
+            services_by_hash: WavsDbTable::new(None::<&str>)?,
+            aggregator_services: WavsDbTable::new(None::<&str>)?,
+            quorum_queues: WavsDbTable::new(None::<&str>)?,
+            kv_store: WavsDbTable::new(None::<&str>)?,
+            kv_atomics_counter: WavsDbTable::new(None::<&str>)?,
+        })
+    }
+}
+
+/// A table abstraction that hides the underlying DashMap implementation
+/// and provides a clean API for database operations.
+#[derive(Clone)]
+pub struct WavsDbTable<K, V>
+where
+    K: Eq + Hash + Clone + Send + Sync + 'static,
+    V: Clone + Send + Sync + 'static,
+{
+    inner: Arc<DashMap<K, V>>,
+    filepath: Option<std::path::PathBuf>,
+}
+
+impl<K, V> Default for WavsDbTable<K, V>
+where
+    K: Eq + Hash + Clone + Send + Sync + 'static,
+    V: Clone + Send + Sync + 'static,
+{
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(DashMap::new()),
+            filepath: None,
+        }
+    }
+}
+
+impl<K, V> WavsDbTable<K, V>
+where
+    K: Eq + Hash + Clone + Send + Sync + 'static,
+    V: Clone + Send + Sync + 'static,
+{
+    /// Create a new table. In the future, this will open/load from a file.
+    pub fn new(filepath: Option<impl AsRef<Path>>) -> Result<Self, DBError> {
+        // TODO LATER: Open a file, load data, keep file handle for writing
+        let filepath = filepath.map(|p| p.as_ref().to_path_buf());
+        Ok(Self {
+            inner: Arc::new(DashMap::new()),
+            filepath,
         })
     }
 
-    #[instrument(skip(self, key, value), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn set<K, V>(&self, handle: &TableHandle<K, V>, key: K, value: V) -> Result<(), DBError>
+    /// Get the filepath for this table (if any)
+    pub fn filepath(&self) -> Option<&std::path::Path> {
+        self.filepath.as_deref()
+    }
+
+    /// Get a cloned value from the table
+    pub fn get_cloned(&self, key: &K) -> Option<V> {
+        self.inner.get(key).map(|v| v.clone())
+    }
+
+    /// Work with a reference without exposing DashMap-specific types
+    pub fn map_ref<T, F>(&self, key: &K, f: F) -> Option<T>
     where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
+        F: FnOnce(&V) -> T,
     {
-        let map = self.table_map(handle)?;
-        map.insert(key, value);
+        self.inner.get(key).map(|v| f(&v))
+    }
+
+    /// Insert a value into the table
+    pub fn insert(&self, key: K, value: V) -> Result<(), DBError> {
+        // TODO LATER: Write data to disk, e.g. in a separate thread
+        self.inner.insert(key, value);
         Ok(())
     }
 
-    #[instrument(skip(self, key), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn get<K, V>(&self, handle: &TableHandle<K, V>, key: &K) -> Result<Option<V>, DBError>
-    where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
-    {
-        let map = self.table_map(handle)?;
-        Ok(map.get(key).map(|v| v.clone()))
+    /// Remove a value from the table
+    pub fn remove(&self, key: &K) -> Option<V> {
+        self.inner.remove(key).map(|(_, v)| v)
     }
 
-    #[instrument(skip(self, key), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn remove<K, V>(&self, handle: &TableHandle<K, V>, key: &K) -> Result<Option<V>, DBError>
-    where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
-    {
-        let map = self.table_map(handle)?;
-        Ok(map.remove(key).map(|(_, v)| v))
+    /// Check if a key exists in the table
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.inner.contains_key(key)
     }
 
-    #[instrument(skip(self, key), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn contains_key<K, V>(&self, handle: &TableHandle<K, V>, key: &K) -> Result<bool, DBError>
-    where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
-    {
-        let map = self.table_map(handle)?;
-        Ok(map.contains_key(key))
+    /// Clear all entries from the table
+    pub fn clear(&self) {
+        self.inner.clear();
     }
 
-    #[instrument(skip(self), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn clear_table<K, V>(&self, handle: &TableHandle<K, V>) -> Result<(), DBError>
-    where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
-    {
-        let map = self.table_map(handle)?;
-        map.clear();
-        Ok(())
-    }
-
-    #[instrument(skip(self, f), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn with_table_read<K, V, F, R>(
-        &self,
-        handle: &TableHandle<K, V>,
-        f: F,
-    ) -> Result<R, DBError>
-    where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
-        F: FnOnce(&TableReadGuard<K, V>) -> Result<R, DBError>,
-    {
-        let map = self.table_map(handle)?;
-        let guard = TableReadGuard { map };
-        f(&guard)
-    }
-
-    fn table_map<K, V>(&self, handle: &TableHandle<K, V>) -> Result<Arc<DashMap<K, V>>, DBError>
-    where
-        K: Eq + Hash + Clone + Send + Sync + 'static,
-        V: Clone + Send + Sync + 'static,
-    {
-        match self.tables.entry(handle.table()) {
-            Entry::Occupied(entry) => {
-                let existing = entry.get().clone();
-                existing
-                    .downcast::<DashMap<K, V>>()
-                    .map_err(|_| anyhow!("table {:?} type mismatch", handle.table()))
-            }
-            Entry::Vacant(entry) => {
-                let map: Arc<DashMap<K, V>> = Arc::new(DashMap::new());
-                let erased: AnyMap = map.clone();
-                entry.insert(erased);
-                Ok(map)
-            }
+    /// Iterate over all entries in the table
+    pub fn iter(&self) -> WavsDbIter<'_, K, V> {
+        WavsDbIter {
+            inner: self.inner.iter(),
         }
     }
 }
 
-pub struct TableReadGuard<K, V> {
-    map: Arc<DashMap<K, V>>,
-}
-
-impl<K, V> TableReadGuard<K, V>
-where
-    K: Eq + Hash,
-{
-    pub fn iter(&self) -> TableIter<'_, K, V> {
-        TableIter {
-            inner: self.map.iter(),
-        }
-    }
-}
-
-pub struct TableIter<'a, K, V> {
+/// Iterator for WavsDbTable that hides DashMap-specific types
+pub struct WavsDbIter<'a, K, V> {
     inner: dashmap::iter::Iter<'a, K, V>,
 }
 
-impl<'a, K, V> Iterator for TableIter<'a, K, V>
+impl<'a, K, V> Iterator for WavsDbIter<'a, K, V>
 where
     K: Eq + Hash,
 {
-    type Item = TableEntry<'a, K, V>;
+    type Item = WavsDbEntry<'a, K, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(TableEntry)
+        self.inner.next().map(WavsDbEntry)
     }
 }
 
-pub struct TableEntry<'a, K, V>(RefMulti<'a, K, V>);
+/// Entry for WavsDbTable that hides DashMap-specific types
+pub struct WavsDbEntry<'a, K, V>(RefMulti<'a, K, V>);
 
-impl<'a, K, V> TableEntry<'a, K, V>
+impl<'a, K, V> WavsDbEntry<'a, K, V>
 where
     K: Eq + Hash,
 {
@@ -223,6 +149,8 @@ where
         (self.0.key(), self.0.value())
     }
 }
+
+pub type DBError = anyhow::Error;
 
 #[cfg(test)]
 mod tests {
@@ -236,71 +164,175 @@ mod tests {
     }
 
     #[test]
-    fn set_get_round_trip() {
-        let db = WavsDb::new().unwrap();
-        let handle: TableHandle<u32, TestStruct> =
-            TableHandle::new(Table::Test("test_u32_teststruct"));
-        let key = 7u32;
+    fn wavsdb_table_basic_operations() {
+        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new(None::<&str>).unwrap();
+        let key = "test_key".to_string();
         let value = TestStruct {
             name: "demo".to_string(),
             value: 99,
         };
 
-        assert!(db.get(&handle, &key).unwrap().is_none());
-        db.set(&handle, key, value.clone()).unwrap();
-        assert_eq!(db.get(&handle, &key).unwrap(), Some(value));
+        // Test get_cloned on empty table
+        assert!(table.get_cloned(&key).is_none());
+
+        // Test insert and get_cloned
+        table.insert(key.clone(), value.clone()).unwrap();
+        let retrieved = table.get_cloned(&key);
+        assert_eq!(retrieved, Some(value.clone()));
+
+        // Test contains_key
+        assert!(table.contains_key(&key));
+        assert!(!table.contains_key(&"nonexistent".to_string()));
+
+        // Test remove
+        let removed = table.remove(&key);
+        assert_eq!(removed, Some(value));
+        assert!(!table.contains_key(&key));
     }
 
     #[test]
-    fn remove_and_contains() {
-        let db = WavsDb::new().unwrap();
-        let handle: TableHandle<String, i64> = TableHandle::new(Table::KvAtomicsCounter);
-        let key = "counter".to_string();
+    fn wavsdb_table_map_ref() {
+        let table: WavsDbTable<String, i32> = WavsDbTable::new(None::<&str>).unwrap();
+        let key = "number".to_string();
+        table.insert(key.clone(), 42).unwrap();
 
-        assert!(!db.contains_key(&handle, &key).unwrap());
-        db.set(&handle, key.clone(), 5).unwrap();
-        assert!(db.contains_key(&handle, &key).unwrap());
+        // Test map_ref to transform value without cloning
+        let doubled = table.map_ref(&key, |v| v * 2);
+        assert_eq!(doubled, Some(84));
 
-        let removed = db.remove(&handle, &key).unwrap();
-        assert_eq!(removed, Some(5));
-        assert!(db.get(&handle, &key).unwrap().is_none());
+        // Test map_ref on nonexistent key
+        let none_result = table.map_ref(&"nonexistent".to_string(), |v| v * 2);
+        assert_eq!(none_result, None);
     }
 
     #[test]
-    fn table_iteration() {
-        let db = WavsDb::new().unwrap();
-        let handle: TableHandle<String, TestStruct> =
-            TableHandle::new(Table::Test("test_string_teststruct"));
-        db.set(
-            &handle,
-            "alpha".to_string(),
-            TestStruct {
-                name: "a".to_string(),
-                value: 1,
-            },
-        )
-        .unwrap();
-        db.set(
-            &handle,
-            "beta".to_string(),
-            TestStruct {
-                name: "b".to_string(),
-                value: 2,
-            },
-        )
-        .unwrap();
+    fn wavsdb_table_iteration() {
+        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new(None::<&str>).unwrap();
 
-        let mut seen = Vec::new();
-        db.with_table_read(&handle, |table| {
-            for entry in table.iter() {
+        // Insert test data
+        table
+            .insert(
+                "alpha".to_string(),
+                TestStruct {
+                    name: "a".to_string(),
+                    value: 1,
+                },
+            )
+            .unwrap();
+
+        table
+            .insert(
+                "beta".to_string(),
+                TestStruct {
+                    name: "b".to_string(),
+                    value: 2,
+                },
+            )
+            .unwrap();
+
+        // Collect all entries
+        let mut collected: Vec<(String, i32)> = table
+            .iter()
+            .map(|entry| {
                 let (key, value) = entry.pair();
-                seen.push((key.clone(), value.value));
-            }
-            Ok(())
-        })
-        .unwrap();
+                (key.clone(), value.value)
+            })
+            .collect();
 
-        seen.sort();
-        assert_eq!(seen, vec![("alpha".into(), 1), ("beta".into(), 2)]);
+        // Sort for consistent ordering (iteration order is not guaranteed)
+        collected.sort();
+        assert_eq!(collected, vec![("alpha".into(), 1), ("beta".into(), 2)]);
+    }
+
+    #[test]
+    fn wavsdb_basic_operations() {
+        let db = WavsDb::new().unwrap();
+
+        // Test basic operations with a simple test struct instead of Service
+        use wavs_types::ServiceId;
+        let service_id = ServiceId::hash(b"test-service");
+        let service = Service {
+            name: "test-service".to_string(),
+            workflows: std::collections::BTreeMap::new(),
+            status: wavs_types::ServiceStatus::Active,
+            manager: wavs_types::ServiceManager::Evm {
+                chain: "evm:anvil".parse().unwrap(),
+                address: alloy_primitives::Address::ZERO,
+            },
+        };
+
+        assert!(db.services.get_cloned(&service_id).is_none());
+        db.services
+            .insert(service_id.clone(), service.clone())
+            .unwrap();
+
+        let retrieved = db.services.get_cloned(&service_id);
+        assert_eq!(retrieved, Some(service.clone()));
+
+        assert!(db.services.contains_key(&service_id));
+
+        let removed = db.services.remove(&service_id);
+        assert_eq!(removed, Some(service));
+        assert!(!db.services.contains_key(&service_id));
+    }
+
+    #[test]
+    fn wavsdb_kv_operations() {
+        let db = WavsDb::new().unwrap();
+
+        let key = "test_key".to_string();
+        let value = b"test_value".to_vec();
+
+        // Test KV operations
+        assert!(db.kv_store.get_cloned(&key).is_none());
+        db.kv_store.insert(key.clone(), value.clone()).unwrap();
+
+        let retrieved = db.kv_store.get_cloned(&key);
+        assert_eq!(retrieved, Some(value.clone()));
+
+        assert!(db.kv_store.contains_key(&key));
+
+        let removed = db.kv_store.remove(&key);
+        assert_eq!(removed, Some(b"test_value".to_vec()));
+        assert!(!db.kv_store.contains_key(&key));
+    }
+
+    #[test]
+    fn wavsdb_counter_operations() {
+        let db = WavsDb::new().unwrap();
+
+        let key = "counter".to_string();
+        let value = 42i64;
+
+        // Test counter operations
+        assert!(db.kv_atomics_counter.get_cloned(&key).is_none());
+        db.kv_atomics_counter.insert(key.clone(), value).unwrap();
+
+        let retrieved = db.kv_atomics_counter.get_cloned(&key);
+        assert_eq!(retrieved, Some(value));
+
+        assert!(db.kv_atomics_counter.contains_key(&key));
+
+        let removed = db.kv_atomics_counter.remove(&key);
+        assert_eq!(removed, Some(value));
+        assert!(!db.kv_atomics_counter.contains_key(&key));
+    }
+
+    #[test]
+    fn table_clear() {
+        let table: WavsDbTable<String, i32> = WavsDbTable::new(None::<&str>).unwrap();
+
+        // Insert some data
+        table.insert("a".to_string(), 1).unwrap();
+        table.insert("b".to_string(), 2).unwrap();
+
+        assert!(table.contains_key(&"a".to_string()));
+        assert!(table.contains_key(&"b".to_string()));
+
+        // Clear the table
+        table.clear();
+
+        assert!(!table.contains_key(&"a".to_string()));
+        assert!(!table.contains_key(&"b".to_string()));
     }
 }

@@ -120,6 +120,9 @@ pub enum AggregatorError {
 
     #[error("Invalid ChainKey: {0}")]
     InvalidChainKey(#[from] ChainKeyError),
+
+    #[error("Database error: {0}")]
+    DatabaseError(String),
 }
 
 #[derive(Error, Debug)]

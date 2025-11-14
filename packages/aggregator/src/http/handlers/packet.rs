@@ -19,16 +19,13 @@ use wavs_types::{
     ChainKey, CosmosSubmitAction, EnvelopeSignature, EnvelopeSigner, EvmSubmitAction,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
-    Packet, ServiceManager, ServiceManagerError,
+    Packet, ServiceManager, ServiceManagerError, {QueuedPacket, QuorumQueue, QuorumQueueId},
 };
 
 use crate::{
     engine::{AggregatorAction, SubmitAction},
     error::{AggregatorError, AggregatorResult, PacketValidationError},
-    http::{
-        error::AnyError,
-        state::{HttpState, QueuedPacket, QuorumQueue, QuorumQueueId},
-    },
+    http::{error::AnyError, state::HttpState},
 };
 
 #[utoipa::path(
@@ -311,7 +308,7 @@ async fn process_action(
                                         );
                                         let count = queue.len();
                                         state
-                                            .save_quorum_queue(&queue_id, QuorumQueue::Active(queue))
+                                            .save_quorum_queue(queue_id.clone(), QuorumQueue::Active(queue))
                                             .await?;
                                         Ok(AddPacketResponse::Aggregated { count })
                                     }
@@ -322,7 +319,7 @@ async fn process_action(
                                             tx_receipt.tx_hash()
                                         );
                                         state
-                                            .save_quorum_queue(&queue_id, QuorumQueue::Burned)
+                                            .save_quorum_queue(queue_id, QuorumQueue::Burned)
                                             .await?;
                                         Ok(AddPacketResponse::Sent {
                                             tx_receipt,
@@ -919,7 +916,7 @@ mod test {
 
                         let test_queue = QuorumQueue::Active(vec![]);
                         state
-                            .save_quorum_queue(&queue_id, test_queue)
+                            .save_quorum_queue(queue_id.clone(), test_queue)
                             .await
                             .unwrap();
 
