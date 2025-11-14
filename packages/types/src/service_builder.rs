@@ -47,6 +47,7 @@ impl Default for TriggerBuilder {
 #[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum SubmitBuilder {
     Submit(Submit),
     Builder(Builder),
@@ -97,6 +98,7 @@ pub enum Builder {
 #[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum ComponentBuilder {
     Component(Component),
     Builder(Builder),
