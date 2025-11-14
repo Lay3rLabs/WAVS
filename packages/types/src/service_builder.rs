@@ -6,6 +6,7 @@ use ts_rs::TS;
 
 use crate::{Component, ServiceManager, ServiceStatus, SignatureKind, Submit, Trigger, WorkflowId};
 
+/// This struct is only used in the CLI to build up a service for later uploading.
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
 #[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug)]
