@@ -1,9 +1,12 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{ops::Deref, str::FromStr};
 use thiserror::Error;
+#[cfg(feature = "ts-bindings")]
+use ts_rs::TS;
 use utoipa::ToSchema;
 
 /// It is a string, but with some strict validation rules. It must be lowercase alphanumeric: `[a-z0-9-_]{3,36}`
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
 #[derive(
     Serialize,
     Clone,

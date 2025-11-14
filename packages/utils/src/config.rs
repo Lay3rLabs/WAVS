@@ -9,7 +9,7 @@ use crate::{
     evm_client::{EvmEndpoint, EvmSigningClientConfig},
 };
 
-pub const WAVS_ENV_PREFIX: &str = "WAVS_ENV";
+pub use wavs_types::WAVS_ENV_PREFIX;
 
 /// The builder we use to build Config
 #[derive(Debug)]
