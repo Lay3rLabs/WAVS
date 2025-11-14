@@ -23,7 +23,7 @@ impl<'a> KeyValueState<'a> {
     }
 
     pub fn get_store_value(&self, key: &Key) -> StoreResult<Option<Vec<u8>>> {
-        match self.db.get(&handles::KV_STORE, key.to_string()) {
+        match self.db.get(&handles::KV_STORE, &key.to_string()) {
             Ok(Some(kv)) => Ok(Some(kv)),
             Ok(None) => Ok(None),
             Err(err) => Err(store::Error::Other(format!(
@@ -65,7 +65,7 @@ impl store::HostBucket for KeyValueState<'_> {
     fn delete(&mut self, bucket: Resource<KeyValueBucket>, key: String) -> StoreResult<()> {
         let key = self.get_key_store(&bucket, key)?;
         self.db
-            .remove(&handles::KV_STORE, key.to_string())
+            .remove(&handles::KV_STORE, &key.to_string())
             .map(|_| ())
             .map_err(|e| {
                 store::Error::Other(format!("Failed to delete key from keyvalue store: {}", e))

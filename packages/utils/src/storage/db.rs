@@ -64,12 +64,12 @@ impl<K, V> fmt::Debug for TableHandle<K, V> {
 
 pub mod handles {
     use super::{Table, TableHandle};
-    use wavs_types::Service;
+    use wavs_types::{Service, ServiceId};
 
-    pub const SERVICES: TableHandle<[u8; 32], Service> = TableHandle::new(Table::Services);
+    pub const SERVICES: TableHandle<ServiceId, Service> = TableHandle::new(Table::Services);
     pub const SERVICES_BY_HASH: TableHandle<[u8; 32], Service> =
         TableHandle::new(Table::ServicesByHash);
-    pub const AGGREGATOR_SERVICES: TableHandle<[u8; 32], ()> =
+    pub const AGGREGATOR_SERVICES: TableHandle<ServiceId, ()> =
         TableHandle::new(Table::AggregatorServices);
     pub const KV_STORE: TableHandle<String, Vec<u8>> = TableHandle::new(Table::KvStore);
     pub const KV_ATOMICS_COUNTER: TableHandle<String, i64> =
@@ -105,33 +105,33 @@ impl WavsDb {
     }
 
     #[instrument(skip(self, key), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn get<K, V>(&self, handle: &TableHandle<K, V>, key: K) -> Result<Option<V>, DBError>
+    pub fn get<K, V>(&self, handle: &TableHandle<K, V>, key: &K) -> Result<Option<V>, DBError>
     where
         K: Eq + Hash + Clone + Send + Sync + 'static,
         V: Clone + Send + Sync + 'static,
     {
         let map = self.table_map(handle)?;
-        Ok(map.get(&key).map(|v| v.clone()))
+        Ok(map.get(key).map(|v| v.clone()))
     }
 
     #[instrument(skip(self, key), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn remove<K, V>(&self, handle: &TableHandle<K, V>, key: K) -> Result<Option<V>, DBError>
+    pub fn remove<K, V>(&self, handle: &TableHandle<K, V>, key: &K) -> Result<Option<V>, DBError>
     where
         K: Eq + Hash + Clone + Send + Sync + 'static,
         V: Clone + Send + Sync + 'static,
     {
         let map = self.table_map(handle)?;
-        Ok(map.remove(&key).map(|(_, v)| v))
+        Ok(map.remove(key).map(|(_, v)| v))
     }
 
     #[instrument(skip(self, key), fields(subsys = "WavsDb", table = ?handle.table()))]
-    pub fn contains_key<K, V>(&self, handle: &TableHandle<K, V>, key: K) -> Result<bool, DBError>
+    pub fn contains_key<K, V>(&self, handle: &TableHandle<K, V>, key: &K) -> Result<bool, DBError>
     where
         K: Eq + Hash + Clone + Send + Sync + 'static,
         V: Clone + Send + Sync + 'static,
     {
         let map = self.table_map(handle)?;
-        Ok(map.contains_key(&key))
+        Ok(map.contains_key(key))
     }
 
     #[instrument(skip(self), fields(subsys = "WavsDb", table = ?handle.table()))]
@@ -246,9 +246,9 @@ mod tests {
             value: 99,
         };
 
-        assert!(db.get(&handle, key).unwrap().is_none());
+        assert!(db.get(&handle, &key).unwrap().is_none());
         db.set(&handle, key, value.clone()).unwrap();
-        assert_eq!(db.get(&handle, key).unwrap(), Some(value));
+        assert_eq!(db.get(&handle, &key).unwrap(), Some(value));
     }
 
     #[test]
@@ -257,13 +257,13 @@ mod tests {
         let handle: TableHandle<String, i64> = TableHandle::new(Table::KvAtomicsCounter);
         let key = "counter".to_string();
 
-        assert!(!db.contains_key(&handle, key.clone()).unwrap());
+        assert!(!db.contains_key(&handle, &key).unwrap());
         db.set(&handle, key.clone(), 5).unwrap();
-        assert!(db.contains_key(&handle, key.clone()).unwrap());
+        assert!(db.contains_key(&handle, &key).unwrap());
 
-        let removed = db.remove(&handle, key.clone()).unwrap();
+        let removed = db.remove(&handle, &key).unwrap();
         assert_eq!(removed, Some(5));
-        assert!(db.get(&handle, key).unwrap().is_none());
+        assert!(db.get(&handle, &key).unwrap().is_none());
     }
 
     #[test]

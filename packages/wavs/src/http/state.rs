@@ -71,7 +71,7 @@ impl HttpState {
             .as_ref()
             .try_into()
             .map_err(|_| anyhow::anyhow!("invalid service hash length"))?;
-        match self.storage.get(&handles::SERVICES_BY_HASH, key) {
+        match self.storage.get(&handles::SERVICES_BY_HASH, &key) {
             Ok(Some(service)) => Ok(service),
             Ok(None) => Err(anyhow::anyhow!(
                 "Service Hash {} has not been set on the http server",

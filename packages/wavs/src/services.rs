@@ -19,7 +19,7 @@ impl Services {
 
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn try_get(&self, id: &ServiceId) -> Result<Option<Service>> {
-        match self.db_storage.get(&handles::SERVICES, id.inner()) {
+        match self.db_storage.get(&handles::SERVICES, id) {
             Ok(Some(service)) => Ok(Some(service)),
             Ok(None) => Ok(None),
             Err(err) => Err(err.into()),
@@ -54,10 +54,7 @@ impl Services {
 
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn exists(&self, service_id: &ServiceId) -> Result<bool> {
-        match self
-            .db_storage
-            .get(&handles::SERVICES, service_id.inner())?
-        {
+        match self.db_storage.get(&handles::SERVICES, service_id)? {
             Some(_) => Ok(true),
             None => Ok(false),
         }
@@ -75,7 +72,7 @@ impl Services {
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn remove(&self, service_id: &ServiceId) -> Result<()> {
         self.db_storage
-            .remove(&handles::SERVICES, service_id.inner())
+            .remove(&handles::SERVICES, service_id)
             .map(|_| ())
             .map_err(|e| e.into())
     }
@@ -83,7 +80,7 @@ impl Services {
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn save(&self, service: &Service) -> Result<()> {
         self.db_storage
-            .set(&handles::SERVICES, service.id().inner(), service.clone())
+            .set(&handles::SERVICES, service.id(), service.clone())
             .map_err(|e| e.into())
     }
 
@@ -93,44 +90,40 @@ impl Services {
         bounds_start: Bound<&ServiceId>,
         bounds_end: Bound<&ServiceId>,
     ) -> Result<Vec<Service>> {
-        let res = self
-            .db_storage
+        self.db_storage
             .with_table_read(&handles::SERVICES, |table| {
-                let mut services = Vec::new();
+                let mut entries = table
+                    .iter()
+                    .map(|entry| {
+                        let (key, value) = entry.pair();
+                        (key.clone(), value.clone())
+                    })
+                    .collect::<Vec<_>>();
 
-                for entry in table.iter() {
-                    let (key_bytes, value) = entry.pair();
-                    let service_id = ServiceId::from(*key_bytes);
+                entries.sort_by(|(a, _), (b, _)| a.cmp(b));
 
+                let mut services = Vec::with_capacity(entries.len());
+
+                for (key, value) in entries {
                     let within_bounds = match (bounds_start, bounds_end) {
                         (Bound::Unbounded, Bound::Unbounded) => true,
-                        (Bound::Unbounded, Bound::Included(y)) => service_id <= *y,
-                        (Bound::Unbounded, Bound::Excluded(y)) => service_id < *y,
-                        (Bound::Included(x), Bound::Unbounded) => service_id >= *x,
-                        (Bound::Excluded(x), Bound::Unbounded) => service_id > *x,
-                        (Bound::Included(x), Bound::Included(y)) => {
-                            service_id >= *x && service_id <= *y
-                        }
-                        (Bound::Included(x), Bound::Excluded(y)) => {
-                            service_id >= *x && service_id < *y
-                        }
-                        (Bound::Excluded(x), Bound::Included(y)) => {
-                            service_id > *x && service_id <= *y
-                        }
-                        (Bound::Excluded(x), Bound::Excluded(y)) => {
-                            service_id > *x && service_id < *y
-                        }
+                        (Bound::Unbounded, Bound::Included(y)) => key <= *y,
+                        (Bound::Unbounded, Bound::Excluded(y)) => key < *y,
+                        (Bound::Included(x), Bound::Unbounded) => key >= *x,
+                        (Bound::Excluded(x), Bound::Unbounded) => key > *x,
+                        (Bound::Included(x), Bound::Included(y)) => key >= *x && key <= *y,
+                        (Bound::Included(x), Bound::Excluded(y)) => key >= *x && key < *y,
+                        (Bound::Excluded(x), Bound::Included(y)) => key > *x && key <= *y,
+                        (Bound::Excluded(x), Bound::Excluded(y)) => key > *x && key < *y,
                     };
 
                     if within_bounds {
-                        services.push(value.clone());
+                        services.push(value);
                     }
                 }
 
                 Ok(services)
-            })?;
-
-        Ok(res)
+            })
     }
 }
 

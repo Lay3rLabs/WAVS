@@ -26,7 +26,7 @@ impl<'a> KeyValueState<'a> {
     }
 
     fn get_atomic_count(&mut self, key: &Key) -> AtomicsResult<Option<i64>> {
-        match self.db.get(&handles::KV_ATOMICS_COUNTER, key.to_string()) {
+        match self.db.get(&handles::KV_ATOMICS_COUNTER, &key.to_string()) {
             Ok(Some(kv)) => Ok(Some(kv)),
             Ok(None) => Ok(None),
             Err(err) => Err(atomics::Error::Other(format!(

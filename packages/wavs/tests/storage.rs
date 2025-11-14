@@ -1,11 +1,12 @@
 #![cfg(feature = "dev")]
 use std::collections::BTreeMap;
 
+use utils::storage::db::handles::SERVICES;
 use utils::storage::db::{Table, TableHandle, WavsDb};
 use utils::test_utils::address::rand_address_evm;
 use wavs_types::{
-    Component, ComponentDigest, ComponentSource, Service, ServiceId, ServiceManager, ServiceStatus,
-    Submit, Workflow, WorkflowId,
+    Component, ComponentDigest, ComponentSource, Service, ServiceManager, ServiceStatus, Submit,
+    Workflow, WorkflowId,
 };
 
 use serde::{Deserialize, Serialize};
@@ -29,12 +30,12 @@ const TJ: TableHandle<String, Demo> = TableHandle::new(Table::Test("tj"));
 fn test_set_once_and_get() {
     let store = WavsDb::new().unwrap();
 
-    let empty = store.get(&T1, 17).unwrap();
+    let empty = store.get(&T1, &17).unwrap();
     assert!(empty.is_none());
 
     let data = "hello".to_string();
     store.set(&T1, 17, data.clone()).unwrap();
-    let full = store.get(&T1, 17).unwrap().unwrap();
+    let full = store.get(&T1, &17).unwrap().unwrap();
     assert_eq!(data, full);
 }
 
@@ -42,7 +43,7 @@ fn test_set_once_and_get() {
 fn test_json_storage() {
     let store = WavsDb::new().unwrap();
 
-    let empty = store.get(&TJ, "john".to_string()).unwrap();
+    let empty = store.get(&TJ, &"john".to_string()).unwrap();
     assert!(empty.is_none());
 
     let data = Demo {
@@ -51,16 +52,13 @@ fn test_json_storage() {
         nicknames: vec!["Johnny".to_string(), "Mr. Rocket".to_string()],
     };
     store.set(&TJ, "john".to_string(), data.clone()).unwrap();
-    let full = store.get(&TJ, "john".to_string()).unwrap().unwrap();
+    let full = store.get(&TJ, &"john".to_string()).unwrap().unwrap();
     assert_eq!(data, full);
 }
 
 #[test]
 fn db_service_store() {
     let storage = WavsDb::new().unwrap();
-
-    const SERVICE_TABLE: TableHandle<[u8; 32], Service> =
-        TableHandle::new(Table::Test("service_table"));
 
     let workflows: BTreeMap<WorkflowId, Workflow> = [
         (
@@ -97,13 +95,10 @@ fn db_service_store() {
     };
 
     storage
-        .set(&SERVICE_TABLE, service.id().inner(), service.clone())
+        .set(&SERVICES, service.id(), service.clone())
         .unwrap();
 
-    let service_stored = storage
-        .get(&SERVICE_TABLE, service.id().inner())
-        .unwrap()
-        .unwrap();
+    let service_stored = storage.get(&SERVICES, &service.id()).unwrap().unwrap();
 
     let expected_service_serialized = serde_json::to_vec(&service).unwrap();
     let service_stored_serialized = serde_json::to_vec(&service_stored).unwrap();
@@ -111,11 +106,11 @@ fn db_service_store() {
 
     // can read keys via iterator
     let keys = storage
-        .with_table_read(&SERVICE_TABLE, |table| {
+        .with_table_read(&SERVICES, |table| {
             let mut keys = Vec::new();
             for entry in table.iter() {
-                let (key_bytes, _) = entry.pair();
-                keys.push(ServiceId::from(*key_bytes));
+                let (service_id, _) = entry.pair();
+                keys.push(service_id.clone());
             }
             Ok(keys)
         })
@@ -124,7 +119,7 @@ fn db_service_store() {
     assert_eq!(vec![service.id()], keys);
 
     let values = storage
-        .with_table_read(&SERVICE_TABLE, |table| {
+        .with_table_read(&SERVICES, |table| {
             Ok(table
                 .iter()
                 .map(|entry| entry.pair().1.clone())
