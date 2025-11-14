@@ -38,8 +38,8 @@ use utils::telemetry::{DispatcherMetrics, WavsMetrics};
 use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessages;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
-    AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, EventId,
-    ServiceManager, WorkflowIdError,
+    AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, ServiceManager,
+    WorkflowIdError,
 };
 use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction};
 
@@ -229,16 +229,10 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                     continue;
                                 }
                             };
-                            let default_event_id = EventId::try_from((&service, &action))
-                                .map_err(DispatcherError::EncodeEventId)
-                                .unwrap_or(EventId::from(alloy_primitives::FixedBytes::new(
-                                    [0; 20],
-                                )));
 
                             tracing::info!(
                                 service_id = %action.config.service_id,
                                 workflow_id = %action.config.workflow_id,
-                                default_event_id = %default_event_id,
                                 "Dispatcher received trigger action",
                             );
                             if let Err(err) = _self

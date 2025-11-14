@@ -17,8 +17,9 @@ use alloy_sol_types::{sol, SolValue};
 use wavs::dispatcher::DispatcherCommand;
 use wavs_systems::{mock_app::MockE2ETestRunner, mock_submissions::wait_for_submission_messages};
 use wavs_types::{
-    ChainKey, Component, ComponentSource, EventId, Service, ServiceManager, SignatureKind, Submit,
-    Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowId,
+    ChainKey, Component, ComponentSource, EventId, EventIdSalt, Service, ServiceManager,
+    SignatureKind, Submit, Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow,
+    WorkflowId,
 };
 
 // Solidity types used by mock EVM event encoding
@@ -291,8 +292,20 @@ fn mock_e2e_same_tx_different_block_hash() {
     let trigger_action_2 = make_action(block_hash_2);
 
     // EventIds should differ due to different block hashes
-    let event_id_1 = EventId::try_from((&service, &trigger_action_1)).unwrap();
-    let event_id_2 = EventId::try_from((&service, &trigger_action_2)).unwrap();
+    let event_id_1 = EventId::new(
+        &service.id(),
+        &workflow_id,
+        EventIdSalt::Trigger(&trigger_action_1.data),
+    )
+    .unwrap();
+
+    let event_id_2 = EventId::new(
+        &service.id(),
+        &workflow_id,
+        EventIdSalt::Trigger(&trigger_action_2.data),
+    )
+    .unwrap();
+
     assert_ne!(event_id_1, event_id_2);
 
     // Send both triggers through the dispatcher and wait for submissions

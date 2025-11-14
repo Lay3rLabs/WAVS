@@ -3,7 +3,7 @@ use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 use utils::config::WAVS_ENV_PREFIX;
-use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDepsBuilder};
+use wavs_engine::worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder};
 use wavs_types::{
     AggregatorAction, AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
     EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, SignatureKind,
@@ -137,7 +137,8 @@ impl ExecAggregator {
             component: wasmtime::component::Component::new(&engine, &wasm_bytes)?,
             service: packet.service.clone(),
             workflow_id: packet.workflow_id.clone(),
-            event_id: packet.event_id(),
+            data: InstanceData::new_aggregator(packet.event_id()),
+
             engine: &engine,
             data_dir: &data_dir,
             chain_configs: &cli_config.chains.read().unwrap(),

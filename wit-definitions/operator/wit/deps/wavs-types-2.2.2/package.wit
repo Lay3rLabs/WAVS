@@ -1,4 +1,4 @@
-package wavs:types@2.2.1;
+package wavs:types@2.2.2;
 
 interface chain {
   /// A string mostly following the caip-2 format of namespace:reference, e.g. "eip155:1" for Ethereum mainnet or "cosmos:cosmoshub-4" for Cosmos Hub

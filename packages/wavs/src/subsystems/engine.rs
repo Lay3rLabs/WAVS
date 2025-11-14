@@ -9,7 +9,7 @@ use error::EngineError;
 use tracing::instrument;
 use utils::storage::CAStorage;
 use wavs_types::{
-    ComponentDigest, Envelope, EventId, EventOrder, Service, TriggerAction, WorkflowId,
+    ComponentDigest, Envelope, EventId, EventIdSalt, EventOrder, Service, TriggerAction, WorkflowId,
 };
 
 use crate::services::Services;
@@ -139,11 +139,19 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         // If Ok(Some(x)), send the result down the pipeline to the submit processor
         // If Ok(None), just end early here, performing no action (but updating local state if needed)
         if let Some(wasm_response) = wasm_response {
-            let event_id = match wasm_response.event_id {
-                Some(event_id) => event_id,
-                None => {
-                    EventId::try_from((&service, &action)).map_err(EngineError::EncodeEventId)?
-                }
+            let event_id = match wasm_response.event_id_salt {
+                Some(salt) => EventId::new(
+                    &service.id(),
+                    &trigger_config.workflow_id,
+                    EventIdSalt::WasmResponse(&salt),
+                )
+                .map_err(EngineError::EncodeEventId)?,
+                None => EventId::new(
+                    &service.id(),
+                    &trigger_config.workflow_id,
+                    EventIdSalt::Trigger(&action.data),
+                )
+                .map_err(EngineError::EncodeEventId)?,
             };
             tracing::info!(
                 service_id = %trigger_config.service_id,

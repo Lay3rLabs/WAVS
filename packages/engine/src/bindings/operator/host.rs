@@ -1,8 +1,8 @@
-use wavs_types::ChainKey;
+use wavs_types::{ChainKey, EventIdSalt};
 
 use crate::worlds::operator::component::OperatorHostComponent;
 
-use super::world::host::{EventId, LogLevel, ServiceAndWorkflowId, WorkflowAndWorkflowId};
+use super::world::host::{LogLevel, ServiceAndWorkflowId, WorkflowAndWorkflowId};
 
 impl super::world::host::Host for OperatorHostComponent {
     fn get_cosmos_chain_config(
@@ -57,8 +57,16 @@ impl super::world::host::Host for OperatorHostComponent {
         }
     }
 
-    fn get_event_id(&mut self) -> Vec<u8> {
-        self.event_id.as_ref().to_vec()
+    fn get_event_id(&mut self, salt: Option<Vec<u8>>) -> Vec<u8> {
+        let salt = match salt.as_ref() {
+            Some(salt) => EventIdSalt::WasmResponse(salt),
+            None => EventIdSalt::Trigger(&self.trigger_data),
+        };
+
+        wavs_types::EventId::new(&self.service.id(), &self.workflow_id, salt)
+            .unwrap() // very unlikely to happen, would be a bincode error
+            .as_bytes()
+            .to_vec()
     }
 
     fn config_var(&mut self, key: String) -> Option<String> {
@@ -67,10 +75,6 @@ impl super::world::host::Host for OperatorHostComponent {
             .get(&self.workflow_id)
             .and_then(|workflow| workflow.component.config.get(&key))
             .cloned()
-    }
-
-    fn hash_event_id(&mut self, bytes: Vec<u8>) -> EventId {
-        wavs_types::EventId::new_hash(&bytes).as_bytes().to_vec()
     }
 
     fn log(&mut self, level: LogLevel, message: String) {

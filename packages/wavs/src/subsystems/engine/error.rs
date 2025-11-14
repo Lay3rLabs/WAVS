@@ -26,7 +26,7 @@ pub enum EngineError {
     NoRegistry,
 
     #[error("could not encode EventId {0:?}")]
-    EncodeEventId(anyhow::Error),
+    EncodeEventId(bincode::error::EncodeError),
 
     #[error("could not encode EventOrder {0:?}")]
     EncodeEventOrder(bincode::error::EncodeError),
