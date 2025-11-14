@@ -16,6 +16,11 @@ clock = ["dep:chrono"]
 signer = ["dep:alloy-signer", "dep:alloy-signer-local"]
 solidity-rpc = ["dep:alloy-contract", "dep:alloy-provider"]
 cosmwasm = ["dep:cosmwasm-schema"]
+ts-bindings = ["dep:ts-rs"]
+
+[[bin]]
+name = "ts"
+path = "ts.rs"
 
 [dependencies]
 anyhow = { workspace = true }
@@ -47,6 +52,7 @@ alloy-provider = { workspace = true, optional = true }
 alloy-signer = { workspace = true, optional = true }
 alloy-signer-local = { workspace = true, optional = true }
 cosmwasm-schema = { workspace = true, optional = true }
+ts-rs = { version = "11.1", features = ["serde-compat"], optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

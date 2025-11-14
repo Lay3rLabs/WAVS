@@ -6,5 +6,5 @@ pub mod command;
 pub mod config;
 pub mod context;
 pub mod deploy;
-mod service_json;
+pub mod service_json;
 pub mod util;

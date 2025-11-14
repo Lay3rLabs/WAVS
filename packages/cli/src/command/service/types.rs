@@ -4,9 +4,9 @@ use std::{
     path::PathBuf,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainKey, ComponentDigest, Permissions, ServiceStatus, Trigger, WorkflowId};
-
-use crate::service_json::ServiceJson;
+use wavs_types::{
+    ChainKey, ComponentDigest, Permissions, ServiceBuilder, ServiceStatus, Trigger, WorkflowId,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ChainType {
@@ -18,7 +18,7 @@ pub enum ChainType {
 #[derive(Debug, Clone, Serialize)]
 pub struct ServiceInitResult {
     /// The generated service
-    pub service: ServiceJson,
+    pub service: ServiceBuilder,
     /// The file path where the service JSON was saved
     pub file_path: PathBuf,
 }

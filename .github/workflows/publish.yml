@@ -129,3 +129,65 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           just wasi-publish version="$VERSION" flags="--config wkg-config.toml"
+
+  publish_npm:
+    name: Publish TypeScript Bindings to NPM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Extract Crate Version
+        id: version
+        shell: bash
+        run: |
+          # Extract version from Cargo.toml using cargo read-manifest and jq
+          VERSION=$(cargo read-manifest --manifest-path ${{ env.CRATE_PATH }}/Cargo.toml | jq -r .version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate TypeScript bindings
+        run: just ts-bindings
+
+      - name: Check if package exists on NPM
+        id: npm_exists
+        shell: bash
+        run: |
+          PACKAGE_NAME="@wavs/types"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Check if package version exists on NPM
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://registry.npmjs.org/$PACKAGE_NAME/$VERSION")
+
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Package $PACKAGE_NAME@$VERSION already exists on NPM"
+          elif [ "$HTTP_STATUS" = "404" ]; then
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Package $PACKAGE_NAME@$VERSION not found on NPM - OK to publish"
+          else
+            echo "Error: Received unexpected HTTP status $HTTP_STATUS when checking NPM package"
+            exit 1
+          fi
+
+      - name: Publish to NPM
+        if: steps.npm_exists.outputs.exists == 'false'
+        run: |
+          cd packages/types/bindings
+          npm publish --access public
