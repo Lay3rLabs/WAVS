@@ -15,6 +15,7 @@ use utoipa::ToSchema;
 /// but allows the namespace part to 1 to 32 characters instead of 3 to 8
 /// and changes the naming of chain_id -> chain_key, reference -> chain_id
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export, type = "string"))]
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, ToSchema, bincode::Decode, bincode::Encode,
 )]
