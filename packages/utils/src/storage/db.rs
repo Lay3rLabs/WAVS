@@ -120,14 +120,6 @@ where
             inner: self.inner.iter(),
         }
     }
-
-    /// Execute a function with read access to the table
-    pub fn with_read<F, R>(&self, f: F) -> Result<R, DBError>
-    where
-        F: FnOnce(&WavsDbTable<K, V>) -> Result<R, DBError>,
-    {
-        f(self)
-    }
 }
 
 /// Iterator for WavsDbTable that hides DashMap-specific types
@@ -342,19 +334,5 @@ mod tests {
 
         assert!(!table.contains_key(&"a".to_string()));
         assert!(!table.contains_key(&"b".to_string()));
-    }
-
-    #[test]
-    fn table_with_read() {
-        let table: WavsDbTable<String, i32> = WavsDbTable::new(None::<&str>).unwrap();
-
-        // Insert test data
-        table.insert("x".to_string(), 10).unwrap();
-        table.insert("y".to_string(), 20).unwrap();
-
-        // Use with_read to count entries
-        let count = table.with_read(|t| Ok(t.iter().count())).unwrap();
-
-        assert_eq!(count, 2);
     }
 }
