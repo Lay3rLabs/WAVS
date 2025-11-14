@@ -1,4 +1,3 @@
-use utils::storage::db::handles;
 use wasmtime::component::Resource;
 
 use super::{
@@ -26,19 +25,13 @@ impl<'a> KeyValueState<'a> {
     }
 
     fn get_atomic_count(&mut self, key: &Key) -> AtomicsResult<Option<i64>> {
-        match self.db.get(&handles::KV_ATOMICS_COUNTER, &key.to_string()) {
-            Ok(Some(kv)) => Ok(Some(kv)),
-            Ok(None) => Ok(None),
-            Err(err) => Err(atomics::Error::Other(format!(
-                "Failed to get key from keyvalue atomics: {}",
-                err
-            ))),
-        }
+        Ok(self.db.kv_atomics_counter.get_cloned(&key.to_string()))
     }
 
     fn save_atomic_count(&mut self, key: &Key, value: i64) -> AtomicsResult<()> {
         self.db
-            .set(&handles::KV_ATOMICS_COUNTER, key.to_string(), value)
+            .kv_atomics_counter
+            .insert(key.to_string(), value)
             .map_err(|e| {
                 atomics::Error::Other(format!("Failed to set key in keyvalue atomics: {}", e))
             })

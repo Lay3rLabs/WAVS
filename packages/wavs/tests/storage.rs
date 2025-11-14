@@ -1,8 +1,7 @@
 #![cfg(feature = "dev")]
 use std::collections::BTreeMap;
 
-use utils::storage::db::handles::SERVICES;
-use utils::storage::db::{Table, TableHandle, WavsDb};
+use utils::storage::db::{WavsDb, WavsDbTable};
 use utils::test_utils::address::rand_address_evm;
 use wavs_types::{
     Component, ComponentDigest, ComponentSource, Service, ServiceManager, ServiceStatus, Submit,
@@ -20,30 +19,24 @@ pub struct Demo {
     pub nicknames: Vec<String>,
 }
 
-// basic types - using test tables
-const T1: TableHandle<u32, String> = TableHandle::new(Table::Test("t1"));
-
-// json types with &str key - using test tables
-const TJ: TableHandle<String, Demo> = TableHandle::new(Table::Test("tj"));
-
 #[test]
-fn test_set_once_and_get() {
-    let store = WavsDb::new().unwrap();
+fn test_wavsdb_table_basic_operations() {
+    let table: WavsDbTable<u32, String> = WavsDbTable::new("test").unwrap();
 
-    let empty = store.get(&T1, &17).unwrap();
+    let empty = table.get_cloned(&17);
     assert!(empty.is_none());
 
     let data = "hello".to_string();
-    store.set(&T1, 17, data.clone()).unwrap();
-    let full = store.get(&T1, &17).unwrap().unwrap();
+    table.insert(17, data.clone()).unwrap();
+    let full = table.get_cloned(&17).unwrap();
     assert_eq!(data, full);
 }
 
 #[test]
-fn test_json_storage() {
-    let store = WavsDb::new().unwrap();
+fn test_wavsdb_table_json_storage() {
+    let table: WavsDbTable<String, Demo> = WavsDbTable::new("test").unwrap();
 
-    let empty = store.get(&TJ, &"john".to_string()).unwrap();
+    let empty = table.get_cloned(&"john".to_string());
     assert!(empty.is_none());
 
     let data = Demo {
@@ -51,8 +44,8 @@ fn test_json_storage() {
         age: 28,
         nicknames: vec!["Johnny".to_string(), "Mr. Rocket".to_string()],
     };
-    store.set(&TJ, "john".to_string(), data.clone()).unwrap();
-    let full = store.get(&TJ, &"john".to_string()).unwrap().unwrap();
+    table.insert("john".to_string(), data.clone()).unwrap();
+    let full = table.get_cloned(&"john".to_string()).unwrap();
     assert_eq!(data, full);
 }
 
@@ -95,37 +88,30 @@ fn db_service_store() {
     };
 
     storage
-        .set(&SERVICES, service.id(), service.clone())
+        .services
+        .insert(service.id(), service.clone())
         .unwrap();
 
-    let service_stored = storage.get(&SERVICES, &service.id()).unwrap().unwrap();
+    let service_stored = storage.services.get_cloned(&service.id()).unwrap();
 
     let expected_service_serialized = serde_json::to_vec(&service).unwrap();
     let service_stored_serialized = serde_json::to_vec(&service_stored).unwrap();
     assert_eq!(expected_service_serialized, service_stored_serialized);
 
     // can read keys via iterator
-    let keys = storage
-        .with_table_read(&SERVICES, |table| {
-            let mut keys = Vec::new();
-            for entry in table.iter() {
-                let (service_id, _) = entry.pair();
-                keys.push(service_id.clone());
-            }
-            Ok(keys)
-        })
-        .unwrap();
+    let mut keys = Vec::new();
+    for entry in storage.services.iter() {
+        let (service_id, _) = entry.pair();
+        keys.push(service_id.clone());
+    }
 
     assert_eq!(vec![service.id()], keys);
 
-    let values = storage
-        .with_table_read(&SERVICES, |table| {
-            Ok(table
-                .iter()
-                .map(|entry| entry.pair().1.clone())
-                .collect::<Vec<Service>>())
-        })
-        .unwrap();
+    let values: Vec<Service> = storage
+        .services
+        .iter()
+        .map(|entry| entry.pair().1.clone())
+        .collect();
 
     let values_serialized = values
         .into_iter()
@@ -133,4 +119,35 @@ fn db_service_store() {
         .collect::<Vec<Vec<u8>>>();
 
     assert_eq!(vec![expected_service_serialized], values_serialized);
+}
+
+#[test]
+fn test_kv_operations() {
+    let storage = WavsDb::new().unwrap();
+
+    // Test kv_store operations
+    let key = "test_key".to_string();
+    let value = b"test_value".to_vec();
+
+    assert!(storage.kv_store.get_cloned(&key).is_none());
+    storage.kv_store.insert(key.clone(), value.clone()).unwrap();
+
+    let retrieved = storage.kv_store.get_cloned(&key).unwrap();
+    assert_eq!(retrieved, value);
+
+    // Test kv_atomics_counter operations
+    let counter_key = "counter".to_string();
+    let counter_value = 42i64;
+
+    assert!(storage
+        .kv_atomics_counter
+        .get_cloned(&counter_key)
+        .is_none());
+    storage
+        .kv_atomics_counter
+        .insert(counter_key.clone(), counter_value)
+        .unwrap();
+
+    let retrieved_counter = storage.kv_atomics_counter.get_cloned(&counter_key).unwrap();
+    assert_eq!(retrieved_counter, counter_value);
 }

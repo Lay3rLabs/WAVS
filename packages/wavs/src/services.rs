@@ -3,7 +3,7 @@ use std::ops::Bound;
 
 use thiserror::Error;
 use tracing::instrument;
-use utils::storage::db::{handles, DBError, WavsDb};
+use utils::storage::db::{DBError, WavsDb};
 use wavs_types::{Service, ServiceId, ServiceStatus, Workflow, WorkflowId};
 
 type Result<T> = std::result::Result<T, ServicesError>;
@@ -20,11 +20,7 @@ impl Services {
 
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn try_get(&self, id: &ServiceId) -> Result<Option<Service>> {
-        match self.db_storage.get(&handles::SERVICES, id) {
-            Ok(Some(service)) => Ok(Some(service)),
-            Ok(None) => Ok(None),
-            Err(err) => Err(err.into()),
-        }
+        Ok(self.db_storage.services.get_cloned(id))
     }
 
     #[instrument(skip(self), fields(subsys = "Services"))]
@@ -55,10 +51,7 @@ impl Services {
 
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn exists(&self, service_id: &ServiceId) -> Result<bool> {
-        match self.db_storage.get(&handles::SERVICES, service_id)? {
-            Some(_) => Ok(true),
-            None => Ok(false),
-        }
+        Ok(self.db_storage.services.contains_key(service_id))
     }
 
     pub fn is_active(&self, service_id: &ServiceId) -> bool {
@@ -72,16 +65,15 @@ impl Services {
 
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn remove(&self, service_id: &ServiceId) -> Result<()> {
-        self.db_storage
-            .remove(&handles::SERVICES, service_id)
-            .map(|_| ())
-            .map_err(|e| e.into())
+        self.db_storage.services.remove(service_id);
+        Ok(())
     }
 
     #[instrument(skip(self), fields(subsys = "Services"))]
     pub fn save(&self, service: &Service) -> Result<()> {
         self.db_storage
-            .set(&handles::SERVICES, service.id(), service.clone())
+            .services
+            .insert(service.id(), service.clone())
             .map_err(|e| e.into())
     }
 
@@ -91,30 +83,26 @@ impl Services {
         bounds_start: Bound<&ServiceId>,
         bounds_end: Bound<&ServiceId>,
     ) -> Result<Vec<Service>> {
-        let services = self
-            .db_storage
-            .with_table_read(&handles::SERVICES, |table| {
-                let mut services = BTreeMap::new();
+        let mut services = BTreeMap::new();
 
-                for entry in table.iter() {
-                    let (key, value) = entry.pair();
-                    services.insert(key.clone(), value.clone());
-                }
+        for entry in self.db_storage.services.iter() {
+            let (key, value) = entry.pair();
+            services.insert(key.clone(), value.clone());
+        }
 
-                let convert_bound = |bound: Bound<&ServiceId>| match bound {
-                    Bound::Unbounded => Bound::Unbounded,
-                    Bound::Included(id) => Bound::Included(id.clone()),
-                    Bound::Excluded(id) => Bound::Excluded(id.clone()),
-                };
+        let convert_bound = |bound: Bound<&ServiceId>| match bound {
+            Bound::Unbounded => Bound::Unbounded,
+            Bound::Included(id) => Bound::Included(id.clone()),
+            Bound::Excluded(id) => Bound::Excluded(id.clone()),
+        };
 
-                let start = convert_bound(bounds_start);
-                let end = convert_bound(bounds_end);
+        let start = convert_bound(bounds_start);
+        let end = convert_bound(bounds_end);
 
-                Ok(services
-                    .range((start, end))
-                    .map(|(_, service)| service.clone())
-                    .collect())
-            })?;
+        let services = services
+            .range((start, end))
+            .map(|(_, service)| service.clone())
+            .collect();
 
         Ok(services)
     }

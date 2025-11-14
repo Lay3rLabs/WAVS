@@ -2,10 +2,7 @@ use std::convert::TryInto;
 use std::sync::Arc;
 
 use utils::{
-    storage::{
-        db::{handles, WavsDb},
-        fs::FileStorage,
-    },
+    storage::{db::WavsDb, fs::FileStorage},
     telemetry::HttpMetrics,
 };
 use wavs_types::{Service, ServiceDigest, ServiceId};
@@ -71,13 +68,13 @@ impl HttpState {
             .as_ref()
             .try_into()
             .map_err(|_| anyhow::anyhow!("invalid service hash length"))?;
-        match self.storage.get(&handles::SERVICES_BY_HASH, &key) {
-            Ok(Some(service)) => Ok(service),
-            Ok(None) => Err(anyhow::anyhow!(
+        if let Some(service) = self.storage.services_by_hash.get_cloned(&key) {
+            Ok(service)
+        } else {
+            Err(anyhow::anyhow!(
                 "Service Hash {} has not been set on the http server",
                 service_hash
-            )),
-            Err(e) => Err(anyhow::anyhow!("Failed to load service by hash: {}", e)),
+            ))
         }
     }
     pub fn save_service_by_hash(&self, service: &Service) -> anyhow::Result<ServiceDigest> {
@@ -86,8 +83,7 @@ impl HttpState {
             .as_ref()
             .try_into()
             .map_err(|_| anyhow::anyhow!("invalid service hash length"))?;
-        self.storage
-            .set(&handles::SERVICES_BY_HASH, key, service.clone())?;
+        self.storage.services_by_hash.insert(key, service.clone())?;
         Ok(service_hash)
     }
 }

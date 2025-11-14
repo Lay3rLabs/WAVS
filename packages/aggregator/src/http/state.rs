@@ -4,57 +4,22 @@ use std::{
 };
 
 use layer_climb::{prelude::KeySigner, signing::SigningClient};
-use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use utils::{
     async_transaction::AsyncTransaction,
     config::EvmChainConfigExt,
     evm_client::EvmSigningClient,
-    storage::{
-        db::{handles, Table, TableHandle, WavsDb},
-        fs::FileStorage,
-    },
+    storage::{db::WavsDb, fs::FileStorage},
 };
-use wavs_types::{ChainKey, CosmosChainConfig, EventId, EvmChainConfig, Packet, ServiceId};
+use wavs_types::{
+    ChainKey, CosmosChainConfig, EvmChainConfig, QuorumQueue, QuorumQueueId, ServiceId,
+};
 
 use crate::{
     config::Config,
     engine::AggregatorEngine,
     error::{AggregatorError, AggregatorResult},
 };
-
-#[derive(
-    Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq, bincode::Decode, bincode::Encode,
-)]
-pub struct QuorumQueueId {
-    pub event_id: EventId,
-    pub aggregator_action: wavs_types::AggregatorAction,
-}
-
-impl QuorumQueueId {
-    pub fn to_bytes(&self) -> AggregatorResult<Vec<u8>> {
-        Ok(bincode::encode_to_vec(self, bincode::config::standard())?)
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> AggregatorResult<Self> {
-        Ok(bincode::borrow_decode_from_slice(bytes, bincode::config::standard())?.0)
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "snake_case")]
-pub enum QuorumQueue {
-    Burned,
-    Active(Vec<QueuedPacket>),
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "snake_case")]
-pub struct QueuedPacket {
-    pub packet: Packet,
-    // so we don't need to recalculate it every time
-    pub signer: alloy_primitives::Address,
-}
 
 #[derive(Clone)]
 pub struct HttpState {
@@ -66,8 +31,6 @@ pub struct HttpState {
     pub aggregator_engine: Arc<AggregatorEngine<FileStorage>>,
     pub metrics: utils::telemetry::AggregatorMetrics,
 }
-
-const QUORUM_QUEUE_TABLE: TableHandle<Vec<u8>, QuorumQueue> = TableHandle::new(Table::QuorumQueues);
 
 // Note: task queue size is bounded by quorum and cleared on execution
 impl HttpState {
@@ -201,11 +164,12 @@ impl HttpState {
 
     pub async fn get_quorum_queue(&self, id: &QuorumQueueId) -> AggregatorResult<QuorumQueue> {
         let storage = self.storage.clone();
-        let id_bytes = id.to_bytes()?;
+        let id = id.clone();
 
         tokio::task::spawn_blocking(move || {
             Ok(storage
-                .get(&QUORUM_QUEUE_TABLE, &id_bytes)?
+                .quorum_queues
+                .get_cloned(&id)
                 .unwrap_or_else(|| QuorumQueue::Active(Vec::new())))
         })
         .await
@@ -215,46 +179,41 @@ impl HttpState {
     #[allow(clippy::result_large_err)]
     pub async fn save_quorum_queue(
         &self,
-        id: &QuorumQueueId,
+        id: QuorumQueueId,
         queue: QuorumQueue,
     ) -> AggregatorResult<()> {
         let storage = self.storage.clone();
-        let id_bytes = id.to_bytes()?;
 
-        tokio::task::spawn_blocking(move || storage.set(&QUORUM_QUEUE_TABLE, id_bytes, queue))
-            .await
-            .map_err(|e| AggregatorError::JoinError(e.to_string()))?
-            .map_err(Into::into)
+        tokio::task::spawn_blocking(move || {
+            storage
+                .quorum_queues
+                .insert(id, queue)
+                .map_err(|e| AggregatorError::DatabaseError(e.to_string()))
+        })
+        .await
+        .map_err(|e| AggregatorError::JoinError(e.to_string()))?
     }
 
     #[instrument(skip(self))]
     pub async fn service_registered(&self, service_id: ServiceId) -> bool {
         let storage = self.storage.clone();
 
-        tokio::task::spawn_blocking(move || {
-            storage
-                .get(&handles::AGGREGATOR_SERVICES, &service_id)
-                .ok()
-                .flatten()
-                .is_some()
-        })
-        .await
-        .ok()
-        .unwrap_or(false)
+        tokio::task::spawn_blocking(move || storage.aggregator_services.contains_key(&service_id))
+            .await
+            .ok()
+            .unwrap_or(false)
     }
 
     #[instrument(skip(self))]
     #[allow(clippy::result_large_err)]
     pub fn register_service(&self, service_id: &ServiceId) -> AggregatorResult<()> {
-        if self
-            .storage
-            .get(&handles::AGGREGATOR_SERVICES, service_id)?
-            .is_none()
-        {
+        if !self.storage.aggregator_services.contains_key(service_id) {
             tracing::info!("Registering aggregator for service {}", service_id);
 
             self.storage
-                .set(&handles::AGGREGATOR_SERVICES, service_id.clone(), ())?;
+                .aggregator_services
+                .insert(service_id.clone(), ())
+                .map_err(|e| AggregatorError::DatabaseError(e.to_string()))?;
         } else {
             tracing::warn!("Attempted to register duplicate service: {}", service_id);
             return Err(AggregatorError::RepeatService(service_id.clone()));
