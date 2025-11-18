@@ -1,9 +1,9 @@
-package wavs:operator@2.2.2;
+package wavs:operator@2.3.0;
 
-use wavs:types/core@2.2.2 as core-types;
-use wavs:types/service@2.2.2 as service-types;
-use wavs:types/chain@2.2.2 as chain-types;
-use wavs:types/events@2.2.2 as event-types;
+use wavs:types/core@2.3.0 as core-types;
+use wavs:types/service@2.3.0 as service-types;
+use wavs:types/chain@2.3.0 as chain-types;
+use wavs:types/events@2.3.0 as event-types;
 
 interface input {
     use service-types.{service-id, workflow-id, trigger};
@@ -33,6 +33,7 @@ interface output {
         // if not supplied, this will be `trigger-data`
         // if supplied, make sure this is unique for every response!
         // for example, using a "message id" from a third-party service
+        // also, it MUST be supplied if multiple responses are returned
         event-id-salt: option<list<u8>>
     }
 }
@@ -81,5 +82,6 @@ world wavs-world {
     use input.{trigger-action};
     use output.{wasm-response};
 
-    export run: func(trigger-action: trigger-action) -> result<option<wasm-response>, string>;
+    // if returning multiple responses, they must all have an event-id-salt
+    export run: func(trigger-action: trigger-action) -> result<list<wasm-response>, string>;
 }

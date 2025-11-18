@@ -240,19 +240,14 @@ async fn main() {
 
             // If an output file was requested, write the wasm response as JSON
             if let Some(path) = output_file {
-                match &res.wasm_response {
-                    Some(wasm_response) => {
-                        if let Err(e) = write_output_file(wasm_response, &path) {
-                            eprintln!("Failed to write component output: {e}");
-                            std::process::exit(1);
-                        }
-                    }
-                    None => {
-                        tracing::warn!(
-                            "No output payload produced by component to save to {}",
-                            path.display()
-                        );
-                    }
+                if res.wasm_responses.is_empty() {
+                    tracing::warn!(
+                        "No output payload produced by component to save to {}",
+                        path.display()
+                    );
+                } else if let Err(e) = write_output_file(&res.wasm_responses, &path) {
+                    eprintln!("Failed to write component output: {e}");
+                    std::process::exit(1);
                 }
             }
 
@@ -260,106 +255,108 @@ async fn main() {
             if let (Some(chain_key), Some(handler_address), Some(operator_credential)) =
                 (submit_chain, submit_handler, operator_credential)
             {
-                if let Some(wasm_response) = &res.wasm_response {
-                    tracing::info!(
-                        "Submitting result to chain {} at address {}",
-                        chain_key,
-                        handler_address
-                    );
+                if res.wasm_responses.is_empty() {
+                    tracing::warn!("No WASM response to submit to chain");
+                } else {
+                    for wasm_response in &res.wasm_responses {
+                        tracing::info!(
+                            "Submitting result to chain {} at address {}",
+                            chain_key,
+                            handler_address
+                        );
 
-                    // Create envelope from WASM response
-                    let envelope = Envelope {
-                        payload: wasm_response.payload.clone().into(),
-                        eventId: FixedBytes::new(rand::random()),
-                        ordering: match wasm_response.ordering {
-                            Some(ordering) => {
-                                // Convert u64 ordering to 12-byte FixedBytes by placing the u64 in the first 8 bytes
-                                // This preserves the ordering value while meeting the FixedBytes<12> requirement
-                                let mut bytes = [0u8; 12];
-                                bytes[..8].copy_from_slice(&ordering.to_le_bytes());
-                                FixedBytes(bytes)
-                            }
-                            None => FixedBytes::default(),
-                        },
-                    };
+                        // Create envelope from WASM response
+                        let envelope = Envelope {
+                            payload: wasm_response.payload.clone().into(),
+                            eventId: FixedBytes::new(rand::random()),
+                            ordering: match wasm_response.ordering {
+                                Some(ordering) => {
+                                    // Convert u64 ordering to 12-byte FixedBytes by placing the u64 in the first 8 bytes
+                                    // This preserves the ordering value while meeting the FixedBytes<12> requirement
+                                    let mut bytes = [0u8; 12];
+                                    bytes[..8].copy_from_slice(&ordering.to_le_bytes());
+                                    FixedBytes(bytes)
+                                }
+                                None => FixedBytes::default(),
+                            },
+                        };
 
-                    // Get EVM client for the chain (for transaction submission)
-                    let evm_client = match new_evm_client(&ctx, chain_key.id.clone()).await {
-                        Ok(client) => client,
-                        Err(e) => {
-                            eprintln!("Failed to create EVM client: {e}");
-                            std::process::exit(1);
-                        }
-                    };
-
-                    // Get operator EVM client for envelope signing
-                    let operator_evm_client = match new_evm_client_with_credential(
-                        &ctx,
-                        chain_key.id,
-                        &operator_credential,
-                        operator_hd_index,
-                    )
-                    .await
-                    {
-                        Ok(client) => client,
-                        Err(e) => {
-                            eprintln!("Failed to create operator EVM client: {e}");
-                            std::process::exit(1);
-                        }
-                    };
-
-                    // Create signature using the operator EVM client's signer
-                    let signature = envelope
-                        .sign(&operator_evm_client.signer, SignatureKind::evm_default())
-                        .await
-                        .unwrap();
-
-                    // Create contract instance
-                    let contract =
-                        IWavsServiceHandler::new(handler_address, evm_client.provider.clone());
-
-                    // Get the block number just before the latest block for reference
-                    let previous_block = match evm_client.provider.get_block_number().await {
-                        Ok(block_num) => block_num - 1,
-                        Err(e) => {
-                            eprintln!("Failed to get latest block number: {e}");
-                            std::process::exit(1);
-                        }
-                    };
-
-                    // Prepare signature data
-                    let signature_data =
-                        match envelope.signature_data(vec![signature], previous_block) {
-                            Ok(data) => data,
+                        // Get EVM client for the chain (for transaction submission)
+                        let evm_client = match new_evm_client(&ctx, chain_key.id.clone()).await {
+                            Ok(client) => client,
                             Err(e) => {
-                                eprintln!("Failed to prepare signature data: {e}");
+                                eprintln!("Failed to create EVM client: {e}");
                                 std::process::exit(1);
                             }
                         };
 
-                    // Convert to contract types
-                    let contract_envelope = IWavsServiceHandler::Envelope {
-                        eventId: envelope.eventId,
-                        ordering: envelope.ordering,
-                        payload: envelope.payload,
-                    };
-
-                    // Submit to chain using the original EVM client (as transaction sender)
-                    match contract
-                        .handleSignedEnvelope(contract_envelope, signature_data)
-                        .send()
+                        // Get operator EVM client for envelope signing
+                        let operator_evm_client = match new_evm_client_with_credential(
+                            &ctx,
+                            chain_key.id.clone(),
+                            &operator_credential,
+                            operator_hd_index,
+                        )
                         .await
-                    {
-                        Ok(tx) => {
-                            tracing::info!("Transaction submitted: {:?}", tx.tx_hash());
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to submit to chain: {e}");
-                            std::process::exit(1);
+                        {
+                            Ok(client) => client,
+                            Err(e) => {
+                                eprintln!("Failed to create operator EVM client: {e}");
+                                std::process::exit(1);
+                            }
+                        };
+
+                        // Create signature using the operator EVM client's signer
+                        let signature = envelope
+                            .sign(&operator_evm_client.signer, SignatureKind::evm_default())
+                            .await
+                            .unwrap();
+
+                        // Create contract instance
+                        let contract =
+                            IWavsServiceHandler::new(handler_address, evm_client.provider.clone());
+
+                        // Get the block number just before the latest block for reference
+                        let previous_block = match evm_client.provider.get_block_number().await {
+                            Ok(block_num) => block_num - 1,
+                            Err(e) => {
+                                eprintln!("Failed to get latest block number: {e}");
+                                std::process::exit(1);
+                            }
+                        };
+
+                        // Prepare signature data
+                        let signature_data =
+                            match envelope.signature_data(vec![signature], previous_block) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    eprintln!("Failed to prepare signature data: {e}");
+                                    std::process::exit(1);
+                                }
+                            };
+
+                        // Convert to contract types
+                        let contract_envelope = IWavsServiceHandler::Envelope {
+                            eventId: envelope.eventId,
+                            ordering: envelope.ordering,
+                            payload: envelope.payload,
+                        };
+
+                        // Submit to chain using the original EVM client (as transaction sender)
+                        match contract
+                            .handleSignedEnvelope(contract_envelope, signature_data)
+                            .send()
+                            .await
+                        {
+                            Ok(tx) => {
+                                tracing::info!("Transaction submitted: {:?}", tx.tx_hash());
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to submit to chain: {e}");
+                                std::process::exit(1);
+                            }
                         }
                     }
-                } else {
-                    tracing::warn!("No WASM response to submit to chain");
                 }
             }
 

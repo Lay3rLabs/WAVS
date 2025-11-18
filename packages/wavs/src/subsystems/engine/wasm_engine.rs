@@ -97,7 +97,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         &self,
         service: Service,
         trigger_action: TriggerAction,
-    ) -> Result<Option<WasmResponse>, EngineError> {
+    ) -> Result<Vec<WasmResponse>, EngineError> {
         #[cfg(feature = "dev")]
         if std::env::var("WAVS_FORCE_ENGINE_ERROR_XXX").is_ok() {
             self.metrics.total_errors.add(1, &[]);
@@ -185,7 +185,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             std::thread::sleep(std::time::Duration::from_secs(6));
         }
 
-        let result =
+        let results =
             wavs_engine::worlds::operator::execute::execute(&mut instance_deps, trigger_action)
                 .await;
         let final_fuel = instance_deps.store.get_fuel().unwrap_or(0);
@@ -198,7 +198,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             fuel_consumed,
             &service_id.to_string(),
             workflow_id.as_ref(),
-            result.is_ok(),
+            results.is_ok(),
         );
 
         tracing::info!(
@@ -206,11 +206,11 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             workflow_id = %workflow_id,
             duration_seconds = duration,
             fuel_consumed = fuel_consumed,
-            success = result.is_ok(),
+            success = results.is_ok(),
             "WASM execution completed"
         );
 
-        result.map_err(|e| e.into())
+        results.map_err(|e| e.into())
     }
 
     #[instrument(skip(self), fields(subsys = "Engine", service_id = %service_id))]
@@ -361,7 +361,7 @@ pub mod tests {
 
         let service_id = service.id();
         // execute it and get bytes back
-        let result = engine
+        let results = engine
             .execute(
                 service,
                 TriggerAction {
@@ -376,7 +376,7 @@ pub mod tests {
             .await
             .unwrap();
 
-        assert_eq!(&result.unwrap().payload, br#"{"x":12}"#);
+        assert_eq!(&results[0].payload, br#"{"x":12}"#);
     }
 
     #[tokio::test]
@@ -423,7 +423,7 @@ pub mod tests {
         let service_id = service.id();
 
         // verify service config kv is accessible
-        let result = engine
+        let results = engine
             .execute(
                 service.clone(),
                 TriggerAction {
@@ -438,10 +438,10 @@ pub mod tests {
             .await
             .unwrap();
 
-        assert_eq!(&result.unwrap().payload, br#"bar"#);
+        assert_eq!(&results[0].payload, br#"bar"#);
 
         // verify whitelisted host env var is accessible
-        let result = engine
+        let results = engine
             .execute(
                 service.clone(),
                 TriggerAction {
@@ -456,7 +456,7 @@ pub mod tests {
             .await
             .unwrap();
 
-        assert_eq!(&result.unwrap().payload, br#"testing"#);
+        assert_eq!(&results[0].payload, br#"testing"#);
 
         // verify the non-enabled env var is not accessible
         let result = engine
@@ -520,7 +520,7 @@ pub mod tests {
 
         let service_id = service.id();
 
-        let result = engine
+        let results = engine
             .execute(
                 service.clone(),
                 TriggerAction {
@@ -536,9 +536,93 @@ pub mod tests {
             .unwrap();
 
         assert_eq!(
-            result.unwrap().event_id_salt.unwrap(),
+            results[0].event_id_salt.as_ref().unwrap(),
             "hello world!".as_bytes()
         );
+    }
+
+    #[tokio::test]
+    async fn execute_multi_response() {
+        let storage = MemoryStorage::new();
+        let app_data = tempfile::tempdir().unwrap();
+        let engine = WasmEngine::new(
+            storage,
+            &app_data,
+            3,
+            mock_chain_configs(),
+            None,
+            None,
+            metrics(),
+            WavsDb::new().unwrap(),
+            DEFAULT_IPFS_GATEWAY.to_owned(),
+        );
+
+        let digest = engine
+            .store_component_bytes(COMPONENT_ECHO_DATA_BYTES)
+            .unwrap();
+        let mut workflow = Workflow {
+            trigger: Trigger::Manual,
+            component: wavs_types::Component::new(ComponentSource::Digest(digest.clone())),
+            submit: Submit::None,
+        };
+
+        workflow.component.config = [
+            ("event-id-salt-1".to_string(), "hello world 1!".to_string()),
+            ("event-id-salt-2".to_string(), "hello world 2!".to_string()),
+        ]
+        .into_iter()
+        .collect();
+
+        let service = wavs_types::Service {
+            name: "Exec Service".to_string(),
+            workflows: BTreeMap::from([(WorkflowId::default(), workflow)]),
+            status: wavs_types::ServiceStatus::Active,
+            manager: wavs_types::ServiceManager::Evm {
+                chain: "evm:anvil".parse().unwrap(),
+                address: Default::default(),
+            },
+        };
+
+        let service_id = service.id();
+
+        let results = engine
+            .execute(
+                service.clone(),
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: service_id.clone(),
+                        workflow_id: WorkflowId::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"multi-response"#),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            results[0].event_id_salt.as_ref().unwrap(),
+            "hello world 1!".as_bytes()
+        );
+        assert_eq!(
+            results[1].event_id_salt.as_ref().unwrap(),
+            "hello world 2!".as_bytes()
+        );
+
+        engine
+            .execute(
+                service.clone(),
+                TriggerAction {
+                    config: TriggerConfig {
+                        service_id: service_id.clone(),
+                        workflow_id: WorkflowId::default(),
+                        trigger: Trigger::Manual,
+                    },
+                    data: TriggerData::new_raw(br#"multi-response-bad"#),
+                },
+            )
+            .await
+            .unwrap_err();
     }
 
     #[tokio::test]

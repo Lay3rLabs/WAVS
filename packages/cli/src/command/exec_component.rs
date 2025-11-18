@@ -24,7 +24,7 @@ use crate::{
 };
 
 pub struct ExecComponent {
-    pub wasm_response: Option<WasmResponse>,
+    pub wasm_responses: Vec<WasmResponse>,
     pub fuel_used: u64,
     pub time_elapsed: u128,
 }
@@ -35,8 +35,11 @@ impl std::fmt::Display for ExecComponent {
         if self.time_elapsed > 0 {
             write!(f, "\n\nTime elapsed (ms): \n{}", self.time_elapsed)?;
         }
-        match &self.wasm_response {
-            Some(wasm_response) => {
+
+        if self.wasm_responses.is_empty() {
+            write!(f, "\n\nNo responses from component execution.")?;
+        } else {
+            for wasm_response in &self.wasm_responses {
                 write!(
                     f,
                     "\n\nResult (hex encoded): \n{}",
@@ -53,7 +56,6 @@ impl std::fmt::Display for ExecComponent {
                     wasm_response.ordering.unwrap_or_default()
                 )?;
             }
-            None => write!(f, "\n\nResult: None")?,
         }
 
         Ok(())
@@ -201,13 +203,13 @@ impl ExecComponent {
             .get_fuel()
             .context("Failed to get initial fuel value from the instance store")?;
         let start_time = Instant::now();
-        let wasm_response = match wavs_engine::worlds::operator::execute::execute(
+        let wasm_responses = match wavs_engine::worlds::operator::execute::execute(
             &mut instance_deps,
             trigger_action,
         )
         .await
         {
-            Ok(response) => response,
+            Ok(responses) => responses,
             Err(e) => {
                 tracing::error!("Error executing component: {}", e);
                 return Err(anyhow::anyhow!("Component execution failed: {}", e));
@@ -217,7 +219,7 @@ impl ExecComponent {
         let fuel_used = initial_fuel - instance_deps.store.get_fuel()?;
 
         Ok(ExecComponent {
-            wasm_response,
+            wasm_responses,
             fuel_used,
             time_elapsed: start_time.elapsed().as_millis(),
         })
@@ -272,7 +274,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.wasm_response.unwrap().payload, b"hello world");
+        assert_eq!(result.wasm_responses[0].payload, b"hello world");
         assert!(result.fuel_used > 0);
 
         // Same idea but hex-encoded with prefix
@@ -287,7 +289,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.wasm_response.unwrap().payload, b"hello world");
+        assert_eq!(result.wasm_responses[0].payload, b"hello world");
         assert!(result.fuel_used > 0);
 
         // Do not hex-decode without the prefix
@@ -302,10 +304,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(
-            result.wasm_response.unwrap().payload,
-            b"68656C6C6F20776F726C64"
-        );
+        assert_eq!(result.wasm_responses[0].payload, b"68656C6C6F20776F726C64");
         assert!(result.fuel_used > 0);
 
         // And filepath
@@ -324,7 +323,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.wasm_response.unwrap().payload, b"hello world");
+        assert_eq!(result.wasm_responses[0].payload, b"hello world");
         assert!(result.fuel_used > 0);
 
         // Test config var usage in the Wasm component
@@ -342,7 +341,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.wasm_response.unwrap().payload, b"config-value");
+        assert_eq!(result.wasm_responses[0].payload, b"config-value");
         assert!(result.fuel_used > 0);
 
         // Set an env var and test it via envvar:<key> lookup
@@ -360,7 +359,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.wasm_response.unwrap().payload, b"env-value");
+        assert_eq!(result.wasm_responses[0].payload, b"env-value");
         assert!(result.fuel_used > 0);
     }
 }
