@@ -10110,7 +10110,6 @@ name = "wavs-types"
 version = "2.0.0-rc.4"
 dependencies = [
  "alloy-contract",
- "alloy-node-bindings",
  "alloy-primitives",
  "alloy-provider",
  "alloy-rpc-types-eth",
