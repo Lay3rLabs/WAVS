@@ -153,6 +153,9 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
+      - name: Update npm to latest
+        run: npm install -g npm@latest
+
       - name: Install just
         uses: extractions/setup-just@v2
 
@@ -191,6 +194,8 @@ jobs:
 
       - name: Publish to NPM
         if: steps.npm_exists.outputs.exists == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd packages/types/bindings
           npm publish --access public
