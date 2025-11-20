@@ -27,7 +27,7 @@ use wavs_types::{ChainConfigs, ChainKey, Service, Trigger, WorkflowId};
 /// This map is used to ensure cosmos contracts only have their wasm uploaded once
 /// Key -> Cosmos Trigger Definition, Value -> Maybe Code Id
 pub type CosmosCodeMap =
-    Arc<DashMap<CosmosContractDefinition, Arc<tokio::sync::Mutex<Option<u64>>>>>;
+    Arc<DashMap<CosmosContractDefinition, Arc<tokio::sync::RwLock<Option<u64>>>>>;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum CosmosContractDefinition {

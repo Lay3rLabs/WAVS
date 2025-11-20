@@ -410,14 +410,22 @@ pub async fn get_cosmos_code_id(
     // Get or insert the entry
     let entry = cosmos_code_map
         .entry(cosmos_contract_definition.clone())
-        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(None)))
+        .or_insert_with(|| Arc::new(tokio::sync::RwLock::new(None)))
         .clone();
 
-    // Lock the entry
-    let mut guard = entry.lock().await;
+    // try to read (non-blocking for other readers)
+    {
+        let read_guard = entry.read().await;
+        if let Some(code_id) = *read_guard {
+            return code_id;
+        }
+    }
 
-    // If already uploaded, return the result
-    if let Some(code_id) = *guard {
+    // cache miss, acquire write lock for upload
+    let mut write_guard = entry.write().await;
+
+    // check cache after acquiring write lock, if another thread already uploaded
+    if let Some(code_id) = *write_guard {
         return code_id;
     }
 
@@ -479,7 +487,7 @@ pub async fn get_cosmos_code_id(
     );
 
     // Cache result and return
-    *guard = Some(code_id);
+    *write_guard = Some(code_id);
     code_id
 }
 
