@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 
 use wasmtime::Trap;
 use wavs_types::{TriggerAction, WasmResponse};
@@ -45,13 +45,25 @@ pub async fn execute(
             }
         })
         .await
-        .map_err(|_| EngineError::OutOfTime(service_id, workflow_id))??;
+        .map_err(|_| EngineError::OutOfTime(service_id.clone(), workflow_id.clone()))??;
 
     // Invariant: If there are multiple responses, they must all have an event id salt
     if responses.len() > 1 {
+        let mut seen_salt = HashSet::new();
         for response in &responses {
-            if response.event_id_salt.is_none() {
-                return Err(EngineError::MissingEventIdSalt);
+            match &response.event_id_salt {
+                Some(salt) => {
+                    if !seen_salt.insert(salt) {
+                        tracing::warn!(
+                            service.id = %service_id,
+                            workflow.id = %workflow_id,
+                            "Duplicate event-id-salt: {}", const_hex::encode(salt)
+                        );
+                    }
+                }
+                None => {
+                    return Err(EngineError::MissingEventIdSalt);
+                }
             }
         }
     }
