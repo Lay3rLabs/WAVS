@@ -21,7 +21,7 @@ async fn keyvalue_basic() {
     let keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
 
     // Write a value to the key-value store
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -33,7 +33,7 @@ async fn keyvalue_basic() {
     )
     .await;
 
-    assert_eq!(resp, KvStoreResponse::Write,);
+    assert_eq!(resp[0], KvStoreResponse::Write,);
 
     // Read it back
     let resp = execute_component::<KvStoreResponse>(
@@ -48,7 +48,7 @@ async fn keyvalue_basic() {
     .await;
 
     assert_eq!(
-        resp,
+        resp[0],
         KvStoreResponse::Read {
             value: VALUE.to_vec()
         },
@@ -68,7 +68,7 @@ async fn keyvalue_wrong_context() {
     let keyvalue_ctx_2 = KeyValueCtx::new(db.clone(), "test-2".to_string());
 
     // Write a value to the key-value store
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx_1),
@@ -80,7 +80,7 @@ async fn keyvalue_wrong_context() {
     )
     .await;
 
-    assert_eq!(resp, KvStoreResponse::Write,);
+    assert_eq!(resp[0], KvStoreResponse::Write,);
 
     // Attempt to read the wrong context
     let err = try_execute_component::<KvStoreResponse>(
@@ -118,7 +118,7 @@ async fn keyvalue_wrong_key() {
     let keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
 
     // Write a value to the key-value store
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -130,7 +130,7 @@ async fn keyvalue_wrong_key() {
     )
     .await;
 
-    assert_eq!(resp, KvStoreResponse::Write,);
+    assert_eq!(resp[0], KvStoreResponse::Write,);
 
     // Attempt to read the wrong key
     let err = try_execute_component::<KvStoreResponse>(
@@ -167,7 +167,7 @@ async fn keyvalue_atomic_increment() {
     let keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
 
     // Increment the key (without setting it first)
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -179,10 +179,10 @@ async fn keyvalue_atomic_increment() {
     )
     .await;
 
-    assert_eq!(resp, KvStoreResponse::AtomicIncrement { value: 3 });
+    assert_eq!(resp[0], KvStoreResponse::AtomicIncrement { value: 3 });
 
     // Increment the key again so we can test against previous value
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -194,11 +194,11 @@ async fn keyvalue_atomic_increment() {
     )
     .await;
 
-    assert_eq!(resp, KvStoreResponse::AtomicIncrement { value: 5 });
+    assert_eq!(resp[0], KvStoreResponse::AtomicIncrement { value: 5 });
 
     // Same process as above, but with a preset key
     // behavior here is currently undefined, but we expect it to be a separate table
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -209,9 +209,9 @@ async fn keyvalue_atomic_increment() {
         },
     )
     .await;
-    assert_eq!(resp, KvStoreResponse::Write,);
+    assert_eq!(resp[0], KvStoreResponse::Write,);
 
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -223,7 +223,7 @@ async fn keyvalue_atomic_increment() {
     )
     .await;
 
-    assert_eq!(resp, KvStoreResponse::AtomicIncrement { value: 3 });
+    assert_eq!(resp[0], KvStoreResponse::AtomicIncrement { value: 3 });
 }
 
 #[tokio::test]
@@ -241,7 +241,7 @@ async fn keyvalue_atomic_swap() {
     let keyvalue_ctx = KeyValueCtx::new(db.clone(), "test".to_string());
 
     // Write a value to the key-value store
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -253,10 +253,10 @@ async fn keyvalue_atomic_swap() {
     )
     .await;
 
-    assert_eq!(resp, KvStoreResponse::Write,);
+    assert_eq!(resp[0], KvStoreResponse::Write,);
 
     // Swap it
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -268,7 +268,7 @@ async fn keyvalue_atomic_swap() {
     )
     .await;
 
-    assert_eq!(resp, KvStoreResponse::AtomicSwap,);
+    assert_eq!(resp[0], KvStoreResponse::AtomicSwap,);
 
     // Read it back
     let resp = execute_component::<KvStoreResponse>(
@@ -283,14 +283,14 @@ async fn keyvalue_atomic_swap() {
     .await;
 
     assert_eq!(
-        resp,
+        resp[0],
         KvStoreResponse::Read {
             value: VALUE_AFTER_SWAP_1.to_vec()
         },
     );
 
     // Swap it, without setting first
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -302,7 +302,7 @@ async fn keyvalue_atomic_swap() {
     )
     .await;
 
-    assert_eq!(resp, KvStoreResponse::AtomicSwap,);
+    assert_eq!(resp[0], KvStoreResponse::AtomicSwap,);
 
     // Read it back
     let resp = execute_component::<KvStoreResponse>(
@@ -317,7 +317,7 @@ async fn keyvalue_atomic_swap() {
     .await;
 
     assert_eq!(
-        resp,
+        resp[0],
         KvStoreResponse::Read {
             value: VALUE_AFTER_SWAP_2.to_vec()
         },
@@ -339,7 +339,7 @@ async fn keyvalue_batch() {
     }
 
     // Perform batch write
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -350,7 +350,7 @@ async fn keyvalue_batch() {
     )
     .await;
 
-    assert_eq!(resp, KvStoreResponse::BatchWrite,);
+    assert_eq!(resp[0], KvStoreResponse::BatchWrite,);
 
     // Perform batch read
     let resp = execute_component::<KvStoreResponse>(
@@ -364,7 +364,7 @@ async fn keyvalue_batch() {
     )
     .await;
 
-    match resp {
+    match &resp[0] {
         KvStoreResponse::BatchRead {
             values: read_values,
         } => {
@@ -382,7 +382,7 @@ async fn keyvalue_batch() {
         "key_5".to_string(),
         "key_7".to_string(),
     ];
-    let resp: KvStoreResponse = execute_component(
+    let resp: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -393,7 +393,7 @@ async fn keyvalue_batch() {
     )
     .await;
 
-    assert_eq!(resp, KvStoreResponse::BatchDelete,);
+    assert_eq!(resp[0], KvStoreResponse::BatchDelete,);
 
     // Verify deleted keys are no longer present
     let resp = execute_component::<KvStoreResponse>(
@@ -407,7 +407,7 @@ async fn keyvalue_batch() {
     )
     .await;
 
-    match resp {
+    match &resp[0] {
         KvStoreResponse::BatchRead {
             values: read_values,
         } => {
@@ -441,7 +441,7 @@ async fn keyvalue_batch() {
     .await;
 
     assert_eq!(
-        resp,
+        resp[0],
         KvStoreResponse::Read {
             value: values.get("key_2").unwrap().clone()
         }
@@ -485,7 +485,7 @@ async fn keyvalue_list() {
     }
 
     // Perform batch write
-    let _: KvStoreResponse = execute_component(
+    let _: Vec<KvStoreResponse> = execute_component(
         COMPONENT_KV_STORE_BYTES,
         Default::default(),
         Some(keyvalue_ctx.clone()),
@@ -509,7 +509,7 @@ async fn keyvalue_list() {
     .await;
 
     let mut next_cursor = None;
-    match resp {
+    match &resp[0] {
         KvStoreResponse::ListKeys { keys, cursor } => {
             // Verify all keys are present
             for (i, key) in keys.iter().enumerate() {
@@ -537,7 +537,7 @@ async fn keyvalue_list() {
     )
     .await;
 
-    match resp {
+    match &resp[0] {
         KvStoreResponse::ListKeys { keys, cursor: _ } => {
             // Verify all keys are present
             for key in keys.iter() {
@@ -569,7 +569,7 @@ async fn keyvalue_list() {
     )
     .await;
 
-    match resp {
+    match &resp[0] {
         KvStoreResponse::ListKeys { keys, cursor: _ } => {
             // Verify all keys are present
             for key in keys.iter() {

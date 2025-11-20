@@ -9,7 +9,7 @@ use example_types::{SquareRequest, SquareResponse};
 async fn basic_execution() {
     init_tracing_tests();
 
-    let resp: SquareResponse = execute_component(
+    let resp: Vec<SquareResponse> = execute_component(
         COMPONENT_SQUARE_BYTES,
         Default::default(),
         None,
@@ -17,5 +17,5 @@ async fn basic_execution() {
     )
     .await;
 
-    assert_eq!(resp.y, 25, "Expected output to be 25, got {}", resp.y);
+    assert_eq!(resp[0].y, 25, "Expected output to be 25, got {}", resp[0].y);
 }

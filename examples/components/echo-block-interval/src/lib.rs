@@ -18,7 +18,7 @@ use example_types::BlockIntervalResponse;
 struct Component;
 
 impl Guest for Component {
-    fn run(trigger_action: TriggerAction) -> std::result::Result<Option<WasmResponse>, String> {
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<WasmResponse>, String> {
         // hardcoding this because our tests are mostly about event-based triggers
         // but this component is not event-based
         let trigger_id = 1337;
@@ -27,13 +27,13 @@ impl Guest for Component {
             (Trigger::BlockInterval(config), TriggerData::BlockInterval(data)) => {
                 if let Some(resp) = inner_run_task(config, data).map_err(|e| e.to_string())? {
                     let resp = serde_json::to_vec(&resp).map_err(|e| e.to_string())?;
-                    Ok(Some(encode_trigger_output(
+                    Ok(vec![encode_trigger_output(
                         trigger_id,
                         resp,
                         host::get_service().service.manager,
-                    )))
+                    )])
                 } else {
-                    Ok(None)
+                    Ok(Vec::new())
                 }
             }
             _ => Err("Invalid trigger config or data".to_string()),

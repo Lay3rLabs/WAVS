@@ -53,4 +53,7 @@ pub enum EngineError {
 
     #[error("Registry: {0}")]
     Registry(#[from] wasm_pkg_client::Error),
+
+    #[error("When returning multiple responses, they must all have an event id salt")]
+    MissingEventIdSalt,
 }

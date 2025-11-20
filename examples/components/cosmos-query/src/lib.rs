@@ -11,7 +11,7 @@ use example_types::{CosmosQueryRequest, CosmosQueryResponse};
 struct Component;
 
 impl Guest for Component {
-    fn run(trigger_action: TriggerAction) -> std::result::Result<Option<WasmResponse>, String> {
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<WasmResponse>, String> {
         block_on(async move {
             let (trigger_id, req) = decode_trigger_event(trigger_action.data)?;
 
@@ -56,7 +56,7 @@ impl Guest for Component {
                 })
         })
         .map_err(|e| e.to_string())
-        .map(Some)
+        .map(|x| vec![x])
     }
 }
 

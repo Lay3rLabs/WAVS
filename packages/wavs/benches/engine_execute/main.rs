@@ -22,11 +22,11 @@ pub fn run_simulation(setup: Arc<ExecuteSetup>) {
 
             // Execute the component and measure performance
             match wavs_engine::worlds::operator::execute::execute(&mut deps, trigger_action).await {
-                Ok(response) => {
-                    let payload = response
-                        .expect("Execution failed to generate a response")
-                        .payload;
-                    assert_eq!(payload, echo_data, "Payload mismatch");
+                Ok(responses) => {
+                    if responses.is_empty() {
+                        panic!("Execution returned no responses");
+                    }
+                    assert_eq!(responses[0].payload, echo_data, "Payload mismatch");
                 }
                 Err(err) => {
                     panic!("Execution failed: {err:?}");

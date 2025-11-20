@@ -68,13 +68,15 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                             Err(e) => {
                                 tracing::error!("Error running trigger: {:?}", e);
                             }
-                            Ok(Some(msg)) => {
-                                if let Err(e) = _self.engine_to_dispatcher_tx.send(msg) {
-                                    tracing::error!("Error sending message to dispatcher: {:?}", e);
+                            Ok(messages) => {
+                                for msg in messages {
+                                    if let Err(e) = _self.engine_to_dispatcher_tx.send(msg) {
+                                        tracing::error!(
+                                            "Error sending message to dispatcher: {:?}",
+                                            e
+                                        );
+                                    }
                                 }
-                            }
-                            Ok(None) => {
-                                // No message to send, just continue
                             }
                         }
                     });
@@ -105,14 +107,14 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         &self,
         action: TriggerAction,
         service: Service,
-    ) -> Result<Option<ChainMessage>, EngineError> {
+    ) -> Result<Vec<ChainMessage>, EngineError> {
         // early-exit without an error if the service is not active
         if !self.services.is_active(&action.config.service_id) {
             tracing::info!(
                 "Service is not active, skipping action: service_id={}",
                 action.config.service_id
             );
-            return Ok(None);
+            return Ok(Vec::new());
         }
         // early-exit if we can't get the workflow
         let workflow = service
@@ -134,56 +136,12 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
             workflow.component.source.digest()
         );
 
-        let wasm_response = self.engine.execute(service.clone(), action.clone()).await?;
+        let wasm_responses = self.engine.execute(service.clone(), action.clone()).await?;
 
-        // If Ok(Some(x)), send the result down the pipeline to the submit processor
-        // If Ok(None), just end early here, performing no action (but updating local state if needed)
-        if let Some(wasm_response) = wasm_response {
-            let event_id = match wasm_response.event_id_salt {
-                Some(salt) => EventId::new(
-                    &service.id(),
-                    &trigger_config.workflow_id,
-                    EventIdSalt::WasmResponse(&salt),
-                )
-                .map_err(EngineError::EncodeEventId)?,
-                None => EventId::new(
-                    &service.id(),
-                    &trigger_config.workflow_id,
-                    EventIdSalt::Trigger(&action.data),
-                )
-                .map_err(EngineError::EncodeEventId)?,
-            };
-            tracing::info!(
-                service_id = %trigger_config.service_id,
-                service.name = %service.name,
-                service.manager = ?service.manager,
-                workflow_id = %trigger_config.workflow_id,
-                payload_size = %wasm_response.payload.len(),
-                event_id = %event_id,
-                "Service {} (workflow {}) component execution completed",
-                service.name,
-                trigger_config.workflow_id
-            );
-
-            let msg = ChainMessage {
-                service_id: trigger_config.service_id,
-                workflow_id: trigger_config.workflow_id,
-                envelope: Envelope {
-                    payload: wasm_response.payload.into(),
-                    eventId: event_id.into(),
-                    ordering: match wasm_response.ordering {
-                        Some(ordering) => EventOrder::new_u64(ordering).into(),
-                        None => FixedBytes::default(),
-                    },
-                },
-                submit: workflow.submit.clone(),
-                #[cfg(feature = "dev")]
-                debug: Default::default(),
-                trigger_data: action.data,
-            };
-
-            Ok(Some(msg))
-        } else {
+        let mut messages = Vec::new();
+        // if there are results, send them down the pipeline to the submit processor
+        // otherwise, just end early here, performing no action (but updating local state if needed)
+        if wasm_responses.is_empty() {
             tracing::info!(
                 service_id = %trigger_config.service_id,
                 service.name = %service.name,
@@ -193,7 +151,54 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                 service.name,
                 trigger_config.workflow_id
             );
-            Ok(None)
+        } else {
+            for wasm_response in wasm_responses {
+                let event_id = match wasm_response.event_id_salt {
+                    Some(salt) => EventId::new(
+                        &service.id(),
+                        &trigger_config.workflow_id,
+                        EventIdSalt::WasmResponse(&salt),
+                    )
+                    .map_err(EngineError::EncodeEventId)?,
+                    None => EventId::new(
+                        &service.id(),
+                        &trigger_config.workflow_id,
+                        EventIdSalt::Trigger(&action.data),
+                    )
+                    .map_err(EngineError::EncodeEventId)?,
+                };
+                tracing::info!(
+                    service_id = %trigger_config.service_id,
+                    service.name = %service.name,
+                    service.manager = ?service.manager,
+                    workflow_id = %trigger_config.workflow_id,
+                    payload_size = %wasm_response.payload.len(),
+                    event_id = %event_id,
+                    "Service {} (workflow {}) component execution completed",
+                    service.name,
+                    trigger_config.workflow_id
+                );
+
+                let msg = ChainMessage {
+                    service_id: trigger_config.service_id.clone(),
+                    workflow_id: trigger_config.workflow_id.clone(),
+                    envelope: Envelope {
+                        payload: wasm_response.payload.into(),
+                        eventId: event_id.into(),
+                        ordering: match wasm_response.ordering {
+                            Some(ordering) => EventOrder::new_u64(ordering).into(),
+                            None => FixedBytes::default(),
+                        },
+                    },
+                    submit: workflow.submit.clone(),
+                    #[cfg(feature = "dev")]
+                    debug: Default::default(),
+                    trigger_data: action.data.clone(),
+                };
+
+                messages.push(msg);
+            }
         }
+        Ok(messages)
     }
 }
