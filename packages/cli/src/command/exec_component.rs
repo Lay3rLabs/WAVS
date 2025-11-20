@@ -39,22 +39,41 @@ impl std::fmt::Display for ExecComponent {
         if self.wasm_responses.is_empty() {
             write!(f, "\n\nNo responses from component execution.")?;
         } else {
-            for wasm_response in &self.wasm_responses {
+            fn write_response(
+                f: &mut std::fmt::Formatter<'_>,
+                wasm_response: &WasmResponse,
+                index: Option<usize>,
+            ) -> std::fmt::Result {
+                let prefix = if let Some(i) = index {
+                    format!("Response #{}: ", i + 1)
+                } else {
+                    "".to_string()
+                };
+
                 write!(
                     f,
-                    "\n\nResult (hex encoded): \n{}",
+                    "\n\n{prefix}Result (hex encoded): \n{}",
                     const_hex::encode(&wasm_response.payload)
                 )?;
 
                 if let Ok(s) = std::str::from_utf8(&wasm_response.payload) {
-                    write!(f, "\n\nResult (utf8): \n{}", s)?;
+                    write!(f, "\n\n{prefix}Result (utf8): \n{}", s)?;
                 }
 
                 write!(
                     f,
-                    "\n\nOrdering: \n{}",
+                    "\n\n{prefix}Ordering: \n{}",
                     wasm_response.ordering.unwrap_or_default()
                 )?;
+
+                Ok(())
+            }
+            for (index, wasm_response) in self.wasm_responses.iter().enumerate() {
+                if self.wasm_responses.len() > 1 {
+                    write_response(f, wasm_response, Some(index))?;
+                } else {
+                    write_response(f, wasm_response, None)?;
+                }
             }
         }
 
