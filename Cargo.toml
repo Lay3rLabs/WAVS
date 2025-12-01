@@ -118,6 +118,16 @@ alloy-signer = "=1.0.42"
 alloy-signer-local = { version = "=1.0.42", features = ["mnemonic"] }
 alloy-network = "=1.0.42"
 alloy-rpc-types-eth = "=1.0.42"
+
+alloy-consensus-any = "=1.0.42"
+alloy-consensus = "=1.0.42"
+alloy-eips = "=1.0.42"
+alloy-network-primitives = "=1.0.42"
+alloy-serde = "=1.0.42"
+alloy-tx-macros = "=1.0.42"
+alloy-eip2930 = "=0.2.1"
+alloy-eip7702 = "=0.6.1"
+
 layer-climb = "0.8.3"
 layer-climb-address = { version = "0.8.3", features = [
     "cw-storage",

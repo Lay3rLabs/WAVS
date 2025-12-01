@@ -1,0 +1,24 @@
+[package]
+name = "version-pins"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# This package exists solely to pin transitive dependency versions
+# for Rust 1.86 compatibility in our Docker build environment.
+alloy-provider = { workspace = true }
+alloy-network = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
+alloy-consensus = { workspace = true }
+alloy-consensus-any = { workspace = true }
+alloy-eips = { workspace = true }
+alloy-network-primitives = { workspace = true }
+alloy-serde = { workspace = true }
+alloy-tx-macros = { workspace = true }
+alloy-eip2930 = { workspace = true }
+alloy-eip7702 = { workspace = true }
+alloy-transport = { workspace = true }
