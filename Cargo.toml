@@ -28,7 +28,7 @@ split-debuginfo = "unpacked"
 
 [workspace.package]
 edition = "2021"
-version = "2.0.0-rc.7"
+version = "2.0.0-rc.8"
 license = "GPL-3.0-or-later"
 authors = ["Layer Labs (Cayman)"]
 repository = "https://github.com/Lay3rLabs/WAVS"
@@ -106,18 +106,28 @@ walkdir = "2.5.0"
 wildmatch = "2.5.0"
 
 # EVM-specific dependencies
-alloy-node-bindings = "1.0.37"
-alloy-json-abi = "1.4.0"
-alloy-primitives = { version = "1.4.0", features = ["serde"] }
-alloy-provider = { version = "1.0.37", features = ["ws", "pubsub"] }
-alloy-sol-types = "1.4.0"
-alloy-sol-macro = { version = "1.4.0", features = ["json"] }
-alloy-transport = "1.0.37"
-alloy-contract = "1.0.37"
-alloy-signer = "1.0.37"
-alloy-signer-local = { version = "1.0.37", features = ["mnemonic"] }
-alloy-network = "1.0.37"
-alloy-rpc-types-eth = "1.0.37"
+alloy-node-bindings = "=1.0.42"
+alloy-json-abi = "1.4.1"
+alloy-primitives = { version = "1.4.1", features = ["serde"] }
+alloy-provider = { version = "=1.0.42", features = ["ws", "pubsub"] }
+alloy-sol-types = "1.4.1"
+alloy-sol-macro = { version = "1.4.1", features = ["json"] }
+alloy-transport = "=1.0.42"
+alloy-contract = "=1.0.42"
+alloy-signer = "=1.0.42"
+alloy-signer-local = { version = "=1.0.42", features = ["mnemonic"] }
+alloy-network = "=1.0.42"
+alloy-rpc-types-eth = "=1.0.42"
+
+alloy-consensus-any = "=1.0.42"
+alloy-consensus = "=1.0.42"
+alloy-eips = "=1.0.42"
+alloy-network-primitives = "=1.0.42"
+alloy-serde = "=1.0.42"
+alloy-tx-macros = "=1.0.42"
+alloy-eip2930 = "=0.2.1"
+alloy-eip7702 = "=0.6.1"
+
 layer-climb = "0.8.3"
 layer-climb-address = { version = "0.8.3", features = [
     "cw-storage",
