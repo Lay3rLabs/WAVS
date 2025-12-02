@@ -388,6 +388,11 @@ async fn run_test(
             }
             Trigger::BlockInterval { .. } => vec![TriggerId::new(1337)],
             Trigger::Cron { .. } => vec![TriggerId::new(1338)],
+            Trigger::AtProtoEvent { .. } => {
+                // For ATProto events, we use a mock trigger ID since these are real-time events
+                // In a real implementation, this would connect to a Jetstream instance and wait for events
+                vec![TriggerId::new(1339)]
+            }
             Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
         };
 

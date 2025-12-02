@@ -108,7 +108,7 @@ impl ServiceJsonExt for ServiceBuilder {
                             ));
                         }
                     }
-                    Trigger::Manual => {}
+                    Trigger::Manual | Trigger::AtProtoEvent { .. } => {}
                 },
             }
 

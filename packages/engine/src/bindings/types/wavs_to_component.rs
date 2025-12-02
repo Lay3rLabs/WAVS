@@ -69,6 +69,10 @@ impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
                 start_time: start_time.map(Into::into),
                 end_time: end_time.map(Into::into),
             }),
+            // TODO: Add ATProto support once WIT bindings are regenerated
+            wavs_types::Trigger::AtProtoEvent { .. } => {
+                return Err(anyhow::anyhow!("ATProto event triggers are not yet supported in component bindings"));
+            }
         })
     }
 }
@@ -432,6 +436,10 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                     trigger_time: trigger_time.into(),
                 }),
             ),
+            // TODO: Add ATProto support once WIT bindings are regenerated
+            wavs_types::TriggerData::AtProtoEvent { .. } => {
+                return Err(anyhow::anyhow!("ATProto event trigger data is not yet supported in component bindings"));
+            },
             wavs_types::TriggerData::Raw(data) => Ok(component_input::TriggerData::Raw(data)),
         }
     }
@@ -633,6 +641,10 @@ impl TryFrom<wavs_types::TriggerData> for aggregator_types::TriggerData {
                     trigger_time: trigger_time.into(),
                 }),
             ),
+            // TODO: Add ATProto support once WIT bindings are regenerated
+            wavs_types::TriggerData::AtProtoEvent { .. } => {
+                return Err(anyhow::anyhow!("ATProto event trigger data is not yet supported in aggregator bindings"));
+            },
             wavs_types::TriggerData::Raw(data) => Ok(aggregator_types::TriggerData::Raw(data)),
         }
     }
@@ -804,6 +816,10 @@ impl TryFrom<wavs_types::Trigger> for aggregator_service::Trigger {
                 start_time: start_time.map(Into::into),
                 end_time: end_time.map(Into::into),
             }),
+            // TODO: Add ATProto support once WIT bindings are regenerated
+            wavs_types::Trigger::AtProtoEvent { .. } => {
+                return Err(anyhow::anyhow!("ATProto event triggers are not yet supported in aggregator bindings"));
+            }
         })
     }
 }

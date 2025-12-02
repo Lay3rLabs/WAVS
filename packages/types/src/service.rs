@@ -281,6 +281,18 @@ pub enum Trigger {
         /// Optional end time (timestamp in nanoseconds) indicating when the schedule ends.
         end_time: Option<Timestamp>,
     },
+    /// ATProto Jetstream event trigger
+    AtProtoEvent {
+        /// Collection NSID to filter for (e.g., "app.bsky.feed.post")
+        /// Supports wildcards with prefix matching (e.g., "app.bsky.feed.*")
+        collection: String,
+        /// Optional DID to filter for specific repositories
+        /// If None, will match events from any repository
+        repo_did: Option<String>,
+        /// Action type to filter for (create, update, delete)
+        /// If None, will match all action types
+        action: Option<String>,
+    },
     // not a real trigger, just for testing
     Manual,
 }
@@ -339,6 +351,25 @@ pub enum TriggerData {
         /// The trigger time
         trigger_time: Timestamp,
     },
+    /// ATProto Jetstream event data
+    AtProtoEvent {
+        /// Sequence number of the event in the stream
+        sequence: i64,
+        /// Timestamp in microseconds
+        timestamp: i64,
+        /// Repository DID that generated the event
+        repo: String,
+        /// Collection NSID (e.g., "app.bsky.feed.post")
+        collection: String,
+        /// Record key within the collection
+        rkey: String,
+        /// Action type (create, update, delete)
+        action: String,
+        /// CID of the record (None for delete events)
+        cid: Option<String>,
+        /// Record data as JSON (None for delete events or when data fetching fails)
+        record: Option<serde_json::Value>,
+    },
     Raw(Vec<u8>),
 }
 
@@ -359,6 +390,7 @@ impl TriggerData {
             TriggerData::EvmContractEvent { .. } => "evm_contract_event",
             TriggerData::BlockInterval { .. } => "block_interval",
             TriggerData::Cron { .. } => "cron",
+            TriggerData::AtProtoEvent { .. } => "atproto_event",
             TriggerData::Raw(_) => "manual",
         }
     }
@@ -368,7 +400,7 @@ impl TriggerData {
             TriggerData::CosmosContractEvent { chain, .. }
             | TriggerData::EvmContractEvent { chain, .. }
             | TriggerData::BlockInterval { chain, .. } => Some(chain),
-            TriggerData::Cron { .. } | TriggerData::Raw(_) => None,
+            TriggerData::Cron { .. } | TriggerData::AtProtoEvent { .. } | TriggerData::Raw(_) => None,
         }
     }
 }

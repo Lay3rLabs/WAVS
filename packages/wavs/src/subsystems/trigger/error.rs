@@ -57,4 +57,12 @@ pub enum TriggerError {
     Services(ServicesError),
     #[error("URI creation error: {0}")]
     URICreation(#[from] CreationError<String>),
+    #[error("Jetstream connection error: {0}")]
+    JetstreamConnection(String),
+    #[error("Jetstream configuration error: {0}")]
+    JetstreamConfig(String),
+    #[error("Jetstream parsing error: {0}")]
+    JetstreamParse(String),
+    #[error("Jetstream decompression error: {0}")]
+    JetstreamDecompression(String),
 }

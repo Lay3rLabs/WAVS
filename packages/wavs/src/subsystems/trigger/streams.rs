@@ -1,10 +1,12 @@
+pub mod atproto_jetstream;
 pub mod cosmos_stream;
 pub mod cron_stream;
 pub mod evm_stream;
 pub mod local_command_stream;
 
 use crate::subsystems::trigger::{
-    streams::cosmos_stream::StreamTriggerCosmosContractEvent, TriggerCommand,
+    streams::cosmos_stream::StreamTriggerCosmosContractEvent,
+    streams::atproto_jetstream::AtProtoEvent, TriggerCommand,
 };
 
 use super::{error::TriggerError, lookup::LookupId};
@@ -59,4 +61,7 @@ pub enum StreamTriggers {
         hits: Vec<CronHit>,
     },
     LocalCommand(TriggerCommand),
+    AtProto {
+        event: AtProtoEvent,
+    },
 }
