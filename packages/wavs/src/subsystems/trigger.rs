@@ -284,6 +284,7 @@ impl TriggerManager {
 
         let mut listening_chains = HashSet::new();
         let mut has_started_cron_stream = false;
+        let mut has_started_atproto_stream = false;
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
@@ -505,6 +506,13 @@ impl TriggerManager {
                                 );
                                 continue;
                             }
+
+                            if has_started_atproto_stream {
+                                tracing::debug!("ATProto stream already started, skipping");
+                                continue;
+                            }
+
+                            has_started_atproto_stream = true;
 
                             // For now, use default configuration
                             let jetstream_config = streams::atproto_jetstream::JetstreamConfig::default();
