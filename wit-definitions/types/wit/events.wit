@@ -43,6 +43,6 @@ interface events {
         rkey: string,
         action: string,
         cid: option<string>,
-        record: option<string>
+        record-data: option<string>
     }
 }
