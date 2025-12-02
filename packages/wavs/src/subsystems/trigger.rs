@@ -123,6 +123,7 @@ pub struct TriggerManager {
     pub disable_networking: bool,
     pub services: Services,
     pub evm_controllers: Arc<std::sync::RwLock<HashMap<ChainKey, EvmTriggerStreamsController>>>,
+    pub config: Config,
 }
 
 impl TriggerManager {
@@ -147,6 +148,7 @@ impl TriggerManager {
             disable_networking: config.disable_trigger_networking,
             services,
             evm_controllers: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            config: config.clone(),
         })
     }
 
@@ -514,8 +516,16 @@ impl TriggerManager {
 
                             has_started_atproto_stream = true;
 
-                            // For now, use default configuration
-                            let jetstream_config = streams::atproto_jetstream::JetstreamConfig::default();
+                            // Subscribe to all ATProto events - filtering will be done in the lookup system
+                            let jetstream_config = streams::atproto_jetstream::JetstreamConfig {
+                                endpoint: self.config.jetstream_endpoint.clone(),
+                                wanted_collections: vec![], // Empty means subscribe to all collections
+                                wanted_dids: None, // Listen to all repos
+                                cursor: None,
+                                compression: true,
+                                max_message_size: self.config.jetstream_max_message_size,
+                                require_hello: false,
+                            };
 
                             // Start the ATProto Jetstream stream
                             match streams::atproto_jetstream::start_jetstream_stream(

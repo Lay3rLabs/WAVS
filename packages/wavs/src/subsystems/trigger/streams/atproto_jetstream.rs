@@ -15,9 +15,10 @@ use utils::telemetry::TriggerMetrics;
 pub struct JetstreamConfig {
     /// Jetstream WebSocket endpoint URL
     pub endpoint: String,
-    /// Collections to subscribe to (e.g., "app.bsky.feed.post")
+    /// Collections to subscribe to. Empty vector means subscribe to all collections.
+    /// Filtering is done in the lookup system based on registered triggers.
     pub wanted_collections: Vec<String>,
-    /// Optional DIDs to filter for
+    /// Optional DIDs to filter for. None means listen to all repos.
     pub wanted_dids: Option<Vec<String>>,
     /// Cursor position for resuming (unix microseconds)
     pub cursor: Option<i64>,
@@ -33,7 +34,7 @@ impl Default for JetstreamConfig {
     fn default() -> Self {
         Self {
             endpoint: "wss://jetstream1.us-east.bsky.network/subscribe".to_string(),
-            wanted_collections: vec!["app.bsky.feed.post".to_string()],
+            wanted_collections: vec![], // Empty means subscribe to all collections
             wanted_dids: None,
             cursor: None,
             compression: true,
