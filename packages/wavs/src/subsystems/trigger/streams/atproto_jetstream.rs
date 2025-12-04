@@ -164,6 +164,11 @@ pub async fn start_jetstream_stream(
                                     event: atproto_event,
                                 });
                             }
+                            Err(TriggerError::JetstreamParse(msg)) => {
+                                // Non-fatal parse issue (e.g. hello/keepalive), log and keep the connection
+                                warn!("Ignoring Jetstream message: {}", msg);
+                                continue;
+                            }
                             Err(e) => {
                                 error!("Error processing Jetstream event: {:?}", e);
                                 metrics.increment_total_errors("jetstream_event");

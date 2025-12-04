@@ -20,6 +20,7 @@ pub enum EvmService {
     ChainTriggerLookup,
     CosmosQuery,
     EchoData,
+    AtprotoEchoData,
     ChangeWorkflow,
     EchoDataSecondaryChain,
     KvStore,
@@ -140,6 +141,9 @@ impl From<EvmService> for Vec<ComponentName> {
                 vec![ComponentName::Operator(OperatorComponent::CosmosQuery)]
             }
             EvmService::EchoData => vec![ComponentName::Operator(OperatorComponent::EchoData)],
+            EvmService::AtprotoEchoData => {
+                vec![ComponentName::Operator(OperatorComponent::EchoData)]
+            }
             EvmService::ChangeWorkflow => vec![
                 ComponentName::Operator(OperatorComponent::Square),
                 ComponentName::Operator(OperatorComponent::EchoData),
