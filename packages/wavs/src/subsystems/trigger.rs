@@ -520,7 +520,7 @@ impl TriggerManager {
                             let jetstream_config = streams::atproto_jetstream::JetstreamConfig {
                                 endpoint: self.config.jetstream_endpoint.clone(),
                                 wanted_collections: vec![], // Empty means subscribe to all collections
-                                wanted_dids: None, // Listen to all repos
+                                wanted_dids: None,          // Listen to all repos
                                 cursor: None,
                                 compression: true,
                                 max_message_size: self.config.jetstream_max_message_size,
@@ -741,7 +741,8 @@ impl TriggerManager {
                 }
                 StreamTriggers::AtProto { event } => {
                     // Process ATProto Jetstream events
-                    tracing::debug!("Received ATProto event: collection={:?}, action={:?}, repo={}",
+                    tracing::debug!(
+                        "Received ATProto event: collection={:?}, action={:?}, repo={}",
                         event.collection,
                         event.action,
                         event.repo
@@ -759,11 +760,8 @@ impl TriggerManager {
 
                     // Strategy 1: Exact match (collection, repo, action)
                     {
-                        let triggers_by_atproto_lock = self
-                            .lookup_maps
-                            .triggers_by_atproto_event
-                            .read()
-                            .unwrap();
+                        let triggers_by_atproto_lock =
+                            self.lookup_maps.triggers_by_atproto_event.read().unwrap();
 
                         // Check exact collection/repo/action match
                         if let Some(lookup_ids) = triggers_by_atproto_lock.get(&(
@@ -793,31 +791,30 @@ impl TriggerManager {
                         }
 
                         // Check collection match (any repo, any action)
-                        if let Some(lookup_ids) = triggers_by_atproto_lock.get(&(
-                            event.collection.clone(),
-                            None,
-                            None,
-                        )) {
+                        if let Some(lookup_ids) =
+                            triggers_by_atproto_lock.get(&(event.collection.clone(), None, None))
+                        {
                             matched_lookup_ids.extend(lookup_ids);
                         }
                     }
 
                     // Strategy 2: Pattern matching for collections with wildcards
                     {
-                        let triggers_by_atproto_lock = self
-                            .lookup_maps
-                            .triggers_by_atproto_event
-                            .read()
-                            .unwrap();
+                        let triggers_by_atproto_lock =
+                            self.lookup_maps.triggers_by_atproto_event.read().unwrap();
 
-                        for ((collection_pattern, repo_did_filter, action_filter), lookup_ids) in triggers_by_atproto_lock.iter() {
+                        for ((collection_pattern, repo_did_filter, action_filter), lookup_ids) in
+                            triggers_by_atproto_lock.iter()
+                        {
                             // Skip if already matched by exact lookup
-                            if !matched_lookup_ids.intersection(lookup_ids).next().is_none() {
+                            if matched_lookup_ids.intersection(lookup_ids).next().is_some() {
                                 continue;
                             }
 
                             // Check collection pattern match (supports wildcards)
-                            if self.matches_collection_pattern(collection_pattern, &event.collection) {
+                            if self
+                                .matches_collection_pattern(collection_pattern, &event.collection)
+                            {
                                 // Check repo filter
                                 let repo_matches = match repo_did_filter {
                                     Some(filter_did) => filter_did == &event.repo,
@@ -850,13 +847,13 @@ impl TriggerManager {
                             record: event.record.clone(),
                         };
 
-                        for trigger_config in self.lookup_maps.get_trigger_configs(&matched_lookup_ids) {
-                            dispatcher_commands.push(DispatcherCommand::Trigger(
-                                TriggerAction {
-                                    data: trigger_data.clone(),
-                                    config: trigger_config.clone(),
-                                },
-                            ));
+                        for trigger_config in
+                            self.lookup_maps.get_trigger_configs(&matched_lookup_ids)
+                        {
+                            dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
+                                data: trigger_data.clone(),
+                                config: trigger_config.clone(),
+                            }));
                         }
 
                         tracing::info!(
@@ -950,9 +947,9 @@ impl TriggerManager {
         }
 
         // Wildcard pattern matching
-        if pattern.ends_with(".*") {
-            let prefix = &pattern[..pattern.len() - 2]; // Remove ".*"
-            return actual.starts_with(prefix) && actual.len() > prefix.len()
+        if let Some(prefix) = pattern.strip_suffix(".*") {
+            return actual.starts_with(prefix)
+                && actual.len() > prefix.len()
                 && actual[prefix.len()..].starts_with('.');
         }
 

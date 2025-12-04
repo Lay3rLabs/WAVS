@@ -400,7 +400,9 @@ impl TriggerData {
             TriggerData::CosmosContractEvent { chain, .. }
             | TriggerData::EvmContractEvent { chain, .. }
             | TriggerData::BlockInterval { chain, .. } => Some(chain),
-            TriggerData::Cron { .. } | TriggerData::AtProtoEvent { .. } | TriggerData::Raw(_) => None,
+            TriggerData::Cron { .. } | TriggerData::AtProtoEvent { .. } | TriggerData::Raw(_) => {
+                None
+            }
         }
     }
 }

@@ -32,9 +32,8 @@ pub struct LookupMaps {
         RwLock<HashMap<(ChainKey, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
     /// lookup id by (collection, optional repo_did, optional action)
-    pub triggers_by_atproto_event: Arc<
-        RwLock<HashMap<(String, Option<String>, Option<String>), HashSet<LookupId>>>,
-    >,
+    pub triggers_by_atproto_event:
+        Arc<RwLock<HashMap<(String, Option<String>, Option<String>), HashSet<LookupId>>>>,
     // ServiceId <-> ServiceManager address
     pub service_manager: Arc<RwLock<BiMap<ServiceId, layer_climb::prelude::Address>>>,
     /// Efficient block schedulers (one per chain) for block interval triggers
@@ -286,7 +285,11 @@ impl LookupMaps {
                         .remove_trigger(lookup_id);
                 }
                 Trigger::Manual => {}
-                Trigger::AtProtoEvent { collection, repo_did, action } => {
+                Trigger::AtProtoEvent {
+                    collection,
+                    repo_did,
+                    action,
+                } => {
                     let mut lock = self.triggers_by_atproto_event.write().unwrap();
                     let key = (collection.clone(), repo_did.clone(), action.clone());
                     if let Some(set) = lock.get_mut(&key) {
@@ -381,7 +384,11 @@ impl LookupMaps {
                                 .remove_trigger(*lookup_id);
                         }
                         Trigger::Manual => {}
-                        Trigger::AtProtoEvent { collection, repo_did, action } => {
+                        Trigger::AtProtoEvent {
+                            collection,
+                            repo_did,
+                            action,
+                        } => {
                             let mut lock = self.triggers_by_atproto_event.write().unwrap();
                             let key = (collection.clone(), repo_did.clone(), action.clone());
                             if let Some(set) = lock.get_mut(&key) {

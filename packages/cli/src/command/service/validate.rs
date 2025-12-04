@@ -167,7 +167,10 @@ pub async fn validate_contracts_exist(
                 }
             }
             // Other trigger types don't need contract validation
-            Trigger::Cron { .. } | Trigger::Manual | Trigger::BlockInterval { .. } | Trigger::AtProtoEvent { .. } => {}
+            Trigger::Cron { .. }
+            | Trigger::Manual
+            | Trigger::BlockInterval { .. }
+            | Trigger::AtProtoEvent { .. } => {}
         }
     }
 

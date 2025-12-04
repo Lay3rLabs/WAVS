@@ -143,7 +143,11 @@ impl std::fmt::Display for WorkflowTriggerResult {
                     writeln!(f, "    End Time:   None")?;
                 }
             }
-            Trigger::AtProtoEvent { collection, repo_did, action } => {
+            Trigger::AtProtoEvent {
+                collection,
+                repo_did,
+                action,
+            } => {
                 writeln!(f, "  Trigger Type: ATProto Event")?;
                 writeln!(f, "    Collection: {}", collection)?;
                 if let Some(did) = repo_did {

@@ -5,8 +5,8 @@ pub mod evm_stream;
 pub mod local_command_stream;
 
 use crate::subsystems::trigger::{
-    streams::cosmos_stream::StreamTriggerCosmosContractEvent,
-    streams::atproto_jetstream::AtProtoEvent, TriggerCommand,
+    streams::atproto_jetstream::AtProtoEvent,
+    streams::cosmos_stream::StreamTriggerCosmosContractEvent, TriggerCommand,
 };
 
 use super::{error::TriggerError, lookup::LookupId};
