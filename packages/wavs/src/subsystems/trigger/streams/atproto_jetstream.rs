@@ -435,15 +435,12 @@ fn parse_commit_event(
                         payload_snippet(&value.to_string())
                     ))
                 })?;
-            let rkey = commit
-                .get("rkey")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| {
-                    TriggerError::JetstreamParse(format!(
-                        "Missing commit.rkey and operation.path; payload={}",
-                        payload_snippet(&value.to_string())
-                    ))
-                })?;
+            let rkey = commit.get("rkey").and_then(|v| v.as_str()).ok_or_else(|| {
+                TriggerError::JetstreamParse(format!(
+                    "Missing commit.rkey and operation.path; payload={}",
+                    payload_snippet(&value.to_string())
+                ))
+            })?;
             (collection, rkey)
         };
 
@@ -468,9 +465,10 @@ fn parse_commit_event(
             "delete" => CommitAction::Delete,
             other => {
                 return Err(TriggerError::JetstreamParse(format!(
-                    "Unknown commit action `{}` for path `{}`; payload={}",
+                    "Unknown commit action `{}` for path `{}/{}`; payload={}",
                     other,
-                    format!("{}/{}", collection, rkey),
+                    collection,
+                    rkey,
                     payload_snippet(&value.to_string())
                 )))
             }
@@ -749,7 +747,10 @@ mod tests {
         assert_eq!(event.collection, "app.bsky.feed.like");
         assert_eq!(event.rkey, "3m7azbh4ous2h");
         assert_eq!(event.action, CommitAction::Create);
-        assert_eq!(event.cid.as_deref(), Some("bafyreiekmyvl7ogn4ym5lvligmc4xylntgvj7nu2rntseb7lfth6imdtyi"));
+        assert_eq!(
+            event.cid.as_deref(),
+            Some("bafyreiekmyvl7ogn4ym5lvligmc4xylntgvj7nu2rntseb7lfth6imdtyi")
+        );
         assert!(event.record.is_some());
     }
 
