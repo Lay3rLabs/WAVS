@@ -151,6 +151,12 @@ impl Guest for Component {
                         event_id_salt: None,
                     },
                 ]);
+            } else if input_str == "at-proto" {
+                return Ok(vec![WasmResponse {
+                    payload: "atproto-echo".as_bytes().to_vec(),
+                    ordering: None,
+                    event_id_salt: None,
+                }]);
             }
         }
 

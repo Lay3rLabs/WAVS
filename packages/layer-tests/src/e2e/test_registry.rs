@@ -339,7 +339,7 @@ impl TestRegistry {
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::Existing(Trigger::AtProtoEvent {
                             collection: "app.bsky.feed.post".to_string(),
-                            repo_did: None,
+                            repo_did: Some("did:example:alice".to_string()),
                             action: Some("create".to_string()),
                         }))
                         .with_submit(SubmitDefinition::Aggregator {

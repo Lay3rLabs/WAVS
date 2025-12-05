@@ -1,6 +1,8 @@
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::time::{sleep, Duration};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
@@ -143,6 +145,7 @@ pub async fn start_jetstream_stream(
     metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
+    static MISSING_TYPE_LOGGED: AtomicUsize = AtomicUsize::new(0);
     let stream = async_stream::stream! {
         let mut reconnect_count = 0;
         let max_reconnects = 10;
@@ -165,8 +168,19 @@ pub async fn start_jetstream_stream(
                                 });
                             }
                             Err(TriggerError::JetstreamParse(msg)) => {
-                                // Non-fatal parse issue (e.g. hello/keepalive), log and keep the connection
-                                warn!("Ignoring Jetstream message: {}", msg);
+                                // Non-fatal parse issue (e.g. hello/keepalive), rate-limit logging for noisy missing-type frames
+                                if msg.contains("missing field `type`") {
+                                    let count = MISSING_TYPE_LOGGED.fetch_add(1, Ordering::Relaxed);
+                                    if count < 3 {
+                                        warn!("Ignoring Jetstream keepalive/info message: {}", msg);
+                                    } else if count == 3 {
+                                        warn!("Further Jetstream keepalive/info messages suppressed");
+                                    } else {
+                                        tracing::debug!("Ignoring Jetstream keepalive/info message");
+                                    }
+                                } else {
+                                    warn!("Ignoring Jetstream message: {}", msg);
+                                }
                                 continue;
                             }
                             Err(e) => {
@@ -290,100 +304,247 @@ fn build_jetstream_url(config: &JetstreamConfig) -> Result<Url, TriggerError> {
 
 /// Handle incoming Jetstream message
 fn handle_message(text: &str, _is_compressed: bool) -> Result<AtProtoEvent, TriggerError> {
+    // Helper to embed a truncated payload in parse errors
+    let payload_snippet = |body: &str| {
+        const MAX_LEN: usize = 512;
+        let bytes = body.as_bytes();
+        let end = bytes.len().min(MAX_LEN);
+        let snippet = String::from_utf8_lossy(&bytes[..end]);
+        if bytes.len() > MAX_LEN {
+            format!("{}... (truncated)", snippet)
+        } else {
+            snippet.to_string()
+        }
+    };
+
     // Try to parse as subscriber message first
     if let Ok(_sub_msg) = serde_json::from_str::<SubscriberMessage>(text) {
-        // This is a subscriber message, ignore for now
-        return Err(TriggerError::JetstreamParse(
-            "Subscriber message received".to_string(),
-        ));
+        return Err(TriggerError::JetstreamParse(format!(
+            "Subscriber message received; payload={}",
+            payload_snippet(text)
+        )));
     }
 
-    // Parse as Jetstream event
-    let jetstream_event: JetstreamEvent = serde_json::from_str(text).map_err(|e| {
-        TriggerError::JetstreamParse(format!("Failed to parse Jetstream event: {}", e))
+    // Flexible parsing: accept either `type` (legacy) or `kind` (current) tagged messages
+    let value: Value = serde_json::from_str(text).map_err(|e| {
+        TriggerError::JetstreamParse(format!(
+            "Failed to parse Jetstream event: {}; payload={}",
+            e,
+            payload_snippet(text)
+        ))
     })?;
 
-    match jetstream_event {
-        JetstreamEvent::Commit {
-            sequence,
-            time_us: timestamp,
-            repo,
-            commit,
-        } => {
-            // Extract collection and rkey from the operation path
-            let (collection, rkey) = if let Some(operation) = &commit.operation {
-                let parts: Vec<&str> = operation.path.split('/').collect();
-                if parts.len() == 3 {
-                    (parts[1].to_string(), parts[2].to_string())
-                } else {
-                    return Err(TriggerError::JetstreamParse(
-                        "Invalid operation path format".to_string(),
-                    ));
-                }
-            } else {
-                return Err(TriggerError::JetstreamParse(
-                    "Missing operation data".to_string(),
-                ));
-            };
+    let tag = value
+        .get("type")
+        .or_else(|| value.get("kind"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            TriggerError::JetstreamParse(format!(
+                "Missing event tag (type/kind); payload={}",
+                payload_snippet(text)
+            ))
+        })?;
 
-            let cid = commit.operation.as_ref().map(|op| op.cid.clone());
-
-            // For now, we don't extract the full record data - it would need to be fetched separately
-            let record = None;
-
-            Ok(AtProtoEvent {
-                sequence,
-                timestamp,
-                repo,
-                collection,
-                rkey,
-                action: commit.action,
-                cid,
-                record,
-            })
-        }
-        JetstreamEvent::Identity {
-            sequence,
-            time_us: timestamp,
-            did,
-            ..
-        } => {
-            // Convert identity event to a standard format
-            Ok(AtProtoEvent {
-                sequence,
-                timestamp,
-                repo: did.clone(),
-                collection: "identity".to_string(),
-                rkey: "handle".to_string(),
-                action: CommitAction::Update,
-                cid: None,
-                record: None,
-            })
-        }
-        JetstreamEvent::Account {
-            sequence,
-            time_us: timestamp,
-            did,
-            active,
-            ..
-        } => {
-            // Convert account event to a standard format
-            Ok(AtProtoEvent {
-                sequence,
-                timestamp,
-                repo: did.clone(),
-                collection: "account".to_string(),
-                rkey: "status".to_string(),
-                action: if active {
-                    CommitAction::Update
-                } else {
-                    CommitAction::Delete
-                },
-                cid: None,
-                record: None,
-            })
-        }
+    match tag {
+        "commit" => parse_commit_event(&value, &payload_snippet),
+        "identity" => parse_identity_event(&value, &payload_snippet),
+        "account" => parse_account_event(&value, &payload_snippet),
+        other => Err(TriggerError::JetstreamParse(format!(
+            "Unsupported Jetstream event kind `{}`; payload={}",
+            other,
+            payload_snippet(text)
+        ))),
     }
+}
+
+fn parse_commit_event(
+    value: &Value,
+    payload_snippet: &impl Fn(&str) -> String,
+) -> Result<AtProtoEvent, TriggerError> {
+    let commit = value.get("commit").ok_or_else(|| {
+        TriggerError::JetstreamParse("Missing commit body".to_string())
+    })?;
+
+    let sequence = value
+        .get("seq")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let timestamp = value
+        .get("time_us")
+        .or_else(|| value.get("timeUs"))
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| {
+            TriggerError::JetstreamParse(format!(
+                "Missing time_us/timeUs; payload={}",
+                payload_snippet(&value.to_string())
+            ))
+        })?;
+    let repo = value
+        .get("repo")
+        .or_else(|| value.get("did"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            TriggerError::JetstreamParse(format!(
+                "Missing repo/did; payload={}",
+                payload_snippet(&value.to_string())
+            ))
+        })?
+        .to_string();
+
+    let collection = commit
+        .get("collection")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            TriggerError::JetstreamParse(format!(
+                "Missing commit.collection; payload={}",
+                payload_snippet(&value.to_string())
+            ))
+        })?
+        .to_string();
+
+    let rkey = commit
+        .get("rkey")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            TriggerError::JetstreamParse(format!(
+                "Missing commit.rkey; payload={}",
+                payload_snippet(&value.to_string())
+            ))
+        })?
+        .to_string();
+
+    let action = commit
+        .get("operation")
+        .or_else(|| commit.get("action"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            TriggerError::JetstreamParse(format!(
+                "Missing commit.operation/action; payload={}",
+                payload_snippet(&value.to_string())
+            ))
+        })?;
+
+    let action = match action {
+        "create" => CommitAction::Create,
+        "update" => CommitAction::Update,
+        "delete" => CommitAction::Delete,
+        other => {
+            return Err(TriggerError::JetstreamParse(format!(
+                "Unknown commit action `{}`; payload={}",
+                other,
+                payload_snippet(&value.to_string())
+            )))
+        }
+    };
+
+    let cid = commit
+        .get("cid")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let record = commit.get("record").cloned();
+
+    Ok(AtProtoEvent {
+        sequence,
+        timestamp,
+        repo,
+        collection,
+        rkey,
+        action,
+        cid,
+        record,
+    })
+}
+
+fn parse_identity_event(
+    value: &Value,
+    payload_snippet: &impl Fn(&str) -> String,
+) -> Result<AtProtoEvent, TriggerError> {
+    let sequence = value
+        .get("seq")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let timestamp = value
+        .get("time_us")
+        .or_else(|| value.get("timeUs"))
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| {
+            TriggerError::JetstreamParse(format!(
+                "Missing time_us/timeUs; payload={}",
+                payload_snippet(&value.to_string())
+            ))
+        })?;
+    let did = value
+        .get("did")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            TriggerError::JetstreamParse(format!(
+                "Missing did; payload={}",
+                payload_snippet(&value.to_string())
+            ))
+        })?
+        .to_string();
+
+    Ok(AtProtoEvent {
+        sequence,
+        timestamp,
+        repo: did.clone(),
+        collection: "identity".to_string(),
+        rkey: "handle".to_string(),
+        action: CommitAction::Update,
+        cid: None,
+        record: None,
+    })
+}
+
+fn parse_account_event(
+    value: &Value,
+    payload_snippet: &impl Fn(&str) -> String,
+) -> Result<AtProtoEvent, TriggerError> {
+    let sequence = value
+        .get("seq")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let timestamp = value
+        .get("time_us")
+        .or_else(|| value.get("timeUs"))
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| {
+            TriggerError::JetstreamParse(format!(
+                "Missing time_us/timeUs; payload={}",
+                payload_snippet(&value.to_string())
+            ))
+        })?;
+    let did = value
+        .get("did")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            TriggerError::JetstreamParse(format!(
+                "Missing did; payload={}",
+                payload_snippet(&value.to_string())
+            ))
+        })?
+        .to_string();
+
+    let active = value
+        .get("active")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    Ok(AtProtoEvent {
+        sequence,
+        timestamp,
+        repo: did.clone(),
+        collection: "account".to_string(),
+        rkey: "status".to_string(),
+        action: if active {
+            CommitAction::Update
+        } else {
+            CommitAction::Delete
+        },
+        cid: None,
+        record: None,
+    })
 }
 
 /// Decompress zstd compressed message
