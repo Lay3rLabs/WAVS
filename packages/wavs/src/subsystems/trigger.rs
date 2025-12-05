@@ -50,6 +50,7 @@ pub enum TriggerCommand {
         addresses: Vec<alloy_primitives::Address>,
         event_hashes: Vec<alloy_primitives::B256>,
     },
+    StartListeningAtProto,
     ManualTrigger(Box<TriggerAction>),
 }
 
@@ -101,6 +102,9 @@ impl TriggerCommand {
                     Vec::new()
                 }
             },
+            Trigger::AtProtoEvent { .. } => {
+                vec![Self::StartListeningAtProto]
+            }
             Trigger::Manual => Vec::new(),
         }
     }
@@ -119,6 +123,7 @@ pub struct TriggerManager {
     pub disable_networking: bool,
     pub services: Services,
     pub evm_controllers: Arc<std::sync::RwLock<HashMap<ChainKey, EvmTriggerStreamsController>>>,
+    pub config: Config,
 }
 
 impl TriggerManager {
@@ -143,6 +148,7 @@ impl TriggerManager {
             disable_networking: config.disable_trigger_networking,
             services,
             evm_controllers: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            config: config.clone(),
         })
     }
 
@@ -280,6 +286,7 @@ impl TriggerManager {
 
         let mut listening_chains = HashSet::new();
         let mut has_started_cron_stream = false;
+        let mut has_started_atproto_stream = false;
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
@@ -493,6 +500,53 @@ impl TriggerManager {
                                 }
                             }
                         }
+                        TriggerCommand::StartListeningAtProto => {
+                            #[cfg(feature = "dev")]
+                            if self.disable_networking {
+                                tracing::warn!(
+                                    "Networking is disabled, skipping ATProto stream start"
+                                );
+                                continue;
+                            }
+
+                            if has_started_atproto_stream {
+                                tracing::debug!("ATProto stream already started, skipping");
+                                continue;
+                            }
+
+                            has_started_atproto_stream = true;
+
+                            // Subscribe to all ATProto events - filtering will be done in the lookup system
+                            let jetstream_config = streams::atproto_jetstream::JetstreamConfig {
+                                endpoint: self.config.jetstream_endpoint.clone(),
+                                wanted_collections: vec![], // Empty means subscribe to all collections
+                                wanted_dids: None,          // Listen to all repos
+                                cursor: None,
+                                compression: true,
+                                max_message_size: self.config.jetstream_max_message_size,
+                                require_hello: false,
+                            };
+
+                            // Start the ATProto Jetstream stream
+                            match streams::atproto_jetstream::start_jetstream_stream(
+                                jetstream_config,
+                                self.metrics.clone(),
+                            )
+                            .await
+                            {
+                                Ok(atproto_stream) => {
+                                    multiplexed_stream.push(atproto_stream);
+                                    tracing::info!("Started ATProto Jetstream stream");
+                                }
+                                Err(err) => {
+                                    tracing::error!(
+                                        "Failed to start ATProto Jetstream stream: {:?}",
+                                        err
+                                    );
+                                    continue;
+                                }
+                            }
+                        }
                     }
                 }
                 StreamTriggers::Evm {
@@ -685,6 +739,132 @@ impl TriggerManager {
                         }
                     }
                 }
+                StreamTriggers::AtProto { event } => {
+                    // Process ATProto Jetstream events
+                    tracing::debug!(
+                        "Received ATProto event: collection={:?}, action={:?}, repo={}",
+                        event.collection,
+                        event.action,
+                        event.repo
+                    );
+
+                    // Convert action to string for matching
+                    let action_str = match event.action {
+                        streams::atproto_jetstream::CommitAction::Create => "create".to_string(),
+                        streams::atproto_jetstream::CommitAction::Update => "update".to_string(),
+                        streams::atproto_jetstream::CommitAction::Delete => "delete".to_string(),
+                    };
+
+                    // Find matching triggers using multiple lookup strategies
+                    let mut matched_lookup_ids: HashSet<LookupId> = HashSet::new();
+
+                    // Strategy 1: Exact match (collection, repo, action)
+                    {
+                        let triggers_by_atproto_lock =
+                            self.lookup_maps.triggers_by_atproto_event.read().unwrap();
+
+                        // Check exact collection/repo/action match
+                        if let Some(lookup_ids) = triggers_by_atproto_lock.get(&(
+                            event.collection.clone(),
+                            Some(event.repo.clone()),
+                            Some(action_str.clone()),
+                        )) {
+                            matched_lookup_ids.extend(lookup_ids);
+                        }
+
+                        // Check collection/repo match (any action)
+                        if let Some(lookup_ids) = triggers_by_atproto_lock.get(&(
+                            event.collection.clone(),
+                            Some(event.repo.clone()),
+                            None,
+                        )) {
+                            matched_lookup_ids.extend(lookup_ids);
+                        }
+
+                        // Check collection/action match (any repo)
+                        if let Some(lookup_ids) = triggers_by_atproto_lock.get(&(
+                            event.collection.clone(),
+                            None,
+                            Some(action_str.clone()),
+                        )) {
+                            matched_lookup_ids.extend(lookup_ids);
+                        }
+
+                        // Check collection match (any repo, any action)
+                        if let Some(lookup_ids) =
+                            triggers_by_atproto_lock.get(&(event.collection.clone(), None, None))
+                        {
+                            matched_lookup_ids.extend(lookup_ids);
+                        }
+                    }
+
+                    // Strategy 2: Pattern matching for collections with wildcards
+                    {
+                        let triggers_by_atproto_lock =
+                            self.lookup_maps.triggers_by_atproto_event.read().unwrap();
+
+                        for ((collection_pattern, repo_did_filter, action_filter), lookup_ids) in
+                            triggers_by_atproto_lock.iter()
+                        {
+                            // Skip if already matched by exact lookup
+                            if matched_lookup_ids.intersection(lookup_ids).next().is_some() {
+                                continue;
+                            }
+
+                            // Check collection pattern match (supports wildcards)
+                            if self
+                                .matches_collection_pattern(collection_pattern, &event.collection)
+                            {
+                                // Check repo filter
+                                let repo_matches = match repo_did_filter {
+                                    Some(filter_did) => filter_did == &event.repo,
+                                    None => true, // any repo
+                                };
+
+                                // Check action filter
+                                let action_matches = match action_filter {
+                                    Some(filter_action) => filter_action == &action_str,
+                                    None => true, // any action
+                                };
+
+                                if repo_matches && action_matches {
+                                    matched_lookup_ids.extend(lookup_ids);
+                                }
+                            }
+                        }
+                    }
+
+                    // Create trigger actions for all matched lookups
+                    if !matched_lookup_ids.is_empty() {
+                        let trigger_data = TriggerData::AtProtoEvent {
+                            sequence: event.sequence,
+                            timestamp: event.timestamp,
+                            repo: event.repo.clone(),
+                            collection: event.collection.clone(),
+                            rkey: event.rkey.clone(),
+                            action: action_str.clone(),
+                            cid: event.cid.clone(),
+                            record: event.record.clone(),
+                        };
+
+                        for trigger_config in
+                            self.lookup_maps.get_trigger_configs(&matched_lookup_ids)
+                        {
+                            dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
+                                data: trigger_data.clone(),
+                                config: trigger_config.clone(),
+                            }));
+                        }
+
+                        tracing::info!(
+                            "ATProto event matched {} triggers: collection={}, repo={}, action={}",
+                            matched_lookup_ids.len(),
+                            event.collection,
+                            event.repo,
+                            action_str
+                        );
+                    }
+                }
             }
 
             if !dispatcher_commands.is_empty() {
@@ -756,6 +936,24 @@ impl TriggerManager {
         } else {
             Vec::new()
         }
+    }
+
+    /// Check if a collection pattern matches the actual collection
+    /// Supports wildcard patterns with '*' (e.g., "app.bsky.feed.*")
+    fn matches_collection_pattern(&self, pattern: &str, actual: &str) -> bool {
+        // Exact match
+        if pattern == actual {
+            return true;
+        }
+
+        // Wildcard pattern matching
+        if let Some(prefix) = pattern.strip_suffix(".*") {
+            return actual.starts_with(prefix)
+                && actual.len() > prefix.len()
+                && actual[prefix.len()..].starts_with('.');
+        }
+
+        false
     }
 
     #[cfg(feature = "dev")]

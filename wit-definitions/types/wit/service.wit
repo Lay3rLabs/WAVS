@@ -92,6 +92,7 @@ interface service {
         cosmos-contract-event(trigger-cosmos-contract-event),
         block-interval(trigger-block-interval),
         cron(trigger-cron),
+        atproto-event(trigger-atproto-event),
         manual
     }
 
@@ -118,6 +119,12 @@ interface service {
         schedule: string,
         start-time: option<timestamp>,
         end-time: option<timestamp>
+    }
+
+    record trigger-atproto-event {
+        collection: string,
+        repo-did: option<string>,
+        action: option<string>
     }
 
 

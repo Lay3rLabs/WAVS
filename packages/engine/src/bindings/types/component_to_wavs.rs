@@ -45,6 +45,11 @@ impl TryFrom<component_service::Trigger> for wavs_types::Trigger {
                 start_time: source.start_time.map(Into::into),
                 end_time: source.end_time.map(Into::into),
             },
+            component_service::Trigger::AtprotoEvent(source) => wavs_types::Trigger::AtProtoEvent {
+                collection: source.collection,
+                repo_did: source.repo_did,
+                action: source.action,
+            },
         })
     }
 }
