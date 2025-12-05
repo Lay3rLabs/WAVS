@@ -329,7 +329,7 @@ async fn process_action(
                                 }
                             }
                             Err(e) => {
-                                tracing::error!("Quorum validation failed: {:?}", e);
+                                tracing::error!("Service handler encountered an error: {:?}", e);
                                 Err(e)
                             }
                         }
