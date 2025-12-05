@@ -2,7 +2,6 @@ use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::time::{sleep, Duration};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
@@ -88,6 +87,9 @@ pub struct CommitData {
     rev: String,
     action: CommitAction,
     operation: Option<OperationData>,
+    operations: Option<Vec<OperationData>>,
+    #[serde(rename = "ops")]
+    ops: Option<Vec<OperationData>>,
 }
 
 /// Commit action type
@@ -103,7 +105,11 @@ pub enum CommitAction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationData {
     path: String,
-    cid: String,
+    cid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    action: Option<CommitAction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    record: Option<Value>,
 }
 
 /// Subscription message for filtering
@@ -145,7 +151,6 @@ pub async fn start_jetstream_stream(
     metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
-    static MISSING_TYPE_LOGGED: AtomicUsize = AtomicUsize::new(0);
     let stream = async_stream::stream! {
         let mut reconnect_count = 0;
         let max_reconnects = 10;
@@ -160,27 +165,18 @@ pub async fn start_jetstream_stream(
                     reconnect_count = 0;
                     info!("Successfully connected to Jetstream");
 
-                    while let Some(event) = stream.next().await {
-                        match event {
-                            Ok(atproto_event) => {
-                                yield Ok(StreamTriggers::AtProto {
-                                    event: atproto_event,
-                                });
+                    while let Some(events) = stream.next().await {
+                        match events {
+                            Ok(atproto_events) => {
+                                for atproto_event in atproto_events {
+                                    yield Ok(StreamTriggers::AtProto {
+                                        event: atproto_event,
+                                    });
+                                }
                             }
                             Err(TriggerError::JetstreamParse(msg)) => {
-                                // Non-fatal parse issue (e.g. hello/keepalive), rate-limit logging for noisy missing-type frames
-                                if msg.contains("missing field `type`") {
-                                    let count = MISSING_TYPE_LOGGED.fetch_add(1, Ordering::Relaxed);
-                                    if count < 3 {
-                                        warn!("Ignoring Jetstream keepalive/info message: {}", msg);
-                                    } else if count == 3 {
-                                        warn!("Further Jetstream keepalive/info messages suppressed");
-                                    } else {
-                                        tracing::debug!("Ignoring Jetstream keepalive/info message");
-                                    }
-                                } else {
-                                    warn!("Ignoring Jetstream message: {}", msg);
-                                }
+                                // Non-fatal parse issue (e.g. hello/keepalive)
+                                warn!("Ignoring Jetstream message: {}", msg);
                                 continue;
                             }
                             Err(e) => {
@@ -222,7 +218,8 @@ pub async fn start_jetstream_stream(
 async fn create_jetstream_connection(
     config: &JetstreamConfig,
     _metrics: &TriggerMetrics,
-) -> Result<Pin<Box<dyn Stream<Item = Result<AtProtoEvent, TriggerError>> + Send>>, TriggerError> {
+) -> Result<Pin<Box<dyn Stream<Item = Result<Vec<AtProtoEvent>, TriggerError>> + Send>>, TriggerError>
+{
     let url = build_jetstream_url(config)?;
     info!("Connecting to Jetstream URL: {}", url);
 
@@ -296,7 +293,7 @@ fn build_jetstream_url(config: &JetstreamConfig) -> Result<Url, TriggerError> {
 }
 
 /// Handle incoming Jetstream message
-fn handle_message(text: &str) -> Result<AtProtoEvent, TriggerError> {
+fn handle_message(text: &str) -> Result<Vec<AtProtoEvent>, TriggerError> {
     // Helper to embed a truncated payload in parse errors
     let payload_snippet = |body: &str| {
         const MAX_LEN: usize = 512;
@@ -353,7 +350,7 @@ fn handle_message(text: &str) -> Result<AtProtoEvent, TriggerError> {
 fn parse_commit_event(
     value: &Value,
     payload_snippet: &impl Fn(&str) -> String,
-) -> Result<AtProtoEvent, TriggerError> {
+) -> Result<Vec<AtProtoEvent>, TriggerError> {
     let commit = value
         .get("commit")
         .ok_or_else(|| TriggerError::JetstreamParse("Missing commit body".to_string()))?;
@@ -362,6 +359,8 @@ fn parse_commit_event(
     let timestamp = value
         .get("time_us")
         .or_else(|| value.get("timeUs"))
+        .or_else(|| commit.get("time_us"))
+        .or_else(|| commit.get("timeUs"))
         .and_then(|v| v.as_i64())
         .ok_or_else(|| {
             TriggerError::JetstreamParse(format!(
@@ -381,75 +380,132 @@ fn parse_commit_event(
         })?
         .to_string();
 
-    let collection = commit
-        .get("collection")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!(
-                "Missing commit.collection; payload={}",
-                payload_snippet(&value.to_string())
-            ))
-        })?
-        .to_string();
-
-    let rkey = commit
-        .get("rkey")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!(
-                "Missing commit.rkey; payload={}",
-                payload_snippet(&value.to_string())
-            ))
-        })?
-        .to_string();
-
-    let action = commit
-        .get("operation")
-        .or_else(|| commit.get("action"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!(
-                "Missing commit.operation/action; payload={}",
-                payload_snippet(&value.to_string())
-            ))
-        })?;
-
-    let action = match action {
-        "create" => CommitAction::Create,
-        "update" => CommitAction::Update,
-        "delete" => CommitAction::Delete,
-        other => {
+    let operations: Vec<&Value> =
+        if let Some(ops) = commit.get("operations").and_then(|v| v.as_array()) {
+            ops.iter().collect()
+        } else if let Some(ops) = commit.get("ops").and_then(|v| v.as_array()) {
+            ops.iter().collect()
+        } else if let Some(op) = commit.get("operation") {
+            if let Some(arr) = op.as_array() {
+                arr.iter().collect()
+            } else {
+                vec![op]
+            }
+        } else if commit.get("collection").is_some() && commit.get("rkey").is_some() {
+            vec![commit]
+        } else {
             return Err(TriggerError::JetstreamParse(format!(
-                "Unknown commit action `{}`; payload={}",
-                other,
+                "Missing commit.operation(s); payload={}",
                 payload_snippet(&value.to_string())
-            )))
-        }
-    };
+            )));
+        };
 
-    let cid = commit
-        .get("cid")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+    if operations.is_empty() {
+        return Err(TriggerError::JetstreamParse(format!(
+            "Empty commit.operations array; payload={}",
+            payload_snippet(&value.to_string())
+        )));
+    }
 
-    let record = commit.get("record").cloned();
+    let mut events = Vec::with_capacity(operations.len());
+    for op in operations {
+        let (collection, rkey) = if let Some(path) = op.get("path").and_then(|v| v.as_str()) {
+            path.split_once('/').ok_or_else(|| {
+                TriggerError::JetstreamParse(format!(
+                    "Invalid commit.operation.path `{}`; payload={}",
+                    path,
+                    payload_snippet(&value.to_string())
+                ))
+            })?
+        } else if let Some(path) = commit.get("path").and_then(|v| v.as_str()) {
+            path.split_once('/').ok_or_else(|| {
+                TriggerError::JetstreamParse(format!(
+                    "Invalid commit.path `{}`; payload={}",
+                    path,
+                    payload_snippet(&value.to_string())
+                ))
+            })?
+        } else {
+            let collection = commit
+                .get("collection")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    TriggerError::JetstreamParse(format!(
+                        "Missing commit.collection and operation.path; payload={}",
+                        payload_snippet(&value.to_string())
+                    ))
+                })?;
+            let rkey = commit
+                .get("rkey")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| {
+                    TriggerError::JetstreamParse(format!(
+                        "Missing commit.rkey and operation.path; payload={}",
+                        payload_snippet(&value.to_string())
+                    ))
+                })?;
+            (collection, rkey)
+        };
 
-    Ok(AtProtoEvent {
-        sequence,
-        timestamp,
-        repo,
-        collection,
-        rkey,
-        action,
-        cid,
-        record,
-    })
+        let action_str = op
+            .get("action")
+            .or_else(|| commit.get("action"))
+            .or_else(|| commit.get("operation"))
+            .or_else(|| op.get("op"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                TriggerError::JetstreamParse(format!(
+                    "Missing commit.action; path={}/{}; payload={}",
+                    collection,
+                    rkey,
+                    payload_snippet(&value.to_string())
+                ))
+            })?;
+
+        let action = match action_str {
+            "create" => CommitAction::Create,
+            "update" => CommitAction::Update,
+            "delete" => CommitAction::Delete,
+            other => {
+                return Err(TriggerError::JetstreamParse(format!(
+                    "Unknown commit action `{}` for path `{}`; payload={}",
+                    other,
+                    format!("{}/{}", collection, rkey),
+                    payload_snippet(&value.to_string())
+                )))
+            }
+        };
+
+        let cid = op
+            .get("cid")
+            .or_else(|| commit.get("cid"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let record = op
+            .get("record")
+            .cloned()
+            .or_else(|| commit.get("record").cloned());
+
+        events.push(AtProtoEvent {
+            sequence,
+            timestamp,
+            repo: repo.clone(),
+            collection: collection.to_string(),
+            rkey: rkey.to_string(),
+            action,
+            cid,
+            record,
+        });
+    }
+
+    Ok(events)
 }
 
 fn parse_identity_event(
     value: &Value,
     payload_snippet: &impl Fn(&str) -> String,
-) -> Result<AtProtoEvent, TriggerError> {
+) -> Result<Vec<AtProtoEvent>, TriggerError> {
     let sequence = value.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
     let timestamp = value
         .get("time_us")
@@ -472,7 +528,7 @@ fn parse_identity_event(
         })?
         .to_string();
 
-    Ok(AtProtoEvent {
+    Ok(vec![AtProtoEvent {
         sequence,
         timestamp,
         repo: did.clone(),
@@ -481,13 +537,13 @@ fn parse_identity_event(
         action: CommitAction::Update,
         cid: None,
         record: None,
-    })
+    }])
 }
 
 fn parse_account_event(
     value: &Value,
     payload_snippet: &impl Fn(&str) -> String,
-) -> Result<AtProtoEvent, TriggerError> {
+) -> Result<Vec<AtProtoEvent>, TriggerError> {
     let sequence = value.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
     let timestamp = value
         .get("time_us")
@@ -515,7 +571,7 @@ fn parse_account_event(
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
-    Ok(AtProtoEvent {
+    Ok(vec![AtProtoEvent {
         sequence,
         timestamp,
         repo: did.clone(),
@@ -528,7 +584,7 @@ fn parse_account_event(
         },
         cid: None,
         record: None,
-    })
+    }])
 }
 
 #[cfg(test)]
@@ -584,12 +640,143 @@ mod tests {
         }
         "#;
 
-        let event = handle_message(commit_msg).unwrap();
+        let events = handle_message(commit_msg).unwrap();
+        assert_eq!(events.len(), 1);
+        let event = &events[0];
         assert_eq!(event.sequence, 12345);
         assert_eq!(event.repo, "did:plc:test123");
         assert_eq!(event.collection, "app.bsky.feed.post");
         assert_eq!(event.rkey, "abcdef");
         assert_eq!(event.action, CommitAction::Create);
         assert_eq!(event.cid, Some("bafytest123".to_string()));
+    }
+
+    #[test]
+    fn test_handle_multiple_operations() {
+        let commit_msg = r#"
+        {
+            "kind": "commit",
+            "seq": 555,
+            "timeUs": 1700000,
+            "repo": "did:plc:multi",
+            "commit": {
+                "seq": 555,
+                "rev": "multirev",
+                "operations": [
+                    {
+                        "action": "create",
+                        "path": "app.bsky.feed.post/aaa",
+                        "cid": "cid-create-aaa",
+                        "record": {"text": "hello"}
+                    },
+                    {
+                        "action": "delete",
+                        "path": "app.bsky.graph.follow/bbb",
+                        "cid": "cid-delete-bbb"
+                    }
+                ]
+            }
+        }
+        "#;
+
+        let events = handle_message(commit_msg).unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].collection, "app.bsky.feed.post");
+        assert_eq!(events[0].rkey, "aaa");
+        assert_eq!(events[0].action, CommitAction::Create);
+        assert_eq!(events[0].cid.as_deref(), Some("cid-create-aaa"));
+        assert!(events[0].record.is_some());
+
+        assert_eq!(events[1].collection, "app.bsky.graph.follow");
+        assert_eq!(events[1].rkey, "bbb");
+        assert_eq!(events[1].action, CommitAction::Delete);
+    }
+
+    #[test]
+    fn test_handle_ops_alias_and_delete_without_cid() {
+        let commit_msg = r#"
+        {
+            "type": "commit",
+            "seq": 777,
+            "timeUs": 1700002,
+            "repo": "did:plc:alias",
+            "commit": {
+                "ops": [
+                    {
+                        "action": "delete",
+                        "path": "app.bsky.feed.post/zzz"
+                    }
+                ]
+            }
+        }
+        "#;
+
+        let events = handle_message(commit_msg).unwrap();
+        assert_eq!(events.len(), 1);
+        let event = &events[0];
+        assert_eq!(event.collection, "app.bsky.feed.post");
+        assert_eq!(event.rkey, "zzz");
+        assert_eq!(event.action, CommitAction::Delete);
+        assert!(event.cid.is_none());
+    }
+
+    #[test]
+    fn test_handle_commit_with_collection_rkey_fields() {
+        let commit_msg = r#"
+        {
+            "kind": "commit",
+            "seq": 888,
+            "time_us": 1764955855798580,
+            "did": "did:plc:u7kls5du676hvfr53pbrl7qc",
+            "commit": {
+                "cid": "bafyreiekmyvl7ogn4ym5lvligmc4xylntgvj7nu2rntseb7lfth6imdtyi",
+                "collection": "app.bsky.feed.like",
+                "operation": "create",
+                "record": {
+                    "$type": "app.bsky.feed.like",
+                    "subject": {"cid": "bafyreifs5jhk7bssffjrqlzngnsdem3d7trc4cq2loormtio73ronscbr4", "uri": "at://did:plc:lm4bexmzwiwvcyp3xvnbqt3y/app.bsky.feed.post/3m7aqb43qqc2i"},
+                    "createdAt": "2025-12-05T17:30:55.445Z"
+                },
+                "rev": "3m7azbh53l22h",
+                "rkey": "3m7azbh4ous2h"
+            }
+        }
+        "#;
+
+        let events = handle_message(commit_msg).unwrap();
+        assert_eq!(events.len(), 1);
+        let event = &events[0];
+        assert_eq!(event.collection, "app.bsky.feed.like");
+        assert_eq!(event.rkey, "3m7azbh4ous2h");
+        assert_eq!(event.action, CommitAction::Create);
+        assert_eq!(event.cid.as_deref(), Some("bafyreiekmyvl7ogn4ym5lvligmc4xylntgvj7nu2rntseb7lfth6imdtyi"));
+        assert!(event.record.is_some());
+    }
+
+    #[test]
+    fn test_handle_invalid_path() {
+        let commit_msg = r#"
+        {
+            "type": "commit",
+            "seq": 111,
+            "timeUs": 1700001,
+            "repo": "did:plc:badpath",
+            "commit": {
+                "action": "create",
+                "operation": {
+                    "path": "missing-slash",
+                    "cid": "cid1"
+                }
+            }
+        }
+        "#;
+
+        let err = handle_message(commit_msg).unwrap_err();
+        match err {
+            TriggerError::JetstreamParse(msg) => {
+                assert!(msg.contains("Invalid commit.operation.path"))
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
     }
 }
