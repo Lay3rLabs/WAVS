@@ -39,7 +39,7 @@ impl Default for JetstreamConfig {
             wanted_collections: vec![], // Empty means subscribe to all collections
             wanted_dids: None,
             cursor: None,
-            compression: true,
+            compression: false,
             max_message_size: 1024 * 1024, // 1MB
             require_hello: false,
         }
@@ -233,19 +233,12 @@ async fn create_jetstream_connection(
     info!("Jetstream connection established: {:?}", response.status());
 
     let ws_stream = ws_stream.map(|msg| match msg {
-        Ok(Message::Text(text)) => handle_message(&text, false),
-        Ok(Message::Binary(data)) => {
-            // Handle compressed messages
-            match decompress_message(&data) {
-                Ok(text) => handle_message(&text, true),
-                Err(e) => {
-                    error!("Failed to decompress message: {:?}", e);
-                    Err(TriggerError::JetstreamDecompression(format!(
-                        "Decompression failed: {}",
-                        e
-                    )))
-                }
-            }
+        Ok(Message::Text(text)) => handle_message(&text),
+        Ok(Message::Binary(_)) => {
+            warn!("Received binary message but compression is disabled");
+            Err(TriggerError::JetstreamConnection(
+                "Binary message received with compression disabled".to_string(),
+            ))
         }
         Ok(Message::Close(_)) => {
             info!("Jetstream connection closed gracefully");
@@ -303,7 +296,7 @@ fn build_jetstream_url(config: &JetstreamConfig) -> Result<Url, TriggerError> {
 }
 
 /// Handle incoming Jetstream message
-fn handle_message(text: &str, _is_compressed: bool) -> Result<AtProtoEvent, TriggerError> {
+fn handle_message(text: &str) -> Result<AtProtoEvent, TriggerError> {
     // Helper to embed a truncated payload in parse errors
     let payload_snippet = |body: &str| {
         const MAX_LEN: usize = 512;
@@ -547,24 +540,6 @@ fn parse_account_event(
     })
 }
 
-/// Decompress zstd compressed message
-fn decompress_message(data: &[u8]) -> Result<String, anyhow::Error> {
-    // For now, we'll return a simple decompression implementation
-    // In a production environment, you'd want to use the proper zstd dictionary
-    // from the ATProto repository
-
-    // Try to decompress without dictionary first
-    match zstd::decode_all(data) {
-        Ok(decompressed) => Ok(String::from_utf8(decompressed)?),
-        Err(_) => {
-            // If that fails, we might need the dictionary
-            // For now, return an error
-            Err(anyhow::anyhow!(
-                "Failed to decompress message (may need zstd dictionary)"
-            ))
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -619,7 +594,7 @@ mod tests {
         }
         "#;
 
-        let event = handle_message(commit_msg, false).unwrap();
+        let event = handle_message(commit_msg).unwrap();
         assert_eq!(event.sequence, 12345);
         assert_eq!(event.repo, "did:plc:test123");
         assert_eq!(event.collection, "app.bsky.feed.post");

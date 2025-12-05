@@ -60,7 +60,6 @@ iri-string = { workspace = true }
 tokio-tungstenite = { workspace = true }
 slotmap = { workspace = true }
 async-stream = "0.3.6"
-zstd = "0.13.2"
 rand = { workspace = true }
 
 [dev-dependencies]

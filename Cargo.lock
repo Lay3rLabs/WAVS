@@ -9997,7 +9997,6 @@ dependencies = [
  "wavs-engine",
  "wavs-types",
  "wildmatch",
- "zstd",
 ]
 
 [[package]]

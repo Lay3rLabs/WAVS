@@ -63,6 +63,4 @@ pub enum TriggerError {
     JetstreamConfig(String),
     #[error("Jetstream parsing error: {0}")]
     JetstreamParse(String),
-    #[error("Jetstream decompression error: {0}")]
-    JetstreamDecompression(String),
 }
