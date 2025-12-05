@@ -26,7 +26,6 @@ use crate::e2e::test_definition::{
     AggregatorDefinition, ChangeServiceDefinition, SubmitDefinition,
 };
 use crate::e2e::test_registry::CosmosCodeMap;
-use serde_json::json;
 use crate::{
     e2e::{
         clients::Clients, components::ComponentSources, test_definition::TestDefinition,
@@ -35,6 +34,7 @@ use crate::{
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{LogSpamClient, SimpleEvmTriggerClient, TriggerId},
 };
+use serde_json::json;
 
 use super::helpers::{evm_wait_for_task_to_land, simulate_anvil_reorg};
 use super::test_definition::WorkflowDefinition;

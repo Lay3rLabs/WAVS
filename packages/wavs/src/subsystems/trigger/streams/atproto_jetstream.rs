@@ -354,14 +354,11 @@ fn parse_commit_event(
     value: &Value,
     payload_snippet: &impl Fn(&str) -> String,
 ) -> Result<AtProtoEvent, TriggerError> {
-    let commit = value.get("commit").ok_or_else(|| {
-        TriggerError::JetstreamParse("Missing commit body".to_string())
-    })?;
+    let commit = value
+        .get("commit")
+        .ok_or_else(|| TriggerError::JetstreamParse("Missing commit body".to_string()))?;
 
-    let sequence = value
-        .get("seq")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    let sequence = value.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
     let timestamp = value
         .get("time_us")
         .or_else(|| value.get("timeUs"))
@@ -453,10 +450,7 @@ fn parse_identity_event(
     value: &Value,
     payload_snippet: &impl Fn(&str) -> String,
 ) -> Result<AtProtoEvent, TriggerError> {
-    let sequence = value
-        .get("seq")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    let sequence = value.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
     let timestamp = value
         .get("time_us")
         .or_else(|| value.get("timeUs"))
@@ -494,10 +488,7 @@ fn parse_account_event(
     value: &Value,
     payload_snippet: &impl Fn(&str) -> String,
 ) -> Result<AtProtoEvent, TriggerError> {
-    let sequence = value
-        .get("seq")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    let sequence = value.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
     let timestamp = value
         .get("time_us")
         .or_else(|| value.get("timeUs"))
@@ -539,7 +530,6 @@ fn parse_account_event(
         record: None,
     })
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -3,6 +3,7 @@ use example_types::{
     BlockIntervalResponse, CosmosQueryRequest, KvStoreRequest, KvStoreResponse, PermissionsRequest,
     PermissionsResponse, SquareRequest, SquareResponse,
 };
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 use wavs_types::aggregator::RegisterServiceRequest;
@@ -347,7 +348,9 @@ impl TestRegistry {
                             aggregator: Self::simple_aggregator(chain),
                         })
                         .with_input_data(InputData::Text("atproto-echo".to_string()))
-                        .with_expected_output(ExpectedOutput::Text("atproto-echo".to_string()))
+                        .with_expected_output(ExpectedOutput::Text(
+                            json!({"text": "atproto-echo"}).to_string(),
+                        ))
                         .build(),
                 )
                 .with_service_manager_chain(chain)

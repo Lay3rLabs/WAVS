@@ -49,10 +49,7 @@ impl HttpClient {
         Ok(response.digest)
     }
 
-    pub async fn simulate_trigger(
-        &self,
-        req: wavs_types::SimulatedTriggerRequest,
-    ) -> Result<()> {
+    pub async fn simulate_trigger(&self, req: wavs_types::SimulatedTriggerRequest) -> Result<()> {
         let url = format!("{}/dev/triggers", self.endpoint);
 
         let response = self
