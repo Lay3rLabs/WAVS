@@ -31,20 +31,6 @@ pub struct JetstreamConfig {
     pub require_hello: bool,
 }
 
-impl Default for JetstreamConfig {
-    fn default() -> Self {
-        Self {
-            endpoint: "wss://jetstream1.us-east.bsky.network/subscribe".to_string(),
-            wanted_collections: vec![], // Empty means subscribe to all collections
-            wanted_dids: None,
-            cursor: None,
-            compression: false,
-            max_message_size: 1024 * 1024, // 1MB
-            require_hello: false,
-        }
-    }
-}
-
 /// ATProto Jetstream event types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -596,7 +582,7 @@ mod tests {
             wanted_collections: vec!["app.bsky.feed.post".to_string()],
             wanted_dids: Some(vec!["did:plc:test123".to_string()]),
             cursor: Some(12345),
-            compression: true,
+            compression: false,
             max_message_size: 1024,
             require_hello: false,
         };

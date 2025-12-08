@@ -522,7 +522,7 @@ impl TriggerManager {
                                 wanted_collections: vec![], // Empty means subscribe to all collections
                                 wanted_dids: None,          // Listen to all repos
                                 cursor: None,
-                                compression: true,
+                                compression: false,
                                 max_message_size: self.config.jetstream_max_message_size,
                                 require_hello: false,
                             };
