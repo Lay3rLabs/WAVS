@@ -104,15 +104,31 @@ impl EventId {
         workflow_id: &WorkflowId,
         salt: EventIdSalt<'_>,
     ) -> Result<Self, bincode::error::EncodeError> {
+        let bincode_config = bincode::config::standard();
         let mut hasher = Ripemd160::new();
         hasher.update(service_id.inner());
         hasher.update(workflow_id.as_bytes());
         match salt {
             EventIdSalt::WasmResponse(bytes) => hasher.update(bytes),
-            EventIdSalt::Trigger(trigger_data) => hasher.update(bincode::serde::encode_to_vec(
-                trigger_data,
-                bincode::config::standard(),
-            )?),
+            // Avoid stream-local fields for deterministic hashes across nodes.
+            EventIdSalt::Trigger(trigger_data) => match trigger_data {
+                TriggerData::AtProtoEvent {
+                    repo,
+                    collection,
+                    rkey,
+                    action,
+                    cid,
+                    record,
+                    ..
+                } => {
+                    let encoded = bincode::serde::encode_to_vec(
+                        (repo, collection, rkey, action, cid, record),
+                        bincode_config,
+                    )?;
+                    hasher.update(encoded);
+                }
+                _ => hasher.update(bincode::serde::encode_to_vec(trigger_data, bincode_config)?),
+            },
         }
         let result = hasher.finalize();
         Ok(Self(result.into()))
@@ -200,4 +216,55 @@ impl AsRef<[u8]> for EventOrder {
 pub enum EnvelopeError {
     #[error("Unable to recover signer address: {0:?}")]
     RecoverSignerAddress(SignatureError),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AtProtoAction;
+
+    #[test]
+    fn atproto_event_id_ignores_seq_and_timestamp() {
+        let service_id = ServiceId::hash(b"service");
+        let workflow_id = WorkflowId::new("flow1").unwrap();
+
+        let base = TriggerData::AtProtoEvent {
+            sequence: 1,
+            timestamp: 1000,
+            repo: "did:example:123".to_string(),
+            collection: "app.bsky.feed.post".to_string(),
+            rkey: "abc".to_string(),
+            action: AtProtoAction::Create,
+            cid: Some("cid123".to_string()),
+            record: None,
+        };
+
+        let different = match &base {
+            TriggerData::AtProtoEvent {
+                repo,
+                collection,
+                rkey,
+                action,
+                cid,
+                record,
+                ..
+            } => TriggerData::AtProtoEvent {
+                sequence: 9999,
+                timestamp: 999999,
+                repo: repo.clone(),
+                collection: collection.clone(),
+                rkey: rkey.clone(),
+                action: action.clone(),
+                cid: cid.clone(),
+                record: record.clone(),
+            },
+            _ => unreachable!(),
+        };
+
+        let id1 = EventId::new(&service_id, &workflow_id, EventIdSalt::Trigger(&base)).unwrap();
+        let id2 =
+            EventId::new(&service_id, &workflow_id, EventIdSalt::Trigger(&different)).unwrap();
+
+        assert_eq!(id1, id2);
+    }
 }

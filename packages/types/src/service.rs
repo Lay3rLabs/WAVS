@@ -415,7 +415,7 @@ pub enum TriggerData {
         action: AtProtoAction,
         /// CID of the record (None for delete events)
         cid: Option<String>,
-        /// Record data as JSON (None for delete events or when data fetching fails)
+        /// Record data as JSON (None for delete events)
         record: Option<serde_json::Value>,
     },
     Raw(Vec<u8>),
