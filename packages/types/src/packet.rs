@@ -119,10 +119,12 @@ impl EventId {
                     action,
                     cid,
                     record,
+                    rev,
+                    op_index,
                     ..
                 } => {
                     let encoded = bincode::serde::encode_to_vec(
-                        (repo, collection, rkey, action, cid, record),
+                        (repo, collection, rkey, action, cid, record, rev, op_index),
                         bincode_config,
                     )?;
                     hasher.update(encoded);
@@ -237,6 +239,8 @@ mod tests {
             action: AtProtoAction::Create,
             cid: Some("cid123".to_string()),
             record: None,
+            rev: Some("rev1".to_string()),
+            op_index: Some(0),
         };
 
         let different = match &base {
@@ -247,6 +251,8 @@ mod tests {
                 action,
                 cid,
                 record,
+                rev,
+                op_index,
                 ..
             } => TriggerData::AtProtoEvent {
                 sequence: 9999,
@@ -257,6 +263,8 @@ mod tests {
                 action: action.clone(),
                 cid: cid.clone(),
                 record: record.clone(),
+                rev: rev.clone(),
+                op_index: *op_index,
             },
             _ => unreachable!(),
         };

@@ -450,6 +450,8 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                 action,
                 cid,
                 record,
+                rev,
+                op_index,
             } => {
                 let record_data = record
                     .map(|value| serde_json::to_string(&value))
@@ -465,6 +467,8 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                         action: action.to_string(),
                         cid,
                         record_data,
+                        rev,
+                        op_index,
                     },
                 ))
             }
@@ -678,6 +682,8 @@ impl TryFrom<wavs_types::TriggerData> for aggregator_types::TriggerData {
                 action,
                 cid,
                 record,
+                rev,
+                op_index,
             } => {
                 let record_data = record
                     .map(|value| serde_json::to_string(&value))
@@ -693,6 +699,8 @@ impl TryFrom<wavs_types::TriggerData> for aggregator_types::TriggerData {
                         action: action.to_string(),
                         cid,
                         record_data,
+                        rev,
+                        op_index,
                     },
                 ))
             }

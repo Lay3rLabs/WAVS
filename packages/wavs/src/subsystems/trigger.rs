@@ -837,6 +837,8 @@ impl TriggerManager {
                             action: action_enum.clone(),
                             cid: event.cid.clone(),
                             record: event.record.clone(),
+                            rev: event.rev.clone(),
+                            op_index: event.op_index,
                         };
 
                         for trigger_config in

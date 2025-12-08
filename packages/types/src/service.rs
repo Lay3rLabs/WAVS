@@ -417,6 +417,10 @@ pub enum TriggerData {
         cid: Option<String>,
         /// Record data as JSON (None for delete events)
         record: Option<serde_json::Value>,
+        /// Repository revision identifier for this commit (if provided by the event)
+        rev: Option<String>,
+        /// Index of the operation within the commit (0-based)
+        op_index: Option<u32>,
     },
     Raw(Vec<u8>),
 }

@@ -129,6 +129,10 @@ pub struct AtProtoEvent {
     pub cid: Option<String>,
     /// Record data (as JSON)
     pub record: Option<serde_json::Value>,
+    /// Repository revision identifier for this commit (if provided)
+    pub rev: Option<String>,
+    /// Index of the operation within the commit (0-based)
+    pub op_index: Option<u32>,
 }
 
 /// Create a Jetstream stream for ATProto events
@@ -393,8 +397,13 @@ fn parse_commit_event(
         )));
     }
 
+    let rev = commit
+        .get("rev")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
     let mut events = Vec::with_capacity(operations.len());
-    for op in operations {
+    for (op_index, op) in operations.into_iter().enumerate() {
         let (collection, rkey) = if let Some(path) = op.get("path").and_then(|v| v.as_str()) {
             path.split_once('/').ok_or_else(|| {
                 TriggerError::JetstreamParse(format!(
@@ -480,6 +489,8 @@ fn parse_commit_event(
             action,
             cid,
             record,
+            rev: rev.clone(),
+            op_index: Some(op_index as u32),
         });
     }
 
@@ -521,6 +532,8 @@ fn parse_identity_event(
         action: CommitAction::Update,
         cid: None,
         record: None,
+        rev: None,
+        op_index: None,
     }])
 }
 
@@ -568,6 +581,8 @@ fn parse_account_event(
         },
         cid: None,
         record: None,
+        rev: None,
+        op_index: None,
     }])
 }
 

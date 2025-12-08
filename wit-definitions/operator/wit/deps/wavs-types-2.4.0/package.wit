@@ -134,6 +134,8 @@ interface events {
     action: string,
     cid: option<string>,
     record-data: option<string>,
+    rev: option<string>,
+    op-index: option<u32>,
   }
 
   /// 20-byte unique hash

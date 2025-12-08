@@ -43,6 +43,8 @@ interface events {
         rkey: string,
         action: string,
         cid: option<string>,
-        record-data: option<string>
+        record-data: option<string>,
+        rev: option<string>,
+        op-index: option<u32>
     }
 }

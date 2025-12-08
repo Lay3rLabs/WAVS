@@ -408,6 +408,8 @@ async fn run_test(
                     action: AtProtoAction::Create,
                     cid: Some("bafytestcid".to_string()),
                     record: Some(json!({ "text": record_text })),
+                    rev: Some("rev-test".to_string()),
+                    op_index: Some(0),
                 };
 
                 let req = SimulatedTriggerRequest {
