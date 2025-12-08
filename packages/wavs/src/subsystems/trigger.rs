@@ -740,14 +740,6 @@ impl TriggerManager {
                     }
                 }
                 StreamTriggers::AtProto { event } => {
-                    // Process ATProto Jetstream events
-                    tracing::debug!(
-                        "Received ATProto event: collection={:?}, action={:?}, repo={}",
-                        event.collection,
-                        event.action,
-                        event.repo
-                    );
-
                     // Convert CommitAction to AtProtoAction
                     let action_enum = match event.action {
                         streams::atproto_jetstream::CommitAction::Create => AtProtoAction::Create,
