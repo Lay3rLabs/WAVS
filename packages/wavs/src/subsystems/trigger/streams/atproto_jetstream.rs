@@ -582,7 +582,7 @@ mod tests {
             wanted_collections: vec!["app.bsky.feed.post".to_string()],
             wanted_dids: Some(vec!["did:plc:test123".to_string()]),
             cursor: Some(12345),
-            compression: false,
+            compression: true,
             max_message_size: 1024,
             require_hello: false,
         };
