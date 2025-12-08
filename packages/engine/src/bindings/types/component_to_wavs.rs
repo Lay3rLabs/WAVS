@@ -48,7 +48,7 @@ impl TryFrom<component_service::Trigger> for wavs_types::Trigger {
             component_service::Trigger::AtprotoEvent(source) => wavs_types::Trigger::AtProtoEvent {
                 collection: source.collection,
                 repo_did: source.repo_did,
-                action: source.action,
+                action: source.action.map(TryInto::try_into).transpose()?,
             },
         })
     }

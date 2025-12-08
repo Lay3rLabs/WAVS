@@ -6,7 +6,7 @@ use example_types::{
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
-use wavs_types::aggregator::RegisterServiceRequest;
+use wavs_types::{aggregator::RegisterServiceRequest, AtProtoAction};
 
 use super::clients::Clients;
 use super::components::{AggregatorComponent, ComponentName, OperatorComponent};
@@ -341,7 +341,7 @@ impl TestRegistry {
                         .with_trigger(TriggerDefinition::Existing(Trigger::AtProtoEvent {
                             collection: "app.bsky.feed.post".to_string(),
                             repo_did: Some("did:example:alice".to_string()),
-                            action: Some("create".to_string()),
+                            action: Some(AtProtoAction::Create),
                         }))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),

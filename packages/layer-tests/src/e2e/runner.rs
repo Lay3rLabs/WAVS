@@ -16,7 +16,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use utils::alloy_helpers::SolidityEventFinder;
 use wavs_types::{
-    ChainKeyNamespace, SimulatedTriggerRequest, Submit, Trigger, TriggerData, Workflow, WorkflowId,
+    AtProtoAction, ChainKeyNamespace, SimulatedTriggerRequest, Submit, Trigger, TriggerData,
+    Workflow, WorkflowId,
 };
 
 use crate::e2e::helpers::{change_service_for_test, cosmos_wait_for_task_to_land};
@@ -404,7 +405,7 @@ async fn run_test(
                     repo: "did:example:alice".to_string(),
                     collection: "app.bsky.feed.post".to_string(),
                     rkey: "rkey-1".to_string(),
-                    action: "create".to_string(),
+                    action: AtProtoAction::Create,
                     cid: Some("bafytestcid".to_string()),
                     record: Some(json!({ "text": record_text })),
                 };

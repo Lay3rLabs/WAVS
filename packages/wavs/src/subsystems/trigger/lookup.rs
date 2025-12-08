@@ -5,7 +5,9 @@ use std::{
 
 use bimap::BiMap;
 use utils::telemetry::TriggerMetrics;
-use wavs_types::{ByteArray, ChainKey, ServiceId, Trigger, TriggerConfig, WorkflowId};
+use wavs_types::{
+    AtProtoAction, ByteArray, ChainKey, ServiceId, Trigger, TriggerConfig, WorkflowId,
+};
 
 use crate::{
     services::Services,
@@ -33,7 +35,7 @@ pub struct LookupMaps {
     >,
     /// lookup id by (collection, optional repo_did, optional action)
     pub triggers_by_atproto_event:
-        Arc<RwLock<HashMap<(String, Option<String>, Option<String>), HashSet<LookupId>>>>,
+        Arc<RwLock<HashMap<(String, Option<String>, Option<AtProtoAction>), HashSet<LookupId>>>>,
     // ServiceId <-> ServiceManager address
     pub service_manager: Arc<RwLock<BiMap<ServiceId, layer_climb::prelude::Address>>>,
     /// Efficient block schedulers (one per chain) for block interval triggers

@@ -31,8 +31,8 @@ use tracing::instrument;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::{
     contracts::cosmwasm::service_manager::event::WavsServiceUriUpdatedEvent, AnyChainConfig,
-    ByteArray, ChainConfigs, ChainKey, IWavsServiceManager, ServiceId, Trigger, TriggerAction,
-    TriggerConfig, TriggerData,
+    AtProtoAction, ByteArray, ChainConfigs, ChainKey, IWavsServiceManager, ServiceId, Trigger,
+    TriggerAction, TriggerConfig, TriggerData,
 };
 
 #[derive(Debug)]
@@ -748,11 +748,11 @@ impl TriggerManager {
                         event.repo
                     );
 
-                    // Convert action to string for matching
-                    let action_str = match event.action {
-                        streams::atproto_jetstream::CommitAction::Create => "create".to_string(),
-                        streams::atproto_jetstream::CommitAction::Update => "update".to_string(),
-                        streams::atproto_jetstream::CommitAction::Delete => "delete".to_string(),
+                    // Convert CommitAction to AtProtoAction
+                    let action_enum = match event.action {
+                        streams::atproto_jetstream::CommitAction::Create => AtProtoAction::Create,
+                        streams::atproto_jetstream::CommitAction::Update => AtProtoAction::Update,
+                        streams::atproto_jetstream::CommitAction::Delete => AtProtoAction::Delete,
                     };
 
                     // Find matching triggers using multiple lookup strategies
@@ -767,7 +767,7 @@ impl TriggerManager {
                         if let Some(lookup_ids) = triggers_by_atproto_lock.get(&(
                             event.collection.clone(),
                             Some(event.repo.clone()),
-                            Some(action_str.clone()),
+                            Some(action_enum.clone()),
                         )) {
                             matched_lookup_ids.extend(lookup_ids);
                         }
@@ -785,7 +785,7 @@ impl TriggerManager {
                         if let Some(lookup_ids) = triggers_by_atproto_lock.get(&(
                             event.collection.clone(),
                             None,
-                            Some(action_str.clone()),
+                            Some(action_enum.clone()),
                         )) {
                             matched_lookup_ids.extend(lookup_ids);
                         }
@@ -823,7 +823,7 @@ impl TriggerManager {
 
                                 // Check action filter
                                 let action_matches = match action_filter {
-                                    Some(filter_action) => filter_action == &action_str,
+                                    Some(filter_action) => filter_action == &action_enum,
                                     None => true, // any action
                                 };
 
@@ -842,7 +842,7 @@ impl TriggerManager {
                             repo: event.repo.clone(),
                             collection: event.collection.clone(),
                             rkey: event.rkey.clone(),
-                            action: action_str.clone(),
+                            action: action_enum.clone(),
                             cid: event.cid.clone(),
                             record: event.record.clone(),
                         };
@@ -861,7 +861,7 @@ impl TriggerManager {
                             matched_lookup_ids.len(),
                             event.collection,
                             event.repo,
-                            action_str
+                            action_enum
                         );
                     }
                 }

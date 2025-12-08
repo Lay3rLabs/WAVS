@@ -29,10 +29,10 @@ use std::{
 use utils::{config::WAVS_ENV_PREFIX, service::fetch_bytes, wkg::WkgClient};
 use uuid::Uuid;
 use wavs_types::{
-    AggregatorBuilder, AllowedHostPermission, AnyChainConfig, ByteArray, ChainKey, Component,
-    ComponentBuilder, ComponentDigest, ComponentSource, Registry, ServiceBuilder, ServiceManager,
-    ServiceManagerBuilder, ServiceStatus, SignatureKind, Submit, SubmitBuilder, Timestamp, Trigger,
-    TriggerBuilder, WorkflowBuilder, WorkflowId,
+    AggregatorBuilder, AllowedHostPermission, AnyChainConfig, AtProtoAction, ByteArray, ChainKey,
+    Component, ComponentBuilder, ComponentDigest, ComponentSource, Registry, ServiceBuilder,
+    ServiceManager, ServiceManagerBuilder, ServiceStatus, SignatureKind, Submit, SubmitBuilder,
+    Timestamp, Trigger, TriggerBuilder, WorkflowBuilder, WorkflowId,
 };
 
 use crate::{
@@ -114,6 +114,14 @@ pub async fn handle_service_command(
                     end_time,
                 } => {
                     let result = set_cron_trigger(&file, id, schedule, start_time, end_time)?;
+                    display_result(ctx, result, json)?;
+                }
+                TriggerCommand::SetAtProtocol {
+                    collection,
+                    repo_did,
+                    action,
+                } => {
+                    let result = set_atproto_trigger(&file, id, collection, repo_did, action)?;
                     display_result(ctx, result, json)?;
                 }
             },
@@ -799,6 +807,55 @@ pub fn set_cron_trigger(
             schedule: schedule.to_string(),
             start_time,
             end_time,
+        };
+        workflow.trigger = TriggerBuilder::Trigger(trigger.clone());
+
+        Ok((
+            service,
+            WorkflowTriggerResult {
+                workflow_id,
+                trigger,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+/// Set an ATProto Jetstream event trigger for a workflow
+pub fn set_atproto_trigger(
+    file_path: &Path,
+    workflow_id: WorkflowId,
+    collection: String,
+    repo_did: Option<String>,
+    action: Option<AtProtoAction>,
+) -> Result<WorkflowTriggerResult> {
+    modify_service_file(file_path, |mut service| {
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+
+        // Validate collection format (basic NSID validation)
+        if !collection.contains('.') {
+            return Err(anyhow!(
+                "Invalid collection format '{}'. Expected NSID format like 'app.bsky.feed.post'",
+                collection
+            ));
+        }
+
+        // Validate DID format if provided
+        if let Some(ref did) = repo_did {
+            if !did.starts_with("did:") {
+                return Err(anyhow!(
+                    "Invalid DID format '{}'. Must start with 'did:'",
+                    did
+                ));
+            }
+        }
+
+        let trigger = Trigger::AtProtoEvent {
+            collection,
+            repo_did,
+            action,
         };
         workflow.trigger = TriggerBuilder::Trigger(trigger.clone());
 

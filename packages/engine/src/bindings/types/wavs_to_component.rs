@@ -76,7 +76,7 @@ impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
             } => component_service::Trigger::AtprotoEvent(component_service::TriggerAtprotoEvent {
                 collection,
                 repo_did,
-                action,
+                action: action.map(|a| a.to_string()),
             }),
         })
     }
@@ -462,7 +462,7 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                         repo,
                         collection,
                         rkey,
-                        action,
+                        action: action.to_string(),
                         cid,
                         record_data,
                     },
@@ -690,7 +690,7 @@ impl TryFrom<wavs_types::TriggerData> for aggregator_types::TriggerData {
                         repo,
                         collection,
                         rkey,
-                        action,
+                        action: action.to_string(),
                         cid,
                         record_data,
                     },
@@ -875,7 +875,7 @@ impl TryFrom<wavs_types::Trigger> for aggregator_service::Trigger {
                 aggregator_service::Trigger::AtprotoEvent(aggregator_service::TriggerAtprotoEvent {
                     collection,
                     repo_did,
-                    action,
+                    action: action.map(|a| a.to_string()),
                 })
             }
         })

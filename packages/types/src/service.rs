@@ -1,4 +1,5 @@
 use alloy_primitives::LogData;
+use anyhow::bail;
 use iri_string::types::UriString;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -15,6 +16,53 @@ use ts_rs::TS;
 use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
 
 use super::{ChainKey, ServiceId, WorkflowId};
+
+/// ATProto Jetstream commit action types
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum AtProtoAction {
+    /// Create a new record
+    Create,
+    /// Update an existing record
+    Update,
+    /// Delete a record
+    Delete,
+}
+
+impl std::fmt::Display for AtProtoAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AtProtoAction::Create => write!(f, "create"),
+            AtProtoAction::Update => write!(f, "update"),
+            AtProtoAction::Delete => write!(f, "delete"),
+        }
+    }
+}
+
+impl FromStr for AtProtoAction {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "create" => Ok(AtProtoAction::Create),
+            "update" => Ok(AtProtoAction::Update),
+            "delete" => Ok(AtProtoAction::Delete),
+            _ => bail!(
+                "Invalid action '{}'. Must be one of: create, update, delete",
+                s
+            ),
+        }
+    }
+}
+
+impl TryFrom<String> for AtProtoAction {
+    type Error = anyhow::Error;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        s.parse()
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum ServiceError {
@@ -291,7 +339,7 @@ pub enum Trigger {
         repo_did: Option<String>,
         /// Action type to filter for (create, update, delete)
         /// If None, will match all action types
-        action: Option<String>,
+        action: Option<AtProtoAction>,
     },
     // not a real trigger, just for testing
     Manual,
@@ -364,7 +412,7 @@ pub enum TriggerData {
         /// Record key within the collection
         rkey: String,
         /// Action type (create, update, delete)
-        action: String,
+        action: AtProtoAction,
         /// CID of the record (None for delete events)
         cid: Option<String>,
         /// Record data as JSON (None for delete events or when data fetching fails)
