@@ -304,8 +304,20 @@ fn build_jetstream_url(config: &JetstreamConfig) -> Result<Url, TriggerError> {
             .append_pair("cursor", &cursor.to_string());
     }
 
+    // Add maxMessageSizeBytes parameter (zero means no limit)
+    if config.max_message_size > 0 {
+        url.query_pairs_mut()
+            .append_pair("maxMessageSizeBytes", &config.max_message_size.to_string());
+    }
+
+    // Add compression parameter
     if config.compression {
-        url.query_pairs_mut().append_pair("compression", "zstd");
+        url.query_pairs_mut().append_pair("compress", "true");
+    }
+
+    // Add requireHello parameter
+    if config.require_hello {
+        url.query_pairs_mut().append_pair("requireHello", "true");
     }
 
     Ok(url)
@@ -507,7 +519,7 @@ mod tests {
             cursor: Some(12345),
             compression: true,
             max_message_size: 1024,
-            require_hello: false,
+            require_hello: true,
         };
 
         let url = build_jetstream_url(&config).unwrap();
@@ -524,7 +536,37 @@ mod tests {
             .any(|(k, v)| k == "cursor" && v == "12345"));
         assert!(url
             .query_pairs()
-            .any(|(k, v)| k == "compression" && v == "zstd"));
+            .any(|(k, v)| k == "maxMessageSizeBytes" && v == "1024"));
+        assert!(url
+            .query_pairs()
+            .any(|(k, v)| k == "compress" && v == "true"));
+        assert!(url
+            .query_pairs()
+            .any(|(k, v)| k == "requireHello" && v == "true"));
+    }
+
+    #[tokio::test]
+    async fn test_build_jetstream_url_no_max_size() {
+        let config = JetstreamConfig {
+            endpoint: "wss://jetstream.example.com/subscribe".to_string(),
+            wanted_collections: vec![],
+            wanted_dids: None,
+            cursor: None,
+            compression: false,
+            max_message_size: 0, // Zero means no limit
+            require_hello: false,
+        };
+
+        let url = build_jetstream_url(&config).unwrap();
+
+        // Should not have maxMessageSizeBytes when it's 0
+        assert!(!url.query_pairs().any(|(k, _)| k == "maxMessageSizeBytes"));
+
+        // Should not have compress when false
+        assert!(!url.query_pairs().any(|(k, _)| k == "compress"));
+
+        // Should not have requireHello when false
+        assert!(!url.query_pairs().any(|(k, _)| k == "requireHello"));
     }
 
     #[test]

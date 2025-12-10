@@ -107,6 +107,7 @@ pub struct Config {
 
     /// Maximum jetstream message size in bytes
     /// Default is 1MB
+    /// Set to 0 for no max size
     pub jetstream_max_message_size: usize,
 }
 
