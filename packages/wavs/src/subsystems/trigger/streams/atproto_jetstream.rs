@@ -33,31 +33,32 @@ pub struct JetstreamConfig {
 
 /// ATProto Jetstream event types
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "lowercase")]
 pub enum JetstreamEvent {
     /// Commit event (create/update/delete operations)
     Commit {
-        #[serde(rename = "seq")]
+        #[serde(alias = "seq")]
         sequence: i64,
-        #[serde(rename = "timeUs")]
+        #[serde(alias = "timeUs", alias = "time_us")]
         time_us: i64,
+        #[serde(alias = "did")]
         repo: String,
-        commit: CommitData,
+        commit: Value, // Keep as Value for now since CommitData structure differs
     },
     /// Identity update event
     Identity {
-        #[serde(rename = "seq")]
+        #[serde(alias = "seq")]
         sequence: i64,
-        #[serde(rename = "timeUs")]
+        #[serde(alias = "timeUs", alias = "time_us")]
         time_us: i64,
         did: String,
         handle: Option<String>,
     },
     /// Account status event
     Account {
-        #[serde(rename = "seq")]
+        #[serde(alias = "seq")]
         sequence: i64,
-        #[serde(rename = "timeUs")]
+        #[serde(alias = "timeUs", alias = "time_us")]
         time_us: i64,
         did: String,
         active: bool,
@@ -292,57 +293,45 @@ fn handle_message(text: &str) -> Result<Vec<AtProtoEvent>, TriggerError> {
         )));
     }
 
-    // Flexible parsing: accept either `type` (legacy) or `kind` (current) tagged messages
-    let value: Value = serde_json::from_str(text).map_err(|e| {
+    // Use the strongly-typed JetstreamEvent enum
+    // Handle both "type" and "kind" field names for compatibility
+    let event_str = text.replace("\"kind\":", "\"type\":");
+    let event = serde_json::from_str::<JetstreamEvent>(&event_str).map_err(|e| {
         TriggerError::JetstreamParse(format!(
             "Failed to parse Jetstream event: {}; payload={}",
             e, text
         ))
     })?;
 
-    let tag = value
-        .get("type")
-        .or_else(|| value.get("kind"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!("Missing event tag (type/kind); payload={}", text))
-        })?;
-
-    match tag {
-        "commit" => parse_commit_event(&value),
-        "identity" => parse_identity_event(&value),
-        "account" => parse_account_event(&value),
-        other => Err(TriggerError::JetstreamParse(format!(
-            "Unsupported Jetstream event kind `{}`; payload={}",
-            other, text
-        ))),
+    match event {
+        JetstreamEvent::Commit {
+            sequence,
+            time_us,
+            repo,
+            commit,
+        } => parse_commitevent_typed(sequence, time_us, repo, commit),
+        JetstreamEvent::Identity {
+            sequence,
+            time_us,
+            did,
+            handle,
+        } => parse_identity_event_typed(sequence, time_us, did, handle),
+        JetstreamEvent::Account {
+            sequence,
+            time_us,
+            did,
+            active,
+            status,
+        } => parse_account_event_typed(sequence, time_us, did, active, status),
     }
 }
 
-fn parse_commit_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> {
-    let commit = value
-        .get("commit")
-        .ok_or_else(|| TriggerError::JetstreamParse("Missing commit body".to_string()))?;
-
-    let sequence = value.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
-    let timestamp = value
-        .get("time_us")
-        .or_else(|| value.get("timeUs"))
-        .or_else(|| commit.get("time_us"))
-        .or_else(|| commit.get("timeUs"))
-        .and_then(|v| v.as_i64())
-        .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!("Missing time_us/timeUs; payload={}", value))
-        })?;
-    let repo = value
-        .get("repo")
-        .or_else(|| value.get("did"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!("Missing repo/did; payload={}", value))
-        })?
-        .to_string();
-
+fn parse_commitevent_typed(
+    sequence: i64,
+    timestamp: i64,
+    repo: String,
+    commit: Value,
+) -> Result<Vec<AtProtoEvent>, TriggerError> {
     let operations: Vec<&Value> =
         if let Some(ops) = commit.get("operations").and_then(|v| v.as_array()) {
             ops.iter().collect()
@@ -355,18 +344,18 @@ fn parse_commit_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> 
                 vec![op]
             }
         } else if commit.get("collection").is_some() && commit.get("rkey").is_some() {
-            vec![commit]
+            vec![&commit]
         } else {
             return Err(TriggerError::JetstreamParse(format!(
                 "Missing commit.operation(s); payload={}",
-                value
+                commit
             )));
         };
 
     if operations.is_empty() {
         return Err(TriggerError::JetstreamParse(format!(
             "Empty commit.operations array; payload={}",
-            value
+            commit
         )));
     }
 
@@ -376,19 +365,21 @@ fn parse_commit_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> 
         .map(|s| s.to_string());
 
     let mut events = Vec::with_capacity(operations.len());
+    // NOTE: This loop could potentially process a very large number of operations without yielding.
+    // Consider adding a yield point or upper bound (e.g., 1000 operations) if this becomes a performance issue.
     for (op_index, op) in operations.into_iter().enumerate() {
         let (collection, rkey) = if let Some(path) = op.get("path").and_then(|v| v.as_str()) {
             path.split_once('/').ok_or_else(|| {
                 TriggerError::JetstreamParse(format!(
                     "Invalid commit.operation.path `{}`; payload={}",
-                    path, value
+                    path, commit
                 ))
             })?
         } else if let Some(path) = commit.get("path").and_then(|v| v.as_str()) {
             path.split_once('/').ok_or_else(|| {
                 TriggerError::JetstreamParse(format!(
                     "Invalid commit.path `{}`; payload={}",
-                    path, value
+                    path, commit
                 ))
             })?
         } else {
@@ -398,13 +389,13 @@ fn parse_commit_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> 
                 .ok_or_else(|| {
                     TriggerError::JetstreamParse(format!(
                         "Missing commit.collection and operation.path; payload={}",
-                        value
+                        commit
                     ))
                 })?;
             let rkey = commit.get("rkey").and_then(|v| v.as_str()).ok_or_else(|| {
                 TriggerError::JetstreamParse(format!(
                     "Missing commit.rkey and operation.path; payload={}",
-                    value
+                    commit
                 ))
             })?;
             (collection, rkey)
@@ -419,7 +410,7 @@ fn parse_commit_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> 
             .ok_or_else(|| {
                 TriggerError::JetstreamParse(format!(
                     "Missing commit.action; path={}/{}; payload={}",
-                    collection, rkey, value
+                    collection, rkey, commit
                 ))
             })?;
 
@@ -430,7 +421,7 @@ fn parse_commit_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> 
             other => {
                 return Err(TriggerError::JetstreamParse(format!(
                     "Unknown commit action `{}` for path `{}/{}`; payload={}",
-                    other, collection, rkey, value
+                    other, collection, rkey, commit
                 )))
             }
         };
@@ -463,21 +454,12 @@ fn parse_commit_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> 
     Ok(events)
 }
 
-fn parse_identity_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> {
-    let sequence = value.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
-    let timestamp = value
-        .get("time_us")
-        .or_else(|| value.get("timeUs"))
-        .and_then(|v| v.as_i64())
-        .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!("Missing time_us/timeUs; payload={}", value))
-        })?;
-    let did = value
-        .get("did")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| TriggerError::JetstreamParse(format!("Missing did; payload={}", value)))?
-        .to_string();
-
+fn parse_identity_event_typed(
+    sequence: i64,
+    timestamp: i64,
+    did: String,
+    _handle: Option<String>,
+) -> Result<Vec<AtProtoEvent>, TriggerError> {
     Ok(vec![AtProtoEvent {
         sequence,
         timestamp,
@@ -492,26 +474,13 @@ fn parse_identity_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError
     }])
 }
 
-fn parse_account_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> {
-    let sequence = value.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
-    let timestamp = value
-        .get("time_us")
-        .or_else(|| value.get("timeUs"))
-        .and_then(|v| v.as_i64())
-        .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!("Missing time_us/timeUs; payload={}", value))
-        })?;
-    let did = value
-        .get("did")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| TriggerError::JetstreamParse(format!("Missing did; payload={}", value)))?
-        .to_string();
-
-    let active = value
-        .get("active")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-
+fn parse_account_event_typed(
+    sequence: i64,
+    timestamp: i64,
+    did: String,
+    active: bool,
+    _status: Option<String>,
+) -> Result<Vec<AtProtoEvent>, TriggerError> {
     Ok(vec![AtProtoEvent {
         sequence,
         timestamp,
