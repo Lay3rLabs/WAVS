@@ -823,8 +823,11 @@ impl TriggerManager {
 
                     // Strategy 1: Exact match (collection, repo, action)
                     {
-                        let triggers_by_atproto_lock =
-                            self.lookup_maps.triggers_by_atproto_event.read().unwrap();
+                        let triggers_by_atproto_lock = self
+                            .lookup_maps
+                            .triggers_by_atproto_event_exact
+                            .read()
+                            .unwrap();
 
                         // Check exact collection/repo/action match
                         if let Some(lookup_ids) = triggers_by_atproto_lock.get(&(
@@ -863,17 +866,17 @@ impl TriggerManager {
 
                     // Strategy 2: Pattern matching for collections with wildcards
                     {
-                        let triggers_by_atproto_lock =
-                            self.lookup_maps.triggers_by_atproto_event.read().unwrap();
+                        let triggers_by_atproto_lock = self
+                            .lookup_maps
+                            .triggers_by_atproto_event_pattern
+                            .read()
+                            .unwrap();
+                        // This collection only holds wildcard patterns, so the slower path
+                        // doesn't need to scan the exact-match entries above.
 
                         for ((collection_pattern, repo_did_filter, action_filter), lookup_ids) in
                             triggers_by_atproto_lock.iter()
                         {
-                            // Skip if already matched by exact lookup
-                            if matched_lookup_ids.intersection(lookup_ids).next().is_some() {
-                                continue;
-                            }
-
                             // Check collection pattern match (supports wildcards)
                             if self
                                 .matches_collection_pattern(collection_pattern, &event.collection)
