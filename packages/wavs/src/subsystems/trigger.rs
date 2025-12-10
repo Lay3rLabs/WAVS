@@ -31,8 +31,8 @@ use tracing::instrument;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::{
     contracts::cosmwasm::service_manager::event::WavsServiceUriUpdatedEvent, AnyChainConfig,
-    AtProtoAction, ByteArray, ChainConfigs, ChainKey, IWavsServiceManager, ServiceId, Trigger,
-    TriggerAction, TriggerConfig, TriggerData,
+    ByteArray, ChainConfigs, ChainKey, IWavsServiceManager, ServiceId, Trigger, TriggerAction,
+    TriggerConfig, TriggerData,
 };
 
 #[derive(Debug)]
@@ -740,12 +740,7 @@ impl TriggerManager {
                     }
                 }
                 StreamTriggers::AtProto { event } => {
-                    // Convert CommitAction to AtProtoAction
-                    let action_enum = match event.action {
-                        streams::atproto_jetstream::CommitAction::Create => AtProtoAction::Create,
-                        streams::atproto_jetstream::CommitAction::Update => AtProtoAction::Update,
-                        streams::atproto_jetstream::CommitAction::Delete => AtProtoAction::Delete,
-                    };
+                    let action_enum = event.action.clone();
 
                     // Find matching triggers using multiple lookup strategies
                     let mut matched_lookup_ids: HashSet<LookupId> = HashSet::new();

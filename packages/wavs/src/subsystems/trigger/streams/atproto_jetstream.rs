@@ -1,6 +1,6 @@
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::pin::Pin;
 use tokio::time::{sleep, Duration};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
@@ -10,6 +10,7 @@ use url::Url;
 use crate::subsystems::trigger::error::TriggerError;
 use crate::subsystems::trigger::streams::StreamTriggers;
 use utils::telemetry::TriggerMetrics;
+use wavs_types::AtProtoAction;
 
 /// Configuration for ATProto Jetstream connection
 #[derive(Debug, Clone)]
@@ -31,72 +32,99 @@ pub struct JetstreamConfig {
     pub require_hello: bool,
 }
 
-/// ATProto Jetstream event types
+/// ATProto Jetstream event (source: https://github.com/bluesky-social/jetstream/blob/main/pkg/models/models.go)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-pub enum JetstreamEvent {
-    /// Commit event (create/update/delete operations)
-    Commit {
-        #[serde(alias = "seq")]
-        sequence: i64,
-        #[serde(alias = "timeUs", alias = "time_us")]
-        time_us: i64,
-        #[serde(alias = "did")]
-        repo: String,
-        commit: Value, // Keep as Value for now since CommitData structure differs
-    },
-    /// Identity update event
-    Identity {
-        #[serde(alias = "seq")]
-        sequence: i64,
-        #[serde(alias = "timeUs", alias = "time_us")]
-        time_us: i64,
-        did: String,
-        handle: Option<String>,
-    },
-    /// Account status event
-    Account {
-        #[serde(alias = "seq")]
-        sequence: i64,
-        #[serde(alias = "timeUs", alias = "time_us")]
-        time_us: i64,
-        did: String,
-        active: bool,
-        status: Option<String>,
-    },
+pub struct JetstreamEvent {
+    /// DID of the repository (can be at top level or in repo field)
+    #[serde(alias = "did", alias = "repo")]
+    pub did: String,
+    /// Timestamp in microseconds
+    #[serde(alias = "time_us", alias = "timeUs")]
+    pub time_us: i64,
+    /// Event kind (optional)
+    #[serde(
+        alias = "kind",
+        alias = "type",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub kind: Option<String>,
+    /// Sequence number
+    #[serde(alias = "seq", skip_serializing_if = "Option::is_none")]
+    pub seq: Option<i64>,
+    /// Commit data (present for commit events)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commit: Option<CommitData>,
+    /// Account data (present for account events)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<AccountData>,
+    /// Identity data (present for identity events)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity: Option<IdentityData>,
 }
 
-/// Commit data for Jetstream events
+/// Commit data (source: https://github.com/bluesky-social/jetstream/blob/main/pkg/models/models.go)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommitData {
-    #[serde(rename = "seq")]
-    sequence: i64,
-    rev: String,
-    action: CommitAction,
-    operation: Option<OperationData>,
-    operations: Option<Vec<OperationData>>,
-    #[serde(rename = "ops")]
-    ops: Option<Vec<OperationData>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rev: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation: Option<OperationField>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collection: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", alias = "rkey")]
+    pub rkey: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cid: Option<String>,
+    /// Non-standard extension to support multi-op payloads seen in the wild.
+    #[serde(skip_serializing_if = "Option::is_none", alias = "ops")]
+    pub operations: Option<Vec<OperationData>>,
+    /// Optional action used alongside nested operation objects.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<AtProtoAction>,
 }
 
-/// Commit action type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum CommitAction {
-    Create,
-    Update,
-    Delete,
+/// Operation field can be a string action or an operation object
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OperationField {
+    Action(AtProtoAction),
+    Detail(OperationData),
 }
 
 /// Operation data within commits
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationData {
-    path: String,
-    cid: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    action: Option<CommitAction>,
+    pub path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    record: Option<Value>,
+    pub cid: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<AtProtoAction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<Value>,
+}
+
+/// Account data (source: com.atproto.sync.subscribeRepos account message)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountData {
+    pub active: bool,
+    pub did: String,
+    pub seq: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    pub time: String,
+}
+
+/// Identity data (source: com.atproto.sync.subscribeRepos identity message)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdentityData {
+    pub did: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub handle: Option<String>,
+    pub seq: i64,
+    pub time: String,
 }
 
 /// Subscription message for filtering
@@ -125,7 +153,7 @@ pub struct AtProtoEvent {
     /// Record key
     pub rkey: String,
     /// Action type
-    pub action: CommitAction,
+    pub action: AtProtoAction,
     /// CID of the record
     pub cid: Option<String>,
     /// Record data (as JSON)
@@ -293,182 +321,146 @@ fn handle_message(text: &str) -> Result<Vec<AtProtoEvent>, TriggerError> {
         )));
     }
 
-    // Use the strongly-typed JetstreamEvent enum
-    // Handle both "type" and "kind" field names for compatibility
-    let event_str = text.replace("\"kind\":", "\"type\":");
-    let event = serde_json::from_str::<JetstreamEvent>(&event_str).map_err(|e| {
+    let event = serde_json::from_str::<JetstreamEvent>(text).map_err(|e| {
         TriggerError::JetstreamParse(format!(
             "Failed to parse Jetstream event: {}; payload={}",
             e, text
         ))
     })?;
 
-    match event {
-        JetstreamEvent::Commit {
-            sequence,
-            time_us,
-            repo,
-            commit,
-        } => parse_commitevent_typed(sequence, time_us, repo, commit),
-        JetstreamEvent::Identity {
-            sequence,
-            time_us,
-            did,
-            handle,
-        } => parse_identity_event_typed(sequence, time_us, did, handle),
-        JetstreamEvent::Account {
-            sequence,
-            time_us,
-            did,
-            active,
-            status,
-        } => parse_account_event_typed(sequence, time_us, did, active, status),
+    let sequence = event.seq.unwrap_or(0);
+    let timestamp = event.time_us;
+    let did = event.did;
+
+    if let Some(commit) = event.commit {
+        parse_commit_event_typed(sequence, timestamp, did, commit)
+    } else if let Some(identity) = event.identity {
+        parse_identity_event_typed(sequence, timestamp, identity)
+    } else if let Some(account) = event.account {
+        parse_account_event_typed(sequence, timestamp, account)
+    } else {
+        Err(TriggerError::JetstreamParse(format!(
+            "Unknown Jetstream event type; payload={}",
+            text
+        )))
     }
 }
 
-fn parse_commitevent_typed(
+fn parse_commit_event_typed(
     sequence: i64,
     timestamp: i64,
     repo: String,
-    commit: Value,
+    commit: CommitData,
 ) -> Result<Vec<AtProtoEvent>, TriggerError> {
-    let operations: Vec<&Value> =
-        if let Some(ops) = commit.get("operations").and_then(|v| v.as_array()) {
-            ops.iter().collect()
-        } else if let Some(ops) = commit.get("ops").and_then(|v| v.as_array()) {
-            ops.iter().collect()
-        } else if let Some(op) = commit.get("operation") {
-            if let Some(arr) = op.as_array() {
-                arr.iter().collect()
-            } else {
-                vec![op]
-            }
-        } else if commit.get("collection").is_some() && commit.get("rkey").is_some() {
-            vec![&commit]
-        } else {
-            return Err(TriggerError::JetstreamParse(format!(
-                "Missing commit.operation(s); payload={}",
-                commit
-            )));
-        };
+    // Prefer multi-operation formats when present
+    if let Some(ops) = commit.operations.as_ref() {
+        let mut events = Vec::with_capacity(ops.len());
+        for (op_index, op) in ops.iter().enumerate() {
+            let path = op.path.as_deref().ok_or_else(|| {
+                TriggerError::JetstreamParse("Missing path in operation".to_string())
+            })?;
 
-    if operations.is_empty() {
-        return Err(TriggerError::JetstreamParse(format!(
-            "Empty commit.operations array; payload={}",
-            commit
-        )));
+            let (collection, rkey) = path.split_once('/').ok_or_else(|| {
+                TriggerError::JetstreamParse(format!("Invalid path format: {}", path))
+            })?;
+
+            let action = op.action.clone().unwrap_or(AtProtoAction::Update);
+
+            events.push(AtProtoEvent {
+                sequence,
+                timestamp,
+                repo: repo.clone(),
+                collection: collection.to_string(),
+                rkey: rkey.to_string(),
+                action,
+                cid: op.cid.clone(),
+                record: op.record.clone(),
+                rev: commit.rev.clone(),
+                op_index: Some(op_index as u32),
+            });
+        }
+        return Ok(events);
     }
 
-    let rev = commit
-        .get("rev")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+    if let Some(OperationField::Detail(op)) = &commit.operation {
+        // Nested operation object
+        let path = op
+            .path
+            .as_deref()
+            .ok_or_else(|| TriggerError::JetstreamParse("Missing path in operation".to_string()))?;
 
-    let mut events = Vec::with_capacity(operations.len());
-    // NOTE: This loop could potentially process a very large number of operations without yielding.
-    // Consider adding a yield point or upper bound (e.g., 1000 operations) if this becomes a performance issue.
-    for (op_index, op) in operations.into_iter().enumerate() {
-        let (collection, rkey) = if let Some(path) = op.get("path").and_then(|v| v.as_str()) {
-            path.split_once('/').ok_or_else(|| {
-                TriggerError::JetstreamParse(format!(
-                    "Invalid commit.operation.path `{}`; payload={}",
-                    path, commit
-                ))
-            })?
-        } else if let Some(path) = commit.get("path").and_then(|v| v.as_str()) {
-            path.split_once('/').ok_or_else(|| {
-                TriggerError::JetstreamParse(format!(
-                    "Invalid commit.path `{}`; payload={}",
-                    path, commit
-                ))
-            })?
-        } else {
-            let collection = commit
-                .get("collection")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| {
-                    TriggerError::JetstreamParse(format!(
-                        "Missing commit.collection and operation.path; payload={}",
-                        commit
-                    ))
-                })?;
-            let rkey = commit.get("rkey").and_then(|v| v.as_str()).ok_or_else(|| {
-                TriggerError::JetstreamParse(format!(
-                    "Missing commit.rkey and operation.path; payload={}",
-                    commit
-                ))
-            })?;
-            (collection, rkey)
-        };
+        let (collection, rkey) = path.split_once('/').ok_or_else(|| {
+            TriggerError::JetstreamParse(format!("Invalid path format: {}", path))
+        })?;
 
-        let action_str = op
-            .get("action")
-            .or_else(|| commit.get("action"))
-            .or_else(|| commit.get("operation"))
-            .or_else(|| op.get("op"))
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                TriggerError::JetstreamParse(format!(
-                    "Missing commit.action; path={}/{}; payload={}",
-                    collection, rkey, commit
-                ))
-            })?;
+        let action = commit
+            .action
+            .clone()
+            .or_else(|| op.action.clone())
+            .unwrap_or(AtProtoAction::Update);
 
-        let action = match action_str {
-            "create" => CommitAction::Create,
-            "update" => CommitAction::Update,
-            "delete" => CommitAction::Delete,
-            other => {
-                return Err(TriggerError::JetstreamParse(format!(
-                    "Unknown commit action `{}` for path `{}/{}`; payload={}",
-                    other, collection, rkey, commit
-                )))
-            }
-        };
-
-        let cid = op
-            .get("cid")
-            .or_else(|| commit.get("cid"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        let record = op
-            .get("record")
-            .cloned()
-            .or_else(|| commit.get("record").cloned());
-
-        events.push(AtProtoEvent {
+        return Ok(vec![AtProtoEvent {
             sequence,
             timestamp,
-            repo: repo.clone(),
+            repo,
             collection: collection.to_string(),
             rkey: rkey.to_string(),
             action,
-            cid,
-            record,
-            rev: rev.clone(),
-            op_index: Some(op_index as u32),
-        });
+            cid: op.cid.clone().or_else(|| commit.cid.clone()),
+            record: op.record.clone().or_else(|| commit.record.clone()),
+            rev: commit.rev.clone(),
+            op_index: None,
+        }]);
     }
 
-    Ok(events)
+    // Single-operation commit shape
+    let collection = commit
+        .collection
+        .as_deref()
+        .ok_or_else(|| TriggerError::JetstreamParse("Missing collection in commit".to_string()))?;
+    let rkey = commit
+        .rkey
+        .as_deref()
+        .ok_or_else(|| TriggerError::JetstreamParse("Missing rkey in commit".to_string()))?;
+
+    let action = match &commit.operation {
+        Some(OperationField::Action(op)) => op.clone(),
+        Some(OperationField::Detail(_)) => AtProtoAction::Update,
+        None => AtProtoAction::Update,
+    };
+
+    Ok(vec![AtProtoEvent {
+        sequence,
+        timestamp,
+        repo,
+        collection: collection.to_string(),
+        rkey: rkey.to_string(),
+        action,
+        cid: commit.cid.clone(),
+        record: commit.record.clone(),
+        rev: commit.rev.clone(),
+        op_index: None,
+    }])
 }
 
 fn parse_identity_event_typed(
     sequence: i64,
     timestamp: i64,
-    did: String,
-    _handle: Option<String>,
+    identity: IdentityData,
 ) -> Result<Vec<AtProtoEvent>, TriggerError> {
     Ok(vec![AtProtoEvent {
         sequence,
         timestamp,
-        repo: did.clone(),
+        repo: identity.did.clone(),
         collection: "identity".to_string(),
         rkey: "handle".to_string(),
-        action: CommitAction::Update,
+        action: AtProtoAction::Update,
         cid: None,
-        record: None,
+        record: Some(json!({
+            "handle": identity.handle,
+            "seq": identity.seq,
+            "time": identity.time
+        })),
         rev: None,
         op_index: None,
     }])
@@ -477,23 +469,26 @@ fn parse_identity_event_typed(
 fn parse_account_event_typed(
     sequence: i64,
     timestamp: i64,
-    did: String,
-    active: bool,
-    _status: Option<String>,
+    account: AccountData,
 ) -> Result<Vec<AtProtoEvent>, TriggerError> {
     Ok(vec![AtProtoEvent {
         sequence,
         timestamp,
-        repo: did.clone(),
+        repo: account.did.clone(),
         collection: "account".to_string(),
         rkey: "status".to_string(),
-        action: if active {
-            CommitAction::Update
+        action: if account.active {
+            AtProtoAction::Update
         } else {
-            CommitAction::Delete
+            AtProtoAction::Delete
         },
         cid: None,
-        record: None,
+        record: Some(json!({
+            "active": account.active,
+            "status": account.status,
+            "seq": account.seq,
+            "time": account.time
+        })),
         rev: None,
         op_index: None,
     }])
@@ -559,7 +554,7 @@ mod tests {
         assert_eq!(event.repo, "did:plc:test123");
         assert_eq!(event.collection, "app.bsky.feed.post");
         assert_eq!(event.rkey, "abcdef");
-        assert_eq!(event.action, CommitAction::Create);
+        assert_eq!(event.action, AtProtoAction::Create);
         assert_eq!(event.cid, Some("bafytest123".to_string()));
     }
 
@@ -595,13 +590,13 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].collection, "app.bsky.feed.post");
         assert_eq!(events[0].rkey, "aaa");
-        assert_eq!(events[0].action, CommitAction::Create);
+        assert_eq!(events[0].action, AtProtoAction::Create);
         assert_eq!(events[0].cid.as_deref(), Some("cid-create-aaa"));
         assert!(events[0].record.is_some());
 
         assert_eq!(events[1].collection, "app.bsky.graph.follow");
         assert_eq!(events[1].rkey, "bbb");
-        assert_eq!(events[1].action, CommitAction::Delete);
+        assert_eq!(events[1].action, AtProtoAction::Delete);
     }
 
     #[test]
@@ -628,8 +623,62 @@ mod tests {
         let event = &events[0];
         assert_eq!(event.collection, "app.bsky.feed.post");
         assert_eq!(event.rkey, "zzz");
-        assert_eq!(event.action, CommitAction::Delete);
+        assert_eq!(event.action, AtProtoAction::Delete);
         assert!(event.cid.is_none());
+    }
+
+    #[test]
+    fn test_handle_identity_event() {
+        let identity_msg = r#"
+        {
+            "type": "identity",
+            "seq": 901,
+            "time_us": 1700003,
+            "did": "did:plc:ident",
+            "identity": {
+                "did": "did:plc:ident",
+                "handle": "example.bsky.social",
+                "seq": 901,
+                "time": "2024-01-01T00:00:00.000Z"
+            }
+        }
+        "#;
+
+        let events = handle_message(identity_msg).unwrap();
+        assert_eq!(events.len(), 1);
+        let event = &events[0];
+        assert_eq!(event.collection, "identity");
+        assert_eq!(event.action, AtProtoAction::Update);
+        assert_eq!(event.repo, "did:plc:ident");
+        assert!(event.record.is_some());
+    }
+
+    #[test]
+    fn test_handle_account_event() {
+        let account_msg = r#"
+        {
+            "type": "account",
+            "seq": 902,
+            "time_us": 1700004,
+            "did": "did:plc:acct",
+            "account": {
+                "active": false,
+                "did": "did:plc:acct",
+                "seq": 902,
+                "status": "takedown",
+                "time": "2024-02-02T00:00:00.000Z"
+            }
+        }
+        "#;
+
+        let events = handle_message(account_msg).unwrap();
+        assert_eq!(events.len(), 1);
+        let event = &events[0];
+        assert_eq!(event.collection, "account");
+        assert_eq!(event.rkey, "status");
+        assert_eq!(event.action, AtProtoAction::Delete);
+        assert_eq!(event.repo, "did:plc:acct");
+        assert!(event.record.is_some());
     }
 
     #[test]
@@ -660,7 +709,7 @@ mod tests {
         let event = &events[0];
         assert_eq!(event.collection, "app.bsky.feed.like");
         assert_eq!(event.rkey, "3m7azbh4ous2h");
-        assert_eq!(event.action, CommitAction::Create);
+        assert_eq!(event.action, AtProtoAction::Create);
         assert_eq!(
             event.cid.as_deref(),
             Some("bafyreiekmyvl7ogn4ym5lvligmc4xylntgvj7nu2rntseb7lfth6imdtyi")
@@ -689,7 +738,11 @@ mod tests {
         let err = handle_message(commit_msg).unwrap_err();
         match err {
             TriggerError::JetstreamParse(msg) => {
-                assert!(msg.contains("Invalid commit.operation.path"))
+                assert!(
+                    msg.contains("Invalid commit.operation.path")
+                        || msg.contains("Invalid path format")
+                        || msg.contains("Missing path in operation")
+                )
             }
             other => panic!("unexpected error: {:?}", other),
         }
