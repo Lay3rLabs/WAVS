@@ -56,14 +56,6 @@ impl FromStr for AtProtoAction {
     }
 }
 
-impl TryFrom<String> for AtProtoAction {
-    type Error = anyhow::Error;
-
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        s.parse()
-    }
-}
-
 #[derive(Error, Debug)]
 pub enum ServiceError {
     #[error("Failed to serialize service for hashing: {0}")]
