@@ -284,24 +284,11 @@ fn build_jetstream_url(config: &JetstreamConfig) -> Result<Url, TriggerError> {
 
 /// Handle incoming Jetstream message
 fn handle_message(text: &str) -> Result<Vec<AtProtoEvent>, TriggerError> {
-    // Helper to embed a truncated payload in parse errors
-    let payload_snippet = |body: &str| {
-        const MAX_LEN: usize = 512;
-        let bytes = body.as_bytes();
-        let end = bytes.len().min(MAX_LEN);
-        let snippet = String::from_utf8_lossy(&bytes[..end]);
-        if bytes.len() > MAX_LEN {
-            format!("{}... (truncated)", snippet)
-        } else {
-            snippet.to_string()
-        }
-    };
-
     // Try to parse as subscriber message first
     if let Ok(_sub_msg) = serde_json::from_str::<SubscriberMessage>(text) {
         return Err(TriggerError::JetstreamParse(format!(
             "Subscriber message received; payload={}",
-            payload_snippet(text)
+            text
         )));
     }
 
@@ -309,8 +296,7 @@ fn handle_message(text: &str) -> Result<Vec<AtProtoEvent>, TriggerError> {
     let value: Value = serde_json::from_str(text).map_err(|e| {
         TriggerError::JetstreamParse(format!(
             "Failed to parse Jetstream event: {}; payload={}",
-            e,
-            payload_snippet(text)
+            e, text
         ))
     })?;
 
@@ -319,28 +305,21 @@ fn handle_message(text: &str) -> Result<Vec<AtProtoEvent>, TriggerError> {
         .or_else(|| value.get("kind"))
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!(
-                "Missing event tag (type/kind); payload={}",
-                payload_snippet(text)
-            ))
+            TriggerError::JetstreamParse(format!("Missing event tag (type/kind); payload={}", text))
         })?;
 
     match tag {
-        "commit" => parse_commit_event(&value, &payload_snippet),
-        "identity" => parse_identity_event(&value, &payload_snippet),
-        "account" => parse_account_event(&value, &payload_snippet),
+        "commit" => parse_commit_event(&value),
+        "identity" => parse_identity_event(&value),
+        "account" => parse_account_event(&value),
         other => Err(TriggerError::JetstreamParse(format!(
             "Unsupported Jetstream event kind `{}`; payload={}",
-            other,
-            payload_snippet(text)
+            other, text
         ))),
     }
 }
 
-fn parse_commit_event(
-    value: &Value,
-    payload_snippet: &impl Fn(&str) -> String,
-) -> Result<Vec<AtProtoEvent>, TriggerError> {
+fn parse_commit_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> {
     let commit = value
         .get("commit")
         .ok_or_else(|| TriggerError::JetstreamParse("Missing commit body".to_string()))?;
@@ -353,20 +332,14 @@ fn parse_commit_event(
         .or_else(|| commit.get("timeUs"))
         .and_then(|v| v.as_i64())
         .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!(
-                "Missing time_us/timeUs; payload={}",
-                payload_snippet(&value.to_string())
-            ))
+            TriggerError::JetstreamParse(format!("Missing time_us/timeUs; payload={}", value))
         })?;
     let repo = value
         .get("repo")
         .or_else(|| value.get("did"))
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!(
-                "Missing repo/did; payload={}",
-                payload_snippet(&value.to_string())
-            ))
+            TriggerError::JetstreamParse(format!("Missing repo/did; payload={}", value))
         })?
         .to_string();
 
@@ -386,14 +359,14 @@ fn parse_commit_event(
         } else {
             return Err(TriggerError::JetstreamParse(format!(
                 "Missing commit.operation(s); payload={}",
-                payload_snippet(&value.to_string())
+                value
             )));
         };
 
     if operations.is_empty() {
         return Err(TriggerError::JetstreamParse(format!(
             "Empty commit.operations array; payload={}",
-            payload_snippet(&value.to_string())
+            value
         )));
     }
 
@@ -408,16 +381,14 @@ fn parse_commit_event(
             path.split_once('/').ok_or_else(|| {
                 TriggerError::JetstreamParse(format!(
                     "Invalid commit.operation.path `{}`; payload={}",
-                    path,
-                    payload_snippet(&value.to_string())
+                    path, value
                 ))
             })?
         } else if let Some(path) = commit.get("path").and_then(|v| v.as_str()) {
             path.split_once('/').ok_or_else(|| {
                 TriggerError::JetstreamParse(format!(
                     "Invalid commit.path `{}`; payload={}",
-                    path,
-                    payload_snippet(&value.to_string())
+                    path, value
                 ))
             })?
         } else {
@@ -427,13 +398,13 @@ fn parse_commit_event(
                 .ok_or_else(|| {
                     TriggerError::JetstreamParse(format!(
                         "Missing commit.collection and operation.path; payload={}",
-                        payload_snippet(&value.to_string())
+                        value
                     ))
                 })?;
             let rkey = commit.get("rkey").and_then(|v| v.as_str()).ok_or_else(|| {
                 TriggerError::JetstreamParse(format!(
                     "Missing commit.rkey and operation.path; payload={}",
-                    payload_snippet(&value.to_string())
+                    value
                 ))
             })?;
             (collection, rkey)
@@ -448,9 +419,7 @@ fn parse_commit_event(
             .ok_or_else(|| {
                 TriggerError::JetstreamParse(format!(
                     "Missing commit.action; path={}/{}; payload={}",
-                    collection,
-                    rkey,
-                    payload_snippet(&value.to_string())
+                    collection, rkey, value
                 ))
             })?;
 
@@ -461,10 +430,7 @@ fn parse_commit_event(
             other => {
                 return Err(TriggerError::JetstreamParse(format!(
                     "Unknown commit action `{}` for path `{}/{}`; payload={}",
-                    other,
-                    collection,
-                    rkey,
-                    payload_snippet(&value.to_string())
+                    other, collection, rkey, value
                 )))
             }
         };
@@ -497,30 +463,19 @@ fn parse_commit_event(
     Ok(events)
 }
 
-fn parse_identity_event(
-    value: &Value,
-    payload_snippet: &impl Fn(&str) -> String,
-) -> Result<Vec<AtProtoEvent>, TriggerError> {
+fn parse_identity_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> {
     let sequence = value.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
     let timestamp = value
         .get("time_us")
         .or_else(|| value.get("timeUs"))
         .and_then(|v| v.as_i64())
         .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!(
-                "Missing time_us/timeUs; payload={}",
-                payload_snippet(&value.to_string())
-            ))
+            TriggerError::JetstreamParse(format!("Missing time_us/timeUs; payload={}", value))
         })?;
     let did = value
         .get("did")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!(
-                "Missing did; payload={}",
-                payload_snippet(&value.to_string())
-            ))
-        })?
+        .ok_or_else(|| TriggerError::JetstreamParse(format!("Missing did; payload={}", value)))?
         .to_string();
 
     Ok(vec![AtProtoEvent {
@@ -537,30 +492,19 @@ fn parse_identity_event(
     }])
 }
 
-fn parse_account_event(
-    value: &Value,
-    payload_snippet: &impl Fn(&str) -> String,
-) -> Result<Vec<AtProtoEvent>, TriggerError> {
+fn parse_account_event(value: &Value) -> Result<Vec<AtProtoEvent>, TriggerError> {
     let sequence = value.get("seq").and_then(|v| v.as_i64()).unwrap_or(0);
     let timestamp = value
         .get("time_us")
         .or_else(|| value.get("timeUs"))
         .and_then(|v| v.as_i64())
         .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!(
-                "Missing time_us/timeUs; payload={}",
-                payload_snippet(&value.to_string())
-            ))
+            TriggerError::JetstreamParse(format!("Missing time_us/timeUs; payload={}", value))
         })?;
     let did = value
         .get("did")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            TriggerError::JetstreamParse(format!(
-                "Missing did; payload={}",
-                payload_snippet(&value.to_string())
-            ))
-        })?
+        .ok_or_else(|| TriggerError::JetstreamParse(format!("Missing did; payload={}", value)))?
         .to_string();
 
     let active = value
