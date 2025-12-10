@@ -110,8 +110,15 @@ impl EventId {
         hasher.update(workflow_id.as_bytes());
         match salt {
             EventIdSalt::WasmResponse(bytes) => hasher.update(bytes),
-            // Avoid stream-local fields for deterministic hashes across nodes.
             EventIdSalt::Trigger(trigger_data) => match trigger_data {
+                // For ATProto events, we exclude sequence and timestamp as they are stream-local:
+                // - sequence: Stream-specific sequence number that varies per relay connection
+                // - timestamp: Processing timestamp when the event was received by the stream
+                //
+                // Including only the canonical event data ensures the same event produces
+                // the same EventId hash regardless of which node processes it.
+                // See: https://docs.bsky.app/docs/advanced-guides/timestamps
+                // See: https://docs.bsky.app/blog/relay-ops#relay-upgrade
                 TriggerData::AtProtoEvent {
                     repo,
                     collection,
