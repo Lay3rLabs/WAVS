@@ -183,11 +183,14 @@ pub async fn start_jetstream_stream(
                 Ok(mut stream) => {
                     reconnect_count = 0;
                     info!("Successfully connected to Jetstream");
+                    metrics.increment_total_errors("jetstream_connection_success");
 
                     while let Some(events) = stream.next().await {
                         match events {
                             Ok(atproto_events) => {
+                                metrics.increment_total_errors("jetstream_message_received");
                                 for atproto_event in atproto_events {
+                                    metrics.increment_total_errors("jetstream_event_processed");
                                     yield Ok(StreamTriggers::AtProto {
                                         event: atproto_event,
                                     });
@@ -195,6 +198,7 @@ pub async fn start_jetstream_stream(
                             }
                             Err(TriggerError::JetstreamParse(msg)) => {
                                 // Non-fatal parse issue (e.g. hello/keepalive)
+                                metrics.increment_total_errors("jetstream_parse_error");
                                 warn!("Ignoring Jetstream message: {}", msg);
                                 continue;
                             }
@@ -212,6 +216,7 @@ pub async fn start_jetstream_stream(
 
                     if reconnect_count >= max_reconnects {
                         error!("Max reconnection attempts reached, giving up");
+                        metrics.increment_total_errors("jetstream_max_reconnects_reached");
                         yield Err(TriggerError::JetstreamConnection("Max reconnection attempts reached".to_string()));
                         return;
                     }
@@ -223,6 +228,7 @@ pub async fn start_jetstream_stream(
                     ) + Duration::from_millis(rand::random::<u64>() % 1000);
 
                     warn!("Reconnecting in {:?} (attempt {})", delay, reconnect_count + 1);
+                    metrics.increment_total_errors("jetstream_reconnect_attempt");
                     sleep(delay).await;
                     reconnect_count += 1;
                 }
@@ -236,20 +242,31 @@ pub async fn start_jetstream_stream(
 /// Create a new Jetstream WebSocket connection
 async fn create_jetstream_connection(
     config: &JetstreamConfig,
-    _metrics: &TriggerMetrics,
+    metrics: &TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<Vec<AtProtoEvent>, TriggerError>> + Send>>, TriggerError>
 {
     let url = build_jetstream_url(config)?;
     info!("Connecting to Jetstream URL: {}", url);
 
+    let start_time = std::time::Instant::now();
     let (ws_stream, response) = connect_async(url.as_str()).await.map_err(|e| {
         TriggerError::JetstreamConnection(format!("WebSocket connection failed: {}", e))
     })?;
+    let connection_latency = start_time.elapsed().as_secs_f64();
 
-    info!("Jetstream connection established: {:?}", response.status());
+    // Record connection latency
+    metrics
+        .sent_dispatcher_command_latency
+        .record(connection_latency, &[]);
+    info!(
+        "Jetstream connection established in {:.3}s: {:?}",
+        connection_latency,
+        response.status()
+    );
 
-    let ws_stream = ws_stream.map(|msg| match msg {
-        Ok(Message::Text(text)) => handle_message(&text),
+    let metrics = metrics.clone();
+    let ws_stream = ws_stream.map(move |msg| match msg {
+        Ok(Message::Text(text)) => handle_message(&text, &metrics),
         Ok(Message::Binary(_)) => {
             warn!("Received binary message but compression is disabled");
             Err(TriggerError::JetstreamConnection(
@@ -324,7 +341,7 @@ fn build_jetstream_url(config: &JetstreamConfig) -> Result<Url, TriggerError> {
 }
 
 /// Handle incoming Jetstream message
-fn handle_message(text: &str) -> Result<Vec<AtProtoEvent>, TriggerError> {
+fn handle_message(text: &str, metrics: &TriggerMetrics) -> Result<Vec<AtProtoEvent>, TriggerError> {
     // Try to parse as subscriber message first
     if let Ok(_sub_msg) = serde_json::from_str::<SubscriberMessage>(text) {
         return Err(TriggerError::JetstreamParse(format!(
@@ -345,12 +362,16 @@ fn handle_message(text: &str) -> Result<Vec<AtProtoEvent>, TriggerError> {
     let did = event.did;
 
     if let Some(commit) = event.commit {
-        parse_commit_event_typed(sequence, timestamp, did, commit)
+        metrics.increment_total_errors("jetstream_commit_event");
+        parse_commit_event_typed(sequence, timestamp, did, commit, metrics)
     } else if let Some(identity) = event.identity {
+        metrics.increment_total_errors("jetstream_identity_event");
         parse_identity_event_typed(sequence, timestamp, identity)
     } else if let Some(account) = event.account {
+        metrics.increment_total_errors("jetstream_account_event");
         parse_account_event_typed(sequence, timestamp, account)
     } else {
+        metrics.increment_total_errors("jetstream_unknown_event_type");
         Err(TriggerError::JetstreamParse(format!(
             "Unknown Jetstream event type; payload={}",
             text
@@ -363,6 +384,7 @@ fn parse_commit_event_typed(
     timestamp: i64,
     repo: String,
     commit: CommitData,
+    metrics: &TriggerMetrics,
 ) -> Result<Vec<AtProtoEvent>, TriggerError> {
     // Prefer multi-operation formats when present
     if let Some(ops) = commit.operations.as_ref() {
@@ -377,6 +399,13 @@ fn parse_commit_event_typed(
             })?;
 
             let action = op.action.clone().unwrap_or(AtProtoAction::Update);
+
+            // Track action type metrics
+            match action {
+                AtProtoAction::Create => metrics.increment_total_errors("jetstream_create_action"),
+                AtProtoAction::Update => metrics.increment_total_errors("jetstream_update_action"),
+                AtProtoAction::Delete => metrics.increment_total_errors("jetstream_delete_action"),
+            }
 
             events.push(AtProtoEvent {
                 sequence,
@@ -411,6 +440,13 @@ fn parse_commit_event_typed(
             .or_else(|| op.action.clone())
             .unwrap_or(AtProtoAction::Update);
 
+        // Track action type metrics
+        match action {
+            AtProtoAction::Create => metrics.increment_total_errors("jetstream_create_action"),
+            AtProtoAction::Update => metrics.increment_total_errors("jetstream_update_action"),
+            AtProtoAction::Delete => metrics.increment_total_errors("jetstream_delete_action"),
+        }
+
         return Ok(vec![AtProtoEvent {
             sequence,
             timestamp,
@@ -440,6 +476,13 @@ fn parse_commit_event_typed(
         Some(OperationField::Detail(_)) => AtProtoAction::Update,
         None => AtProtoAction::Update,
     };
+
+    // Track action type metrics
+    match action {
+        AtProtoAction::Create => metrics.increment_total_errors("jetstream_create_action"),
+        AtProtoAction::Update => metrics.increment_total_errors("jetstream_update_action"),
+        AtProtoAction::Delete => metrics.increment_total_errors("jetstream_delete_action"),
+    }
 
     Ok(vec![AtProtoEvent {
         sequence,
@@ -571,6 +614,7 @@ mod tests {
 
     #[test]
     fn test_handle_commit_message() {
+        let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
         let commit_msg = r#"
         {
             "type": "commit",
@@ -589,7 +633,7 @@ mod tests {
         }
         "#;
 
-        let events = handle_message(commit_msg).unwrap();
+        let events = handle_message(commit_msg, &metrics).unwrap();
         assert_eq!(events.len(), 1);
         let event = &events[0];
         assert_eq!(event.sequence, 12345);
@@ -602,6 +646,7 @@ mod tests {
 
     #[test]
     fn test_handle_multiple_operations() {
+        let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
         let commit_msg = r#"
         {
             "kind": "commit",
@@ -628,7 +673,7 @@ mod tests {
         }
         "#;
 
-        let events = handle_message(commit_msg).unwrap();
+        let events = handle_message(commit_msg, &metrics).unwrap();
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].collection, "app.bsky.feed.post");
         assert_eq!(events[0].rkey, "aaa");
@@ -643,6 +688,7 @@ mod tests {
 
     #[test]
     fn test_handle_ops_alias_and_delete_without_cid() {
+        let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
         let commit_msg = r#"
         {
             "type": "commit",
@@ -660,7 +706,7 @@ mod tests {
         }
         "#;
 
-        let events = handle_message(commit_msg).unwrap();
+        let events = handle_message(commit_msg, &metrics).unwrap();
         assert_eq!(events.len(), 1);
         let event = &events[0];
         assert_eq!(event.collection, "app.bsky.feed.post");
@@ -671,6 +717,7 @@ mod tests {
 
     #[test]
     fn test_handle_identity_event() {
+        let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
         let identity_msg = r#"
         {
             "type": "identity",
@@ -686,7 +733,7 @@ mod tests {
         }
         "#;
 
-        let events = handle_message(identity_msg).unwrap();
+        let events = handle_message(identity_msg, &metrics).unwrap();
         assert_eq!(events.len(), 1);
         let event = &events[0];
         assert_eq!(event.collection, "identity");
@@ -697,6 +744,7 @@ mod tests {
 
     #[test]
     fn test_handle_account_event() {
+        let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
         let account_msg = r#"
         {
             "type": "account",
@@ -713,7 +761,7 @@ mod tests {
         }
         "#;
 
-        let events = handle_message(account_msg).unwrap();
+        let events = handle_message(account_msg, &metrics).unwrap();
         assert_eq!(events.len(), 1);
         let event = &events[0];
         assert_eq!(event.collection, "account");
@@ -725,6 +773,7 @@ mod tests {
 
     #[test]
     fn test_handle_commit_with_collection_rkey_fields() {
+        let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
         let commit_msg = r#"
         {
             "kind": "commit",
@@ -746,7 +795,7 @@ mod tests {
         }
         "#;
 
-        let events = handle_message(commit_msg).unwrap();
+        let events = handle_message(commit_msg, &metrics).unwrap();
         assert_eq!(events.len(), 1);
         let event = &events[0];
         assert_eq!(event.collection, "app.bsky.feed.like");
@@ -761,6 +810,7 @@ mod tests {
 
     #[test]
     fn test_handle_invalid_path() {
+        let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
         let commit_msg = r#"
         {
             "type": "commit",
@@ -777,7 +827,7 @@ mod tests {
         }
         "#;
 
-        let err = handle_message(commit_msg).unwrap_err();
+        let err = handle_message(commit_msg, &metrics).unwrap_err();
         match err {
             TriggerError::JetstreamParse(msg) => {
                 assert!(
