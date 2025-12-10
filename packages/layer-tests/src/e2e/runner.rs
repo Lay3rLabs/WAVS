@@ -15,7 +15,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use utils::alloy_helpers::SolidityEventFinder;
-use wavs_types::{ChainKeyNamespace, Submit, Trigger, Workflow, WorkflowId};
+use wavs_types::{
+    AtProtoAction, ChainKeyNamespace, SimulatedTriggerRequest, Submit, Trigger, TriggerData,
+    Workflow, WorkflowId,
+};
 
 use crate::e2e::helpers::{change_service_for_test, cosmos_wait_for_task_to_land};
 use crate::e2e::report::TestReport;
@@ -32,6 +35,7 @@ use crate::{
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{LogSpamClient, SimpleEvmTriggerClient, TriggerId},
 };
+use serde_json::json;
 
 use super::helpers::{evm_wait_for_task_to_land, simulate_anvil_reorg};
 use super::test_definition::WorkflowDefinition;
@@ -388,6 +392,39 @@ async fn run_test(
             }
             Trigger::BlockInterval { .. } => vec![TriggerId::new(1337)],
             Trigger::Cron { .. } => vec![TriggerId::new(1338)],
+            Trigger::AtProtoEvent { .. } => {
+                let sequence: u64 = 1339;
+                let trigger_id = TriggerId::new(sequence);
+
+                let record_payload = input_bytes.clone().unwrap_or_default();
+                let record_text = String::from_utf8_lossy(&record_payload).to_string();
+
+                let atproto_data = TriggerData::AtProtoEvent {
+                    sequence: sequence as i64,
+                    timestamp: 0,
+                    repo: "did:example:alice".to_string(),
+                    collection: "app.bsky.feed.post".to_string(),
+                    rkey: "rkey-1".to_string(),
+                    action: AtProtoAction::Create,
+                    cid: Some("bafytestcid".to_string()),
+                    record: Some(json!({ "text": record_text })),
+                    rev: Some("rev-test".to_string()),
+                    op_index: Some(0),
+                };
+
+                let req = SimulatedTriggerRequest {
+                    service_id: service_deployment.service.id(),
+                    workflow_id: first_workflow_id.clone(),
+                    trigger: trigger.clone(),
+                    data: atproto_data,
+                    count: 1,
+                    wait_for_completion: true,
+                };
+
+                clients.http_client.simulate_trigger(req).await?;
+
+                vec![trigger_id]
+            }
             Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
         };
 

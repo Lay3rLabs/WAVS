@@ -69,6 +69,15 @@ impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
                 start_time: start_time.map(Into::into),
                 end_time: end_time.map(Into::into),
             }),
+            wavs_types::Trigger::AtProtoEvent {
+                collection,
+                repo_did,
+                action,
+            } => component_service::Trigger::AtprotoEvent(component_service::TriggerAtprotoEvent {
+                collection,
+                repo_did,
+                action: action.map(|a| a.to_string()),
+            }),
         })
     }
 }
@@ -432,6 +441,37 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                     trigger_time: trigger_time.into(),
                 }),
             ),
+            wavs_types::TriggerData::AtProtoEvent {
+                sequence,
+                timestamp,
+                repo,
+                collection,
+                rkey,
+                action,
+                cid,
+                record,
+                rev,
+                op_index,
+            } => {
+                let record_data = record
+                    .map(|value| serde_json::to_string(&value))
+                    .transpose()?;
+
+                Ok(component_input::TriggerData::AtprotoEvent(
+                    component_events::TriggerDataAtprotoEvent {
+                        sequence,
+                        timestamp,
+                        repo,
+                        collection,
+                        rkey,
+                        action: action.to_string(),
+                        cid,
+                        record_data,
+                        rev,
+                        op_index,
+                    },
+                ))
+            }
             wavs_types::TriggerData::Raw(data) => Ok(component_input::TriggerData::Raw(data)),
         }
     }
@@ -633,6 +673,37 @@ impl TryFrom<wavs_types::TriggerData> for aggregator_types::TriggerData {
                     trigger_time: trigger_time.into(),
                 }),
             ),
+            wavs_types::TriggerData::AtProtoEvent {
+                sequence,
+                timestamp,
+                repo,
+                collection,
+                rkey,
+                action,
+                cid,
+                record,
+                rev,
+                op_index,
+            } => {
+                let record_data = record
+                    .map(|value| serde_json::to_string(&value))
+                    .transpose()?;
+
+                Ok(aggregator_types::TriggerData::AtprotoEvent(
+                    aggregator_events::TriggerDataAtprotoEvent {
+                        sequence,
+                        timestamp,
+                        repo,
+                        collection,
+                        rkey,
+                        action: action.to_string(),
+                        cid,
+                        record_data,
+                        rev,
+                        op_index,
+                    },
+                ))
+            }
             wavs_types::TriggerData::Raw(data) => Ok(aggregator_types::TriggerData::Raw(data)),
         }
     }
@@ -804,6 +875,17 @@ impl TryFrom<wavs_types::Trigger> for aggregator_service::Trigger {
                 start_time: start_time.map(Into::into),
                 end_time: end_time.map(Into::into),
             }),
+            wavs_types::Trigger::AtProtoEvent {
+                collection,
+                repo_did,
+                action,
+            } => {
+                aggregator_service::Trigger::AtprotoEvent(aggregator_service::TriggerAtprotoEvent {
+                    collection,
+                    repo_did,
+                    action: action.map(|a| a.to_string()),
+                })
+            }
         })
     }
 }

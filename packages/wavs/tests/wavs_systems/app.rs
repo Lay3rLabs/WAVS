@@ -81,5 +81,7 @@ fn zeroed_cli_args(
         jaeger: None,
         prometheus: None,
         prometheus_push_interval_secs: None,
+        jetstream_endpoint: None,
+        jetstream_max_message_size: None,
     }
 }

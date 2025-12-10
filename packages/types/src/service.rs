@@ -1,4 +1,5 @@
 use alloy_primitives::LogData;
+use anyhow::bail;
 use iri_string::types::UriString;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -15,6 +16,45 @@ use ts_rs::TS;
 use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
 
 use super::{ChainKey, ServiceId, WorkflowId};
+
+/// ATProto Jetstream commit action types
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum AtProtoAction {
+    /// Create a new record
+    Create,
+    /// Update an existing record
+    Update,
+    /// Delete a record
+    Delete,
+}
+
+impl std::fmt::Display for AtProtoAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AtProtoAction::Create => write!(f, "create"),
+            AtProtoAction::Update => write!(f, "update"),
+            AtProtoAction::Delete => write!(f, "delete"),
+        }
+    }
+}
+
+impl FromStr for AtProtoAction {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "create" => Ok(AtProtoAction::Create),
+            "update" => Ok(AtProtoAction::Update),
+            "delete" => Ok(AtProtoAction::Delete),
+            _ => bail!(
+                "Invalid action '{}'. Must be one of: create, update, delete",
+                s
+            ),
+        }
+    }
+}
 
 #[derive(Error, Debug)]
 pub enum ServiceError {
@@ -281,6 +321,18 @@ pub enum Trigger {
         /// Optional end time (timestamp in nanoseconds) indicating when the schedule ends.
         end_time: Option<Timestamp>,
     },
+    /// ATProto Jetstream event trigger
+    AtProtoEvent {
+        /// Collection NSID to filter for (e.g., "app.bsky.feed.post")
+        /// Supports wildcards with prefix matching (e.g., "app.bsky.feed.*")
+        collection: String,
+        /// Optional DID to filter for specific repositories
+        /// If None, will match events from any repository
+        repo_did: Option<String>,
+        /// Action type to filter for (create, update, delete)
+        /// If None, will match all action types
+        action: Option<AtProtoAction>,
+    },
     // not a real trigger, just for testing
     Manual,
 }
@@ -339,6 +391,29 @@ pub enum TriggerData {
         /// The trigger time
         trigger_time: Timestamp,
     },
+    /// ATProto Jetstream event data
+    AtProtoEvent {
+        /// Sequence number of the event in the stream
+        sequence: i64,
+        /// Timestamp in microseconds
+        timestamp: i64,
+        /// Repository DID that generated the event
+        repo: String,
+        /// Collection NSID (e.g., "app.bsky.feed.post")
+        collection: String,
+        /// Record key within the collection
+        rkey: String,
+        /// Action type (create, update, delete)
+        action: AtProtoAction,
+        /// CID of the record (None for delete events)
+        cid: Option<String>,
+        /// Record data as JSON (None for delete events)
+        record: Option<serde_json::Value>,
+        /// Repository revision identifier for this commit (if provided by the event)
+        rev: Option<String>,
+        /// Index of the operation within the commit (0-based)
+        op_index: Option<u32>,
+    },
     Raw(Vec<u8>),
 }
 
@@ -359,6 +434,7 @@ impl TriggerData {
             TriggerData::EvmContractEvent { .. } => "evm_contract_event",
             TriggerData::BlockInterval { .. } => "block_interval",
             TriggerData::Cron { .. } => "cron",
+            TriggerData::AtProtoEvent { .. } => "atproto_event",
             TriggerData::Raw(_) => "manual",
         }
     }
@@ -368,7 +444,9 @@ impl TriggerData {
             TriggerData::CosmosContractEvent { chain, .. }
             | TriggerData::EvmContractEvent { chain, .. }
             | TriggerData::BlockInterval { chain, .. } => Some(chain),
-            TriggerData::Cron { .. } | TriggerData::Raw(_) => None,
+            TriggerData::Cron { .. } | TriggerData::AtProtoEvent { .. } | TriggerData::Raw(_) => {
+                None
+            }
         }
     }
 }

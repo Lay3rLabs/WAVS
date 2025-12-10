@@ -100,6 +100,15 @@ pub struct Config {
     /// Disable submission networking for testing (default: false)
     #[cfg(feature = "dev")]
     pub disable_submission_networking: bool,
+
+    /// Jetstream WebSocket endpoint URL for ATProto events
+    /// Default is "wss://jetstream1.us-east.bsky.network/subscribe"
+    pub jetstream_endpoint: String,
+
+    /// Maximum jetstream message size in bytes
+    /// Default is 1MB
+    /// Set to 0 for no max size
+    pub jetstream_max_message_size: usize,
 }
 
 impl ConfigExt for Config {
@@ -140,6 +149,8 @@ impl Default for Config {
             disable_trigger_networking: false,
             #[cfg(feature = "dev")]
             disable_submission_networking: false,
+            jetstream_endpoint: "wss://jetstream1.us-east.bsky.network/subscribe".to_string(),
+            jetstream_max_message_size: 1024 * 1024, // 1MB
         }
     }
 }

@@ -1,4 +1,4 @@
-package wavs:types@2.3.0;
+package wavs:types@2.4.0;
 
 interface chain {
   /// A string mostly following the caip-2 format of namespace:reference, e.g. "eip155:1" for Ethereum mainnet or "cosmos:cosmoshub-4" for Cosmos Hub
@@ -125,12 +125,26 @@ interface events {
     trigger-time: timestamp,
   }
 
+  record trigger-data-atproto-event {
+    sequence: s64,
+    timestamp: s64,
+    repo: string,
+    collection: string,
+    rkey: string,
+    action: string,
+    cid: option<string>,
+    record-data: option<string>,
+    rev: option<string>,
+    op-index: option<u32>,
+  }
+
   /// 20-byte unique hash
   variant trigger-data {
     evm-contract-event(trigger-data-evm-contract-event),
     cosmos-contract-event(trigger-data-cosmos-contract-event),
     block-interval(trigger-data-block-interval),
     cron(trigger-data-cron),
+    atproto-event(trigger-data-atproto-event),
     raw(list<u8>),
   }
 }
@@ -235,12 +249,19 @@ interface service {
     end-time: option<timestamp>,
   }
 
+  record trigger-atproto-event {
+    collection: string,
+    repo-did: option<string>,
+    action: option<string>,
+  }
+
   /// Trigger types
   variant trigger {
     evm-contract-event(trigger-evm-contract-event),
     cosmos-contract-event(trigger-cosmos-contract-event),
     block-interval(trigger-block-interval),
     cron(trigger-cron),
+    atproto-event(trigger-atproto-event),
     manual,
   }
 

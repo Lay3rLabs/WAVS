@@ -5,7 +5,9 @@ use std::{
 
 use bimap::BiMap;
 use utils::telemetry::TriggerMetrics;
-use wavs_types::{ByteArray, ChainKey, ServiceId, Trigger, TriggerConfig, WorkflowId};
+use wavs_types::{
+    AtProtoAction, ByteArray, ChainKey, ServiceId, Trigger, TriggerConfig, WorkflowId,
+};
 
 use crate::{
     services::Services,
@@ -31,6 +33,12 @@ pub struct LookupMaps {
     pub triggers_by_evm_contract_event: Arc<
         RwLock<HashMap<(ChainKey, alloy_primitives::Address, ByteArray<32>), HashSet<LookupId>>>,
     >,
+    /// lookup id by (collection, optional repo_did, optional action) for exact matches
+    pub triggers_by_atproto_event_exact:
+        Arc<RwLock<HashMap<(String, Option<String>, Option<AtProtoAction>), HashSet<LookupId>>>>,
+    /// lookup id by (collection pattern, optional repo_did, optional action) for wildcard matches
+    pub triggers_by_atproto_event_pattern:
+        Arc<RwLock<HashMap<(String, Option<String>, Option<AtProtoAction>), HashSet<LookupId>>>>,
     // ServiceId <-> ServiceManager address
     pub service_manager: Arc<RwLock<BiMap<ServiceId, layer_climb::prelude::Address>>>,
     /// Efficient block schedulers (one per chain) for block interval triggers
@@ -51,6 +59,8 @@ impl LookupMaps {
             lookup_id: Arc::new(AtomicUsize::new(0)),
             triggers_by_cosmos_contract_event: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_evm_contract_event: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_atproto_event_exact: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_atproto_event_pattern: Arc::new(RwLock::new(HashMap::new())),
             block_schedulers: BlockSchedulers::default(),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
             service_manager: Arc::new(RwLock::new(BiMap::new())),
@@ -180,6 +190,29 @@ impl LookupMaps {
                         lookup_id, &schedule, start_time, end_time,
                     )?)?;
             }
+            Trigger::AtProtoEvent {
+                collection,
+                repo_did,
+                action,
+            } => {
+                let key = (collection.clone(), repo_did.clone(), action.clone());
+                // Use separate collections so the pattern-matching path only iterates over patterns
+                if collection.contains('*') {
+                    self.triggers_by_atproto_event_pattern
+                        .write()
+                        .unwrap()
+                        .entry(key)
+                        .or_default()
+                        .insert(lookup_id);
+                } else {
+                    self.triggers_by_atproto_event_exact
+                        .write()
+                        .unwrap()
+                        .entry(key)
+                        .or_default()
+                        .insert(lookup_id);
+                }
+            }
             Trigger::Manual => {}
         }
 
@@ -268,6 +301,30 @@ impl LookupMaps {
                         .remove_trigger(lookup_id);
                 }
                 Trigger::Manual => {}
+                Trigger::AtProtoEvent {
+                    collection,
+                    repo_did,
+                    action,
+                } => {
+                    let key = (collection.clone(), repo_did.clone(), action.clone());
+                    if collection.contains('*') {
+                        let mut lock = self.triggers_by_atproto_event_pattern.write().unwrap();
+                        if let Some(set) = lock.get_mut(&key) {
+                            set.remove(&lookup_id);
+                            if set.is_empty() {
+                                lock.remove(&key);
+                            }
+                        }
+                    } else {
+                        let mut lock = self.triggers_by_atproto_event_exact.write().unwrap();
+                        if let Some(set) = lock.get_mut(&key) {
+                            set.remove(&lookup_id);
+                            if set.is_empty() {
+                                lock.remove(&key);
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -283,6 +340,10 @@ impl LookupMaps {
             self.triggers_by_evm_contract_event.write().unwrap();
         let mut triggers_by_cosmos_contract_event =
             self.triggers_by_cosmos_contract_event.write().unwrap();
+        let mut triggers_by_atproto_event_exact =
+            self.triggers_by_atproto_event_exact.write().unwrap();
+        let mut triggers_by_atproto_event_pattern =
+            self.triggers_by_atproto_event_pattern.write().unwrap();
         let mut triggers_by_service_workflow_lock =
             self.triggers_by_service_workflow.write().unwrap();
 
@@ -353,6 +414,27 @@ impl LookupMaps {
                                 .remove_trigger(*lookup_id);
                         }
                         Trigger::Manual => {}
+                        Trigger::AtProtoEvent {
+                            collection,
+                            repo_did,
+                            action,
+                        } => {
+                            let key = (collection.clone(), repo_did.clone(), action.clone());
+                            if collection.contains('*') {
+                                if let Some(set) = triggers_by_atproto_event_pattern.get_mut(&key) {
+                                    set.remove(lookup_id);
+                                    if set.is_empty() {
+                                        triggers_by_atproto_event_pattern.remove(&key);
+                                    }
+                                }
+                            } else if let Some(set) = triggers_by_atproto_event_exact.get_mut(&key)
+                            {
+                                set.remove(lookup_id);
+                                if set.is_empty() {
+                                    triggers_by_atproto_event_exact.remove(&key);
+                                }
+                            }
+                        }
                     }
                 }
             }

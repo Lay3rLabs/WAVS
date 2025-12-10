@@ -49,6 +49,29 @@ impl HttpClient {
         Ok(response.digest)
     }
 
+    pub async fn simulate_trigger(&self, req: wavs_types::SimulatedTriggerRequest) -> Result<()> {
+        let url = format!("{}/dev/triggers", self.endpoint);
+
+        let response = self
+            .inner
+            .post(&url)
+            .json(&req)
+            .send()
+            .await
+            .context("Failed to send simulated trigger request")?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            let status = response.status();
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<failed to read body>".to_string());
+            anyhow::bail!("{} from {}: {}", status, url, body);
+        }
+    }
+
     pub async fn register_aggregator_service(
         &self,
         service_manager: &ServiceManager,

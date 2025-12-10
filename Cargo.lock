@@ -1843,7 +1843,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chain-trigger-lookup"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
@@ -2199,7 +2199,7 @@ dependencies = [
 
 [[package]]
 name = "cosmos-query"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -3259,7 +3259,7 @@ dependencies = [
 
 [[package]]
 name = "echo-block-interval"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -3269,14 +3269,14 @@ dependencies = [
 
 [[package]]
 name = "echo-cron-interval"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "example-helpers",
 ]
 
 [[package]]
 name = "echo-data"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "example-helpers",
  "wstd",
@@ -3486,7 +3486,7 @@ dependencies = [
 
 [[package]]
 name = "example-helpers"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
@@ -3506,7 +3506,7 @@ dependencies = [
 
 [[package]]
 name = "example-types"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "layer-climb-address",
  "serde",
@@ -4721,7 +4721,7 @@ dependencies = [
 
 [[package]]
 name = "kv-store"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -4879,7 +4879,7 @@ dependencies = [
 
 [[package]]
 name = "layer-tests"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -5962,7 +5962,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissions"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "anyhow",
  "example-helpers",
@@ -7649,7 +7649,7 @@ checksum = "d66dc143e6b11c1eddc06d5c423cfc97062865baf299914ab64caa38182078fe"
 
 [[package]]
 name = "simple-aggregator"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-primitives",
  "layer-climb-address",
@@ -7742,7 +7742,7 @@ dependencies = [
 
 [[package]]
 name = "square"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "example-helpers",
  "example-types",
@@ -8154,7 +8154,7 @@ dependencies = [
 
 [[package]]
 name = "timer-aggregator"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
@@ -8892,7 +8892,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-contract",
  "alloy-network",
@@ -9016,7 +9016,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "version-pins"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-consensus",
  "alloy-consensus-any",
@@ -9944,7 +9944,7 @@ dependencies = [
 
 [[package]]
 name = "wavs"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -9954,6 +9954,7 @@ dependencies = [
  "alloy-signer-local",
  "alloy-sol-types",
  "anyhow",
+ "async-stream",
  "axum",
  "axum-tracing-opentelemetry",
  "bimap",
@@ -9973,6 +9974,7 @@ dependencies = [
  "iri-string",
  "layer-climb",
  "opentelemetry",
+ "rand 0.9.2",
  "reqwest",
  "serde",
  "serde_json",
@@ -9999,7 +10001,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-aggregator"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-contract",
  "alloy-node-bindings",
@@ -10035,7 +10037,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-benchmark-common"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "tempfile",
  "utils",
@@ -10046,7 +10048,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-cli"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
@@ -10079,7 +10081,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-dev-tools"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-signer-local",
  "clap 4.5.53",
@@ -10093,7 +10095,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-engine"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -10124,7 +10126,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-types"
-version = "2.0.0-rc.8"
+version = "2.0.0-rc.9"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",

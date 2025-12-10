@@ -133,6 +133,16 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_submission_networking: Option<bool>,
+
+    /// Jetstream WebSocket endpoint URL for ATProto events
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jetstream_endpoint: Option<String>,
+
+    /// Maximum jetstream message size in bytes
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jetstream_max_message_size: Option<usize>,
 }
 
 impl CliEnvExt for CliArgs {

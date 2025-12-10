@@ -11,7 +11,9 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainKey, ComponentDigest, Credential, ServiceStatus, Timestamp, WorkflowId};
+use wavs_types::{
+    AtProtoAction, ChainKey, ComponentDigest, Credential, ServiceStatus, Timestamp, WorkflowId,
+};
 
 use crate::config::Config;
 
@@ -385,6 +387,24 @@ pub enum TriggerCommand {
         /// Optional end time (timestamp in nanoseconds)
         #[clap(long)]
         end_time: Option<Timestamp>,
+    },
+
+    /// Set an ATProto Jetstream event trigger for a workflow
+    SetAtProtocol {
+        /// Collection NSID to filter for (e.g., "app.bsky.feed.post")
+        /// Supports wildcards with prefix matching (e.g., "app.bsky.feed.*")
+        #[clap(long)]
+        collection: String,
+
+        /// Optional DID to filter for specific repositories
+        /// If not provided, will match events from any repository
+        #[clap(long)]
+        repo_did: Option<String>,
+
+        /// Action type to filter for (create, update, delete)
+        /// If not provided, will match all action types
+        #[clap(long)]
+        action: Option<AtProtoAction>,
     },
 }
 

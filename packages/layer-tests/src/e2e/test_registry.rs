@@ -3,9 +3,10 @@ use example_types::{
     BlockIntervalResponse, CosmosQueryRequest, KvStoreRequest, KvStoreResponse, PermissionsRequest,
     PermissionsResponse, SquareRequest, SquareResponse,
 };
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
-use wavs_types::aggregator::RegisterServiceRequest;
+use wavs_types::{aggregator::RegisterServiceRequest, AtProtoAction};
 
 use super::clients::Clients;
 use super::components::{AggregatorComponent, ComponentName, OperatorComponent};
@@ -125,6 +126,9 @@ impl TestRegistry {
             match service {
                 EvmService::EchoData => {
                     registry.register_evm_echo_data_test(chain, aggregator_endpoint);
+                }
+                EvmService::AtprotoEchoData => {
+                    registry.register_evm_atproto_echo_data_test(chain, aggregator_endpoint);
                 }
                 EvmService::EchoDataSecondaryChain => {
                     let secondary = chains.secondary_evm().unwrap();
@@ -314,6 +318,39 @@ impl TestRegistry {
                         })
                         .with_input_data(InputData::Text("The times".to_string()))
                         .with_expected_output(ExpectedOutput::Text("The times".to_string()))
+                        .build(),
+                )
+                .with_service_manager_chain(chain)
+                .build(),
+        )
+    }
+
+    fn register_evm_atproto_echo_data_test(
+        &mut self,
+        chain: &ChainKey,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
+        self.register(
+            TestBuilder::new("evm_atproto_echo_data")
+                .with_description("Tests the EchoData component handling ATProto triggers")
+                .add_workflow(
+                    WorkflowId::new("atproto_echo_data").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_operator_component(OperatorComponent::EchoData)
+                        .with_aggregator_component(AggregatorComponent::SimpleAggregator)
+                        .with_trigger(TriggerDefinition::Existing(Trigger::AtProtoEvent {
+                            collection: "app.bsky.feed.post".to_string(),
+                            repo_did: Some("did:example:alice".to_string()),
+                            action: Some(AtProtoAction::Create),
+                        }))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                            aggregator: Self::simple_aggregator(chain),
+                        })
+                        .with_input_data(InputData::Text("atproto-echo".to_string()))
+                        .with_expected_output(ExpectedOutput::Text(
+                            json!({"text": "atproto-echo"}).to_string(),
+                        ))
                         .build(),
                 )
                 .with_service_manager_chain(chain)

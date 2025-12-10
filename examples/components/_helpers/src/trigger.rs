@@ -2,7 +2,9 @@
 use crate::bindings::world::wavs::{
     operator::{input as component_input, output as component_output},
     types::{
-        events::{TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent},
+        events::{
+            TriggerDataAtprotoEvent, TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent,
+        },
         service::ServiceManager,
     },
 };
@@ -35,6 +37,17 @@ pub fn decode_trigger_event(trigger_data: component_input::TriggerData) -> Resul
             Ok((trigger_info.triggerId, trigger_info.data.to_vec()))
         }
         component_input::TriggerData::Raw(bytes) => Ok((0, bytes)),
+        component_input::TriggerData::AtprotoEvent(TriggerDataAtprotoEvent {
+            record_data,
+            sequence,
+            ..
+        }) => Ok((
+            sequence.try_into().expect("Expected sequence to be u64"),
+            record_data
+                .expect("Record data was not provided")
+                .as_bytes()
+                .to_vec(),
+        )),
         _ => Err(anyhow::anyhow!("Unsupported trigger data type")),
     }
 }

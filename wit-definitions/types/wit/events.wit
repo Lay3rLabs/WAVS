@@ -9,6 +9,7 @@ interface events {
         cosmos-contract-event(trigger-data-cosmos-contract-event),
         block-interval(trigger-data-block-interval),
         cron(trigger-data-cron),
+        atproto-event(trigger-data-atproto-event),
         raw(list<u8>)
     }
 
@@ -32,5 +33,18 @@ interface events {
 
     record trigger-data-cron {
         trigger-time: timestamp
+    }
+
+    record trigger-data-atproto-event {
+        sequence: s64,
+        timestamp: s64,
+        repo: string,
+        collection: string,
+        rkey: string,
+        action: string,
+        cid: option<string>,
+        record-data: option<string>,
+        rev: option<string>,
+        op-index: option<u32>
     }
 }
