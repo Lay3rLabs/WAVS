@@ -7,7 +7,7 @@ middleware_concurrency = true
 grouping = false
 evm_middleware_type = "eigenlayer" # or "poa"
 # Run all tests
-mode = { "isolated" = [{ evm = "atproto_echo_data" }] }
+mode = "all"
 
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
 # mode = "all_eth"
