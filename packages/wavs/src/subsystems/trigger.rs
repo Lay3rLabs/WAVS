@@ -110,6 +110,13 @@ impl TriggerCommand {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StreamStartState {
+    Waiting,
+    Connecting,
+    Connected,
+}
+
 #[derive(Clone)]
 pub struct TriggerManager {
     pub chain_configs: Arc<std::sync::RwLock<ChainConfigs>>,
@@ -284,9 +291,9 @@ impl TriggerManager {
 
         let mut cosmos_clients = HashMap::new();
 
-        let mut listening_chains = HashSet::new();
-        let mut has_started_cron_stream = false;
-        let mut has_started_atproto_stream = false;
+        let mut listening_chain_states: HashMap<ChainKey, StreamStartState> = HashMap::new();
+        let mut cron_stream_state = StreamStartState::Waiting;
+        let mut atproto_stream_state = StreamStartState::Waiting;
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
@@ -322,25 +329,40 @@ impl TriggerManager {
                                 continue;
                             }
 
-                            if has_started_cron_stream {
-                                tracing::debug!("Cron stream already started, skipping");
-                                continue;
+                            match cron_stream_state {
+                                StreamStartState::Connected => {
+                                    tracing::debug!("Cron stream already started, skipping");
+                                    continue;
+                                }
+                                StreamStartState::Connecting => {
+                                    tracing::debug!("Cron stream is already starting, skipping");
+                                    continue;
+                                }
+                                StreamStartState::Waiting => {
+                                    cron_stream_state = StreamStartState::Connecting;
+                                }
                             }
 
-                            has_started_cron_stream = true;
-
                             let cron_scheduler = self.lookup_maps.cron_scheduler.clone();
-                            match cron_stream::start_cron_stream(
+                            let cron_start_result = cron_stream::start_cron_stream(
                                 cron_scheduler,
                                 self.metrics.clone(),
                             )
-                            .await
-                            {
+                            .await;
+                            let was_connecting =
+                                matches!(cron_stream_state, StreamStartState::Connecting);
+                            match cron_start_result {
                                 Ok(cron_stream) => {
                                     multiplexed_stream.push(cron_stream);
+                                    if was_connecting {
+                                        cron_stream_state = StreamStartState::Connected;
+                                    }
                                 }
                                 Err(err) => {
                                     tracing::error!("Failed to start cron stream: {:?}", err);
+                                    if was_connecting {
+                                        cron_stream_state = StreamStartState::Waiting;
+                                    }
                                     continue;
                                 }
                             }
@@ -353,19 +375,33 @@ impl TriggerManager {
                                 );
                                 continue;
                             }
-                            if listening_chains.contains(&chain) {
-                                tracing::debug!("Already listening to chain {chain}");
-                                continue;
+                            let chain_state = listening_chain_states
+                                .entry(chain.clone())
+                                .or_insert(StreamStartState::Waiting);
+                            match chain_state {
+                                StreamStartState::Connected => {
+                                    tracing::debug!("Already listening to chain {chain}");
+                                    continue;
+                                }
+                                StreamStartState::Connecting => {
+                                    tracing::debug!("Chain {chain} is already starting");
+                                    continue;
+                                }
+                                StreamStartState::Waiting => {
+                                    *chain_state = StreamStartState::Connecting;
+                                }
                             }
-
-                            // insert right away, before we get to an await point
-                            listening_chains.insert(chain.clone());
 
                             let chain_config =
                                 match self.chain_configs.read().unwrap().get_chain(&chain) {
                                     Some(config) => config,
                                     None => {
                                         tracing::error!("No chain config found for {chain}");
+                                        if let Some(chain_state) =
+                                            listening_chain_states.get_mut(&chain)
+                                        {
+                                            *chain_state = StreamStartState::Waiting;
+                                        }
                                         continue;
                                     }
                                 };
@@ -379,8 +415,6 @@ impl TriggerManager {
                                     .await
                                     .map_err(TriggerError::Climb)?;
 
-                                    cosmos_clients.insert(chain.clone(), cosmos_client.clone());
-
                                     // Start the Cosmos event stream
                                     match cosmos_stream::start_cosmos_stream(
                                         cosmos_client.clone(),
@@ -391,12 +425,24 @@ impl TriggerManager {
                                     {
                                         Ok(cosmos_event_stream) => {
                                             multiplexed_stream.push(cosmos_event_stream);
+                                            cosmos_clients
+                                                .insert(chain.clone(), cosmos_client.clone());
+                                            if let Some(chain_state) =
+                                                listening_chain_states.get_mut(&chain)
+                                            {
+                                                *chain_state = StreamStartState::Connected;
+                                            }
                                         }
                                         Err(err) => {
                                             tracing::error!(
                                                 "Failed to start Cosmos event stream: {:?}",
                                                 err
                                             );
+                                            if let Some(chain_state) =
+                                                listening_chain_states.get_mut(&chain)
+                                            {
+                                                *chain_state = StreamStartState::Waiting;
+                                            }
                                             continue;
                                         }
                                     }
@@ -421,51 +467,65 @@ impl TriggerManager {
                                         chain_config.ws_priority_endpoint_index,
                                     );
 
-                                    self.evm_controllers
-                                        .write()
-                                        .unwrap()
-                                        .insert(chain.clone(), controller);
-
                                     // Start the EVM event stream
                                     // however, the actual subscription for log filters is set via the controller
-                                    match evm_stream::start_evm_event_stream(
+                                    let evm_event_stream = match evm_stream::start_evm_event_stream(
                                         chain.clone(),
                                         log_stream,
                                         self.metrics.clone(),
                                     )
                                     .await
                                     {
-                                        Ok(evm_event_stream) => {
-                                            multiplexed_stream.push(evm_event_stream);
-                                        }
+                                        Ok(stream) => stream,
                                         Err(err) => {
                                             tracing::error!(
                                                 "Failed to start EVM event stream: {:?}",
                                                 err
                                             );
+                                            if let Some(chain_state) =
+                                                listening_chain_states.get_mut(&chain)
+                                            {
+                                                *chain_state = StreamStartState::Waiting;
+                                            }
                                             continue;
                                         }
-                                    }
+                                    };
 
                                     // Start the EVM block stream
                                     // however, the actual subscription for blocks is gated via the controller
-                                    match evm_stream::start_evm_block_stream(
+                                    let evm_block_stream = match evm_stream::start_evm_block_stream(
                                         chain.clone(),
                                         block_height_stream,
                                         self.metrics.clone(),
                                     )
                                     .await
                                     {
-                                        Ok(evm_block_stream) => {
-                                            multiplexed_stream.push(evm_block_stream);
-                                        }
+                                        Ok(stream) => stream,
                                         Err(err) => {
                                             tracing::error!(
                                                 "Failed to start EVM block stream: {:?}",
                                                 err
                                             );
+                                            if let Some(chain_state) =
+                                                listening_chain_states.get_mut(&chain)
+                                            {
+                                                *chain_state = StreamStartState::Waiting;
+                                            }
                                             continue;
                                         }
+                                    };
+
+                                    multiplexed_stream.push(evm_event_stream);
+                                    multiplexed_stream.push(evm_block_stream);
+
+                                    self.evm_controllers
+                                        .write()
+                                        .unwrap()
+                                        .insert(chain.clone(), controller);
+                                    if let Some(chain_state) =
+                                        listening_chain_states.get_mut(&chain)
+                                    {
+                                        *chain_state = StreamStartState::Connected;
                                     }
                                 }
                             }
@@ -509,12 +569,19 @@ impl TriggerManager {
                                 continue;
                             }
 
-                            if has_started_atproto_stream {
-                                tracing::debug!("ATProto stream already started, skipping");
-                                continue;
+                            match atproto_stream_state {
+                                StreamStartState::Connected => {
+                                    tracing::debug!("ATProto stream already started, skipping");
+                                    continue;
+                                }
+                                StreamStartState::Connecting => {
+                                    tracing::debug!("ATProto stream is already starting, skipping");
+                                    continue;
+                                }
+                                StreamStartState::Waiting => {
+                                    atproto_stream_state = StreamStartState::Connecting;
+                                }
                             }
-
-                            has_started_atproto_stream = true;
 
                             // Subscribe to all ATProto events - filtering will be done in the lookup system
                             let jetstream_config = streams::atproto_jetstream::JetstreamConfig {
@@ -528,21 +595,30 @@ impl TriggerManager {
                             };
 
                             // Start the ATProto Jetstream stream
-                            match streams::atproto_jetstream::start_jetstream_stream(
-                                jetstream_config,
-                                self.metrics.clone(),
-                            )
-                            .await
-                            {
+                            let atproto_start_result =
+                                streams::atproto_jetstream::start_jetstream_stream(
+                                    jetstream_config,
+                                    self.metrics.clone(),
+                                )
+                                .await;
+                            let was_connecting =
+                                matches!(atproto_stream_state, StreamStartState::Connecting);
+                            match atproto_start_result {
                                 Ok(atproto_stream) => {
                                     multiplexed_stream.push(atproto_stream);
                                     tracing::info!("Started ATProto Jetstream stream");
+                                    if was_connecting {
+                                        atproto_stream_state = StreamStartState::Connected;
+                                    }
                                 }
                                 Err(err) => {
                                     tracing::error!(
                                         "Failed to start ATProto Jetstream stream: {:?}",
                                         err
                                     );
+                                    if was_connecting {
+                                        atproto_stream_state = StreamStartState::Waiting;
+                                    }
                                     continue;
                                 }
                             }
