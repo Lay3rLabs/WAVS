@@ -1,0 +1,39 @@
+[package]
+name = "wavs-gui-frontend"
+description = "WAVS gui frontend"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+wavs-types = { workspace = true, features = ["full"] }
+wavs-gui-shared= { workspace = true}
+serde_json = {workspace = true}
+anyhow = {workspace = true}
+futures = {workspace = true}
+serde = {workspace = true}
+wasm-bindgen = {workspace = true}
+js-sys = {workspace = true}
+wasm-bindgen-futures = {workspace = true}
+serde-wasm-bindgen = {workspace = true}
+web-sys = {workspace = true}
+gloo-net = {workspace = true}
+gloo-events = {workspace = true}
+gloo-timers = {workspace = true}
+tracing-web = {workspace = true}
+tracing-panic = {workspace = true}
+dominator = {workspace = true}
+futures-signals = {workspace = true}
+dominator_helpers = {workspace = true}
+awsm_web = {workspace = true}
+tracing-subscriber = {workspace = true}
+tracing = {workspace = true}
+getrandom = { workspace = true}
+mime_guess = { workspace = true}
+# Force getrandom 0.2 (transitive dependency) to use js feature for wasm
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
