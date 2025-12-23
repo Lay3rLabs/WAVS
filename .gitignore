@@ -18,3 +18,4 @@ sdk/*.wasm
 temp_clone/
 **/.claude/settings.local.json
 packages/types/bindings
+dist

@@ -10,6 +10,12 @@ COSMWASM_OPTIMIZER_VERSION := env_var_or_default("COSMWASM_OPTIMIZER_VERSION", "
 help:
   just --list
 
+gui-dev:
+    cd packages/gui && cargo tauri dev
+
+gui-dev-frontend:
+    cd packages/gui/frontend && TAURI_BROWSER_DEV=true trunk serve --watch . --watch ../shared
+
 # builds wavs
 docker-build TAG="local":
     {{SUDO}} docker build . -t ghcr.io/lay3rlabs/wavs:{{TAG}}
