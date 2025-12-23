@@ -91,23 +91,19 @@ pub async fn cmd_start_wavs(
                 });
             }
             HealthCheckMode::Wait => {
-                ctx.rt.block_on(async {
-                    health_status.update(&chain_configs).await;
-                    if health_status.any_failing() {
-                        log::warn!("Health check failed: {:#?}", health_status.read().unwrap());
-                    }
-                });
+                health_status.update(&chain_configs).await;
+                if health_status.any_failing() {
+                    log::warn!("Health check failed: {:#?}", health_status.read().unwrap());
+                }
             }
             HealthCheckMode::Exit => {
-                ctx.rt.block_on(async {
-                    health_status.update(&chain_configs).await;
-                    if health_status.any_failing() {
-                        panic!(
-                            "Health check failed (exit mode): {:#?}",
-                            health_status.read().unwrap()
-                        );
-                    }
-                });
+                health_status.update(&chain_configs).await;
+                if health_status.any_failing() {
+                    return Err(AppError::HealthCheck(format!(
+                        "Health check failed (exit mode): {:#?}",
+                        health_status.read().unwrap()
+                    )));
+                }
             }
         }
     }

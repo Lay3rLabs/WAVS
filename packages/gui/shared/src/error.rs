@@ -25,4 +25,7 @@ pub enum AppError {
 
     #[error("Wavs Config: {0}")]
     WavsConfig(String),
+
+    #[error("Health check: {0}")]
+    HealthCheck(String),
 }
