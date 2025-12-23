@@ -5,9 +5,11 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::commands::{cmd_get_settings, cmd_restart, cmd_set_wavs_home, cmd_start_wavs};
 use crate::state::{SettingsState, WavsConfigState, WavsInstanceState};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod commands;
 mod event;
+mod logger;
 mod state;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -16,13 +18,14 @@ pub fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            // Set up tracing subscriber to capture and forward to frontend
+
+            let tauri_log_layer = logger::TauriLogLayer::new(app.handle().clone());
+
+            tracing_subscriber::registry()
+                .with(tauri_log_layer)
+                .with(tracing_subscriber::filter::LevelFilter::INFO)
+                .init();
 
             let handle = app.handle();
             let settings_state = tauri::async_runtime::block_on(async move {

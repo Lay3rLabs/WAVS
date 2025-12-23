@@ -85,6 +85,7 @@ tracing-opentelemetry = { version = "0.32.0", default-features = false, features
 thiserror = "2.0.17"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+tracing-log = "0.2"
 
 # cli and config
 clap = { version = "4.5.48", features = ["derive", "env", "string"] }
