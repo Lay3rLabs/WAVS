@@ -1,0 +1,40 @@
+[package]
+name = "wavs-gui-backend"
+description = "WAVS gui backend"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[features]
+test-utils = []
+dev = []
+
+[dependencies]
+wavs = { workspace = true }
+wavs-types = { workspace = true, features = ["full"] }
+utils = { workspace = true }
+wavs-cli = { workspace = true }
+wavs-aggregator = { workspace = true }
+cw-wavs-mock-api = { workspace = true }
+wavs-gui-shared= { workspace = true}
+serde_json = {workspace = true}
+serde = {workspace = true}
+log = {workspace = true}
+tauri = {workspace = true}
+tauri-plugin-log = {workspace = true}
+tauri-plugin-fs = {workspace = true}
+tauri-plugin-dialog = {workspace = true}
+anyhow = {workspace = true}
+tokio = {workspace = true}
+toml = {workspace = true}
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+
+
+
+[build-dependencies]
+tauri-build = { workspace = true }
