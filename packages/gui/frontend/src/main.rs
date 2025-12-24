@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(clippy::arc_with_non_send_sync)]
 #![allow(clippy::type_complexity)]
+#![allow(clippy::match_like_matches_macro)]
 mod atoms;
 mod body;
 mod config;

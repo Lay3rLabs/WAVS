@@ -1,7 +1,7 @@
 use crate::{
     pages::{
-        components::Components, logs::Logs, not_found::NotFound, services::Services,
-        settings::SettingsUi, submissions::Submissions, triggers::Triggers,
+        logs::Logs, not_found::NotFound, services::Services, settings::SettingsUi,
+        submissions::Submissions, triggers::Triggers,
     },
     prelude::*,
 };
@@ -44,10 +44,9 @@ impl Body {
                     .child(match route {
                         Route::Logs => Logs::new(&state).render(),
                         Route::Settings => SettingsUi::new(state.clone()).render(),
-                        Route::Services => Services::new().render(),
-                        Route::Triggers => Triggers::new().render(),
-                        Route::Components => Components::new().render(),
-                        Route::Submissions => Submissions::new().render(),
+                        Route::Services => Services::new(state.clone()).render(),
+                        Route::Triggers => Triggers::new(state.clone()).render(),
+                        Route::Submissions => Submissions::new(state.clone()).render(),
                         Route::NotFound => NotFound::new().render(),
                     })
                 }))

@@ -52,12 +52,6 @@ impl Header {
                 .class([&*NAVBAR, FontSize::Lg.class()])
                 .children([
                     Button::new()
-                        .with_text("Logs")
-                        .with_disabled_signal(self.state.settings_complete_signal().map(|complete| !complete))
-                        .with_selected_signal(Route::signal().map(|route| route == Route::Logs))
-                        .with_on_click(|| Route::Logs.go_to_url())
-                        .render(),
-                    Button::new()
                         .with_text("Services")
                         .with_disabled_signal(self.state.settings_complete_signal().map(|complete| !complete))
                         .with_selected_signal(Route::signal().map(|route| route == Route::Services))
@@ -70,16 +64,16 @@ impl Header {
                         .with_on_click(|| Route::Triggers.go_to_url())
                         .render(),
                     Button::new()
-                        .with_text("Components")
-                        .with_disabled_signal(self.state.settings_complete_signal().map(|complete| !complete))
-                        .with_selected_signal(Route::signal().map(|route| route == Route::Components))
-                        .with_on_click(|| Route::Components.go_to_url())
-                        .render(),
-                    Button::new()
                         .with_text("Submissions")
                         .with_disabled_signal(self.state.settings_complete_signal().map(|complete| !complete))
                         .with_selected_signal(Route::signal().map(|route| route == Route::Submissions))
                         .with_on_click(|| Route::Submissions.go_to_url())
+                        .render(),
+                    Button::new()
+                        .with_text("Logs")
+                        .with_disabled_signal(self.state.settings_complete_signal().map(|complete| !complete))
+                        .with_selected_signal(Route::signal().map(|route| route == Route::Logs))
+                        .with_on_click(|| Route::Logs.go_to_url())
                         .render(),
                     Button::new()
                         .with_link(Route::Settings.link())

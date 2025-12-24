@@ -7,21 +7,16 @@ use utils::{config::ConfigExt, service::DEFAULT_IPFS_GATEWAY};
 use utoipa::ToSchema;
 use wavs_types::{ChainConfigs, Credential, Workflow};
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HealthCheckMode {
     /// Skip health checks, spawn background task to log results
     Bypass,
     /// Run health checks before startup, warn on failures (default)
+    #[default]
     Wait,
     /// Run health checks before startup, panic on failures
     Exit,
-}
-
-impl Default for HealthCheckMode {
-    fn default() -> Self {
-        Self::Wait
-    }
 }
 
 /// The fully parsed and validated config struct we use in the application
@@ -58,9 +53,6 @@ pub struct Config {
 
     /// The mnemonic to use for submitting transactions on EVM chains
     pub submission_mnemonic: Option<Credential>,
-
-    /// The mnemonic to use for submitting transactions on Cosmos chains
-    pub cosmos_submission_mnemonic: Option<Credential>,
 
     /// The maximum amount of fuel (compute metering) to allow for 1 component's execution
     pub max_wasm_fuel: u64,
@@ -134,7 +126,6 @@ impl Default for Config {
             chains: Arc::new(RwLock::new(ChainConfigs::default())),
             wasm_lru_size: 20,
             submission_mnemonic: None,
-            cosmos_submission_mnemonic: None,
             max_execution_seconds: Workflow::DEFAULT_TIME_LIMIT_SECONDS,
             max_wasm_fuel: Workflow::DEFAULT_FUEL_LIMIT,
             jaeger: None,

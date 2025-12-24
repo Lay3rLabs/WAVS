@@ -28,4 +28,13 @@ pub enum AppError {
 
     #[error("Health check: {0}")]
     HealthCheck(String),
+
+    #[error("Missing chain: {0}")]
+    MissingChain(wavs_types::ChainKey),
+
+    #[error("WAVS is not running")]
+    WavsNotRunning,
+
+    #[error("Service: {0}")]
+    Service(String),
 }

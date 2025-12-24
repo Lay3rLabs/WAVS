@@ -12,6 +12,7 @@ use wavs_gui_shared::{
     error::{AppError, AppResult},
     settings::Settings,
 };
+use wavs_types::{ChainConfigs, Service, ServiceManager};
 
 use crate::state::{SettingsState, WavsConfigState, WavsInstance, WavsInstanceState};
 
@@ -118,10 +119,11 @@ pub async fn cmd_start_wavs(
     let meter = opentelemetry::global::meter("wavs_metrics");
     let metrics = Metrics::new(meter);
 
-    let dispatcher = Arc::new(Dispatcher::new(&config, metrics.wavs).unwrap());
+    let dispatcher = Arc::new(Dispatcher::new_gui(&config, metrics.wavs, app).unwrap());
 
     let handle = std::thread::spawn({
         let ctx = ctx.clone();
+        let dispatcher = dispatcher.clone();
         move || wavs::run_server(ctx, config, dispatcher, metrics.http, health_status)
     });
 
@@ -129,7 +131,38 @@ pub async fn cmd_start_wavs(
         ctx,
         meter_provider,
         handle,
+        dispatcher,
     });
 
     Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_chain_configs(
+    wavs_config: State<'_, WavsConfigState>,
+) -> AppResult<ChainConfigs> {
+    Ok(wavs_config.chain_configs())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_services(
+    wavs_instance: State<'_, WavsInstanceState>,
+) -> AppResult<Vec<Service>> {
+    wavs_instance
+        .dispatcher()?
+        .services
+        .list(std::ops::Bound::Unbounded, std::ops::Bound::Unbounded)
+        .map_err(|e| AppError::Service(e.to_string()))
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_add_service(
+    wavs_instance: State<'_, WavsInstanceState>,
+    manager: ServiceManager,
+) -> AppResult<Service> {
+    wavs_instance
+        .dispatcher()?
+        .add_service(manager)
+        .await
+        .map_err(|e| AppError::Service(format!("Failed to add service: {}", e)))
 }

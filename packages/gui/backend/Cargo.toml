@@ -14,13 +14,13 @@ test-utils = []
 dev = []
 
 [dependencies]
-wavs = { workspace = true }
+wavs = { workspace = true, features = ["gui"] }
 wavs-types = { workspace = true, features = ["full"] }
 utils = { workspace = true }
 wavs-cli = { workspace = true }
 wavs-aggregator = { workspace = true }
 cw-wavs-mock-api = { workspace = true }
-wavs-gui-shared= { workspace = true}
+wavs-gui-shared= { workspace = true, features = ["backend"] }
 serde_json = {workspace = true}
 serde = {workspace = true}
 log = {workspace = true}

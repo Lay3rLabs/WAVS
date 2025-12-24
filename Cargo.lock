@@ -12555,6 +12555,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slotmap",
+ "tauri",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
@@ -12571,6 +12572,7 @@ dependencies = [
  "wasm-pkg-common",
  "wavs-benchmark-common",
  "wavs-engine",
+ "wavs-gui-shared",
  "wavs-types",
  "wildmatch",
 ]
@@ -12767,6 +12769,7 @@ dependencies = [
  "anyhow",
  "serde",
  "serde_json",
+ "tauri",
  "thiserror 2.0.17",
  "wavs-types",
 ]

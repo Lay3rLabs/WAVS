@@ -20,10 +20,20 @@ pub enum ColorRaw {
 
     // Transparent overlays (for effects/gradients)
     // Note: These will be used with CSS rgba() or similar
-    WarmOverlay30,  // For subtle warm tints
-    DarkOverlay70,  // For backdrop effects
-    DarkOverlay40,  // For gradient stops
-    Black15,        // For shadows
+    WarmOverlay30, // For subtle warm tints
+    DarkOverlay70, // For backdrop effects
+    DarkOverlay40, // For gradient stops
+    Black15,       // For shadows
+
+    // More stuff
+    Red1,
+    Red2,
+    Red3,
+    Red4,
+
+    Purple1,
+    Purple2,
+    Purple3,
 }
 
 impl ColorRaw {
@@ -52,6 +62,14 @@ impl ColorRaw {
             Self::DarkOverlay70 => "rgba(30, 28, 27, 0.80)",
             Self::DarkOverlay40 => "rgba(55, 51, 46, 0.4)",
             Self::Black15 => "rgba(0, 0, 0, 0.15)",
+
+            Self::Red1 => "#991b1b",
+            Self::Red2 => "#b91c1c",
+            Self::Red3 => "#dc2626",
+            Self::Red4 => "#ef4444",
+            Self::Purple1 => "#7e22ce",
+            Self::Purple2 => "#9333ea",
+            Self::Purple3 => "#a855f7",
         }
     }
 }

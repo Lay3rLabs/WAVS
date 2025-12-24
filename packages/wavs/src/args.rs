@@ -67,11 +67,6 @@ pub struct CliArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub submission_mnemonic: Option<Credential>,
 
-    /// mnemonic for the submission client (usually leave this as None and override in env)
-    #[arg(long)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_submission_mnemonic: Option<Credential>,
-
     /// The maximum amount of fuel (compute metering) to allow for 1 component's execution
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]

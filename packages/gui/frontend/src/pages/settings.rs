@@ -1,6 +1,6 @@
 use wasm_bindgen_futures::spawn_local;
 
-use crate::{prelude::*, tauri};
+use crate::prelude::*;
 
 pub struct SettingsUi {
     app_state: AppState,
@@ -130,7 +130,7 @@ impl SettingsUi {
                         .attr("type", "text")
                         .attr("readonly", "true")
                         .attr("placeholder", "No directory selected")
-                        .prop_signal("value", app_state.settings_inner().signal_ref(|settings| {
+                        .prop_signal("value", app_state.settings.signal_ref(|settings| {
                             match &settings.wavs_home.as_ref() {
                                 Some(path) => path.display().to_string(),
                                 None => "".to_string(),

@@ -38,6 +38,7 @@ pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         } else {
             ConfigDebug::release_mode()
         },
+        #[allow(clippy::if_same_then_else)]
         root_path: if cfg!(debug_assertions) {
             ""
         } else {

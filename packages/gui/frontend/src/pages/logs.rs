@@ -89,7 +89,8 @@ fn render_item(item: LogItem) -> Dom {
     });
 
     // Format timestamp - simple approach showing elapsed time
-    let timestamp = item.ts
+    let timestamp = item
+        .ts
         .duration_since(UNIX_EPOCH)
         .map(|d| {
             let secs = d.as_secs();
