@@ -16,6 +16,12 @@ gui-dev:
 gui-dev-frontend:
     cd packages/gui/frontend && TAURI_BROWSER_DEV=true trunk serve --watch . --watch ../shared
 
+gui-build:
+    cd packages/gui && cargo tauri build
+
+gui-build-frontend:
+    cd packages/gui/frontend && trunk build --release
+
 # builds wavs
 docker-build TAG="local":
     {{SUDO}} docker build . -t ghcr.io/lay3rlabs/wavs:{{TAG}}
