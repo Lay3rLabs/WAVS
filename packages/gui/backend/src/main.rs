@@ -3,12 +3,14 @@
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
-use crate::commands::{cmd_get_settings, cmd_restart, cmd_set_wavs_home, cmd_start_wavs};
+use crate::commands::{
+    cmd_add_service, cmd_get_chain_configs, cmd_get_services, cmd_get_settings, cmd_restart,
+    cmd_set_wavs_home, cmd_start_wavs,
+};
 use crate::state::{SettingsState, WavsConfigState, WavsInstanceState};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod commands;
-mod event;
 mod logger;
 mod state;
 
@@ -56,8 +58,8 @@ pub fn main() {
                 let position = monitor.position();
 
                 // Use 70% of screen width and height
-                let width = (size.width as f64 * 0.7) as f64;
-                let height = (size.height as f64 * 0.7) as f64;
+                let width = size.width as f64 * 0.7;
+                let height = size.height as f64 * 0.7;
 
                 // Calculate centered position on primary monitor
                 let x = position.x as f64 + ((size.width as f64 - width) / 2.0);
@@ -78,7 +80,10 @@ pub fn main() {
             cmd_set_wavs_home,
             cmd_get_settings,
             cmd_restart,
-            cmd_start_wavs
+            cmd_start_wavs,
+            cmd_get_chain_configs,
+            cmd_add_service,
+            cmd_get_services
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

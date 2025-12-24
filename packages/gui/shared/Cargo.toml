@@ -12,9 +12,13 @@ publish = false
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+backend = ["dep:tauri"]
+
 [dependencies]
 wavs-types = { workspace = true, features = ["full"] }
 serde_json = {workspace = true}
 serde = {workspace = true}
 thiserror = {workspace = true}
 anyhow = {workspace = true}
+tauri = {workspace = true, optional = true}

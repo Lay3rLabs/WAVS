@@ -15,6 +15,7 @@ pub enum ColorBackground {
     ButtonPurple,
     ButtonPurpleHover,
     ButtonPurpleSelected,
+    Dropdown,
 }
 
 impl ColorBackground {
@@ -27,12 +28,13 @@ impl ColorBackground {
             Self::ButtonPrimaryHover => ColorRaw::CharcoalDark.value(),
             Self::ButtonPrimarySelected => ColorRaw::CharcoalLight.value(),
             Self::ButtonDisabled => ColorRaw::CharcoalDark.value(),
-            Self::ButtonRed => "#991b1b",
-            Self::ButtonRedHover => "#b91c1c",
-            Self::ButtonRedSelected => "#dc2626",
-            Self::ButtonPurple => "#7e22ce",
-            Self::ButtonPurpleHover => "#9333ea",
-            Self::ButtonPurpleSelected => "#a855f7",
+            Self::ButtonRed => ColorRaw::Red1.value(),
+            Self::ButtonRedHover => ColorRaw::Red2.value(),
+            Self::ButtonRedSelected => ColorRaw::Red3.value(),
+            Self::ButtonPurple => ColorRaw::Purple1.value(),
+            Self::ButtonPurpleHover => ColorRaw::Purple2.value(),
+            Self::ButtonPurpleSelected => ColorRaw::Purple3.value(),
+            Self::Dropdown => ColorRaw::CreamLight.value(),
         }
     }
 
@@ -115,6 +117,12 @@ impl ColorBackground {
             }
         });
 
+        static DROPDOWN: LazyLock<String> = LazyLock::new(|| {
+            class! {
+              .style("background-color", ColorBackground::Dropdown.value())
+            }
+        });
+
         match self {
             Self::Initial => &INITIAL,
             Self::NavBar => &NAV_BAR,
@@ -129,6 +137,7 @@ impl ColorBackground {
             Self::ButtonPurple => &BUTTON_PURPLE,
             Self::ButtonPurpleHover => &BUTTON_PURPLE_HOVER,
             Self::ButtonPurpleSelected => &BUTTON_PURPLE_SELECTED,
+            Self::Dropdown => &DROPDOWN,
         }
     }
 }
@@ -156,17 +165,17 @@ impl ColorBorder {
         match self {
             Self::Initial => "initial",
             Self::ButtonSolidPrimarySelected => ColorRaw::BeigeWarm.value(),
-            Self::ButtonSolidRedSelected => "#dc2626",
-            Self::ButtonSolidPurpleSelected => "#a855f7",
+            Self::ButtonSolidRedSelected => ColorRaw::Red3.value(),
+            Self::ButtonSolidPurpleSelected => ColorRaw::Purple3.value(),
             Self::ButtonOutlinePrimary => ColorRaw::TanWarm.value(),
             Self::ButtonOutlinePrimaryHover => ColorRaw::BeigeWarm.value(),
             Self::ButtonOutlinePrimarySelected => ColorRaw::BeigeLight.value(),
             Self::ButtonOutlineRed => ColorRaw::TanMuted.value(),
             Self::ButtonOutlineRedHover => ColorRaw::TanWarm.value(),
             Self::ButtonOutlineRedSelected => ColorRaw::BeigeWarm.value(),
-            Self::ButtonOutlinePurple => "#7e22ce",
-            Self::ButtonOutlinePurpleHover => "#9333ea",
-            Self::ButtonOutlinePurpleSelected => "#a855f7",
+            Self::ButtonOutlinePurple => ColorRaw::Purple1.value(),
+            Self::ButtonOutlinePurpleHover => ColorRaw::Purple2.value(),
+            Self::ButtonOutlinePurpleSelected => ColorRaw::Purple3.value(),
             Self::ButtonDisabled => ColorRaw::CharcoalMedium.value(),
         }
     }
@@ -292,6 +301,8 @@ pub enum ColorText {
     ButtonOutlinePurpleHover,
     ButtonOutlinePurpleSelected,
     RedAlert,
+    Dropdown,
+    DropdownHover,
 }
 
 impl ColorText {
@@ -308,10 +319,12 @@ impl ColorText {
             Self::ButtonOutlineRed => ColorRaw::TanMuted.value(),
             Self::ButtonOutlineRedHover => ColorRaw::TanWarm.value(),
             Self::ButtonOutlineRedSelected => ColorRaw::BeigeWarm.value(),
-            Self::ButtonOutlinePurple => "#7e22ce",
-            Self::ButtonOutlinePurpleHover => "#9333ea",
-            Self::ButtonOutlinePurpleSelected => "#a855f7",
-            Self::RedAlert => "#ef4444",
+            Self::ButtonOutlinePurple => ColorRaw::Purple1.value(),
+            Self::ButtonOutlinePurpleHover => ColorRaw::Purple2.value(),
+            Self::ButtonOutlinePurpleSelected => ColorRaw::Purple3.value(),
+            Self::RedAlert => ColorRaw::Red4.value(),
+            Self::Dropdown => ColorRaw::CharcoalDarkest.value(),
+            Self::DropdownHover => ColorRaw::CharcoalDark.value(),
         }
     }
 
@@ -406,6 +419,18 @@ impl ColorText {
             }
         });
 
+        static DROPDOWN: LazyLock<String> = LazyLock::new(|| {
+            class! {
+              .style("color", ColorText::Dropdown.value())
+            }
+        });
+
+        static DROPDOWN_HOVER: LazyLock<String> = LazyLock::new(|| {
+            class! {
+              .style("color", ColorText::DropdownHover.value())
+            }
+        });
+
         match self {
             Self::NavBar => &NAV_BAR,
             Self::MainContent => &MAIN_CONTENT,
@@ -422,6 +447,8 @@ impl ColorText {
             Self::ButtonOutlinePurpleHover => &BUTTON_OUTLINE_PURPLE_HOVER,
             Self::ButtonOutlinePurpleSelected => &BUTTON_OUTLINE_PURPLE_SELECTED,
             Self::RedAlert => &RED_ALERT,
+            Self::Dropdown => &DROPDOWN,
+            Self::DropdownHover => &DROPDOWN_HOVER,
         }
     }
 }

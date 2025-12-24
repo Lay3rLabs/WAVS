@@ -1,24 +1,71 @@
+use std::collections::BTreeMap;
+
+use wasm_bindgen_futures::spawn_local;
+use wavs_gui_shared::error::AppError;
+use wavs_types::{AnyChainConfig, ChainKey, Service, ServiceId, ServiceManager};
+
 use crate::prelude::*;
 
 pub struct Services {
     address_input: Mutable<String>,
-    chain_input: Mutable<String>,
-    services: MutableVec<String>,
+    chain_input: Mutable<Option<ChainKey>>,
+    state: AppState,
 }
 
 impl Services {
-    pub fn new() -> Arc<Self> {
+    pub fn new(state: AppState) -> Arc<Self> {
         Arc::new(Self {
             address_input: Mutable::new(String::new()),
-            chain_input: Mutable::new(String::new()),
-            services: MutableVec::new(),
+            chain_input: Mutable::new(None),
+            state,
         })
     }
 
     pub fn render(self: &Arc<Self>) -> Dom {
+        let ready = Mutable::new(None);
+        let state = &self.state;
+        let _self = self.clone();
+
+        #[derive(Clone, Debug)]
+        struct ReadyInfo {
+            chains: Vec<ChainKey>,
+        }
+
+        html!("div", {
+            .child_signal(ready.signal_cloned().map(clone!(_self => move |info| {
+                Some(match info {
+                    None => {
+                        html!("div", {
+                            .class([FontSize::Lg.class(), ColorText::MainContent.class()])
+                            .text("Loading services...")
+                        })
+                    }
+                    Some(ReadyInfo { chains }) => {
+                        _self.render_ready(chains)
+                    }
+                })
+            })))
+            .future(clone!(ready, state => async move {
+                if let Err(err) = load_services(&state).await {
+                    tracing::error!("Failed to load services: {}", err);
+                    Modal::open_error_message(format!("Failed to load services: {}", err));
+                    return;
+                }
+
+                // we shouldn't be able to reach this screen with invalid chain configs
+                let chain_configs = crate::tauri::commands::get_chain_configs().await.unwrap_ext();
+
+                ready.set(Some(ReadyInfo {
+                    chains: chain_configs.all_chain_keys().unwrap_or_default()
+                }));
+            }))
+        })
+    }
+
+    pub fn render_ready(self: &Arc<Self>, chains: Vec<ChainKey>) -> Dom {
         let address_input = self.address_input.clone();
         let chain_input = self.chain_input.clone();
-        let services = self.services.clone();
+        let state = &self.state;
 
         static CONTAINER: LazyLock<String> = LazyLock::new(|| {
             class! {
@@ -92,18 +139,6 @@ impl Services {
             }
         });
 
-        static SERVICE_ITEM: LazyLock<String> = LazyLock::new(|| {
-            class! {
-                .style("padding", "1rem")
-                .style("border-radius", "0.375rem")
-                .style("background-color", ColorRaw::CharcoalMedium.value())
-                .style("border", &format!("1px solid {}", ColorRaw::CharcoalLight.value()))
-                .style("color", ColorRaw::BeigeWarm.value())
-                .style("font-family", "monospace")
-                .style("font-size", "0.875rem")
-            }
-        });
-
         static EMPTY_STATE: LazyLock<String> = LazyLock::new(|| {
             class! {
                 .style("padding", "2rem")
@@ -150,33 +185,46 @@ impl Services {
                                 .class(&*INPUT_LABEL)
                                 .text("Chain")
                             }))
-                            .child(html!("input" => web_sys::HtmlInputElement, {
-                                .class(&*INPUT_FIELD)
-                                .attr("type", "text")
-                                .attr("placeholder", "e.g., ethereum")
-                                .prop_signal("value", chain_input.signal_cloned())
-                                .with_node!(element => {
-                                    .event(clone!(chain_input => move |_: events::Input| {
-                                        let value = element.value();
-                                        chain_input.set(value);
-                                    }))
-                                })
-                            }))
+                            .child(Dropdown::new()
+                                .with_size(DropdownSize::Md)
+                                .with_options(chains.into_iter().map(|chain_key| (chain_key.to_string(), chain_key)))
+                                .with_on_change(clone!(chain_input => move |chain| {
+                                    chain_input.set(Some(chain.clone()))
+                                }))
+                                .render()
+                            )
+                            // .child(html!("input" => web_sys::HtmlInputElement, {
+                            //     .class(&*INPUT_FIELD)
+                            //     .attr("type", "text")
+                            //     .attr("placeholder", "e.g., ethereum")
+                            //     .prop_signal("value", chain_input.signal_cloned())
+                            //     .with_node!(element => {
+                            //         .event(clone!(chain_input => move |_: events::Input| {
+                            //             let value = element.value();
+                            //             chain_input.set(value);
+                            //         }))
+                            //     })
+                            // }))
                         }))
                     }))
                     .child(
                         Button::new()
                             .with_text("Add Service")
                             .with_color(ButtonColor::Purple)
-                            .with_on_click(clone!(address_input, chain_input, services => move || {
+                            .with_on_click(clone!(address_input, chain_input, state => move || {
                                 let address = address_input.get_cloned();
                                 let chain = chain_input.get_cloned();
-                                if !address.is_empty() && !chain.is_empty() {
-                                    tracing::info!("Adding service: {} ({})", address, chain);
-                                    services.lock_mut().push_cloned(format!("{} - {}", address, chain));
-                                    address_input.set(String::new());
-                                    chain_input.set(String::new());
-                                    // TODO: Hook up to actual service addition
+                                if let Some(chain) = chain {
+                                    if !address.is_empty() {
+                                        address_input.set(String::new());
+                                        chain_input.set(None);
+                                        spawn_local(clone!(state => async move {
+                                            if let Err(err) = add_service(&state, address, chain).await {
+                                                tracing::error!("Failed to add service: {}", err);
+                                                Modal::open_error_message(format!("Failed to add service: {}", err));
+                                            }
+                                        }));
+                                    }
                                 }
                             }))
                             .render()
@@ -189,8 +237,8 @@ impl Services {
                     .class(&*SECTION_TITLE)
                     .text("Active Services")
                 }))
-                .child_signal(services.signal_vec_cloned().is_empty().map(clone!(services => move |is_empty| {
-                    if is_empty {
+                .child_signal(state.services.signal_ref(|service_list| {
+                    if service_list.is_empty() {
                         Some(html!("div", {
                             .class(&*EMPTY_STATE)
                             .text("No services configured yet")
@@ -198,16 +246,64 @@ impl Services {
                     } else {
                         Some(html!("div", {
                             .class(&*SERVICES_LIST)
-                            .children_signal_vec(services.signal_vec_cloned().map(move |service| {
-                                html!("div", {
-                                    .class(&*SERVICE_ITEM)
-                                    .text(&service)
-                                })
+                            .children(service_list.values().map(|service| {
+                                render_service_item(service)
                             }))
                         }))
                     }
-                })))
+                }))
             }))
         })
     }
+}
+
+fn render_service_item(service: &Service) -> Dom {
+    let content = html!("pre", {
+        .text(&serde_json::to_string_pretty(&service).unwrap_or_else(|_| "Failed to serialize service".to_string()))
+    });
+
+    render_expander(&service.name, content, false)
+}
+
+async fn add_service(state: &AppState, address: String, chain: ChainKey) -> anyhow::Result<()> {
+    let chain_configs = crate::tauri::commands::get_chain_configs().await?;
+
+    let config = match chain_configs.get_chain(&chain) {
+        Some(config) => config,
+        None => {
+            return Err(AppError::MissingChain(chain).into());
+        }
+    };
+
+    let manager = match config {
+        AnyChainConfig::Cosmos(config) => ServiceManager::Cosmos {
+            chain,
+            address: config
+                .to_chain_config()
+                .parse_address(&address)?
+                .try_into()?,
+        },
+        AnyChainConfig::Evm(_config) => ServiceManager::Evm {
+            chain,
+            address: address.parse()?,
+        },
+    };
+
+    crate::tauri::commands::add_service(manager).await?;
+
+    load_services(state).await?;
+
+    Ok(())
+}
+
+async fn load_services(state: &AppState) -> anyhow::Result<()> {
+    state.services.set(
+        crate::tauri::commands::get_services()
+            .await?
+            .into_iter()
+            .map(|s| (s.id(), s))
+            .collect::<BTreeMap<ServiceId, Service>>(),
+    );
+
+    Ok(())
 }
