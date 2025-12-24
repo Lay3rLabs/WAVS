@@ -1,16 +1,15 @@
-use std::{path::PathBuf, thread::JoinHandle};
+use std::{path::PathBuf, sync::Arc, thread::JoinHandle};
 
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use tauri::{AppHandle, Manager};
-use utils::config::ConfigBuilder;
+use utils::{config::ConfigBuilder, storage::fs::FileStorage};
+use wavs::dispatcher::Dispatcher;
 use wavs_gui_shared::{
     error::{AppError, AppResult},
-    event::SettingsEvent,
+    event::{SettingsEvent, TauriEventEmitterExt},
     settings::Settings,
 };
 use wavs_types::ChainConfigs;
-
-use crate::event::EmitterExt;
 
 pub struct SettingsState {
     pub path: PathBuf,
@@ -50,13 +49,6 @@ impl SettingsState {
             .await
             .map_err(|e| AppError::Io(e.to_string()))?;
         serde_json::from_slice(&bytes).map_err(|e| AppError::Json(e.to_string()))
-    }
-
-    pub async fn reset(&self, app: &AppHandle) -> AppResult<()> {
-        self.update(app, |s| {
-            *s = Settings::default();
-        })
-        .await
     }
 
     pub async fn update(&self, app: &AppHandle, mut f: impl FnMut(&mut Settings)) -> AppResult<()> {
@@ -118,6 +110,7 @@ impl WavsConfigState {
         self.inner.read().unwrap().clone()
     }
 
+    #[allow(clippy::field_reassign_with_default)]
     async fn _load_inner(path: PathBuf) -> AppResult<wavs::config::Config> {
         let mut args = wavs::args::CliArgs::default();
         args.home = Some(path.clone());
@@ -143,9 +136,17 @@ impl WavsInstanceState {
     pub fn set(&self, instance: WavsInstance) {
         *self.inner.write().unwrap() = Some(instance);
     }
+
+    pub fn dispatcher(&self) -> AppResult<Arc<Dispatcher<FileStorage>>> {
+        let guard = self.inner.read().unwrap();
+        let instance = guard.as_ref().ok_or(AppError::WavsNotRunning)?;
+        Ok(instance.dispatcher.clone())
+    }
 }
 
+#[allow(dead_code)]
 pub struct WavsInstance {
+    pub dispatcher: Arc<Dispatcher<FileStorage>>,
     pub ctx: utils::context::AppContext,
     pub meter_provider: Option<SdkMeterProvider>,
     pub handle: JoinHandle<()>,

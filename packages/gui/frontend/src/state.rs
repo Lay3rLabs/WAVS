@@ -1,15 +1,21 @@
+use std::collections::BTreeMap;
+
 use futures_signals::{
     signal::{Mutable, Signal},
     signal_vec::MutableVec,
 };
-use wavs_gui_shared::settings::Settings;
+use wavs_gui_shared::{event::SubmissionEvent, settings::Settings};
+use wavs_types::{Service, ServiceId, TriggerAction};
 
 use crate::logger::LogItem;
 // high-level app state shared by all components
 #[derive(Clone)]
 pub struct AppState {
     pub log_list: MutableVec<LogItem>,
-    _settings: Mutable<Settings>,
+    pub triggers_list: MutableVec<TriggerAction>,
+    pub submissions_list: MutableVec<SubmissionEvent>,
+    pub services: Mutable<BTreeMap<ServiceId, Service>>,
+    pub settings: Mutable<Settings>,
 }
 
 impl AppState {
@@ -18,19 +24,26 @@ impl AppState {
 
         Ok(Self {
             log_list: MutableVec::new(),
-            _settings: Mutable::new(settings),
+            triggers_list: MutableVec::new(),
+            submissions_list: MutableVec::new(),
+            services: Mutable::new(BTreeMap::new()),
+            settings: Mutable::new(settings),
         })
     }
 
     pub fn get_settings_complete(&self) -> bool {
-        self._settings.lock_ref().wavs_home.is_some()
+        self.settings.lock_ref().wavs_home.is_some()
     }
 
     pub fn settings_complete_signal(&self) -> impl Signal<Item = bool> {
-        self._settings.signal_ref(|s| s.wavs_home.is_some())
+        self.settings.signal_ref(|s| s.wavs_home.is_some())
     }
 
-    pub fn settings_inner(&self) -> &Mutable<Settings> {
-        &self._settings
+    pub fn service_label(&self, service_id: &ServiceId) -> String {
+        if let Some(service) = self.services.lock_ref().get(service_id) {
+            service.name.clone()
+        } else {
+            "unknown".to_string()
+        }
     }
 }

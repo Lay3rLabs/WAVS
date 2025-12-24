@@ -173,7 +173,7 @@ pub enum ButtonStyle {
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-enum ButtonState {
+pub enum ButtonState {
     Normal,
     Hover,
     Selected,

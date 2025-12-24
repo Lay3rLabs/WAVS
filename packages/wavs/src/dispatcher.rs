@@ -36,6 +36,8 @@ use utils::error::EvmClientError;
 use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
+#[cfg(feature = "gui")]
+use wavs_gui_shared::event::TauriEventEmitterExt;
 use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessages;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
@@ -82,6 +84,8 @@ pub struct Dispatcher<S: CAStorage> {
     evm_http_providers: Arc<RwLock<HashMap<ChainKey, DynProvider>>>,
     /// Cached Cosmos query clients per chain to avoid creating new connections for each query
     cosmos_query_clients: Arc<RwLock<HashMap<ChainKey, QueryClient>>>,
+    #[cfg(feature = "gui")]
+    pub tauri_handle: tauri::AppHandle,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -102,7 +106,12 @@ pub enum DispatcherCommand {
 }
 
 impl Dispatcher<FileStorage> {
-    pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, DispatcherError> {
+    #[cfg(feature = "gui")]
+    pub fn new_gui(
+        config: &Config,
+        metrics: WavsMetrics,
+        tauri_handle: tauri::AppHandle,
+    ) -> Result<Self, DispatcherError> {
         // Create all our channels for communication
         // except dispatcher_to_trigger calls its local stream channel
         let (subsystem_to_dispatcher_tx, subsystem_to_dispatcher_rx) =
@@ -185,7 +194,80 @@ impl Dispatcher<FileStorage> {
             dispatcher_to_aggregator_tx,
             evm_http_providers: Arc::new(RwLock::new(HashMap::new())),
             cosmos_query_clients: Arc::new(RwLock::new(HashMap::new())),
+            tauri_handle,
         })
+    }
+
+    #[allow(unused_variables)]
+    pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, DispatcherError> {
+        // Create all our channels for communication
+        // except dispatcher_to_trigger calls its local stream channel
+        let (trigger_to_dispatcher_tx, trigger_to_dispatcher_rx) =
+            crossbeam::channel::unbounded::<DispatcherCommand>();
+
+        let (dispatcher_to_engine_tx, dispatcher_to_engine_rx) =
+            crossbeam::channel::unbounded::<EngineCommand>();
+        let (engine_to_dispatcher_tx, engine_to_dispatcher_rx) =
+            crossbeam::channel::unbounded::<ChainMessage>();
+
+        let (dispatcher_to_submission_tx, dispatcher_to_submission_rx) =
+            crossbeam::channel::unbounded::<SubmissionCommand>();
+
+        let file_storage = FileStorage::new(config.data.join("ca"))?;
+        let db_storage = WavsDb::new()?;
+
+        let services = Services::new(db_storage.clone());
+
+        let trigger_manager = TriggerManager::new(
+            config,
+            metrics.trigger,
+            services.clone(),
+            trigger_to_dispatcher_tx,
+        )?;
+
+        let app_storage = config.data.join("app");
+        let engine = WasmEngine::new(
+            file_storage,
+            app_storage,
+            config.wasm_lru_size,
+            config.chains.clone(),
+            Some(config.max_wasm_fuel),
+            Some(config.max_execution_seconds),
+            metrics.engine,
+            db_storage,
+            config.ipfs_gateway.clone(),
+        );
+        let engine_manager = EngineManager::new(
+            engine,
+            services.clone(),
+            dispatcher_to_engine_rx,
+            engine_to_dispatcher_tx,
+        );
+
+        let submission_manager = SubmissionManager::new(
+            config,
+            metrics.submission,
+            services.clone(),
+            dispatcher_to_submission_rx,
+        )?;
+
+        #[cfg(not(feature = "gui"))]
+        return Ok(Self {
+            trigger_manager,
+            engine_manager,
+            submission_manager,
+            services,
+            chain_configs: config.chains.clone(),
+            metrics: metrics.dispatcher.clone(),
+            ipfs_gateway: config.ipfs_gateway.clone(),
+            trigger_to_dispatcher_rx,
+            dispatcher_to_engine_tx,
+            engine_to_dispatcher_rx,
+            dispatcher_to_submission_tx,
+        });
+
+        #[cfg(feature = "gui")]
+        unimplemented!("Use new_gui when GUI feature is enabled")
     }
 }
 
@@ -288,6 +370,20 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                 workflow_id = %action.config.workflow_id,
                                 "Dispatcher received trigger action",
                             );
+
+                            #[cfg(feature = "gui")]
+                            {
+                                if let Err(err) = _self.tauri_handle.emit_ext(
+                                    wavs_gui_shared::event::TriggerEvent {
+                                        action: action.clone(),
+                                    },
+                                ) {
+                                    tracing::error!(
+                                        "Error emitting trigger event to GUI: {:?}",
+                                        err
+                                    );
+                                }
+                            }
                             if let Err(err) = _self
                                 .dispatcher_to_engine_tx
                                 .send(EngineCommand::ExecuteOperator { service, action })

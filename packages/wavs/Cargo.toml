@@ -12,10 +12,12 @@ publish = false
 [features]
 test-utils = []
 dev = []
+gui = ["dep:tauri", "dep:wavs-gui-shared"]
 
 [dependencies]
 wavs-types = { workspace = true, features = ["full"] }
 wavs-engine = { workspace = true }
+wavs-gui-shared= { workspace = true, features = ["backend"], optional = true }
 utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
@@ -68,6 +70,7 @@ hypercore = { workspace = true }
 hypercore-protocol = { workspace = true }
 hyperswarm = { workspace = true }
 tokio-util = { workspace = true }
+tauri = {workspace = true, optional = true}
 
 [dev-dependencies]
 criterion = { workspace = true }

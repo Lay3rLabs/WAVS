@@ -5,7 +5,6 @@ pub enum Route {
     Logs,
     Services,
     Triggers,
-    Components,
     Submissions,
     Settings,
     NotFound,
@@ -31,7 +30,6 @@ impl Route {
             ["settings"] => Self::Settings,
             ["services"] => Self::Services,
             ["triggers"] => Self::Triggers,
-            ["components"] => Self::Components,
             ["submissions"] => Self::Submissions,
             _ => Self::NotFound,
         }
@@ -73,7 +71,6 @@ impl std::fmt::Display for Route {
             Route::Settings => "settings".to_string(),
             Route::Services => "services".to_string(),
             Route::Triggers => "triggers".to_string(),
-            Route::Components => "components".to_string(),
             Route::Submissions => "submissions".to_string(),
             Route::NotFound => "404".to_string(),
         };

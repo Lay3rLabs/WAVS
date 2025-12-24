@@ -2,25 +2,39 @@ use std::cell::RefCell;
 
 use anyhow::Result;
 use wasm_bindgen::prelude::*;
-use wavs_gui_shared::event::{LogEvent, SettingsEvent, TauriEventExt};
+use wavs_gui_shared::event::{
+    LogEvent, SettingsEvent, SubmissionEvent, TauriEventExt, TriggerEvent,
+};
 
 use crate::{logger::LogItem, state::AppState, tauri::listen};
 
 thread_local! {
-    static GLOBAL_LISTENERS:RefCell<Option<GlobalListeners>> = RefCell::new(None);
+    #[allow(clippy::missing_const_for_thread_local)]
+    static GLOBAL_LISTENERS:RefCell<Option<GlobalListeners>> =  RefCell::new(None);
 }
 
 pub struct GlobalListeners {
     settings: Closure<dyn FnMut(JsValue)>,
     log: Closure<dyn FnMut(JsValue)>,
+    triggers: Closure<dyn FnMut(JsValue)>,
+    submissions: Closure<dyn FnMut(JsValue)>,
 }
 
 impl GlobalListeners {
     pub async fn start(state: AppState) -> Result<()> {
         let settings = start_settings_listener(state.clone()).await?;
         let log = start_log_listener(state.clone()).await?;
+        let triggers = start_triggers_listener(state.clone()).await?;
+        let submissions = start_submissions_listener(state.clone()).await?;
 
-        GLOBAL_LISTENERS.with(|x| *x.borrow_mut() = Some(Self { settings, log }));
+        GLOBAL_LISTENERS.with(|x| {
+            *x.borrow_mut() = Some(Self {
+                settings,
+                log,
+                triggers,
+                submissions,
+            })
+        });
 
         Ok(())
     }
@@ -28,7 +42,7 @@ impl GlobalListeners {
 
 async fn start_settings_listener(state: AppState) -> Result<Closure<dyn FnMut(JsValue)>> {
     let callback = listen(SettingsEvent::NAME, move |evt: SettingsEvent| {
-        state.settings_inner().set(evt.settings);
+        state.settings.set(evt.settings);
     })
     .await?;
 
@@ -61,6 +75,24 @@ async fn start_log_listener(state: AppState) -> Result<Closure<dyn FnMut(JsValue
             target: evt.target,
             fields: evt.fields,
         });
+    })
+    .await?;
+
+    Ok(callback)
+}
+
+async fn start_triggers_listener(state: AppState) -> Result<Closure<dyn FnMut(JsValue)>> {
+    let callback = listen(TriggerEvent::NAME, move |evt: TriggerEvent| {
+        state.triggers_list.lock_mut().push_cloned(evt.action);
+    })
+    .await?;
+
+    Ok(callback)
+}
+
+async fn start_submissions_listener(state: AppState) -> Result<Closure<dyn FnMut(JsValue)>> {
+    let callback = listen(SubmissionEvent::NAME, move |evt: SubmissionEvent| {
+        state.submissions_list.lock_mut().push_cloned(evt);
     })
     .await?;
 
