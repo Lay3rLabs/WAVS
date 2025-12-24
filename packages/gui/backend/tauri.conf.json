@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../frontend/dist",
     "beforeDevCommand": "cd frontend && trunk serve --watch . --watch ../shared",
-    "beforeBuildCommand": "cd frontend && trunk build"
+    "beforeBuildCommand": "cd frontend && trunk build --release"
   },
   "app": {
     "withGlobalTauri": true,
