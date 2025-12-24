@@ -31,6 +31,15 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.90.0
+          targets: wasm32-unknown-unknown
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.5.0
+        with:
+          version: "latest"
+
+      - name: Install just
+        uses: extractions/setup-just@v2
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -43,6 +52,9 @@ jobs:
       - name: Configure EigenLayer middleware
         run: |
           sed -i 's/middleware_type = ".*"/middleware_type = "eigenlayer"/' packages/layer-tests/layer-tests.toml
+
+      - name: Build frontend for linting
+        run: just gui-build-frontend
 
       - name: Build tests first
         run: cargo test --workspace --no-run --locked
@@ -66,6 +78,15 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.90.0
+          targets: wasm32-unknown-unknown
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.5.0
+        with:
+          version: "latest"
+
+      - name: Install just
+        uses: extractions/setup-just@v2
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -79,6 +100,9 @@ jobs:
         run: |
           sed -i 's/middleware_type = ".*"/middleware_type = "poa"/' packages/layer-tests/layer-tests.toml
           sed -i 's/middleware_concurrency = .*/middleware_concurrency = true/' packages/layer-tests/layer-tests.toml
+
+      - name: Build frontend for linting
+        run: just gui-build-frontend
 
       - name: Build tests first
         run: cargo test --workspace --no-run --locked
