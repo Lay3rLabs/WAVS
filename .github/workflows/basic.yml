@@ -126,6 +126,7 @@ jobs:
         with:
           toolchain: 1.90.0
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
