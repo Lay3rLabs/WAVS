@@ -4,8 +4,6 @@ description: "Common CI setup steps (tools, deps, caches, etc.)"
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v4
-
     - name: Install system dependencies (Linux only)
       if: runner.os == 'Linux'
       shell: bash

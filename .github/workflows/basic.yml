@@ -21,6 +21,7 @@ jobs:
     name: Test Suite (EigenLayer)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
       - name: Configure EigenLayer middleware
@@ -39,6 +40,7 @@ jobs:
     name: Test Suite (POA)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
       - name: Configure POA middleware
@@ -72,6 +74,7 @@ jobs:
     name: Lint
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
       - name: Check formatting
