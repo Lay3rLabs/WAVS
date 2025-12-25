@@ -16,15 +16,8 @@ jobs:
     name: Verify and Publish Crate
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Extract Crate Version
         id: version
@@ -91,18 +84,8 @@ jobs:
     name: Publish WASM to wa.dev
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Install just
-        uses: extractions/setup-just@v2
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Install wkg
         run: cargo install wkg
@@ -137,15 +120,8 @@ jobs:
     name: Publish TypeScript Bindings to NPM
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -155,9 +131,6 @@ jobs:
 
       - name: Update npm to latest
         run: npm install -g npm@latest
-
-      - name: Install just
-        uses: extractions/setup-just@v2
 
       - name: Extract Crate Version
         id: version
