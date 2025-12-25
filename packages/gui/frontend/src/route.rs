@@ -25,8 +25,7 @@ impl Route {
         //let uid = url.search_params().get("uid");
 
         match paths {
-            [""] => Self::Logs,
-            ["logs"] => Self::Logs,
+            [""] | [] | ["logs"] => Self::Logs,
             ["settings"] => Self::Settings,
             ["services"] => Self::Services,
             ["triggers"] => Self::Triggers,

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "WAVS",
-  "version": "2.0.0-rc.10",
+  "version": "0.0.1",
   "identifier": "xyz.wavs",
   "build": {
     "frontendDist": "../frontend/dist",
@@ -13,7 +13,8 @@
     "security": {
       "csp": {
         "default-src": "'self' customprotocol: asset:",
-        "connect-src": "ipc: http://ipc.localhost",
+        "script-src": "'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+        "connect-src": "ipc: asset: tauri: http://ipc.localhost http://asset.localhost",
         "font-src": ["https://fonts.gstatic.com"],
         "img-src": "'self' asset: http://asset.localhost blob: data:",
         "style-src": "'unsafe-inline' 'self' https://fonts.googleapis.com"

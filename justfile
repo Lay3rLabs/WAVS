@@ -16,8 +16,11 @@ gui-dev:
 gui-dev-frontend:
     cd packages/gui/frontend && TAURI_BROWSER_DEV=true trunk serve --watch . --watch ../shared
 
-gui-build:
+gui-build-release:
     cd packages/gui && cargo tauri build
+
+gui-build-debug:
+    cd packages/gui && cargo tauri build --debug
 
 gui-build-frontend:
     cd packages/gui/frontend && trunk build --release

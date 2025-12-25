@@ -22,8 +22,9 @@ impl Body {
             class! {
                 .style("display", "flex")
                 .style("flex-direction", "column")
-                .style("min-height", "calc(100vh - 5rem)")
+                .style("height", "calc(100vh - 5rem)")
                 .style("padding", "2rem")
+                .style("overflow", "hidden")
             }
         });
 
@@ -33,6 +34,7 @@ impl Body {
                 .style("border-radius", "0.5rem")
                 .style("box-shadow", &format!("0 2px 8px {}", ColorRaw::Black15.value()))
                 .style("border", &format!("1px solid {}", ColorRaw::CharcoalMedium.value()))
+                .style("overflow", "hidden")
             }
         });
 

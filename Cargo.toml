@@ -222,6 +222,7 @@ tauri-plugin-log = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-build = { version = "2.5.3" }
+fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev="c4c45d503ea115a839aae718d02f79e7c7f0f673"}
 
 # Tauri - frontend
 wasm-bindgen = "0.2.100"
