@@ -31,6 +31,7 @@ tauri = {workspace = true}
 tauri-plugin-log = {workspace = true}
 tauri-plugin-fs = {workspace = true}
 tauri-plugin-dialog = {workspace = true}
+fix-path-env = {workspace = true}
 anyhow = {workspace = true}
 tokio = {workspace = true}
 toml = {workspace = true}
