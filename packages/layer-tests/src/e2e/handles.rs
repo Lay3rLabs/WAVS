@@ -14,7 +14,7 @@ use utils::{
         evm::EvmMiddleware,
     },
 };
-use wavs::dispatcher::Dispatcher;
+use wavs::dispatcher::{Dispatcher, TauriHandle};
 use wavs::subsystems::aggregator::p2p::P2pConfig;
 use wavs_cli::clients::HttpClient;
 use wavs_types::{ChainKey, ChainKeyNamespace};
@@ -142,7 +142,7 @@ impl AppHandles {
         metrics: &Metrics,
         operator_index: usize,
     ) -> std::thread::JoinHandle<()> {
-        let dispatcher = Arc::new(Dispatcher::new(wavs_config, metrics.wavs.clone()).unwrap());
+        let dispatcher = Arc::new(Dispatcher::new(wavs_config, metrics.wavs.clone(), TauriHandle::Mock).unwrap());
 
         std::thread::spawn({
             let dispatcher = dispatcher.clone();
