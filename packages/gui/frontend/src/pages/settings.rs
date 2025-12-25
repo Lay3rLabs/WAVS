@@ -18,6 +18,17 @@ impl SettingsUi {
     }
 
     pub fn render(self: &Arc<Self>) -> Dom {
+        static SCROLL_CONTAINER: LazyLock<String> = LazyLock::new(|| {
+            class! {
+                .style("display", "flex")
+                .style("flex-direction", "column")
+                .style("gap", "0.75rem")
+                .style("max-height", "calc(100vh - 12rem)")
+                .style("overflow-y", "auto")
+                .style("padding-right", "0.5rem")
+            }
+        });
+
         static HEADER_ROW: LazyLock<String> = LazyLock::new(|| {
             class! {
                 .style("display", "flex")
@@ -88,6 +99,7 @@ impl SettingsUi {
         let changed = &self.changed;
 
         html!("div", {
+            .class(&*SCROLL_CONTAINER)
             .child_signal(changed.signal().map(|changed| {
                 if changed {
                     Some(html!("div", {

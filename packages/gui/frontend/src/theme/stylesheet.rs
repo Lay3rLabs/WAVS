@@ -20,6 +20,8 @@ pub fn init() {
         .style("margin", "0")
         .style("padding", "0")
         .style("font-family", FONT_FAMILY_NOTO)
+        .style("overflow", "hidden")
+        .style("height", "100vh")
     });
 
     stylesheet!("a", {
