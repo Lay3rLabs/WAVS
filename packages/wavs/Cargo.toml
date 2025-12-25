@@ -12,12 +12,12 @@ publish = false
 [features]
 test-utils = []
 dev = []
-gui = ["dep:tauri", "dep:wavs-gui-shared"]
+gui = ["dep:tauri", "wavs-gui-shared/backend"]
 
 [dependencies]
 wavs-types = { workspace = true, features = ["full"] }
 wavs-engine = { workspace = true }
-wavs-gui-shared= { workspace = true, features = ["backend"], optional = true }
+wavs-gui-shared= { workspace = true}
 utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
