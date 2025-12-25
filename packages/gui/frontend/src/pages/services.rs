@@ -67,6 +67,17 @@ impl Services {
         let chain_input = self.chain_input.clone();
         let state = &self.state;
 
+        static SCROLL_CONTAINER: LazyLock<String> = LazyLock::new(|| {
+            class! {
+                .style("display", "flex")
+                .style("flex-direction", "column")
+                .style("gap", "0.75rem")
+                .style("max-height", "calc(100vh - 12rem)")
+                .style("overflow-y", "auto")
+                .style("padding-right", "0.5rem")
+            }
+        });
+
         static CONTAINER: LazyLock<String> = LazyLock::new(|| {
             class! {
                 .style("display", "flex")
@@ -149,7 +160,9 @@ impl Services {
         });
 
         html!("div", {
-            .class(&*CONTAINER)
+            .class(&*SCROLL_CONTAINER)
+            .child(html!("div", {
+                .class(&*CONTAINER)
             // Add Service Section
             .child(html!("div", {
                 .child(html!("div", {
@@ -169,7 +182,7 @@ impl Services {
                             .child(html!("input" => web_sys::HtmlInputElement, {
                                 .class(&*INPUT_FIELD)
                                 .attr("type", "text")
-                                .attr("placeholder", "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb2")
+                                .attr("placeholder", "e.g. 0xabc123...")
                                 .prop_signal("value", address_input.signal_cloned())
                                 .with_node!(element => {
                                     .event(clone!(address_input => move |_: events::Input| {
@@ -193,18 +206,6 @@ impl Services {
                                 }))
                                 .render()
                             )
-                            // .child(html!("input" => web_sys::HtmlInputElement, {
-                            //     .class(&*INPUT_FIELD)
-                            //     .attr("type", "text")
-                            //     .attr("placeholder", "e.g., ethereum")
-                            //     .prop_signal("value", chain_input.signal_cloned())
-                            //     .with_node!(element => {
-                            //         .event(clone!(chain_input => move |_: events::Input| {
-                            //             let value = element.value();
-                            //             chain_input.set(value);
-                            //         }))
-                            //     })
-                            // }))
                         }))
                     }))
                     .child(
@@ -214,14 +215,23 @@ impl Services {
                             .with_on_click(clone!(address_input, chain_input, state => move || {
                                 let address = address_input.get_cloned();
                                 let chain = chain_input.get_cloned();
-                                if let Some(chain) = chain {
-                                    if !address.is_empty() {
+                                match (chain, address.is_empty()) {
+                                    (None, _) => {
+                                        Modal::open_error_message("Please select a chain.".to_string());
+                                    }
+                                    (_, true) => {
+                                        Modal::open_error_message("Please enter an address.".to_string());
+                                    }
+                                    (Some(chain), false) => {
                                         address_input.set(String::new());
                                         chain_input.set(None);
+                                        Modal::open_info_message(format!("Adding service for address {} on chain {}...", address, chain));
                                         spawn_local(clone!(state => async move {
-                                            if let Err(err) = add_service(&state, address, chain).await {
+                                            if let Err(err) = add_service(&state, address.clone(), chain.clone()).await {
                                                 tracing::error!("Failed to add service: {}", err);
                                                 Modal::open_error_message(format!("Failed to add service: {}", err));
+                                            } else {
+                                                Modal::open_info_message(format!("Service added for address {} on chain {}!", address, chain));
                                             }
                                         }));
                                     }
@@ -252,6 +262,7 @@ impl Services {
                         }))
                     }
                 }))
+            }))
             }))
         })
     }

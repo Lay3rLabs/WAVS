@@ -19,6 +19,24 @@ impl Modal {
         });
     }
 
+    pub fn open_info_message(msg: impl Into<String>) {
+        static CONTAINER: LazyLock<String> = LazyLock::new(|| {
+            class! {
+                .style("padding", "2rem")
+                .style("text-align", "center")
+            }
+        });
+
+        let msg = msg.into();
+
+        Self::open(move || {
+            html!("div", {
+                .class([&*CONTAINER, FontSize::Lg.class(), ColorText::ModalInfo.class()])
+                .text(&msg)
+            })
+        });
+    }
+
     pub fn open_error_message(msg: impl Into<String>) {
         static CONTAINER: LazyLock<String> = LazyLock::new(|| {
             class! {

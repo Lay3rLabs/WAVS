@@ -303,6 +303,7 @@ pub enum ColorText {
     RedAlert,
     Dropdown,
     DropdownHover,
+    ModalInfo,
 }
 
 impl ColorText {
@@ -325,6 +326,7 @@ impl ColorText {
             Self::RedAlert => ColorRaw::Red4.value(),
             Self::Dropdown => ColorRaw::CharcoalDarkest.value(),
             Self::DropdownHover => ColorRaw::CharcoalDark.value(),
+            Self::ModalInfo => ColorRaw::CharcoalDarkest.value(),
         }
     }
 
@@ -431,6 +433,12 @@ impl ColorText {
             }
         });
 
+        static MODAL_INFO: LazyLock<String> = LazyLock::new(|| {
+            class! {
+              .style("color", ColorText::ModalInfo.value())
+            }
+        });
+
         match self {
             Self::NavBar => &NAV_BAR,
             Self::MainContent => &MAIN_CONTENT,
@@ -449,6 +457,7 @@ impl ColorText {
             Self::RedAlert => &RED_ALERT,
             Self::Dropdown => &DROPDOWN,
             Self::DropdownHover => &DROPDOWN_HOVER,
+            Self::ModalInfo => &MODAL_INFO,
         }
     }
 }
