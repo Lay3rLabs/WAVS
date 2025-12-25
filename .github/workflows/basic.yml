@@ -21,6 +21,7 @@ jobs:
     name: Test Suite (EigenLayer)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
       - name: Configure EigenLayer middleware
@@ -39,7 +40,6 @@ jobs:
     name: Test Suite (POA)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-<<<<<<< HEAD
       - uses: actions/checkout@v4
       - name: install dependencies (ubuntu only)
         run: |
@@ -49,10 +49,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-<<<<<<< HEAD
           toolchain: 1.91.0
-=======
-          toolchain: 1.90.0
           targets: wasm32-unknown-unknown
 
       - name: Install Trunk
@@ -62,7 +59,6 @@ jobs:
 
       - name: Install just
         uses: extractions/setup-just@v2
->>>>>>> abc35a75 (ci)
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -88,6 +84,9 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 =======
+=======
+      - uses: actions/checkout@v4
+>>>>>>> 643ba865 (ci)
       - uses: ./.github/actions/setup
 >>>>>>> ed21f542 (ci)
 
@@ -121,6 +120,7 @@ jobs:
     name: Lint
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
+<<<<<<< HEAD
 <<<<<<< HEAD
       - uses: actions/checkout@v4
 
@@ -162,6 +162,9 @@ jobs:
       - name: Fetch WIT dependencies
         run: just wit-deps-fetch
 =======
+=======
+      - uses: actions/checkout@v4
+>>>>>>> 643ba865 (ci)
       - uses: ./.github/actions/setup
 >>>>>>> ed21f542 (ci)
 
