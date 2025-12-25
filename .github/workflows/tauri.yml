@@ -1,11 +1,9 @@
 name: "tauri"
 
-# on:
-#   push:
-#     tags:
-#       - "v*"
-
-on: [pull_request]
+on:
+  push:
+    tags:
+      - "v*"
 
 jobs:
   publish-tauri:
