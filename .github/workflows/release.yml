@@ -24,8 +24,8 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Set IMAGE_TAG
         shell: bash
@@ -65,8 +65,8 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Set IMAGE_TAG
         shell: bash
@@ -107,8 +107,8 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Set IMAGE_TAG
         shell: bash
