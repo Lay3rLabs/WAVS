@@ -11,7 +11,7 @@ use utils::{
 use wavs::{
     args::CliArgs,
     config::{Config, HealthCheckMode},
-    dispatcher::Dispatcher,
+    dispatcher::{Dispatcher, TauriHandle},
     health::SharedHealthStatus,
 };
 
@@ -96,7 +96,8 @@ fn main() {
     let metrics = Metrics::new(meter);
 
     let config_clone = config.clone();
-    let dispatcher = Arc::new(Dispatcher::new(&config_clone, metrics.wavs).unwrap());
+    let dispatcher =
+        Arc::new(Dispatcher::new(&config_clone, metrics.wavs, TauriHandle::Mock).unwrap());
 
     wavs::run_server(ctx, config, dispatcher, metrics.http, health_status);
 

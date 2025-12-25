@@ -13,7 +13,7 @@ use utils::{
         evm::{EvmMiddleware, EvmMiddlewareType},
     },
 };
-use wavs::dispatcher::Dispatcher;
+use wavs::dispatcher::{Dispatcher, TauriHandle};
 use wavs_types::{ChainKey, ChainKeyNamespace};
 
 use super::config::Configs;
@@ -69,7 +69,8 @@ impl AppHandles {
             }
         }
 
-        let dispatcher = Arc::new(Dispatcher::new(&configs.wavs, metrics.wavs).unwrap());
+        let dispatcher =
+            Arc::new(Dispatcher::new(&configs.wavs, metrics.wavs, TauriHandle::Mock).unwrap());
 
         let wavs_handle = std::thread::spawn({
             let dispatcher = dispatcher.clone();

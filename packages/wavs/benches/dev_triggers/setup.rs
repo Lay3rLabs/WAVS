@@ -4,6 +4,7 @@ use tempfile::tempdir;
 use utils::context::AppContext;
 use utils::filesystem::workspace_path;
 use wavs::config::Config;
+use wavs::dispatcher::TauriHandle;
 use wavs_types::{
     AllowedHostPermission, Component, ComponentDigest, ComponentSource, Service, WorkflowId,
 };
@@ -116,6 +117,7 @@ impl DevTriggersRuntime {
         let mut dispatcher_local = wavs::dispatcher::Dispatcher::new(
             &config,
             utils::telemetry::WavsMetrics::new(opentelemetry::global::meter("wavs-benchmark")),
+            TauriHandle::Mock,
         )
         .expect("dispatcher new");
 

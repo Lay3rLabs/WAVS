@@ -119,7 +119,7 @@ pub async fn cmd_start_wavs(
     let meter = opentelemetry::global::meter("wavs_metrics");
     let metrics = Metrics::new(meter);
 
-    let dispatcher = Arc::new(Dispatcher::new_gui(&config, metrics.wavs, app).unwrap());
+    let dispatcher = Arc::new(Dispatcher::new(&config, metrics.wavs, app).unwrap());
 
     let handle = std::thread::spawn({
         let ctx = ctx.clone();
