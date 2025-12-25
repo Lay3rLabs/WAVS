@@ -21,40 +21,11 @@ jobs:
     name: Test Suite (EigenLayer)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v4
-      - name: install dependencies (ubuntu only)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.90.0
-          targets: wasm32-unknown-unknown
-
-      - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.0
-        with:
-          version: "latest"
-
-      - name: Install just
-        uses: extractions/setup-just@v2
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+      - uses: ./.github/actions/setup
 
       - name: Configure EigenLayer middleware
         run: |
           sed -i 's/middleware_type = ".*"/middleware_type = "eigenlayer"/' packages/layer-tests/layer-tests.toml
-
-      - name: Build frontend for linting
-        run: just gui-build-frontend
 
       - name: Build tests first
         run: cargo test --workspace --no-run --locked
@@ -68,41 +39,12 @@ jobs:
     name: Test Suite (POA)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v4
-      - name: install dependencies (ubuntu only)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.90.0
-          targets: wasm32-unknown-unknown
-
-      - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.0
-        with:
-          version: "latest"
-
-      - name: Install just
-        uses: extractions/setup-just@v2
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+      - uses: ./.github/actions/setup
 
       - name: Configure POA middleware
         run: |
           sed -i 's/middleware_type = ".*"/middleware_type = "poa"/' packages/layer-tests/layer-tests.toml
           sed -i 's/middleware_concurrency = .*/middleware_concurrency = true/' packages/layer-tests/layer-tests.toml
-
-      - name: Build frontend for linting
-        run: just gui-build-frontend
 
       - name: Build tests first
         run: cargo test --workspace --no-run --locked
@@ -130,35 +72,7 @@ jobs:
     name: Lint
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v4
-
-      - name: install dependencies (ubuntu only)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.0
-        with:
-          version: "latest"
-
-      - name: Install just
-        uses: extractions/setup-just@v2
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.90.0
-          components: rustfmt, clippy
-          targets: wasm32-unknown-unknown
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: Build frontend for linting
-        run: just gui-build-frontend
+      - uses: ./.github/actions/setup
 
       - name: Check formatting
         run: cargo fmt --all -- --check
