@@ -16,7 +16,7 @@ use utils::{
 };
 use utils::{storage::db::WavsDb, test_utils::address::rand_address_evm};
 use wavs::{
-    dispatcher::{Dispatcher, DispatcherCommand},
+    dispatcher::{Dispatcher, DispatcherCommand, TauriHandle},
     subsystems::engine::wasm_engine::WasmEngine,
 };
 use wavs_types::{
@@ -73,7 +73,7 @@ impl MockE2ETestRunner {
         let meter = opentelemetry::global::meter("wavs_metrics");
         let metrics = Metrics::new(meter);
 
-        let mut dispatcher = Dispatcher::new(&config, metrics.wavs).unwrap();
+        let mut dispatcher = Dispatcher::new(&config, metrics.wavs, TauriHandle::Mock).unwrap();
         dispatcher.trigger_manager.disable_networking = true;
         dispatcher.submission_manager.disable_networking = true;
         dispatcher

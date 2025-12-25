@@ -35,6 +35,7 @@ use utils::error::EvmClientError;
 use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
+use wavs_gui_shared::event::TauriEventEmitterExt;
 use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessages;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
@@ -70,6 +71,33 @@ pub struct Dispatcher<S: CAStorage> {
     pub dispatcher_to_engine_tx: crossbeam::channel::Sender<EngineCommand>,
     pub engine_to_dispatcher_rx: crossbeam::channel::Receiver<ChainMessage>,
     pub dispatcher_to_submission_tx: crossbeam::channel::Sender<SubmissionCommand>,
+    pub tauri_handle: TauriHandle,
+}
+
+#[derive(Clone)]
+pub enum TauriHandle {
+    #[cfg(feature = "gui")]
+    Real(tauri::AppHandle),
+    Mock,
+}
+
+impl TauriEventEmitterExt for TauriHandle {
+    fn emit_ext<E: wavs_gui_shared::event::TauriEventExt>(
+        &self,
+        event: E,
+    ) -> Result<(), wavs_gui_shared::error::AppError> {
+        match self {
+            TauriHandle::Real(handle) => handle.emit_ext(event),
+            TauriHandle::Mock => Ok(()),
+        }
+    }
+}
+
+#[cfg(feature = "gui")]
+impl From<tauri::AppHandle> for TauriHandle {
+    fn from(handle: tauri::AppHandle) -> Self {
+        TauriHandle::Real(handle)
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -83,7 +111,11 @@ pub enum DispatcherCommand {
 }
 
 impl Dispatcher<FileStorage> {
-    pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, DispatcherError> {
+    pub fn new(
+        config: &Config,
+        metrics: WavsMetrics,
+        tauri_handle: impl Into<TauriHandle>,
+    ) -> Result<Self, DispatcherError> {
         // Create all our channels for communication
         // except dispatcher_to_trigger calls its local stream channel
         let (trigger_to_dispatcher_tx, trigger_to_dispatcher_rx) =
@@ -147,6 +179,7 @@ impl Dispatcher<FileStorage> {
             dispatcher_to_engine_tx,
             engine_to_dispatcher_rx,
             dispatcher_to_submission_tx,
+            tauri_handle: tauri_handle.into(),
         })
     }
 }
@@ -235,6 +268,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                 workflow_id = %action.config.workflow_id,
                                 "Dispatcher received trigger action",
                             );
+
+                            if let Err(err) =
+                                _self
+                                    .tauri_handle
+                                    .emit_ext(wavs_gui_shared::event::TriggerEvent {
+                                        action: action.clone(),
+                                    })
+                            {
+                                tracing::error!("Error emitting trigger event to GUI: {:?}", err);
+                            }
                             if let Err(err) = _self
                                 .dispatcher_to_engine_tx
                                 .send(EngineCommand::Execute { service, action })
@@ -268,6 +311,20 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             let _self = self.clone();
             move || {
                 while let Ok(msg) = _self.engine_to_dispatcher_rx.recv() {
+                    if let Err(err) =
+                        _self
+                            .tauri_handle
+                            .emit_ext(wavs_gui_shared::event::SubmissionEvent {
+                                service_id: msg.service_id.clone(),
+                                workflow_id: msg.workflow_id.clone(),
+                                envelope: msg.envelope.clone(),
+                                trigger_data: msg.trigger_data.clone(),
+                                submit: msg.submit.clone(),
+                            })
+                    {
+                        tracing::error!("Error emitting submission event to GUI: {:?}", err);
+                    }
+
                     if let Err(e) = _self
                         .dispatcher_to_submission_tx
                         .send(SubmissionCommand::Submit(msg))

@@ -16,26 +16,13 @@ env:
   WAVS_COSMOS_SUBMISSION_MNEMONIC: "reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff"
   WAVS_CLI_COSMOS_MNEMONIC: "reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff"
 
-
 jobs:
   test-eigenlayer:
     name: Test Suite (EigenLayer)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.90.0
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+      - uses: ./.github/actions/setup
 
       - name: Configure EigenLayer middleware
         run: |
@@ -54,19 +41,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.90.0
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+      - uses: ./.github/actions/setup
 
       - name: Configure POA middleware
         run: |
@@ -100,17 +75,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.90.0
-          components: rustfmt, clippy
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
+      - uses: ./.github/actions/setup
 
       - name: Check formatting
         run: cargo fmt --all -- --check

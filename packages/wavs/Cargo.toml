@@ -12,10 +12,12 @@ publish = false
 [features]
 test-utils = []
 dev = []
+gui = ["dep:tauri", "wavs-gui-shared/backend"]
 
 [dependencies]
 wavs-types = { workspace = true, features = ["full"] }
 wavs-engine = { workspace = true }
+wavs-gui-shared= { workspace = true}
 utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
@@ -61,6 +63,7 @@ tokio-tungstenite = { workspace = true }
 slotmap = { workspace = true }
 async-stream = "0.3.6"
 rand = { workspace = true }
+tauri = {workspace = true, optional = true}
 
 [dev-dependencies]
 criterion = { workspace = true }
