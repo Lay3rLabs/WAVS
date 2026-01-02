@@ -4918,7 +4918,6 @@ dependencies = [
  "uuid",
  "wasm-pkg-common",
  "wavs",
- "wavs-aggregator",
  "wavs-cli",
  "wavs-types",
 ]
@@ -10000,42 +9999,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wavs-aggregator"
-version = "2.0.0-rc.9"
-dependencies = [
- "alloy-contract",
- "alloy-node-bindings",
- "alloy-primitives",
- "alloy-provider",
- "alloy-rpc-types-eth",
- "alloy-signer-local",
- "anyhow",
- "axum",
- "bincode",
- "clap 4.5.53",
- "ctrlc",
- "futures",
- "layer-climb",
- "opentelemetry",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.17",
- "tokio",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "utils",
- "utoipa",
- "utoipa-swagger-ui",
- "wasmtime",
- "wavs-engine",
- "wavs-types",
- "wildmatch",
-]
-
-[[package]]
 name = "wavs-benchmark-common"
 version = "2.0.0-rc.9"
 dependencies = [
@@ -10074,7 +10037,6 @@ dependencies = [
  "uuid",
  "wasm-pkg-client",
  "wasmtime",
- "wavs-aggregator",
  "wavs-engine",
  "wavs-types",
 ]

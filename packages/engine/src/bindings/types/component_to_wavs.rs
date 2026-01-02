@@ -10,7 +10,7 @@ use crate::{
     bindings::operator::world::wavs::types::service as component_service,
 };
 
-use crate::bindings::aggregator::world::wavs::aggregator::aggregator::{self as aggregator_types};
+use crate::bindings::aggregator::world::wavs::aggregator::output as aggregator_output;
 
 impl TryFrom<component_service::Trigger> for wavs_types::Trigger {
     type Error = anyhow::Error;
@@ -231,11 +231,9 @@ impl From<component_service::Submit> for wavs_types::Submit {
         match src {
             component_service::Submit::None => wavs_types::Submit::None,
             component_service::Submit::Aggregator(component_service::AggregatorSubmit {
-                url,
                 component,
                 signature_kind,
             }) => wavs_types::Submit::Aggregator {
-                url,
                 component: Box::new(component.try_into().unwrap()),
                 signature_kind: signature_kind.into(),
             },
@@ -280,15 +278,15 @@ impl From<component_output::WasmResponse> for wavs_types::WasmResponse {
     }
 }
 
-impl TryFrom<aggregator_types::AggregatorAction> for wavs_types::AggregatorAction {
+impl TryFrom<aggregator_output::AggregatorAction> for wavs_types::AggregatorAction {
     type Error = anyhow::Error;
 
-    fn try_from(action: aggregator_types::AggregatorAction) -> Result<Self, Self::Error> {
+    fn try_from(action: aggregator_output::AggregatorAction) -> Result<Self, Self::Error> {
         Ok(match action {
-            aggregator_types::AggregatorAction::Submit(action) => {
+            aggregator_output::AggregatorAction::Submit(action) => {
                 wavs_types::AggregatorAction::Submit(action.try_into()?)
             }
-            aggregator_types::AggregatorAction::Timer(timer) => {
+            aggregator_output::AggregatorAction::Timer(timer) => {
                 wavs_types::AggregatorAction::Timer(wavs_types::TimerAction {
                     delay: timer.delay.into(),
                 })
@@ -297,19 +295,19 @@ impl TryFrom<aggregator_types::AggregatorAction> for wavs_types::AggregatorActio
     }
 }
 
-impl TryFrom<aggregator_types::SubmitAction> for wavs_types::SubmitAction {
+impl TryFrom<aggregator_output::SubmitAction> for wavs_types::SubmitAction {
     type Error = anyhow::Error;
 
-    fn try_from(action: aggregator_types::SubmitAction) -> Result<Self, Self::Error> {
+    fn try_from(action: aggregator_output::SubmitAction) -> Result<Self, Self::Error> {
         Ok(match action {
-            aggregator_types::SubmitAction::Evm(action) => {
+            aggregator_output::SubmitAction::Evm(action) => {
                 wavs_types::SubmitAction::Evm(wavs_types::EvmSubmitAction {
                     chain: action.chain.parse()?,
                     address: action.address.try_into()?,
                     gas_price: action.gas_price.map(|x| x.into()),
                 })
             }
-            aggregator_types::SubmitAction::Cosmos(action) => {
+            aggregator_output::SubmitAction::Cosmos(action) => {
                 wavs_types::SubmitAction::Cosmos(wavs_types::CosmosSubmitAction {
                     chain: action.chain.parse()?,
                     address: action.address.try_into()?,
@@ -320,10 +318,10 @@ impl TryFrom<aggregator_types::SubmitAction> for wavs_types::SubmitAction {
     }
 }
 
-impl TryFrom<aggregator_types::EvmAddress> for layer_climb::prelude::EvmAddr {
+impl TryFrom<aggregator_output::EvmAddress> for layer_climb::prelude::EvmAddr {
     type Error = anyhow::Error;
 
-    fn try_from(addr: aggregator_types::EvmAddress) -> Result<Self, Self::Error> {
+    fn try_from(addr: aggregator_output::EvmAddress) -> Result<Self, Self::Error> {
         if addr.raw_bytes.len() != 20 {
             return Err(anyhow::anyhow!(
                 "EVM address must be 20 bytes, got {} bytes",
@@ -334,10 +332,10 @@ impl TryFrom<aggregator_types::EvmAddress> for layer_climb::prelude::EvmAddr {
     }
 }
 
-impl TryFrom<aggregator_types::CosmosAddress> for layer_climb::prelude::CosmosAddr {
+impl TryFrom<aggregator_output::CosmosAddress> for layer_climb::prelude::CosmosAddr {
     type Error = anyhow::Error;
 
-    fn try_from(addr: aggregator_types::CosmosAddress) -> Result<Self, Self::Error> {
+    fn try_from(addr: aggregator_output::CosmosAddress) -> Result<Self, Self::Error> {
         let prefix = &addr.bech32_addr[..addr.prefix_len as usize];
         layer_climb::prelude::CosmosAddr::new_str(&addr.bech32_addr, Some(prefix))
     }

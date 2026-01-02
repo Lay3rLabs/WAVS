@@ -36,7 +36,6 @@ pub enum EvmService {
     SimpleAggregator,
     TimerAggregator,
     TimerAggregatorReorg,
-    MultipleServicesWithDifferentAggregators,
     GasPrice,
 }
 
@@ -184,12 +183,6 @@ impl From<EvmService> for Vec<ComponentName> {
             }
             EvmService::TimerAggregatorReorg => {
                 vec![ComponentName::Operator(OperatorComponent::EchoData)]
-            }
-            EvmService::MultipleServicesWithDifferentAggregators => {
-                vec![
-                    ComponentName::Operator(OperatorComponent::EchoData),
-                    ComponentName::Operator(OperatorComponent::Square),
-                ]
             }
             EvmService::GasPrice => {
                 vec![

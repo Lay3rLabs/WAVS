@@ -132,9 +132,9 @@ pub enum Command {
         #[clap(long)]
         component: String,
 
-        /// Optional path to the packet JSON file (creates dummy packet if not provided)
+        /// Optional path to the input JSON file (creates dummy input if not provided)
         #[clap(long)]
-        packet: Option<String>,
+        input: Option<String>,
 
         /// Optional fuel limit for component execution
         #[clap(long)]
@@ -312,11 +312,7 @@ pub enum ManagerCommand {
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum SubmitCommand {
     /// Set an aggregator submit for a workflow
-    SetAggregator {
-        /// The URL of the aggregator
-        #[clap(long)]
-        url: String,
-    },
+    SetAggregator {},
     /// Set the submit to None for a workflow
     SetNone {},
     /// Commands for the aggregator component

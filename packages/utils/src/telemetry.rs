@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 use std::time::Duration;
 
 use opentelemetry::metrics::{Counter, Gauge, Histogram, Meter, UpDownCounter};
@@ -9,8 +11,9 @@ use opentelemetry_sdk::{
     resource::Resource,
     trace::{self, Sampler, SdkTracerProvider},
 };
+use tracing::instrument::WithSubscriber;
 use tracing_subscriber::layer::SubscriberExt;
-use wavs_types::ChainKey;
+use wavs_types::{ChainKey, Service, WorkflowId};
 
 const DEFAULT_PROMETHEUS_PUSH_INTERVAL: u64 = 30; // seconds
 
@@ -90,6 +93,7 @@ pub fn setup_metrics(
     meter_provider
 }
 
+#[derive(Clone, Debug)]
 pub struct Metrics {
     pub http: HttpMetrics,
     pub wavs: WavsMetrics,
@@ -100,47 +104,6 @@ impl Metrics {
         Self {
             http: HttpMetrics::new(meter.clone()),
             wavs: WavsMetrics::new(meter),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct AggregatorMetrics {
-    pub packets_received: Counter<u64>,
-    pub packets_processed: Counter<u64>,
-    pub packets_failed: Counter<u64>,
-    pub processing_latency: Histogram<f64>,
-    pub total_errors: Counter<u64>,
-    pub engine: EngineMetrics,
-}
-
-impl AggregatorMetrics {
-    pub const NAMESPACE: &'static str = "aggregator";
-
-    pub fn new(meter: Meter) -> Self {
-        Self {
-            packets_received: meter
-                .u64_counter(format!("{}.packets_received", Self::NAMESPACE))
-                .with_description("Total packets received by aggregator")
-                .build(),
-            packets_processed: meter
-                .u64_counter(format!("{}.packets_processed", Self::NAMESPACE))
-                .with_description("Total packets successfully processed")
-                .build(),
-            packets_failed: meter
-                .u64_counter(format!("{}.packets_failed", Self::NAMESPACE))
-                .with_description("Total packets that failed processing")
-                .build(),
-            processing_latency: meter
-                .f64_histogram(format!("{}.processing_latency_seconds", Self::NAMESPACE))
-                .with_description("Packet processing latency in seconds")
-                .with_boundaries(vec![0.001, 0.01, 0.1, 0.5, 1.0, 5.0, 10.0])
-                .build(),
-            total_errors: meter
-                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
-                .with_description("Total errors in aggregator")
-                .build(),
-            engine: EngineMetrics::new(meter.clone()),
         }
     }
 }
@@ -218,6 +181,7 @@ pub struct WavsMetrics {
     pub dispatcher: DispatcherMetrics,
     pub submission: SubmissionMetrics,
     pub trigger: TriggerMetrics,
+    pub aggregator: AggregatorMetrics,
 }
 
 impl WavsMetrics {
@@ -226,7 +190,8 @@ impl WavsMetrics {
             engine: EngineMetrics::new(meter.clone()),
             dispatcher: DispatcherMetrics::new(meter.clone()),
             submission: SubmissionMetrics::new(meter.clone()),
-            trigger: TriggerMetrics::new(meter),
+            trigger: TriggerMetrics::new(meter.clone()),
+            aggregator: AggregatorMetrics::new(meter),
         }
     }
 }
@@ -352,11 +317,20 @@ impl Default for DispatcherMetrics {
 
 #[derive(Clone, Debug)]
 pub struct SubmissionMetrics {
-    pub total_messages_processed: Counter<u64>,
-    pub total_errors: Counter<u64>,
-    pub submission_latency: Histogram<f64>, // Time from WASM completion to chain submission
-    pub submissions_success: Counter<u64>,
-    pub submissions_failed: Counter<u64>,
+    request_count: Counter<u64>,
+    request_count_raw: Arc<AtomicU64>,
+
+    sign_count: Counter<u64>,
+    sign_count_raw: Arc<AtomicU64>,
+
+    dispatch_count: Counter<u64>,
+    dispatch_count_raw: Arc<AtomicU64>,
+
+    sign_error_count: Counter<u64>,
+    sign_error_count_raw: Arc<AtomicU64>,
+
+    dispatch_error_count: Counter<u64>,
+    dispatch_error_count_raw: Arc<AtomicU64>,
 }
 
 impl SubmissionMetrics {
@@ -364,50 +338,126 @@ impl SubmissionMetrics {
 
     pub fn new(meter: Meter) -> Self {
         Self {
-            total_messages_processed: meter
-                .u64_counter(format!("{}.total_messages_processed", Self::NAMESPACE))
-                .with_description("Total number of messages processed")
+            request_count: meter
+                .u64_counter(format!("{}.request_count", Self::NAMESPACE))
+                .with_description("Total number of submissions requested")
                 .build(),
-            total_errors: meter
-                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
-                .with_description("Total number of errors encountered")
+            request_count_raw: Arc::new(AtomicU64::new(0)),
+
+            sign_count: meter
+                .u64_counter(format!("{}.sign_count", Self::NAMESPACE))
+                .with_description("Total number of submissions signed")
                 .build(),
-            submission_latency: meter
-                .f64_histogram(format!("{}.submission_latency_seconds", Self::NAMESPACE))
-                .with_description("Time from WASM completion to chain submission")
-                .with_boundaries(vec![0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0])
+            sign_count_raw: Arc::new(AtomicU64::new(0)),
+
+            dispatch_count: meter
+                .u64_counter(format!("{}.dispatch_count", Self::NAMESPACE))
+                .with_description("Total number of submissions dispatched to aggregator")
                 .build(),
-            submissions_success: meter
-                .u64_counter(format!("{}.submissions_success", Self::NAMESPACE))
-                .with_description("Successful chain submissions")
+            dispatch_count_raw: Arc::new(AtomicU64::new(0)),
+
+            sign_error_count: meter
+                .u64_counter(format!("{}.sign_error_count", Self::NAMESPACE))
+                .with_description("Total number of submissions failed on signing")
                 .build(),
-            submissions_failed: meter
-                .u64_counter(format!("{}.submissions_failed", Self::NAMESPACE))
-                .with_description("Failed chain submissions")
+            sign_error_count_raw: Arc::new(AtomicU64::new(0)),
+
+            dispatch_error_count: meter
+                .u64_counter(format!("{}.dispatch_error_count", Self::NAMESPACE))
+                .with_description("Total number of submissions failed on dispatched to aggregator")
                 .build(),
+            dispatch_error_count_raw: Arc::new(AtomicU64::new(0)),
         }
     }
 
-    pub fn increment_total_processed_messages(&self, source: &str) {
-        self.total_messages_processed
-            .add(1, &[KeyValue::new("source", source.to_owned())]);
+    pub fn increment_request_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.request_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.request_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub fn increment_total_errors(&self, error: &str) {
-        self.total_errors
-            .add(1, &[KeyValue::new("error", error.to_owned())]);
+    pub fn increment_sign_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.sign_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.sign_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub fn record_submission(&self, latency: f64, chain: &str, success: bool) {
-        let labels = &[KeyValue::new("chain", chain.to_owned())];
+    pub fn increment_sign_error_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.sign_error_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.sign_error_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
 
-        self.submission_latency.record(latency, labels);
+    pub fn increment_dispatch_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.dispatch_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.dispatch_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
 
-        if success {
-            self.submissions_success.add(1, labels);
-        } else {
-            self.submissions_failed.add(1, labels);
-        }
+    pub fn increment_dispatch_error_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.dispatch_error_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.dispatch_error_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn get_request_count(&self) -> u64 {
+        self.request_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_sign_count(&self) -> u64 {
+        self.sign_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_dispatch_count(&self) -> u64 {
+        self.dispatch_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_sign_error_count(&self) -> u64 {
+        self.sign_error_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_dispatch_error_count(&self) -> u64 {
+        self.dispatch_error_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -459,5 +509,124 @@ impl TriggerMetrics {
 
     pub fn record_trigger_sent_dispatcher_command(&self, duration: f64) {
         self.sent_dispatcher_command_latency.record(duration, &[]);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AggregatorMetrics {
+    receive_count: Counter<u64>,
+    receive_count_raw: Arc<AtomicU64>,
+
+    broadcast_count: Counter<u64>,
+    broadcast_count_raw: Arc<AtomicU64>,
+
+    execute_count: Counter<u64>,
+    execute_count_raw: Arc<AtomicU64>,
+
+    submit_count: Counter<u64>,
+    submit_count_raw: Arc<AtomicU64>,
+}
+
+impl AggregatorMetrics {
+    pub const NAMESPACE: &'static str = "aggregator";
+
+    pub fn new(meter: Meter) -> Self {
+        Self {
+            receive_count: meter
+                .u64_counter(format!("{}.receive_count", Self::NAMESPACE))
+                .with_description("Total submissions received by aggregator")
+                .build(),
+            receive_count_raw: Arc::new(AtomicU64::new(0)),
+
+            broadcast_count: meter
+                .u64_counter(format!("{}.broadcast_count", Self::NAMESPACE))
+                .with_description("Total submissions broadcasted by aggregator")
+                .build(),
+            broadcast_count_raw: Arc::new(AtomicU64::new(0)),
+
+            execute_count: meter
+                .u64_counter(format!("{}.execute_count", Self::NAMESPACE))
+                .with_description("Total components executed by aggregator")
+                .build(),
+            execute_count_raw: Arc::new(AtomicU64::new(0)),
+
+            submit_count: meter
+                .u64_counter(format!("{}.submit_count", Self::NAMESPACE))
+                .with_description("Total submissions sent by aggregator")
+                .build(),
+            submit_count_raw: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    pub fn increment_receive_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.receive_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.receive_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn increment_broadcast_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.broadcast_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.broadcast_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn increment_execute_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.execute_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.execute_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn increment_submit_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.submit_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.submit_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn get_receive_count(&self) -> u64 {
+        self.receive_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_broadcast_count(&self) -> u64 {
+        self.broadcast_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_execute_count(&self) -> u64 {
+        self.execute_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_submit_count(&self) -> u64 {
+        self.submit_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }

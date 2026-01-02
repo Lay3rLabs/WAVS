@@ -1,5 +1,4 @@
 use std::hash::Hash;
-use std::path::Path;
 use std::sync::Arc;
 
 use dashmap::mapref::multiple::RefMulti;
@@ -21,15 +20,16 @@ pub struct WavsDb {
 
 impl WavsDb {
     /// Create a new database with all tables initialized
+    /// Right now this is purely in-memory; later we will add file-based persistence
     #[instrument(fields(subsys = "WavsDb"))]
     pub fn new() -> Result<Self, DBError> {
         Ok(Self {
-            services: WavsDbTable::new(None::<&str>)?,
-            services_by_hash: WavsDbTable::new(None::<&str>)?,
-            aggregator_services: WavsDbTable::new(None::<&str>)?,
-            quorum_queues: WavsDbTable::new(None::<&str>)?,
-            kv_store: WavsDbTable::new(None::<&str>)?,
-            kv_atomics_counter: WavsDbTable::new(None::<&str>)?,
+            services: WavsDbTable::new()?,
+            services_by_hash: WavsDbTable::new()?,
+            aggregator_services: WavsDbTable::new()?,
+            quorum_queues: WavsDbTable::new()?,
+            kv_store: WavsDbTable::new()?,
+            kv_atomics_counter: WavsDbTable::new()?,
         })
     }
 }
@@ -43,7 +43,6 @@ where
     V: Clone + Send + Sync + 'static,
 {
     inner: Arc<DashMap<K, V>>,
-    filepath: Option<std::path::PathBuf>,
 }
 
 impl<K, V> Default for WavsDbTable<K, V>
@@ -54,7 +53,6 @@ where
     fn default() -> Self {
         Self {
             inner: Arc::new(DashMap::new()),
-            filepath: None,
         }
     }
 }
@@ -65,18 +63,12 @@ where
     V: Clone + Send + Sync + 'static,
 {
     /// Create a new table. In the future, this will open/load from a file.
-    pub fn new(filepath: Option<impl AsRef<Path>>) -> Result<Self, DBError> {
-        // TODO LATER: Open a file, load data, keep file handle for writing
-        let filepath = filepath.map(|p| p.as_ref().to_path_buf());
+    /// Right now this is purely in-memory; later we will add file-based persistence
+    /// and this will then need a filepath as an argument, most likely
+    pub fn new() -> Result<Self, DBError> {
         Ok(Self {
             inner: Arc::new(DashMap::new()),
-            filepath,
         })
-    }
-
-    /// Get the filepath for this table (if any)
-    pub fn filepath(&self) -> Option<&std::path::Path> {
-        self.filepath.as_deref()
     }
 
     /// Get a cloned value from the table
@@ -165,7 +157,7 @@ mod tests {
 
     #[test]
     fn wavsdb_table_basic_operations() {
-        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new(None::<&str>).unwrap();
+        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new().unwrap();
         let key = "test_key".to_string();
         let value = TestStruct {
             name: "demo".to_string(),
@@ -192,7 +184,7 @@ mod tests {
 
     #[test]
     fn wavsdb_table_map_ref() {
-        let table: WavsDbTable<String, i32> = WavsDbTable::new(None::<&str>).unwrap();
+        let table: WavsDbTable<String, i32> = WavsDbTable::new().unwrap();
         let key = "number".to_string();
         table.insert(key.clone(), 42).unwrap();
 
@@ -207,7 +199,7 @@ mod tests {
 
     #[test]
     fn wavsdb_table_iteration() {
-        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new(None::<&str>).unwrap();
+        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new().unwrap();
 
         // Insert test data
         table
@@ -320,7 +312,7 @@ mod tests {
 
     #[test]
     fn table_clear() {
-        let table: WavsDbTable<String, i32> = WavsDbTable::new(None::<&str>).unwrap();
+        let table: WavsDbTable<String, i32> = WavsDbTable::new().unwrap();
 
         // Insert some data
         table.insert("a".to_string(), 1).unwrap();

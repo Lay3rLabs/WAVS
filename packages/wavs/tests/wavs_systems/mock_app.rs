@@ -155,7 +155,6 @@ impl MockE2ETestRunner {
         let trigger = mock_evm_event_trigger();
 
         let submit = Submit::Aggregator {
-            url: "http://example.com".to_string(),
             // just use the same component for submit for simplicity
             component: Box::new(Component::new(component_source.clone())),
             signature_kind: SignatureKind::evm_default(),

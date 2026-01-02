@@ -3,9 +3,9 @@ use alloy_signer::{k256::ecdsa::SigningKey, SignerSync};
 use alloy_signer_local::{coins_bip39::English, LocalSigner, MnemonicBuilder};
 use alloy_sol_types::SolValue;
 use wavs_types::{
-    Component, ComponentDigest, ComponentSource, Envelope, EnvelopeExt, EnvelopeSignature, Packet,
-    Service, ServiceManager, ServiceStatus, SignatureKind, Submit, Trigger, TriggerData, Workflow,
-    WorkflowId,
+    Component, ComponentDigest, ComponentSource, Envelope, Packet, Service, ServiceManager,
+    ServiceStatus, SignatureKind, Submit, Trigger, TriggerData, WavsSignable, WavsSignature,
+    Workflow, WorkflowId,
 };
 
 use crate::test_utils::address::rand_address_evm;
@@ -19,16 +19,16 @@ pub fn packet_from_service(
     envelope: &Envelope,
     trigger_data: &TriggerData,
 ) -> Packet {
-    let signature = signer
-        .sign_hash_sync(&envelope.prefix_eip191_hash())
+    let envelope_signature = signer
+        .sign_hash_sync(&envelope.prefix_eip191_hash().unwrap())
         .unwrap();
 
     Packet {
         service: service.clone(),
         workflow_id: workflow_id.clone(),
         envelope: envelope.clone(),
-        signature: EnvelopeSignature {
-            data: signature.into(),
+        envelope_signature: WavsSignature {
+            data: envelope_signature.into(),
             kind: SignatureKind::evm_default(),
         },
         trigger_data: trigger_data.clone(),

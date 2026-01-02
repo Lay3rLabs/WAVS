@@ -53,7 +53,6 @@ fn dispatcher_pipeline() {
                 component: Component::new(ComponentSource::Digest(digest.clone())),
                 trigger: mock_cosmos_event_trigger(),
                 submit: Submit::Aggregator {
-                    url: "http://example.com/aggregator".to_string(),
                     component: Box::new(Component::new(ComponentSource::Digest(digest))),
                     signature_kind: SignatureKind::evm_default(),
                 },
@@ -104,7 +103,7 @@ fn dispatcher_pipeline() {
 
     // check that the events were properly handled and arrived at submission
     wait_for_submission_messages(&dispatcher.submission_manager, 2, None).unwrap();
-    let processed = dispatcher.submission_manager.get_debug_packets();
+    let processed = dispatcher.submission_manager.get_debug_submissions();
 
     assert_eq!(processed.len(), 2);
 

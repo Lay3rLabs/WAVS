@@ -20,7 +20,6 @@ use super::config::Configs;
 
 pub struct AppHandles {
     pub wavs_handle: std::thread::JoinHandle<()>,
-    pub aggregator_handles: Vec<std::thread::JoinHandle<()>>,
     pub evm_middleware: Option<EvmMiddleware>,
     pub cosmos_middlewares: CosmosMiddlewares,
     _evm_chains: Vec<EvmInstance>,
@@ -82,20 +81,6 @@ impl AppHandles {
             }
         });
 
-        let mut aggregator_handles = Vec::new();
-
-        for config in &configs.aggregators {
-            aggregator_handles.push(std::thread::spawn({
-                let ctx = ctx.clone();
-                let config = config.clone();
-                move || {
-                    let meter = opentelemetry::global::meter("aggregator_test");
-                    let metrics = utils::telemetry::AggregatorMetrics::new(meter);
-                    wavs_aggregator::run_server(ctx, config, metrics);
-                }
-            }));
-        }
-
         let evm_middleware = if evm_chains.is_empty() {
             None
         } else {
@@ -104,7 +89,6 @@ impl AppHandles {
 
         Self {
             wavs_handle,
-            aggregator_handles,
             evm_middleware,
             cosmos_middlewares: Arc::new(cosmos_middlewares),
             _evm_chains: evm_chains,
@@ -115,9 +99,6 @@ impl AppHandles {
     pub fn try_join(self) -> Vec<std::thread::Result<()>> {
         let mut results = Vec::new();
         results.push(self.wavs_handle.join());
-        for handle in self.aggregator_handles {
-            results.push(handle.join());
-        }
 
         results
     }

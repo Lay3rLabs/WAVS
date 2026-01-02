@@ -3,18 +3,17 @@ mod world;
 
 use world::{
     host,
-    wavs::aggregator::aggregator::{AggregatorAction, Packet, SubmitAction, TimerAction},
+    wavs::aggregator::input::AggregatorInput,
+    wavs::aggregator::output::{AggregatorAction, EvmSubmitAction, SubmitAction, TimerAction},
     wavs::types::chain::{AnyTxHash, EvmAddress},
     wavs::types::core::Duration,
     Guest,
 };
 
-use crate::world::wavs::aggregator::aggregator::EvmSubmitAction;
-
 struct Component;
 
 impl Guest for Component {
-    fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
+    fn process_input(_input: AggregatorInput) -> Result<Vec<AggregatorAction>, String> {
         let timer_delay_secs_str = host::config_var("timer_delay_secs")
             .ok_or("timer_delay_secs config variable is required")?;
 
@@ -30,7 +29,7 @@ impl Guest for Component {
         Ok(vec![AggregatorAction::Timer(timer_action)])
     }
 
-    fn handle_timer_callback(packet: Packet) -> Result<Vec<AggregatorAction>, String> {
+    fn handle_timer_callback(input: AggregatorInput) -> Result<Vec<AggregatorAction>, String> {
         let chain = host::config_var("chain").ok_or("chain config variable is required")?;
         let service_handler_str = host::config_var("service_handler")
             .ok_or("service_handler config variable is required")?;
@@ -46,7 +45,7 @@ impl Guest for Component {
             gas_price: None,
         });
 
-        if !utils::is_valid_tx(packet.trigger_data)? {
+        if !utils::is_valid_tx(input.trigger_action.data)? {
             return Ok(vec![]);
         }
 
@@ -54,7 +53,7 @@ impl Guest for Component {
     }
 
     fn handle_submit_callback(
-        _packet: Packet,
+        _input: AggregatorInput,
         tx_result: Result<AnyTxHash, String>,
     ) -> Result<(), String> {
         match tx_result {

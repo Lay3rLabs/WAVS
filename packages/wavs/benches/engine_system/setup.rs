@@ -5,13 +5,11 @@ use opentelemetry::global::meter;
 use utils::service::DEFAULT_IPFS_GATEWAY;
 use utils::storage::{db::WavsDb, fs::FileStorage};
 use utils::telemetry::Metrics;
+use wavs::dispatcher::DispatcherCommand;
 use wavs::subsystems::engine::EngineCommand;
 use wavs::{
     services::Services,
-    subsystems::{
-        engine::{wasm_engine::WasmEngine, EngineManager},
-        submission::chain_message::ChainMessage,
-    },
+    subsystems::engine::{wasm_engine::WasmEngine, EngineManager},
 };
 use wavs_benchmark_common::{app_context::APP_CONTEXT, engine_setup::EngineSetup};
 use wavs_types::{Service, TriggerAction};
@@ -36,7 +34,7 @@ pub struct SystemSetup {
     pub _engine_manager: EngineManager<FileStorage>,
     pub config: SystemConfig,
     pub dispatcher_to_engine_tx: crossbeam::channel::Sender<EngineCommand>,
-    pub engine_to_dispatcher_rx: crossbeam::channel::Receiver<ChainMessage>,
+    pub subsystem_to_dispatcher_rx: crossbeam::channel::Receiver<DispatcherCommand>,
     #[allow(clippy::type_complexity)]
     pub trigger_actions: Arc<std::sync::Mutex<Option<Vec<(TriggerAction, Service)>>>>,
 }
@@ -77,13 +75,13 @@ impl SystemSetup {
 
         let (dispatcher_to_engine_tx, dispatcher_to_engine_rx) =
             crossbeam::channel::unbounded::<EngineCommand>();
-        let (engine_to_dispatcher_tx, engine_to_dispatcher_rx) =
-            crossbeam::channel::unbounded::<ChainMessage>();
+        let (subsystem_to_dispatcher_tx, subsystem_to_dispatcher_rx) =
+            crossbeam::channel::unbounded::<DispatcherCommand>();
         let engine_manager = EngineManager::new(
             wasm_engine,
             Services::new(db_storage),
             dispatcher_to_engine_rx,
-            engine_to_dispatcher_tx,
+            subsystem_to_dispatcher_tx,
         );
 
         let trigger_actions = (1..=system_config.n_actions)
@@ -110,7 +108,7 @@ impl SystemSetup {
             _engine_manager: engine_manager,
             config: system_config,
             dispatcher_to_engine_tx,
-            engine_to_dispatcher_rx,
+            subsystem_to_dispatcher_rx,
             trigger_actions: Arc::new(std::sync::Mutex::new(Some(trigger_actions))),
         })
     }

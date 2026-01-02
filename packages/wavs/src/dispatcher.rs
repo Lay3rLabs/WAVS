@@ -45,10 +45,12 @@ use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction
 
 use crate::config::Config;
 use crate::services::{Services, ServicesError};
+use crate::subsystems::aggregator::error::AggregatorError;
+use crate::subsystems::aggregator::{Aggregator, AggregatorCommand};
 use crate::subsystems::engine::error::EngineError;
 use crate::subsystems::engine::wasm_engine::WasmEngine;
-use crate::subsystems::engine::{EngineCommand, EngineManager};
-use crate::subsystems::submission::chain_message::ChainMessage;
+use crate::subsystems::engine::{EngineCommand, EngineManager, EngineResponse};
+use crate::subsystems::submission::data::Submission;
 use crate::subsystems::submission::error::SubmissionError;
 use crate::subsystems::submission::{SubmissionCommand, SubmissionManager};
 use crate::subsystems::trigger::error::TriggerError;
@@ -62,14 +64,15 @@ pub struct Dispatcher<S: CAStorage> {
     pub trigger_manager: TriggerManager,
     pub engine_manager: EngineManager<S>,
     pub submission_manager: SubmissionManager,
+    pub aggregator: Aggregator,
     pub services: Services,
     pub chain_configs: Arc<RwLock<ChainConfigs>>,
     pub metrics: DispatcherMetrics,
     pub ipfs_gateway: String,
-    pub trigger_to_dispatcher_rx: crossbeam::channel::Receiver<DispatcherCommand>,
+    pub subsystem_to_dispatcher_rx: crossbeam::channel::Receiver<DispatcherCommand>,
     pub dispatcher_to_engine_tx: crossbeam::channel::Sender<EngineCommand>,
-    pub engine_to_dispatcher_rx: crossbeam::channel::Receiver<ChainMessage>,
     pub dispatcher_to_submission_tx: crossbeam::channel::Sender<SubmissionCommand>,
+    pub dispatcher_to_aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -80,22 +83,25 @@ pub enum DispatcherCommand {
         service_id: ServiceId,
         uri: UriString,
     },
+    EngineResponse(EngineResponse),
+    SubmissionResponse(Submission),
 }
 
 impl Dispatcher<FileStorage> {
     pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, DispatcherError> {
         // Create all our channels for communication
         // except dispatcher_to_trigger calls its local stream channel
-        let (trigger_to_dispatcher_tx, trigger_to_dispatcher_rx) =
+        let (subsystem_to_dispatcher_tx, subsystem_to_dispatcher_rx) =
             crossbeam::channel::unbounded::<DispatcherCommand>();
 
         let (dispatcher_to_engine_tx, dispatcher_to_engine_rx) =
             crossbeam::channel::unbounded::<EngineCommand>();
-        let (engine_to_dispatcher_tx, engine_to_dispatcher_rx) =
-            crossbeam::channel::unbounded::<ChainMessage>();
 
         let (dispatcher_to_submission_tx, dispatcher_to_submission_rx) =
             crossbeam::channel::unbounded::<SubmissionCommand>();
+
+        let (dispatcher_to_aggregator_tx, dispatcher_to_aggregator_rx) =
+            crossbeam::channel::unbounded::<AggregatorCommand>();
 
         let file_storage = FileStorage::new(config.data.join("ca"))?;
         let db_storage = WavsDb::new()?;
@@ -106,7 +112,7 @@ impl Dispatcher<FileStorage> {
             config,
             metrics.trigger,
             services.clone(),
-            trigger_to_dispatcher_tx,
+            subsystem_to_dispatcher_tx.clone(),
         )?;
 
         let app_storage = config.data.join("app");
@@ -125,7 +131,7 @@ impl Dispatcher<FileStorage> {
             engine,
             services.clone(),
             dispatcher_to_engine_rx,
-            engine_to_dispatcher_tx,
+            subsystem_to_dispatcher_tx.clone(),
         );
 
         let submission_manager = SubmissionManager::new(
@@ -133,20 +139,31 @@ impl Dispatcher<FileStorage> {
             metrics.submission,
             services.clone(),
             dispatcher_to_submission_rx,
+            subsystem_to_dispatcher_tx.clone(),
+        )?;
+
+        let aggregator = Aggregator::new(
+            config,
+            metrics.aggregator,
+            services.clone(),
+            dispatcher_to_aggregator_rx,
+            dispatcher_to_aggregator_tx.clone(),
+            subsystem_to_dispatcher_tx.clone(),
         )?;
 
         Ok(Self {
             trigger_manager,
             engine_manager,
             submission_manager,
+            aggregator,
             services,
             chain_configs: config.chains.clone(),
             metrics: metrics.dispatcher.clone(),
             ipfs_gateway: config.ipfs_gateway.clone(),
-            trigger_to_dispatcher_rx,
+            subsystem_to_dispatcher_rx,
             dispatcher_to_engine_tx,
-            engine_to_dispatcher_rx,
             dispatcher_to_submission_tx,
+            dispatcher_to_aggregator_tx,
         })
     }
 }
@@ -182,6 +199,14 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             }
         }));
 
+        handles.push(std::thread::spawn({
+            let _self = self.clone();
+            let ctx = ctx.clone();
+            move || {
+                _self.aggregator.start(ctx);
+            }
+        }));
+
         // Kill all subsystems on demand
         handles.push(std::thread::spawn({
             let _self = self.clone();
@@ -209,17 +234,24 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                         {
                             tracing::error!("Error sending kill to submission manager: {:?}", err);
                         }
+                        // shut down aggregator
+                        if let Err(err) = _self
+                            .dispatcher_to_aggregator_tx
+                            .send(AggregatorCommand::Kill)
+                        {
+                            tracing::error!("Error sending kill to aggregator: {:?}", err);
+                        }
                     }
                 });
             }
         }));
 
-        // handle incoming commands from trigger manager
+        // handle incoming commands from subsystems
         std::thread::spawn({
             let _self = self.clone();
             let ctx_rt = ctx.rt.clone();
             move || {
-                while let Ok(command) = _self.trigger_to_dispatcher_rx.recv() {
+                while let Ok(command) = _self.subsystem_to_dispatcher_rx.recv() {
                     match command {
                         DispatcherCommand::Trigger(action) => {
                             let service = match _self.services.get(&action.config.service_id) {
@@ -237,10 +269,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             );
                             if let Err(err) = _self
                                 .dispatcher_to_engine_tx
-                                .send(EngineCommand::Execute { service, action })
+                                .send(EngineCommand::ExecuteOperator { service, action })
                             {
                                 tracing::error!("Error sending work to engine: {:?}", err);
-                                // blocking_send only fails if the receiver has been dropped (channel closed)
                                 _self.metrics.channel_closed_errors.add(
                                     1,
                                     &[opentelemetry::KeyValue::new("channel", "engine_work")],
@@ -258,21 +289,45 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                 }
                             });
                         }
-                    }
-                }
-            }
-        });
 
-        // handle incoming commands from engine manager
-        std::thread::spawn({
-            let _self = self.clone();
-            move || {
-                while let Ok(msg) = _self.engine_to_dispatcher_rx.recv() {
-                    if let Err(e) = _self
-                        .dispatcher_to_submission_tx
-                        .send(SubmissionCommand::Submit(msg))
-                    {
-                        tracing::error!("Error sending message to submission manager: {:?}", e);
+                        DispatcherCommand::EngineResponse(response) => match response {
+                            EngineResponse::Operator(msg) => {
+                                if let Err(e) = _self
+                                    .dispatcher_to_submission_tx
+                                    .send(SubmissionCommand::Submit(msg))
+                                {
+                                    tracing::error!(
+                                        "Error sending message to submission manager: {:?}",
+                                        e
+                                    );
+                                }
+                            }
+
+                            // This is AFTER aggregator has aggregated, and executed the component
+                            EngineResponse::Aggregator {
+                                submission,
+                                actions,
+                            } => {
+                                if let Err(e) = _self.dispatcher_to_aggregator_tx.send(
+                                    AggregatorCommand::Submit {
+                                        submission,
+                                        actions,
+                                    },
+                                ) {
+                                    tracing::error!("Error sending message to aggregator: {:?}", e);
+                                }
+                            }
+                        },
+
+                        DispatcherCommand::SubmissionResponse(submission) => {
+                            // This is BEFORE aggregator has even broadcast
+                            if let Err(e) = _self
+                                .dispatcher_to_aggregator_tx
+                                .send(AggregatorCommand::Broadcast(submission))
+                            {
+                                tracing::error!("Error sending message to aggregator: {:?}", e);
+                            }
+                        }
                     }
                 }
             }
@@ -696,6 +751,9 @@ pub enum DispatcherError {
 
     #[error("Submission: {0}")]
     Submission(#[from] SubmissionError),
+
+    #[error("Aggregator: {0}")]
+    Aggregator(#[from] AggregatorError),
 
     #[error("Chain config error: {0}")]
     ChainConfig(#[from] ChainConfigError),

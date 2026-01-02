@@ -1,13 +1,12 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     str::FromStr,
 };
 
-use super::{config::Configs, test_definition::SubmitDefinition, test_registry::TestRegistry};
+use super::config::Configs;
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::filesystem::workspace_path;
 use wasm_pkg_common::package::PackageRef;
-use wavs_aggregator::config::Config as AggregatorConfig;
 use wavs_cli::clients::HttpClient;
 use wavs_types::{ComponentDigest, ComponentSource, Registry};
 
@@ -82,14 +81,8 @@ impl ComponentName {
 }
 
 impl ComponentSources {
-    pub async fn new(
-        configs: &Configs,
-        registry: &TestRegistry,
-        http_client: &HttpClient,
-        aggregator_clients: &[HttpClient],
-        aggregator_configs: &[AggregatorConfig],
-    ) -> Self {
-        let mut component_names: HashSet<ComponentName> = configs
+    pub async fn new(configs: &Configs, http_client: &HttpClient) -> Self {
+        let component_names: HashSet<ComponentName> = configs
             .matrix
             .evm
             .iter()
@@ -111,32 +104,13 @@ impl ComponentSources {
             .flatten()
             .collect();
 
-        // Collect which aggregator components need to go to which aggregator endpoint
-        let mut aggregator_components_by_endpoint: HashMap<String, HashSet<ComponentName>> =
-            HashMap::new();
-        for test in registry.list_all() {
-            for workflow in test.workflows.values() {
-                let SubmitDefinition::Aggregator { url, .. } = &workflow.submit;
-                for aggregator in &workflow.aggregators {
-                    aggregator_components_by_endpoint
-                        .entry(url.clone())
-                        .or_default()
-                        .insert(*aggregator);
-                    component_names.insert(*aggregator);
-                }
-            }
-        }
-
         let mut futures = FuturesUnordered::new();
 
         for component_name in component_names {
             futures.push(get_component_source(
                 http_client,
-                aggregator_clients,
-                aggregator_configs,
                 component_name,
                 configs.registry,
-                &aggregator_components_by_endpoint,
             ));
         }
 
@@ -152,11 +126,8 @@ impl ComponentSources {
 
 async fn get_component_source(
     http_client: &HttpClient,
-    aggregator_clients: &[HttpClient],
-    aggregator_configs: &[AggregatorConfig],
     name: ComponentName,
     registry: bool,
-    aggregator_components_by_endpoint: &HashMap<String, HashSet<ComponentName>>,
 ) -> (ComponentName, ComponentSource) {
     if !registry {
         let wasm_filename = name.as_str();
@@ -171,36 +142,10 @@ async fn get_component_source(
 
         let wasm_bytes = tokio::fs::read(wasm_path).await.unwrap();
 
-        let digest = if name.is_aggregator() {
-            let mut digest = None;
-
-            // Upload to each aggregator that has this component specified
-            for (client, config) in aggregator_clients.iter().zip(aggregator_configs.iter()) {
-                let endpoint_url = format!("http://{}:{}", config.host, config.port);
-
-                if let Some(components) = aggregator_components_by_endpoint.get(&endpoint_url) {
-                    if components.contains(&name) {
-                        tracing::info!("Uploading {} to {}", name.as_str(), endpoint_url);
-                        let uploaded_digest =
-                            client.upload_component(wasm_bytes.to_vec()).await.unwrap();
-
-                        if let Some(existing_digest) = &digest {
-                            assert_eq!(existing_digest, &uploaded_digest,
-                                "Different aggregators returned different digests for the same component");
-                        } else {
-                            digest = Some(uploaded_digest);
-                        }
-                    }
-                }
-            }
-            digest.expect("No aggregator clients available")
-        } else {
-            // Operator components go to WAVS server
-            http_client
-                .upload_component(wasm_bytes.to_vec())
-                .await
-                .unwrap()
-        };
+        let digest = http_client
+            .upload_component(wasm_bytes.to_vec())
+            .await
+            .unwrap();
         (name, ComponentSource::Digest(digest))
     } else {
         // Adding a component from the registry requires calculating the digest ahead-of-time.

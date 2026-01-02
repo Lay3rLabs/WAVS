@@ -17,19 +17,6 @@ use crate::config::TestConfig;
 
 use super::matrix::TestMatrix;
 
-// Aggregator endpoint configuration
-pub const AGGREGATOR_HOST: &str = "127.0.0.1";
-pub const AGGREGATOR_PORT_1: u32 = 8001;
-pub const AGGREGATOR_PORT_2: u32 = 8002;
-
-pub fn aggregator_endpoint_1() -> String {
-    format!("http://{}:{}", AGGREGATOR_HOST, AGGREGATOR_PORT_1)
-}
-
-pub fn aggregator_endpoint_2() -> String {
-    format!("http://{}:{}", AGGREGATOR_HOST, AGGREGATOR_PORT_2)
-}
-
 pub const CRON_INTERVAL_DATA: &str = "cron-interval data";
 // we can go down to 1 for small groups of tests, but it currently causes a long wait in the test runner
 // might be a good candidate to use this a a benchmark for increasing throughput
@@ -42,7 +29,6 @@ pub struct Configs {
     pub wavs: wavs::config::Config,
     pub cli: wavs_cli::config::Config,
     pub cli_args: wavs_cli::args::CliArgs,
-    pub aggregators: Vec<wavs_aggregator::config::Config>,
     pub chains: Arc<RwLock<ChainConfigs>>,
     pub mnemonics: TestMnemonics,
     pub middleware_concurrency: bool,
@@ -212,31 +198,6 @@ impl From<TestConfig> for Configs {
         wavs_config.submission_mnemonic = Some(mnemonics.wavs.clone());
         wavs_config.dev_endpoints_enabled = true;
 
-        // Create first aggregator config (default port 8001)
-        let mut aggregator_config: wavs_aggregator::config::Config =
-            ConfigBuilder::new(wavs_aggregator::args::CliArgs {
-                data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
-                home: Some(workspace_path()),
-                // deliberately point to a non-existing file
-                dotenv: Some(tempfile::NamedTempFile::new().unwrap().path().to_path_buf()),
-                ..Default::default()
-            })
-            .build()
-            .unwrap();
-
-        aggregator_config.chains = chain_configs.clone();
-        aggregator_config.credential = Some(mnemonics.aggregator.clone());
-        aggregator_config.cosmos_credential = Some(mnemonics.aggregator_cosmos.clone());
-        aggregator_config.dev_endpoints_enabled = true;
-
-        // Create second aggregator config
-        // It is used only in few tests, but we need to spin it beforehand
-        let mut aggregator_config_2 = aggregator_config.clone();
-        aggregator_config_2.port = AGGREGATOR_PORT_2;
-        aggregator_config_2.data = tempfile::tempdir().unwrap().path().to_path_buf();
-        aggregator_config_2.credential = Some(mnemonics.aggregator_2.clone());
-        aggregator_config_2.dev_endpoints_enabled = true;
-
         let cli_args = wavs_cli::args::CliArgs {
             data: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
             home: Some(workspace_path()),
@@ -258,7 +219,6 @@ impl From<TestConfig> for Configs {
             registry: test_config.registry.map_or_else(|| false, |t| t),
             cli: cli_config,
             cli_args,
-            aggregators: vec![aggregator_config, aggregator_config_2],
             wavs: wavs_config,
             chains: chain_configs,
             mnemonics,

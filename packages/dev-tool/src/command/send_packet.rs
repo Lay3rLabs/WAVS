@@ -1,6 +1,6 @@
 use alloy_signer_local::PrivateKeySigner;
 use wavs_types::{
-    aggregator::AddPacketRequest, Envelope, EnvelopeSigner, Packet, SignatureKind, TriggerData,
+    aggregator::AddPacketRequest, Envelope, Packet, SignatureKind, TriggerData, WavsSigner,
     WorkflowId,
 };
 
@@ -18,16 +18,16 @@ pub async fn run() {
         payload: vec![1, 2, 3, 4, 5].into(),
     };
 
-    let signature = envelope
+    let envelope_signature = envelope
         .sign(&signer, SignatureKind::evm_default())
         .await
         .unwrap();
 
     let packet = Packet {
         envelope,
+        envelope_signature,
         workflow_id: workflow_id.clone(),
         service,
-        signature,
         trigger_data: TriggerData::Raw(vec![1, 2, 3, 4, 5]),
     };
 

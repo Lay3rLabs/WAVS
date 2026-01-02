@@ -2,15 +2,18 @@ use utils::storage::db::WavsDb;
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
-    bindings::aggregator::world::{host::LogLevel, wavs::aggregator::aggregator::AggregatorAction},
+    bindings::aggregator::world::{host::LogLevel, wavs::aggregator::output::AggregatorAction},
     worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder},
 };
-use wavs_types::{ChainConfigs, ComponentDigest, EvmChainConfig, Packet, ServiceId, WorkflowId};
+use wavs_types::{
+    AggregatorInput, ChainConfigs, ComponentDigest, EvmChainConfig, Service, ServiceId, WorkflowId,
+};
 
 #[allow(dead_code)]
 pub async fn execute_aggregator_component(
     wasm_bytes: &[u8],
-    packet: Packet,
+    input: AggregatorInput,
+    service: Service,
 ) -> Vec<AggregatorAction> {
     let mut wt_config = WTConfig::new();
     wt_config.wasm_component_model(true);
@@ -38,9 +41,9 @@ pub async fn execute_aggregator_component(
         .unwrap();
 
     let mut instance_deps = InstanceDepsBuilder {
-        workflow_id: packet.workflow_id.clone(),
-        service: packet.service.clone(),
-        data: InstanceData::new_aggregator(packet.event_id()),
+        workflow_id: input.trigger_action.config.workflow_id.clone(),
+        service,
+        data: InstanceData::new_aggregator(input.event_id().unwrap()),
 
         component: WasmtimeComponent::new(&engine, wasm_bytes).unwrap(),
         engine: &engine,
@@ -61,10 +64,10 @@ pub async fn execute_aggregator_component(
         .await
         .unwrap();
 
-    let wit_packet = packet.try_into().unwrap();
+    let wit_input = input.try_into().unwrap();
 
     let result = aggregator_world
-        .call_process_packet(instance_deps.store.as_aggregator_mut(), &wit_packet)
+        .call_process_input(instance_deps.store.as_aggregator_mut(), &wit_input)
         .await
         .unwrap();
 

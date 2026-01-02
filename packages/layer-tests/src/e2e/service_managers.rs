@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::test_utils::{
@@ -14,8 +11,7 @@ use utils::test_utils::{
 };
 use wavs_cli::command::deploy_service::{DeployService, DeployServiceArgs};
 use wavs_types::{
-    ChainKey, ChainKeyNamespace, Service, ServiceId, ServiceManager, ServiceStatus, SignerResponse,
-    Submit,
+    ChainKey, ChainKeyNamespace, Service, ServiceManager, ServiceStatus, SignerResponse,
 };
 
 use crate::{
@@ -35,7 +31,6 @@ use crate::e2e::{
 pub struct ServiceManagers {
     configs: Arc<Configs>,
     lookup: Arc<HashMap<String, AnyServiceManagerInstance>>,
-    aggregator_registered_service_ids: Arc<std::sync::Mutex<HashSet<(ServiceId, String)>>>,
 }
 
 pub enum AnyServiceManagerInstance {
@@ -53,7 +48,6 @@ impl ServiceManagers {
     pub fn new(configs: Configs) -> Self {
         Self {
             lookup: Arc::new(HashMap::new()),
-            aggregator_registered_service_ids: Arc::new(std::sync::Mutex::new(HashSet::new())),
             configs: Arc::new(configs),
         }
     }
@@ -366,24 +360,6 @@ impl ServiceManagers {
         let mut futures = Vec::new();
 
         for service in services {
-            // register the service to the aggregator if needed
-            for workflow in service.workflows.values() {
-                if let Submit::Aggregator { url, .. } = &workflow.submit {
-                    // Track registrations per (service_id, aggregator_url) pair
-                    // This ensures a service is registered to ALL aggregators it needs
-                    if self
-                        .aggregator_registered_service_ids
-                        .lock()
-                        .unwrap()
-                        .insert((service.id(), url.clone()))
-                    {
-                        TestRegistry::register_to_aggregator(url, &service)
-                            .await
-                            .unwrap();
-                    }
-                }
-            }
-
             let service_url = DeployService::save_service(&clients.cli_ctx, &service)
                 .await
                 .unwrap();

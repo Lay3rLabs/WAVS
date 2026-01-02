@@ -1032,7 +1032,6 @@ async fn test_service_validation() {
     };
 
     let submit = Submit::Aggregator {
-        url: "https://api.example.com/aggregator".to_string(),
         component: Box::new(component.clone()),
         signature_kind: SignatureKind::evm_default(),
     };
@@ -1325,7 +1324,6 @@ async fn test_service_validation() {
                 trigger: TriggerBuilder::Trigger(trigger.clone()),
                 component: ComponentBuilder::Component(component.clone()),
                 submit: SubmitBuilder::Submit(Submit::Aggregator {
-                    url: "not-a-valid-url".to_string(),
                     component: Box::new(component.clone()),
                     signature_kind: SignatureKind::evm_default(),
                 }),
@@ -1501,13 +1499,10 @@ fn test_set_aggregator_submit() {
     let workflow_id = workflow_result.workflow_id;
 
     // Set aggregator submit
-    let test_url = "https://example.com/aggregator";
-    let result =
-        set_aggregator_submit(&file_path, workflow_id.clone(), test_url.to_string()).unwrap();
+    let result = set_aggregator_submit(&file_path, workflow_id.clone()).unwrap();
 
     // Verify result
     assert_eq!(result.workflow_id, workflow_id);
-    assert_eq!(result.url, test_url);
 
     // Verify the service file was updated
     let service_json = std::fs::read_to_string(&file_path).unwrap();
@@ -1517,11 +1512,9 @@ fn test_set_aggregator_submit() {
     // Should create AggregatorJson with unset component
     match &workflow.submit {
         SubmitBuilder::AggregatorBuilder(AggregatorBuilder::Aggregator {
-            url,
             component,
             signature_kind,
         }) => {
-            assert_eq!(url, test_url);
             assert!(component.is_unset());
             assert_eq!(*signature_kind, SignatureKind::evm_default());
         }
@@ -1572,8 +1565,7 @@ async fn test_modify_aggregator_component() {
     let workflow_id = workflow_result.workflow_id;
 
     // First set aggregator submit
-    let test_url = "https://example.com/aggregator";
-    set_aggregator_submit(&file_path, workflow_id.clone(), test_url.to_string()).unwrap();
+    set_aggregator_submit(&file_path, workflow_id.clone()).unwrap();
 
     // Create test digest
     let test_digest = ComponentDigest::hash(b"test_component");
@@ -1601,11 +1593,9 @@ async fn test_modify_aggregator_component() {
 
     match &workflow.submit {
         SubmitBuilder::AggregatorBuilder(AggregatorBuilder::Aggregator {
-            url,
             component,
             signature_kind: _,
         }) => {
-            assert_eq!(url, test_url);
             assert!(component.is_set());
             if let ComponentBuilder::Component(comp) = component {
                 match &comp.source {
@@ -1617,12 +1607,10 @@ async fn test_modify_aggregator_component() {
             }
         }
         SubmitBuilder::Submit(Submit::Aggregator {
-            url,
             component,
             signature_kind: _,
         }) => {
             // This might be matched first due to enum ordering
-            assert_eq!(*url, test_url);
             match &component.source {
                 ComponentSource::Digest(digest) => {
                     assert_eq!(*digest, test_digest);
@@ -1694,7 +1682,6 @@ fn test_aggregator_validation() {
             ComponentDigest::hash(b"workflow_component"),
         ))),
         submit: SubmitBuilder::Submit(Submit::Aggregator {
-            url: "https://valid-url.com".to_string(),
             component: Box::new(component.clone()),
             signature_kind: SignatureKind::evm_default(),
         }),
@@ -1720,7 +1707,6 @@ fn test_aggregator_validation() {
             ComponentDigest::hash(b"workflow_component"),
         ))),
         submit: SubmitBuilder::Submit(Submit::Aggregator {
-            url: "https://valid-url.com".to_string(),
             component: Box::new(invalid_component),
             signature_kind: SignatureKind::evm_default(),
         }),
@@ -1753,7 +1739,6 @@ fn test_aggregator_validation() {
             ComponentDigest::hash(b"workflow_component"),
         ))),
         submit: SubmitBuilder::Submit(Submit::Aggregator {
-            url: "https://valid-url.com".to_string(),
             component: Box::new(invalid_env_component),
             signature_kind: SignatureKind::evm_default(),
         }),

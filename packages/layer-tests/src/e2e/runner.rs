@@ -456,7 +456,7 @@ async fn run_test(
                             anyhow!("Could not get workflow definition from id: {}", workflow_id)
                         })?;
 
-                        let SubmitDefinition::Aggregator { aggregator, .. } = &workflow_def.submit;
+                        let SubmitDefinition::Aggregator(aggregator) = &workflow_def.submit;
                         let AggregatorDefinition::ComponentBasedAggregator { chain, .. } =
                             aggregator;
 

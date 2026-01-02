@@ -385,3 +385,6 @@ ts-bindings:
     rm -rf packages/types/bindings
     cargo test -p wavs-types --features ts-bindings
     cargo run --bin ts
+
+debug:
+    cargo test --package wavs --features dev --test aggregator_tests single

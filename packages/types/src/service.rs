@@ -452,7 +452,9 @@ impl TriggerData {
 }
 
 /// A bundle of the trigger and the associated data needed to take action on it
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, bincode::Decode, bincode::Encode)]
+#[derive(
+    Serialize, Deserialize, Clone, Debug, PartialEq, Eq, bincode::Decode, bincode::Encode, ToSchema,
+)]
 pub struct TriggerAction {
     #[bincode(with_serde)]
     /// Identify which trigger this came from
@@ -463,7 +465,7 @@ pub struct TriggerAction {
     pub data: TriggerData,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 // Trigger with metadata so it can be identified in relation to services and workflows
 pub struct TriggerConfig {
     pub service_id: ServiceId,
@@ -480,8 +482,6 @@ pub enum Submit {
     // useful for when the component just does something with its own state
     None,
     Aggregator {
-        /// The aggregator endpoint
-        url: String,
         /// component dynamically determines the destination
         component: Box<Component>,
         signature_kind: SignatureKind,
@@ -617,7 +617,7 @@ pub enum AllowedHostPermission {
     None,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(default, rename_all = "snake_case")]
 #[derive(Default)]
 pub struct WasmResponse {

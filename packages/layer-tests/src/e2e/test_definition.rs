@@ -175,10 +175,7 @@ pub enum EvmTriggerDefinition {
 /// Configuration for a submit
 #[derive(Clone, Debug)]
 pub enum SubmitDefinition {
-    Aggregator {
-        url: String,
-        aggregator: AggregatorDefinition,
-    },
+    Aggregator(AggregatorDefinition),
 }
 
 /// Different types of input data

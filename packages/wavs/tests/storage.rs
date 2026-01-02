@@ -21,7 +21,7 @@ pub struct Demo {
 
 #[test]
 fn test_wavsdb_table_basic_operations() {
-    let table: WavsDbTable<u32, String> = WavsDbTable::new(None::<&str>).unwrap();
+    let table: WavsDbTable<u32, String> = WavsDbTable::new().unwrap();
 
     let empty = table.get_cloned(&17);
     assert!(empty.is_none());
@@ -34,7 +34,7 @@ fn test_wavsdb_table_basic_operations() {
 
 #[test]
 fn test_wavsdb_table_json_storage() {
-    let table: WavsDbTable<String, Demo> = WavsDbTable::new(None::<&str>).unwrap();
+    let table: WavsDbTable<String, Demo> = WavsDbTable::new().unwrap();
 
     let empty = table.get_cloned(&"john".to_string());
     assert!(empty.is_none());

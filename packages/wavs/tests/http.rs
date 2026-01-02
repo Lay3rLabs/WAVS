@@ -116,7 +116,6 @@ fn http_save_service() {
         mock_evm_event_trigger(),
         ComponentSource::Digest(ComponentDigest::hash([1, 2, 3])),
         wavs_types::Submit::Aggregator {
-            url: "http://example.com/aggregator".to_string(),
             component: Box::new(Component::new(ComponentSource::Digest(
                 ComponentDigest::hash([1, 2, 3]),
             ))),

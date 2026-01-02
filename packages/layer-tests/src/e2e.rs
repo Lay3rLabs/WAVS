@@ -159,14 +159,7 @@ async fn _run(
         .await;
 
     // upload components
-    let component_sources = ComponentSources::new(
-        &configs,
-        &registry,
-        &clients.http_client,
-        &clients.aggregator_clients,
-        &configs.aggregators,
-    )
-    .await;
+    let component_sources = ComponentSources::new(&configs, &clients.http_client).await;
 
     // create the real services (deploy contracts etc.)
 

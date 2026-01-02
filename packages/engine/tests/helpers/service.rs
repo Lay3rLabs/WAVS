@@ -40,7 +40,6 @@ pub fn make_service(wasm_digest: ComponentDigest, config: BTreeMap<String, Strin
         trigger: Trigger::Manual,
         component: component.clone(),
         submit: Submit::Aggregator {
-            url: "https://api.example.com/aggregator".to_string(),
             component: Box::new(component),
             signature_kind: SignatureKind::evm_default(),
         },

@@ -208,7 +208,6 @@ wavs = { path = "packages/wavs" }
 wavs-engine = { path = "packages/engine" }
 wavs-types = { path = "packages/types" }
 wavs-cli = { path = "packages/cli" }
-wavs-aggregator = { path = "packages/aggregator" }
 wavs-benchmark-common = { path = "packages/wavs/benches/common" }
 example-helpers = { path = "examples/components/_helpers" }
 example-types = { path = "examples/components/_types" }
