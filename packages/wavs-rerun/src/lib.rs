@@ -44,10 +44,11 @@ fn node_position(node: &str) -> [f32; 2] {
 }
 
 /// Initialize Rerun visualization with the network topology.
+/// Start viewer first with: rerun --serve
 pub fn init_rerun(app_name: &str) -> anyhow::Result<()> {
     let rec = rerun::RecordingStreamBuilder::new(app_name)
         .recording_id("wavs-network-viz")
-        .spawn()?;
+        .connect_grpc()?;
 
     // Log static network topology
     log_network_topology(&rec)?;
@@ -68,12 +69,12 @@ fn log_network_topology(rec: &RecordingStream) -> anyhow::Result<()> {
     ];
 
     let colors = vec![
-        Color::from_rgb(66, 135, 245),   // Blue - Trigger
-        Color::from_rgb(245, 166, 35),   // Orange - Dispatcher
-        Color::from_rgb(126, 211, 33),   // Green - Engine
-        Color::from_rgb(208, 2, 27),     // Red - Submission
-        Color::from_rgb(144, 19, 254),   // Purple - Aggregator
-        Color::from_rgb(80, 80, 80),     // Gray - Contract
+        Color::from_rgb(66, 135, 245), // Blue - Trigger
+        Color::from_rgb(245, 166, 35), // Orange - Dispatcher
+        Color::from_rgb(126, 211, 33), // Green - Engine
+        Color::from_rgb(208, 2, 27),   // Red - Submission
+        Color::from_rgb(144, 19, 254), // Purple - Aggregator
+        Color::from_rgb(80, 80, 80),   // Gray - Contract
     ];
 
     let labels = vec![
@@ -133,12 +134,19 @@ pub fn log_packet_flow(
     workflow_id: &str,
     details: Option<&str>,
 ) {
-    let guard = RECORDER.get().and_then(|r| {
-        let lock = r.read();
-        lock.as_ref().cloned()
-    });
+    eprintln!("[wavs-rerun] log_packet_flow: {} -> {}", from, to);
 
-    if let Some(rec) = guard {
+    let Some(recorder) = RECORDER.get() else {
+        eprintln!("[wavs-rerun] RECORDER not initialized!");
+        return;
+    };
+    let lock = recorder.read();
+    let Some(rec) = lock.as_ref() else {
+        eprintln!("[wavs-rerun] RecordingStream is None!");
+        return;
+    };
+
+    {
         let from_pos = node_position(from);
         let to_pos = node_position(to);
 
