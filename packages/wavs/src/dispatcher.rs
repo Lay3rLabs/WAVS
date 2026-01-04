@@ -245,6 +245,15 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                 None,
                             );
 
+                            #[cfg(feature = "rerun")]
+                            wavs_rerun::log_packet_flow(
+                                wavs_rerun::NODE_DISPATCHER,
+                                wavs_rerun::NODE_ENGINE,
+                                &action.config.workflow_id.to_string(),
+                                &action.config.service_id.to_string(),
+                                None,
+                            );
+
                             if let Err(err) = _self
                                 .dispatcher_to_engine_tx
                                 .send(EngineCommand::Execute { service, action })
@@ -280,7 +289,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                 while let Ok(msg) = _self.engine_to_dispatcher_rx.recv() {
                     #[cfg(feature = "rerun")]
                     wavs_rerun::log_packet_flow(
-                        wavs_rerun::NODE_ENGINE,
+                        wavs_rerun::NODE_DISPATCHER,
                         wavs_rerun::NODE_SUBMISSION,
                         &msg.envelope.eventId.to_string(),
                         &msg.workflow_id.to_string(),

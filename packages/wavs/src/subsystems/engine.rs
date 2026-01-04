@@ -70,6 +70,15 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                             }
                             Ok(messages) => {
                                 for msg in messages {
+                                    #[cfg(feature = "rerun")]
+                                    wavs_rerun::log_packet_flow(
+                                        wavs_rerun::NODE_ENGINE,
+                                        wavs_rerun::NODE_DISPATCHER,
+                                        &msg.envelope.eventId.to_string(),
+                                        &msg.workflow_id.to_string(),
+                                        None,
+                                    );
+
                                     if let Err(e) = _self.engine_to_dispatcher_tx.send(msg) {
                                         tracing::error!(
                                             "Error sending message to dispatcher: {:?}",
