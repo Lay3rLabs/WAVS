@@ -9,6 +9,9 @@ repository.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+rerun = ["dep:wavs-rerun"]
+
 [dependencies]
 wavs-types = { workspace = true, features = ["full"] }
 wavs-engine = { workspace = true }
@@ -37,6 +40,7 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 bincode = { workspace = true }
 layer-climb = { workspace = true }
+wavs-rerun = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

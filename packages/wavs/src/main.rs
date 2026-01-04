@@ -41,6 +41,11 @@ fn main() {
         None
     };
 
+    #[cfg(feature = "rerun")]
+    if let Err(e) = wavs_rerun::init_rerun("wavs-node") {
+        tracing::warn!("Failed to initialize Rerun visualization: {}", e);
+    }
+
     let health_status = SharedHealthStatus::new();
 
     let (chains, chain_configs) = {

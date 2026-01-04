@@ -1,0 +1,17 @@
+[package]
+name = "wavs-rerun"
+description = "Rerun visualization for WAVS network packet flow"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+rerun = "0.28.1"
+tracing = { workspace = true }
+anyhow = { workspace = true }
+once_cell = "1.19"
+parking_lot = "0.12"

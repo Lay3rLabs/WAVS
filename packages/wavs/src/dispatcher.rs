@@ -235,6 +235,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                 workflow_id = %action.config.workflow_id,
                                 "Dispatcher received trigger action",
                             );
+
+                            #[cfg(feature = "rerun")]
+                            wavs_rerun::log_packet_flow(
+                                wavs_rerun::NODE_TRIGGER,
+                                wavs_rerun::NODE_DISPATCHER,
+                                &action.config.workflow_id.to_string(),
+                                &action.config.service_id.to_string(),
+                                None,
+                            );
+
                             if let Err(err) = _self
                                 .dispatcher_to_engine_tx
                                 .send(EngineCommand::Execute { service, action })
@@ -268,6 +278,15 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             let _self = self.clone();
             move || {
                 while let Ok(msg) = _self.engine_to_dispatcher_rx.recv() {
+                    #[cfg(feature = "rerun")]
+                    wavs_rerun::log_packet_flow(
+                        wavs_rerun::NODE_ENGINE,
+                        wavs_rerun::NODE_SUBMISSION,
+                        &msg.envelope.eventId.to_string(),
+                        &msg.workflow_id.to_string(),
+                        None,
+                    );
+
                     if let Err(e) = _self
                         .dispatcher_to_submission_tx
                         .send(SubmissionCommand::Submit(msg))

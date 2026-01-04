@@ -69,6 +69,11 @@ impl AppHandles {
             }
         }
 
+        #[cfg(feature = "rerun")]
+        if let Err(e) = wavs_rerun::init_rerun("layer-tests") {
+            tracing::warn!("Failed to initialize Rerun: {}", e);
+        }
+
         let dispatcher = Arc::new(Dispatcher::new(&configs.wavs, metrics.wavs).unwrap());
 
         let wavs_handle = std::thread::spawn({

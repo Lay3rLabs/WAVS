@@ -41,6 +41,11 @@ fn main() {
         None
     };
 
+    #[cfg(feature = "rerun")]
+    if let Err(e) = wavs_rerun::init_rerun("wavs-aggregator") {
+        tracing::warn!("Failed to initialize Rerun visualization: {}", e);
+    }
+
     let meter_provider = config.prometheus.as_ref().map(|collector| {
         setup_metrics(
             collector,

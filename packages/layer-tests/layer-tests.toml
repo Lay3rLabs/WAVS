@@ -7,13 +7,13 @@ middleware_concurrency = true
 grouping = false
 evm_middleware_type = "eigenlayer" # or "poa"
 # Run all tests
-mode = "all"
+# mode = "all"
 
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
 # mode = "all_eth"
 
 # Run a specific test
-# mode = { "isolated" = [{ evm = "trigger_backpressure" }] }
+mode = { "isolated" = [{ evm = "multiple_services_with_different_aggregators" }] }
 
 # Run a few specific tests
 # mode = {"isolated" = [

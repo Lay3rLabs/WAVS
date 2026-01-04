@@ -48,6 +48,15 @@ pub async fn handle_packet(
     state.metrics.packets_received.add(1, &[]);
     let start_time = std::time::Instant::now();
 
+    #[cfg(feature = "rerun")]
+    wavs_rerun::log_packet_flow(
+        wavs_rerun::NODE_AGGREGATOR,
+        wavs_rerun::NODE_CONTRACT,
+        &req.packet.event_id().to_string(),
+        &req.packet.workflow_id.to_string(),
+        Some(&format!("service: {}", req.packet.service.name)),
+    );
+
     #[cfg(debug_assertions)]
     if std::env::var("WAVS_FORCE_AGGREGATOR_PACKET_ERROR_XXX").is_ok() {
         state.metrics.packets_failed.add(1, &[]);

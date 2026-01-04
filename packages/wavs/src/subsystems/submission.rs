@@ -310,6 +310,15 @@ impl SubmissionManager {
             std::thread::sleep(std::time::Duration::from_secs(6));
         }
 
+        #[cfg(feature = "rerun")]
+        wavs_rerun::log_packet_flow(
+            wavs_rerun::NODE_SUBMISSION,
+            wavs_rerun::NODE_AGGREGATOR,
+            &packet.event_id().to_string(),
+            &packet.workflow_id.to_string(),
+            Some(&format!("url: {}", url)),
+        );
+
         let response = self
             .http_client
             .post(format!("{url}/packets"))

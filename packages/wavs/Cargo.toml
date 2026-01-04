@@ -12,6 +12,7 @@ publish = false
 [features]
 test-utils = []
 dev = []
+rerun = ["dep:wavs-rerun"]
 
 [dependencies]
 wavs-types = { workspace = true, features = ["full"] }
@@ -61,6 +62,7 @@ tokio-tungstenite = { workspace = true }
 slotmap = { workspace = true }
 async-stream = "0.3.6"
 rand = { workspace = true }
+wavs-rerun = { workspace = true, optional = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
