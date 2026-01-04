@@ -273,6 +273,19 @@ impl SubmissionManager {
             .await
             .map_err(SubmissionError::FailedToSignEnvelope)?;
 
+        #[cfg(feature = "rerun")]
+        {
+            let signer_addr = evm_signer.address().to_string();
+            wavs_rerun::log_operator_node(&signer_addr);
+            wavs_rerun::log_packet_flow(
+                wavs_rerun::NODE_SUBMISSION,
+                &format!("operator_{}", signer_addr),
+                &envelope.eventId.to_string(),
+                &workflow_id.to_string(),
+                Some("signed"),
+            );
+        }
+
         let service = self.services.get(&service_id)?;
 
         Ok(Packet {
@@ -311,13 +324,20 @@ impl SubmissionManager {
         }
 
         #[cfg(feature = "rerun")]
-        wavs_rerun::log_packet_flow(
-            wavs_rerun::NODE_SUBMISSION,
-            wavs_rerun::NODE_AGGREGATOR,
-            &packet.event_id().to_string(),
-            &packet.workflow_id.to_string(),
-            Some(&format!("url: {}", url)),
-        );
+        {
+            let signer_addr = packet
+                .signature
+                .evm_signer_address(&packet.envelope)
+                .map(|a| a.to_string())
+                .unwrap_or_default();
+            wavs_rerun::log_packet_flow(
+                &format!("operator_{}", signer_addr),
+                wavs_rerun::NODE_AGGREGATOR,
+                &packet.event_id().to_string(),
+                &packet.workflow_id.to_string(),
+                Some(&format!("url: {}", url)),
+            );
+        }
 
         let response = self
             .http_client

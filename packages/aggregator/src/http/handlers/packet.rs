@@ -168,6 +168,18 @@ async fn process_packet(
     };
     tracing::debug!("Packet signer address: {:?}", signer);
 
+    #[cfg(feature = "rerun")]
+    {
+        wavs_rerun::log_operator_node(&signer.to_string());
+        wavs_rerun::log_packet_flow(
+            &format!("operator_{}", signer),
+            wavs_rerun::NODE_AGGREGATOR,
+            &packet.event_id().to_string(),
+            &packet.workflow_id.to_string(),
+            Some(&format!("operator resolved: {}", signer)),
+        );
+    }
+
     AggregatorProcess {
         state: &state,
         packet,

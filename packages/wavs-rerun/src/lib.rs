@@ -4,8 +4,9 @@
 //! using animated 2D points that move between nodes.
 
 use once_cell::sync::OnceCell;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use rerun::{Color, LineStrips2D, Points2D, RecordingStream, TextLog};
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Global recorder instance shared across the application.
@@ -13,6 +14,9 @@ static RECORDER: OnceCell<RwLock<Option<RecordingStream>>> = OnceCell::new();
 
 /// Frame counter for animation timing
 static FRAME_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Track seen operators for dynamic node creation
+static SEEN_OPERATORS: OnceCell<Mutex<HashSet<String>>> = OnceCell::new();
 
 // Node IDs for the network graph
 pub const NODE_TRIGGER: &str = "trigger_manager";
@@ -30,6 +34,23 @@ const POS_SUBMISSION: [f32; 2] = [400.0, 0.0];
 const POS_AGGREGATOR: [f32; 2] = [600.0, 0.0];
 const POS_CONTRACT: [f32; 2] = [800.0, 0.0];
 
+/// Get position for an operator node (positioned in arc below Aggregator)
+fn operator_position(operator_id: &str) -> [f32; 2] {
+    let operators = SEEN_OPERATORS.get_or_init(|| Mutex::new(HashSet::new()));
+    let mut set = operators.lock();
+    let index = if set.contains(operator_id) {
+        set.iter().position(|x| x == operator_id).unwrap()
+    } else {
+        let idx = set.len();
+        set.insert(operator_id.to_string());
+        idx
+    };
+    // Position in arc below Aggregator (600, 0)
+    let angle = std::f32::consts::PI * (0.25 + 0.5 * index as f32 / 4.0);
+    let radius = 120.0;
+    [500.0 + radius * angle.cos(), -radius * angle.sin()]
+}
+
 /// Get position for a node
 fn node_position(node: &str) -> [f32; 2] {
     match node {
@@ -39,6 +60,7 @@ fn node_position(node: &str) -> [f32; 2] {
         NODE_SUBMISSION => POS_SUBMISSION,
         NODE_AGGREGATOR => POS_AGGREGATOR,
         NODE_CONTRACT => POS_CONTRACT,
+        _ if node.starts_with("operator_") => operator_position(&node[9..]),
         _ => [0.0, 0.0],
     }
 }
@@ -112,6 +134,35 @@ fn log_network_topology(rec: &RecordingStream) -> anyhow::Result<()> {
     )?;
 
     Ok(())
+}
+
+/// Log and create operator node dynamically.
+/// Call this before logging packet flow involving an operator.
+pub fn log_operator_node(operator_id: &str) {
+    let Some(recorder) = RECORDER.get() else {
+        return;
+    };
+    let lock = recorder.read();
+    let Some(rec) = lock.as_ref() else {
+        return;
+    };
+
+    let pos = operator_position(operator_id);
+    let label = if operator_id.len() > 8 {
+        format!("Op_{}", &operator_id[..8])
+    } else {
+        format!("Op_{}", operator_id)
+    };
+
+    if let Err(e) = rec.log(
+        format!("network/operators/{}", operator_id),
+        &Points2D::new([pos])
+            .with_colors([Color::from_rgb(255, 165, 0)]) // Orange for operators
+            .with_labels([label])
+            .with_radii([12.0]),
+    ) {
+        tracing::warn!("Failed to log operator node: {}", e);
+    }
 }
 
 /// Number of animation frames for packet movement
