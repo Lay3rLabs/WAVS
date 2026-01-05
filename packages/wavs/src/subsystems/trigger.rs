@@ -658,6 +658,14 @@ impl TriggerManager {
                                     streams::hypercore_stream::HypercoreStreamConfig {
                                         storage_dir: self.config.hypercore_storage_dir.clone(),
                                         overwrite: self.config.hypercore_overwrite,
+                                        replication_endpoint: self
+                                            .config
+                                            .hypercore_replication_endpoint
+                                            .clone(),
+                                        replication_feed_key: self
+                                            .config
+                                            .hypercore_replication_feed_key
+                                            .clone(),
                                     },
                                     self.metrics.clone(),
                                 )
@@ -992,42 +1000,7 @@ impl TriggerManager {
                     }
                 }
                 StreamTriggers::Hypercore { event } => {
-                    let mut matched_lookup_ids: HashSet<LookupId> = HashSet::new();
-
-                    {
-                        let triggers_by_hypercore_lock = self
-                            .lookup_maps
-                            .triggers_by_hypercore_append
-                            .read()
-                            .unwrap();
-
-                        if let Some(lookup_ids) =
-                            triggers_by_hypercore_lock.get(&Some(event.feed_key.clone()))
-                        {
-                            matched_lookup_ids.extend(lookup_ids);
-                        }
-
-                        if let Some(lookup_ids) = triggers_by_hypercore_lock.get(&None) {
-                            matched_lookup_ids.extend(lookup_ids);
-                        }
-                    }
-
-                    if !matched_lookup_ids.is_empty() {
-                        let trigger_data = TriggerData::HypercoreAppend {
-                            feed_key: event.feed_key.clone(),
-                            index: event.index,
-                            data: event.data.clone(),
-                        };
-
-                        for trigger_config in
-                            self.lookup_maps.get_trigger_configs(&matched_lookup_ids)
-                        {
-                            dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
-                                data: trigger_data.clone(),
-                                config: trigger_config.clone(),
-                            }));
-                        }
-                    }
+                    dispatcher_commands.extend(self.handle_hypercore_event(event));
                 }
             }
 
@@ -1100,6 +1073,51 @@ impl TriggerManager {
         } else {
             Vec::new()
         }
+    }
+
+    fn handle_hypercore_event(
+        &self,
+        event: streams::hypercore_stream::HypercoreAppendEvent,
+    ) -> Vec<DispatcherCommand> {
+        let mut matched_lookup_ids: HashSet<LookupId> = HashSet::new();
+
+        {
+            let triggers_by_hypercore_lock = self
+                .lookup_maps
+                .triggers_by_hypercore_append
+                .read()
+                .unwrap();
+
+            if let Some(lookup_ids) = triggers_by_hypercore_lock.get(&Some(event.feed_key.clone()))
+            {
+                matched_lookup_ids.extend(lookup_ids);
+            }
+
+            if let Some(lookup_ids) = triggers_by_hypercore_lock.get(&None) {
+                matched_lookup_ids.extend(lookup_ids);
+            }
+        }
+
+        if matched_lookup_ids.is_empty() {
+            return Vec::new();
+        }
+
+        let trigger_data = TriggerData::HypercoreAppend {
+            feed_key: event.feed_key,
+            index: event.index,
+            data: event.data,
+        };
+
+        self.lookup_maps
+            .get_trigger_configs(&matched_lookup_ids)
+            .into_iter()
+            .map(|trigger_config| {
+                DispatcherCommand::Trigger(TriggerAction {
+                    data: trigger_data.clone(),
+                    config: trigger_config,
+                })
+            })
+            .collect()
     }
 
     /// Check if a collection pattern matches the actual collection
@@ -1227,5 +1245,90 @@ mod tests {
         assert_eq!(received_count, 6, "Expected to receive 6 triggers");
 
         ctx.kill();
+    }
+
+    #[test]
+    fn test_hypercore_append_dispatch() {
+        let config = Config::default();
+
+        let db_storage = WavsDb::new().unwrap();
+        let services = Services::new(db_storage);
+
+        let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
+        let (dispatcher_tx, _dispatcher_rx) = crossbeam::channel::unbounded::<DispatcherCommand>();
+
+        let workflow_id = WorkflowId::new("workflow-1").unwrap();
+        let feed_key = "feed-key-1".to_string();
+
+        let service = wavs_types::Service {
+            name: "hypercore-service".to_string(),
+            status: wavs_types::ServiceStatus::Active,
+            manager: ServiceManager::Evm {
+                chain: "evm:anvil".parse().unwrap(),
+                address: rand_address_evm(),
+            },
+            workflows: vec![(
+                workflow_id.clone(),
+                Workflow {
+                    trigger: Trigger::HypercoreAppend {
+                        feed_key: Some(feed_key.clone()),
+                    },
+                    component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
+                        [0; 32],
+                    ))),
+                    submit: Submit::Aggregator {
+                        url: "http://example.com".to_string(),
+                        component: Box::new(Component::new(ComponentSource::Digest(
+                            ComponentDigest::hash([0; 32]),
+                        ))),
+                        signature_kind: SignatureKind::evm_default(),
+                    },
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+        services.save(&service).unwrap();
+
+        let trigger_manager =
+            TriggerManager::new(&config, metrics, services, dispatcher_tx).unwrap();
+
+        let trigger_config = TriggerConfig {
+            service_id: service.id(),
+            workflow_id: workflow_id.clone(),
+            trigger: Trigger::HypercoreAppend {
+                feed_key: Some(feed_key.clone()),
+            },
+        };
+        trigger_manager
+            .lookup_maps
+            .add_trigger(trigger_config)
+            .unwrap();
+
+        let payload = b"hypercore-payload".to_vec();
+        let commands = trigger_manager.handle_hypercore_event(
+            streams::hypercore_stream::HypercoreAppendEvent {
+                feed_key: feed_key.clone(),
+                index: 0,
+                data: payload.clone(),
+            },
+        );
+
+        assert_eq!(commands.len(), 1);
+        match &commands[0] {
+            DispatcherCommand::Trigger(action) => match &action.data {
+                TriggerData::HypercoreAppend {
+                    feed_key: actual_feed_key,
+                    index,
+                    data,
+                } => {
+                    assert_eq!(actual_feed_key, &feed_key);
+                    assert_eq!(*index, 0);
+                    assert_eq!(data, &payload);
+                }
+                other => panic!("unexpected trigger data: {:?}", other),
+            },
+            other => panic!("unexpected dispatcher command: {:?}", other),
+        }
     }
 }

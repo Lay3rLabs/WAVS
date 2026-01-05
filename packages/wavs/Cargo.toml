@@ -62,6 +62,8 @@ slotmap = { workspace = true }
 async-stream = "0.3.6"
 rand = { workspace = true }
 hypercore = { workspace = true }
+hypercore-protocol = { workspace = true }
+tokio-util = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

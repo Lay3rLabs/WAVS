@@ -88,7 +88,7 @@ futures = "0.3.31"
 ctrlc = "3.5.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.89"
-hypercore = { version = "0.15.0", default-features = false, features = ["tokio", "replication", "sparse"] }
+hypercore = { version = "0.14.0", default-features = false, features = ["tokio", "replication", "sparse"] }
 
 # websocket
 tokio-tungstenite = { version = "0.28.0", features = [
@@ -183,6 +183,7 @@ bip39 = { version = "2.2.0", features = ["rand"] }
 sha2 = "0.10.9"
 const-hex = "1.16.0"
 ripemd = "0.1.3"
+hypercore-protocol = "0.6.1"
 
 # database
 lru = "0.16.1"
@@ -192,6 +193,7 @@ chrono = "0.4.42"
 cron = { version = "0.15.0", features = ["serde"] }
 uuid = { version = "1.18.1", features = ["v7", "serde"] }
 subtle = "2.6.1"
+tokio-util = { version = "0.7.17", features = ["compat"] }
 
 # utilis
 cfg-if = "1.0.3"

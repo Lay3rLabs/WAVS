@@ -130,6 +130,9 @@ impl TestRegistry {
                 EvmService::AtprotoEchoData => {
                     registry.register_evm_atproto_echo_data_test(chain, aggregator_endpoint);
                 }
+                EvmService::HypercoreEchoData => {
+                    registry.register_evm_hypercore_echo_data_test(chain, aggregator_endpoint);
+                }
                 EvmService::EchoDataSecondaryChain => {
                     let secondary = chains.secondary_evm().unwrap();
                     registry.register_evm_echo_data_secondary_chain_test(
@@ -351,6 +354,35 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text(
                             json!({"text": "atproto-echo"}).to_string(),
                         ))
+                        .build(),
+                )
+                .with_service_manager_chain(chain)
+                .build(),
+        )
+    }
+
+    fn register_evm_hypercore_echo_data_test(
+        &mut self,
+        chain: &ChainKey,
+        aggregator_endpoint: &str,
+    ) -> &mut Self {
+        self.register(
+            TestBuilder::new("evm_hypercore_echo_data")
+                .with_description("Tests the EchoData component handling Hypercore append triggers")
+                .add_workflow(
+                    WorkflowId::new("hypercore_echo_data").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_operator_component(OperatorComponent::EchoData)
+                        .with_aggregator_component(AggregatorComponent::SimpleAggregator)
+                        .with_trigger(TriggerDefinition::Existing(Trigger::HypercoreAppend {
+                            feed_key: Some("feed-key-1".to_string()),
+                        }))
+                        .with_submit(SubmitDefinition::Aggregator {
+                            url: aggregator_endpoint.to_string(),
+                            aggregator: Self::simple_aggregator(chain),
+                        })
+                        .with_input_data(InputData::Text("hypercore-echo".to_string()))
+                        .with_expected_output(ExpectedOutput::Text("hypercore-echo".to_string()))
                         .build(),
                 )
                 .with_service_manager_chain(chain)
