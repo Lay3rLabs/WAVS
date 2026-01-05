@@ -406,6 +406,13 @@ pub enum TriggerCommand {
         #[clap(long)]
         action: Option<AtProtoAction>,
     },
+
+    /// Set a Hypercore append trigger for a workflow
+    SetHypercoreAppend {
+        /// Optional feed key to filter on. If not provided, matches any feed.
+        #[clap(long)]
+        feed_key: Option<String>,
+    },
 }
 
 impl Command {

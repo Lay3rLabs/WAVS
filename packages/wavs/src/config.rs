@@ -45,6 +45,13 @@ pub struct Config {
     /// Default is `/var/wavs`
     #[schema(value_type = String)]
     pub data: PathBuf,
+    /// The directory to store hypercore data
+    /// Default is `/var/wavs/hypercore`
+    #[schema(value_type = String)]
+    pub hypercore_storage_dir: PathBuf,
+    /// Whether to overwrite hypercore storage on startup
+    /// Default is `false`
+    pub hypercore_overwrite: bool,
     /// The allowed cors origins
     /// Default is empty
     pub cors_allowed_origins: Vec<String>,
@@ -130,6 +137,8 @@ impl Default for Config {
             log_level: vec!["info".to_string()],
             host: "127.0.0.1".to_string(),
             data: PathBuf::from("/var/wavs"),
+            hypercore_storage_dir: PathBuf::from("/var/wavs/hypercore"),
+            hypercore_overwrite: false,
             cors_allowed_origins: Vec::new(),
             chains: Arc::new(RwLock::new(ChainConfigs::default())),
             wasm_lru_size: 20,

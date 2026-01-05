@@ -51,6 +51,7 @@ pub enum TriggerCommand {
         event_hashes: Vec<alloy_primitives::B256>,
     },
     StartListeningAtProto,
+    StartListeningHypercore,
     ManualTrigger(Box<TriggerAction>),
 }
 
@@ -104,6 +105,9 @@ impl TriggerCommand {
             },
             Trigger::AtProtoEvent { .. } => {
                 vec![Self::StartListeningAtProto]
+            }
+            Trigger::HypercoreAppend { .. } => {
+                vec![Self::StartListeningHypercore]
             }
             Trigger::Manual => Vec::new(),
         }
@@ -294,6 +298,7 @@ impl TriggerManager {
         let mut listening_chain_states: HashMap<ChainKey, StreamStartState> = HashMap::new();
         let mut cron_stream_state = StreamStartState::Waiting;
         let mut atproto_stream_state = StreamStartState::Waiting;
+        let mut hypercore_stream_state = StreamStartState::Waiting;
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
@@ -623,6 +628,59 @@ impl TriggerManager {
                                 }
                             }
                         }
+                        TriggerCommand::StartListeningHypercore => {
+                            #[cfg(feature = "dev")]
+                            if self.disable_networking {
+                                tracing::warn!(
+                                    "Networking is disabled, skipping hypercore stream start"
+                                );
+                                continue;
+                            }
+
+                            match hypercore_stream_state {
+                                StreamStartState::Connected => {
+                                    tracing::debug!("Hypercore stream already started, skipping");
+                                    continue;
+                                }
+                                StreamStartState::Connecting => {
+                                    tracing::debug!(
+                                        "Hypercore stream is already starting, skipping"
+                                    );
+                                    continue;
+                                }
+                                StreamStartState::Waiting => {
+                                    hypercore_stream_state = StreamStartState::Connecting;
+                                }
+                            }
+
+                            let hypercore_start_result =
+                                streams::hypercore_stream::start_hypercore_stream(
+                                    streams::hypercore_stream::HypercoreStreamConfig {
+                                        storage_dir: self.config.hypercore_storage_dir.clone(),
+                                        overwrite: self.config.hypercore_overwrite,
+                                    },
+                                    self.metrics.clone(),
+                                )
+                                .await;
+                            let was_connecting =
+                                matches!(hypercore_stream_state, StreamStartState::Connecting);
+                            match hypercore_start_result {
+                                Ok(hypercore_stream) => {
+                                    multiplexed_stream.push(hypercore_stream);
+                                    tracing::info!("Started hypercore stream");
+                                    if was_connecting {
+                                        hypercore_stream_state = StreamStartState::Connected;
+                                    }
+                                }
+                                Err(err) => {
+                                    tracing::error!("Failed to start hypercore stream: {:?}", err);
+                                    if was_connecting {
+                                        hypercore_stream_state = StreamStartState::Waiting;
+                                    }
+                                    continue;
+                                }
+                            }
+                        }
                     }
                 }
                 StreamTriggers::Evm {
@@ -931,6 +989,44 @@ impl TriggerManager {
                             event.repo,
                             action_enum
                         );
+                    }
+                }
+                StreamTriggers::Hypercore { event } => {
+                    let mut matched_lookup_ids: HashSet<LookupId> = HashSet::new();
+
+                    {
+                        let triggers_by_hypercore_lock = self
+                            .lookup_maps
+                            .triggers_by_hypercore_append
+                            .read()
+                            .unwrap();
+
+                        if let Some(lookup_ids) =
+                            triggers_by_hypercore_lock.get(&Some(event.feed_key.clone()))
+                        {
+                            matched_lookup_ids.extend(lookup_ids);
+                        }
+
+                        if let Some(lookup_ids) = triggers_by_hypercore_lock.get(&None) {
+                            matched_lookup_ids.extend(lookup_ids);
+                        }
+                    }
+
+                    if !matched_lookup_ids.is_empty() {
+                        let trigger_data = TriggerData::HypercoreAppend {
+                            feed_key: event.feed_key.clone(),
+                            index: event.index,
+                            data: event.data.clone(),
+                        };
+
+                        for trigger_config in
+                            self.lookup_maps.get_trigger_configs(&matched_lookup_ids)
+                        {
+                            dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
+                                data: trigger_data.clone(),
+                                config: trigger_config.clone(),
+                            }));
+                        }
                     }
                 }
             }

@@ -88,6 +88,7 @@ futures = "0.3.31"
 ctrlc = "3.5.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.89"
+hypercore = { version = "0.15.0", default-features = false, features = ["tokio", "replication", "sparse"] }
 
 # websocket
 tokio-tungstenite = { version = "0.28.0", features = [

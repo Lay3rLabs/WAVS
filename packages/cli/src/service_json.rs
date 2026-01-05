@@ -108,6 +108,16 @@ impl ServiceJsonExt for ServiceBuilder {
                             ));
                         }
                     }
+                    Trigger::HypercoreAppend { feed_key } => {
+                        if let Some(key) = feed_key {
+                            if key.trim().is_empty() {
+                                errors.push(format!(
+                                    "Workflow '{}' has an empty feed_key in Hypercore trigger",
+                                    workflow_id
+                                ));
+                            }
+                        }
+                    }
                     Trigger::Manual | Trigger::AtProtoEvent { .. } => {}
                 },
             }

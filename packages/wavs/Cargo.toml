@@ -61,6 +61,7 @@ tokio-tungstenite = { workspace = true }
 slotmap = { workspace = true }
 async-stream = "0.3.6"
 rand = { workspace = true }
+hypercore = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

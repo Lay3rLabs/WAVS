@@ -425,6 +425,29 @@ async fn run_test(
 
                 vec![trigger_id]
             }
+            Trigger::HypercoreAppend { feed_key } => {
+                let trigger_id = TriggerId::new(1340);
+                let payload = input_bytes.clone().unwrap_or_default();
+
+                let hypercore_data = TriggerData::HypercoreAppend {
+                    feed_key: feed_key.clone().unwrap_or_else(|| "feed-key-1".to_string()),
+                    index: 0,
+                    data: payload,
+                };
+
+                let req = SimulatedTriggerRequest {
+                    service_id: service_deployment.service.id(),
+                    workflow_id: first_workflow_id.clone(),
+                    trigger: trigger.clone(),
+                    data: hypercore_data,
+                    count: 1,
+                    wait_for_completion: true,
+                };
+
+                clients.http_client.simulate_trigger(req).await?;
+
+                vec![trigger_id]
+            }
             Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
         };
 

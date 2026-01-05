@@ -161,6 +161,14 @@ impl std::fmt::Display for WorkflowTriggerResult {
                     writeln!(f, "    Action: None")?;
                 }
             }
+            Trigger::HypercoreAppend { feed_key } => {
+                writeln!(f, "  Trigger Type: Hypercore Append")?;
+                if let Some(key) = feed_key {
+                    writeln!(f, "    Feed Key: {}", key)?;
+                } else {
+                    writeln!(f, "    Feed Key: Any")?;
+                }
+            }
         }
 
         writeln!(f, "  Updated:     {}", self.file_path.display())
