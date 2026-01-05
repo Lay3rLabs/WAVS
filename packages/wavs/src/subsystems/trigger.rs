@@ -261,6 +261,17 @@ impl TriggerManager {
                 }
             }
 
+            #[cfg(feature = "rerun")]
+            if let DispatcherCommand::Trigger(action) = &command {
+                wavs_rerun::log_packet_flow(
+                    wavs_rerun::NODE_TRIGGER,
+                    wavs_rerun::NODE_DISPATCHER,
+                    &action.config.workflow_id.to_string(),
+                    &action.config.service_id.to_string(),
+                    None,
+                );
+            }
+
             let start = std::time::Instant::now();
             self.trigger_to_dispatcher_tx
                 .send(command)

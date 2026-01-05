@@ -238,15 +238,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
                             #[cfg(feature = "rerun")]
                             wavs_rerun::log_packet_flow(
-                                wavs_rerun::NODE_TRIGGER,
-                                wavs_rerun::NODE_DISPATCHER,
-                                &action.config.workflow_id.to_string(),
-                                &action.config.service_id.to_string(),
-                                None,
-                            );
-
-                            #[cfg(feature = "rerun")]
-                            wavs_rerun::log_packet_flow(
                                 wavs_rerun::NODE_DISPATCHER,
                                 wavs_rerun::NODE_ENGINE,
                                 &action.config.workflow_id.to_string(),

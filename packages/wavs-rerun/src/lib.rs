@@ -34,7 +34,7 @@ const POS_SUBMISSION: [f32; 2] = [400.0, 0.0];
 const POS_AGGREGATOR: [f32; 2] = [600.0, 0.0];
 const POS_CONTRACT: [f32; 2] = [800.0, 0.0];
 
-/// Get position for an operator node (positioned in arc below Aggregator)
+/// get position for an operator node (positioned in arc above Aggregator)
 fn operator_position(operator_id: &str) -> [f32; 2] {
     let operators = SEEN_OPERATORS.get_or_init(|| Mutex::new(HashSet::new()));
     let mut set = operators.lock();
@@ -45,13 +45,12 @@ fn operator_position(operator_id: &str) -> [f32; 2] {
         set.insert(operator_id.to_string());
         idx
     };
-    // Position in arc below Aggregator (600, 0)
+    // position in arc above Aggregator (600, 0)
     let angle = std::f32::consts::PI * (0.25 + 0.5 * index as f32 / 4.0);
     let radius = 120.0;
     [500.0 + radius * angle.cos(), -radius * angle.sin()]
 }
 
-/// Get position for a node
 fn node_position(node: &str) -> [f32; 2] {
     match node {
         NODE_TRIGGER => POS_TRIGGER,
@@ -60,19 +59,19 @@ fn node_position(node: &str) -> [f32; 2] {
         NODE_SUBMISSION => POS_SUBMISSION,
         NODE_AGGREGATOR => POS_AGGREGATOR,
         NODE_CONTRACT => POS_CONTRACT,
-        _ if node.starts_with("operator_") => operator_position(&node[9..]),
+        _ if node.starts_with("operator_") => operator_position(&node[9..]), // strip operator_ prefix
         _ => [0.0, 0.0],
     }
 }
 
-/// Initialize Rerun visualization with the network topology.
-/// Start viewer first with: rerun --serve
+/// Initialize Rerun visualization with the network topology
+/// (start viewer first using: rerun)
 pub fn init_rerun(app_name: &str) -> anyhow::Result<()> {
     let rec = rerun::RecordingStreamBuilder::new(app_name)
         .recording_id("wavs-network-viz")
         .connect_grpc()?;
 
-    // Log static network topology
+    // draw static network topology
     log_network_topology(&rec)?;
 
     RECORDER.get_or_init(|| RwLock::new(Some(rec)));
@@ -91,12 +90,12 @@ fn log_network_topology(rec: &RecordingStream) -> anyhow::Result<()> {
     ];
 
     let colors = vec![
-        Color::from_rgb(66, 135, 245), // Blue - Trigger
-        Color::from_rgb(245, 166, 35), // Orange - Dispatcher
-        Color::from_rgb(126, 211, 33), // Green - Engine
-        Color::from_rgb(208, 2, 27),   // Red - Submission
-        Color::from_rgb(144, 19, 254), // Purple - Aggregator
-        Color::from_rgb(80, 80, 80),   // Gray - Contract
+        Color::from_rgb(66, 135, 245), // blue - Trigger
+        Color::from_rgb(245, 166, 35), // orange - Dispatcher
+        Color::from_rgb(126, 211, 33), // green - Engine
+        Color::from_rgb(208, 2, 27),   // red - Submission
+        Color::from_rgb(144, 19, 254), // purple - Aggregator
+        Color::from_rgb(80, 80, 80),   // gray - Contract
     ];
 
     let labels = vec![
@@ -108,7 +107,7 @@ fn log_network_topology(rec: &RecordingStream) -> anyhow::Result<()> {
         "Contract",
     ];
 
-    // Log static nodes as large points
+    // record static nodes as large points
     rec.log_static(
         "network/nodes",
         &Points2D::new(positions)
@@ -117,13 +116,12 @@ fn log_network_topology(rec: &RecordingStream) -> anyhow::Result<()> {
             .with_radii([15.0]),
     )?;
 
-    // Log static connection lines (faint)
+    // record static connection lines
     let connections: Vec<Vec<[f32; 2]>> = vec![
         vec![POS_TRIGGER, POS_DISPATCHER],
         vec![POS_DISPATCHER, POS_ENGINE],
         vec![POS_ENGINE, POS_DISPATCHER],
         vec![POS_DISPATCHER, POS_SUBMISSION],
-        vec![POS_SUBMISSION, POS_AGGREGATOR],
         vec![POS_AGGREGATOR, POS_CONTRACT],
     ];
 
@@ -157,7 +155,7 @@ pub fn log_operator_node(operator_id: &str) {
     if let Err(e) = rec.log(
         format!("network/operators/{}", operator_id),
         &Points2D::new([pos])
-            .with_colors([Color::from_rgb(255, 165, 0)]) // Orange for operators
+            .with_colors([Color::from_rgb(255, 165, 0)]) // orange for operators
             .with_labels([label])
             .with_radii([12.0]),
     ) {

@@ -13,12 +13,11 @@ evm_middleware_type = "eigenlayer" # or "poa"
 # mode = "all_eth"
 
 # Run a specific test
-mode = { "isolated" = [{ evm = "multiple_services_with_different_aggregators" }] }
+mode = { "isolated" = [{ evm = "multi_workflow" }] }
 
 # Run a few specific tests
 # mode = {"isolated" = [
 #     {evm = "echo_data"},
-#     {evm = "echo_data_aggregator"},
 #     {cosmos = "permissions"},
 # ]}
 
