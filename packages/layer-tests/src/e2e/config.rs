@@ -146,6 +146,8 @@ impl TestMnemonics {
 pub const MULTI_OPERATOR_COUNT: usize = 3;
 /// Base port for WAVS HTTP servers
 pub const WAVS_BASE_PORT: u32 = 8000;
+/// Base port for WAVS P2P servers
+pub const P2P_BASE_PORT: u16 = 9000;
 
 impl From<TestConfig> for Configs {
     fn from(test_config: TestConfig) -> Self {
