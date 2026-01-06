@@ -114,6 +114,11 @@ impl AppHandles {
     }
 
     pub fn try_join(self) -> Vec<std::thread::Result<()>> {
-        vec![self.wavs_handle.join()]
+        let mut results = Vec::new();
+        for handle in self.wavs_handles {
+            results.push(handle.join());
+        }
+
+        results
     }
 }

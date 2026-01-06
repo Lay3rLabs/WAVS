@@ -315,8 +315,8 @@ impl ServiceManagers {
 
             // Calculate required operators for quorum (2/3 of total)
             let required_to_pass = if test.multi_operator {
-                // For 2/3 quorum with 3 operators, we need 2 signatures
-                ((num_operators as u64) * 2 + 2) / 3 // Ceiling division for 2/3
+                // For 2/3 quorum
+                ((num_operators as u64) * 2).div_ceil(3)
             } else {
                 1
             };
