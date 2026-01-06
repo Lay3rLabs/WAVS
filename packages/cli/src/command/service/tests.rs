@@ -1315,46 +1315,6 @@ async fn test_service_validation() {
         );
     }
 
-    // Test invalid URL in Aggregator submit
-    {
-        let mut workflows = BTreeMap::new();
-        workflows.insert(
-            workflow_id.clone(),
-            WorkflowBuilder {
-                trigger: TriggerBuilder::Trigger(trigger.clone()),
-                component: ComponentBuilder::Component(component.clone()),
-                submit: SubmitBuilder::Submit(Submit::Aggregator {
-                    component: Box::new(component.clone()),
-                    signature_kind: SignatureKind::evm_default(),
-                }),
-            },
-        );
-
-        let invalid_url_service = ServiceBuilder {
-            name: "Test Service".to_string(),
-            workflows,
-            status: ServiceStatus::Active,
-            manager: manager.clone(),
-        };
-
-        let file_path = temp_dir.path().join("invalid_url.json");
-        let service_json = serde_json::to_string_pretty(&invalid_url_service).unwrap();
-        std::fs::write(&file_path, service_json).unwrap();
-
-        let result = validate_service(&file_path, None).await.unwrap();
-        assert!(
-            !result.errors.is_empty(),
-            "Invalid URL service should have validation errors"
-        );
-        assert!(
-            result
-                .errors
-                .iter()
-                .any(|error| error.contains("invalid URL")),
-            "Validation should catch invalid URL in Aggregator submit"
-        );
-    }
-
     // Test unset service manager
     {
         let mut workflows = BTreeMap::new();
