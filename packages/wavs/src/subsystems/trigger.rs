@@ -639,10 +639,10 @@ impl TriggerManager {
                             if self.config.hypercore_replication_endpoint.is_none()
                                 || self.config.hypercore_replication_feed_key.is_none()
                             {
-                                return Err(TriggerError::Hypercore(
-                                    "hypercore replication endpoint and feed key are required"
-                                        .to_string(),
-                                ));
+                                tracing::warn!(
+                                    "Hypercore replication endpoint and feed key are required, skipping hypercore stream start"
+                                );
+                                continue;
                             }
 
                             match hypercore_stream_state {
