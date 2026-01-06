@@ -1,3 +1,9 @@
+//! Hypercore trigger stream for WAVS.
+//!
+//! Opens a hypercore, subscribes to append events, fetches new blocks, and
+//! emits `StreamTriggers::Hypercore`. Requires a replication endpoint and
+//! spawns the replication protocol to ingest distributed data.
+
 use futures::Stream;
 use hypercore::{replication::Event, Hypercore, HypercoreBuilder, PartialKeypair, Storage};
 use std::{path::PathBuf, pin::Pin, sync::Arc};
@@ -26,7 +32,6 @@ pub struct HypercoreAppendEvent {
 #[derive(Debug, Clone)]
 pub struct HypercoreStreamConfig {
     pub storage_dir: PathBuf,
-    pub overwrite: bool,
     pub replication_endpoint: Option<String>,
     pub replication_feed_key: Option<String>,
 }
@@ -36,6 +41,12 @@ pub async fn start_hypercore_stream(
     metrics: TriggerMetrics,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
+    if config.replication_endpoint.is_none() {
+        return Err(TriggerError::Hypercore(
+            "hypercore replication endpoint is required".to_string(),
+        ));
+    }
+
     std::fs::create_dir_all(&config.storage_dir).map_err(|err| {
         TriggerError::Hypercore(format!(
             "create storage dir {}: {}",
@@ -44,7 +55,7 @@ pub async fn start_hypercore_stream(
         ))
     })?;
 
-    let storage = Storage::new_disk(&config.storage_dir, config.overwrite)
+    let storage = Storage::new_disk(&config.storage_dir, false)
         .await
         .map_err(|err| TriggerError::Hypercore(format!("open storage: {err:?}")))?;
 
@@ -59,7 +70,7 @@ pub async fn start_hypercore_stream(
         core.event_subscribe()
     };
 
-    let stream = async_stream::stream! {
+    let event_stream = async_stream::stream! {
         loop {
             match receiver.recv().await {
                 Ok(event) => match event {
@@ -113,59 +124,56 @@ pub async fn start_hypercore_stream(
         }
     };
 
-    if let Some((endpoint, feed_key_bytes)) = replication_target {
-        let replication_core = Arc::clone(&core);
-        let stream = connect_replication_endpoint(&endpoint).await?.compat();
-        tokio::spawn(async move {
-            if let Err(err) =
-                hypercore_protocol::run_protocol(stream, true, replication_core, feed_key_bytes)
-                    .await
-            {
-                tracing::warn!("Hypercore protocol exited: {err:?}");
-            }
-        });
-    }
+    let (endpoint, feed_key_bytes) = replication_target;
+    let replication_core = Arc::clone(&core);
+    let replication_stream = connect_replication_endpoint(&endpoint).await?.compat();
+    tokio::spawn(async move {
+        if let Err(err) = hypercore_protocol::run_protocol(
+            replication_stream,
+            true,
+            replication_core,
+            feed_key_bytes,
+        )
+        .await
+        {
+            tracing::warn!("Hypercore protocol exited: {err:?}");
+        }
+    });
 
-    Ok(Box::pin(stream))
+    Ok(Box::pin(event_stream))
 }
 
 async fn build_core_with_replication(
     storage: Storage,
     config: &HypercoreStreamConfig,
-) -> Result<(Hypercore, String, Option<(String, [u8; 32])>), TriggerError> {
-    if let Some(endpoint) = config.replication_endpoint.clone() {
-        let feed_key_hex = config.replication_feed_key.clone().ok_or_else(|| {
-            TriggerError::Hypercore(
-                "hypercore replication feed key is required when endpoint is set".to_string(),
-            )
-        })?;
-        let feed_key_bytes = const_hex::decode(feed_key_hex.trim())
-            .map_err(|err| TriggerError::Hypercore(format!("invalid feed key hex: {err:?}")))?;
-        let feed_key: [u8; 32] = feed_key_bytes
-            .as_slice()
-            .try_into()
-            .map_err(|_| TriggerError::Hypercore("invalid feed key length".to_string()))?;
-        let public = hypercore::VerifyingKey::from_bytes(&feed_key)
-            .map_err(|err| TriggerError::Hypercore(format!("invalid feed key: {err:?}")))?;
+) -> Result<(Hypercore, String, (String, [u8; 32])), TriggerError> {
+    let endpoint = config.replication_endpoint.clone().ok_or_else(|| {
+        TriggerError::Hypercore("hypercore replication endpoint is required".to_string())
+    })?;
+    let feed_key_hex = config.replication_feed_key.clone().ok_or_else(|| {
+        TriggerError::Hypercore(
+            "hypercore replication feed key is required when endpoint is set".to_string(),
+        )
+    })?;
+    let feed_key_bytes = const_hex::decode(feed_key_hex.trim())
+        .map_err(|err| TriggerError::Hypercore(format!("invalid feed key hex: {err:?}")))?;
+    let feed_key: [u8; 32] = feed_key_bytes
+        .as_slice()
+        .try_into()
+        .map_err(|_| TriggerError::Hypercore("invalid feed key length".to_string()))?;
+    let public = hypercore::VerifyingKey::from_bytes(&feed_key)
+        .map_err(|err| TriggerError::Hypercore(format!("invalid feed key: {err:?}")))?;
 
-        let core = HypercoreBuilder::new(storage)
-            .key_pair(PartialKeypair {
-                public,
-                secret: None,
-            })
-            .build()
-            .await
-            .map_err(|err| TriggerError::Hypercore(format!("build hypercore: {err:?}")))?;
+    let core = HypercoreBuilder::new(storage)
+        .key_pair(PartialKeypair {
+            public,
+            secret: None,
+        })
+        .build()
+        .await
+        .map_err(|err| TriggerError::Hypercore(format!("build hypercore: {err:?}")))?;
 
-        Ok((core, feed_key_hex, Some((endpoint, feed_key))))
-    } else {
-        let core = HypercoreBuilder::new(storage)
-            .build()
-            .await
-            .map_err(|err| TriggerError::Hypercore(format!("build hypercore: {err:?}")))?;
-        let feed_key = const_hex::encode(core.key_pair().public.to_bytes());
-        Ok((core, feed_key, None))
-    }
+    Ok((core, feed_key_hex, (endpoint, feed_key)))
 }
 async fn connect_replication_endpoint(endpoint: &str) -> Result<ReplicationStream, TriggerError> {
     if let Some(path) = endpoint.strip_prefix("unix:") {

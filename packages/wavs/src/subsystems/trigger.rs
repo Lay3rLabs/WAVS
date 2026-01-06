@@ -657,7 +657,6 @@ impl TriggerManager {
                                 streams::hypercore_stream::start_hypercore_stream(
                                     streams::hypercore_stream::HypercoreStreamConfig {
                                         storage_dir: self.config.hypercore_storage_dir.clone(),
-                                        overwrite: self.config.hypercore_overwrite,
                                         replication_endpoint: self
                                             .config
                                             .hypercore_replication_endpoint

@@ -1,3 +1,8 @@
+//! Hypercore replication wire protocol over an async stream.
+//!
+//! This module handles low-level protocol messages (requests, proofs, blocks) to
+//! sync a `Hypercore` with a remote peer.
+
 use anyhow::{Context, Result};
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::StreamExt;

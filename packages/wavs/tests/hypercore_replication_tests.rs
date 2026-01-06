@@ -88,7 +88,6 @@ async fn hypercore_stream_reads_external_writer() {
     let mut stream = wavs::subsystems::trigger::streams::hypercore_stream::start_hypercore_stream(
         HypercoreStreamConfig {
             storage_dir: reader_dir.path().to_path_buf(),
-            overwrite: true,
             replication_endpoint: Some(socket_endpoint.clone()),
             replication_feed_key: Some(feed_key),
         },
