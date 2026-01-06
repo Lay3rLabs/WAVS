@@ -66,7 +66,7 @@ impl<T> WavsSigner for T where T: WavsSignable {}
 impl WavsSignature {
     pub fn evm_signer_address<T: WavsSignable + ?Sized>(
         &self,
-        payload: &T,
+        signable: &T,
     ) -> std::result::Result<alloy_primitives::Address, SigningError> {
         match self.kind.algorithm {
             SignatureAlgorithm::Secp256k1 => {
@@ -76,14 +76,14 @@ impl WavsSignature {
                 match self.kind.prefix {
                     Some(SignaturePrefix::Eip191) => signature
                         .recover_address_from_prehash(
-                            &payload
+                            &signable
                                 .prefix_eip191_hash()
                                 .map_err(SigningError::DataHash)?,
                         )
                         .map_err(SigningError::RecoverSignerAddress),
                     None => signature
                         .recover_address_from_prehash(
-                            &payload.unprefixed_hash().map_err(SigningError::DataHash)?,
+                            &signable.unprefixed_hash().map_err(SigningError::DataHash)?,
                         )
                         .map_err(SigningError::RecoverSignerAddress),
                 }

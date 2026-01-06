@@ -28,7 +28,7 @@ pub fn mock_aggregator(
 
     assert_eq!(aggregator.metrics.get_broadcast_count(), 0);
     assert_eq!(aggregator.metrics.get_receive_count(), 0);
-    assert_eq!(aggregator.metrics.get_execute_count(), 0);
+    assert_eq!(aggregator.metrics.get_submit_count(), 0);
 
     std::thread::spawn({
         let ctx = ctx.clone();
@@ -54,11 +54,47 @@ pub fn wait_for_aggregator_broadcasts(
         }
         sleep(AGGREGATOR_POLL);
     }
-    Err(WaitError::Timeout)
+    Err(WaitError::TimeoutBroadcast)
+}
+
+pub fn wait_for_aggregator_receives(
+    aggregator: &Aggregator,
+    n: u64,
+    duration: Option<Duration>,
+) -> Result<(), WaitError> {
+    let end = Instant::now() + duration.unwrap_or(AGGREGATOR_TIMEOUT);
+    while Instant::now() < end {
+        if aggregator.metrics.get_receive_count() >= n {
+            return Ok(());
+        }
+        sleep(AGGREGATOR_POLL);
+    }
+    Err(WaitError::TimeoutReceive)
+}
+
+pub fn wait_for_aggregator_submissions(
+    aggregator: &Aggregator,
+    n: u64,
+    duration: Option<Duration>,
+) -> Result<(), WaitError> {
+    let end = Instant::now() + duration.unwrap_or(AGGREGATOR_TIMEOUT);
+    while Instant::now() < end {
+        if aggregator.metrics.get_submit_count() >= n {
+            return Ok(());
+        }
+        sleep(AGGREGATOR_POLL);
+    }
+    Err(WaitError::TimeoutSubmit)
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum WaitError {
-    #[error("Waiting timed out")]
-    Timeout,
+    #[error("Broadcast timed out")]
+    TimeoutBroadcast,
+    #[error("Receive timed out")]
+    TimeoutReceive,
+    #[error("Execute timed out")]
+    TimeoutExecute,
+    #[error("Submit timed out")]
+    TimeoutSubmit,
 }

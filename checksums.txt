@@ -7,6 +7,6 @@
 74859d20ef1624be300bc641a24d8823f1b55a3038c1a6654e08713279e45773  ./examples/build/components/example_types.wasm
 f4e5eb8e9773fefa4e182412ed655a7bd789e9882163687bbf5da34acb3a68c0  ./examples/build/components/kv_store.wasm
 4d0391997d2095613e9052ca66ef8b5429d8f5425455454f04bc90a90388fb5f  ./examples/build/components/permissions.wasm
-685106be0e1689bc7925975b81b50f402b9e828cb66cc9d6e4388284db1ace8c  ./examples/build/components/simple_aggregator.wasm
+ec07dc357b85c3e39ae4d219617751648837939f20b5851b69202e85de7f65a2  ./examples/build/components/simple_aggregator.wasm
 a4e4277e8f310cb423e1156d05d9e515ce11dd838941c2064f55624ecfa14ce6  ./examples/build/components/square.wasm
 5dff96dcd7fcb2302dfa83bc4a27a8fee739cc8f23797fef095c06be98d7078a  ./examples/build/components/timer_aggregator.wasm

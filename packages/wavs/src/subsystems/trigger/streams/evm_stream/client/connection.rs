@@ -553,15 +553,13 @@ pub enum ConnectionError {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        init_tracing_tests, subsystems::trigger::streams::evm_stream::client::channels::Channels,
-    };
+    use crate::subsystems::trigger::streams::evm_stream::client::channels::Channels;
 
     use super::*;
     use alloy_node_bindings::Anvil;
 
     use tokio::time::{timeout, Duration};
-    use utils::test_utils::anvil::safe_spawn_anvil;
+    use utils::{init_tracing_tests, test_utils::anvil::safe_spawn_anvil};
 
     #[tokio::test]
     async fn connection_works() {

@@ -11,8 +11,8 @@ use wavs_engine::{
     worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{
-    AggregatorAction, AggregatorInput, ChainConfigs, ComponentDigest, ComponentSource, Service,
-    ServiceId, TriggerAction, WasmResponse, WorkflowId,
+    AggregatorAction, AggregatorInput, ChainConfigs, ComponentDigest, ComponentSource, EventId,
+    Service, ServiceId, TriggerAction, WasmResponse, WorkflowId,
 };
 
 use utils::storage::CAStorage;
@@ -102,7 +102,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         #[cfg(feature = "dev")]
         if std::env::var("WAVS_FORCE_ENGINE_ERROR_XXX").is_ok() {
             self.metrics.total_errors.add(1, &[]);
-            self.metrics.executions_failed.add(1, &[]);
+            self.metrics.operator_executions_failed.add(1, &[]);
             return Err(EngineError::Compile(anyhow::anyhow!(
                 "Forced engine error for testing alerts"
             )));
@@ -160,7 +160,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let duration = start_time.elapsed().as_secs_f64();
         let fuel_consumed = initial_fuel.saturating_sub(final_fuel);
 
-        self.metrics.record_execution(
+        self.metrics.record_operator_execution(
             duration,
             fuel_consumed,
             &service_id.to_string(),
@@ -174,7 +174,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             duration_seconds = duration,
             fuel_consumed = fuel_consumed,
             success = results.is_ok(),
-            "WASM execution completed"
+            "WASM operator execution completed"
         );
 
         results.map_err(|e| e.into())
@@ -190,6 +190,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         service: Service,
         trigger_action: TriggerAction,
         operator_response: WasmResponse,
+        event_id: EventId,
     ) -> Result<Vec<AggregatorAction>, EngineError> {
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
@@ -198,7 +199,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             mut instance_deps,
             input,
         } = match self
-            .get_aggregator_deps(service, trigger_action, operator_response)
+            .get_aggregator_deps(service, trigger_action, operator_response, event_id)
             .await?
         {
             Some(deps) => deps,
@@ -213,12 +214,13 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let results =
             wavs_engine::worlds::aggregator::execute::execute_input(&mut instance_deps, input)
                 .await;
+
         let final_fuel = instance_deps.store.get_fuel().unwrap_or(0);
 
         let duration = start_time.elapsed().as_secs_f64();
         let fuel_consumed = initial_fuel.saturating_sub(final_fuel);
 
-        self.metrics.record_execution(
+        self.metrics.record_aggregator_execution(
             duration,
             fuel_consumed,
             &service_id.to_string(),
@@ -232,18 +234,15 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             duration_seconds = duration,
             fuel_consumed = fuel_consumed,
             success = results.is_ok(),
-            "WASM execution completed"
+            "WASM aggregator execution completed"
         );
 
         let results = results?;
 
-        Ok(results
+        results
             .into_iter()
-            .map(|r| {
-                r.try_into()
-                    .map_err(|e| EngineError::ConvertAggregatorAction(e))
-            })
-            .collect::<Result<_, _>>()?)
+            .map(|r| r.try_into().map_err(EngineError::ConvertAggregatorAction))
+            .collect::<Result<_, _>>()
     }
 
     #[instrument(
@@ -255,6 +254,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         service: Service,
         trigger_action: TriggerAction,
         operator_response: WasmResponse,
+        event_id: EventId,
     ) -> Result<Vec<AggregatorAction>, EngineError> {
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
@@ -263,7 +263,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             mut instance_deps,
             input,
         } = match self
-            .get_aggregator_deps(service, trigger_action, operator_response)
+            .get_aggregator_deps(service, trigger_action, operator_response, event_id)
             .await?
         {
             Some(deps) => deps,
@@ -285,7 +285,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let duration = start_time.elapsed().as_secs_f64();
         let fuel_consumed = initial_fuel.saturating_sub(final_fuel);
 
-        self.metrics.record_execution(
+        self.metrics.record_aggregator_execution(
             duration,
             fuel_consumed,
             &service_id.to_string(),
@@ -299,18 +299,15 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             duration_seconds = duration,
             fuel_consumed = fuel_consumed,
             success = results.is_ok(),
-            "WASM execution completed"
+            "WASM aggregator timer callback execution completed"
         );
 
         let results = results?;
 
-        Ok(results
+        results
             .into_iter()
-            .map(|r| {
-                r.try_into()
-                    .map_err(|e| EngineError::ConvertAggregatorAction(e))
-            })
-            .collect::<Result<_, _>>()?)
+            .map(|r| r.try_into().map_err(EngineError::ConvertAggregatorAction))
+            .collect::<Result<_, _>>()
     }
 
     #[instrument(
@@ -323,6 +320,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         trigger_action: TriggerAction,
         operator_response: WasmResponse,
         tx_result: Result<AnyTxHash, String>,
+        event_id: EventId,
     ) -> Result<(), EngineError> {
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
@@ -331,7 +329,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             mut instance_deps,
             input,
         } = match self
-            .get_aggregator_deps(service, trigger_action, operator_response)
+            .get_aggregator_deps(service, trigger_action, operator_response, event_id)
             .await?
         {
             Some(deps) => deps,
@@ -354,7 +352,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let duration = start_time.elapsed().as_secs_f64();
         let fuel_consumed = initial_fuel.saturating_sub(final_fuel);
 
-        self.metrics.record_execution(
+        self.metrics.record_aggregator_execution(
             duration,
             fuel_consumed,
             &service_id.to_string(),
@@ -368,7 +366,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             duration_seconds = duration,
             fuel_consumed = fuel_consumed,
             success = result.is_ok(),
-            "WASM execution completed"
+            "WASM aggregator submit callback execution completed"
         );
 
         result.map_err(|e| e.into())
@@ -380,11 +378,12 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         service: Service,
         trigger_action: TriggerAction,
         operator_response: WasmResponse,
+        event_id: EventId,
     ) -> Result<Option<AggregatorDeps>, EngineError> {
         #[cfg(feature = "dev")]
         if std::env::var("WAVS_FORCE_ENGINE_ERROR_XXX").is_ok() {
             self.metrics.total_errors.add(1, &[]);
-            self.metrics.executions_failed.add(1, &[]);
+            self.metrics.aggregator_executions_failed.add(1, &[]);
             return Err(EngineError::Compile(anyhow::anyhow!(
                 "Forced engine error for testing alerts"
             )));
@@ -402,7 +401,8 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
 
         let digest = match &workflow.submit {
             wavs_types::Submit::Aggregator { component, .. } => component.source.digest().clone(),
-            _ => {
+            wavs_types::Submit::None => {
+                tracing::info!("Submit is None for service_id: {}", service.id(),);
                 return Ok(None);
             }
         };
@@ -415,9 +415,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
             workflow_id: trigger_action.config.workflow_id.clone(),
             component,
-            data: wavs_engine::worlds::instance::InstanceData::new_operator(
-                trigger_action.data.clone(),
-            ),
+            data: wavs_engine::worlds::instance::InstanceData::new_aggregator(event_id),
             engine: &self.engine.wasm_engine,
             data_dir: self
                 .engine

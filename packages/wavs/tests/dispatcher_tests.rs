@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use alloy_sol_types::SolValue;
 use example_types::{SquareRequest, SquareResponse};
+use utils::init_tracing_tests;
 use utils::test_utils::test_contracts::ISimpleSubmit::DataWithId;
 use utils::{
     context::AppContext,
@@ -12,7 +13,6 @@ use utils::{
     },
 };
 use wavs::dispatcher::DispatcherCommand;
-use wavs::init_tracing_tests;
 use wavs_types::{
     Component, ComponentSource, Service, ServiceManager, ServiceStatus, SignatureKind, Submit,
     Workflow, WorkflowId,

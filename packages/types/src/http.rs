@@ -1,4 +1,3 @@
-pub mod aggregator;
 use std::collections::HashMap;
 
 use super::Service;

@@ -1,6 +1,5 @@
 use wavs_types::{
-    Envelope, EventId, EventIdSalt, Service, ServiceId, TriggerAction, WasmResponse, WavsSignature,
-    WorkflowId,
+    EventId, EventIdSalt, Service, ServiceId, TriggerAction, WasmResponse, WorkflowId,
 };
 
 /// The data we send from engine to submission, after operator component execution
@@ -27,7 +26,7 @@ impl SubmissionRequest {
             Some(salt) => EventId::new(
                 self.service_id(),
                 self.workflow_id(),
-                EventIdSalt::WasmResponse(&salt),
+                EventIdSalt::WasmResponse(salt),
             ),
             None => EventId::new(
                 self.service_id(),
@@ -44,24 +43,4 @@ impl SubmissionRequest {
 pub struct SubmissionRequestDebug {
     // Do not submit to aggregator, even if it's defined
     pub do_not_submit_aggregator: bool,
-}
-
-// The data we send from submission to dispatcher
-#[derive(Clone, Debug)]
-pub struct Submission {
-    pub trigger_action: TriggerAction,
-    pub operator_response: WasmResponse,
-    pub event_id: EventId,
-    pub envelope: Envelope,
-    pub envelope_signature: WavsSignature,
-}
-
-impl Submission {
-    pub fn service_id(&self) -> &ServiceId {
-        &self.trigger_action.config.service_id
-    }
-
-    pub fn workflow_id(&self) -> &WorkflowId {
-        &self.trigger_action.config.workflow_id
-    }
 }

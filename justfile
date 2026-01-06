@@ -387,4 +387,4 @@ ts-bindings:
     cargo run --bin ts
 
 debug:
-    cargo test --package wavs --features dev --test aggregator_tests single
+    cargo test --package wavs --features dev --test aggregator_tests send_to_self

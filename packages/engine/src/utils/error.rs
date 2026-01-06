@@ -56,4 +56,10 @@ pub enum EngineError {
 
     #[error("When returning multiple responses, they must all have an event id salt")]
     MissingEventIdSalt,
+
+    #[error("Mismatched instance data and logger. Data: {data}, Logger: {logger}")]
+    MismatchedInstanceDataAndLogger {
+        data: &'static str,
+        logger: &'static str,
+    },
 }

@@ -7,8 +7,8 @@ cfg_if::cfg_if! {
 
 pub use crate::solidity_types::Envelope;
 use crate::{
-    Service, ServiceId, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData,
-    SignatureKind, SubmitAction, TriggerAction, TriggerData, WasmResponse, WorkflowId,
+    ServiceId, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, SignatureKind,
+    SubmitAction, TriggerAction, TriggerData, WasmResponse, WorkflowId,
 };
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
 use alloy_sol_types::SolValue;
@@ -40,17 +40,6 @@ impl AggregatorInput {
         )
     }
 }
-#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct Packet {
-    pub service: Service,
-    pub workflow_id: WorkflowId,
-    #[schema(value_type  = Object)]
-    pub envelope: Envelope,
-    pub envelope_signature: WavsSignature,
-    pub trigger_data: TriggerData,
-}
-
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait WavsSignable {
@@ -103,17 +92,11 @@ impl From<SignatureData> for ServiceManagerSignatureData {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub struct WavsSignature {
     pub data: Vec<u8>,
     pub kind: SignatureKind,
-}
-
-impl Packet {
-    pub fn event_id(&self) -> EventId {
-        self.envelope.eventId.into()
-    }
 }
 
 #[derive(

@@ -11,7 +11,6 @@ use opentelemetry_sdk::{
     resource::Resource,
     trace::{self, Sampler, SdkTracerProvider},
 };
-use tracing::instrument::WithSubscriber;
 use tracing_subscriber::layer::SubscriberExt;
 use wavs_types::{ChainKey, Service, WorkflowId};
 
@@ -202,8 +201,10 @@ pub struct EngineMetrics {
     pub total_errors: Counter<u64>,
     pub execution_duration: Histogram<f64>,
     pub fuel_consumption: Histogram<u64>,
-    pub executions_success: Counter<u64>,
-    pub executions_failed: Counter<u64>,
+    pub operator_executions_success: Counter<u64>,
+    pub operator_executions_failed: Counter<u64>,
+    pub aggregator_executions_success: Counter<u64>,
+    pub aggregator_executions_failed: Counter<u64>,
 }
 
 impl EngineMetrics {
@@ -236,13 +237,21 @@ impl EngineMetrics {
                     100000000.0,
                 ])
                 .build(),
-            executions_success: meter
-                .u64_counter(format!("{}.executions_success", Self::NAMESPACE))
-                .with_description("Successful WASM executions")
+            operator_executions_success: meter
+                .u64_counter(format!("{}.operator_executions_success", Self::NAMESPACE))
+                .with_description("Successful WASM operator executions")
                 .build(),
-            executions_failed: meter
-                .u64_counter(format!("{}.executions_failed", Self::NAMESPACE))
-                .with_description("Failed WASM executions")
+            operator_executions_failed: meter
+                .u64_counter(format!("{}.operator_executions_failed", Self::NAMESPACE))
+                .with_description("Failed WASM operator executions")
+                .build(),
+            aggregator_executions_success: meter
+                .u64_counter(format!("{}.aggregator_executions_success", Self::NAMESPACE))
+                .with_description("Successful WASM operator executions")
+                .build(),
+            aggregator_executions_failed: meter
+                .u64_counter(format!("{}.aggregator_executions_failed", Self::NAMESPACE))
+                .with_description("Failed WASM operator executions")
                 .build(),
         }
     }
@@ -252,7 +261,7 @@ impl EngineMetrics {
             .add(1, &[KeyValue::new("error", error.to_owned())]);
     }
 
-    pub fn record_execution(
+    pub fn record_operator_execution(
         &self,
         duration: f64,
         fuel: u64,
@@ -269,9 +278,32 @@ impl EngineMetrics {
         self.fuel_consumption.record(fuel, labels);
 
         if success {
-            self.executions_success.add(1, labels);
+            self.operator_executions_success.add(1, labels);
         } else {
-            self.executions_failed.add(1, labels);
+            self.operator_executions_failed.add(1, labels);
+        }
+    }
+
+    pub fn record_aggregator_execution(
+        &self,
+        duration: f64,
+        fuel: u64,
+        service_id: &str,
+        workflow_id: &str,
+        success: bool,
+    ) {
+        let labels = &[
+            KeyValue::new("service_id", service_id.to_owned()),
+            KeyValue::new("workflow_id", workflow_id.to_owned()),
+        ];
+
+        self.execution_duration.record(duration, labels);
+        self.fuel_consumption.record(fuel, labels);
+
+        if success {
+            self.aggregator_executions_success.add(1, labels);
+        } else {
+            self.aggregator_executions_failed.add(1, labels);
         }
     }
 }
@@ -520,8 +552,8 @@ pub struct AggregatorMetrics {
     broadcast_count: Counter<u64>,
     broadcast_count_raw: Arc<AtomicU64>,
 
-    execute_count: Counter<u64>,
-    execute_count_raw: Arc<AtomicU64>,
+    action_count: Counter<u64>,
+    action_count_raw: Arc<AtomicU64>,
 
     submit_count: Counter<u64>,
     submit_count_raw: Arc<AtomicU64>,
@@ -544,11 +576,11 @@ impl AggregatorMetrics {
                 .build(),
             broadcast_count_raw: Arc::new(AtomicU64::new(0)),
 
-            execute_count: meter
-                .u64_counter(format!("{}.execute_count", Self::NAMESPACE))
-                .with_description("Total components executed by aggregator")
+            action_count: meter
+                .u64_counter(format!("{}.action_count", Self::NAMESPACE))
+                .with_description("Total actions handled by aggregator")
                 .build(),
-            execute_count_raw: Arc::new(AtomicU64::new(0)),
+            action_count_raw: Arc::new(AtomicU64::new(0)),
 
             submit_count: meter
                 .u64_counter(format!("{}.submit_count", Self::NAMESPACE))
@@ -584,8 +616,8 @@ impl AggregatorMetrics {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub fn increment_execute_count(&self, service: &Service, workflow_id: &WorkflowId) {
-        self.execute_count.add(
+    pub fn increment_action_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.action_count.add(
             1,
             &[
                 KeyValue::new("service_name", service.name.clone()),
@@ -593,7 +625,7 @@ impl AggregatorMetrics {
                 KeyValue::new("workflow_id", workflow_id.to_string()),
             ],
         );
-        self.execute_count_raw
+        self.submit_count_raw
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
@@ -620,8 +652,8 @@ impl AggregatorMetrics {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn get_execute_count(&self) -> u64 {
-        self.execute_count_raw
+    pub fn get_action_count(&self) -> u64 {
+        self.action_count_raw
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 

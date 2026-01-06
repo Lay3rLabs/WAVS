@@ -63,14 +63,20 @@ pub struct CliArgs {
     pub wasm_threads: Option<usize>,
 
     /// mnemonic for the submission client (usually leave this as None and override in env)
+    /// signing keys are _derived_ from this using monotonic HD index
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub submission_mnemonic: Option<Credential>,
+    pub signing_mnemonic: Option<Credential>,
 
-    /// mnemonic for the submission client (usually leave this as None and override in env)
+    /// Optional aggregator credential for submitting to cosmos chains
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_submission_mnemonic: Option<Credential>,
+    pub aggregator_cosmos_credential: Option<Credential>,
+
+    /// Optional aggregator credential for submitting to evm chains
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aggregator_evm_credential: Option<Credential>,
 
     /// The maximum amount of fuel (compute metering) to allow for 1 component's execution
     #[arg(long)]

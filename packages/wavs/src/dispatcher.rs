@@ -39,7 +39,7 @@ use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessage
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, ServiceManager,
-    WorkflowIdError,
+    Submission, WorkflowIdError,
 };
 use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction};
 
@@ -49,8 +49,9 @@ use crate::subsystems::aggregator::error::AggregatorError;
 use crate::subsystems::aggregator::{Aggregator, AggregatorCommand};
 use crate::subsystems::engine::error::EngineError;
 use crate::subsystems::engine::wasm_engine::WasmEngine;
-use crate::subsystems::engine::{EngineCommand, EngineManager, EngineResponse};
-use crate::subsystems::submission::data::Submission;
+use crate::subsystems::engine::{
+    AggregatorExecuteKind, EngineCommand, EngineManager, EngineResponse,
+};
 use crate::subsystems::submission::error::SubmissionError;
 use crate::subsystems::submission::{SubmissionCommand, SubmissionManager};
 use crate::subsystems::trigger::error::TriggerError;
@@ -85,6 +86,11 @@ pub enum DispatcherCommand {
     },
     EngineResponse(EngineResponse),
     SubmissionResponse(Submission),
+    AggregatorExecute {
+        submission: Submission,
+        service: Service,
+        kind: AggregatorExecuteKind,
+    },
 }
 
 impl Dispatcher<FileStorage> {
@@ -307,11 +313,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             EngineResponse::Aggregator {
                                 submission,
                                 actions,
+                                kind,
                             } => {
                                 if let Err(e) = _self.dispatcher_to_aggregator_tx.send(
-                                    AggregatorCommand::Submit {
+                                    AggregatorCommand::Actions {
                                         submission,
                                         actions,
+                                        kind,
                                     },
                                 ) {
                                     tracing::error!("Error sending message to aggregator: {:?}", e);
@@ -326,6 +334,25 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                 .send(AggregatorCommand::Broadcast(submission))
                             {
                                 tracing::error!("Error sending message to aggregator: {:?}", e);
+                            }
+                        }
+                        DispatcherCommand::AggregatorExecute {
+                            submission,
+                            service,
+                            kind,
+                        } => {
+                            if let Err(err) = _self.dispatcher_to_engine_tx.send(
+                                EngineCommand::ExecuteAggregator {
+                                    submission,
+                                    service,
+                                    kind,
+                                },
+                            ) {
+                                tracing::error!("Error sending work to engine: {:?}", err);
+                                _self.metrics.channel_closed_errors.add(
+                                    1,
+                                    &[opentelemetry::KeyValue::new("channel", "engine_work")],
+                                );
                             }
                         }
                     }

@@ -2,19 +2,23 @@
 
 mod wavs_systems;
 
-use utils::{context::AppContext, telemetry::Metrics};
+use utils::{context::AppContext, init_tracing_tests, telemetry::Metrics};
 use wavs::subsystems::aggregator::AggregatorCommand;
 
 use crate::wavs_systems::{
     channels::TestChannels,
-    mock_aggregator::{mock_aggregator, wait_for_aggregator_broadcasts},
+    mock_aggregator::{
+        mock_aggregator, wait_for_aggregator_broadcasts, wait_for_aggregator_receives,
+    },
     mock_config::mock_config,
     mock_service::{mock_service, mock_services},
     mock_submissions::{mock_submission_manager, mock_submission_request},
 };
 
 #[test]
-fn single() {
+fn send_to_self() {
+    init_tracing_tests();
+
     let ctx = AppContext::new();
     let channels = TestChannels::new();
     let services = mock_services();
@@ -53,4 +57,7 @@ fn single() {
 
     wait_for_aggregator_broadcasts(&aggregator, 3, None).unwrap();
     assert_eq!(aggregator.metrics.get_broadcast_count(), 3);
+
+    wait_for_aggregator_receives(&aggregator, 3, None).unwrap();
+    assert_eq!(aggregator.metrics.get_receive_count(), 3);
 }

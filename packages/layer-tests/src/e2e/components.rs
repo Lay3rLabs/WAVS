@@ -3,6 +3,8 @@ use std::{
     str::FromStr,
 };
 
+use crate::e2e::test_registry::TestRegistry;
+
 use super::config::Configs;
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::filesystem::workspace_path;
@@ -81,8 +83,8 @@ impl ComponentName {
 }
 
 impl ComponentSources {
-    pub async fn new(configs: &Configs, http_client: &HttpClient) -> Self {
-        let component_names: HashSet<ComponentName> = configs
+    pub async fn new(configs: &Configs, registry: &TestRegistry, http_client: &HttpClient) -> Self {
+        let mut component_names: HashSet<ComponentName> = configs
             .matrix
             .evm
             .iter()
@@ -103,6 +105,14 @@ impl ComponentSources {
             )
             .flatten()
             .collect();
+
+        for test in registry.list_all() {
+            for workflow in test.workflows.values() {
+                for aggregator in &workflow.aggregators {
+                    component_names.insert(*aggregator);
+                }
+            }
+        }
 
         let mut futures = FuturesUnordered::new();
 

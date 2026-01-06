@@ -2,7 +2,38 @@ use layer_climb_address::{CosmosAddr, EvmAddr};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{ChainKey, Duration};
+use crate::{ChainKey, Duration, EventId, Submission};
+
+#[derive(
+    Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq, bincode::Encode, bincode::Decode,
+)]
+pub struct QuorumQueueId {
+    pub event_id: EventId,
+    pub action: SubmitAction,
+}
+
+impl QuorumQueueId {
+    pub fn to_bytes(&self) -> Result<Vec<u8>, bincode::error::EncodeError> {
+        bincode::encode_to_vec(self, bincode::config::standard())
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::error::DecodeError> {
+        Ok(bincode::borrow_decode_from_slice(bytes, bincode::config::standard())?.0)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum QuorumQueue {
+    Burned,
+    Active(Vec<Submission>),
+}
+
+impl Default for QuorumQueue {
+    fn default() -> Self {
+        QuorumQueue::Active(Vec::new())
+    }
+}
 
 #[derive(
     Serialize,
@@ -21,6 +52,15 @@ use crate::{ChainKey, Duration};
 pub enum SubmitAction {
     Evm(EvmSubmitAction),
     Cosmos(CosmosSubmitAction),
+}
+
+impl SubmitAction {
+    pub fn chain(&self) -> &ChainKey {
+        match self {
+            SubmitAction::Evm(action) => &action.chain,
+            SubmitAction::Cosmos(action) => &action.chain,
+        }
+    }
 }
 
 #[derive(

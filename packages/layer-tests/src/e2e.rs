@@ -55,6 +55,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
             .with(
                 tracing_subscriber::fmt::layer()
                     .without_time()
+                    .with_line_number(true)
                     .with_target(false),
             )
             .with(config.tracing_env_filter().unwrap())
@@ -159,7 +160,7 @@ async fn _run(
         .await;
 
     // upload components
-    let component_sources = ComponentSources::new(&configs, &clients.http_client).await;
+    let component_sources = ComponentSources::new(&configs, &registry, &clients.http_client).await;
 
     // create the real services (deploy contracts etc.)
 

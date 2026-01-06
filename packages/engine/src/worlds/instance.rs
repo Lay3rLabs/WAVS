@@ -126,6 +126,28 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             keyvalue_ctx,
         } = self;
 
+        match (&data, &log) {
+            (
+                InstanceData::Operator { .. },
+                HostComponentLogger::AggregatorHostComponentLogger(_),
+            ) => {
+                return Err(EngineError::MismatchedInstanceDataAndLogger {
+                    data: "Operator",
+                    logger: "Aggregator",
+                });
+            }
+            (
+                InstanceData::Aggregator { .. },
+                HostComponentLogger::OperatorHostComponentLogger(_),
+            ) => {
+                return Err(EngineError::MismatchedInstanceDataAndLogger {
+                    data: "Aggregator",
+                    logger: "Operator",
+                });
+            }
+            _ => {}
+        }
+
         // create linker
         let (linker, wavs_component) = {
             let workflow = service.workflows.get(&workflow_id).ok_or_else(|| {

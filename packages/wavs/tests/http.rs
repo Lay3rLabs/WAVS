@@ -367,7 +367,6 @@ fn test_add_chain_prevents_duplicates() {
 
 #[test]
 fn body_size_limit() {
-    wavs::init_tracing_tests();
     let app = TestHttpApp::new();
 
     // 14MB body succeeds (under default 15MB limit)

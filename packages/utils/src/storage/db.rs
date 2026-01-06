@@ -114,6 +114,31 @@ where
     }
 }
 
+impl<K, V> WavsDbTable<K, V>
+where
+    K: Eq + Hash + Clone + Send + Sync + 'static,
+    V: Clone + Send + Sync + Default + 'static,
+{
+    pub fn update_or_insert_default<F>(&self, key: K, update_fn: F) -> Result<(), DBError>
+    where
+        F: FnOnce(&mut V),
+    {
+        use dashmap::mapref::entry::Entry;
+
+        match self.inner.entry(key) {
+            Entry::Occupied(mut entry) => {
+                let value = entry.get_mut();
+                update_fn(value);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(V::default());
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// Iterator for WavsDbTable that hides DashMap-specific types
 pub struct WavsDbIter<'a, K, V> {
     inner: dashmap::iter::Iter<'a, K, V>,

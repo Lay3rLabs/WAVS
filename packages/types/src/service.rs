@@ -511,7 +511,7 @@ pub enum Submit {
 ///    breaking changes.
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
 #[cfg_attr(feature = "ts-bindings", ts(export))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema, Hash)]
 pub struct SignatureKind {
     /// The cryptographic algorithm used for signature generation and verification.
     ///
@@ -538,7 +538,7 @@ impl SignatureKind {
 
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
 #[cfg_attr(feature = "ts-bindings", ts(export))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum SignatureAlgorithm {
     Secp256k1,
@@ -547,7 +547,7 @@ pub enum SignatureAlgorithm {
 
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
 #[cfg_attr(feature = "ts-bindings", ts(export))]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum SignaturePrefix {
     Eip191,

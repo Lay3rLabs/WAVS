@@ -41,9 +41,9 @@ pub struct Configs {
 pub struct TestMnemonics {
     pub cli: Credential,
     pub cli_cosmos: Credential,
-    pub wavs: Credential,
-    pub aggregator: Credential,
-    pub aggregator_2: Credential,
+    // operator _and_ signer as one (signer uses hd-index 1+, so it's okay)
+    pub operator: Credential,
+    pub aggregator_evm: Credential,
     pub aggregator_cosmos: Credential,
     pub cosmos_middleware: Vec<Credential>,
 }
@@ -62,18 +62,13 @@ impl TestMnemonics {
                     .to_string(),
             ),
             // 0x55a8F5cac28c2dA45aFA89c46e47CC4A445570AE
-            wavs: Credential::new(
+            operator: Credential::new(
                 "aspect mushroom fly cousin hobby body need dose blind siren shoe annual"
                     .to_string(),
             ),
             // 0xB1Ebb71428FF42F529708B5Afd2BA6Ad3432f38d
-            aggregator: Credential::new(
+            aggregator_evm: Credential::new(
                 "brain medal write network foam renew muscle mirror rather daring bike uniform"
-                    .to_string(),
-            ),
-            // 0x5E661B79FE2D3F6cE70F5AAC07d8Cd9AF2161630
-            aggregator_2: Credential::new(
-                "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat"
                     .to_string(),
             ),
             aggregator_cosmos: Credential::new(
@@ -93,7 +88,12 @@ impl TestMnemonics {
                 .unwrap();
             let anvil_client = EvmSigningClient::new(anvil_config).await.unwrap();
 
-            for mnemonic in [&self.cli, &self.wavs, &self.aggregator, &self.aggregator_2] {
+            for mnemonic in [
+                &self.cli,
+                &self.operator,
+                &self.aggregator_evm,
+                &self.aggregator_cosmos,
+            ] {
                 let dest_addr = MnemonicBuilder::<English>::default()
                     .phrase(mnemonic.as_str())
                     .build()
@@ -195,7 +195,9 @@ impl From<TestConfig> for Configs {
         .unwrap();
 
         wavs_config.chains = chain_configs.clone();
-        wavs_config.submission_mnemonic = Some(mnemonics.wavs.clone());
+        wavs_config.signing_mnemonic = Some(mnemonics.operator.clone());
+        wavs_config.aggregator_cosmos_credential = Some(mnemonics.aggregator_cosmos.clone());
+        wavs_config.aggregator_evm_credential = Some(mnemonics.aggregator_evm.clone());
         wavs_config.dev_endpoints_enabled = true;
 
         let cli_args = wavs_cli::args::CliArgs {

@@ -14,6 +14,16 @@ use crate::e2e::components::{
     AggregatorComponent, ComponentName, ComponentSources, OperatorComponent,
 };
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+pub enum TestGroupId {
+    Default,
+    Interval,
+    IntervalStartStop,
+    Backpressure,
+    AggregatorTimer,
+    Other(usize),
+}
+
 /// Defines a complete end-to-end test case
 #[derive(Clone, Debug)]
 pub struct TestDefinition {
@@ -35,7 +45,7 @@ pub struct TestDefinition {
     pub service_manager_chain: Option<ChainKey>,
 
     /// Execution group (ascending priority)
-    pub group: u64,
+    pub group: TestGroupId,
 }
 
 #[derive(Clone, Debug)]
@@ -273,7 +283,7 @@ impl TestBuilder {
                 workflows: BTreeMap::new(),
                 service_manager_chain: None,
                 change_service: None,
-                group: u64::MAX,
+                group: TestGroupId::Default,
             },
         }
     }
@@ -285,7 +295,7 @@ impl TestBuilder {
     }
 
     /// Set the execution group
-    pub fn with_group(mut self, group: u64) -> Self {
+    pub fn with_group(mut self, group: TestGroupId) -> Self {
         self.definition.group = group;
         self
     }

@@ -40,7 +40,7 @@ impl DevTriggersRuntime {
             ..Default::default()
         };
         // Provide a test mnemonic so SubmissionManager can create a signer
-        config.submission_mnemonic = Some(wavs_types::Credential::new(
+        config.signing_mnemonic = Some(wavs_types::Credential::new(
             "test test test test test test test test test test test junk".to_string(),
         ));
 

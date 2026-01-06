@@ -261,7 +261,7 @@ impl ServiceManagers {
             // unique HD index per test to avoid nonce collisions during parallel operations
             let operator_hd_index = test_index as u32;
             let operator_signer = utils::evm_client::signing::make_signer(
-                &self.configs.mnemonics.wavs,
+                &self.configs.mnemonics.operator,
                 Some(operator_hd_index),
             )
             .unwrap();
@@ -269,7 +269,7 @@ impl ServiceManagers {
             let operator_private_key = const_hex::encode(operator_signer.to_bytes());
 
             let signing_signer = utils::evm_client::signing::make_signer(
-                &self.configs.mnemonics.wavs,
+                &self.configs.mnemonics.operator,
                 Some(hd_index),
             )
             .unwrap();

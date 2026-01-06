@@ -7,17 +7,15 @@ use std::{
 };
 
 use crate::{
-    config::Config,
-    dispatcher::DispatcherCommand,
-    services::Services,
-    subsystems::submission::data::{Submission, SubmissionRequest},
-    tracing_service_info, AppContext,
+    config::Config, dispatcher::DispatcherCommand, services::Services,
+    subsystems::submission::data::SubmissionRequest, tracing_service_info, AppContext,
 };
 use alloy_primitives::FixedBytes;
 use alloy_signer_local::PrivateKeySigner;
 use error::SubmissionError;
 use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
+use wavs_types::Submission;
 use wavs_types::{Credential, Envelope, EventOrder, ServiceId, SignerResponse, Submit, WavsSigner};
 
 #[derive(Debug)]
@@ -31,9 +29,9 @@ pub enum SubmissionCommand {
 pub struct SubmissionManager {
     // created on-demand from chain_name and hd_index
     pub metrics: SubmissionMetrics,
-    evm_signers: Arc<RwLock<HashMap<ServiceId, SignerInfo>>>,
-    evm_mnemonic: Option<Credential>,
-    evm_mnemonic_hd_index_count: Arc<AtomicU32>,
+    signers: Arc<RwLock<HashMap<ServiceId, SignerInfo>>>,
+    signing_mnemonic: Credential,
+    signing_mnemonic_hd_index_count: Arc<AtomicU32>,
     subsystem_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
     dispatcher_to_submission_rx: crossbeam::channel::Receiver<SubmissionCommand>,
     #[cfg(feature = "dev")]
@@ -58,10 +56,14 @@ impl SubmissionManager {
         dispatcher_to_submission_rx: crossbeam::channel::Receiver<SubmissionCommand>,
         subsystem_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
     ) -> Result<Self, SubmissionError> {
+        let signing_mnemonic = config
+            .signing_mnemonic
+            .clone()
+            .ok_or(SubmissionError::MissingSigningMnemonic)?;
         Ok(Self {
-            evm_signers: Arc::new(RwLock::new(HashMap::new())),
-            evm_mnemonic: config.submission_mnemonic.clone(),
-            evm_mnemonic_hd_index_count: Arc::new(AtomicU32::new(1)),
+            signers: Arc::new(RwLock::new(HashMap::new())),
+            signing_mnemonic,
+            signing_mnemonic_hd_index_count: Arc::new(AtomicU32::new(1)),
             metrics,
             subsystem_to_dispatcher_tx,
             dispatcher_to_submission_rx,
@@ -153,8 +155,8 @@ impl SubmissionManager {
             },
         };
 
-        let evm_signer = {
-            let lock = self.evm_signers.read().unwrap();
+        let signer = {
+            let lock = self.signers.read().unwrap();
             lock.get(service_id)
                 .ok_or(SubmissionError::MissingEvmSigner(service_id.clone()))?
                 .signer
@@ -171,7 +173,7 @@ impl SubmissionManager {
         };
 
         let envelope_signature = envelope
-            .sign(&evm_signer, signature_kind.clone())
+            .sign(&signer, signature_kind.clone())
             .await
             .map_err(SubmissionError::FailedToSignEnvelope)?;
 
@@ -184,11 +186,11 @@ impl SubmissionManager {
         })
     }
 
-    #[instrument(skip(self, req), fields(subsys = "Submission"))]
+    #[instrument(skip(self, _req), fields(subsys = "Submission"))]
     async fn dispatch(
         &self,
         submission: Submission,
-        req: &SubmissionRequest,
+        _req: &SubmissionRequest,
     ) -> Result<(), SubmissionError> {
         #[cfg(feature = "dev")]
         {
@@ -205,7 +207,7 @@ impl SubmissionManager {
         }
 
         #[cfg(feature = "dev")]
-        if req.debug.do_not_submit_aggregator {
+        if _req.debug.do_not_submit_aggregator {
             tracing::warn!("Test-only flag set, skipping submission to aggregator");
             return Ok(());
         }
@@ -219,9 +221,11 @@ impl SubmissionManager {
 
         #[cfg(feature = "dev")]
         if std::env::var("WAVS_FORCE_SLOW_SUBMISSION_XXX").is_ok() {
+            tracing::warn!("Forcing slow submission");
             std::thread::sleep(std::time::Duration::from_secs(6));
         }
 
+        tracing::warn!("dispatching: {}", submission.label());
         self.subsystem_to_dispatcher_tx
             .send(DispatcherCommand::SubmissionResponse(submission))
             .map_err(Box::new)?;
@@ -238,17 +242,12 @@ impl SubmissionManager {
         hd_index: Option<u32>,
     ) -> Result<(), SubmissionError> {
         let hd_index = hd_index.unwrap_or(
-            self.evm_mnemonic_hd_index_count
+            self.signing_mnemonic_hd_index_count
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         );
 
-        let signer = make_signer(
-            self.evm_mnemonic
-                .as_ref()
-                .ok_or(SubmissionError::MissingMnemonic)?,
-            Some(hd_index),
-        )
-        .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service_id.clone(), e))?;
+        let signer = make_signer(&self.signing_mnemonic, Some(hd_index))
+            .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service_id.clone(), e))?;
 
         tracing::info!(
             "Created new signing client for service {} -> {}",
@@ -256,7 +255,7 @@ impl SubmissionManager {
             signer.address()
         );
 
-        self.evm_signers
+        self.signers
             .write()
             .unwrap()
             .insert(service_id, SignerInfo { signer, hd_index });
@@ -275,7 +274,7 @@ impl SubmissionManager {
         service_id: ServiceId,
     ) -> Result<SignerResponse, SubmissionError> {
         let key = self
-            .evm_signers
+            .signers
             .read()
             .unwrap()
             .get(&service_id)

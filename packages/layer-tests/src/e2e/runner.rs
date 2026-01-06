@@ -134,9 +134,9 @@ impl Runner {
 
             // Then we need to deploy the update to service managers
             if futures.is_empty() {
-                tracing::info!("No changes to services in group {}", group);
+                tracing::info!("No changes to services in group {:?}", group);
             } else {
-                tracing::warn!("Running service changes for group {}", group);
+                tracing::warn!("Running service changes for group {:?}", group);
                 let mut services_to_change = Vec::new();
                 while let Some((service, change_service)) = futures.next().await {
                     // update our local copy of the service and handle changes
@@ -200,7 +200,7 @@ impl Runner {
 
             // All services are now deployed and ready for the tests
             // From here on in we're strictly testing the trigger->execute->aggregate->submit flow
-            tracing::info!("Running group {} with {} tests", group, group_tests.len());
+            tracing::info!("Running group {:?} with {} tests", group, group_tests.len());
             let mut futures = FuturesUnordered::new();
 
             for test in group_tests {

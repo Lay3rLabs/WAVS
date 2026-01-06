@@ -10,8 +10,8 @@ pub enum SubmissionError {
     EvmClient(#[from] EvmClientError),
     #[error("climb: {0}")]
     Climb(anyhow::Error),
-    #[error("missing mnemonic")]
-    MissingMnemonic,
+    #[error("missing signing mnemonic")]
+    MissingSigningMnemonic,
     #[error("missing key for service {service_id}")]
     MissingServiceKey { service_id: ServiceId },
     #[error("faucet url: {0}")]
