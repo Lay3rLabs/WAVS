@@ -146,8 +146,6 @@ impl TestMnemonics {
 pub const MULTI_OPERATOR_COUNT: usize = 3;
 /// Base port for WAVS HTTP servers
 pub const WAVS_BASE_PORT: u32 = 8000;
-/// Base port for P2P networking (separate from HTTP)
-pub const P2P_BASE_PORT: u16 = 9000;
 
 impl From<TestConfig> for Configs {
     fn from(test_config: TestConfig) -> Self {
@@ -247,17 +245,6 @@ impl From<TestConfig> for Configs {
             wavs_config.dev_endpoints_enabled = true;
             // Each operator gets a unique port
             wavs_config.port = WAVS_BASE_PORT + operator_index as u32;
-
-            // Enable P2P for multi-operator tests with mDNS discovery
-            if num_operators > 1 {
-                wavs_config.p2p = P2pConfig::Local {
-                    listen_port: P2P_BASE_PORT + operator_index as u16,
-                    max_retry_duration_secs: None,
-                    retry_interval_ms: None,
-                    submission_ttl_secs: None,
-                    max_catchup_submissions: None,
-                };
-            }
 
             wavs_configs.push(wavs_config);
         }

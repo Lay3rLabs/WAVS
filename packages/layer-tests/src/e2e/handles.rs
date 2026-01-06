@@ -118,7 +118,6 @@ impl AppHandles {
         for handle in self.wavs_handles {
             results.push(handle.join());
         }
-
         results
     }
 }
