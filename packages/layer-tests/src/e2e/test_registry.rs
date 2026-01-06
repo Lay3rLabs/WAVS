@@ -894,7 +894,7 @@ impl TestRegistry {
                 )
                 .with_service_manager_chain(chain)
                 .with_multi_operator()
-                .with_group(TestGroupId::Default)
+                .with_group(TestGroupId::P2pLocal)
                 .build(),
         )
     }

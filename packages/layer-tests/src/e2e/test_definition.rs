@@ -21,6 +21,7 @@ pub enum TestGroupId {
     IntervalStartStop,
     Backpressure,
     AggregatorTimer,
+    P2pLocal,
     Other(usize),
 }
 
