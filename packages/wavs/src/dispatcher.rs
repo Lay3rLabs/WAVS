@@ -375,6 +375,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                 service,
                 &self.trigger_manager,
                 &self.submission_manager,
+                &self.dispatcher_to_aggregator_tx,
                 None,
             )?;
         }
@@ -517,6 +518,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             &service,
             &self.trigger_manager,
             &self.submission_manager,
+            &self.dispatcher_to_aggregator_tx,
             None,
         )?;
 
@@ -529,6 +531,20 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         self.engine_manager.engine.remove_storage(&id);
         self.trigger_manager.remove_service(id.clone())?;
         // no need to remove from submission manager, it has nothing to do
+
+        // Unsubscribe from P2P topic for this service (if P2P is enabled)
+        if let Err(err) =
+            self.dispatcher_to_aggregator_tx
+                .send(AggregatorCommand::UnsubscribeService {
+                    service_id: id.clone(),
+                })
+        {
+            tracing::warn!(
+                "Failed to send UnsubscribeService command for service {}: {:?}",
+                id,
+                err
+            );
+        }
 
         // Get current service count for logging
         let current_services = self.services.list(Bound::Unbounded, Bound::Unbounded)?;
@@ -607,6 +623,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             &service,
             &self.trigger_manager,
             &self.submission_manager,
+            &self.dispatcher_to_aggregator_tx,
             Some(hd_index),
         )?;
 
@@ -729,6 +746,8 @@ fn add_service_to_managers(
     service: &Service,
     triggers: &TriggerManager,
     submissions: &SubmissionManager,
+    // needs to be through channel because subscription is async
+    aggregator_tx: &crossbeam::channel::Sender<AggregatorCommand>,
     hd_index: Option<u32>,
 ) -> Result<(), DispatcherError> {
     if let Err(err) = submissions.add_service_key(service.id(), hd_index) {
@@ -739,6 +758,17 @@ fn add_service_to_managers(
     if let Err(err) = triggers.add_service(service) {
         tracing::error!("Error adding service to trigger manager: {:?}", err);
         return Err(err.into());
+    }
+
+    // Subscribe to P2P topic for this service (if P2P is enabled)
+    if let Err(err) = aggregator_tx.send(AggregatorCommand::SubscribeService {
+        service_id: service.id(),
+    }) {
+        tracing::warn!(
+            "Failed to send SubscribeService command for service {}: {:?}",
+            service.name,
+            err
+        );
     }
 
     Ok(())

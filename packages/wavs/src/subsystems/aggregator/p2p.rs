@@ -1,0 +1,1012 @@
+//! P2P Network Layer for WAVS Aggregator
+//!
+//! Key components:
+//! - GossipSub: Message dissemination per service topic
+//! - Request/Response: Catch-up protocol for missed messages
+//! - mDNS: Local peer discovery for development/testing
+//! - Identify: Peer identification protocol
+
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap, HashSet, VecDeque},
+    hash::{Hash, Hasher},
+    io, iter,
+    time::{Duration, Instant},
+};
+
+use async_trait::async_trait;
+use futures::{AsyncReadExt, AsyncWriteExt, StreamExt};
+use libp2p::{
+    autonat,
+    gossipsub::{self, IdentTopic, MessageAuthenticity, MessageId, ValidationMode},
+    identify, mdns,
+    request_response::{self, Codec, ProtocolSupport},
+    swarm::{NetworkBehaviour, SwarmEvent},
+    Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder,
+};
+use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
+use utils::context::AppContext;
+use wavs_types::{P2pStatus, ServiceId, Submission};
+
+use super::{error::AggregatorError, peer::Peer, AggregatorCommand};
+
+const PROTOCOL_VERSION: &str = "/wavs/1.0.0";
+const CATCHUP_PROTOCOL: &str = "/wavs/catchup/1.0.0";
+const MAX_RETRY_DURATION_SECS: u64 = 10;
+const RETRY_INTERVAL_MS: u64 = 200;
+/// How long to keep submissions in memory for catch-up responses
+const SUBMISSION_TTL_SECS: u64 = 300; // 5 minutes
+/// Maximum submissions to return in a catch-up response
+const MAX_CATCHUP_SUBMISSIONS: usize = 100;
+
+/// Pending publish entry for retry queue
+struct PendingPublish {
+    topic_name: String,
+    data: Vec<u8>,
+    created_at: Instant,
+    retries: u32,
+}
+
+/// Stored submission for catch-up responses
+struct StoredSubmission {
+    submission: Submission,
+    created_at: Instant,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum P2pConfig {
+    /// Disabled - no P2P networking (for single-operator setups)
+    #[default]
+    Disabled,
+    /// Local development - use mDNS for peer discovery with test-friendly defaults
+    Local {
+        /// Port to listen on for P2P connections (0 for random)
+        listen_port: u16,
+    },
+    // TODO: Remote/production with bootstrap nodes + Kademlia
+    // Remote {
+    //     listen_port: u16,
+    //     bootstrap_nodes: Vec<Multiaddr>,
+    // },
+}
+
+impl P2pConfig {
+    /// GossipSub heartbeat interval - how often peers exchange mesh state
+    pub fn heartbeat_interval(&self) -> Duration {
+        match self {
+            // Faster heartbeat for local testing to speed up mesh formation
+            P2pConfig::Local { .. } => Duration::from_millis(100),
+            // Default for production (disabled doesn't matter)
+            P2pConfig::Disabled => Duration::from_secs(1),
+        }
+    }
+
+    /// Minimum number of peers in mesh before we start publishing
+    pub fn mesh_n_low(&self) -> usize {
+        match self {
+            // Lower threshold for local testing with few peers
+            P2pConfig::Local { .. } => 1,
+            P2pConfig::Disabled => 2,
+        }
+    }
+
+    /// Target number of peers in mesh
+    pub fn mesh_n(&self) -> usize {
+        match self {
+            P2pConfig::Local { .. } => 2,
+            P2pConfig::Disabled => 6,
+        }
+    }
+
+    /// Maximum number of peers in mesh
+    pub fn mesh_n_high(&self) -> usize {
+        match self {
+            P2pConfig::Local { .. } => 4,
+            P2pConfig::Disabled => 12,
+        }
+    }
+
+    /// How long to keep messages in cache for deduplication
+    pub fn duplicate_cache_time(&self) -> Duration {
+        match self {
+            P2pConfig::Local { .. } => Duration::from_secs(30),
+            P2pConfig::Disabled => Duration::from_secs(60),
+        }
+    }
+
+    /// History length for gossip (number of heartbeats)
+    pub fn history_length(&self) -> usize {
+        match self {
+            P2pConfig::Local { .. } => 3,
+            P2pConfig::Disabled => 5,
+        }
+    }
+
+    /// History gossip length (how many heartbeats of history to include)
+    pub fn history_gossip(&self) -> usize {
+        match self {
+            P2pConfig::Local { .. } => 2,
+            P2pConfig::Disabled => 3,
+        }
+    }
+}
+
+// ============================================================================
+// Catch-up Protocol Types
+// ============================================================================
+
+/// Request to catch up on missed submissions for a service
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatchUpRequest {
+    /// Service ID to catch up on
+    pub service_id: ServiceId,
+}
+
+/// Response containing missed submissions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatchUpResponse {
+    /// Submissions the requester may have missed
+    pub submissions: Vec<Submission>,
+}
+
+/// Codec for catch-up request/response protocol
+#[derive(Debug, Clone, Default)]
+pub struct CatchUpCodec;
+
+#[async_trait]
+impl Codec for CatchUpCodec {
+    type Protocol = StreamProtocol;
+    type Request = CatchUpRequest;
+    type Response = CatchUpResponse;
+
+    async fn read_request<T>(
+        &mut self,
+        _protocol: &Self::Protocol,
+        io: &mut T,
+    ) -> io::Result<Self::Request>
+    where
+        T: futures::AsyncRead + Unpin + Send,
+    {
+        let mut buf = Vec::new();
+        io.read_to_end(&mut buf).await?;
+        serde_json::from_slice(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+
+    async fn read_response<T>(
+        &mut self,
+        _protocol: &Self::Protocol,
+        io: &mut T,
+    ) -> io::Result<Self::Response>
+    where
+        T: futures::AsyncRead + Unpin + Send,
+    {
+        let mut buf = Vec::new();
+        io.read_to_end(&mut buf).await?;
+        serde_json::from_slice(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+
+    async fn write_request<T>(
+        &mut self,
+        _protocol: &Self::Protocol,
+        io: &mut T,
+        req: Self::Request,
+    ) -> io::Result<()>
+    where
+        T: futures::AsyncWrite + Unpin + Send,
+    {
+        let data =
+            serde_json::to_vec(&req).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        io.write_all(&data).await?;
+        io.close().await
+    }
+
+    async fn write_response<T>(
+        &mut self,
+        _protocol: &Self::Protocol,
+        io: &mut T,
+        res: Self::Response,
+    ) -> io::Result<()>
+    where
+        T: futures::AsyncWrite + Unpin + Send,
+    {
+        let data =
+            serde_json::to_vec(&res).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        io.write_all(&data).await?;
+        io.close().await
+    }
+}
+
+// ============================================================================
+// Network Behaviour
+// ============================================================================
+
+/// libp2p behaviour for WAVS
+#[derive(NetworkBehaviour)]
+struct WavsBehaviour {
+    /// GossipSub for message dissemination
+    gossipsub: gossipsub::Behaviour,
+    /// Request/Response for catch-up protocol
+    catchup: request_response::Behaviour<CatchUpCodec>,
+    /// mDNS for local peer discovery
+    mdns: mdns::tokio::Behaviour,
+    /// Identify protocol for peer identification
+    identify: identify::Behaviour,
+    /// AutoNAT for external address discovery
+    autonat: autonat::Behaviour,
+}
+
+// ============================================================================
+// P2P Handle and Commands
+// ============================================================================
+
+/// Commands that can be sent to the P2P network
+enum P2pCommand {
+    /// Publish a submission to the network
+    Publish {
+        service_id: ServiceId,
+        submission: Box<Submission>,
+    },
+    /// Subscribe to a service's topic
+    Subscribe { service_id: ServiceId },
+    /// Unsubscribe from a service's topic
+    Unsubscribe { service_id: ServiceId },
+    /// Get the current P2P status
+    GetStatus {
+        response_tx: tokio::sync::oneshot::Sender<P2pStatus>,
+    },
+}
+
+/// Handle to the P2P network that can be cloned and shared
+#[derive(Clone)]
+pub struct P2pHandle {
+    command_tx: mpsc::Sender<P2pCommand>,
+}
+
+impl P2pHandle {
+    /// Create a new P2P handle, spawning the network event loop.
+    ///
+    /// Returns None if P2P is disabled.
+    pub async fn new(
+        ctx: AppContext,
+        config: P2pConfig,
+        aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
+    ) -> Result<Option<Self>, AggregatorError> {
+        match &config {
+            P2pConfig::Disabled => {
+                tracing::info!("P2P networking is disabled");
+                Ok(None)
+            }
+            P2pConfig::Local { listen_port } => {
+                let handle =
+                    Self::create_local_network(ctx, *listen_port, aggregator_tx, &config).await?;
+                Ok(Some(handle))
+            }
+        }
+    }
+
+    /// Publish a submission to the P2P network
+    pub async fn publish(&self, submission: &Submission) -> Result<(), AggregatorError> {
+        let service_id = submission.service_id().clone();
+        self.command_tx
+            .send(P2pCommand::Publish {
+                service_id,
+                submission: Box::new(submission.clone()),
+            })
+            .await
+            .map_err(|e| AggregatorError::P2p(format!("Failed to send publish command: {}", e)))
+    }
+
+    /// Subscribe to a service's P2P topic
+    pub async fn subscribe(&self, service_id: &ServiceId) -> Result<(), AggregatorError> {
+        self.command_tx
+            .send(P2pCommand::Subscribe {
+                service_id: service_id.clone(),
+            })
+            .await
+            .map_err(|e| AggregatorError::P2p(format!("Failed to send subscribe command: {}", e)))
+    }
+
+    /// Unsubscribe from a service's P2P topic
+    pub async fn unsubscribe(&self, service_id: &ServiceId) -> Result<(), AggregatorError> {
+        self.command_tx
+            .send(P2pCommand::Unsubscribe {
+                service_id: service_id.clone(),
+            })
+            .await
+            .map_err(|e| AggregatorError::P2p(format!("Failed to send unsubscribe command: {}", e)))
+    }
+
+    /// Get the current P2P network status
+    pub async fn get_status(&self) -> Result<P2pStatus, AggregatorError> {
+        let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+        self.command_tx
+            .send(P2pCommand::GetStatus { response_tx })
+            .await
+            .map_err(|e| {
+                AggregatorError::P2p(format!("Failed to send get_status command: {}", e))
+            })?;
+
+        response_rx
+            .await
+            .map_err(|e| AggregatorError::P2p(format!("Failed to receive P2P status: {}", e)))
+    }
+
+    /// Create a local P2P network using mDNS for peer discovery
+    async fn create_local_network(
+        ctx: AppContext,
+        listen_port: u16,
+        aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
+        config: &P2pConfig,
+    ) -> Result<Self, AggregatorError> {
+        let swarm = build_swarm(config)?;
+        let local_peer_id = *swarm.local_peer_id();
+
+        tracing::info!("Local P2P peer ID: {}", local_peer_id);
+
+        let (command_tx, command_rx) = mpsc::channel(256);
+
+        tokio::spawn(run_event_loop(
+            ctx,
+            swarm,
+            listen_port,
+            command_rx,
+            aggregator_tx,
+        ));
+
+        Ok(P2pHandle { command_tx })
+    }
+}
+
+// ============================================================================
+// Swarm Building
+// ============================================================================
+
+/// Build the libp2p swarm with all required behaviours
+fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorError> {
+    // Message ID function for deduplication
+    let message_id_fn = |message: &gossipsub::Message| {
+        let mut hasher = DefaultHasher::new();
+        message.data.hash(&mut hasher);
+        message.source.hash(&mut hasher);
+        MessageId::from(hasher.finish().to_string())
+    };
+
+    // GossipSub configuration - use config-specific values for test vs production
+    let gossipsub_config = gossipsub::ConfigBuilder::default()
+        .heartbeat_interval(config.heartbeat_interval())
+        .validation_mode(ValidationMode::Strict)
+        .message_id_fn(message_id_fn)
+        .mesh_n_low(config.mesh_n_low())
+        .mesh_n(config.mesh_n())
+        .mesh_n_high(config.mesh_n_high())
+        .duplicate_cache_time(config.duplicate_cache_time())
+        .history_length(config.history_length())
+        .history_gossip(config.history_gossip())
+        .build()
+        .map_err(|e| AggregatorError::P2p(format!("Failed to build gossipsub config: {}", e)))?;
+
+    let swarm = SwarmBuilder::with_new_identity()
+        .with_tokio()
+        .with_tcp(
+            libp2p::tcp::Config::default(),
+            libp2p::noise::Config::new,
+            libp2p::yamux::Config::default,
+        )
+        .map_err(|e| AggregatorError::P2p(format!("Failed to configure TCP: {}", e)))?
+        .with_behaviour(|key| {
+            let gossipsub = gossipsub::Behaviour::new(
+                MessageAuthenticity::Signed(key.clone()),
+                gossipsub_config,
+            )
+            .map_err(|e| format!("Failed to create gossipsub: {}", e))?;
+
+            // Catch-up request/response protocol
+            let catchup = request_response::Behaviour::new(
+                iter::once((StreamProtocol::new(CATCHUP_PROTOCOL), ProtocolSupport::Full)),
+                request_response::Config::default(),
+            );
+
+            let mdns =
+                mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())
+                    .map_err(|e| format!("Failed to create mDNS: {}", e))?;
+
+            let identify = identify::Behaviour::new(identify::Config::new(
+                PROTOCOL_VERSION.to_string(),
+                key.public(),
+            ));
+
+            let autonat =
+                autonat::Behaviour::new(key.public().to_peer_id(), autonat::Config::default());
+
+            Ok(WavsBehaviour {
+                gossipsub,
+                catchup,
+                mdns,
+                identify,
+                autonat,
+            })
+        })
+        .map_err(|e| AggregatorError::P2p(format!("Failed to build behaviour: {}", e)))?
+        .build();
+
+    Ok(swarm)
+}
+
+// ============================================================================
+// Event Loop
+// ============================================================================
+
+/// State for the P2P event loop
+struct EventLoopState {
+    /// Topics we're subscribed to
+    subscribed_topics: HashSet<String>,
+    /// Service IDs we're subscribed to (for catch-up requests)
+    subscribed_services: HashSet<ServiceId>,
+    /// Pending publishes waiting for peers
+    pending_publishes: VecDeque<PendingPublish>,
+    /// Recent submissions stored for catch-up responses (service_id -> submissions)
+    stored_submissions: HashMap<ServiceId, Vec<StoredSubmission>>,
+    /// Connected peers we've already requested catch-up from
+    catchup_requested_peers: HashSet<PeerId>,
+}
+
+impl EventLoopState {
+    fn new() -> Self {
+        Self {
+            subscribed_topics: HashSet::new(),
+            subscribed_services: HashSet::new(),
+            pending_publishes: VecDeque::new(),
+            stored_submissions: HashMap::new(),
+            catchup_requested_peers: HashSet::new(),
+        }
+    }
+
+    /// Store a submission for catch-up responses
+    fn store_submission(&mut self, submission: Submission) {
+        let service_id = submission.service_id().clone();
+        let stored = StoredSubmission {
+            submission,
+            created_at: Instant::now(),
+        };
+
+        self.stored_submissions
+            .entry(service_id)
+            .or_default()
+            .push(stored);
+    }
+
+    /// Get submissions for a service (for catch-up response)
+    fn get_submissions_for_catchup(&self, service_id: &ServiceId) -> Vec<Submission> {
+        let now = Instant::now();
+        let ttl = Duration::from_secs(SUBMISSION_TTL_SECS);
+
+        self.stored_submissions
+            .get(service_id)
+            .map(|subs| {
+                subs.iter()
+                    .filter(|s| now.duration_since(s.created_at) < ttl)
+                    .take(MAX_CATCHUP_SUBMISSIONS)
+                    .map(|s| s.submission.clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Clean up expired submissions
+    fn cleanup_expired_submissions(&mut self) {
+        let now = Instant::now();
+        let ttl = Duration::from_secs(SUBMISSION_TTL_SECS);
+
+        for subs in self.stored_submissions.values_mut() {
+            subs.retain(|s| now.duration_since(s.created_at) < ttl);
+        }
+
+        // Remove empty service entries
+        self.stored_submissions.retain(|_, subs| !subs.is_empty());
+    }
+}
+
+/// Run the P2P event loop
+async fn run_event_loop(
+    ctx: AppContext,
+    mut swarm: Swarm<WavsBehaviour>,
+    listen_port: u16,
+    mut command_rx: mpsc::Receiver<P2pCommand>,
+    aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
+) {
+    let listen_addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{}", listen_port)
+        .parse()
+        .expect("Valid multiaddr");
+
+    if let Err(e) = swarm.listen_on(listen_addr.clone()) {
+        tracing::error!("Failed to listen on {}: {}", listen_addr, e);
+        return;
+    }
+
+    tracing::info!("P2P listening on {}", listen_addr);
+
+    let mut state = EventLoopState::new();
+    let mut retry_interval = tokio::time::interval(Duration::from_millis(RETRY_INTERVAL_MS));
+    let mut cleanup_interval = tokio::time::interval(Duration::from_secs(60)); // Cleanup every minute
+    let mut shutdown_signal = ctx.get_kill_receiver();
+
+    loop {
+        tokio::select! {
+            _ = shutdown_signal.recv() => {
+                tracing::info!("P2P network shutting down");
+                break;
+            }
+            event = swarm.select_next_some() => {
+                handle_swarm_event(&mut swarm, event, &aggregator_tx, &mut state);
+            }
+            Some(command) = command_rx.recv() => {
+                handle_command(&mut swarm, command, &mut state);
+            }
+            _ = retry_interval.tick() => {
+                retry_pending_publishes(&mut swarm, &mut state.pending_publishes);
+            }
+            _ = cleanup_interval.tick() => {
+                state.cleanup_expired_submissions();
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Event Handlers
+// ============================================================================
+
+/// Retry any pending publishes in the queue
+fn retry_pending_publishes(
+    swarm: &mut Swarm<WavsBehaviour>,
+    pending_publishes: &mut VecDeque<PendingPublish>,
+) {
+    let now = Instant::now();
+    let max_age = Duration::from_secs(MAX_RETRY_DURATION_SECS);
+
+    let mut items_to_retry: VecDeque<PendingPublish> = std::mem::take(pending_publishes);
+
+    while let Some(mut item) = items_to_retry.pop_front() {
+        if now.duration_since(item.created_at) > max_age {
+            tracing::warn!(
+                "P2P publish to {} timed out after {} retries",
+                item.topic_name,
+                item.retries
+            );
+            continue;
+        }
+
+        let topic = IdentTopic::new(&item.topic_name);
+        match swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish(topic, item.data.clone())
+        {
+            Ok(_) => {
+                tracing::debug!(
+                    "Retry #{} successful: published to topic {}",
+                    item.retries,
+                    item.topic_name
+                );
+            }
+            Err(gossipsub::PublishError::NoPeersSubscribedToTopic) => {
+                item.retries += 1;
+                pending_publishes.push_back(item);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Retry #{} failed for topic {}: {}",
+                    item.retries,
+                    item.topic_name,
+                    e
+                );
+                item.retries += 1;
+                pending_publishes.push_back(item);
+            }
+        }
+    }
+}
+
+/// Handle swarm events
+fn handle_swarm_event(
+    swarm: &mut Swarm<WavsBehaviour>,
+    event: SwarmEvent<WavsBehaviourEvent>,
+    aggregator_tx: &crossbeam::channel::Sender<AggregatorCommand>,
+    state: &mut EventLoopState,
+) {
+    match event {
+        // mDNS discovered new peers
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
+            for (peer_id, addr) in peers {
+                tracing::info!("mDNS discovered peer: {} at {}", peer_id, addr);
+                swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
+                if let Err(e) = swarm.dial(addr.clone()) {
+                    tracing::debug!("Could not dial peer {} at {}: {:?}", peer_id, addr, e);
+                }
+            }
+        }
+        // mDNS peer expired
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
+            for (peer_id, _addr) in peers {
+                tracing::info!("mDNS peer expired: {}", peer_id);
+                swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .remove_explicit_peer(&peer_id);
+                // Allow re-requesting catch-up if peer reconnects
+                state.catchup_requested_peers.remove(&peer_id);
+            }
+        }
+        // Received a gossipsub message
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Gossipsub(gossipsub::Event::Message {
+            propagation_source,
+            message,
+            ..
+        })) => {
+            handle_gossip_message(propagation_source, message, aggregator_tx, state);
+        }
+        // Peer subscribed to a topic
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Gossipsub(gossipsub::Event::Subscribed {
+            peer_id,
+            topic,
+        })) => {
+            tracing::debug!("Peer {} subscribed to topic {}", peer_id, topic);
+        }
+        // Peer unsubscribed from a topic
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Gossipsub(gossipsub::Event::Unsubscribed {
+            peer_id,
+            topic,
+        })) => {
+            tracing::debug!("Peer {} unsubscribed from topic {}", peer_id, topic);
+        }
+        // Catch-up request received
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Catchup(request_response::Event::Message {
+            peer,
+            message:
+                request_response::Message::Request {
+                    request, channel, ..
+                },
+            ..
+        })) => {
+            handle_catchup_request(swarm, peer, request, channel, state);
+        }
+        // Catch-up response received
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Catchup(request_response::Event::Message {
+            peer,
+            message: request_response::Message::Response { response, .. },
+            ..
+        })) => {
+            handle_catchup_response(peer, response, aggregator_tx);
+        }
+        // Catch-up request/response errors
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Catchup(
+            request_response::Event::OutboundFailure { peer, error, .. },
+        )) => {
+            tracing::warn!("Catch-up request to {} failed: {:?}", peer, error);
+        }
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Catchup(
+            request_response::Event::InboundFailure { peer, error, .. },
+        )) => {
+            tracing::warn!("Catch-up request from {} failed: {:?}", peer, error);
+        }
+        // Identify received
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Identify(identify::Event::Received {
+            peer_id,
+            info,
+            ..
+        })) => {
+            tracing::debug!(
+                "Identified peer {}: {} with {} addresses",
+                peer_id,
+                info.protocol_version,
+                info.listen_addrs.len()
+            );
+        }
+        // AutoNAT status changed
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Autonat(autonat::Event::StatusChanged {
+            old,
+            new,
+        })) => {
+            tracing::info!("AutoNAT status changed: {:?} -> {:?}", old, new);
+        }
+        // AutoNAT inbound/outbound probes - debug level
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Autonat(event)) => {
+            tracing::debug!("AutoNAT event: {:?}", event);
+        }
+        // New listen address
+        SwarmEvent::NewListenAddr { address, .. } => {
+            tracing::info!("P2P listening on {}", address);
+        }
+        // Connection established - request catch-up
+        SwarmEvent::ConnectionEstablished {
+            peer_id, endpoint, ..
+        } => {
+            tracing::info!("Connection established with {} via {:?}", peer_id, endpoint);
+            // Request catch-up for all subscribed services
+            request_catchup_from_peer(swarm, peer_id, state);
+        }
+        // Connection closed
+        SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+            tracing::info!("Connection closed with {}: {:?}", peer_id, cause);
+            // Allow re-requesting catch-up if peer reconnects
+            state.catchup_requested_peers.remove(&peer_id);
+        }
+        // Other events we don't need to handle explicitly
+        _ => {}
+    }
+}
+
+/// Request catch-up from a newly connected peer
+fn request_catchup_from_peer(
+    swarm: &mut Swarm<WavsBehaviour>,
+    peer_id: PeerId,
+    state: &mut EventLoopState,
+) {
+    // Only request once per peer per connection
+    if state.catchup_requested_peers.contains(&peer_id) {
+        return;
+    }
+
+    // Request catch-up for each subscribed service
+    for service_id in &state.subscribed_services {
+        tracing::debug!(
+            "Requesting catch-up from {} for service {}",
+            peer_id,
+            service_id
+        );
+        let request = CatchUpRequest {
+            service_id: service_id.clone(),
+        };
+        swarm
+            .behaviour_mut()
+            .catchup
+            .send_request(&peer_id, request);
+    }
+
+    state.catchup_requested_peers.insert(peer_id);
+}
+
+/// Handle an incoming catch-up request
+fn handle_catchup_request(
+    swarm: &mut Swarm<WavsBehaviour>,
+    peer: PeerId,
+    request: CatchUpRequest,
+    channel: request_response::ResponseChannel<CatchUpResponse>,
+    state: &EventLoopState,
+) {
+    tracing::debug!(
+        "Received catch-up request from {} for service {}",
+        peer,
+        request.service_id
+    );
+
+    let submissions = state.get_submissions_for_catchup(&request.service_id);
+    let count = submissions.len();
+
+    let response = CatchUpResponse { submissions };
+
+    if let Err(e) = swarm
+        .behaviour_mut()
+        .catchup
+        .send_response(channel, response)
+    {
+        tracing::warn!("Failed to send catch-up response to {}: {:?}", peer, e);
+    } else {
+        tracing::debug!(
+            "Sent {} submissions in catch-up response to {}",
+            count,
+            peer
+        );
+    }
+}
+
+/// Handle an incoming catch-up response
+fn handle_catchup_response(
+    peer: PeerId,
+    response: CatchUpResponse,
+    aggregator_tx: &crossbeam::channel::Sender<AggregatorCommand>,
+) {
+    if response.submissions.is_empty() {
+        tracing::debug!("Received empty catch-up response from {}", peer);
+        return;
+    }
+
+    tracing::info!(
+        "Received catch-up response from {} with {} submissions",
+        peer,
+        response.submissions.len()
+    );
+
+    // Forward each submission to the aggregator
+    for submission in response.submissions {
+        if let Err(e) = aggregator_tx.send(AggregatorCommand::Receive {
+            submission,
+            peer: Peer::Other(format!("catchup:{}", peer)),
+        }) {
+            tracing::error!("Failed to send catch-up submission to aggregator: {}", e);
+        }
+    }
+}
+
+/// Handle a received gossip message
+fn handle_gossip_message(
+    propagation_source: PeerId,
+    message: gossipsub::Message,
+    aggregator_tx: &crossbeam::channel::Sender<AggregatorCommand>,
+    state: &mut EventLoopState,
+) {
+    let submission: Submission = match serde_json::from_slice(&message.data) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(
+                "Failed to deserialize submission from {}: {}",
+                propagation_source,
+                e
+            );
+            return;
+        }
+    };
+
+    tracing::info!(
+        "Received submission via P2P from {}: {}",
+        propagation_source,
+        submission.label()
+    );
+
+    // Store for catch-up responses
+    state.store_submission(submission.clone());
+
+    // Forward to aggregator
+    if let Err(e) = aggregator_tx.send(AggregatorCommand::Receive {
+        submission,
+        peer: Peer::Other(propagation_source.to_string()),
+    }) {
+        tracing::error!("Failed to send P2P submission to aggregator: {}", e);
+    }
+}
+
+/// Handle a command from the application
+fn handle_command(
+    swarm: &mut Swarm<WavsBehaviour>,
+    command: P2pCommand,
+    state: &mut EventLoopState,
+) {
+    match command {
+        P2pCommand::Publish {
+            service_id,
+            submission,
+        } => {
+            let topic_name = service_topic_name(&service_id);
+            let topic = IdentTopic::new(&topic_name);
+
+            // Ensure we're subscribed to the topic
+            if !state.subscribed_topics.contains(&topic_name) {
+                if let Err(e) = swarm.behaviour_mut().gossipsub.subscribe(&topic) {
+                    tracing::error!("Failed to subscribe to topic {}: {}", topic_name, e);
+                    return;
+                }
+                state.subscribed_topics.insert(topic_name.clone());
+                state.subscribed_services.insert(service_id.clone());
+                tracing::info!("Subscribed to P2P topic: {}", topic_name);
+            }
+
+            // Store submission for catch-up responses
+            state.store_submission(*submission.clone());
+
+            // Serialize and publish
+            let data = match serde_json::to_vec(&*submission) {
+                Ok(d) => d,
+                Err(e) => {
+                    tracing::error!("Failed to serialize submission: {}", e);
+                    return;
+                }
+            };
+
+            match swarm
+                .behaviour_mut()
+                .gossipsub
+                .publish(topic.clone(), data.clone())
+            {
+                Ok(_) => {
+                    tracing::debug!("Published submission to topic {}", topic_name);
+                }
+                Err(gossipsub::PublishError::NoPeersSubscribedToTopic) => {
+                    tracing::debug!("No peers subscribed to {}, queueing for retry", topic_name);
+                    state.pending_publishes.push_back(PendingPublish {
+                        topic_name,
+                        data,
+                        created_at: Instant::now(),
+                        retries: 0,
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to publish to topic {}: {}", topic_name, e);
+                }
+            }
+        }
+        P2pCommand::Subscribe { service_id } => {
+            let topic_name = service_topic_name(&service_id);
+            let topic = IdentTopic::new(&topic_name);
+
+            if state.subscribed_topics.contains(&topic_name) {
+                return;
+            }
+
+            if let Err(e) = swarm.behaviour_mut().gossipsub.subscribe(&topic) {
+                tracing::error!("Failed to subscribe to topic {}: {}", topic_name, e);
+                return;
+            }
+
+            state.subscribed_topics.insert(topic_name.clone());
+            state.subscribed_services.insert(service_id);
+            tracing::info!("Subscribed to P2P topic: {}", topic_name);
+        }
+        P2pCommand::Unsubscribe { service_id } => {
+            let topic_name = service_topic_name(&service_id);
+            let topic = IdentTopic::new(&topic_name);
+
+            if !state.subscribed_topics.contains(&topic_name) {
+                tracing::debug!(
+                    "Unsubscribe called for topic {} but not subscribed",
+                    topic_name
+                );
+                return;
+            }
+
+            if !swarm.behaviour_mut().gossipsub.unsubscribe(&topic) {
+                tracing::warn!("Failed to unsubscribe from topic {}", topic_name);
+                return;
+            }
+
+            state.subscribed_topics.remove(&topic_name);
+            state.subscribed_services.remove(&service_id);
+            // Also clear stored submissions for this service to free memory
+            state.stored_submissions.remove(&service_id);
+            tracing::info!("Unsubscribed from P2P topic: {}", topic_name);
+        }
+        P2pCommand::GetStatus { response_tx } => {
+            let local_peer_id = *swarm.local_peer_id();
+            let connected_peers: Vec<PeerId> = swarm.connected_peers().cloned().collect();
+
+            // Listen addresses - what we're directly listening on
+            let listen_addresses: Vec<String> = swarm
+                .listeners()
+                .map(|addr| format!("{}/p2p/{}", addr, local_peer_id))
+                .collect();
+
+            // External addresses - discovered via AutoNAT/Identify, preferred for NAT traversal
+            let external_addresses: Vec<String> = swarm
+                .external_addresses()
+                .map(|addr| format!("{}/p2p/{}", addr, local_peer_id))
+                .collect();
+
+            // Get peer counts for each subscribed topic
+            let mut topic_peer_counts = HashMap::new();
+            for topic_name in state.subscribed_topics.iter() {
+                let topic_hash = IdentTopic::new(topic_name).hash();
+                let peer_count = swarm.behaviour().gossipsub.mesh_peers(&topic_hash).count();
+                topic_peer_counts.insert(topic_name.clone(), peer_count);
+            }
+
+            let status = P2pStatus {
+                enabled: true,
+                local_peer_id: Some(local_peer_id.to_string()),
+                listen_addresses,
+                external_addresses,
+                connected_peers: connected_peers.len(),
+                peer_ids: connected_peers.iter().map(|p| p.to_string()).collect(),
+                subscribed_topics: state.subscribed_topics.iter().cloned().collect(),
+                topic_peer_counts,
+            };
+
+            // Ignore send error - the receiver may have been dropped
+            let _ = response_tx.send(status);
+        }
+    }
+}
+
+/// Create a GossipSub topic name for a service
+fn service_topic_name(service_id: &ServiceId) -> String {
+    format!("wavs/{}/packets/v1", service_id)
+}

@@ -1,4 +1,5 @@
 pub mod error;
+pub mod p2p;
 pub mod peer;
 mod queue;
 mod submit;
@@ -23,7 +24,7 @@ use crate::{
     services::Services,
     subsystems::{
         aggregator::{
-            error::AggregatorError, peer::Peer, queue::append_submission_to_queue,
+            error::AggregatorError, p2p::P2pHandle, peer::Peer, queue::append_submission_to_queue,
             submit::AnyTransactionReceipt,
         },
         engine::AggregatorExecuteKind,
@@ -44,6 +45,8 @@ pub struct Aggregator {
         Arc<std::sync::RwLock<HashMap<ChainKey, layer_climb::prelude::SigningClient>>>,
     queue_transaction: AsyncTransaction<QuorumQueueId>,
     chain_transaction: AsyncTransaction<ChainKey>,
+    /// Optional P2P handle for broadcasting submissions to peers
+    p2p_handle: Arc<std::sync::RwLock<Option<P2pHandle>>>,
 }
 
 #[derive(Debug)]
@@ -61,6 +64,14 @@ pub enum AggregatorCommand {
         submission: Submission,
         actions: Vec<AggregatorAction>,
         kind: AggregatorExecuteKind,
+    },
+    // Subscribe to a service's P2P topic (called when service is added)
+    SubscribeService {
+        service_id: wavs_types::ServiceId,
+    },
+    /// Unsubscribe from P2P topic when service is removed
+    UnsubscribeService {
+        service_id: wavs_types::ServiceId,
     },
 }
 
@@ -87,17 +98,42 @@ impl Aggregator {
             config: Arc::new(config.clone()),
             queue_transaction: AsyncTransaction::new(false),
             chain_transaction: AsyncTransaction::new(false),
+            p2p_handle: Arc::new(std::sync::RwLock::new(None)), // Initialized in start() method
         })
+    }
+
+    /// Get the current P2P network status
+    pub async fn get_p2p_status(&self) -> wavs_types::P2pStatus {
+        let handle = self.p2p_handle.read().unwrap().clone();
+        match handle {
+            Some(h) => h.get_status().await.unwrap_or_default(),
+            None => wavs_types::P2pStatus::default(),
+        }
     }
 
     #[instrument(skip(self, ctx), fields(subsys = "Aggregator"))]
     pub fn start(&self, ctx: AppContext) {
         let _self = self.clone();
 
-        let handle = ctx.rt.spawn({
-            let _self = self.clone();
-            async move {
-                _self.start_listener().await;
+        // Initialize P2P network if configured
+        ctx.rt.block_on(async {
+            match P2pHandle::new(
+                ctx.clone(),
+                self.config.p2p.clone(),
+                self.aggregator_to_self_tx.clone(),
+            )
+            .await
+            {
+                Ok(Some(handle)) => {
+                    tracing::info!("P2P network initialized successfully");
+                    *self.p2p_handle.write().unwrap() = Some(handle);
+                }
+                Ok(None) => {
+                    tracing::info!("P2P networking is disabled");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to initialize P2P network: {:?}", e);
+                }
             }
         });
 
@@ -108,15 +144,6 @@ impl Aggregator {
                 break;
             }
         }
-
-        handle.abort();
-
-        ctx.rt.block_on(async move {
-            match handle.await {
-                Ok(_) => tracing::info!("Aggregator listener task completed successfully"),
-                Err(e) => tracing::error!("Aggregator listener task failed: {:?}", e),
-            }
-        });
     }
 
     fn handle_dispatcher_command(&self, ctx: &AppContext, command: AggregatorCommand) {
@@ -142,6 +169,12 @@ impl Aggregator {
                 },
                 actions.len()
             ),
+            AggregatorCommand::SubscribeService { service_id } => {
+                format!("SubscribeService({})", service_id)
+            }
+            AggregatorCommand::UnsubscribeService { service_id } => {
+                format!("UnsubscribeService({})", service_id)
+            }
         };
 
         tracing::info!("Aggregator received command: {}", label);
@@ -322,6 +355,41 @@ impl Aggregator {
                     });
                 }
             }
+            AggregatorCommand::SubscribeService { service_id } => {
+                let p2p_handle = self.p2p_handle.read().unwrap().clone();
+                if let Some(handle) = p2p_handle {
+                    ctx.rt.spawn(async move {
+                        if let Err(e) = handle.subscribe(&service_id).await {
+                            tracing::warn!(
+                                "Failed to subscribe to P2P topic for service {}: {:?}",
+                                service_id,
+                                e
+                            );
+                        } else {
+                            tracing::info!("Subscribed to P2P topic for service {}", service_id);
+                        }
+                    });
+                }
+            }
+            AggregatorCommand::UnsubscribeService { service_id } => {
+                let p2p_handle = self.p2p_handle.read().unwrap().clone();
+                if let Some(handle) = p2p_handle {
+                    ctx.rt.spawn(async move {
+                        if let Err(e) = handle.unsubscribe(&service_id).await {
+                            tracing::warn!(
+                                "Failed to unsubscribe from P2P topic for service {}: {:?}",
+                                service_id,
+                                e
+                            );
+                        } else {
+                            tracing::info!(
+                                "Unsubscribed from P2P topic for service {}",
+                                service_id
+                            );
+                        }
+                    });
+                }
+            }
         }
     }
 
@@ -367,12 +435,27 @@ impl Aggregator {
     }
 
     async fn handle_broadcast(&self, submission: &Submission) -> Result<(), AggregatorError> {
+        // 1. Send to self for local processing
         self.aggregator_to_self_tx
             .send(AggregatorCommand::Receive {
                 submission: submission.clone(),
                 peer: Peer::Me,
             })
             .map_err(Box::new)?;
+
+        // 2. Broadcast to P2P network if enabled
+        let p2p_handle = self.p2p_handle.read().unwrap().clone();
+        if let Some(handle) = p2p_handle {
+            if let Err(e) = handle.publish(submission).await {
+                tracing::warn!("Failed to publish submission to P2P network: {:?}", e);
+                // Don't fail the broadcast if P2P fails - local processing should continue
+            } else {
+                tracing::debug!(
+                    "Published submission to P2P network: {}",
+                    submission.label()
+                );
+            }
+        }
 
         Ok(())
     }
@@ -382,7 +465,8 @@ impl Aggregator {
         submission: Submission,
         service: Service,
     ) -> Result<(), AggregatorError> {
-        // TODO - broadcast to peers
+        // Note: Broadcasting to peers happens in handle_broadcast when we create our own submission.
+        // When we receive from peers via P2P, it comes here with Peer::Other and gets processed locally.
 
         self.subsystem_to_dispatcher_tx
             .send(DispatcherCommand::AggregatorExecute {
@@ -504,10 +588,6 @@ impl Aggregator {
             .map_err(Box::new)?;
 
         Ok(())
-    }
-
-    async fn start_listener(&self) {
-        // Implement the logic to listen for incoming packets from the aggregator nodes
     }
 
     async fn get_evm_client(

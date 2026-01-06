@@ -246,6 +246,34 @@ async fn run_test(
     clients: &Clients,
     component_sources: &ComponentSources,
 ) -> anyhow::Result<()> {
+    // For multi-operator tests, wait for P2P mesh to form before triggering
+    if test.multi_operator && clients.http_clients.len() > 1 {
+        let expected_peers = clients.http_clients.len() - 1;
+        tracing::info!(
+            "Multi-operator test: waiting for P2P mesh formation ({} expected peers)",
+            expected_peers
+        );
+
+        // Wait for all operators to have connected to peers
+        for (idx, http_client) in clients.http_clients.iter().enumerate() {
+            match http_client
+                .wait_for_p2p_ready(expected_peers, Some(Duration::from_secs(30)))
+                .await
+            {
+                Ok(status) => {
+                    tracing::info!(
+                        "Operator {} P2P ready: {} connected peers",
+                        idx,
+                        status.connected_peers
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!("Operator {} P2P readiness check failed: {}", idx, e);
+                }
+            }
+        }
+    }
+
     // Group workflows by trigger to handle multi-triggers
     let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowId, &Workflow)>> = OrderMap::new();
 
