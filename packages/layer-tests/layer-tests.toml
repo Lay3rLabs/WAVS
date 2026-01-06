@@ -7,9 +7,9 @@ middleware_concurrency = true
 grouping = false
 evm_middleware_type = "poa" # "eigenlayer" or "poa"
 # Run all tests
-# mode = "all"
+mode = "all"
 # mode = { "isolated" = [{ evm = "echo_data" }] }
-mode = { "isolated" = [{ evm = "multi_operator" }] }
+# mode = { "isolated" = [{ evm = "multi_operator" }] }
 
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
 # mode = "all_eth"
