@@ -3,8 +3,10 @@
 //! Key components:
 //! - GossipSub: Message dissemination per service topic
 //! - Request/Response: Catch-up protocol for missed messages
-//! - mDNS: Local peer discovery for development/testing
+//! - mDNS: Local peer discovery for development/testing (Local mode)
+//! - Kademlia: DHT-based peer discovery for production (Remote mode)
 //! - Identify: Peer identification protocol
+//! - AutoNAT: External address discovery for NAT traversal
 
 use std::{
     collections::{hash_map::DefaultHasher, HashMap, HashSet, VecDeque},
@@ -18,9 +20,9 @@ use futures::{AsyncReadExt, AsyncWriteExt, StreamExt};
 use libp2p::{
     autonat,
     gossipsub::{self, IdentTopic, MessageAuthenticity, MessageId, ValidationMode},
-    identify, mdns,
+    identify, kad, mdns,
     request_response::{self, Codec, ProtocolSupport},
-    swarm::{NetworkBehaviour, SwarmEvent},
+    swarm::{behaviour::toggle::Toggle, NetworkBehaviour, SwarmEvent},
     Multiaddr, PeerId, StreamProtocol, Swarm, SwarmBuilder,
 };
 use serde::{Deserialize, Serialize};
@@ -62,11 +64,13 @@ pub enum P2pConfig {
         submission_ttl_secs: Option<u64>,
         max_catchup_submissions: Option<usize>,
     },
-    // TODO: Remote/production with bootstrap nodes + Kademlia
-    // Remote {
-    //     listen_port: u16,
-    //     bootstrap_nodes: Vec<Multiaddr>,
-    // },
+    /// Remote/production - use Kademlia DHT for peer discovery with bootstrap nodes
+    Remote {
+        /// Port to listen on for P2P connections
+        listen_port: u16,
+        /// Bootstrap node addresses (multiaddr format). Empty = this node is a bootstrap server.
+        bootstrap_nodes: Vec<String>,
+    },
 }
 
 impl P2pConfig {
@@ -121,8 +125,8 @@ impl P2pConfig {
         match self {
             // Faster heartbeat for local testing to speed up mesh formation
             P2pConfig::Local { .. } => Duration::from_millis(100),
-            // Default for production (disabled doesn't matter)
-            P2pConfig::Disabled => Duration::from_secs(1),
+            // Production defaults
+            P2pConfig::Remote { .. } | P2pConfig::Disabled => Duration::from_secs(1),
         }
     }
 
@@ -160,7 +164,7 @@ impl P2pConfig {
     pub fn duplicate_cache_time(&self) -> Duration {
         match self {
             P2pConfig::Local { .. } => Duration::from_secs(30),
-            P2pConfig::Disabled => Duration::from_secs(60),
+            P2pConfig::Remote { .. } | P2pConfig::Disabled => Duration::from_secs(60),
         }
     }
 
@@ -168,7 +172,7 @@ impl P2pConfig {
     pub fn history_length(&self) -> usize {
         match self {
             P2pConfig::Local { .. } => 3,
-            P2pConfig::Disabled => 5,
+            P2pConfig::Remote { .. } | P2pConfig::Disabled => 5,
         }
     }
 
@@ -176,7 +180,7 @@ impl P2pConfig {
     pub fn history_gossip(&self) -> usize {
         match self {
             P2pConfig::Local { .. } => 2,
-            P2pConfig::Disabled => 3,
+            P2pConfig::Remote { .. } | P2pConfig::Disabled => 3,
         }
     }
 }
@@ -277,8 +281,10 @@ struct WavsBehaviour {
     gossipsub: gossipsub::Behaviour,
     /// Request/Response for catch-up protocol
     catchup: request_response::Behaviour<CatchUpCodec>,
-    /// mDNS for local peer discovery
-    mdns: mdns::tokio::Behaviour,
+    /// mDNS for local peer discovery (Local mode only)
+    mdns: Toggle<mdns::tokio::Behaviour>,
+    /// Kademlia DHT for remote peer discovery (Remote mode only)
+    kademlia: Toggle<kad::Behaviour<kad::store::MemoryStore>>,
     /// Identify protocol for peer identification
     identify: identify::Behaviour,
     /// AutoNAT for external address discovery
@@ -331,6 +337,20 @@ impl P2pHandle {
                     Self::create_local_network(ctx, p2p_config, listen_port, aggregator_tx).await?;
                 Ok(Some(handle))
             }
+            P2pConfig::Remote {
+                listen_port,
+                bootstrap_nodes,
+            } => {
+                let handle = Self::create_network(
+                    ctx,
+                    *listen_port,
+                    bootstrap_nodes.clone(),
+                    aggregator_tx,
+                    &config,
+                )
+                .await?;
+                Ok(Some(handle))
+            }
         }
     }
 
@@ -377,17 +397,23 @@ impl P2pHandle {
             .map_err(|e| AggregatorError::P2p(format!("Failed to receive P2P status: {}", e)))
     }
 
-    /// Create a local P2P network using mDNS for peer discovery
-    async fn create_local_network(
+    /// Create a P2P network
+    async fn create_network(
         ctx: AppContext,
         p2p_config: P2pConfig,
         listen_port: u16,
+        bootstrap_nodes: Vec<String>,
         aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
     ) -> Result<Self, AggregatorError> {
         let swarm = build_swarm(&p2p_config)?;
         let local_peer_id = *swarm.local_peer_id();
 
-        tracing::info!("Local P2P peer ID: {}", local_peer_id);
+        let mode_name = match config {
+            P2pConfig::Local { .. } => "Local (mDNS)",
+            P2pConfig::Remote { .. } => "Remote (Kademlia)",
+            P2pConfig::Disabled => "Disabled",
+        };
+        tracing::info!("P2P peer ID: {} (mode: {})", local_peer_id, mode_name);
 
         let (command_tx, command_rx) = mpsc::unbounded_channel();
 
@@ -396,6 +422,7 @@ impl P2pHandle {
             p2p_config,
             swarm,
             listen_port,
+            bootstrap_nodes,
             command_rx,
             aggregator_tx,
         ));
@@ -436,6 +463,8 @@ fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorErr
         .build()
         .map_err(|e| AggregatorError::P2p(format!("Failed to build gossipsub config: {}", e)))?;
 
+    let is_local = matches!(config, P2pConfig::Local { .. });
+
     let swarm = SwarmBuilder::with_new_identity()
         .with_tokio()
         .with_tcp(
@@ -445,6 +474,8 @@ fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorErr
         )
         .map_err(|e| AggregatorError::P2p(format!("Failed to configure TCP: {}", e)))?
         .with_behaviour(|key| {
+            let peer_id = key.public().to_peer_id();
+
             let gossipsub = gossipsub::Behaviour::new(
                 MessageAuthenticity::Signed(key.clone()),
                 gossipsub_config,
@@ -457,22 +488,30 @@ fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorErr
                 request_response::Config::default(),
             );
 
-            let mdns =
-                mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())
+            // Discovery: mDNS for Local mode, Kademlia for Remote mode
+            let (mdns, kademlia) = if is_local {
+                let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), peer_id)
                     .map_err(|e| format!("Failed to create mDNS: {}", e))?;
+                (Toggle::from(Some(mdns)), Toggle::from(None))
+            } else {
+                // Remote mode: use Kademlia DHT
+                let store = kad::store::MemoryStore::new(peer_id);
+                let kademlia = kad::Behaviour::new(peer_id, store);
+                (Toggle::from(None), Toggle::from(Some(kademlia)))
+            };
 
             let identify = identify::Behaviour::new(identify::Config::new(
                 PROTOCOL_VERSION.to_string(),
                 key.public(),
             ));
 
-            let autonat =
-                autonat::Behaviour::new(key.public().to_peer_id(), autonat::Config::default());
+            let autonat = autonat::Behaviour::new(peer_id, autonat::Config::default());
 
             Ok(WavsBehaviour {
                 gossipsub,
                 catchup,
                 mdns,
+                kademlia,
                 identify,
                 autonat,
             })
@@ -565,7 +604,10 @@ async fn run_event_loop(
     p2p_config: P2pConfig,
     mut swarm: Swarm<WavsBehaviour>,
     listen_port: u16,
+    bootstrap_nodes: Vec<String>,
     mut command_rx: mpsc::UnboundedReceiver<P2pCommand>,
+    
+ 
     aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
 ) {
     let listen_addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{}", listen_port)
@@ -579,8 +621,36 @@ async fn run_event_loop(
 
     tracing::info!("P2P listening on {}", listen_addr);
 
-    let mut retry_interval =
-        tokio::time::interval(Duration::from_millis(p2p_config.retry_interval_ms()));
+    // For Remote mode: dial bootstrap nodes and trigger Kademlia bootstrap
+    if !bootstrap_nodes.is_empty() {
+        for addr_str in &bootstrap_nodes {
+            match addr_str.parse::<Multiaddr>() {
+                Ok(addr) => {
+                    tracing::info!("Dialing bootstrap node: {}", addr);
+                    if let Err(e) = swarm.dial(addr.clone()) {
+                        tracing::warn!("Failed to dial bootstrap node {}: {:?}", addr, e);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Invalid bootstrap address '{}': {}", addr_str, e);
+                }
+            }
+        }
+
+        // Trigger Kademlia bootstrap if available
+        if let Some(kademlia) = swarm.behaviour_mut().kademlia.as_mut() {
+            if let Err(e) = kademlia.bootstrap() {
+                tracing::warn!("Kademlia bootstrap failed: {:?}", e);
+            } else {
+                tracing::info!("Kademlia bootstrap initiated");
+            }
+        }
+    } else if swarm.behaviour().kademlia.as_ref().is_some() {
+        tracing::info!("Running as bootstrap server (no bootstrap nodes configured)");
+    }
+
+    let mut state = EventLoopState::new();
+    let mut retry_interval = tokio::time::interval(Duration::from_millis(RETRY_INTERVAL_MS));
     let mut cleanup_interval = tokio::time::interval(Duration::from_secs(60)); // Cleanup every minute
     let mut shutdown_signal = ctx.get_kill_receiver();
     let mut state = EventLoopState::new(p2p_config);
@@ -745,7 +815,7 @@ fn handle_swarm_event(
         )) => {
             tracing::warn!("Catch-up request from {} failed: {:?}", peer, error);
         }
-        // Identify received
+        // Identify received - add peer addresses to Kademlia if available
         SwarmEvent::Behaviour(WavsBehaviourEvent::Identify(identify::Event::Received {
             peer_id,
             info,
@@ -757,6 +827,57 @@ fn handle_swarm_event(
                 info.protocol_version,
                 info.listen_addrs.len()
             );
+            // Add peer's addresses to Kademlia routing table if in Remote mode
+            if let Some(kademlia) = swarm.behaviour_mut().kademlia.as_mut() {
+                for addr in &info.listen_addrs {
+                    kademlia.add_address(&peer_id, addr.clone());
+                }
+            }
+        }
+        // Kademlia routing table updated - peer discovered via DHT
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Kademlia(kad::Event::RoutingUpdated {
+            peer,
+            is_new_peer,
+            addresses,
+            ..
+        })) => {
+            if is_new_peer {
+                tracing::info!(
+                    "Kademlia discovered new peer: {} with {} addresses",
+                    peer,
+                    addresses.len()
+                );
+                swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer);
+            }
+        }
+        // Kademlia query progress
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Kademlia(
+            kad::Event::OutboundQueryProgressed { id, result, .. },
+        )) => match result {
+            kad::QueryResult::Bootstrap(Ok(kad::BootstrapOk { num_remaining, .. })) => {
+                if num_remaining == 0 {
+                    tracing::info!("Kademlia bootstrap complete");
+                }
+            }
+            kad::QueryResult::Bootstrap(Err(e)) => {
+                tracing::warn!("Kademlia bootstrap error: {:?}", e);
+            }
+            kad::QueryResult::GetClosestPeers(Ok(kad::GetClosestPeersOk { peers, .. })) => {
+                tracing::debug!("Kademlia found {} closest peers", peers.len());
+                for peer_info in peers {
+                    swarm
+                        .behaviour_mut()
+                        .gossipsub
+                        .add_explicit_peer(&peer_info.peer_id);
+                }
+            }
+            _ => {
+                tracing::debug!("Kademlia query {:?} progressed", id);
+            }
+        },
+        // Other Kademlia events - debug level
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Kademlia(event)) => {
+            tracing::debug!("Kademlia event: {:?}", event);
         }
         // AutoNAT status changed
         SwarmEvent::Behaviour(WavsBehaviourEvent::Autonat(autonat::Event::StatusChanged {

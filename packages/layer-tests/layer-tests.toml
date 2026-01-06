@@ -12,6 +12,7 @@ mode = "all"
 # mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }
 # mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }
 # mode = { "isolated" = [{ evm = "multi_operator" }] }
+# mode = { "isolated" = [{ evm = "multi_operator_remote" }] }
 # mode = {"isolated" = [
 #     {evm = "echo_data"},
 #     {evm = "multi_operator"},
