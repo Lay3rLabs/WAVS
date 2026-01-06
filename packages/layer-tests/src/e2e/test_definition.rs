@@ -46,6 +46,9 @@ pub struct TestDefinition {
 
     /// Execution group (ascending priority)
     pub group: TestGroupId,
+
+    /// If true, this test requires multiple operators with 2/3 quorum
+    pub multi_operator: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -284,6 +287,7 @@ impl TestBuilder {
                 service_manager_chain: None,
                 change_service: None,
                 group: TestGroupId::Default,
+                multi_operator: false,
             },
         }
     }
@@ -297,6 +301,12 @@ impl TestBuilder {
     /// Set the execution group
     pub fn with_group(mut self, group: TestGroupId) -> Self {
         self.definition.group = group;
+        self
+    }
+
+    /// Mark this test as requiring multiple operators with 2/3 quorum
+    pub fn with_multi_operator(mut self) -> Self {
+        self.definition.multi_operator = true;
         self
     }
 
