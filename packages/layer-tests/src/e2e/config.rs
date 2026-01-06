@@ -218,7 +218,7 @@ impl From<TestConfig> for Configs {
 
         Self {
             matrix,
-            registry: test_config.registry.map_or_else(|| false, |t| t),
+            registry: test_config.registry.unwrap_or(false),
             cli: cli_config,
             cli_args,
             wavs: wavs_config,

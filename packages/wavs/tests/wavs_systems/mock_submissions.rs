@@ -63,7 +63,7 @@ pub fn mock_submission_request(service: &Service, payload: &str) -> SubmissionRe
             data: wavs_types::TriggerData::default(),
         },
         operator_response: WasmResponse {
-            payload: payload.as_bytes().to_vec().into(),
+            payload: payload.as_bytes().to_vec(),
             event_id_salt: None,
             ordering: None,
         },
@@ -82,7 +82,7 @@ pub fn mock_submission_manager(
     services: Services,
 ) -> SubmissionManager {
     let submission_manager = SubmissionManager::new(
-        &config,
+        config,
         metrics.wavs.submission.clone(),
         services,
         channels.dispatcher_to_submission_rx.clone(),

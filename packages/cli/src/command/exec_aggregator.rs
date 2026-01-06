@@ -282,7 +282,7 @@ mod test {
             operator_response: wavs_types::WasmResponse {
                 event_id_salt: None,
                 ordering: None,
-                payload: b"test data".to_vec().into(),
+                payload: b"test data".to_vec(),
             },
         }
     }

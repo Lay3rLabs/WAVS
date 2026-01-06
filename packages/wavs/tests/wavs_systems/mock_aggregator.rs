@@ -17,7 +17,7 @@ pub fn mock_aggregator(
     services: Services,
 ) -> Aggregator {
     let aggregator = Aggregator::new(
-        &config,
+        config,
         metrics.wavs.aggregator.clone(),
         services,
         channels.dispatcher_to_aggregator_rx.clone(),
@@ -54,7 +54,7 @@ pub fn wait_for_aggregator_broadcasts(
         }
         sleep(AGGREGATOR_POLL);
     }
-    Err(WaitError::TimeoutBroadcast)
+    Err(WaitError::Broadcast)
 }
 
 pub fn wait_for_aggregator_receives(
@@ -69,7 +69,7 @@ pub fn wait_for_aggregator_receives(
         }
         sleep(AGGREGATOR_POLL);
     }
-    Err(WaitError::TimeoutReceive)
+    Err(WaitError::Receive)
 }
 
 pub fn wait_for_aggregator_submissions(
@@ -84,17 +84,17 @@ pub fn wait_for_aggregator_submissions(
         }
         sleep(AGGREGATOR_POLL);
     }
-    Err(WaitError::TimeoutSubmit)
+    Err(WaitError::Submit)
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum WaitError {
     #[error("Broadcast timed out")]
-    TimeoutBroadcast,
+    Broadcast,
     #[error("Receive timed out")]
-    TimeoutReceive,
+    Receive,
     #[error("Execute timed out")]
-    TimeoutExecute,
+    Execute,
     #[error("Submit timed out")]
-    TimeoutSubmit,
+    Submit,
 }

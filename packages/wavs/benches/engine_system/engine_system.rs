@@ -57,14 +57,14 @@ fn run_simulation(setup: Arc<SystemSetup>) {
     std::thread::spawn(move || {
         let mut received_results = Vec::new();
         while let Ok(result) = results_receiver.recv() {
-            if let DispatcherCommand::EngineResponse(engine_response) = result {
-                if let EngineResponse::Operator(submission_request) = engine_response {
-                    received_results.push(submission_request);
-                    if received_results.len() == total_actions as usize {
-                        // Notify that all results have been received
-                        let _ = finished_sender.send(received_results);
-                        break;
-                    }
+            if let DispatcherCommand::EngineResponse(EngineResponse::Operator(submission_request)) =
+                result
+            {
+                received_results.push(submission_request);
+                if received_results.len() == total_actions as usize {
+                    // Notify that all results have been received
+                    let _ = finished_sender.send(received_results);
+                    break;
                 }
             }
         }

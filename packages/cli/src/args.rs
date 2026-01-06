@@ -1,5 +1,5 @@
 use alloy_primitives::{Address, LogData};
-use clap::{arg, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use iri_string::types::UriString;
 use serde::{Deserialize, Serialize};
 use std::{
