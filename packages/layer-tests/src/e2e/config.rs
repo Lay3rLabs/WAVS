@@ -246,6 +246,24 @@ impl From<TestConfig> for Configs {
             // Each operator gets a unique port
             wavs_config.port = WAVS_BASE_PORT + operator_index as u32;
 
+            // Enable P2P for multi-operator tests
+            if num_operators > 1 {
+                if matrix.multi_operator_remote_enabled() {
+                    // Remote mode: Kademlia DHT discovery
+                    // Operator 0 is the bootstrap server (empty bootstrap_nodes)
+                    // Operators 1+ will have bootstrap_nodes set at runtime after operator 0 starts
+                    wavs_config.p2p = P2pConfig::Remote {
+                        listen_port: P2P_BASE_PORT + operator_index as u16,
+                        bootstrap_nodes: vec![], // Set at runtime for operators 1+
+                    };
+                } else {
+                    // Local mode: mDNS discovery
+                    wavs_config.p2p = P2pConfig::Local {
+                        listen_port: P2P_BASE_PORT + operator_index as u16,
+                    };
+                }
+            }
+
             wavs_configs.push(wavs_config);
         }
 

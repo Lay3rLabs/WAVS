@@ -174,6 +174,9 @@ impl TestRegistry {
                 EvmService::MultiOperator => {
                     registry.register_evm_multi_operator_test(chain);
                 }
+                EvmService::MultiOperatorRemote => {
+                    registry.register_evm_multi_operator_remote_test(chain);
+                }
             }
         }
 
@@ -868,14 +871,12 @@ impl TestRegistry {
         )
     }
 
-    /// Multi-operator test that requires 2/3 quorum
-    /// This test is expected to FAIL until P2P signature aggregation is implemented
-    /// because only one operator will sign, but 2/3 signatures are required
+    /// Multi-operator test with mDNS discovery (Local mode)
     fn register_evm_multi_operator_test(&mut self, chain: &ChainKey) -> &mut Self {
         self.register(
             TestBuilder::new("evm_multi_operator")
                 .with_description(
-                    "Tests multi-operator quorum (2/3) - expected to fail until P2P aggregation is implemented",
+                    "Tests multi-operator quorum (2/3) with mDNS discovery (Local P2P mode)",
                 )
                 .add_workflow(
                     WorkflowId::new("multi_operator_echo").unwrap(),
@@ -889,7 +890,40 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator(Self::simple_aggregator(chain)))
                         .with_input_data(InputData::Text("multi-operator test".to_string()))
-                        .with_expected_output(ExpectedOutput::Text("multi-operator test".to_string()))
+                        .with_expected_output(ExpectedOutput::Text(
+                            "multi-operator test".to_string(),
+                        ))
+                        .build(),
+                )
+                .with_service_manager_chain(chain)
+                .with_multi_operator()
+                .with_group(TestGroupId::Default)
+                .build(),
+        )
+    }
+
+    /// Multi-operator test with Kademlia DHT discovery (Remote mode)
+    fn register_evm_multi_operator_remote_test(&mut self, chain: &ChainKey) -> &mut Self {
+        self.register(
+            TestBuilder::new("evm_multi_operator_remote")
+                .with_description(
+                    "Tests multi-operator quorum (2/3) with Kademlia discovery (Remote P2P mode)",
+                )
+                .add_workflow(
+                    WorkflowId::new("multi_operator_remote_echo").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_operator_component(OperatorComponent::EchoData)
+                        .with_aggregator_component(AggregatorComponent::SimpleAggregator)
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator(Self::simple_aggregator(chain)))
+                        .with_input_data(InputData::Text("multi-operator remote test".to_string()))
+                        .with_expected_output(ExpectedOutput::Text(
+                            "multi-operator remote test".to_string(),
+                        ))
                         .build(),
                 )
                 .with_service_manager_chain(chain)
