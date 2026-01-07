@@ -595,7 +595,7 @@ impl Aggregator {
 
         let client = SigningClient::new(chain_config.into(), key_signer, None)
             .await
-            .map_err(AggregatorError::CreateEvmClient)?;
+            .map_err(AggregatorError::CosmosClient)?;
 
         {
             let clients = &mut self.cosmos_submission_clients.write().unwrap();
