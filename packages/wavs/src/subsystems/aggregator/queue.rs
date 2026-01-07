@@ -67,7 +67,7 @@ pub fn append_submission_to_queue(
     match queue.first() {
         None => {}
         Some(prev) => {
-            // check if the packet is the same as the last one
+            // check if the submission is the same as the last one
             // TODO - let custom logic here? wasm component?
             if submission.envelope != prev.envelope {
                 return Err(AggregatorError::EnvelopeDiff(queue_id.clone()));
