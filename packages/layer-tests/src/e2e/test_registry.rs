@@ -810,7 +810,7 @@ impl TestRegistry {
                         .build(),
                 )
                 .with_service_manager_chain(chain)
-                .with_group(TestGroupId::Interval)
+                .with_group(TestGroupId::EvmInterval)
                 .build(),
         )
     }
@@ -838,7 +838,7 @@ impl TestRegistry {
                         .build(),
                 )
                 .with_service_manager_chain(chain)
-                .with_group(TestGroupId::IntervalStartStop)
+                .with_group(TestGroupId::EvmIntervalStartStop)
                 .build(),
         )
     }
@@ -863,7 +863,7 @@ impl TestRegistry {
                         .build(),
                 )
                 .with_service_manager_chain(chain)
-                .with_group(TestGroupId::Interval)
+                .with_group(TestGroupId::CronInterval)
                 .build(),
         )
     }
@@ -1086,7 +1086,7 @@ impl TestRegistry {
                         .build(),
                 )
                 .with_service_manager_chain(submit_chain)
-                .with_group(TestGroupId::Interval)
+                .with_group(TestGroupId::CosmosInterval)
                 .build(),
         )
     }
@@ -1120,7 +1120,7 @@ impl TestRegistry {
                         .build(),
                 )
                 .with_service_manager_chain(submit_chain)
-                .with_group(TestGroupId::IntervalStartStop)
+                .with_group(TestGroupId::CosmosIntervalStartStop)
                 .build(),
         )
     }
@@ -1151,7 +1151,7 @@ impl TestRegistry {
                         .build(),
                 )
                 .with_service_manager_chain(submit_chain)
-                .with_group(TestGroupId::Interval)
+                .with_group(TestGroupId::CronInterval)
                 .build(),
         )
     }

@@ -9,7 +9,7 @@ use utils::test_utils::{
     },
     mock_service_manager::MockEvmServiceManager,
 };
-use wavs_cli::{clients::HttpClient, command::deploy_service::DeployService};
+use wavs_cli::command::deploy_service::DeployService;
 use wavs_types::{
     ChainKey, ChainKeyNamespace, Service, ServiceManager, ServiceStatus, SignerResponse,
 };
@@ -242,8 +242,8 @@ impl ServiceManagers {
         }
     }
 
-    pub async fn register_operators(&self, registry: &TestRegistry, _clients: &Clients) {
-        use crate::e2e::config::{MULTI_OPERATOR_COUNT, WAVS_BASE_PORT};
+    pub async fn register_operators(&self, registry: &TestRegistry, clients: &Clients) {
+        use crate::e2e::config::MULTI_OPERATOR_COUNT;
 
         let mut futures = Vec::new();
 
@@ -261,11 +261,8 @@ impl ServiceManagers {
             let mut avs_operators = Vec::with_capacity(num_operators);
 
             for operator_offset in 0..num_operators {
-                // Get the signing key from the correct WAVS instance
-                // Each WAVS instance runs on its own port: 8000, 8001, 8002, etc.
-                let wavs_port = WAVS_BASE_PORT + operator_offset as u32;
-                let wavs_endpoint = format!("http://127.0.0.1:{}", wavs_port);
-                let http_client = HttpClient::new(wavs_endpoint);
+                // Reuse existing HTTP client for this WAVS instance
+                let http_client = &clients.http_clients[operator_offset];
 
                 let SignerResponse::Secp256k1 {
                     evm_address: avs_signer_address,

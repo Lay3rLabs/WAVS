@@ -17,8 +17,11 @@ use crate::e2e::components::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub enum TestGroupId {
     Default,
-    Interval,
-    IntervalStartStop,
+    EvmInterval,
+    EvmIntervalStartStop,
+    CronInterval,
+    CosmosInterval,
+    CosmosIntervalStartStop,
     Backpressure,
     AggregatorTimer,
     P2pLocal,

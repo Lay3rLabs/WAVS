@@ -190,7 +190,7 @@ cosmwasm-build-inner CONTRACT_PATH:
     fi;
 # on-chain integration test
 test-wavs-e2e:
-    RUST_LOG=debug,alloy_rpc=off,alloy_provider=off,wasmtime=off,cranelift=off,hyper_util=off cargo test -p layer-tests
+    ulimit -n 65536 && RUST_LOG=debug,alloy_rpc=off,alloy_provider=off,wasmtime=off,cranelift=off,hyper_util=off cargo test -p layer-tests
 
 update-submodules:
     git submodule update --init --recursive

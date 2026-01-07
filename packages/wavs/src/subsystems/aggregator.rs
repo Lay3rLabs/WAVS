@@ -4,7 +4,13 @@ pub mod peer;
 mod queue;
 mod submit;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use layer_climb::prelude::*;
 use tracing::instrument;
@@ -31,7 +37,6 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
 pub struct Aggregator {
     pub metrics: AggregatorMetrics,
     storage: WavsDb,
@@ -47,6 +52,9 @@ pub struct Aggregator {
     chain_transaction: AsyncTransaction<ChainKey>,
     /// Optional P2P handle for broadcasting submissions to peers
     p2p_handle: Arc<std::sync::RwLock<Option<P2pHandle>>>,
+    /// Tracks whether this is the primary instance (true) or a clone for async tasks (false).
+    /// Only the primary instance logs a warning when dropped.
+    is_primary: Arc<AtomicBool>,
 }
 
 #[derive(Debug)]
@@ -99,6 +107,7 @@ impl Aggregator {
             queue_transaction: AsyncTransaction::new(false),
             chain_transaction: AsyncTransaction::new(false),
             p2p_handle: Arc::new(std::sync::RwLock::new(None)), // Initialized in start() method
+            is_primary: Arc::new(AtomicBool::new(true)),
         })
     }
 
@@ -686,8 +695,33 @@ impl Aggregator {
     }
 }
 
+impl Clone for Aggregator {
+    fn clone(&self) -> Self {
+        Self {
+            metrics: self.metrics.clone(),
+            storage: self.storage.clone(),
+            config: self.config.clone(),
+            services: self.services.clone(),
+            dispatcher_to_aggregator_rx: self.dispatcher_to_aggregator_rx.clone(),
+            aggregator_to_self_tx: self.aggregator_to_self_tx.clone(),
+            subsystem_to_dispatcher_tx: self.subsystem_to_dispatcher_tx.clone(),
+            evm_submission_clients: self.evm_submission_clients.clone(),
+            cosmos_submission_clients: self.cosmos_submission_clients.clone(),
+            queue_transaction: self.queue_transaction.clone(),
+            chain_transaction: self.chain_transaction.clone(),
+            p2p_handle: self.p2p_handle.clone(),
+            // Clones are not primary - only the original instance is
+            is_primary: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
 impl Drop for Aggregator {
     fn drop(&mut self) {
-        tracing::warn!("Dropping Aggregator subsystem");
+        // Only log when the primary instance is dropped (actual subsystem shutdown),
+        // not when clones used for async tasks are dropped
+        if self.is_primary.load(Ordering::Relaxed) {
+            tracing::warn!("Dropping Aggregator subsystem");
+        }
     }
 }

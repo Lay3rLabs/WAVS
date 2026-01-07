@@ -22,11 +22,12 @@
  *
  ***/
 
-use alloy_provider::ProviderBuilder;
+use alloy_provider::{DynProvider, ProviderBuilder};
 use anyhow::Result;
 use futures::{stream, StreamExt};
 use iri_string::types::{CreationError, UriString};
 use layer_climb::querier::QueryClient;
+use std::collections::HashMap;
 use std::ops::Bound;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
@@ -74,6 +75,11 @@ pub struct Dispatcher<S: CAStorage> {
     pub dispatcher_to_engine_tx: crossbeam::channel::Sender<EngineCommand>,
     pub dispatcher_to_submission_tx: crossbeam::channel::Sender<SubmissionCommand>,
     pub dispatcher_to_aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
+    pub db_storage: WavsDb,
+    /// Cached EVM HTTP providers per chain to avoid creating new connections for each query
+    evm_http_providers: Arc<RwLock<HashMap<ChainKey, DynProvider>>>,
+    /// Cached Cosmos query clients per chain to avoid creating new connections for each query
+    cosmos_query_clients: Arc<RwLock<HashMap<ChainKey, QueryClient>>>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -130,7 +136,7 @@ impl Dispatcher<FileStorage> {
             Some(config.max_wasm_fuel),
             Some(config.max_execution_seconds),
             metrics.engine,
-            db_storage,
+            db_storage.clone(),
             config.ipfs_gateway.clone(),
         );
         let engine_manager = EngineManager::new(
@@ -163,6 +169,7 @@ impl Dispatcher<FileStorage> {
             submission_manager,
             aggregator,
             services,
+            db_storage,
             chain_configs: config.chains.clone(),
             metrics: metrics.dispatcher.clone(),
             ipfs_gateway: config.ipfs_gateway.clone(),
@@ -170,6 +177,8 @@ impl Dispatcher<FileStorage> {
             dispatcher_to_engine_tx,
             dispatcher_to_submission_tx,
             dispatcher_to_aggregator_tx,
+            evm_http_providers: Arc::new(RwLock::new(HashMap::new())),
+            cosmos_query_clients: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 }
@@ -383,9 +392,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         // Check ServiceURI for each service at startup and update if needed (bounded concurrency)
         let chain_configs = self.chain_configs.read().unwrap().clone();
         let ipfs_gateway = self.ipfs_gateway.clone();
+        let evm_http_providers = self.evm_http_providers.clone();
+        let cosmos_query_clients = self.cosmos_query_clients.clone();
         ctx.rt.block_on(async {
             let ipfs_gateway = ipfs_gateway.as_ref();
             let chain_configs = &chain_configs;
+            let evm_http_providers = &evm_http_providers;
+            let cosmos_query_clients = &cosmos_query_clients;
 
             // Limit concurrent ServiceURI checks
             const MAX_CONCURRENT_CHECKS: usize = 10;
@@ -395,7 +408,14 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                     async move {
                         (
                             original_service_id,
-                            check_service_needs_update(service, chain_configs, ipfs_gateway).await,
+                            check_service_needs_update(
+                                service,
+                                chain_configs,
+                                ipfs_gateway,
+                                evm_http_providers,
+                                cosmos_query_clients,
+                            )
+                            .await,
                         )
                     }
                 })
@@ -480,8 +500,15 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             }
         };
         let chain_configs = self.chain_configs.read().unwrap().clone();
-        let service =
-            query_service_from_address(chain, address, &chain_configs, &self.ipfs_gateway).await?;
+        let service = query_service_from_address(
+            chain,
+            address,
+            &chain_configs,
+            &self.ipfs_gateway,
+            &self.evm_http_providers,
+            &self.cosmos_query_clients,
+        )
+        .await?;
 
         self.add_service_direct(service.clone()).await?;
 
@@ -640,6 +667,8 @@ async fn check_service_needs_update(
     service: &Service,
     chain_configs: &ChainConfigs,
     ipfs_gateway: &str,
+    evm_http_providers: &Arc<RwLock<HashMap<ChainKey, DynProvider>>>,
+    cosmos_query_clients: &Arc<RwLock<HashMap<ChainKey, QueryClient>>>,
 ) -> Result<Option<Service>, DispatcherError> {
     let service_id = service.id();
     let cached_hash = service.hash()?;
@@ -652,6 +681,8 @@ async fn check_service_needs_update(
                 (*address).into(),
                 chain_configs,
                 ipfs_gateway,
+                evm_http_providers,
+                cosmos_query_clients,
             )
             .await?
         }
@@ -661,6 +692,8 @@ async fn check_service_needs_update(
                 address.clone().into(),
                 chain_configs,
                 ipfs_gateway,
+                evm_http_providers,
+                cosmos_query_clients,
             )
             .await?
         }
@@ -687,6 +720,8 @@ async fn query_service_from_address(
     address: layer_climb::prelude::Address,
     chain_configs: &ChainConfigs,
     ipfs_gateway: &str,
+    evm_http_providers: &Arc<RwLock<HashMap<ChainKey, DynProvider>>>,
+    cosmos_query_clients: &Arc<RwLock<HashMap<ChainKey, QueryClient>>>,
 ) -> Result<Service, DispatcherError> {
     // Get the chain config
     let chain_config = chain_configs.get_chain(&chain).ok_or_else(|| {
@@ -696,16 +731,35 @@ async fn query_service_from_address(
     // Handle different chain types
     let service_uri = match chain_config {
         AnyChainConfig::Evm(evm_config) => {
-            // Get the HTTP endpoint, required for contract calls
-            let http_endpoint = evm_config.http_endpoint.clone().ok_or_else(|| {
-                DispatcherError::Config(format!("No HTTP endpoint configured for chain {chain}"))
-            })?;
+            // Get or create cached provider for this chain
+            let provider = {
+                let providers = evm_http_providers.read().unwrap();
+                providers.get(&chain).cloned()
+            };
 
-            // Create a provider using the HTTP endpoint
-            let provider = ProviderBuilder::new().connect_http(
-                reqwest::Url::parse(&http_endpoint)
-                    .unwrap_or_else(|_| panic!("Could not parse http endpoint {}", http_endpoint)),
-            );
+            let provider = match provider {
+                Some(p) => p,
+                None => {
+                    // Get the HTTP endpoint, required for contract calls
+                    let http_endpoint = evm_config.http_endpoint.clone().ok_or_else(|| {
+                        DispatcherError::Config(format!(
+                            "No HTTP endpoint configured for chain {chain}"
+                        ))
+                    })?;
+
+                    // Create a provider using the HTTP endpoint
+                    let new_provider = DynProvider::new(ProviderBuilder::new().connect_http(
+                        reqwest::Url::parse(&http_endpoint).unwrap_or_else(|_| {
+                            panic!("Could not parse http endpoint {}", http_endpoint)
+                        }),
+                    ));
+
+                    // Cache the provider
+                    let mut providers = evm_http_providers.write().unwrap();
+                    providers.insert(chain.clone(), new_provider.clone());
+                    new_provider
+                }
+            };
 
             let contract = IWavsServiceManagerInstance::new(
                 address
@@ -718,9 +772,26 @@ async fn query_service_from_address(
             service_uri
         }
         AnyChainConfig::Cosmos(config) => {
-            let query_client = QueryClient::new(config.into(), None)
-                .await
-                .map_err(DispatcherError::CosmosQuery)?;
+            // Get or create cached query client for this chain
+            let query_client = {
+                let clients = cosmos_query_clients.read().unwrap();
+                clients.get(&chain).cloned()
+            };
+
+            let query_client = match query_client {
+                Some(c) => c,
+                None => {
+                    // Create a new query client
+                    let new_client = QueryClient::new(config.into(), None)
+                        .await
+                        .map_err(DispatcherError::CosmosQuery)?;
+
+                    // Cache the client
+                    let mut clients = cosmos_query_clients.write().unwrap();
+                    clients.insert(chain.clone(), new_client.clone());
+                    new_client
+                }
+            };
 
             let service_uri: String = query_client
                 .contract_smart(&address, &ServiceManagerQueryMessages::WavsServiceUri {})

@@ -1,6 +1,7 @@
 mod gas_oracle;
 mod world;
 
+use example_types::{KvStoreError, KvStoreResult};
 use wavs_types::ChainKey;
 use wavs_wasi_utils::impl_u128_conversions;
 use world::{
@@ -12,6 +13,8 @@ use world::{
     wavs::types::chain::{AnyTxHash, EvmAddress},
     Guest,
 };
+
+use crate::world::wasi::keyvalue::store;
 
 impl_u128_conversions!(U128);
 
@@ -75,11 +78,37 @@ impl Guest for Component {
         _input: AggregatorInput,
         tx_result: Result<AnyTxHash, String>,
     ) -> Result<(), String> {
-        match tx_result {
-            Ok(_) => Ok(()),
-            Err(_) => Ok(()),
-        }
+        write_kv_value("submit-result", "completed", "true".as_bytes())
+            .map_err(|e| e.to_string())?;
+        write_kv_value(
+            "submit-result",
+            "success",
+            if tx_result.is_ok() {
+                "true".as_bytes()
+            } else {
+                "false".as_bytes()
+            },
+        )
+        .map_err(|e| e.to_string())?;
+
+        Ok(())
     }
+}
+
+fn write_kv_value(bucket_id: &str, key: &str, value: &[u8]) -> KvStoreResult<()> {
+    let bucket = open_kv_bucket(bucket_id)?;
+    bucket.set(key, value).map_err(|e| KvStoreError::WriteKey {
+        bucket: bucket_id.to_string(),
+        key: key.to_string(),
+        reason: e.to_string(),
+    })
+}
+
+fn open_kv_bucket(id: &str) -> KvStoreResult<store::Bucket> {
+    store::open(id).map_err(|e| KvStoreError::BucketOpen {
+        id: id.to_string(),
+        reason: e.to_string(),
+    })
 }
 
 enum AnyChainKey {

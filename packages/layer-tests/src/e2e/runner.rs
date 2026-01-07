@@ -256,21 +256,22 @@ async fn run_test(
 
         // Wait for all operators to have connected to peers
         for (idx, http_client) in clients.http_clients.iter().enumerate() {
-            match http_client
+            let status = http_client
                 .wait_for_p2p_ready(expected_peers, Some(Duration::from_secs(30)))
                 .await
-            {
-                Ok(status) => {
-                    tracing::info!(
-                        "Operator {} P2P ready: {} connected peers",
+                .map_err(|e| {
+                    anyhow!(
+                        "Operator {} P2P readiness check failed: {}. \
+                         Multi-operator tests require P2P mesh to be ready.",
                         idx,
-                        status.connected_peers
-                    );
-                }
-                Err(e) => {
-                    tracing::warn!("Operator {} P2P readiness check failed: {}", idx, e);
-                }
-            }
+                        e
+                    )
+                })?;
+            tracing::info!(
+                "Operator {} P2P ready: {} connected peers",
+                idx,
+                status.connected_peers
+            );
         }
     }
 

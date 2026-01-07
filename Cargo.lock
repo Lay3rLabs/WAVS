@@ -8730,6 +8730,8 @@ name = "simple-aggregator"
 version = "2.0.0-rc.9"
 dependencies = [
  "alloy-primitives",
+ "example-helpers",
+ "example-types",
  "layer-climb-address",
  "serde",
  "wasip2",
