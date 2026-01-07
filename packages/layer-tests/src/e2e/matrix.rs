@@ -37,10 +37,8 @@ pub enum EvmService {
     TimerAggregator,
     TimerAggregatorReorg,
     GasPrice,
-    /// Multi-operator test with mDNS discovery (Local mode)
+    /// Multi-operator test
     MultiOperator,
-    /// Multi-operator test with Kademlia discovery (Remote mode)
-    MultiOperatorRemote,
 }
 
 #[derive(
@@ -135,11 +133,6 @@ impl TestMatrix {
 
     pub fn multi_operator_enabled(&self) -> bool {
         self.evm.contains(&EvmService::MultiOperator)
-            || self.evm.contains(&EvmService::MultiOperatorRemote)
-    }
-
-    pub fn multi_operator_remote_enabled(&self) -> bool {
-        self.evm.contains(&EvmService::MultiOperatorRemote)
     }
 }
 
@@ -204,9 +197,6 @@ impl From<EvmService> for Vec<ComponentName> {
                 ]
             }
             EvmService::MultiOperator => {
-                vec![ComponentName::Operator(OperatorComponent::EchoData)]
-            }
-            EvmService::MultiOperatorRemote => {
                 vec![ComponentName::Operator(OperatorComponent::EchoData)]
             }
         }
