@@ -1,8 +1,8 @@
 use thiserror::Error;
 use utils::error::EvmClientError;
-use wavs_types::{ChainKey, EnvelopeError, ServiceId, Submit};
+use wavs_types::{ChainKey, ServiceId, SigningError, Submit};
 
-use crate::services::ServicesError;
+use crate::{dispatcher::DispatcherCommand, services::ServicesError};
 
 #[derive(Error, Debug)]
 pub enum SubmissionError {
@@ -10,8 +10,8 @@ pub enum SubmissionError {
     EvmClient(#[from] EvmClientError),
     #[error("climb: {0}")]
     Climb(anyhow::Error),
-    #[error("missing mnemonic")]
-    MissingMnemonic,
+    #[error("missing signing mnemonic")]
+    MissingSigningMnemonic,
     #[error("missing key for service {service_id}")]
     MissingServiceKey { service_id: ServiceId },
     #[error("faucet url: {0}")]
@@ -44,6 +44,8 @@ pub enum SubmissionError {
     ExpectedEvmMessage,
     #[error("failed to sign envelope: {0:?}")]
     FailedToSignEnvelope(anyhow::Error),
+    #[error("failed to sign submit actions: {0:?}")]
+    FailedToSignSubmitActions(anyhow::Error),
     #[error("failed to submit to EVM directly: {0}")]
     FailedToSubmitEvmDirect(anyhow::Error),
     #[error("failed to submit to cosmos: {0}")]
@@ -54,10 +56,14 @@ pub enum SubmissionError {
     FailedToCreateEvmSigner(ServiceId, anyhow::Error),
     #[error("missing EVM signing client for chain {0}")]
     MissingEvmSendingClient(ChainKey),
-    #[error("envelope {0:?}")]
-    Envelope(#[from] EnvelopeError),
+    #[error("signing {0:?}")]
+    Envelope(#[from] SigningError),
     #[error("services {0:?}")]
     Services(#[from] ServicesError),
     #[error("Cannot submit to {0:?}")]
     InvalidSubmitKind(Submit),
+    #[error("Submission channel error: {0}")]
+    SendCommand(#[from] Box<crossbeam::channel::SendError<DispatcherCommand>>),
+    #[error("could not encode EventId {0:?}")]
+    EncodeEventId(bincode::error::EncodeError),
 }

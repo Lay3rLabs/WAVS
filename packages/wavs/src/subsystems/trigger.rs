@@ -121,7 +121,7 @@ enum StreamStartState {
 pub struct TriggerManager {
     pub chain_configs: Arc<std::sync::RwLock<ChainConfigs>>,
     pub command_sender: tokio::sync::mpsc::UnboundedSender<TriggerCommand>,
-    trigger_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
+    subsystem_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
     command_receiver:
         Arc<std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<TriggerCommand>>>>,
     lookup_maps: Arc<LookupMaps>,
@@ -140,14 +140,14 @@ impl TriggerManager {
         config: &Config,
         metrics: TriggerMetrics,
         services: Services,
-        trigger_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
+        subsystem_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
     ) -> Result<Self, TriggerError> {
         let (command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel();
 
         Ok(Self {
             chain_configs: config.chains.clone(),
             lookup_maps: Arc::new(LookupMaps::new(services.clone(), metrics.clone())),
-            trigger_to_dispatcher_tx,
+            subsystem_to_dispatcher_tx,
             command_sender,
             command_receiver: Arc::new(std::sync::Mutex::new(Some(command_receiver))),
             metrics,
@@ -259,10 +259,11 @@ impl TriggerManager {
                         uri
                     );
                 }
+                _ => {}
             }
 
             let start = std::time::Instant::now();
-            self.trigger_to_dispatcher_tx
+            self.subsystem_to_dispatcher_tx
                 .send(command)
                 .map_err(Box::new)?;
 
@@ -1069,7 +1070,6 @@ mod tests {
                         [0; 32],
                     ))),
                     submit: Submit::Aggregator {
-                        url: "http://example.com".to_string(),
                         component: Box::new(Component::new(ComponentSource::Digest(
                             ComponentDigest::hash([0; 32]),
                         ))),

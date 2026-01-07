@@ -72,23 +72,6 @@ impl HttpClient {
         }
     }
 
-    pub async fn register_aggregator_service(
-        &self,
-        service_manager: &ServiceManager,
-    ) -> Result<()> {
-        use wavs_types::aggregator::RegisterServiceRequest;
-
-        self.inner
-            .post(format!("{}/services", self.endpoint))
-            .json(&RegisterServiceRequest {
-                service_manager: service_manager.clone(),
-            })
-            .send()
-            .await?;
-
-        Ok(())
-    }
-
     pub async fn create_service(
         &self,
         service_manager: ServiceManager,

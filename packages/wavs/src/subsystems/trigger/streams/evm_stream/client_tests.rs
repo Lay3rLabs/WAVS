@@ -11,21 +11,16 @@ use std::{
     },
 };
 
-use crate::{
-    init_tracing_tests,
-    subsystems::trigger::streams::evm_stream::{
-        client::EvmTriggerStreams,
-        client_tests::helpers::{
-            wait_for_all_rpc_requests_landed, EventEmitter, EventEmitterClient,
-        },
-    },
+use crate::subsystems::trigger::streams::evm_stream::{
+    client::EvmTriggerStreams,
+    client_tests::helpers::{wait_for_all_rpc_requests_landed, EventEmitter, EventEmitterClient},
 };
 
 use alloy_primitives::U256;
 use alloy_sol_types::SolEvent;
 use futures::StreamExt;
 use tokio::time::{timeout, Duration};
-use utils::test_utils::anvil::safe_spawn_anvil_extra;
+use utils::{init_tracing_tests, test_utils::anvil::safe_spawn_anvil_extra};
 
 #[tokio::test]
 async fn block_height_stream() {

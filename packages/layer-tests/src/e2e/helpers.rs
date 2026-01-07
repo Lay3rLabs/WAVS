@@ -291,7 +291,7 @@ pub async fn create_submit_from_config(
     component_sources: Option<&ComponentSources>,
 ) -> Result<Submit> {
     match submit_config {
-        SubmitDefinition::Aggregator { url, aggregator } => match aggregator {
+        SubmitDefinition::Aggregator(aggregator) => match aggregator {
             AggregatorDefinition::ComponentBasedAggregator {
                 component: component_def,
                 ..
@@ -321,7 +321,6 @@ pub async fn create_submit_from_config(
                 let component = deploy_component(sources, component_def, config_vars, env_vars);
 
                 Ok(Submit::Aggregator {
-                    url: url.clone(),
                     component: Box::new(component),
                     signature_kind: SignatureKind::evm_default(),
                 })

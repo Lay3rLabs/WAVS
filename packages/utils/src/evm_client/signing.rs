@@ -160,7 +160,7 @@ mod test {
     use alloy_provider::Provider;
     use alloy_rpc_types_eth::TransactionTrait;
     use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
-    use wavs_types::{Credential, Envelope, EnvelopeSigner, SignatureKind};
+    use wavs_types::{Credential, Envelope, SignatureKind, WavsSigner};
 
     use crate::{
         evm_client::{AnyNonceManager, EvmSigningClient, EvmSigningClientConfig},

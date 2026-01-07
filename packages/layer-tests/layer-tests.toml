@@ -5,7 +5,7 @@ log_level = ["info", "wavs=debug"]
 wavs_concurrency = true
 middleware_concurrency = true
 grouping = false
-evm_middleware_type = "eigenlayer" # or "poa"
+evm_middleware_type = "poa" # or "poa"
 # Run all tests
 mode = "all"
 

@@ -33,7 +33,11 @@ pub async fn handle_debug_trigger(
 async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> HttpResult<()> {
     let start = std::time::Instant::now();
 
-    let initial_count = state.dispatcher.submission_manager.get_message_count();
+    let initial_count = state
+        .dispatcher
+        .submission_manager
+        .metrics
+        .get_request_count();
 
     for _ in 0..req.count {
         let action = TriggerAction {
@@ -59,7 +63,13 @@ async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> 
         let mut tick = tokio::time::interval(std::time::Duration::from_millis(100));
         let expected = initial_count + req.count as u64;
         loop {
-            if state.dispatcher.submission_manager.get_message_count() >= expected {
+            if state
+                .dispatcher
+                .submission_manager
+                .metrics
+                .get_request_count()
+                >= expected
+            {
                 let elapsed = start.elapsed();
                 state
                     .metrics

@@ -5,13 +5,12 @@ use wavs_types::ChainKey;
 use wavs_wasi_utils::impl_u128_conversions;
 use world::{
     host,
-    wavs::aggregator::aggregator::{AggregatorAction, Packet, SubmitAction},
+    wavs::aggregator::input::AggregatorInput,
+    wavs::aggregator::output::{
+        AggregatorAction, CosmosAddress, CosmosSubmitAction, EvmSubmitAction, SubmitAction, U128,
+    },
     wavs::types::chain::{AnyTxHash, EvmAddress},
     Guest,
-};
-
-use crate::world::wavs::aggregator::aggregator::{
-    CosmosAddress, CosmosSubmitAction, EvmSubmitAction, U128,
 };
 
 impl_u128_conversions!(U128);
@@ -19,7 +18,7 @@ impl_u128_conversions!(U128);
 struct Component;
 
 impl Guest for Component {
-    fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
+    fn process_input(_input: AggregatorInput) -> Result<Vec<AggregatorAction>, String> {
         let chain = host::config_var("chain").ok_or("chain config variable is required")?;
         let chain =
             AnyChainKey::from_host(&chain).ok_or(format!("no chain config for {}", chain))?;
@@ -68,12 +67,12 @@ impl Guest for Component {
         Ok(vec![AggregatorAction::Submit(submit_action)])
     }
 
-    fn handle_timer_callback(_packet: Packet) -> Result<Vec<AggregatorAction>, String> {
+    fn handle_timer_callback(_input: AggregatorInput) -> Result<Vec<AggregatorAction>, String> {
         Err("Not implemented yet".to_string())
     }
 
     fn handle_submit_callback(
-        _packet: Packet,
+        _input: AggregatorInput,
         tx_result: Result<AnyTxHash, String>,
     ) -> Result<(), String> {
         match tx_result {

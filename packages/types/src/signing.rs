@@ -5,12 +5,10 @@ cfg_if::cfg_if! {
     }
 }
 
-use std::borrow::Borrow;
-
 pub use crate::solidity_types::Envelope;
 use crate::{
-    Service, ServiceId, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData,
-    SignatureKind, TriggerData, WorkflowId,
+    ServiceId, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, SignatureKind,
+    SubmitAction, TriggerAction, TriggerData, WasmResponse, WorkflowId,
 };
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
 use alloy_sol_types::SolValue;
@@ -23,31 +21,56 @@ use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
 #[serde(rename_all = "snake_case")]
-pub struct Packet {
-    pub service: Service,
-    pub workflow_id: WorkflowId,
-    #[schema(value_type  = Object)]
-    pub envelope: Envelope,
-    pub signature: EnvelopeSignature,
-    pub trigger_data: TriggerData,
+pub struct AggregatorInput {
+    pub trigger_action: TriggerAction,
+    pub operator_response: WasmResponse,
 }
 
+impl AggregatorInput {
+    pub fn event_id(&self) -> Result<EventId, bincode::error::EncodeError> {
+        let salt = match &self.operator_response.event_id_salt {
+            Some(bytes) => EventIdSalt::WasmResponse(bytes),
+            None => EventIdSalt::Trigger(&self.trigger_action.data),
+        };
+
+        EventId::new(
+            &self.trigger_action.config.service_id,
+            &self.trigger_action.config.workflow_id,
+            salt,
+        )
+    }
+}
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-pub trait EnvelopeExt: Borrow<Envelope> {
-    fn prefix_eip191_hash(&self) -> FixedBytes<32> {
-        let envelope_bytes = self.borrow().abi_encode();
-        eip191_hash_message(keccak256(&envelope_bytes))
+pub trait WavsSignable {
+    // just need to impl this
+    fn encode_data(&self) -> anyhow::Result<Vec<u8>>;
+
+    fn prefix_eip191_hash(&self) -> anyhow::Result<FixedBytes<32>> {
+        let envelope_bytes = self.encode_data()?;
+        Ok(eip191_hash_message(keccak256(&envelope_bytes)))
     }
 
-    fn unprefixed_hash(&self) -> FixedBytes<32> {
-        let envelope_bytes = self.borrow().abi_encode();
-        keccak256(&envelope_bytes)
+    fn unprefixed_hash(&self) -> anyhow::Result<FixedBytes<32>> {
+        let envelope_bytes = self.encode_data()?;
+        Ok(keccak256(&envelope_bytes))
     }
 }
 
-// Blanket impl for anything that borrows as Envelope
-impl<T: Borrow<Envelope> + ?Sized> EnvelopeExt for T {}
+impl WavsSignable for Envelope {
+    fn encode_data(&self) -> anyhow::Result<Vec<u8>> {
+        Ok(self.abi_encode())
+    }
+}
+
+impl WavsSignable for &[SubmitAction] {
+    fn encode_data(&self) -> anyhow::Result<Vec<u8>> {
+        Ok(bincode::serde::encode_to_vec(
+            self,
+            bincode::config::standard(),
+        )?)
+    }
+}
 
 impl From<Envelope> for ServiceManagerEnvelope {
     fn from(envelope: Envelope) -> Self {
@@ -69,17 +92,11 @@ impl From<SignatureData> for ServiceManagerSignatureData {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
-pub struct EnvelopeSignature {
+pub struct WavsSignature {
     pub data: Vec<u8>,
     pub kind: SignatureKind,
-}
-
-impl Packet {
-    pub fn event_id(&self) -> EventId {
-        self.envelope.eventId.into()
-    }
 }
 
 #[derive(
@@ -94,6 +111,7 @@ impl Packet {
     bincode::Encode,
     Ord,
     PartialOrd,
+    Default,
 )]
 #[serde(transparent)]
 pub struct EventId(#[serde(with = "const_hex")] [u8; 20]);
@@ -222,9 +240,12 @@ impl AsRef<[u8]> for EventOrder {
 }
 
 #[derive(Debug, Error)]
-pub enum EnvelopeError {
+pub enum SigningError {
     #[error("Unable to recover signer address: {0:?}")]
     RecoverSignerAddress(SignatureError),
+
+    #[error("Unable to get data hash: {0:?}")]
+    DataHash(anyhow::Error),
 }
 
 #[cfg(test)]
