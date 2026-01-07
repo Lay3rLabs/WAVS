@@ -610,6 +610,41 @@ async fn run_test(
         tracing::info!("Test completed successfully!");
     }
 
+    // Wait for the aggregator submit callback to complete on all WAVS instances
+    // before cleaning up the service. This ensures the after-submit callback
+    // has finished writing to the KV store.
+    // Only do this if:
+    // 1. Any workflow uses an aggregator submit
+    // 2. No workflow expects dropped output (e.g., reorg tests where submission is intentionally skipped)
+    let has_aggregator = service_deployment
+        .service
+        .workflows
+        .values()
+        .any(|w| matches!(w.submit, Submit::Aggregator { .. }));
+
+    let expects_dropped = test.workflows.values().any(|w| w.expects_reorg());
+
+    if has_aggregator && !expects_dropped {
+        let service_id = service_deployment.service.id().to_string();
+        tracing::info!(
+            "Waiting for submit callback to complete for service: {}",
+            service_id
+        );
+        for (idx, http_client) in clients.http_clients.iter().enumerate() {
+            http_client
+                .wait_for_submit_callback(&service_id, None)
+                .await
+                .map_err(|e| {
+                    anyhow!("Instance {} failed waiting for submit callback: {}", idx, e)
+                })?;
+            tracing::info!(
+                "Submit callback completed on instance {} for service: {}",
+                idx,
+                service_id
+            );
+        }
+    }
+
     tracing::info!(
         "Cleaning up service: {0:?}",
         service_deployment.service.manager

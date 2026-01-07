@@ -82,11 +82,13 @@ impl P2pConfig {
         }
     }
 
-    /// Minimum number of peers in mesh before we start publishing
+    /// Minimum number of peers in mesh before gossipsub considers it "low"
+    /// When below this threshold, gossipsub will try to add more peers
     pub fn mesh_n_low(&self) -> usize {
         match self {
-            // Lower threshold for local testing with few peers
-            P2pConfig::Local { .. } => 1,
+            // For local testing with 3 nodes, set to 0 to avoid "Mesh low" warnings
+            // during dynamic topic subscription. Messages still propagate via flooding.
+            P2pConfig::Local { .. } => 0,
             P2pConfig::Disabled => 2,
         }
     }
@@ -94,7 +96,9 @@ impl P2pConfig {
     /// Target number of peers in mesh
     pub fn mesh_n(&self) -> usize {
         match self {
-            P2pConfig::Local { .. } => 2,
+            // For local testing with 3 nodes, max possible mesh is 2 peers
+            // Setting target to 1 is achievable even with just 2 connected nodes
+            P2pConfig::Local { .. } => 1,
             P2pConfig::Disabled => 6,
         }
     }
@@ -102,7 +106,8 @@ impl P2pConfig {
     /// Maximum number of peers in mesh
     pub fn mesh_n_high(&self) -> usize {
         match self {
-            P2pConfig::Local { .. } => 4,
+            // For 3-node local testing, cap at 2 (max possible)
+            P2pConfig::Local { .. } => 2,
             P2pConfig::Disabled => 12,
         }
     }
@@ -260,7 +265,7 @@ enum P2pCommand {
 /// Handle to the P2P network that can be cloned and shared
 #[derive(Clone)]
 pub struct P2pHandle {
-    command_tx: mpsc::Sender<P2pCommand>,
+    command_tx: mpsc::UnboundedSender<P2pCommand>,
 }
 
 impl P2pHandle {
@@ -286,34 +291,31 @@ impl P2pHandle {
     }
 
     /// Publish a submission to the P2P network
-    pub async fn publish(&self, submission: &Submission) -> Result<(), AggregatorError> {
+    pub fn publish(&self, submission: &Submission) -> Result<(), AggregatorError> {
         let service_id = submission.service_id().clone();
         self.command_tx
             .send(P2pCommand::Publish {
                 service_id,
                 submission: Box::new(submission.clone()),
             })
-            .await
             .map_err(|e| AggregatorError::P2p(format!("Failed to send publish command: {}", e)))
     }
 
     /// Subscribe to a service's P2P topic
-    pub async fn subscribe(&self, service_id: &ServiceId) -> Result<(), AggregatorError> {
+    pub fn subscribe(&self, service_id: &ServiceId) -> Result<(), AggregatorError> {
         self.command_tx
             .send(P2pCommand::Subscribe {
                 service_id: service_id.clone(),
             })
-            .await
             .map_err(|e| AggregatorError::P2p(format!("Failed to send subscribe command: {}", e)))
     }
 
     /// Unsubscribe from a service's P2P topic
-    pub async fn unsubscribe(&self, service_id: &ServiceId) -> Result<(), AggregatorError> {
+    pub fn unsubscribe(&self, service_id: &ServiceId) -> Result<(), AggregatorError> {
         self.command_tx
             .send(P2pCommand::Unsubscribe {
                 service_id: service_id.clone(),
             })
-            .await
             .map_err(|e| AggregatorError::P2p(format!("Failed to send unsubscribe command: {}", e)))
     }
 
@@ -322,7 +324,6 @@ impl P2pHandle {
         let (response_tx, response_rx) = tokio::sync::oneshot::channel();
         self.command_tx
             .send(P2pCommand::GetStatus { response_tx })
-            .await
             .map_err(|e| {
                 AggregatorError::P2p(format!("Failed to send get_status command: {}", e))
             })?;
@@ -344,7 +345,7 @@ impl P2pHandle {
 
         tracing::info!("Local P2P peer ID: {}", local_peer_id);
 
-        let (command_tx, command_rx) = mpsc::channel(256);
+        let (command_tx, command_rx) = mpsc::unbounded_channel();
 
         tokio::spawn(run_event_loop(
             ctx,
@@ -512,7 +513,7 @@ async fn run_event_loop(
     ctx: AppContext,
     mut swarm: Swarm<WavsBehaviour>,
     listen_port: u16,
-    mut command_rx: mpsc::Receiver<P2pCommand>,
+    mut command_rx: mpsc::UnboundedReceiver<P2pCommand>,
     aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
 ) {
     let listen_addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{}", listen_port)

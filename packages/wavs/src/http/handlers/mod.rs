@@ -3,6 +3,7 @@ mod config;
 pub mod debug;
 mod health;
 mod info;
+pub mod kv;
 mod not_found;
 pub(crate) mod openapi;
 mod p2p;

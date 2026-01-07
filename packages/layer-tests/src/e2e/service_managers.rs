@@ -250,12 +250,10 @@ impl ServiceManagers {
         for (test_index, test) in registry.list_all().enumerate() {
             let service_manager = self.get_service_manager(&test.name);
 
-            // For multi-operator tests, register all operators with 2/3 quorum requirement
-            let num_operators = if test.multi_operator {
-                MULTI_OPERATOR_COUNT
-            } else {
-                1
-            };
+            // Register operators for all running WAVS instances since any of them
+            // might execute aggregation and submit. Cap at the number of available
+            // instances (may be less than MULTI_OPERATOR_COUNT for isolated tests).
+            let num_operators = std::cmp::min(MULTI_OPERATOR_COUNT, clients.http_clients.len());
 
             // Collect all operators for this test
             let mut avs_operators = Vec::with_capacity(num_operators);
@@ -310,9 +308,10 @@ impl ServiceManagers {
                 avs_operators.push(avs_operator);
             }
 
-            // Calculate required operators for quorum (2/3 of total)
+            // Calculate required signatures for quorum
+            // Multi-operator: 2/3 quorum (requires multiple signatures)
+            // Single-operator: quorum of 1 (any single operator can submit)
             let required_to_pass = if test.multi_operator {
-                // For 2/3 quorum
                 ((num_operators as u64) * 2).div_ceil(3)
             } else {
                 1
@@ -322,11 +321,12 @@ impl ServiceManagers {
             futures.push(async move {
                 match service_manager_instance {
                     AnyServiceManagerInstance::Evm { manager, .. } => {
+                        let config =
+                            MiddlewareServiceManagerConfig::new(&avs_operators, required_to_pass);
+                        manager.configure(&config).await.unwrap();
+                        // Validate that operators are properly registered before proceeding
                         manager
-                            .configure(&MiddlewareServiceManagerConfig::new(
-                                &avs_operators,
-                                required_to_pass,
-                            ))
+                            .validate_operator_registration(&config)
                             .await
                             .unwrap();
                     }

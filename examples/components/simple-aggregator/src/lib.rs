@@ -71,7 +71,7 @@ impl Guest for Component {
     }
 
     fn handle_timer_callback(_input: AggregatorInput) -> Result<Vec<AggregatorAction>, String> {
-        Err("Not implemented yet".to_string())
+        Ok(Vec::new())
     }
 
     fn handle_submit_callback(

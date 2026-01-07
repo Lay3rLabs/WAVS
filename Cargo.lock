@@ -9262,6 +9262,8 @@ dependencies = [
  "alloy-network",
  "alloy-primitives",
  "alloy-provider",
+ "example-helpers",
+ "example-types",
  "wasip2",
  "wavs-wasi-utils",
  "wit-bindgen",

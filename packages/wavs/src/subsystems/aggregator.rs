@@ -368,7 +368,7 @@ impl Aggregator {
                 let p2p_handle = self.p2p_handle.read().unwrap().clone();
                 if let Some(handle) = p2p_handle {
                     ctx.rt.spawn(async move {
-                        if let Err(e) = handle.subscribe(&service_id).await {
+                        if let Err(e) = handle.subscribe(&service_id) {
                             tracing::warn!(
                                 "Failed to subscribe to P2P topic for service {}: {:?}",
                                 service_id,
@@ -384,7 +384,7 @@ impl Aggregator {
                 let p2p_handle = self.p2p_handle.read().unwrap().clone();
                 if let Some(handle) = p2p_handle {
                     ctx.rt.spawn(async move {
-                        if let Err(e) = handle.unsubscribe(&service_id).await {
+                        if let Err(e) = handle.unsubscribe(&service_id) {
                             tracing::warn!(
                                 "Failed to unsubscribe from P2P topic for service {}: {:?}",
                                 service_id,
@@ -455,7 +455,7 @@ impl Aggregator {
         // 2. Broadcast to P2P network if enabled
         let p2p_handle = self.p2p_handle.read().unwrap().clone();
         if let Some(handle) = p2p_handle {
-            if let Err(e) = handle.publish(submission).await {
+            if let Err(e) = handle.publish(submission) {
                 tracing::warn!("Failed to publish submission to P2P network: {:?}", e);
                 // Don't fail the broadcast if P2P fails - local processing should continue
             } else {
