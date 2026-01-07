@@ -1,12 +1,24 @@
 //! P2P Network Layer for WAVS Aggregator
 //!
-//! Key components:
-//! - GossipSub: Message dissemination per service topic
-//! - Request/Response: Catch-up protocol for missed messages
-//! - mDNS: Local peer discovery for development/testing (Local mode)
-//! - Kademlia: DHT-based peer discovery for production (Remote mode)
-//! - Identify: Peer identification protocol
-//! - AutoNAT: External address discovery for NAT traversal
+//! This module provides peer-to-peer networking for multi-operator WAVS deployments,
+//! enabling operators to share submissions and reach quorum consensus.
+//!
+//! # Discovery Modes
+//!
+//! - **Local (mDNS)**: Uses multicast DNS for automatic peer discovery on local networks.
+//!   Best for development and testing. Peers discover each other automatically.
+//!
+//! - **Remote (Kademlia)**: Uses a DHT for peer discovery across networks. Requires
+//!   bootstrap nodes. One node runs as the bootstrap server (empty bootstrap_nodes),
+//!   others connect to it. Periodic DHT queries ensure all peers eventually discover
+//!   each other even if they join at different times.
+//!
+//! # Key Components
+//!
+//! - **GossipSub**: Pub/sub message dissemination per service topic
+//! - **Request/Response**: Catch-up protocol for missed messages when peers reconnect
+//! - **Identify**: Peer identification and address exchange
+//! - **AutoNAT**: External address discovery for NAT traversal
 
 use std::{
     collections::{hash_map::DefaultHasher, HashMap, HashSet, VecDeque},
@@ -551,6 +563,8 @@ struct EventLoopState {
     /// Connected peers we've already requested catch-up from
     catchup_requested_peers: HashSet<PeerId>,
     config: P2pConfig,
+    /// Actual listen addresses (from NewListenAddr events, filtered for usable addresses)
+    listen_addresses: Vec<Multiaddr>,
 }
 
 impl EventLoopState {
@@ -561,6 +575,7 @@ impl EventLoopState {
             pending_publishes: VecDeque::new(),
             stored_submissions: HashMap::new(),
             catchup_requested_peers: HashSet::new(),
+            listen_addresses: Vec::new(),
             config,
         }
     }
@@ -618,7 +633,6 @@ async fn run_event_loop(
     listen_port: u16,
     bootstrap_nodes: Vec<String>,
     mut command_rx: mpsc::UnboundedReceiver<P2pCommand>,
-
     aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
 ) {
     let listen_addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{}", listen_port)
@@ -662,7 +676,10 @@ async fn run_event_loop(
 
     let mut state = EventLoopState::new();
     let mut retry_interval = tokio::time::interval(Duration::from_millis(RETRY_INTERVAL_MS));
-    let mut cleanup_interval = tokio::time::interval(Duration::from_secs(60)); // Cleanup every minute
+    let mut cleanup_interval = tokio::time::interval(Duration::from_secs(CLEANUP_INTERVAL_SECS));
+    // Periodic peer discovery for Kademlia mode - helps find peers that joined after initial bootstrap
+    let mut discovery_interval =
+        tokio::time::interval(Duration::from_secs(KADEMLIA_DISCOVERY_INTERVAL_SECS));
     let mut shutdown_signal = ctx.get_kill_receiver();
     let mut state = EventLoopState::new(p2p_config);
 
@@ -683,6 +700,13 @@ async fn run_event_loop(
             }
             _ = cleanup_interval.tick() => {
                 state.cleanup_expired_submissions();
+            }
+            _ = discovery_interval.tick() => {
+                // Periodic peer discovery for Kademlia mode
+                let local_peer_id = *swarm.local_peer_id();
+                if let Some(kademlia) = swarm.behaviour_mut().kademlia.as_mut() {
+                    kademlia.get_closest_peers(local_peer_id);
+                }
             }
         }
     }
@@ -841,7 +865,9 @@ fn handle_swarm_event(
             // Add peer's addresses to Kademlia routing table if in Remote mode
             if let Some(kademlia) = swarm.behaviour_mut().kademlia.as_mut() {
                 for addr in &info.listen_addrs {
-                    kademlia.add_address(&peer_id, addr.clone());
+                    if is_dialable_address(addr) {
+                        kademlia.add_address(&peer_id, addr.clone());
+                    }
                 }
             }
         }
@@ -853,12 +879,29 @@ fn handle_swarm_event(
             ..
         })) => {
             if is_new_peer {
-                tracing::info!(
-                    "Kademlia discovered new peer: {} with {} addresses",
+                tracing::debug!(
+                    "Kademlia routing updated for peer: {} ({} addresses)",
                     peer,
                     addresses.len()
                 );
                 swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer);
+
+                // Dial the peer if not already connected
+                if !swarm.is_connected(&peer) {
+                    for addr in addresses.iter() {
+                        if let Err(e) = swarm.dial(addr.clone()) {
+                            tracing::debug!(
+                                "Could not dial Kademlia peer {} at {}: {:?}",
+                                peer,
+                                addr,
+                                e
+                            );
+                        } else {
+                            tracing::debug!("Dialing Kademlia peer {} at {}", peer, addr);
+                            break; // Only need to dial one address
+                        }
+                    }
+                }
             }
         }
         // Kademlia query progress
@@ -876,10 +919,26 @@ fn handle_swarm_event(
             kad::QueryResult::GetClosestPeers(Ok(kad::GetClosestPeersOk { peers, .. })) => {
                 tracing::debug!("Kademlia found {} closest peers", peers.len());
                 for peer_info in peers {
-                    swarm
-                        .behaviour_mut()
-                        .gossipsub
-                        .add_explicit_peer(&peer_info.peer_id);
+                    // Dial the peer if not already connected (RoutingUpdated will handle gossipsub)
+                    if !swarm.is_connected(&peer_info.peer_id) {
+                        for addr in &peer_info.addrs {
+                            if let Err(e) = swarm.dial(addr.clone()) {
+                                tracing::debug!(
+                                    "Could not dial closest peer {} at {}: {:?}",
+                                    peer_info.peer_id,
+                                    addr,
+                                    e
+                                );
+                            } else {
+                                tracing::debug!(
+                                    "Dialing closest peer {} at {}",
+                                    peer_info.peer_id,
+                                    addr
+                                );
+                                break;
+                            }
+                        }
+                    }
                 }
             }
             _ => {
@@ -901,9 +960,14 @@ fn handle_swarm_event(
         SwarmEvent::Behaviour(WavsBehaviourEvent::Autonat(event)) => {
             tracing::debug!("AutoNAT event: {:?}", event);
         }
-        // New listen address
+        // New listen address - track usable addresses and add as external for Identify
         SwarmEvent::NewListenAddr { address, .. } => {
             tracing::info!("P2P listening on {}", address);
+            if is_dialable_address(&address) {
+                state.listen_addresses.push(address.clone());
+                // Add as external address so Identify reports it to other peers
+                swarm.add_external_address(address);
+            }
         }
         // Connection established - request catch-up
         SwarmEvent::ConnectionEstablished {
@@ -1172,9 +1236,12 @@ fn handle_command(
             let local_peer_id = *swarm.local_peer_id();
             let connected_peers: Vec<PeerId> = swarm.connected_peers().cloned().collect();
 
-            // Listen addresses - what we're directly listening on
-            let listen_addresses: Vec<String> = swarm
-                .listeners()
+            // Listen addresses - use tracked addresses from NewListenAddr events
+            // These are the actual interface addresses (e.g., 127.0.0.1) rather than
+            // the wildcard 0.0.0.0 that was passed to listen_on()
+            let listen_addresses: Vec<String> = state
+                .listen_addresses
+                .iter()
                 .map(|addr| format!("{}/p2p/{}", addr, local_peer_id))
                 .collect();
 
@@ -1212,4 +1279,11 @@ fn handle_command(
 /// Create a GossipSub topic name for a service
 fn service_topic_name(service_id: &ServiceId) -> String {
     format!("wavs/{}/packets/v1", service_id)
+}
+
+/// Check if a multiaddr is dialable by other peers.
+/// Addresses bound to 0.0.0.0 are not dialable because they represent "all interfaces"
+/// on the local machine, not a specific IP that external peers can connect to.
+fn is_dialable_address(addr: &Multiaddr) -> bool {
+    !addr.to_string().contains("/ip4/0.0.0.0/")
 }
