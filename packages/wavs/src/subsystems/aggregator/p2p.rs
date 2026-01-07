@@ -137,6 +137,8 @@ impl P2pConfig {
             // For local testing with 3 nodes, set to 0 to avoid "Mesh low" warnings
             // during dynamic topic subscription. Messages still propagate via flooding.
             P2pConfig::Local { .. } => 0,
+            // Production default (D_lo)
+            P2pConfig::Remote { .. } => 4,
             P2pConfig::Disabled => 2,
         }
     }
@@ -147,6 +149,8 @@ impl P2pConfig {
             // For local testing with 3 nodes, max possible mesh is 2 peers
             // Setting target to 1 is achievable even with just 2 connected nodes
             P2pConfig::Local { .. } => 1,
+            // Production default (D)
+            P2pConfig::Remote { .. } => 6,
             P2pConfig::Disabled => 6,
         }
     }
@@ -156,6 +160,8 @@ impl P2pConfig {
         match self {
             // For 3-node local testing, cap at 2 (max possible)
             P2pConfig::Local { .. } => 2,
+            // Production default (D_hi)
+            P2pConfig::Remote { .. } => 12,
             P2pConfig::Disabled => 12,
         }
     }
@@ -612,8 +618,7 @@ async fn run_event_loop(
     listen_port: u16,
     bootstrap_nodes: Vec<String>,
     mut command_rx: mpsc::UnboundedReceiver<P2pCommand>,
-    
- 
+
     aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
 ) {
     let listen_addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{}", listen_port)
