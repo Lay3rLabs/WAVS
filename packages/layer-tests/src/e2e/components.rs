@@ -83,7 +83,11 @@ impl ComponentName {
 }
 
 impl ComponentSources {
-    pub async fn new(configs: &Configs, registry: &TestRegistry, http_client: &HttpClient) -> Self {
+    pub async fn new(
+        configs: &Configs,
+        registry: &TestRegistry,
+        http_clients: &[HttpClient],
+    ) -> Self {
         let mut component_names: HashSet<ComponentName> = configs
             .matrix
             .evm
@@ -114,20 +118,33 @@ impl ComponentSources {
             }
         }
 
-        let mut futures = FuturesUnordered::new();
-
-        for component_name in component_names {
-            futures.push(get_component_source(
-                http_client,
-                component_name,
-                configs.registry,
-            ));
-        }
-
+        // Upload components to ALL WAVS instances
         let mut lookup = BTreeMap::default();
 
-        while let Some((name, digest)) = futures.next().await {
-            lookup.insert(name, digest);
+        for component_name in component_names {
+            let mut futures = FuturesUnordered::new();
+
+            // Upload to all HTTP clients (all WAVS instances)
+            for http_client in http_clients.iter() {
+                futures.push(get_component_source(
+                    http_client,
+                    component_name,
+                    configs.registry,
+                ));
+            }
+
+            // Wait for all uploads to complete and take the digest from the first one
+            // (all digests should be the same since it's the same component)
+            let mut digest = None;
+            while let Some((name, d)) = futures.next().await {
+                if digest.is_none() {
+                    digest = Some((name, d));
+                }
+            }
+
+            if let Some((name, d)) = digest {
+                lookup.insert(name, d);
+            }
         }
 
         Self { lookup }

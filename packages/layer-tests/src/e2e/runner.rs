@@ -399,29 +399,32 @@ async fn run_test(
                 let record_payload = input_bytes.clone().unwrap_or_default();
                 let record_text = String::from_utf8_lossy(&record_payload).to_string();
 
-                let atproto_data = TriggerData::AtProtoEvent {
-                    sequence: sequence as i64,
-                    timestamp: 0,
-                    repo: "did:example:alice".to_string(),
-                    collection: "app.bsky.feed.post".to_string(),
-                    rkey: "rkey-1".to_string(),
-                    action: AtProtoAction::Create,
-                    cid: Some("bafytestcid".to_string()),
-                    record: Some(json!({ "text": record_text })),
-                    rev: Some("rev-test".to_string()),
-                    op_index: Some(0),
-                };
+                // Send simulated trigger to all WAVS instances
+                for http_client in clients.http_clients.iter() {
+                    let atproto_data = TriggerData::AtProtoEvent {
+                        sequence: sequence as i64,
+                        timestamp: 0,
+                        repo: "did:example:alice".to_string(),
+                        collection: "app.bsky.feed.post".to_string(),
+                        rkey: "rkey-1".to_string(),
+                        action: AtProtoAction::Create,
+                        cid: Some("bafytestcid".to_string()),
+                        record: Some(json!({ "text": record_text.clone() })),
+                        rev: Some("rev-test".to_string()),
+                        op_index: Some(0),
+                    };
 
-                let req = SimulatedTriggerRequest {
-                    service_id: service_deployment.service.id(),
-                    workflow_id: first_workflow_id.clone(),
-                    trigger: trigger.clone(),
-                    data: atproto_data,
-                    count: 1,
-                    wait_for_completion: true,
-                };
+                    let req = SimulatedTriggerRequest {
+                        service_id: service_deployment.service.id(),
+                        workflow_id: first_workflow_id.clone(),
+                        trigger: trigger.clone(),
+                        data: atproto_data,
+                        count: 1,
+                        wait_for_completion: true,
+                    };
 
-                clients.http_client.simulate_trigger(req).await?;
+                    http_client.simulate_trigger(req).await?;
+                }
 
                 vec![trigger_id]
             }
@@ -582,10 +585,12 @@ async fn run_test(
         "Cleaning up service: {0:?}",
         service_deployment.service.manager
     );
-    clients
-        .http_client
-        .delete_service(vec![service_deployment.service.manager])
-        .await?;
+    // Delete service from all WAVS instances
+    for http_client in clients.http_clients.iter() {
+        http_client
+            .delete_service(vec![service_deployment.service.manager.clone()])
+            .await?;
+    }
 
     Ok(())
 }

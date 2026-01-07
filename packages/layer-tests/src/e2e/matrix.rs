@@ -37,6 +37,8 @@ pub enum EvmService {
     TimerAggregator,
     TimerAggregatorReorg,
     GasPrice,
+    /// Multi-operator test that requires 2/3 quorum - expected to fail until P2P aggregation is implemented
+    MultiOperator,
 }
 
 #[derive(
@@ -128,6 +130,10 @@ impl TestMatrix {
                 .cross_chain
                 .contains(&CrossChainService::CosmosToEvmEchoData)
     }
+
+    pub fn multi_operator_enabled(&self) -> bool {
+        self.evm.contains(&EvmService::MultiOperator)
+    }
 }
 
 impl From<EvmService> for Vec<ComponentName> {
@@ -189,6 +195,9 @@ impl From<EvmService> for Vec<ComponentName> {
                     ComponentName::Operator(OperatorComponent::EchoData),
                     ComponentName::Aggregator(AggregatorComponent::SimpleAggregator),
                 ]
+            }
+            EvmService::MultiOperator => {
+                vec![ComponentName::Operator(OperatorComponent::EchoData)]
             }
         }
     }

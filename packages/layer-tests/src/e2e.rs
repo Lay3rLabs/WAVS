@@ -159,8 +159,8 @@ async fn _run(
         .bootstrap(&registry, &clients, evm_middleware, cosmos_middlewares)
         .await;
 
-    // upload components
-    let component_sources = ComponentSources::new(&configs, &registry, &clients.http_client).await;
+    // upload components to ALL WAVS instances
+    let component_sources = ComponentSources::new(&configs, &registry, &clients.http_clients).await;
 
     // create the real services (deploy contracts etc.)
 
