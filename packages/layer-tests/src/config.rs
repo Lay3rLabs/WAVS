@@ -5,6 +5,14 @@ use utils::{config::ConfigExt, test_utils::middleware::evm::EvmMiddlewareType};
 
 use crate::e2e::{AnyService, CosmosService, CrossChainService, EvmService, TestMatrix};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum TestP2pMode {
+    #[default]
+    Mdns,
+    Kademlia,
+}
+
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
 ///
@@ -19,6 +27,7 @@ pub struct TestConfig {
     pub wavs_concurrency: bool,
     pub grouping: bool,
     pub middleware_type: EvmMiddlewareType,
+    pub p2p: TestP2pMode,
     pub jaeger: Option<String>,
     pub prometheus: Option<String>,
     _log_levels: Vec<String>,
@@ -52,6 +61,7 @@ impl Default for TestConfig {
             middleware_concurrency: false,
             grouping: true,
             middleware_type: EvmMiddlewareType::default(),
+            p2p: TestP2pMode::default(),
             jaeger: None,
             prometheus: None,
             _data_dir: tempfile::tempdir().unwrap().keep(),

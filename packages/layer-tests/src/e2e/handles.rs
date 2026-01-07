@@ -10,13 +10,15 @@ use utils::{
     telemetry::Metrics,
     test_utils::middleware::{
         cosmos::{CosmosMiddleware, CosmosMiddlewareKind},
-        evm::{EvmMiddleware, EvmMiddlewareType},
+        evm::EvmMiddleware,
     },
 };
 use wavs::dispatcher::Dispatcher;
 use wavs::subsystems::aggregator::p2p::P2pConfig;
 use wavs_cli::clients::HttpClient;
 use wavs_types::{ChainKey, ChainKeyNamespace};
+
+use crate::config::TestP2pMode;
 
 use super::config::Configs;
 
@@ -32,12 +34,7 @@ pub struct AppHandles {
 pub type CosmosMiddlewares = Arc<HashMap<ChainKey, CosmosMiddleware>>;
 
 impl AppHandles {
-    pub fn start(
-        ctx: &AppContext,
-        configs: &Configs,
-        metrics: Metrics,
-        evm_middleware_type: EvmMiddlewareType,
-    ) -> Self {
+    pub fn start(ctx: &AppContext, configs: &Configs, metrics: Metrics) -> Self {
         let mut evm_chains = Vec::new();
         let mut cosmos_chains = Vec::new();
 
@@ -75,13 +72,8 @@ impl AppHandles {
         let mut wavs_handles = Vec::with_capacity(configs.num_operators());
 
         // Check if we're using Remote P2P mode (Kademlia)
-        let is_remote_p2p = configs
-            .wavs_configs
-            .first()
-            .map(|c| matches!(c.p2p, P2pConfig::Remote { .. }))
-            .unwrap_or(false);
 
-        if is_remote_p2p && configs.num_operators() > 1 {
+        if configs.p2p == TestP2pMode::Kademlia && configs.num_operators() > 1 {
             // Remote mode: start operator 0 first, get bootstrap address, then start others
             wavs_handles = Self::start_wavs_remote_mode(ctx, configs, &metrics);
         } else {
@@ -95,7 +87,7 @@ impl AppHandles {
         let evm_middleware = if evm_chains.is_empty() {
             None
         } else {
-            Some(EvmMiddleware::new(evm_middleware_type).unwrap())
+            Some(EvmMiddleware::new(configs.evm_middleware_type).unwrap())
         };
 
         Self {

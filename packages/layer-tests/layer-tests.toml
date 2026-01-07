@@ -6,13 +6,13 @@ wavs_concurrency = true
 middleware_concurrency = true
 grouping = false
 evm_middleware_type = "poa" # "eigenlayer" or "poa"
+p2p = "kademlia" # "mdns" or "kademlia"
 # Run all tests
-mode = "all"
+# mode = "all"
 # mode = { "isolated" = [{ evm = "timer_aggregator_reorg" }] }
 # mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }
 # mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }
-# mode = { "isolated" = [{ evm = "multi_operator" }] }
-# mode = { "isolated" = [{ evm = "multi_operator_remote" }] }
+mode = { "isolated" = [{ evm = "multi_operator" }] }
 # mode = {"isolated" = [
 #     {evm = "echo_data"},
 #     {evm = "multi_operator"},

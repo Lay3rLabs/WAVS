@@ -24,8 +24,7 @@ pub enum TestGroupId {
     CosmosIntervalStartStop,
     Backpressure,
     AggregatorTimer,
-    P2pLocal,
-    P2pRemote,
+    P2p,
     Other(usize),
 }
 
