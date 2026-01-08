@@ -52,7 +52,8 @@ impl Guest for Component {
         let (maybe_trigger_id, data) = match trigger_action.data {
             TriggerData::EvmContractEvent(_)
             | TriggerData::CosmosContractEvent(_)
-            | TriggerData::AtprotoEvent(_) => {
+            | TriggerData::AtprotoEvent(_)
+            | TriggerData::HypercoreAppend(_) => {
                 let (trigger_id, data) =
                     decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
 
