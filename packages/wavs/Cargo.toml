@@ -37,6 +37,7 @@ layer-climb = { workspace = true }
 ctrlc = { workspace = true }
 tempfile = { workspace = true }
 futures = { workspace = true }
+futures-lite = { workspace = true }
 cosmwasm-std = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
@@ -64,6 +65,7 @@ rand = { workspace = true }
 hypercore = { workspace = true }
 hypercore-protocol = { workspace = true }
 hyperswarm = { workspace = true }
+async-std = { workspace = true }
 tokio-util = { workspace = true }
 
 [dev-dependencies]

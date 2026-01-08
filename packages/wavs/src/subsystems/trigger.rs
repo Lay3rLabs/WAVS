@@ -233,7 +233,8 @@ impl TriggerManager {
 
     #[instrument(skip(self, ctx), fields(subsys = "TriggerManager"))]
     pub fn start(&self, ctx: AppContext) {
-        ctx.rt.block_on(self.start_watcher()).unwrap();
+        let kill_receiver = ctx.get_kill_receiver();
+        ctx.rt.block_on(self.start_watcher(kill_receiver)).unwrap();
     }
 
     pub fn send_dispatcher_commands(
@@ -288,7 +289,10 @@ impl TriggerManager {
     }
 
     #[instrument(skip(self), fields(subsys = "TriggerManager"))]
-    async fn start_watcher(&self) -> Result<(), TriggerError> {
+    async fn start_watcher(
+        &self,
+        mut kill_receiver: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<(), TriggerError> {
         let mut multiplexed_stream: MultiplexedStream = SelectAll::new();
 
         let local_command_stream = local_command_stream::start_local_command_stream(
@@ -306,7 +310,17 @@ impl TriggerManager {
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
-        while let Some(res) = multiplexed_stream.next().await {
+        loop {
+            let res = tokio::select! {
+                _ = kill_receiver.recv() => {
+                    tracing::debug!("Trigger Manager watcher received shutdown");
+                    break;
+                }
+                res = multiplexed_stream.next() => res,
+            };
+            let Some(res) = res else {
+                break;
+            };
             let res = match res {
                 Err(err) => {
                     tracing::error!("{:?}", err);
@@ -672,6 +686,7 @@ impl TriggerManager {
                                         feed_key: feed_key.clone(),
                                     },
                                     self.metrics.clone(),
+                                    kill_receiver.resubscribe(),
                                 )
                                 .await;
                             let was_connecting = matches!(current_state, StreamStartState::Waiting);

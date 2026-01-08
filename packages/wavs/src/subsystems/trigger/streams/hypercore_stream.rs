@@ -5,8 +5,7 @@
 //! and spawns the replication protocol to ingest data.
 
 use ::hypercore_protocol::discovery_key;
-use futures::{Stream, StreamExt};
-use futures_lite::StreamExt as LiteStreamExt;
+use futures::{future::select, future::Either, FutureExt, Stream};
 use hypercore::{replication::Event, Hypercore, HypercoreBuilder, PartialKeypair, Storage};
 use hyperswarm::{Config as SwarmConfig, Hyperswarm, TopicConfig};
 use std::{path::PathBuf, pin::Pin, sync::Arc};
@@ -33,6 +32,7 @@ pub struct HypercoreStreamConfig {
 pub async fn start_hypercore_stream(
     config: HypercoreStreamConfig,
     metrics: TriggerMetrics,
+    shutdown: tokio::sync::broadcast::Receiver<()>,
 ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
 {
     std::fs::create_dir_all(&config.storage_dir).map_err(|err| {
@@ -117,7 +117,7 @@ pub async fn start_hypercore_stream(
         }
     };
 
-    start_swarm_replication(feed_key_bytes, Arc::clone(&core)).await?;
+    start_swarm_replication(feed_key_bytes, Arc::clone(&core), shutdown).await?;
 
     Ok(Box::pin(event_stream))
 }
@@ -151,6 +151,7 @@ async fn build_core_with_feed_key(
 async fn start_swarm_replication(
     feed_key: [u8; 32],
     core: Arc<Mutex<Hypercore>>,
+    shutdown: tokio::sync::broadcast::Receiver<()>,
 ) -> Result<(), TriggerError> {
     let topic = discovery_key(&feed_key);
 
@@ -159,25 +160,46 @@ async fn start_swarm_replication(
         .map_err(|err| TriggerError::Hypercore(format!("bind hyperswarm: {err:?}")))?;
     swarm.configure(topic, TopicConfig::announce_and_lookup());
 
+    let (shutdown_tx, shutdown_rx) = async_std::channel::bounded::<()>(1);
+    let mut shutdown_signal = shutdown;
+    tokio::spawn(async move {
+        let _ = shutdown_signal.recv().await;
+        let _ = shutdown_tx.send(()).await;
+    });
+
     // Hyperswarm uses async-std internals, so poll it on the async-std executor.
     async_std::task::spawn(async move {
-        while let Some(stream) = swarm.next().await {
-            let stream = match stream {
-                Ok(stream) => stream,
-                Err(err) => {
-                    tracing::warn!("Hyperswarm connection error: {err:?}");
-                    continue;
-                }
-            };
-            let replication_core = Arc::clone(&core);
-            async_std::task::spawn(async move {
-                if let Err(err) =
-                    hypercore_protocol::run_protocol(stream, false, replication_core, feed_key)
+        loop {
+            let shutdown_future = shutdown_rx.recv().fuse();
+            let swarm_future = futures_lite::StreamExt::next(&mut swarm).fuse();
+            futures::pin_mut!(shutdown_future, swarm_future);
+
+            match select(shutdown_future, swarm_future).await {
+                Either::Left(_) => break,
+                Either::Right((stream, _)) => {
+                    let stream = match stream {
+                        Some(Ok(stream)) => stream,
+                        Some(Err(err)) => {
+                            tracing::warn!("Hyperswarm connection error: {err:?}");
+                            continue;
+                        }
+                        None => break,
+                    };
+                    let replication_core = Arc::clone(&core);
+                    async_std::task::spawn(async move {
+                        if let Err(err) = hypercore_protocol::run_protocol(
+                            stream,
+                            false,
+                            replication_core,
+                            feed_key,
+                        )
                         .await
-                {
-                    tracing::warn!("Hypercore protocol swarm peer error: {err:?}");
+                        {
+                            tracing::warn!("Hypercore protocol swarm peer error: {err:?}");
+                        }
+                    });
                 }
-            });
+            }
         }
     });
 
