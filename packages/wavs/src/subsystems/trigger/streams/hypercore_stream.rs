@@ -6,6 +6,7 @@
 
 use ::hypercore_protocol::discovery_key;
 use futures::{Stream, StreamExt};
+use futures_lite::StreamExt as LiteStreamExt;
 use hypercore::{replication::Event, Hypercore, HypercoreBuilder, PartialKeypair, Storage};
 use hyperswarm::{Config as SwarmConfig, Hyperswarm, TopicConfig};
 use std::{path::PathBuf, pin::Pin, sync::Arc};
@@ -158,7 +159,8 @@ async fn start_swarm_replication(
         .map_err(|err| TriggerError::Hypercore(format!("bind hyperswarm: {err:?}")))?;
     swarm.configure(topic, TopicConfig::announce_and_lookup());
 
-    tokio::spawn(async move {
+    // Hyperswarm uses async-std internals, so poll it on the async-std executor.
+    async_std::task::spawn(async move {
         while let Some(stream) = swarm.next().await {
             let stream = match stream {
                 Ok(stream) => stream,
@@ -168,7 +170,7 @@ async fn start_swarm_replication(
                 }
             };
             let replication_core = Arc::clone(&core);
-            tokio::spawn(async move {
+            async_std::task::spawn(async move {
                 if let Err(err) =
                     hypercore_protocol::run_protocol(stream, false, replication_core, feed_key)
                         .await
