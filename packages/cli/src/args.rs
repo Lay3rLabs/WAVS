@@ -409,9 +409,9 @@ pub enum TriggerCommand {
 
     /// Set a Hypercore append trigger for a workflow
     SetHypercoreAppend {
-        /// Optional feed key to filter on. If not provided, matches any feed.
+        /// Feed key to filter on.
         #[clap(long)]
-        feed_key: Option<String>,
+        feed_key: String,
     },
 }
 

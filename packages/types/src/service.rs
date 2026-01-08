@@ -335,8 +335,8 @@ pub enum Trigger {
     },
     /// Hypercore append event trigger
     HypercoreAppend {
-        /// Optional feed key to filter on. None matches any feed.
-        feed_key: Option<String>,
+        /// Feed key to filter on.
+        feed_key: String,
     },
     // not a real trigger, just for testing
     Manual,

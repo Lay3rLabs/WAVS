@@ -51,7 +51,9 @@ pub enum TriggerCommand {
         event_hashes: Vec<alloy_primitives::B256>,
     },
     StartListeningAtProto,
-    StartListeningHypercore,
+    StartListeningHypercore {
+        feed_key: String,
+    },
     ManualTrigger(Box<TriggerAction>),
 }
 
@@ -106,8 +108,10 @@ impl TriggerCommand {
             Trigger::AtProtoEvent { .. } => {
                 vec![Self::StartListeningAtProto]
             }
-            Trigger::HypercoreAppend { .. } => {
-                vec![Self::StartListeningHypercore]
+            Trigger::HypercoreAppend { feed_key } => {
+                vec![Self::StartListeningHypercore {
+                    feed_key: feed_key.clone(),
+                }]
             }
             Trigger::Manual => Vec::new(),
         }
@@ -298,7 +302,7 @@ impl TriggerManager {
         let mut listening_chain_states: HashMap<ChainKey, StreamStartState> = HashMap::new();
         let mut cron_stream_state = StreamStartState::Waiting;
         let mut atproto_stream_state = StreamStartState::Waiting;
-        let mut hypercore_stream_state = StreamStartState::Waiting;
+        let mut hypercore_stream_states: HashMap<String, StreamStartState> = HashMap::new();
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
@@ -628,7 +632,7 @@ impl TriggerManager {
                                 }
                             }
                         }
-                        TriggerCommand::StartListeningHypercore => {
+                        TriggerCommand::StartListeningHypercore { feed_key } => {
                             #[cfg(feature = "dev")]
                             if self.disable_networking {
                                 tracing::warn!(
@@ -636,28 +640,28 @@ impl TriggerManager {
                                 );
                                 continue;
                             }
-                            if self.config.hypercore_replication_endpoint.is_none()
-                                || self.config.hypercore_replication_feed_key.is_none()
-                            {
-                                tracing::warn!(
-                                    "Hypercore replication endpoint and feed key are required, skipping hypercore stream start"
-                                );
-                                continue;
-                            }
-
-                            match hypercore_stream_state {
+                            let current_state = hypercore_stream_states
+                                .get(&feed_key)
+                                .copied()
+                                .unwrap_or(StreamStartState::Waiting);
+                            match current_state {
                                 StreamStartState::Connected => {
-                                    tracing::debug!("Hypercore stream already started, skipping");
+                                    tracing::debug!(
+                                        "Hypercore stream already started for {}, skipping",
+                                        feed_key
+                                    );
                                     continue;
                                 }
                                 StreamStartState::Connecting => {
                                     tracing::debug!(
-                                        "Hypercore stream is already starting, skipping"
+                                        "Hypercore stream is already starting for {}, skipping",
+                                        feed_key
                                     );
                                     continue;
                                 }
                                 StreamStartState::Waiting => {
-                                    hypercore_stream_state = StreamStartState::Connecting;
+                                    hypercore_stream_states
+                                        .insert(feed_key.clone(), StreamStartState::Connecting);
                                 }
                             }
 
@@ -665,32 +669,26 @@ impl TriggerManager {
                                 streams::hypercore_stream::start_hypercore_stream(
                                     streams::hypercore_stream::HypercoreStreamConfig {
                                         storage_dir: self.config.hypercore_storage_dir.clone(),
-                                        replication_endpoint: self
-                                            .config
-                                            .hypercore_replication_endpoint
-                                            .clone(),
-                                        replication_feed_key: self
-                                            .config
-                                            .hypercore_replication_feed_key
-                                            .clone(),
+                                        feed_key: feed_key.clone(),
                                     },
                                     self.metrics.clone(),
                                 )
                                 .await;
-                            let was_connecting =
-                                matches!(hypercore_stream_state, StreamStartState::Connecting);
+                            let was_connecting = matches!(current_state, StreamStartState::Waiting);
                             match hypercore_start_result {
                                 Ok(hypercore_stream) => {
                                     multiplexed_stream.push(hypercore_stream);
                                     tracing::info!("Started hypercore stream");
                                     if was_connecting {
-                                        hypercore_stream_state = StreamStartState::Connected;
+                                        hypercore_stream_states
+                                            .insert(feed_key.clone(), StreamStartState::Connected);
                                     }
                                 }
                                 Err(err) => {
                                     tracing::error!("Failed to start hypercore stream: {:?}", err);
                                     if was_connecting {
-                                        hypercore_stream_state = StreamStartState::Waiting;
+                                        hypercore_stream_states
+                                            .insert(feed_key.clone(), StreamStartState::Waiting);
                                     }
                                     continue;
                                 }
@@ -1095,12 +1093,7 @@ impl TriggerManager {
                 .read()
                 .unwrap();
 
-            if let Some(lookup_ids) = triggers_by_hypercore_lock.get(&Some(event.feed_key.clone()))
-            {
-                matched_lookup_ids.extend(lookup_ids);
-            }
-
-            if let Some(lookup_ids) = triggers_by_hypercore_lock.get(&None) {
+            if let Some(lookup_ids) = triggers_by_hypercore_lock.get(&event.feed_key) {
                 matched_lookup_ids.extend(lookup_ids);
             }
         }
@@ -1278,7 +1271,7 @@ mod tests {
                 workflow_id.clone(),
                 Workflow {
                     trigger: Trigger::HypercoreAppend {
-                        feed_key: Some(feed_key.clone()),
+                        feed_key: feed_key.clone(),
                     },
                     component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
                         [0; 32],
@@ -1304,7 +1297,7 @@ mod tests {
             service_id: service.id(),
             workflow_id: workflow_id.clone(),
             trigger: Trigger::HypercoreAppend {
-                feed_key: Some(feed_key.clone()),
+                feed_key: feed_key.clone(),
             },
         };
         trigger_manager

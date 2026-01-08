@@ -430,7 +430,7 @@ async fn run_test(
                 let payload = input_bytes.clone().unwrap_or_default();
 
                 let hypercore_data = TriggerData::HypercoreAppend {
-                    feed_key: feed_key.clone().unwrap_or_else(|| "feed-key-1".to_string()),
+                    feed_key: feed_key.clone(),
                     index: trigger_id.u64(),
                     data: payload,
                 };

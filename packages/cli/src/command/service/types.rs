@@ -163,11 +163,7 @@ impl std::fmt::Display for WorkflowTriggerResult {
             }
             Trigger::HypercoreAppend { feed_key } => {
                 writeln!(f, "  Trigger Type: Hypercore Append")?;
-                if let Some(key) = feed_key {
-                    writeln!(f, "    Feed Key: {}", key)?;
-                } else {
-                    writeln!(f, "    Feed Key: Any")?;
-                }
+                writeln!(f, "    Feed Key: {}", feed_key)?;
             }
         }
 

@@ -39,8 +39,8 @@ pub struct LookupMaps {
     /// lookup id by (collection pattern, optional repo_did, optional action) for wildcard matches
     pub triggers_by_atproto_event_pattern:
         Arc<RwLock<HashMap<(String, Option<String>, Option<AtProtoAction>), HashSet<LookupId>>>>,
-    /// lookup id by optional hypercore feed key (None means any feed)
-    pub triggers_by_hypercore_append: Arc<RwLock<HashMap<Option<String>, HashSet<LookupId>>>>,
+    /// lookup id by hypercore feed key
+    pub triggers_by_hypercore_append: Arc<RwLock<HashMap<String, HashSet<LookupId>>>>,
     // ServiceId <-> ServiceManager address
     pub service_manager: Arc<RwLock<BiMap<ServiceId, layer_climb::prelude::Address>>>,
     /// Efficient block schedulers (one per chain) for block interval triggers
@@ -220,7 +220,7 @@ impl LookupMaps {
                 self.triggers_by_hypercore_append
                     .write()
                     .unwrap()
-                    .entry(feed_key)
+                    .entry(feed_key.clone())
                     .or_default()
                     .insert(lookup_id);
             }

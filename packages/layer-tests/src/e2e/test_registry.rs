@@ -375,7 +375,7 @@ impl TestRegistry {
                         .with_operator_component(OperatorComponent::EchoData)
                         .with_aggregator_component(AggregatorComponent::SimpleAggregator)
                         .with_trigger(TriggerDefinition::Existing(Trigger::HypercoreAppend {
-                            feed_key: Some("feed-key-1".to_string()),
+                            feed_key: "feed-key-1".to_string(),
                         }))
                         .with_submit(SubmitDefinition::Aggregator {
                             url: aggregator_endpoint.to_string(),

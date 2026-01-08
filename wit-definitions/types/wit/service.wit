@@ -129,7 +129,7 @@ interface service {
     }
 
     record trigger-hypercore-append {
-        feed-key: option<string>
+        feed-key: string
     }
 
 

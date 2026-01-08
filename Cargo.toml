@@ -89,6 +89,7 @@ ctrlc = "3.5.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.89"
 hypercore = { version = "0.14.0", default-features = false, features = ["tokio", "replication", "sparse"] }
+hyperswarm = { git = "https://github.com/datrs/hyperswarm-rs.git", default-features = false }
 
 # websocket
 tokio-tungstenite = { version = "0.28.0", features = [

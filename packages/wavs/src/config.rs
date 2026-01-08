@@ -49,11 +49,6 @@ pub struct Config {
     /// Default is `/var/wavs/hypercore`
     #[schema(value_type = String)]
     pub hypercore_storage_dir: PathBuf,
-    /// Hypercore replication endpoint in the form "host:port" or "unix:/path"
-    /// Required for hypercore triggers; requires hypercore_replication_feed_key.
-    pub hypercore_replication_endpoint: Option<String>,
-    /// Hypercore feed key (hex) to subscribe to for replication
-    pub hypercore_replication_feed_key: Option<String>,
     /// The allowed cors origins
     /// Default is empty
     pub cors_allowed_origins: Vec<String>,
@@ -140,8 +135,6 @@ impl Default for Config {
             host: "127.0.0.1".to_string(),
             data: PathBuf::from("/var/wavs"),
             hypercore_storage_dir: PathBuf::from("/var/wavs/hypercore"),
-            hypercore_replication_endpoint: None,
-            hypercore_replication_feed_key: None,
             cors_allowed_origins: Vec::new(),
             chains: Arc::new(RwLock::new(ChainConfigs::default())),
             wasm_lru_size: 20,
