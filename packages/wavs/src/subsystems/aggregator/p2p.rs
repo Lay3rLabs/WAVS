@@ -370,6 +370,10 @@ fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorErr
         let mut hasher = DefaultHasher::new();
         message.data.hash(&mut hasher);
         message.source.hash(&mut hasher);
+        message.topic.hash(&mut hasher);
+        if let Some(seq) = &message.sequence_number {
+            seq.hash(&mut hasher);
+        }
         MessageId::from(hasher.finish().to_string())
     };
 
