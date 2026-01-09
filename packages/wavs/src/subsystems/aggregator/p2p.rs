@@ -75,6 +75,7 @@ pub enum P2pConfig {
         retry_interval_ms: Option<u64>,
         submission_ttl_secs: Option<u64>,
         max_catchup_submissions: Option<usize>,
+        cleanup_interval_secs: Option<u64>,
     },
     /// Remote/production - use Kademlia DHT for peer discovery with bootstrap nodes
     Remote {
@@ -82,6 +83,12 @@ pub enum P2pConfig {
         listen_port: u16,
         /// Bootstrap node addresses (multiaddr format). Empty = this node is a bootstrap server.
         bootstrap_nodes: Vec<String>,
+        max_retry_duration_secs: Option<u64>,
+        retry_interval_ms: Option<u64>,
+        submission_ttl_secs: Option<u64>,
+        max_catchup_submissions: Option<usize>,
+        cleanup_interval_secs: Option<u64>,
+        kademlia_discovery_interval_secs: Option<u64>,
     },
 }
 
@@ -92,10 +99,45 @@ impl P2pConfig {
     const DEFAULT_SUBMISSION_TTL_SECS: u64 = 300; // 5 minutes
     /// Maximum submissions to return in a catch-up response
     const DEFAULT_MAX_CATCHUP_SUBMISSIONS: usize = 100;
+    /// This ensures peers eventually discover each other even if they join at different times.
+    const DEFAULT_KADEMLIA_DISCOVERY_INTERVAL_SECS: u64 = 2;
+    /// Interval between cleanup of expired stored submissions
+    const DEFAULT_CLEANUP_INTERVAL_SECS: u64 = 60;
+
+    pub fn cleanup_interval_secs(&self) -> u64 {
+        match self {
+            P2pConfig::Local {
+                cleanup_interval_secs,
+                ..
+            } => cleanup_interval_secs.unwrap_or(Self::DEFAULT_CLEANUP_INTERVAL_SECS),
+            P2pConfig::Remote {
+                cleanup_interval_secs,
+                ..
+            } => cleanup_interval_secs.unwrap_or(Self::DEFAULT_CLEANUP_INTERVAL_SECS),
+            P2pConfig::Disabled => Self::DEFAULT_CLEANUP_INTERVAL_SECS,
+        }
+    }
+
+    pub fn kademlia_discovery_interval_secs(&self) -> u64 {
+        match self {
+            P2pConfig::Remote {
+                kademlia_discovery_interval_secs,
+                ..
+            } => kademlia_discovery_interval_secs
+                .unwrap_or(Self::DEFAULT_KADEMLIA_DISCOVERY_INTERVAL_SECS),
+            P2pConfig::Local { .. } | P2pConfig::Disabled => {
+                Self::DEFAULT_KADEMLIA_DISCOVERY_INTERVAL_SECS
+            }
+        }
+    }
 
     pub fn max_retry_duration_secs(&self) -> u64 {
         match self {
             P2pConfig::Local {
+                max_retry_duration_secs,
+                ..
+            } => max_retry_duration_secs.unwrap_or(Self::DEFAULT_MAX_RETRY_DURATION_SECS),
+            P2pConfig::Remote {
                 max_retry_duration_secs,
                 ..
             } => max_retry_duration_secs.unwrap_or(Self::DEFAULT_MAX_RETRY_DURATION_SECS),
@@ -108,6 +150,9 @@ impl P2pConfig {
             P2pConfig::Local {
                 retry_interval_ms, ..
             } => retry_interval_ms.unwrap_or(Self::DEFAULT_RETRY_INTERVAL_MS),
+            P2pConfig::Remote {
+                retry_interval_ms, ..
+            } => retry_interval_ms.unwrap_or(Self::DEFAULT_RETRY_INTERVAL_MS),
             P2pConfig::Disabled => Self::DEFAULT_RETRY_INTERVAL_MS,
         }
     }
@@ -118,6 +163,10 @@ impl P2pConfig {
                 submission_ttl_secs,
                 ..
             } => submission_ttl_secs.unwrap_or(Self::DEFAULT_SUBMISSION_TTL_SECS),
+            P2pConfig::Remote {
+                submission_ttl_secs,
+                ..
+            } => submission_ttl_secs.unwrap_or(Self::DEFAULT_SUBMISSION_TTL_SECS),
             P2pConfig::Disabled => Self::DEFAULT_SUBMISSION_TTL_SECS,
         }
     }
@@ -125,6 +174,10 @@ impl P2pConfig {
     pub fn max_catchup_submissions(&self) -> usize {
         match self {
             P2pConfig::Local {
+                max_catchup_submissions,
+                ..
+            } => max_catchup_submissions.unwrap_or(Self::DEFAULT_MAX_CATCHUP_SUBMISSIONS),
+            P2pConfig::Remote {
                 max_catchup_submissions,
                 ..
             } => max_catchup_submissions.unwrap_or(Self::DEFAULT_MAX_CATCHUP_SUBMISSIONS),
@@ -353,30 +406,12 @@ impl P2pHandle {
         p2p_config: P2pConfig,
         aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
     ) -> Result<Option<Self>, AggregatorError> {
-        match p2p_config {
-            P2pConfig::Disabled => {
-                tracing::info!("P2P networking is disabled");
-                Ok(None)
-            }
-            P2pConfig::Local { listen_port, .. } => {
-                let handle =
-                    Self::create_local_network(ctx, p2p_config, listen_port, aggregator_tx).await?;
-                Ok(Some(handle))
-            }
-            P2pConfig::Remote {
-                listen_port,
-                bootstrap_nodes,
-            } => {
-                let handle = Self::create_network(
-                    ctx,
-                    *listen_port,
-                    bootstrap_nodes.clone(),
-                    aggregator_tx,
-                    &config,
-                )
-                .await?;
-                Ok(Some(handle))
-            }
+        if matches!(p2p_config, P2pConfig::Disabled) {
+            tracing::info!("P2P networking is disabled");
+            Ok(None)
+        } else {
+            let handle = Self::create_network(ctx, p2p_config, aggregator_tx).await?;
+            Ok(Some(handle))
         }
     }
 
@@ -427,14 +462,12 @@ impl P2pHandle {
     async fn create_network(
         ctx: AppContext,
         p2p_config: P2pConfig,
-        listen_port: u16,
-        bootstrap_nodes: Vec<String>,
         aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
     ) -> Result<Self, AggregatorError> {
         let swarm = build_swarm(&p2p_config)?;
         let local_peer_id = *swarm.local_peer_id();
 
-        let mode_name = match config {
+        let mode_name = match p2p_config {
             P2pConfig::Local { .. } => "Local (mDNS)",
             P2pConfig::Remote { .. } => "Remote (Kademlia)",
             P2pConfig::Disabled => "Disabled",
@@ -447,8 +480,6 @@ impl P2pHandle {
             ctx,
             p2p_config,
             swarm,
-            listen_port,
-            bootstrap_nodes,
             command_rx,
             aggregator_tx,
         ));
@@ -630,11 +661,17 @@ async fn run_event_loop(
     ctx: AppContext,
     p2p_config: P2pConfig,
     mut swarm: Swarm<WavsBehaviour>,
-    listen_port: u16,
-    bootstrap_nodes: Vec<String>,
     mut command_rx: mpsc::UnboundedReceiver<P2pCommand>,
     aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
 ) {
+    let listen_port = match &p2p_config {
+        P2pConfig::Local { listen_port, .. } => *listen_port,
+        P2pConfig::Remote { listen_port, .. } => *listen_port,
+        P2pConfig::Disabled => {
+            tracing::error!("P2P is disabled, cannot run event loop");
+            return;
+        }
+    };
     let listen_addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{}", listen_port)
         .parse()
         .expect("Valid multiaddr");
@@ -646,9 +683,16 @@ async fn run_event_loop(
 
     tracing::info!("P2P listening on {}", listen_addr);
 
+    let bootstrap_nodes = match &p2p_config {
+        P2pConfig::Remote {
+            bootstrap_nodes, ..
+        } => bootstrap_nodes,
+        _ => &vec![],
+    };
+
     // For Remote mode: dial bootstrap nodes and trigger Kademlia bootstrap
     if !bootstrap_nodes.is_empty() {
-        for addr_str in &bootstrap_nodes {
+        for addr_str in bootstrap_nodes {
             match addr_str.parse::<Multiaddr>() {
                 Ok(addr) => {
                     tracing::info!("Dialing bootstrap node: {}", addr);
@@ -674,12 +718,14 @@ async fn run_event_loop(
         tracing::info!("Running as bootstrap server (no bootstrap nodes configured)");
     }
 
-    let mut state = EventLoopState::new();
-    let mut retry_interval = tokio::time::interval(Duration::from_millis(RETRY_INTERVAL_MS));
-    let mut cleanup_interval = tokio::time::interval(Duration::from_secs(CLEANUP_INTERVAL_SECS));
+    let mut retry_interval =
+        tokio::time::interval(Duration::from_millis(p2p_config.retry_interval_ms()));
+    let mut cleanup_interval =
+        tokio::time::interval(Duration::from_secs(p2p_config.cleanup_interval_secs()));
     // Periodic peer discovery for Kademlia mode - helps find peers that joined after initial bootstrap
-    let mut discovery_interval =
-        tokio::time::interval(Duration::from_secs(KADEMLIA_DISCOVERY_INTERVAL_SECS));
+    let mut discovery_interval = tokio::time::interval(Duration::from_secs(
+        p2p_config.kademlia_discovery_interval_secs(),
+    ));
     let mut shutdown_signal = ctx.get_kill_receiver();
     let mut state = EventLoopState::new(p2p_config);
 
