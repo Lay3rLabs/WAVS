@@ -142,6 +142,7 @@ impl Aggregator {
                 }
                 Err(e) => {
                     tracing::error!("Failed to initialize P2P network: {:?}", e);
+                    ctx.kill();
                 }
             }
         });
