@@ -37,7 +37,6 @@ pub enum EvmService {
     TimerAggregator,
     TimerAggregatorReorg,
     GasPrice,
-    /// Multi-operator test that requires 2/3 quorum - expected to fail until P2P aggregation is implemented
     MultiOperator,
 }
 

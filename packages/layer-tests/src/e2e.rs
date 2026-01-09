@@ -82,7 +82,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
 
     let configs: Configs = config.into();
 
-    let handles = AppHandles::start(&ctx, &configs, metrics, configs.evm_middleware_type);
+    let handles = AppHandles::start(&ctx, &configs, metrics);
     tracing::info!("Background processes started");
 
     let clients = ctx

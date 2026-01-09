@@ -14,7 +14,7 @@ use utils::{
 use wavs::subsystems::aggregator::p2p::P2pConfig;
 use wavs_types::{ChainConfigs, CosmosChainConfigBuilder, Credential, EvmChainConfigBuilder};
 
-use crate::config::TestConfig;
+use crate::config::{TestConfig, TestP2pMode};
 
 use super::matrix::TestMatrix;
 
@@ -37,6 +37,7 @@ pub struct Configs {
     pub wavs_concurrency: bool,
     pub grouping: bool,
     pub evm_middleware_type: EvmMiddlewareType,
+    pub p2p: TestP2pMode,
 }
 
 impl Configs {
@@ -146,7 +147,7 @@ impl TestMnemonics {
 pub const MULTI_OPERATOR_COUNT: usize = 3;
 /// Base port for WAVS HTTP servers
 pub const WAVS_BASE_PORT: u32 = 8000;
-/// Base port for P2P networking (separate from HTTP)
+/// Base port for WAVS P2P servers
 pub const P2P_BASE_PORT: u16 = 9000;
 
 impl From<TestConfig> for Configs {
@@ -248,15 +249,36 @@ impl From<TestConfig> for Configs {
             // Each operator gets a unique port
             wavs_config.port = WAVS_BASE_PORT + operator_index as u32;
 
-            // Enable P2P for multi-operator tests with mDNS discovery
+            // Enable P2P for multi-operator tests
             if num_operators > 1 {
-                wavs_config.p2p = P2pConfig::Local {
-                    listen_port: P2P_BASE_PORT + operator_index as u16,
-                    max_retry_duration_secs: None,
-                    retry_interval_ms: None,
-                    submission_ttl_secs: None,
-                    max_catchup_submissions: None,
-                };
+                match test_config.p2p {
+                    TestP2pMode::Kademlia => {
+                        // Remote mode: Kademlia DHT discovery
+                        // Operator 0 is the bootstrap server (empty bootstrap_nodes)
+                        // Operators 1+ will have bootstrap_nodes set at runtime after operator 0 starts
+                        wavs_config.p2p = P2pConfig::Remote {
+                            listen_port: P2P_BASE_PORT + operator_index as u16,
+                            bootstrap_nodes: vec![], // Set at runtime for operators 1+
+                            max_retry_duration_secs: None,
+                            retry_interval_ms: None,
+                            submission_ttl_secs: None,
+                            max_catchup_submissions: None,
+                            cleanup_interval_secs: None,
+                            kademlia_discovery_interval_secs: Some(2),
+                        };
+                    }
+                    TestP2pMode::Mdns => {
+                        // Local mode: mDNS discovery
+                        wavs_config.p2p = P2pConfig::Local {
+                            listen_port: P2P_BASE_PORT + operator_index as u16,
+                            max_retry_duration_secs: None,
+                            retry_interval_ms: None,
+                            submission_ttl_secs: None,
+                            max_catchup_submissions: None,
+                            cleanup_interval_secs: None,
+                        };
+                    }
+                }
             }
 
             wavs_configs.push(wavs_config);
@@ -290,6 +312,7 @@ impl From<TestConfig> for Configs {
             wavs_concurrency: test_config.wavs_concurrency,
             grouping: test_config.grouping,
             evm_middleware_type: test_config.middleware_type,
+            p2p: test_config.p2p,
         }
     }
 }

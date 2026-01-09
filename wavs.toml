@@ -104,6 +104,17 @@ port = 8000
 # [wavs.p2p.local]
 # listen_port = 9000
 #
+# To enable P2P with Kademlia DHT for production (remote peer discovery):
+# p2p = { remote = { listen_port = 9000, bootstrap_nodes = ["/ip4/1.2.3.4/tcp/9000/p2p/12D3KooW..."] } }
+#
+# Or using section format:
+# [wavs.p2p.remote]
+# listen_port = 9000
+# bootstrap_nodes = ["/ip4/1.2.3.4/tcp/9000/p2p/12D3KooW..."]
+#
+# Note: Any node can serve as a bootstrap server for others. Empty bootstrap_nodes
+# means this is the initial bootstrap server; otherwise it joins via existing nodes.
+#
 # To explicitly disable P2P:
 # p2p = "disabled"
 
