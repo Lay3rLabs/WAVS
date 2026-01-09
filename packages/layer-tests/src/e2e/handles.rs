@@ -192,11 +192,23 @@ impl AppHandles {
             if let P2pConfig::Remote {
                 listen_port,
                 bootstrap_nodes: _,
+                max_retry_duration_secs,
+                retry_interval_ms,
+                submission_ttl_secs,
+                max_catchup_submissions,
+                cleanup_interval_secs,
+                kademlia_discovery_interval_secs,
             } = &config.p2p
             {
                 config.p2p = P2pConfig::Remote {
                     listen_port: *listen_port,
                     bootstrap_nodes: vec![bootstrap_addr.clone()],
+                    max_retry_duration_secs: *max_retry_duration_secs,
+                    retry_interval_ms: *retry_interval_ms,
+                    submission_ttl_secs: *submission_ttl_secs,
+                    max_catchup_submissions: *max_catchup_submissions,
+                    cleanup_interval_secs: *cleanup_interval_secs,
+                    kademlia_discovery_interval_secs: *kademlia_discovery_interval_secs,
                 };
             }
 

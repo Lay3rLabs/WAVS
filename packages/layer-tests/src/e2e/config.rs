@@ -259,12 +259,23 @@ impl From<TestConfig> for Configs {
                         wavs_config.p2p = P2pConfig::Remote {
                             listen_port: P2P_BASE_PORT + operator_index as u16,
                             bootstrap_nodes: vec![], // Set at runtime for operators 1+
+                            max_retry_duration_secs: None,
+                            retry_interval_ms: None,
+                            submission_ttl_secs: None,
+                            max_catchup_submissions: None,
+                            cleanup_interval_secs: None,
+                            kademlia_discovery_interval_secs: None,
                         };
                     }
                     TestP2pMode::Mdns => {
                         // Local mode: mDNS discovery
                         wavs_config.p2p = P2pConfig::Local {
                             listen_port: P2P_BASE_PORT + operator_index as u16,
+                            max_retry_duration_secs: None,
+                            retry_interval_ms: None,
+                            submission_ttl_secs: None,
+                            max_catchup_submissions: None,
+                            cleanup_interval_secs: None,
                         };
                     }
                 }
