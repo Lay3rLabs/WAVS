@@ -100,7 +100,7 @@ impl P2pConfig {
     /// Maximum submissions to return in a catch-up response
     const DEFAULT_MAX_CATCHUP_SUBMISSIONS: usize = 100;
     /// This ensures peers eventually discover each other even if they join at different times.
-    const DEFAULT_KADEMLIA_DISCOVERY_INTERVAL_SECS: u64 = 2;
+    const DEFAULT_KADEMLIA_DISCOVERY_INTERVAL_SECS: u64 = 60;
     /// Interval between cleanup of expired stored submissions
     const DEFAULT_CLEANUP_INTERVAL_SECS: u64 = 60;
 

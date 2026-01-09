@@ -264,7 +264,7 @@ impl From<TestConfig> for Configs {
                             submission_ttl_secs: None,
                             max_catchup_submissions: None,
                             cleanup_interval_secs: None,
-                            kademlia_discovery_interval_secs: None,
+                            kademlia_discovery_interval_secs: Some(2),
                         };
                     }
                     TestP2pMode::Mdns => {
