@@ -95,6 +95,18 @@ port = 8000
 # Generate with `openssl rand -hex 32`
 # bearer_token = "change-me"
 
+# P2P is disabled by default (for single-operator setups)
+#
+# To enable P2P with local mDNS peer discovery (for development/testing):
+# p2p = { local = { listen_port = 9000 } }
+#
+# Or using section format:
+# [wavs.p2p.local]
+# listen_port = 9000
+#
+# To explicitly disable P2P:
+# p2p = "disabled"
+
 # WAVS-specific chain overrides (if needed)
 # Example:
 # [wavs.chains.evm.local]

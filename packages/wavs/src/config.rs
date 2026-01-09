@@ -7,6 +7,8 @@ use utils::{config::ConfigExt, service::DEFAULT_IPFS_GATEWAY};
 use utoipa::ToSchema;
 use wavs_types::{ChainConfigs, Credential, Workflow};
 
+use crate::subsystems::aggregator::p2p::P2pConfig;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HealthCheckMode {
@@ -91,6 +93,11 @@ pub struct Config {
     /// Health check mode for chain endpoints at startup
     pub health_check_mode: HealthCheckMode,
 
+    /// P2P networking configuration for signature aggregation
+    #[serde(default)]
+    #[schema(value_type = String)]
+    pub p2p: P2pConfig,
+
     /// Disable trigger networking for testing (default: false)
     #[cfg(feature = "dev")]
     pub disable_trigger_networking: bool,
@@ -144,6 +151,7 @@ impl Default for Config {
             dev_endpoints_enabled: false,
             max_body_size_mb: 15,
             health_check_mode: HealthCheckMode::default(),
+            p2p: P2pConfig::default(),
             #[cfg(feature = "dev")]
             disable_trigger_networking: false,
             #[cfg(feature = "dev")]

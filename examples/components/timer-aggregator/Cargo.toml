@@ -14,6 +14,9 @@ wavs-wasi-utils = { workspace = true }
 alloy-network = { workspace = true }
 alloy-provider = { workspace = true }
 wasip2 = { workspace = true }
+example-helpers = { workspace = true }
+example-types = { workspace = true }
+
 
 [lib]
 crate-type = ["cdylib"]

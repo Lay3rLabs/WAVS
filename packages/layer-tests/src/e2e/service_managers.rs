@@ -9,7 +9,7 @@ use utils::test_utils::{
     },
     mock_service_manager::MockEvmServiceManager,
 };
-use wavs_cli::{clients::HttpClient, command::deploy_service::DeployService};
+use wavs_cli::command::deploy_service::DeployService;
 use wavs_types::{
     ChainKey, ChainKeyNamespace, Service, ServiceManager, ServiceStatus, SignerResponse,
 };
@@ -242,30 +242,25 @@ impl ServiceManagers {
         }
     }
 
-    pub async fn register_operators(&self, registry: &TestRegistry, _clients: &Clients) {
-        use crate::e2e::config::{MULTI_OPERATOR_COUNT, WAVS_BASE_PORT};
+    pub async fn register_operators(&self, registry: &TestRegistry, clients: &Clients) {
+        use crate::e2e::config::MULTI_OPERATOR_COUNT;
 
         let mut futures = Vec::new();
 
         for (test_index, test) in registry.list_all().enumerate() {
             let service_manager = self.get_service_manager(&test.name);
 
-            // For multi-operator tests, register all operators with 2/3 quorum requirement
-            let num_operators = if test.multi_operator {
-                MULTI_OPERATOR_COUNT
-            } else {
-                1
-            };
+            // Register operators for all running WAVS instances since any of them
+            // might execute aggregation and submit. Cap at the number of available
+            // instances (may be less than MULTI_OPERATOR_COUNT for isolated tests).
+            let num_operators = std::cmp::min(MULTI_OPERATOR_COUNT, clients.http_clients.len());
 
             // Collect all operators for this test
             let mut avs_operators = Vec::with_capacity(num_operators);
 
             for operator_offset in 0..num_operators {
-                // Get the signing key from the correct WAVS instance
-                // Each WAVS instance runs on its own port: 8000, 8001, 8002, etc.
-                let wavs_port = WAVS_BASE_PORT + operator_offset as u32;
-                let wavs_endpoint = format!("http://127.0.0.1:{}", wavs_port);
-                let http_client = HttpClient::new(wavs_endpoint);
+                // Reuse existing HTTP client for this WAVS instance
+                let http_client = &clients.http_clients[operator_offset];
 
                 let SignerResponse::Secp256k1 {
                     evm_address: avs_signer_address,
@@ -313,9 +308,10 @@ impl ServiceManagers {
                 avs_operators.push(avs_operator);
             }
 
-            // Calculate required operators for quorum (2/3 of total)
+            // Calculate required signatures for quorum
+            // Multi-operator: 2/3 quorum (requires multiple signatures)
+            // Single-operator: quorum of 1 (any single operator can submit)
             let required_to_pass = if test.multi_operator {
-                // For 2/3 quorum
                 ((num_operators as u64) * 2).div_ceil(3)
             } else {
                 1
@@ -325,11 +321,12 @@ impl ServiceManagers {
             futures.push(async move {
                 match service_manager_instance {
                     AnyServiceManagerInstance::Evm { manager, .. } => {
+                        let config =
+                            MiddlewareServiceManagerConfig::new(&avs_operators, required_to_pass);
+                        manager.configure(&config).await.unwrap();
+                        // Validate that operators are properly registered before proceeding
                         manager
-                            .configure(&MiddlewareServiceManagerConfig::new(
-                                &avs_operators,
-                                required_to_pass,
-                            ))
+                            .validate_operator_registration(&config)
                             .await
                             .unwrap();
                     }

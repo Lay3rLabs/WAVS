@@ -109,3 +109,25 @@ pub enum DevTriggerStreamSubscriptionKind {
     },
     NewPendingTransactions,
 }
+
+/// P2P network status for monitoring and readiness checks
+#[derive(Debug, Clone, Default, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct P2pStatus {
+    /// Whether P2P networking is enabled
+    pub enabled: bool,
+    /// Local peer ID
+    pub local_peer_id: Option<String>,
+    /// Listen addresses (multiaddrs with peer ID appended, e.g. "/ip4/0.0.0.0/tcp/9000/p2p/12D3KooW...")
+    pub listen_addresses: Vec<String>,
+    /// External addresses discovered via AutoNAT/Identify (preferred for NAT traversal)
+    /// These are addresses that peers outside NAT can use to reach us.
+    pub external_addresses: Vec<String>,
+    /// Number of connected peers
+    pub connected_peers: usize,
+    /// List of connected peer IDs
+    pub peer_ids: Vec<String>,
+    /// Topics we're subscribed to
+    pub subscribed_topics: Vec<String>,
+    /// Number of peers subscribed to our topics (topic -> peer count)
+    pub topic_peer_counts: HashMap<String, usize>,
+}

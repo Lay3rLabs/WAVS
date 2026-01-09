@@ -15,6 +15,8 @@ wstd = { workspace = true }
 layer-climb-address = { workspace = true }
 wavs-types = { workspace = true }
 wasip2 = { workspace = true }
+example-helpers = { workspace = true }
+example-types = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

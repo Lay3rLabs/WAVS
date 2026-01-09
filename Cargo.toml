@@ -88,6 +88,7 @@ futures = "0.3.31"
 ctrlc = "3.5.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.89"
+async-stream = "0.3.6"
 
 # websocket
 tokio-tungstenite = { version = "0.28.0", features = [
@@ -201,6 +202,25 @@ crossbeam = "0.8.4"
 
 # versioning
 semver = { version = "1.0.27", features = ["serde"] }
+
+# p2p
+# Cargo.toml
+libp2p = { version = "0.56", features = [
+  "tokio",        # tokio runtime
+  "tcp",
+  "dns",
+  "noise",
+  "yamux",
+  "identify",
+  "ping",
+  "gossipsub",
+  "request-response",
+  "kad",          # WAN discovery
+  "mdns",         # local dev discovery
+  "autonat",      # NAT detection for external address discovery
+  "macros",
+] }
+
 
 # local
 utils = { path = "packages/utils" }
