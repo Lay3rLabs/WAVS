@@ -365,38 +365,29 @@ impl Aggregator {
                 }
             }
             AggregatorCommand::SubscribeService { service_id } => {
-                let p2p_handle = self.p2p_handle.read().unwrap().clone();
-                if let Some(handle) = p2p_handle {
-                    ctx.rt.spawn(async move {
-                        if let Err(e) = handle.subscribe(&service_id) {
-                            tracing::warn!(
-                                "Failed to subscribe to P2P topic for service {}: {:?}",
-                                service_id,
-                                e
-                            );
-                        } else {
-                            tracing::info!("Subscribed to P2P topic for service {}", service_id);
-                        }
-                    });
+                if let Some(handle) = self.p2p_handle.read().unwrap().clone() {
+                    if let Err(e) = handle.subscribe(&service_id) {
+                        tracing::warn!(
+                            "Failed to subscribe to P2P topic for service {}: {:?}",
+                            service_id,
+                            e
+                        );
+                    } else {
+                        tracing::info!("Subscribed to P2P topic for service {}", service_id);
+                    }
                 }
             }
             AggregatorCommand::UnsubscribeService { service_id } => {
-                let p2p_handle = self.p2p_handle.read().unwrap().clone();
-                if let Some(handle) = p2p_handle {
-                    ctx.rt.spawn(async move {
-                        if let Err(e) = handle.unsubscribe(&service_id) {
-                            tracing::warn!(
-                                "Failed to unsubscribe from P2P topic for service {}: {:?}",
-                                service_id,
-                                e
-                            );
-                        } else {
-                            tracing::info!(
-                                "Unsubscribed from P2P topic for service {}",
-                                service_id
-                            );
-                        }
-                    });
+                if let Some(handle) = self.p2p_handle.read().unwrap().clone() {
+                    if let Err(e) = handle.unsubscribe(&service_id) {
+                        tracing::warn!(
+                            "Failed to unsubscribe from P2P topic for service {}: {:?}",
+                            service_id,
+                            e
+                        );
+                    } else {
+                        tracing::info!("Unsubscribed from P2P topic for service {}", service_id);
+                    }
                 }
             }
         }
