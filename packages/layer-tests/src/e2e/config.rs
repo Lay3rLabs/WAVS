@@ -252,6 +252,10 @@ impl From<TestConfig> for Configs {
             if num_operators > 1 {
                 wavs_config.p2p = P2pConfig::Local {
                     listen_port: P2P_BASE_PORT + operator_index as u16,
+                    max_retry_duration_secs: None,
+                    retry_interval_ms: None,
+                    submission_ttl_secs: None,
+                    max_catchup_submissions: None,
                 };
             }
 

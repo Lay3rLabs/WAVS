@@ -32,12 +32,6 @@ use super::{error::AggregatorError, peer::Peer, AggregatorCommand};
 
 const PROTOCOL_VERSION: &str = "/wavs/1.0.0";
 const CATCHUP_PROTOCOL: &str = "/wavs/catchup/1.0.0";
-const MAX_RETRY_DURATION_SECS: u64 = 10;
-const RETRY_INTERVAL_MS: u64 = 200;
-/// How long to keep submissions in memory for catch-up responses
-const SUBMISSION_TTL_SECS: u64 = 300; // 5 minutes
-/// Maximum submissions to return in a catch-up response
-const MAX_CATCHUP_SUBMISSIONS: usize = 100;
 
 /// Pending publish entry for retry queue
 struct PendingPublish {
@@ -63,6 +57,10 @@ pub enum P2pConfig {
     Local {
         /// Port to listen on for P2P connections (0 for random)
         listen_port: u16,
+        max_retry_duration_secs: Option<u64>,
+        retry_interval_ms: Option<u64>,
+        submission_ttl_secs: Option<u64>,
+        max_catchup_submissions: Option<usize>,
     },
     // TODO: Remote/production with bootstrap nodes + Kademlia
     // Remote {
@@ -72,6 +70,52 @@ pub enum P2pConfig {
 }
 
 impl P2pConfig {
+    const DEFAULT_MAX_RETRY_DURATION_SECS: u64 = 10;
+    const DEFAULT_RETRY_INTERVAL_MS: u64 = 200;
+    /// How long to keep submissions in memory for catch-up responses
+    const DEFAULT_SUBMISSION_TTL_SECS: u64 = 300; // 5 minutes
+    /// Maximum submissions to return in a catch-up response
+    const DEFAULT_MAX_CATCHUP_SUBMISSIONS: usize = 100;
+
+    pub fn max_retry_duration_secs(&self) -> u64 {
+        match self {
+            P2pConfig::Local {
+                max_retry_duration_secs,
+                ..
+            } => max_retry_duration_secs.unwrap_or(Self::DEFAULT_MAX_RETRY_DURATION_SECS),
+            P2pConfig::Disabled => Self::DEFAULT_MAX_RETRY_DURATION_SECS,
+        }
+    }
+
+    pub fn retry_interval_ms(&self) -> u64 {
+        match self {
+            P2pConfig::Local {
+                retry_interval_ms, ..
+            } => retry_interval_ms.unwrap_or(Self::DEFAULT_RETRY_INTERVAL_MS),
+            P2pConfig::Disabled => Self::DEFAULT_RETRY_INTERVAL_MS,
+        }
+    }
+
+    pub fn submission_ttl_secs(&self) -> u64 {
+        match self {
+            P2pConfig::Local {
+                submission_ttl_secs,
+                ..
+            } => submission_ttl_secs.unwrap_or(Self::DEFAULT_SUBMISSION_TTL_SECS),
+            P2pConfig::Disabled => Self::DEFAULT_SUBMISSION_TTL_SECS,
+        }
+    }
+
+    pub fn max_catchup_submissions(&self) -> usize {
+        match self {
+            P2pConfig::Local {
+                max_catchup_submissions,
+                ..
+            } => max_catchup_submissions.unwrap_or(Self::DEFAULT_MAX_CATCHUP_SUBMISSIONS),
+            P2pConfig::Disabled => Self::DEFAULT_MAX_CATCHUP_SUBMISSIONS,
+        }
+    }
+
     /// GossipSub heartbeat interval - how often peers exchange mesh state
     pub fn heartbeat_interval(&self) -> Duration {
         match self {
@@ -274,17 +318,17 @@ impl P2pHandle {
     /// Returns None if P2P is disabled.
     pub async fn new(
         ctx: AppContext,
-        config: P2pConfig,
+        p2p_config: P2pConfig,
         aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
     ) -> Result<Option<Self>, AggregatorError> {
-        match &config {
+        match p2p_config {
             P2pConfig::Disabled => {
                 tracing::info!("P2P networking is disabled");
                 Ok(None)
             }
-            P2pConfig::Local { listen_port } => {
+            P2pConfig::Local { listen_port, .. } => {
                 let handle =
-                    Self::create_local_network(ctx, *listen_port, aggregator_tx, &config).await?;
+                    Self::create_local_network(ctx, p2p_config, listen_port, aggregator_tx).await?;
                 Ok(Some(handle))
             }
         }
@@ -336,11 +380,11 @@ impl P2pHandle {
     /// Create a local P2P network using mDNS for peer discovery
     async fn create_local_network(
         ctx: AppContext,
+        p2p_config: P2pConfig,
         listen_port: u16,
         aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
-        config: &P2pConfig,
     ) -> Result<Self, AggregatorError> {
-        let swarm = build_swarm(config)?;
+        let swarm = build_swarm(&p2p_config)?;
         let local_peer_id = *swarm.local_peer_id();
 
         tracing::info!("Local P2P peer ID: {}", local_peer_id);
@@ -349,6 +393,7 @@ impl P2pHandle {
 
         tokio::spawn(run_event_loop(
             ctx,
+            p2p_config,
             swarm,
             listen_port,
             command_rx,
@@ -454,16 +499,18 @@ struct EventLoopState {
     stored_submissions: HashMap<ServiceId, Vec<StoredSubmission>>,
     /// Connected peers we've already requested catch-up from
     catchup_requested_peers: HashSet<PeerId>,
+    config: P2pConfig,
 }
 
 impl EventLoopState {
-    fn new() -> Self {
+    fn new(config: P2pConfig) -> Self {
         Self {
             subscribed_topics: HashSet::new(),
             subscribed_services: HashSet::new(),
             pending_publishes: VecDeque::new(),
             stored_submissions: HashMap::new(),
             catchup_requested_peers: HashSet::new(),
+            config,
         }
     }
 
@@ -484,14 +531,14 @@ impl EventLoopState {
     /// Get submissions for a service (for catch-up response)
     fn get_submissions_for_catchup(&self, service_id: &ServiceId) -> Vec<Submission> {
         let now = Instant::now();
-        let ttl = Duration::from_secs(SUBMISSION_TTL_SECS);
+        let ttl = Duration::from_secs(self.config.submission_ttl_secs());
 
         self.stored_submissions
             .get(service_id)
             .map(|subs| {
                 subs.iter()
                     .filter(|s| now.duration_since(s.created_at) < ttl)
-                    .take(MAX_CATCHUP_SUBMISSIONS)
+                    .take(self.config.max_catchup_submissions())
                     .map(|s| s.submission.clone())
                     .collect()
             })
@@ -501,7 +548,7 @@ impl EventLoopState {
     /// Clean up expired submissions
     fn cleanup_expired_submissions(&mut self) {
         let now = Instant::now();
-        let ttl = Duration::from_secs(SUBMISSION_TTL_SECS);
+        let ttl = Duration::from_secs(self.config.submission_ttl_secs());
 
         for subs in self.stored_submissions.values_mut() {
             subs.retain(|s| now.duration_since(s.created_at) < ttl);
@@ -515,6 +562,7 @@ impl EventLoopState {
 /// Run the P2P event loop
 async fn run_event_loop(
     ctx: AppContext,
+    p2p_config: P2pConfig,
     mut swarm: Swarm<WavsBehaviour>,
     listen_port: u16,
     mut command_rx: mpsc::UnboundedReceiver<P2pCommand>,
@@ -531,10 +579,11 @@ async fn run_event_loop(
 
     tracing::info!("P2P listening on {}", listen_addr);
 
-    let mut state = EventLoopState::new();
-    let mut retry_interval = tokio::time::interval(Duration::from_millis(RETRY_INTERVAL_MS));
+    let mut retry_interval =
+        tokio::time::interval(Duration::from_millis(p2p_config.retry_interval_ms()));
     let mut cleanup_interval = tokio::time::interval(Duration::from_secs(60)); // Cleanup every minute
     let mut shutdown_signal = ctx.get_kill_receiver();
+    let mut state = EventLoopState::new(p2p_config);
 
     loop {
         tokio::select! {
@@ -549,7 +598,7 @@ async fn run_event_loop(
                 handle_command(&mut swarm, command, &mut state);
             }
             _ = retry_interval.tick() => {
-                retry_pending_publishes(&mut swarm, &mut state.pending_publishes);
+                retry_pending_publishes(&mut swarm, &mut state.pending_publishes, &state.config);
             }
             _ = cleanup_interval.tick() => {
                 state.cleanup_expired_submissions();
@@ -566,9 +615,10 @@ async fn run_event_loop(
 fn retry_pending_publishes(
     swarm: &mut Swarm<WavsBehaviour>,
     pending_publishes: &mut VecDeque<PendingPublish>,
+    p2p_config: &P2pConfig,
 ) {
     let now = Instant::now();
-    let max_age = Duration::from_secs(MAX_RETRY_DURATION_SECS);
+    let max_age = Duration::from_secs(p2p_config.max_retry_duration_secs());
 
     let mut items_to_retry: VecDeque<PendingPublish> = std::mem::take(pending_publishes);
 
