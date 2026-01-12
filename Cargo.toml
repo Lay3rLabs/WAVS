@@ -94,7 +94,7 @@ hypercore = { version = "0.14.0", default-features = false, features = [
     "replication",
     "sparse",
 ] }
-hyperswarm = { git = "https://github.com/datrs/hyperswarm-rs.git", default-features = false }
+hyperswarm = { git = "https://github.com/datrs/hyperswarm-rs.git", default-features = false, rev = "da1c2fd" }
 
 # websocket
 tokio-tungstenite = { version = "0.28.0", features = [

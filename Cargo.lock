@@ -4821,7 +4821,7 @@ dependencies = [
 [[package]]
 name = "hyperswarm"
 version = "0.1.0"
-source = "git+https://github.com/datrs/hyperswarm-rs.git#da1c2fdd26b00a99150a03c194d5808a98bb8f5f"
+source = "git+https://github.com/datrs/hyperswarm-rs.git?rev=da1c2fd#da1c2fdd26b00a99150a03c194d5808a98bb8f5f"
 dependencies = [
  "async-compat",
  "async-std",
