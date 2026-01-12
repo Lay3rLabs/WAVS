@@ -90,9 +90,6 @@ port = 8000
 # The directory to store the data. Default is "/var/wavs"
 # data = "/var/wavs"
 
-# The directory to store Hypercore data. Default is "/var/wavs/hypercore"
-# hypercore_storage_dir = "/var/wavs/hypercore"
-
 # Optional bearer token to protect mutating HTTP endpoints
 # If set here or via env var `WAVS_BEARER_TOKEN`, POST/DELETE endpoints require `Authorization: Bearer <token>`
 # Generate with `openssl rand -hex 32`
