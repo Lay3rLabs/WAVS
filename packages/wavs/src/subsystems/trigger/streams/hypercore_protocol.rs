@@ -6,9 +6,11 @@
 use anyhow::{Context, Result};
 use futures::io::{AsyncRead, AsyncWrite};
 use futures::StreamExt;
-use hypercore::{Hypercore, RequestBlock, RequestUpgrade};
+use hypercore::{replication::Event as ReplicationEvent, Hypercore, RequestBlock, RequestUpgrade};
 use hypercore_protocol::schema::{Data, Range, Request, Synchronize};
-use hypercore_protocol::{discovery_key, Channel, Event, Message, ProtocolBuilder};
+use hypercore_protocol::{
+    discovery_key, Channel, Event as ProtocolEvent, Message, ProtocolBuilder,
+};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -50,22 +52,31 @@ where
 {
     let dkey = discovery_key(&feed_key);
     let mut protocol = ProtocolBuilder::new(is_initiator).connect(stream);
+    tracing::info!(
+        "Hypercore protocol started (initiator={}, discovery_key={})",
+        is_initiator,
+        const_hex::encode(dkey)
+    );
 
     while let Some(event) = protocol.next().await {
         let event = event.context("hypercore protocol event")?;
         match event {
-            Event::Handshake(_) => {
+            ProtocolEvent::Handshake(_) => {
+                tracing::info!("Hypercore protocol handshake");
                 if is_initiator {
+                    tracing::info!("Hypercore protocol opening feed (initiator)");
                     protocol.open(feed_key).await?;
                 }
             }
-            Event::DiscoveryKey(key) => {
+            ProtocolEvent::DiscoveryKey(key) => {
                 if key == dkey {
+                    tracing::info!("Hypercore protocol discovery key matched, opening feed");
                     protocol.open(feed_key).await?;
                 }
             }
-            Event::Channel(channel) => {
+            ProtocolEvent::Channel(channel) => {
                 if channel.discovery_key() == &dkey {
+                    tracing::info!("Hypercore protocol channel opened");
                     spawn_peer(channel, hypercore.clone());
                 }
             }
@@ -79,10 +90,15 @@ where
 fn spawn_peer(mut channel: Channel, hypercore: Arc<Mutex<Hypercore>>) {
     tokio::spawn(async move {
         let mut peer_state = PeerState::default();
+        let mut receiver = {
+            let hypercore = hypercore.lock().await;
+            hypercore.event_subscribe()
+        };
         let info = {
             let hypercore = hypercore.lock().await;
             hypercore.info()
         };
+        let mut last_sent_length = info.length;
 
         if info.fork != peer_state.remote_fork {
             peer_state.can_upgrade = false;
@@ -114,11 +130,63 @@ fn spawn_peer(mut channel: Channel, hypercore: Arc<Mutex<Hypercore>>) {
         } else {
             let _ = channel.send(Message::Synchronize(sync_msg)).await;
         }
+        tracing::info!(
+            "Hypercore protocol initial sync: length={}, contiguous_length={}",
+            info.length,
+            info.contiguous_length
+        );
 
-        while let Some(message) = channel.next().await {
-            if let Err(err) = onmessage(&hypercore, &mut peer_state, &mut channel, message).await {
-                tracing::warn!("Hypercore protocol error: {err:?}");
-                break;
+        loop {
+            tokio::select! {
+                message = channel.next() => {
+                    let message = match message {
+                        Some(message) => message,
+                        None => break,
+                    };
+                    if let Err(err) = onmessage(&hypercore, &mut peer_state, &mut channel, message).await {
+                        tracing::warn!("Hypercore protocol error: {err:?}");
+                        break;
+                    }
+                }
+                event = receiver.recv() => {
+                    match event {
+                        Ok(ReplicationEvent::Have(have)) => {
+                            if have.drop {
+                                continue;
+                            }
+                            let info = {
+                                let hypercore = hypercore.lock().await;
+                                hypercore.info()
+                            };
+                            if info.length != last_sent_length {
+                                let remote_length = if info.fork == peer_state.remote_fork {
+                                    peer_state.remote_length
+                                } else {
+                                    0
+                                };
+                                if let Err(err) = channel
+                                    .send(Message::Synchronize(Synchronize {
+                                        fork: info.fork,
+                                        length: info.length,
+                                        remote_length,
+                                        can_upgrade: peer_state.can_upgrade,
+                                        uploading: true,
+                                        downloading: true,
+                                    }))
+                                    .await
+                                {
+                                    tracing::warn!("Hypercore protocol sync send error: {err:?}");
+                                    break;
+                                }
+                                last_sent_length = info.length;
+                            }
+                        }
+                        Ok(ReplicationEvent::DataUpgrade(_) | ReplicationEvent::Get(_)) => {}
+                        Err(err) => {
+                            tracing::warn!("Hypercore protocol event receive error: {err:?}");
+                        }
+                    }
+                }
             }
         }
     });
@@ -132,6 +200,12 @@ async fn onmessage(
 ) -> Result<()> {
     match message {
         Message::Synchronize(message) => {
+            tracing::info!(
+                "Hypercore protocol synchronize received: length={}, remote_length={}, fork={}",
+                message.length,
+                message.remote_length,
+                message.fork
+            );
             let length_changed = message.length != peer_state.remote_length;
             let first_sync = !peer_state.remote_synced;
             let info = {
@@ -186,6 +260,12 @@ async fn onmessage(
             }
         }
         Message::Request(message) => {
+            tracing::info!(
+                "Hypercore protocol request received: id={}, fork={}, upgrade={}",
+                message.id,
+                message.fork,
+                message.upgrade.is_some()
+            );
             let (info, proof) = {
                 let mut hypercore = hypercore.lock().await;
                 let proof = hypercore
@@ -204,9 +284,15 @@ async fn onmessage(
                     upgrade: proof.upgrade,
                 };
                 channel.send(Message::Data(msg)).await?;
+                tracing::info!("Hypercore protocol sent data for request {}", message.id);
             }
         }
         Message::Data(message) => {
+            tracing::info!(
+                "Hypercore protocol data received: request={}, fork={}",
+                message.request,
+                message.fork
+            );
             let (_old_info, _applied, new_info, request_block) = {
                 let mut hypercore = hypercore.lock().await;
                 let old_info = hypercore.info();

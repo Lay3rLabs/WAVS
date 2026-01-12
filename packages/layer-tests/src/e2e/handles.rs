@@ -1,7 +1,8 @@
 mod cosmos;
 mod evm;
+pub mod hypercore;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
@@ -25,6 +26,7 @@ pub struct AppHandles {
     pub cosmos_middlewares: CosmosMiddlewares,
     _evm_chains: Vec<EvmInstance>,
     _cosmos_chains: Vec<CosmosInstance>,
+    _hyperswarm_bootstrap: Option<async_std::task::JoinHandle<std::io::Result<()>>>,
 }
 
 pub type CosmosMiddlewares = Arc<HashMap<ChainKey, CosmosMiddleware>>;
@@ -32,10 +34,15 @@ pub type CosmosMiddlewares = Arc<HashMap<ChainKey, CosmosMiddleware>>;
 impl AppHandles {
     pub fn start(
         ctx: &AppContext,
-        configs: &Configs,
+        configs: &mut Configs,
         metrics: Metrics,
         evm_middleware_type: EvmMiddlewareType,
     ) -> Self {
+        let (bootstrap_addr, bootstrap_handle) = start_hyperswarm_bootstrap();
+        if let Some(addr) = bootstrap_addr {
+            configs.wavs.hyperswarm_bootstrap = Some(addr.to_string());
+        }
+
         let mut evm_chains = Vec::new();
         let mut cosmos_chains = Vec::new();
 
@@ -109,6 +116,7 @@ impl AppHandles {
             cosmos_middlewares: Arc::new(cosmos_middlewares),
             _evm_chains: evm_chains,
             _cosmos_chains: cosmos_chains,
+            _hyperswarm_bootstrap: bootstrap_handle,
         }
     }
 
@@ -120,5 +128,33 @@ impl AppHandles {
         }
 
         results
+    }
+}
+
+fn start_hyperswarm_bootstrap() -> (
+    Option<SocketAddr>,
+    Option<async_std::task::JoinHandle<std::io::Result<()>>>,
+) {
+    match async_std::task::block_on(hyperswarm::run_bootstrap_node::<SocketAddr>(None)) {
+        Ok((addr, handle)) => {
+            let announce_addr = if addr.ip().is_unspecified() {
+                SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    addr.port(),
+                )
+            } else {
+                addr
+            };
+            tracing::info!(
+                "Started hyperswarm bootstrap node at {} (announcing {})",
+                addr,
+                announce_addr
+            );
+            (Some(announce_addr), Some(handle))
+        }
+        Err(err) => {
+            tracing::warn!("Failed to start hyperswarm bootstrap node: {err}");
+            (None, None)
+        }
     }
 }

@@ -8,6 +8,7 @@ use ::hypercore_protocol::discovery_key;
 use futures::Stream;
 use hypercore::{replication::Event, Hypercore, HypercoreBuilder, PartialKeypair, Storage};
 use hyperswarm::{Config as SwarmConfig, Hyperswarm, TopicConfig};
+use std::net::SocketAddr;
 use std::{path::PathBuf, pin::Pin, sync::Arc};
 use tokio::sync::Mutex;
 use utils::telemetry::TriggerMetrics;
@@ -27,6 +28,7 @@ pub struct HypercoreAppendEvent {
 pub struct HypercoreStreamConfig {
     pub storage_dir: PathBuf,
     pub feed_key: String,
+    pub hyperswarm_bootstrap: Option<String>,
 }
 
 pub async fn start_hypercore_stream(
@@ -117,7 +119,13 @@ pub async fn start_hypercore_stream(
         }
     };
 
-    start_swarm_replication(feed_key_bytes, Arc::clone(&core), shutdown).await?;
+    start_swarm_replication(
+        feed_key_bytes,
+        Arc::clone(&core),
+        shutdown,
+        config.hyperswarm_bootstrap.clone(),
+    )
+    .await?;
 
     Ok(Box::pin(event_stream))
 }
@@ -152,10 +160,11 @@ async fn start_swarm_replication(
     feed_key: [u8; 32],
     core: Arc<Mutex<Hypercore>>,
     mut shutdown: tokio::sync::broadcast::Receiver<()>,
+    hyperswarm_bootstrap: Option<String>,
 ) -> Result<(), TriggerError> {
     let topic = discovery_key(&feed_key);
 
-    let mut swarm = Hyperswarm::bind(SwarmConfig::default())
+    let mut swarm = Hyperswarm::bind(build_swarm_config(hyperswarm_bootstrap.as_deref()))
         .await
         .map_err(|err| TriggerError::Hypercore(format!("bind hyperswarm: {err:?}")))?;
     swarm.configure(topic, TopicConfig::announce_and_lookup());
@@ -175,12 +184,17 @@ async fn start_swarm_replication(
                         }
                         None => break,
                     };
+                    tracing::info!(
+                        "Hyperswarm connection established (initiator={})",
+                        stream.is_initiator()
+                    );
                     let replication_core = Arc::clone(&core);
+                    let is_initiator = stream.is_initiator();
 
                     tokio::spawn(async move {
                         if let Err(err) = hypercore_protocol::run_protocol(
                             stream,
-                            false,
+                            is_initiator,
                             replication_core,
                             feed_key,
                         )
@@ -195,4 +209,22 @@ async fn start_swarm_replication(
     });
 
     Ok(())
+}
+
+fn build_swarm_config(hyperswarm_bootstrap: Option<&str>) -> SwarmConfig {
+    if let Some(addr) = hyperswarm_bootstrap {
+        match addr.parse::<SocketAddr>() {
+            Ok(addr) => {
+                tracing::info!("Using hyperswarm bootstrap: {}", addr);
+                return SwarmConfig::default()
+                    .set_bootstrap_nodes(&[addr])
+                    .with_defaults();
+            }
+            Err(err) => {
+                tracing::warn!("Invalid hyperswarm bootstrap address '{}': {err}", addr);
+            }
+        }
+    }
+
+    SwarmConfig::all()
 }

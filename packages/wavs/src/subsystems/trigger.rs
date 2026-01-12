@@ -684,6 +684,10 @@ impl TriggerManager {
                                     streams::hypercore_stream::HypercoreStreamConfig {
                                         storage_dir: self.config.data.join("hypercore"),
                                         feed_key: feed_key.clone(),
+                                        hyperswarm_bootstrap: self
+                                            .config
+                                            .hyperswarm_bootstrap
+                                            .clone(),
                                     },
                                     self.metrics.clone(),
                                     kill_receiver.resubscribe(),

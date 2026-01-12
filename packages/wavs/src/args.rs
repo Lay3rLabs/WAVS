@@ -143,6 +143,11 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jetstream_max_message_size: Option<usize>,
+
+    /// Optional hyperswarm bootstrap address (host:port) for Hypercore discovery
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hyperswarm_bootstrap: Option<String>,
 }
 
 impl CliEnvExt for CliArgs {
