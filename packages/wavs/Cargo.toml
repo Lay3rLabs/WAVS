@@ -65,7 +65,6 @@ rand = { workspace = true }
 hypercore = { workspace = true }
 hypercore-protocol = { workspace = true }
 hyperswarm = { workspace = true }
-async-std = { workspace = true }
 tokio-util = { workspace = true }
 
 [dev-dependencies]

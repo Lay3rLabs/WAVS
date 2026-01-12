@@ -5,7 +5,7 @@
 //! and spawns the replication protocol to ingest data.
 
 use ::hypercore_protocol::discovery_key;
-use futures::{future::select, future::Either, FutureExt, Stream};
+use futures::Stream;
 use hypercore::{replication::Event, Hypercore, HypercoreBuilder, PartialKeypair, Storage};
 use hyperswarm::{Config as SwarmConfig, Hyperswarm, TopicConfig};
 use std::{path::PathBuf, pin::Pin, sync::Arc};
@@ -151,7 +151,7 @@ async fn build_core_with_feed_key(
 async fn start_swarm_replication(
     feed_key: [u8; 32],
     core: Arc<Mutex<Hypercore>>,
-    shutdown: tokio::sync::broadcast::Receiver<()>,
+    mut shutdown: tokio::sync::broadcast::Receiver<()>,
 ) -> Result<(), TriggerError> {
     let topic = discovery_key(&feed_key);
 
@@ -160,23 +160,13 @@ async fn start_swarm_replication(
         .map_err(|err| TriggerError::Hypercore(format!("bind hyperswarm: {err:?}")))?;
     swarm.configure(topic, TopicConfig::announce_and_lookup());
 
-    let (shutdown_tx, shutdown_rx) = async_std::channel::bounded::<()>(1);
-    let mut shutdown_signal = shutdown;
+    // Hyperswarm is async-std based but exposes futures-compatible streams, so it
+    // can be polled directly from the tokio runtime that owns hypercore.
     tokio::spawn(async move {
-        let _ = shutdown_signal.recv().await;
-        let _ = shutdown_tx.send(()).await;
-    });
-
-    // Hyperswarm uses async-std internals, so poll it on the async-std executor.
-    async_std::task::spawn(async move {
         loop {
-            let shutdown_future = shutdown_rx.recv().fuse();
-            let swarm_future = futures_lite::StreamExt::next(&mut swarm).fuse();
-            futures::pin_mut!(shutdown_future, swarm_future);
-
-            match select(shutdown_future, swarm_future).await {
-                Either::Left(_) => break,
-                Either::Right((stream, _)) => {
+            tokio::select! {
+                _ = shutdown.recv() => break,
+                stream = futures_lite::StreamExt::next(&mut swarm) => {
                     let stream = match stream {
                         Some(Ok(stream)) => stream,
                         Some(Err(err)) => {
@@ -186,7 +176,8 @@ async fn start_swarm_replication(
                         None => break,
                     };
                     let replication_core = Arc::clone(&core);
-                    async_std::task::spawn(async move {
+
+                    tokio::spawn(async move {
                         if let Err(err) = hypercore_protocol::run_protocol(
                             stream,
                             false,

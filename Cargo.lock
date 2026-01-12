@@ -11146,7 +11146,6 @@ dependencies = [
  "alloy-signer-local",
  "alloy-sol-types",
  "anyhow",
- "async-std",
  "async-stream",
  "axum",
  "axum-tracing-opentelemetry",
