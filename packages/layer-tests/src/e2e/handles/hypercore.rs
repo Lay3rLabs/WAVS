@@ -114,10 +114,6 @@ impl HypercoreTestClient {
                             stream.is_initiator(),
                             feed_key_for_swarm
                         );
-                        tracing::info!(
-                            "Hyperswarm: New peer connection for feed_key: {}",
-                            feed_key_for_swarm
-                        );
                         let feed = Arc::clone(&swarm_feed);
                         let is_initiator = stream.is_initiator();
                         let feed_key_bytes = feed_key_bytes_for_swarm;
