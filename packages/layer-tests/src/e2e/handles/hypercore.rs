@@ -23,6 +23,8 @@ pub struct HypercoreTestClient {
     feed_key: String,
     /// Handle for the hyperswarm task
     _swarm_handle: JoinHandle<()>,
+    /// TempDir storage - must be kept alive for the lifetime of the client
+    _storage_dir: TempDir,
 }
 
 impl HypercoreTestClient {
@@ -147,6 +149,7 @@ impl HypercoreTestClient {
             feed,
             feed_key,
             _swarm_handle: swarm_handle,
+            _storage_dir: storage_dir,
         })
     }
 
