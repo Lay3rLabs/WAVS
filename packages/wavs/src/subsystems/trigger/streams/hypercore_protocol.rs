@@ -293,7 +293,7 @@ async fn onmessage(
                 message.request,
                 message.fork
             );
-            let (_old_info, _applied, new_info, request_block) = {
+            let (new_info, request_block) = {
                 let mut hypercore = hypercore.lock().await;
                 let old_info = hypercore.info();
                 let proof = message.clone().into_proof();
@@ -331,7 +331,7 @@ async fn onmessage(
                         new_info.contiguous_length
                     );
                 }
-                (old_info, applied, new_info, request_block)
+                (new_info, request_block)
             };
 
             let mut messages = Vec::new();
