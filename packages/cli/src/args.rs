@@ -408,8 +408,9 @@ pub enum TriggerCommand {
     },
 
     /// Set a Hypercore append trigger for a workflow
+    /// Hypercore is a distributed data structure for secure log replication.
     SetHypercoreAppend {
-        /// Feed key to filter on.
+        /// Hex-encoded public key of the Hypercore feed to monitor
         #[clap(long)]
         feed_key: String,
     },
