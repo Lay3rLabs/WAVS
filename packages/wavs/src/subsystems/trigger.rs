@@ -682,7 +682,11 @@ impl TriggerManager {
                             let hypercore_start_result =
                                 streams::hypercore_stream::start_hypercore_stream(
                                     streams::hypercore_stream::HypercoreStreamConfig {
-                                        storage_dir: self.config.data.join("hypercore"),
+                                        storage_dir: self
+                                            .config
+                                            .data
+                                            .join("hypercore")
+                                            .join(&feed_key),
                                         feed_key: feed_key.clone(),
                                         hyperswarm_bootstrap: self
                                             .config
