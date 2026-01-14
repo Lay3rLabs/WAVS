@@ -411,14 +411,12 @@ impl P2pHandle {
 /// Build the libp2p swarm with all required behaviours
 fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorError> {
     // Message ID function for deduplication
+    // Exclude sequence_number so the same content gets the same ID for proper deduplication
     let message_id_fn = |message: &gossipsub::Message| {
         let mut hasher = DefaultHasher::new();
         message.data.hash(&mut hasher);
         message.source.hash(&mut hasher);
         message.topic.hash(&mut hasher);
-        if let Some(seq) = &message.sequence_number {
-            seq.hash(&mut hasher);
-        }
         MessageId::from(hasher.finish().to_string())
     };
 
