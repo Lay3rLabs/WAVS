@@ -1018,6 +1018,10 @@ fn handle_command(
             state.subscribed_services.remove(&service_id);
             // Also clear stored submissions for this service to free memory
             state.stored_submissions.remove(&service_id);
+            // Clear any pending publishes for this topic to avoid wasted retries
+            state
+                .pending_publishes
+                .retain(|p| p.topic_name != topic_name);
             tracing::info!("Unsubscribed from P2P topic: {}", topic_name);
         }
         P2pCommand::GetStatus { response_tx } => {
