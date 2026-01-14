@@ -217,8 +217,12 @@ impl Codec for CatchUpCodec {
     where
         T: futures::AsyncRead + Unpin + Send,
     {
+        use futures::AsyncReadExt;
+        // Limit request size to prevent DoS - requests are small (just a ServiceId)
+        const MAX_REQUEST_SIZE: u64 = 1024; // 1KB
+
         let mut buf = Vec::new();
-        io.read_to_end(&mut buf).await?;
+        io.take(MAX_REQUEST_SIZE).read_to_end(&mut buf).await?;
         serde_json::from_slice(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
@@ -230,8 +234,12 @@ impl Codec for CatchUpCodec {
     where
         T: futures::AsyncRead + Unpin + Send,
     {
+        use futures::AsyncReadExt;
+        // Limit response size to prevent DoS - responses contain multiple submissions
+        const MAX_RESPONSE_SIZE: u64 = 10 * 1024 * 1024; // 10MB
+
         let mut buf = Vec::new();
-        io.read_to_end(&mut buf).await?;
+        io.take(MAX_RESPONSE_SIZE).read_to_end(&mut buf).await?;
         serde_json::from_slice(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
