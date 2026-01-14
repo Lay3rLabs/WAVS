@@ -1026,6 +1026,11 @@ fn handle_swarm_event(
         // Connection closed
         SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
             tracing::info!("Connection closed with {}: {:?}", peer_id, cause);
+            // Remove from GossipSub explicit peers to prevent accumulation
+            swarm
+                .behaviour_mut()
+                .gossipsub
+                .remove_explicit_peer(&peer_id);
             // Allow re-requesting catch-up if peer reconnects
             state.catchup_requested_peers.remove(&peer_id);
         }
