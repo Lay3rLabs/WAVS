@@ -28,7 +28,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use futures::{AsyncReadExt, AsyncWriteExt, StreamExt};
+use futures::{AsyncWriteExt, StreamExt};
 use libp2p::{
     autonat,
     gossipsub::{self, IdentTopic, MessageAuthenticity, MessageId, ValidationMode},
@@ -1151,7 +1151,7 @@ fn handle_gossip_message(
     };
 
     // Validate that the submission's service_id matches the topic
-    let expected_topic = service_topic_name(&submission.service_id());
+    let expected_topic = service_topic_name(submission.service_id());
     if message.topic.as_str() != expected_topic {
         tracing::warn!(
             "Received submission with mismatched service_id from {}: expected topic '{}' but got '{}'",
