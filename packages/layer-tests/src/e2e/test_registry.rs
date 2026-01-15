@@ -868,15 +868,11 @@ impl TestRegistry {
         )
     }
 
-    /// Multi-operator test that requires 2/3 quorum
-    /// This test is expected to FAIL until P2P signature aggregation is implemented
-    /// because only one operator will sign, but 2/3 signatures are required
+    /// Multi-operator test (P2P mode configured via layer-tests.toml)
     fn register_evm_multi_operator_test(&mut self, chain: &ChainKey) -> &mut Self {
         self.register(
             TestBuilder::new("evm_multi_operator")
-                .with_description(
-                    "Tests multi-operator quorum (2/3) - expected to fail until P2P aggregation is implemented",
-                )
+                .with_description("Tests multi-operator quorum (2/3) with P2P networking")
                 .add_workflow(
                     WorkflowId::new("multi_operator_echo").unwrap(),
                     WorkflowBuilder::new()
@@ -889,12 +885,14 @@ impl TestRegistry {
                         ))
                         .with_submit(SubmitDefinition::Aggregator(Self::simple_aggregator(chain)))
                         .with_input_data(InputData::Text("multi-operator test".to_string()))
-                        .with_expected_output(ExpectedOutput::Text("multi-operator test".to_string()))
+                        .with_expected_output(ExpectedOutput::Text(
+                            "multi-operator test".to_string(),
+                        ))
                         .build(),
                 )
                 .with_service_manager_chain(chain)
                 .with_multi_operator()
-                .with_group(TestGroupId::P2pLocal)
+                .with_group(TestGroupId::P2p)
                 .build(),
         )
     }
