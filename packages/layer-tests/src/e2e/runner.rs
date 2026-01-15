@@ -479,6 +479,18 @@ async fn run_test(
                         feed_key
                     );
 
+                    if clients.http_clients.len() > 1 {
+                        let expected = clients.http_clients.len();
+                        tracing::info!(
+                            "Waiting for {} hyperswarm peers before appending",
+                            expected
+                        );
+                        let connected = hypercore_client
+                            .wait_for_peers(expected, Duration::from_secs(30))
+                            .await?;
+                        tracing::info!("Hypercore peers connected: {}", connected);
+                    }
+
                     // Verify feed keys match
                     if client_feed_key != *feed_key {
                         tracing::error!(
