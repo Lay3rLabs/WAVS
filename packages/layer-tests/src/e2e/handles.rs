@@ -1,7 +1,8 @@
 mod cosmos;
 mod evm;
+pub mod hypercore;
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
@@ -21,6 +22,7 @@ use wavs_types::{ChainKey, ChainKeyNamespace};
 use crate::config::TestP2pMode;
 
 use super::config::Configs;
+use super::matrix::EvmService;
 
 pub struct AppHandles {
     /// One handle per WAVS operator instance
@@ -29,12 +31,26 @@ pub struct AppHandles {
     pub cosmos_middlewares: CosmosMiddlewares,
     _evm_chains: Vec<EvmInstance>,
     _cosmos_chains: Vec<CosmosInstance>,
+    _hyperswarm_bootstrap: Option<async_std::task::JoinHandle<std::io::Result<()>>>,
 }
 
 pub type CosmosMiddlewares = Arc<HashMap<ChainKey, CosmosMiddleware>>;
 
 impl AppHandles {
-    pub fn start(ctx: &AppContext, configs: &Configs, metrics: Metrics) -> Self {
+    pub fn start(ctx: &AppContext, configs: &mut Configs, metrics: Metrics) -> Self {
+        let (bootstrap_addr, bootstrap_handle) =
+            if configs.matrix.evm.contains(&EvmService::HypercoreEchoData) {
+                Self::start_hyperswarm_bootstrap()
+            } else {
+                (None, None)
+            };
+        if let Some(addr) = bootstrap_addr {
+            let addr = addr.to_string();
+            for wavs_config in configs.wavs_configs.iter_mut() {
+                wavs_config.hyperswarm_bootstrap = Some(addr.clone());
+            }
+        }
+
         let mut evm_chains = Vec::new();
         let mut cosmos_chains = Vec::new();
 
@@ -96,6 +112,7 @@ impl AppHandles {
             cosmos_middlewares: Arc::new(cosmos_middlewares),
             _evm_chains: evm_chains,
             _cosmos_chains: cosmos_chains,
+            _hyperswarm_bootstrap: bootstrap_handle,
         }
     }
 
@@ -226,5 +243,33 @@ impl AppHandles {
         }
 
         handles
+    }
+
+    fn start_hyperswarm_bootstrap() -> (
+        Option<SocketAddr>,
+        Option<async_std::task::JoinHandle<std::io::Result<()>>>,
+    ) {
+        match async_std::task::block_on(hyperswarm::run_bootstrap_node::<SocketAddr>(None)) {
+            Ok((addr, handle)) => {
+                let announce_addr = if addr.ip().is_unspecified() {
+                    SocketAddr::new(
+                        std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                        addr.port(),
+                    )
+                } else {
+                    addr
+                };
+                tracing::info!(
+                    "Started hyperswarm bootstrap node at {} (announcing {})",
+                    addr,
+                    announce_addr
+                );
+                (Some(announce_addr), Some(handle))
+            }
+            Err(err) => {
+                tracing::warn!("Failed to start hyperswarm bootstrap node: {err}");
+                (None, None)
+            }
+        }
     }
 }

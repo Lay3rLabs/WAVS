@@ -37,6 +37,7 @@ layer-climb = { workspace = true }
 ctrlc = { workspace = true }
 tempfile = { workspace = true }
 futures = { workspace = true }
+futures-lite = { workspace = true }
 cosmwasm-std = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
@@ -59,10 +60,14 @@ crossbeam = { workspace = true }
 iri-string = { workspace = true }
 tokio-tungstenite = { workspace = true }
 slotmap = { workspace = true }
-async-stream = {workspace = true}
-async-trait= {workspace = true}
+async-stream = { workspace = true }
+async-trait = { workspace = true }
 rand = { workspace = true }
 libp2p = { workspace = true }
+hypercore = { workspace = true }
+hypercore-protocol = { workspace = true }
+hyperswarm = { workspace = true }
+tokio-util = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

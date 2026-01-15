@@ -475,6 +475,24 @@ impl ServiceManagers {
                     );
                 }
 
+                // Debug: Log trigger streams status
+                let http_client = clients
+                    .http_clients
+                    .first()
+                    .expect("Expected at least one WAVS HTTP client");
+                match http_client.get_trigger_streams_info().await {
+                    Ok(streams) => {
+                        tracing::info!(
+                            "Trigger streams finalized={}, chains={:?}",
+                            streams.finalized(),
+                            streams.chains
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to get trigger streams info: {:?}", e);
+                    }
+                }
+
                 // doesn't hurt to wait again for rpcs at least in case trigger contract changed
                 if let AnyServiceManagerInstance::Evm { .. } = service_manager_instance {
                     for (idx, http_client) in http_clients.iter().enumerate() {

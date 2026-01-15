@@ -80,9 +80,9 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     let meter = opentelemetry::global::meter("wavs_test_metrics");
     let metrics = Metrics::new(meter);
 
-    let configs: Configs = config.into();
+    let mut configs: Configs = config.into();
 
-    let handles = AppHandles::start(&ctx, &configs, metrics);
+    let handles = AppHandles::start(&ctx, &mut configs, metrics);
     tracing::info!("Background processes started");
 
     let clients = ctx
@@ -150,6 +150,10 @@ async fn _run(
         configs.chains.clone(),
         &clients,
         &cosmos_code_map,
+        configs
+            .wavs_configs
+            .first()
+            .and_then(|config| config.hyperswarm_bootstrap.clone()),
     )
     .await;
 

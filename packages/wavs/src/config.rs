@@ -114,6 +114,9 @@ pub struct Config {
     /// Default is 1MB
     /// Set to 0 for no max size
     pub jetstream_max_message_size: usize,
+
+    /// Optional hyperswarm bootstrap address (host:port) for Hypercore discovery
+    pub hyperswarm_bootstrap: Option<String>,
 }
 
 impl ConfigExt for Config {
@@ -158,6 +161,7 @@ impl Default for Config {
             disable_submission_networking: false,
             jetstream_endpoint: "wss://jetstream1.us-east.bsky.network/subscribe".to_string(),
             jetstream_max_message_size: 1024 * 1024, // 1MB
+            hyperswarm_bootstrap: None,
         }
     }
 }

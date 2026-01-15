@@ -125,6 +125,10 @@ pub async fn handle_service_command(
                     let result = set_atproto_trigger(&file, id, collection, repo_did, action)?;
                     display_result(ctx, result, json)?;
                 }
+                TriggerCommand::SetHypercoreAppend { feed_key } => {
+                    let result = set_hypercore_append_trigger(&file, id, feed_key)?;
+                    display_result(ctx, result, json)?;
+                }
             },
             WorkflowCommand::Submit { id, command } => match command {
                 SubmitCommand::SetAggregator {} => {
@@ -858,6 +862,34 @@ pub fn set_atproto_trigger(
             repo_did,
             action,
         };
+        workflow.trigger = TriggerBuilder::Trigger(trigger.clone());
+
+        Ok((
+            service,
+            WorkflowTriggerResult {
+                workflow_id,
+                trigger,
+                file_path: file_path.to_path_buf(),
+            },
+        ))
+    })
+}
+
+/// Set a Hypercore append trigger for a workflow
+pub fn set_hypercore_append_trigger(
+    file_path: &Path,
+    workflow_id: WorkflowId,
+    feed_key: String,
+) -> Result<WorkflowTriggerResult> {
+    modify_service_file(file_path, |mut service| {
+        let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
+            anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
+        })?;
+        if feed_key.trim().is_empty() {
+            return Err(anyhow::anyhow!("Hypercore feed key cannot be empty"));
+        }
+
+        let trigger = Trigger::HypercoreAppend { feed_key };
         workflow.trigger = TriggerBuilder::Trigger(trigger.clone());
 
         Ok((

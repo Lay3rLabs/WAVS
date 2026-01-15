@@ -51,6 +51,9 @@ pub enum TriggerCommand {
         event_hashes: Vec<alloy_primitives::B256>,
     },
     StartListeningAtProto,
+    StartListeningHypercore {
+        feed_key: String,
+    },
     ManualTrigger(Box<TriggerAction>),
 }
 
@@ -104,6 +107,11 @@ impl TriggerCommand {
             },
             Trigger::AtProtoEvent { .. } => {
                 vec![Self::StartListeningAtProto]
+            }
+            Trigger::HypercoreAppend { feed_key } => {
+                vec![Self::StartListeningHypercore {
+                    feed_key: feed_key.clone(),
+                }]
             }
             Trigger::Manual => Vec::new(),
         }
@@ -225,7 +233,8 @@ impl TriggerManager {
 
     #[instrument(skip(self, ctx), fields(subsys = "TriggerManager"))]
     pub fn start(&self, ctx: AppContext) {
-        ctx.rt.block_on(self.start_watcher()).unwrap();
+        let kill_receiver = ctx.get_kill_receiver();
+        ctx.rt.block_on(self.start_watcher(kill_receiver)).unwrap();
     }
 
     pub fn send_dispatcher_commands(
@@ -281,7 +290,10 @@ impl TriggerManager {
     }
 
     #[instrument(skip(self), fields(subsys = "TriggerManager"))]
-    async fn start_watcher(&self) -> Result<(), TriggerError> {
+    async fn start_watcher(
+        &self,
+        mut kill_receiver: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<(), TriggerError> {
         let mut multiplexed_stream: MultiplexedStream = SelectAll::new();
 
         let local_command_stream = local_command_stream::start_local_command_stream(
@@ -295,10 +307,21 @@ impl TriggerManager {
         let mut listening_chain_states: HashMap<ChainKey, StreamStartState> = HashMap::new();
         let mut cron_stream_state = StreamStartState::Waiting;
         let mut atproto_stream_state = StreamStartState::Waiting;
+        let mut hypercore_stream_states: HashMap<String, StreamStartState> = HashMap::new();
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
-        while let Some(res) = multiplexed_stream.next().await {
+        loop {
+            let res = tokio::select! {
+                _ = kill_receiver.recv() => {
+                    tracing::debug!("Trigger Manager watcher received shutdown");
+                    break;
+                }
+                res = multiplexed_stream.next() => res,
+            };
+            let Some(res) = res else {
+                break;
+            };
             let res = match res {
                 Err(err) => {
                     tracing::error!("{:?}", err);
@@ -624,6 +647,77 @@ impl TriggerManager {
                                 }
                             }
                         }
+                        TriggerCommand::StartListeningHypercore { feed_key } => {
+                            #[cfg(feature = "dev")]
+                            if self.disable_networking {
+                                tracing::warn!(
+                                    "Networking is disabled, skipping hypercore stream start"
+                                );
+                                continue;
+                            }
+                            let current_state = hypercore_stream_states
+                                .get(&feed_key)
+                                .copied()
+                                .unwrap_or(StreamStartState::Waiting);
+                            match current_state {
+                                StreamStartState::Connected => {
+                                    tracing::debug!(
+                                        "Hypercore stream already started for {}, skipping",
+                                        feed_key
+                                    );
+                                    continue;
+                                }
+                                StreamStartState::Connecting => {
+                                    tracing::debug!(
+                                        "Hypercore stream is already starting for {}, skipping",
+                                        feed_key
+                                    );
+                                    continue;
+                                }
+                                StreamStartState::Waiting => {
+                                    hypercore_stream_states
+                                        .insert(feed_key.clone(), StreamStartState::Connecting);
+                                }
+                            }
+
+                            let hypercore_start_result =
+                                streams::hypercore_stream::start_hypercore_stream(
+                                    streams::hypercore_stream::HypercoreStreamConfig {
+                                        storage_dir: self
+                                            .config
+                                            .data
+                                            .join("hypercore")
+                                            .join(&feed_key),
+                                        feed_key: feed_key.clone(),
+                                        hyperswarm_bootstrap: self
+                                            .config
+                                            .hyperswarm_bootstrap
+                                            .clone(),
+                                    },
+                                    self.metrics.clone(),
+                                    kill_receiver.resubscribe(),
+                                )
+                                .await;
+                            let was_connecting = matches!(current_state, StreamStartState::Waiting);
+                            match hypercore_start_result {
+                                Ok(hypercore_stream) => {
+                                    multiplexed_stream.push(hypercore_stream);
+                                    tracing::info!("Started hypercore stream");
+                                    if was_connecting {
+                                        hypercore_stream_states
+                                            .insert(feed_key.clone(), StreamStartState::Connected);
+                                    }
+                                }
+                                Err(err) => {
+                                    tracing::error!("Failed to start hypercore stream: {:?}", err);
+                                    if was_connecting {
+                                        hypercore_stream_states
+                                            .insert(feed_key.clone(), StreamStartState::Waiting);
+                                    }
+                                    continue;
+                                }
+                            }
+                        }
                     }
                 }
                 StreamTriggers::Evm {
@@ -934,6 +1028,9 @@ impl TriggerManager {
                         );
                     }
                 }
+                StreamTriggers::Hypercore { event } => {
+                    dispatcher_commands.extend(self.handle_hypercore_event(event));
+                }
             }
 
             if !dispatcher_commands.is_empty() {
@@ -1005,6 +1102,46 @@ impl TriggerManager {
         } else {
             Vec::new()
         }
+    }
+
+    fn handle_hypercore_event(
+        &self,
+        event: streams::hypercore_stream::HypercoreAppendEvent,
+    ) -> Vec<DispatcherCommand> {
+        let mut matched_lookup_ids: HashSet<LookupId> = HashSet::new();
+
+        {
+            let triggers_by_hypercore_lock = self
+                .lookup_maps
+                .triggers_by_hypercore_append
+                .read()
+                .unwrap();
+
+            if let Some(lookup_ids) = triggers_by_hypercore_lock.get(&event.feed_key) {
+                matched_lookup_ids.extend(lookup_ids);
+            }
+        }
+
+        if matched_lookup_ids.is_empty() {
+            return Vec::new();
+        }
+
+        let trigger_data = TriggerData::HypercoreAppend {
+            feed_key: event.feed_key,
+            index: event.index,
+            data: event.data,
+        };
+
+        self.lookup_maps
+            .get_trigger_configs(&matched_lookup_ids)
+            .into_iter()
+            .map(|trigger_config| {
+                DispatcherCommand::Trigger(TriggerAction {
+                    data: trigger_data.clone(),
+                    config: trigger_config,
+                })
+            })
+            .collect()
     }
 
     /// Check if a collection pattern matches the actual collection
@@ -1131,5 +1268,89 @@ mod tests {
         assert_eq!(received_count, 6, "Expected to receive 6 triggers");
 
         ctx.kill();
+    }
+
+    #[test]
+    fn test_hypercore_append_dispatch() {
+        let config = Config::default();
+
+        let db_storage = WavsDb::new().unwrap();
+        let services = Services::new(db_storage);
+
+        let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
+        let (dispatcher_tx, _dispatcher_rx) = crossbeam::channel::unbounded::<DispatcherCommand>();
+
+        let workflow_id = WorkflowId::new("workflow-1").unwrap();
+        let feed_key = "feed-key-1".to_string();
+
+        let service = wavs_types::Service {
+            name: "hypercore-service".to_string(),
+            status: wavs_types::ServiceStatus::Active,
+            manager: ServiceManager::Evm {
+                chain: "evm:anvil".parse().unwrap(),
+                address: rand_address_evm(),
+            },
+            workflows: vec![(
+                workflow_id.clone(),
+                Workflow {
+                    trigger: Trigger::HypercoreAppend {
+                        feed_key: feed_key.clone(),
+                    },
+                    component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
+                        [0; 32],
+                    ))),
+                    submit: Submit::Aggregator {
+                        component: Box::new(Component::new(ComponentSource::Digest(
+                            ComponentDigest::hash([0; 32]),
+                        ))),
+                        signature_kind: SignatureKind::evm_default(),
+                    },
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+        services.save(&service).unwrap();
+
+        let trigger_manager =
+            TriggerManager::new(&config, metrics, services, dispatcher_tx).unwrap();
+
+        let trigger_config = TriggerConfig {
+            service_id: service.id(),
+            workflow_id: workflow_id.clone(),
+            trigger: Trigger::HypercoreAppend {
+                feed_key: feed_key.clone(),
+            },
+        };
+        trigger_manager
+            .lookup_maps
+            .add_trigger(trigger_config)
+            .unwrap();
+
+        let payload = b"hypercore-payload".to_vec();
+        let commands = trigger_manager.handle_hypercore_event(
+            streams::hypercore_stream::HypercoreAppendEvent {
+                feed_key: feed_key.clone(),
+                index: 0,
+                data: payload.clone(),
+            },
+        );
+
+        assert_eq!(commands.len(), 1);
+        match &commands[0] {
+            DispatcherCommand::Trigger(action) => match &action.data {
+                TriggerData::HypercoreAppend {
+                    feed_key: actual_feed_key,
+                    index,
+                    data,
+                } => {
+                    assert_eq!(actual_feed_key, &feed_key);
+                    assert_eq!(*index, 0);
+                    assert_eq!(data, &payload);
+                }
+                other => panic!("unexpected trigger data: {:?}", other),
+            },
+            other => panic!("unexpected dispatcher command: {:?}", other),
+        }
     }
 }

@@ -80,6 +80,11 @@ impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
                 repo_did,
                 action: action.map(|a| a.to_string()),
             }),
+            wavs_types::Trigger::HypercoreAppend { feed_key } => {
+                component_service::Trigger::HypercoreAppend(
+                    component_service::TriggerHypercoreAppend { feed_key },
+                )
+            }
         })
     }
 }
@@ -472,6 +477,17 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                     },
                 ))
             }
+            wavs_types::TriggerData::HypercoreAppend {
+                feed_key,
+                index,
+                data,
+            } => Ok(component_input::TriggerData::HypercoreAppend(
+                component_events::TriggerDataHypercoreAppend {
+                    feed_key,
+                    index,
+                    data,
+                },
+            )),
             wavs_types::TriggerData::Raw(data) => Ok(component_input::TriggerData::Raw(data)),
         }
     }
@@ -627,6 +643,17 @@ impl TryFrom<wavs_types::TriggerData> for aggregator_operator_input::TriggerData
                     },
                 ))
             }
+            wavs_types::TriggerData::HypercoreAppend {
+                feed_key,
+                index,
+                data,
+            } => Ok(aggregator_operator_input::TriggerData::HypercoreAppend(
+                aggregator_events::TriggerDataHypercoreAppend {
+                    feed_key,
+                    index,
+                    data,
+                },
+            )),
             wavs_types::TriggerData::Raw(data) => {
                 Ok(aggregator_operator_input::TriggerData::Raw(data))
             }
@@ -895,6 +922,11 @@ impl TryFrom<wavs_types::Trigger> for aggregator_service::Trigger {
                     repo_did,
                     action: action.map(|a| a.to_string()),
                 })
+            }
+            wavs_types::Trigger::HypercoreAppend { feed_key } => {
+                aggregator_service::Trigger::HypercoreAppend(
+                    aggregator_service::TriggerHypercoreAppend { feed_key },
+                )
             }
         })
     }

@@ -4,6 +4,7 @@ use crate::bindings::world::wavs::{
     types::{
         events::{
             TriggerDataAtprotoEvent, TriggerDataCosmosContractEvent, TriggerDataEvmContractEvent,
+            TriggerDataHypercoreAppend,
         },
         service::ServiceManager,
     },
@@ -48,6 +49,11 @@ pub fn decode_trigger_event(trigger_data: component_input::TriggerData) -> Resul
                 .as_bytes()
                 .to_vec(),
         )),
+        component_input::TriggerData::HypercoreAppend(TriggerDataHypercoreAppend {
+            index,
+            data,
+            ..
+        }) => Ok((index, data)),
         _ => Err(anyhow::anyhow!("Unsupported trigger data type")),
     }
 }

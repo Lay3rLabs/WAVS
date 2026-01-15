@@ -37,10 +37,22 @@ pub enum CosmosContractDefinition {
     Submit(CosmosSubmitDefinition),
 }
 
+use super::handles::hypercore::HypercoreTestClient;
+
 /// Registry for managing test definitions and their deployed services
-#[derive(Default)]
 pub struct TestRegistry {
     tests: Vec<TestDefinition>,
+    /// Map of test name to hypercore test client for real hypercore e2e tests
+    hypercore_clients: DashMap<String, Arc<HypercoreTestClient>>,
+}
+
+impl Default for TestRegistry {
+    fn default() -> Self {
+        Self {
+            tests: Vec::new(),
+            hypercore_clients: DashMap::new(),
+        }
+    }
 }
 
 impl TestRegistry {
@@ -77,12 +89,23 @@ impl TestRegistry {
         self.tests.iter()
     }
 
+    /// Get a hypercore test client by test name
+    pub fn get_hypercore_client(&self, test_name: &str) -> Option<Arc<HypercoreTestClient>> {
+        self.hypercore_clients.get(test_name).map(|v| v.clone())
+    }
+
+    /// Store a hypercore test client for a test
+    pub fn insert_hypercore_client(&self, test_name: String, client: HypercoreTestClient) {
+        self.hypercore_clients.insert(test_name, Arc::new(client));
+    }
+
     /// Create a registry based on the test mode
     pub async fn from_test_mode(
         test_mode: crate::config::TestMode,
         chain_configs: Arc<RwLock<ChainConfigs>>,
         clients: &Clients,
         cosmos_code_map: &CosmosCodeMap,
+        hyperswarm_bootstrap: Option<String>,
     ) -> Self {
         // Convert TestMode to TestMatrix
         let matrix: TestMatrix = test_mode.into();
@@ -102,6 +125,11 @@ impl TestRegistry {
                 }
                 EvmService::AtprotoEchoData => {
                     registry.register_evm_atproto_echo_data_test(chain);
+                }
+                EvmService::HypercoreEchoData => {
+                    registry
+                        .register_evm_hypercore_echo_data_test(chain, hyperswarm_bootstrap.clone())
+                        .await;
                 }
                 EvmService::EchoDataSecondaryChain => {
                     let secondary = chains.secondary_evm().unwrap();
@@ -280,6 +308,51 @@ impl TestRegistry {
                         .with_expected_output(ExpectedOutput::Text(
                             json!({"text": "atproto-echo"}).to_string(),
                         ))
+                        .build(),
+                )
+                .with_service_manager_chain(chain)
+                .build(),
+        )
+    }
+
+    async fn register_evm_hypercore_echo_data_test(
+        &mut self,
+        chain: &ChainKey,
+        hyperswarm_bootstrap: Option<String>,
+    ) -> &mut Self {
+        // Create a real hypercore test client with generated feed key
+        let test_name = "evm_hypercore_echo_data";
+        let hypercore_client = HypercoreTestClient::new(test_name, hyperswarm_bootstrap)
+            .await
+            .expect("Failed to create hypercore test client");
+
+        let feed_key = hypercore_client.feed_key();
+
+        tracing::info!(
+            "Created hypercore test client for '{}' with feed key: {}",
+            test_name,
+            feed_key
+        );
+
+        // Store the client for use during test execution
+        self.insert_hypercore_client(test_name.to_string(), hypercore_client);
+
+        self.register(
+            TestBuilder::new(test_name)
+                .with_description(
+                    "Tests the EchoData component with real Hypercore append triggers",
+                )
+                .add_workflow(
+                    WorkflowId::new("hypercore_echo_data").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_operator_component(OperatorComponent::EchoData)
+                        .with_aggregator_component(AggregatorComponent::SimpleAggregator)
+                        .with_trigger(TriggerDefinition::Existing(Trigger::HypercoreAppend {
+                            feed_key,
+                        }))
+                        .with_submit(SubmitDefinition::Aggregator(Self::simple_aggregator(chain)))
+                        .with_input_data(InputData::Text("hypercore-echo".to_string()))
+                        .with_expected_output(ExpectedOutput::Text("hypercore-echo".to_string()))
                         .build(),
                 )
                 .with_service_manager_chain(chain)
