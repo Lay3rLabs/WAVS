@@ -230,10 +230,16 @@ impl Runner {
     ) {
         report.start_test(test.name.clone());
 
-        run_test(test, service_deployment, &clients, &component_sources)
-            .await
-            .context(test.name.clone())
-            .unwrap();
+        run_test(
+            test,
+            service_deployment,
+            &clients,
+            &component_sources,
+            &self.registry,
+        )
+        .await
+        .context(test.name.clone())
+        .unwrap();
 
         report.end_test(test.name.clone());
     }
@@ -245,6 +251,7 @@ async fn run_test(
     service_deployment: ServiceDeployment,
     clients: &Clients,
     component_sources: &ComponentSources,
+    registry: &TestRegistry,
 ) -> anyhow::Result<()> {
     // Group workflows by trigger to handle multi-triggers
     let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowId, &Workflow)>> = OrderMap::new();
@@ -424,6 +431,66 @@ async fn run_test(
                 clients.http_client.simulate_trigger(req).await?;
 
                 vec![trigger_id]
+            }
+            Trigger::HypercoreAppend { feed_key } => {
+                // Try to get the hypercore test client for this test
+                let payload = input_bytes.clone().unwrap_or_default();
+
+                tracing::info!("Hypercore trigger detected with feed_key: {}", feed_key);
+
+                if let Some(hypercore_client) = registry.get_hypercore_client(&test.name) {
+                    let client_feed_key = hypercore_client.feed_key();
+                    tracing::info!(
+                        "Using real hypercore feed for test '{}', client feed_key: {}, service feed_key: {}",
+                        test.name,
+                        client_feed_key,
+                        feed_key
+                    );
+
+                    // Verify feed keys match
+                    if client_feed_key != *feed_key {
+                        tracing::error!(
+                            "FEED KEY MISMATCH! Client has: {}, Service has: {}",
+                            client_feed_key,
+                            feed_key
+                        );
+                        return Err(anyhow::anyhow!(
+                            "Feed key mismatch between client and service"
+                        ));
+                    }
+
+                    // Append data to the hypercore feed
+                    tracing::info!("Appending {} bytes to hypercore feed...", payload.len());
+                    let index = hypercore_client.append(payload).await?;
+
+                    vec![TriggerId::new(index)]
+                } else {
+                    // Fallback to simulated trigger for backward compatibility
+                    tracing::warn!(
+                        "No hypercore client found for test '{}', using simulated trigger",
+                        test.name
+                    );
+
+                    let trigger_id = TriggerId::new(0);
+                    let hypercore_data = TriggerData::HypercoreAppend {
+                        feed_key: feed_key.clone(),
+                        index: trigger_id.u64(),
+                        data: payload,
+                    };
+
+                    let req = SimulatedTriggerRequest {
+                        service_id: service_deployment.service.id(),
+                        workflow_id: first_workflow_id.clone(),
+                        trigger: trigger.clone(),
+                        data: hypercore_data,
+                        count: 1,
+                        wait_for_completion: true,
+                    };
+
+                    clients.http_client.simulate_trigger(req).await?;
+
+                    vec![trigger_id]
+                }
             }
             Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
         };

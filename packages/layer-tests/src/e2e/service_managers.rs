@@ -411,6 +411,20 @@ impl ServiceManagers {
                     .await
                     .unwrap();
 
+                // Debug: Log trigger streams status
+                match clients.http_client.get_trigger_streams_info().await {
+                    Ok(streams) => {
+                        tracing::info!(
+                            "Trigger streams finalized={}, chains={:?}",
+                            streams.finalized(),
+                            streams.chains
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to get trigger streams info: {:?}", e);
+                    }
+                }
+
                 // doesn't hurt to wait again for rpcs at least in case trigger contract changed
                 if let AnyServiceManagerInstance::Evm { .. } = service_manager_instance {
                     wait_for_evm_trigger_streams_to_finalize(&clients.http_client, None).await;

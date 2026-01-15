@@ -406,6 +406,14 @@ pub enum TriggerCommand {
         #[clap(long)]
         action: Option<AtProtoAction>,
     },
+
+    /// Set a Hypercore append trigger for a workflow
+    /// Hypercore is a distributed data structure for secure log replication.
+    SetHypercoreAppend {
+        /// Hex-encoded public key of the Hypercore feed to monitor
+        #[clap(long)]
+        feed_key: String,
+    },
 }
 
 impl Command {

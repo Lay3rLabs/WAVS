@@ -2,8 +2,11 @@ pub mod atproto_jetstream;
 pub mod cosmos_stream;
 pub mod cron_stream;
 pub mod evm_stream;
+pub mod hypercore_protocol;
+pub mod hypercore_stream;
 pub mod local_command_stream;
 
+use self::hypercore_stream::HypercoreAppendEvent;
 use crate::subsystems::trigger::{
     streams::atproto_jetstream::AtProtoEvent,
     streams::cosmos_stream::StreamTriggerCosmosContractEvent, TriggerCommand,
@@ -63,5 +66,8 @@ pub enum StreamTriggers {
     LocalCommand(TriggerCommand),
     AtProto {
         event: AtProtoEvent,
+    },
+    Hypercore {
+        event: HypercoreAppendEvent,
     },
 }

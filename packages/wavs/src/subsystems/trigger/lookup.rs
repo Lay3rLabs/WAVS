@@ -39,6 +39,8 @@ pub struct LookupMaps {
     /// lookup id by (collection pattern, optional repo_did, optional action) for wildcard matches
     pub triggers_by_atproto_event_pattern:
         Arc<RwLock<HashMap<(String, Option<String>, Option<AtProtoAction>), HashSet<LookupId>>>>,
+    /// lookup id by hypercore feed key
+    pub triggers_by_hypercore_append: Arc<RwLock<HashMap<String, HashSet<LookupId>>>>,
     // ServiceId <-> ServiceManager address
     pub service_manager: Arc<RwLock<BiMap<ServiceId, layer_climb::prelude::Address>>>,
     /// Efficient block schedulers (one per chain) for block interval triggers
@@ -61,6 +63,7 @@ impl LookupMaps {
             triggers_by_evm_contract_event: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_atproto_event_exact: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_atproto_event_pattern: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_hypercore_append: Arc::new(RwLock::new(HashMap::new())),
             block_schedulers: BlockSchedulers::default(),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
             service_manager: Arc::new(RwLock::new(BiMap::new())),
@@ -213,6 +216,14 @@ impl LookupMaps {
                         .insert(lookup_id);
                 }
             }
+            Trigger::HypercoreAppend { feed_key } => {
+                self.triggers_by_hypercore_append
+                    .write()
+                    .unwrap()
+                    .entry(feed_key.clone())
+                    .or_default()
+                    .insert(lookup_id);
+            }
             Trigger::Manual => {}
         }
 
@@ -325,6 +336,15 @@ impl LookupMaps {
                         }
                     }
                 }
+                Trigger::HypercoreAppend { feed_key } => {
+                    let mut lock = self.triggers_by_hypercore_append.write().unwrap();
+                    if let Some(set) = lock.get_mut(&feed_key) {
+                        set.remove(&lookup_id);
+                        if set.is_empty() {
+                            lock.remove(&feed_key);
+                        }
+                    }
+                }
             }
         }
 
@@ -344,6 +364,7 @@ impl LookupMaps {
             self.triggers_by_atproto_event_exact.write().unwrap();
         let mut triggers_by_atproto_event_pattern =
             self.triggers_by_atproto_event_pattern.write().unwrap();
+        let mut triggers_by_hypercore_append = self.triggers_by_hypercore_append.write().unwrap();
         let mut triggers_by_service_workflow_lock =
             self.triggers_by_service_workflow.write().unwrap();
 
@@ -432,6 +453,14 @@ impl LookupMaps {
                                 set.remove(lookup_id);
                                 if set.is_empty() {
                                     triggers_by_atproto_event_exact.remove(&key);
+                                }
+                            }
+                        }
+                        Trigger::HypercoreAppend { feed_key } => {
+                            if let Some(set) = triggers_by_hypercore_append.get_mut(feed_key) {
+                                set.remove(lookup_id);
+                                if set.is_empty() {
+                                    triggers_by_hypercore_append.remove(feed_key);
                                 }
                             }
                         }
