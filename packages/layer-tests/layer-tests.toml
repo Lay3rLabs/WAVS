@@ -8,8 +8,15 @@ grouping = false
 evm_middleware_type = "poa" # "eigenlayer" or "poa"
 # Run all tests
 mode = "all"
-# mode = { "isolated" = [{ evm = "echo_data" }] }
+# mode = { "isolated" = [{ evm = "timer_aggregator_reorg" }] }
+# mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }
+# mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }
 # mode = { "isolated" = [{ evm = "multi_operator" }] }
+# mode = {"isolated" = [
+#     {evm = "echo_data"},
+#     {evm = "multi_operator"},
+#     {cosmos = "permissions"},
+# ]}
 
 # Run all ethereum tests (same can be done for cosmos, cross-chain, etc.)
 # mode = "all_eth"
@@ -20,7 +27,7 @@ mode = "all"
 # Run a few specific tests
 # mode = {"isolated" = [
 #     {evm = "echo_data"},
-#     {evm = "echo_data_aggregator"},
+#     {evm = "multi_operator"},
 #     {cosmos = "permissions"},
 # ]}
 

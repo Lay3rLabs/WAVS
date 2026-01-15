@@ -66,4 +66,7 @@ pub enum AggregatorError {
 
     #[error("Unexpected envelope difference for queue {0:?}")]
     EnvelopeDiff(QuorumQueueId),
+
+    #[error("P2P: {0}")]
+    P2p(String),
 }

@@ -59,8 +59,10 @@ crossbeam = { workspace = true }
 iri-string = { workspace = true }
 tokio-tungstenite = { workspace = true }
 slotmap = { workspace = true }
-async-stream = "0.3.6"
+async-stream = {workspace = true}
+async-trait= {workspace = true}
 rand = { workspace = true }
+libp2p = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
