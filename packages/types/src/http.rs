@@ -76,6 +76,8 @@ fn default_simulated_trigger_count() -> usize {
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct DevTriggerStreamsInfo {
     pub chains: HashMap<ChainKey, DevTriggerStreamInfo>,
+    #[serde(default)]
+    pub hypercore: HashMap<String, DevHypercoreStreamState>,
 }
 
 impl DevTriggerStreamsInfo {
@@ -90,6 +92,14 @@ impl DevTriggerStreamsInfo {
             .values()
             .any(|info| !info.active_subscriptions.is_empty())
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DevHypercoreStreamState {
+    Waiting,
+    Connecting,
+    Connected,
 }
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]

@@ -20,6 +20,7 @@ use wavs_types::{
     Workflow, WorkflowId,
 };
 
+use crate::e2e::helpers::wait_for_hypercore_streams_to_finalize;
 use crate::e2e::helpers::{change_service_for_test, cosmos_wait_for_task_to_land};
 use crate::e2e::report::TestReport;
 use crate::e2e::service_managers::ServiceManagers;
@@ -478,6 +479,20 @@ async fn run_test(
                         client_feed_key,
                         feed_key
                     );
+
+                    for (idx, http_client) in clients.http_clients.iter().enumerate() {
+                        tracing::info!(
+                            "Waiting for hypercore stream readiness on instance {} for feed_key {}",
+                            idx,
+                            feed_key
+                        );
+                        wait_for_hypercore_streams_to_finalize(
+                            http_client,
+                            feed_key,
+                            Some(Duration::from_secs(30)),
+                        )
+                        .await;
+                    }
 
                     if clients.http_clients.len() > 1 {
                         let expected = clients.http_clients.len();

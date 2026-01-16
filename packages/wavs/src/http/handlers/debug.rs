@@ -135,5 +135,7 @@ pub async fn handle_dev_trigger_streams_info(State(state): State<HttpState>) -> 
         })
         .collect::<HashMap<ChainKey, DevTriggerStreamInfo>>();
 
-    Json(DevTriggerStreamsInfo { chains }).into_response()
+    let hypercore = state.dispatcher.trigger_manager.hypercore_streams_info();
+
+    Json(DevTriggerStreamsInfo { chains, hypercore }).into_response()
 }
