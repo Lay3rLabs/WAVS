@@ -591,8 +591,8 @@ struct EventLoopState {
     pending_publishes: VecDeque<PendingPublish>,
     /// Recent submissions stored for catch-up responses (service_id -> submissions)
     stored_submissions: HashMap<ServiceId, Vec<StoredSubmission>>,
-    /// Connected peers we've already requested catch-up from
-    catchup_requested_peers: HashSet<PeerId>,
+    /// Peers we've already requested catch-up from, tracked per service
+    catchup_requested_peers: HashMap<ServiceId, HashSet<PeerId>>,
     config: P2pConfig,
     /// Actual listen addresses (from NewListenAddr events, filtered for usable addresses)
     listen_addresses: Vec<Multiaddr>,
@@ -605,7 +605,7 @@ impl EventLoopState {
             subscribed_services: HashSet::new(),
             pending_publishes: VecDeque::new(),
             stored_submissions: HashMap::new(),
-            catchup_requested_peers: HashSet::new(),
+            catchup_requested_peers: HashMap::new(),
             listen_addresses: Vec::new(),
             config,
         }
@@ -840,8 +840,10 @@ fn handle_swarm_event(
                     .behaviour_mut()
                     .gossipsub
                     .remove_explicit_peer(&peer_id);
-                // Allow re-requesting catch-up if peer reconnects
-                state.catchup_requested_peers.remove(&peer_id);
+                // Allow re-requesting catch-up if peer reconnects - remove from all services
+                for peer_set in state.catchup_requested_peers.values_mut() {
+                    peer_set.remove(&peer_id);
+                }
             }
         }
         // Received a gossipsub message
@@ -1031,8 +1033,10 @@ fn handle_swarm_event(
                 .behaviour_mut()
                 .gossipsub
                 .remove_explicit_peer(&peer_id);
-            // Allow re-requesting catch-up if peer reconnects
-            state.catchup_requested_peers.remove(&peer_id);
+            // Allow re-requesting catch-up if peer reconnects - remove from all services
+            for peer_set in state.catchup_requested_peers.values_mut() {
+                peer_set.remove(&peer_id);
+            }
         }
         // Other events we don't need to handle explicitly
         _ => {}
@@ -1045,13 +1049,18 @@ fn request_catchup_from_peer(
     peer_id: PeerId,
     state: &mut EventLoopState,
 ) {
-    // Only request once per peer per connection
-    if state.catchup_requested_peers.contains(&peer_id) {
-        return;
-    }
-
-    // Request catch-up for each subscribed service
+    // Request catch-up for each subscribed service (only once per peer per service)
     for service_id in &state.subscribed_services {
+        let peer_set = state
+            .catchup_requested_peers
+            .entry(service_id.clone())
+            .or_insert_with(HashSet::new);
+
+        // Skip if we've already requested from this peer for this service
+        if peer_set.contains(&peer_id) {
+            continue;
+        }
+
         tracing::debug!(
             "Requesting catch-up from {} for service {}",
             peer_id,
@@ -1064,9 +1073,9 @@ fn request_catchup_from_peer(
             .behaviour_mut()
             .catchup
             .send_request(&peer_id, request);
-    }
 
-    state.catchup_requested_peers.insert(peer_id);
+        peer_set.insert(peer_id);
+    }
 }
 
 /// Handle an incoming catch-up request
@@ -1281,6 +1290,8 @@ fn handle_command(
             state
                 .pending_publishes
                 .retain(|p| p.topic_name != topic_name);
+            // Clear catch-up state for this service to allow fresh requests on resubscribe
+            state.catchup_requested_peers.remove(&service_id);
             tracing::info!("Unsubscribed from P2P topic: {}", topic_name);
         }
         P2pCommand::GetStatus { response_tx } => {
