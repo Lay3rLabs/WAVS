@@ -21,6 +21,32 @@ pub enum HealthCheckMode {
     Exit,
 }
 
+/// Configuration for the aggregator subsystem
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(default)]
+pub struct AggregatorConfig {
+    /// Time-to-live for burned quorum queues in seconds (default: 172800 = 48 hours)
+    /// Burned queues older than this will be cleaned up
+    pub burned_queue_ttl_secs: Option<u64>,
+}
+
+impl Default for AggregatorConfig {
+    fn default() -> Self {
+        Self {
+            burned_queue_ttl_secs: None,
+        }
+    }
+}
+
+impl AggregatorConfig {
+    const DEFAULT_BURNED_QUEUE_TTL_SECS: u64 = 172800; // 48 hours
+
+    pub fn burned_queue_ttl_secs(&self) -> u64 {
+        self.burned_queue_ttl_secs
+            .unwrap_or(Self::DEFAULT_BURNED_QUEUE_TTL_SECS)
+    }
+}
+
 /// The fully parsed and validated config struct we use in the application
 /// this is built up from the ConfigBuilder which can load from multiple sources (in order of preference):
 ///
@@ -93,6 +119,10 @@ pub struct Config {
     /// Health check mode for chain endpoints at startup
     pub health_check_mode: HealthCheckMode,
 
+    /// Aggregator subsystem configuration
+    #[serde(default)]
+    pub aggregator: AggregatorConfig,
+
     /// P2P networking configuration for signature aggregation
     #[serde(default)]
     #[schema(value_type = String)]
@@ -154,6 +184,7 @@ impl Default for Config {
             dev_endpoints_enabled: false,
             max_body_size_mb: 15,
             health_check_mode: HealthCheckMode::default(),
+            aggregator: AggregatorConfig::default(),
             p2p: P2pConfig::default(),
             #[cfg(feature = "dev")]
             disable_trigger_networking: false,

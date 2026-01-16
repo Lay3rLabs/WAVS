@@ -147,6 +147,40 @@ impl Aggregator {
             }
         });
 
+        // Spawn periodic cleanup task for burned queues
+        {
+            let _self = _self.clone();
+            let mut shutdown_signal = ctx.get_kill_receiver();
+            ctx.rt.spawn(async move {
+                // Run cleanup every hour
+                let mut cleanup_interval =
+                    tokio::time::interval(tokio::time::Duration::from_secs(3600));
+                cleanup_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+                loop {
+                    tokio::select! {
+                        _ = shutdown_signal.recv() => {
+                            tracing::info!("Burned queue cleanup task shutting down");
+                            break;
+                        }
+                        _ = cleanup_interval.tick() => {
+                            match _self.cleanup_old_burned_queues().await {
+                                Ok(count) if count > 0 => {
+                                    tracing::info!("Cleaned up {} old burned queue(s)", count);
+                                }
+                                Ok(_) => {
+                                    tracing::debug!("No old burned queues to clean up");
+                                }
+                                Err(e) => {
+                                    tracing::error!("Error cleaning up burned queues: {:?}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         while let Ok(command) = self.dispatcher_to_aggregator_rx.recv() {
             self.handle_dispatcher_command(&ctx, command);
 
@@ -284,8 +318,8 @@ impl Aggregator {
                                                 let mut queue = match _self.get_quorum_queue(&queue_id).await {
                                                     Ok(queue) => {
                                                         match queue {
-                                                            QuorumQueue::Burned => {
-                                                                tracing::warn!("Tried to access burned quorum queue: {:?}", queue_id);
+                                                            QuorumQueue::Burned(timestamp) => {
+                                                                tracing::warn!("Tried to access burned quorum queue: {:?} (burned at {})", queue_id, timestamp);
                                                                 return;
                                                             }
                                                             QuorumQueue::Active(submissions) => submissions,

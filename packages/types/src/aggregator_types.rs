@@ -25,7 +25,9 @@ impl QuorumQueueId {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum QuorumQueue {
-    Burned,
+    /// Queue that has been processed and submitted on-chain
+    /// Includes timestamp (seconds since UNIX epoch) when it was burned
+    Burned(u64),
     Active(Vec<Submission>),
 }
 

@@ -45,17 +45,61 @@ impl Aggregator {
     #[allow(clippy::result_large_err)]
     pub async fn burn_quorum_queue(&self, id: QuorumQueueId) -> Result<(), AggregatorError> {
         let storage = self.storage.clone();
+        let burned_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         let _ = tokio::task::spawn_blocking(move || {
             storage
                 .quorum_queues
-                .insert(id, QuorumQueue::Burned)
+                .insert(id, QuorumQueue::Burned(burned_at))
                 .map_err(AggregatorError::Db)
         })
         .await
         .map_err(|e| AggregatorError::JoinError(e.to_string()))?;
 
         Ok(())
+    }
+
+    /// Clean up burned quorum queues that are older than the configured TTL
+    pub async fn cleanup_old_burned_queues(&self) -> Result<usize, AggregatorError> {
+        let storage = self.storage.clone();
+        let ttl_secs = self.config.aggregator.burned_queue_ttl_secs();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        tokio::task::spawn_blocking(move || {
+            let mut removed_count = 0;
+            let cutoff_time = now.saturating_sub(ttl_secs);
+
+            // Collect keys to remove (can't remove while iterating)
+            let keys_to_remove: Vec<QuorumQueueId> = storage
+                .quorum_queues
+                .iter()
+                .filter_map(|entry| {
+                    let (key, value) = entry.pair();
+                    match value {
+                        QuorumQueue::Burned(timestamp) if *timestamp < cutoff_time => {
+                            Some(key.clone())
+                        }
+                        _ => None,
+                    }
+                })
+                .collect();
+
+            // Remove the expired entries
+            for key in keys_to_remove {
+                storage.quorum_queues.remove(&key);
+                removed_count += 1;
+            }
+
+            removed_count
+        })
+        .await
+        .map_err(|e| AggregatorError::JoinError(e.to_string()))
     }
 }
 

@@ -95,6 +95,13 @@ port = 8000
 # Generate with `openssl rand -hex 32`
 # bearer_token = "change-me"
 
+# Aggregator subsystem configuration
+# [wavs.aggregator]
+# Time-to-live for burned quorum queues in seconds (default: 172800 = 48 hours)
+# After a queue is successfully submitted on-chain, it's marked as "burned" and kept
+# in memory for this duration to prevent duplicate processing. Older entries are cleaned up.
+# burned_queue_ttl_secs = 172800
+
 # P2P is disabled by default (for single-operator setups)
 #
 # To enable P2P with local mDNS peer discovery (for development/testing):
@@ -134,28 +141,3 @@ port = 8000
 
 # WAVS endpoint
 # wavs_endpoint = "http://localhost:8000"
-
-# ----------------------------
-# Aggregator specific settings
-# ----------------------------
-[aggregator]
-# The directory to store the data. Default is "/var/wavs-aggregator"
-# data = "/var/wavs-aggregator"
-
-cors_allowed_origins = [
-    "https://lay3rlabs.github.io/*",
-    "http://localhost:*",
-    "http://127.0.0.1:*",
-]
-
-# Optional bearer token to protect mutating HTTP endpoints
-# If set here or via env var `WAVS_AGGREGATOR_BEARER_TOKEN`, POST endpoints require `Authorization: Bearer <token>`
-# Generate with `openssl rand -hex 32`
-# bearer_token = "change-me"
-
-# Aggregator-specific chain overrides (if needed)
-# Example:
-# [aggregator.chains.evm.local]
-# chain_id = "31337"
-# ws_endpoints = ["ws://localhost:8545"]
-# http_endpoint = "http://localhost:8545"
