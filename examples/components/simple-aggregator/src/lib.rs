@@ -1,25 +1,27 @@
 mod gas_oracle;
 mod world;
 
+use example_types::{KvStoreError, KvStoreResult};
 use wavs_types::ChainKey;
 use wavs_wasi_utils::impl_u128_conversions;
 use world::{
     host,
-    wavs::aggregator::aggregator::{AggregatorAction, Packet, SubmitAction},
+    wavs::aggregator::input::AggregatorInput,
+    wavs::aggregator::output::{
+        AggregatorAction, CosmosAddress, CosmosSubmitAction, EvmSubmitAction, SubmitAction, U128,
+    },
     wavs::types::chain::{AnyTxHash, EvmAddress},
     Guest,
 };
 
-use crate::world::wavs::aggregator::aggregator::{
-    CosmosAddress, CosmosSubmitAction, EvmSubmitAction, U128,
-};
+use crate::world::wasi::keyvalue::store;
 
 impl_u128_conversions!(U128);
 
 struct Component;
 
 impl Guest for Component {
-    fn process_packet(_pkt: Packet) -> Result<Vec<AggregatorAction>, String> {
+    fn process_input(_input: AggregatorInput) -> Result<Vec<AggregatorAction>, String> {
         let chain = host::config_var("chain").ok_or("chain config variable is required")?;
         let chain =
             AnyChainKey::from_host(&chain).ok_or(format!("no chain config for {}", chain))?;
@@ -68,19 +70,45 @@ impl Guest for Component {
         Ok(vec![AggregatorAction::Submit(submit_action)])
     }
 
-    fn handle_timer_callback(_packet: Packet) -> Result<Vec<AggregatorAction>, String> {
-        Err("Not implemented yet".to_string())
+    fn handle_timer_callback(_input: AggregatorInput) -> Result<Vec<AggregatorAction>, String> {
+        Ok(Vec::new())
     }
 
     fn handle_submit_callback(
-        _packet: Packet,
+        _input: AggregatorInput,
         tx_result: Result<AnyTxHash, String>,
     ) -> Result<(), String> {
-        match tx_result {
-            Ok(_) => Ok(()),
-            Err(_) => Ok(()),
-        }
+        write_kv_value("submit-result", "completed", "true".as_bytes())
+            .map_err(|e| e.to_string())?;
+        write_kv_value(
+            "submit-result",
+            "success",
+            if tx_result.is_ok() {
+                "true".as_bytes()
+            } else {
+                "false".as_bytes()
+            },
+        )
+        .map_err(|e| e.to_string())?;
+
+        Ok(())
     }
+}
+
+fn write_kv_value(bucket_id: &str, key: &str, value: &[u8]) -> KvStoreResult<()> {
+    let bucket = open_kv_bucket(bucket_id)?;
+    bucket.set(key, value).map_err(|e| KvStoreError::WriteKey {
+        bucket: bucket_id.to_string(),
+        key: key.to_string(),
+        reason: e.to_string(),
+    })
+}
+
+fn open_kv_bucket(id: &str) -> KvStoreResult<store::Bucket> {
+    store::open(id).map_err(|e| KvStoreError::BucketOpen {
+        id: id.to_string(),
+        reason: e.to_string(),
+    })
 }
 
 enum AnyChainKey {

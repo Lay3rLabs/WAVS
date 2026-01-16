@@ -6,8 +6,8 @@ use layer_climb::{prelude::CosmosAddr, signing::SigningClient};
 use wavs_types::{
     contracts::cosmwasm::service_manager::ServiceManagerExecuteMessages, AddServiceRequest,
     ChainKey, ComponentDigest, DeleteServicesRequest, DevTriggerStreamsInfo, GetSignerRequest,
-    IWavsServiceManager::IWavsServiceManagerInstance, SaveServiceResponse, Service, ServiceManager,
-    SignerResponse, UploadComponentResponse,
+    IWavsServiceManager::IWavsServiceManagerInstance, P2pStatus, SaveServiceResponse, Service,
+    ServiceManager, SignerResponse, UploadComponentResponse,
 };
 
 use crate::command::deploy_service::SetServiceUriArgs;
@@ -70,23 +70,6 @@ impl HttpClient {
                 .unwrap_or_else(|_| "<failed to read body>".to_string());
             anyhow::bail!("{} from {}: {}", status, url, body);
         }
-    }
-
-    pub async fn register_aggregator_service(
-        &self,
-        service_manager: &ServiceManager,
-    ) -> Result<()> {
-        use wavs_types::aggregator::RegisterServiceRequest;
-
-        self.inner
-            .post(format!("{}/services", self.endpoint))
-            .json(&RegisterServiceRequest {
-                service_manager: service_manager.clone(),
-            })
-            .send()
-            .await?;
-
-        Ok(())
     }
 
     pub async fn create_service(
@@ -349,5 +332,104 @@ impl HttpClient {
         }
 
         Ok(())
+    }
+
+    /// Get the P2P network status
+    pub async fn get_p2p_status(&self) -> Result<P2pStatus> {
+        let url = format!("{}/p2p/status", self.endpoint);
+        let text = self.inner.get(&url).send().await?.text().await?;
+        serde_json::from_str(&text).map_err(|err| {
+            anyhow::anyhow!("Failed to parse response as P2pStatus [{}]: {}", err, text)
+        })
+    }
+
+    /// Wait for P2P network to be ready with a minimum number of connected peers
+    pub async fn wait_for_p2p_ready(
+        &self,
+        min_peers: usize,
+        timeout: Option<Duration>,
+    ) -> Result<P2pStatus> {
+        let timeout_duration = timeout.unwrap_or(Duration::from_secs(30));
+        let start = std::time::Instant::now();
+
+        loop {
+            match self.get_p2p_status().await {
+                Ok(status) => {
+                    if status.connected_peers >= min_peers {
+                        return Ok(status);
+                    }
+                    tracing::debug!(
+                        "P2P not ready: {} connected peers, need {}",
+                        status.connected_peers,
+                        min_peers
+                    );
+                }
+                Err(e) => {
+                    tracing::debug!("Failed to get P2P status: {}", e);
+                }
+            }
+
+            if start.elapsed() > timeout_duration {
+                anyhow::bail!(
+                    "Timeout waiting for P2P readiness: need {} peers",
+                    min_peers
+                );
+            }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+
+    /// Get a value from the KV store
+    pub async fn get_kv(
+        &self,
+        service_id: &str,
+        bucket: &str,
+        key: &str,
+    ) -> Result<Option<Vec<u8>>> {
+        let url = format!("{}/dev/kv/{}/{}/{}", self.endpoint, service_id, bucket, key);
+        let response = self.inner.get(&url).send().await?;
+
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+
+        if !response.status().is_success() {
+            anyhow::bail!("Failed to get KV value: {}", response.status());
+        }
+
+        Ok(Some(response.bytes().await?.to_vec()))
+    }
+
+    /// Wait for the aggregator submit callback to complete for a service
+    pub async fn wait_for_submit_callback(
+        &self,
+        service_id: &str,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
+        let timeout_duration = timeout.unwrap_or(Duration::from_secs(30));
+        let start = std::time::Instant::now();
+
+        loop {
+            match self.get_kv(service_id, "submit-result", "completed").await {
+                Ok(Some(value)) => {
+                    if value == b"true" {
+                        return Ok(());
+                    }
+                }
+                Ok(None) => {
+                    // Key not found yet, keep waiting
+                }
+                Err(e) => {
+                    tracing::debug!("Failed to get submit callback status: {}", e);
+                }
+            }
+
+            if start.elapsed() > timeout_duration {
+                anyhow::bail!("Timeout waiting for submit callback to complete");
+            }
+
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
     }
 }

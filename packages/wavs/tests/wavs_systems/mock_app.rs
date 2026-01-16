@@ -64,7 +64,7 @@ impl MockE2ETestRunner {
         data_dir: impl AsRef<std::path::Path>,
     ) -> Dispatcher<FileStorage> {
         let config = wavs::config::Config {
-            submission_mnemonic: Some(Credential::new(
+            signing_mnemonic: Some(Credential::new(
                 "test test test test test test test test test test test junk".to_string(),
             )),
             data: data_dir.as_ref().to_path_buf(),
@@ -155,7 +155,6 @@ impl MockE2ETestRunner {
         let trigger = mock_evm_event_trigger();
 
         let submit = Submit::Aggregator {
-            url: "http://example.com".to_string(),
             // just use the same component for submit for simplicity
             component: Box::new(Component::new(component_source.clone())),
             signature_kind: SignatureKind::evm_default(),

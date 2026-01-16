@@ -12,8 +12,9 @@ use uuid::Uuid;
 use wavs_cli::clients::HttpClient;
 
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainKey, Component, DevTriggerStreamSubscriptionKind,
-    Permissions, Service, ServiceManager, ServiceStatus, SignatureKind, Submit, Trigger, Workflow,
+    AllowedHostPermission, ByteArray, ChainKey, Component, DevHypercoreStreamState,
+    DevTriggerStreamSubscriptionKind, Permissions, Service, ServiceManager, ServiceStatus,
+    SignatureKind, Submit, Trigger, Workflow,
 };
 
 use crate::deployment::{ServiceDeployment, WorkflowDeployment};
@@ -291,7 +292,7 @@ pub async fn create_submit_from_config(
     component_sources: Option<&ComponentSources>,
 ) -> Result<Submit> {
     match submit_config {
-        SubmitDefinition::Aggregator { url, aggregator } => match aggregator {
+        SubmitDefinition::Aggregator(aggregator) => match aggregator {
             AggregatorDefinition::ComponentBasedAggregator {
                 component: component_def,
                 ..
@@ -321,7 +322,6 @@ pub async fn create_submit_from_config(
                 let component = deploy_component(sources, component_def, config_vars, env_vars);
 
                 Ok(Submit::Aggregator {
-                    url: url.clone(),
                     component: Box::new(component),
                     signature_kind: SignatureKind::evm_default(),
                 })
@@ -662,6 +662,38 @@ pub async fn wait_for_evm_trigger_streams_to_finalize(
                 }
             } else {
                 tracing::warn!("Still waiting for trigger streams to finalize");
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .unwrap();
+}
+
+pub async fn wait_for_hypercore_streams_to_finalize(
+    client: &HttpClient,
+    feed_key: &str,
+    timeout: Option<Duration>,
+) {
+    tokio::time::timeout(timeout.unwrap_or(Duration::from_secs(30)), async {
+        loop {
+            tracing::info!("Getting hypercore trigger stream info...");
+            let info = client.get_trigger_streams_info().await.unwrap();
+            match info.hypercore.get(feed_key) {
+                Some(DevHypercoreStreamState::Connected) => break,
+                Some(state) => {
+                    tracing::warn!(
+                        "Hypercore stream not ready for feed_key {} (state={:?})",
+                        feed_key,
+                        state
+                    );
+                }
+                None => {
+                    tracing::warn!(
+                        "Hypercore stream not registered yet for feed_key {}",
+                        feed_key
+                    );
+                }
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }

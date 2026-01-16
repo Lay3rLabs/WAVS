@@ -55,6 +55,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
             .with(
                 tracing_subscriber::fmt::layer()
                     .without_time()
+                    .with_line_number(true)
                     .with_target(false),
             )
             .with(config.tracing_env_filter().unwrap())
@@ -80,8 +81,8 @@ pub fn run(args: TestArgs, ctx: AppContext) {
     let metrics = Metrics::new(meter);
 
     let mut configs: Configs = config.into();
-    let evm_middleware_type = configs.evm_middleware_type;
-    let handles = AppHandles::start(&ctx, &mut configs, metrics, evm_middleware_type);
+
+    let handles = AppHandles::start(&ctx, &mut configs, metrics);
     tracing::info!("Background processes started");
 
     let clients = ctx
@@ -149,7 +150,10 @@ async fn _run(
         configs.chains.clone(),
         &clients,
         &cosmos_code_map,
-        configs.wavs.hyperswarm_bootstrap.clone(),
+        configs
+            .wavs_configs
+            .first()
+            .and_then(|config| config.hyperswarm_bootstrap.clone()),
     )
     .await;
 
@@ -159,15 +163,8 @@ async fn _run(
         .bootstrap(&registry, &clients, evm_middleware, cosmos_middlewares)
         .await;
 
-    // upload components
-    let component_sources = ComponentSources::new(
-        &configs,
-        &registry,
-        &clients.http_client,
-        &clients.aggregator_clients,
-        &configs.aggregators,
-    )
-    .await;
+    // upload components to ALL WAVS instances
+    let component_sources = ComponentSources::new(&configs, &registry, &clients.http_clients).await;
 
     // create the real services (deploy contracts etc.)
 

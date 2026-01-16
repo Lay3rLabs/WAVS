@@ -1,34 +1,25 @@
-package wavs:aggregator@2.4.0;
+package wavs:aggregator@2.6.0;
 
-use wavs:types/core@2.4.0 as core-types;
-use wavs:types/service@2.4.0 as service-types;
-use wavs:types/chain@2.4.0 as chain-types;
-use wavs:types/events@2.4.0 as event-types;
+use wavs:types/core@2.6.0 as core-types;
+use wavs:types/service@2.6.0 as service-types;
+use wavs:types/chain@2.6.0 as chain-types;
+use wavs:types/events@2.6.0 as event-types;
+use wavs:operator/input@2.6.0 as operator-input;
+use wavs:operator/output@2.6.0 as operator-output;
 
-interface aggregator {
+interface input {
+    use operator-input.{trigger-action};
+    use operator-output.{wasm-response};
+
+    record aggregator-input {
+        trigger-action: trigger-action,
+        operator-response: wasm-response
+    }
+}
+
+interface output {
     use core-types.{duration, u128};
-    use service-types.{service, workflow-id, signature-kind};
     use chain-types.{chain-key, evm-address, cosmos-address};
-    use event-types.{trigger-data, event-id};
-
-    record envelope {
-        event-id: event-id,
-        ordering: list<u8>,
-        payload: list<u8>,
-    }
-
-    record envelope-signature {
-        data: list<u8>,
-        kind: signature-kind,
-    }
-
-    record packet {
-        service: service,
-        workflow-id: workflow-id,
-        envelope: envelope,
-        signature: envelope-signature,
-        trigger-data: trigger-data,
-    }
 
     variant aggregator-action {
         timer(timer-action),
@@ -97,12 +88,13 @@ world aggregator-world {
         get-event-id: func() -> event-id;
     }
 
-    use aggregator.{packet, aggregator-action};
+    use input.{aggregator-input};
+    use output.{aggregator-action};
     use chain-types.{any-tx-hash};
 
-    export process-packet: func(packet: packet) -> result<list<aggregator-action>, string>;
+    export process-input: func(input: aggregator-input) -> result<list<aggregator-action>, string>;
 
-    export handle-timer-callback: func(packet: packet) -> result<list<aggregator-action>, string>;
+    export handle-timer-callback: func(input: aggregator-input) -> result<list<aggregator-action>, string>;
 
-    export handle-submit-callback: func(packet: packet, tx-result: result<any-tx-hash, string>) -> result<_, string>;
+    export handle-submit-callback: func(input: aggregator-input, tx-result: result<any-tx-hash, string>) -> result<_, string>;
 }

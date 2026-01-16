@@ -7,20 +7,35 @@ use utils::{config::ConfigExt, service::DEFAULT_IPFS_GATEWAY};
 use utoipa::ToSchema;
 use wavs_types::{ChainConfigs, Credential, Workflow};
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+use crate::subsystems::aggregator::p2p::P2pConfig;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HealthCheckMode {
     /// Skip health checks, spawn background task to log results
     Bypass,
     /// Run health checks before startup, warn on failures (default)
+    #[default]
     Wait,
     /// Run health checks before startup, panic on failures
     Exit,
 }
 
-impl Default for HealthCheckMode {
-    fn default() -> Self {
-        Self::Wait
+/// Configuration for the aggregator subsystem
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Default)]
+#[serde(default)]
+pub struct AggregatorConfig {
+    /// Time-to-live for burned quorum queues in seconds (default: 172800 = 48 hours)
+    /// Burned queues older than this will be cleaned up
+    pub burned_queue_ttl_secs: Option<u64>,
+}
+
+impl AggregatorConfig {
+    const DEFAULT_BURNED_QUEUE_TTL_SECS: u64 = 172800; // 48 hours
+
+    pub fn burned_queue_ttl_secs(&self) -> u64 {
+        self.burned_queue_ttl_secs
+            .unwrap_or(Self::DEFAULT_BURNED_QUEUE_TTL_SECS)
     }
 }
 
@@ -56,11 +71,14 @@ pub struct Config {
     #[schema(value_type = ChainConfigs)]
     pub chains: Arc<RwLock<ChainConfigs>>,
 
-    /// The mnemonic to use for submitting transactions on EVM chains
-    pub submission_mnemonic: Option<Credential>,
+    /// mnemonic for the submission client (usually leave this as None and override in env)
+    /// signing keys are _derived_ from this using monotonic HD index
+    pub signing_mnemonic: Option<Credential>,
 
-    /// The mnemonic to use for submitting transactions on Cosmos chains
-    pub cosmos_submission_mnemonic: Option<Credential>,
+    /// Optional aggregator credential for submitting to cosmos chains
+    pub aggregator_cosmos_credential: Option<Credential>,
+    /// Optional aggregator credential for submitting to evm chains
+    pub aggregator_evm_credential: Option<Credential>,
 
     /// The maximum amount of fuel (compute metering) to allow for 1 component's execution
     pub max_wasm_fuel: u64,
@@ -92,6 +110,15 @@ pub struct Config {
 
     /// Health check mode for chain endpoints at startup
     pub health_check_mode: HealthCheckMode,
+
+    /// Aggregator subsystem configuration
+    #[serde(default)]
+    pub aggregator: AggregatorConfig,
+
+    /// P2P networking configuration for signature aggregation
+    #[serde(default)]
+    #[schema(value_type = String)]
+    pub p2p: P2pConfig,
 
     /// Disable trigger networking for testing (default: false)
     #[cfg(feature = "dev")]
@@ -136,8 +163,9 @@ impl Default for Config {
             cors_allowed_origins: Vec::new(),
             chains: Arc::new(RwLock::new(ChainConfigs::default())),
             wasm_lru_size: 20,
-            submission_mnemonic: None,
-            cosmos_submission_mnemonic: None,
+            signing_mnemonic: None,
+            aggregator_cosmos_credential: None,
+            aggregator_evm_credential: None,
             max_execution_seconds: Workflow::DEFAULT_TIME_LIMIT_SECONDS,
             max_wasm_fuel: Workflow::DEFAULT_FUEL_LIMIT,
             jaeger: None,
@@ -148,6 +176,8 @@ impl Default for Config {
             dev_endpoints_enabled: false,
             max_body_size_mb: 15,
             health_check_mode: HealthCheckMode::default(),
+            aggregator: AggregatorConfig::default(),
+            p2p: P2pConfig::default(),
             #[cfg(feature = "dev")]
             disable_trigger_networking: false,
             #[cfg(feature = "dev")]

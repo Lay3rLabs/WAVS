@@ -65,7 +65,6 @@ pub fn create_service(sleep_ms: Option<u64>) -> Service {
                 },
                 // Use aggregator submit so the submission manager produces packets
                 submit: Submit::Aggregator {
-                    url: "http://127.0.0.1:12345".to_string(),
                     component: Box::new(Component {
                         source: ComponentSource::Digest(aggregator_component_digest),
                         permissions: wavs_types::Permissions {

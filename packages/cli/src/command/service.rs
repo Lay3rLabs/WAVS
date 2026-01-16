@@ -7,7 +7,7 @@ mod tests;
 pub use types::{
     ChainType, ComponentContext, ComponentOperationResult, EvmManagerResult, ServiceInitResult,
     ServiceValidationResult, UpdateStatusResult, WorkflowAddResult, WorkflowDeleteResult,
-    WorkflowSetAggregatorUrlResult, WorkflowSetSubmitNoneResult, WorkflowTriggerResult,
+    WorkflowSetSubmitNoneResult, WorkflowTriggerResult,
 };
 pub use validate::{
     check_cosmos_contract_exists, check_evm_contract_exists, validate_contracts_exist,
@@ -40,6 +40,7 @@ use crate::{
         ComponentCommand, ManagerCommand, ServiceCommand, SubmitCommand, TriggerCommand,
         WorkflowCommand,
     },
+    command::service::types::WorkflowSetSubmitAggregatorResult,
     context::CliContext,
     service_json::{
         validate_block_interval_config, validate_block_interval_config_on_chain,
@@ -130,8 +131,8 @@ pub async fn handle_service_command(
                 }
             },
             WorkflowCommand::Submit { id, command } => match command {
-                SubmitCommand::SetAggregator { url } => {
-                    let result = set_aggregator_submit(&file, id, url)?;
+                SubmitCommand::SetAggregator {} => {
+                    let result = set_aggregator_submit(&file, id)?;
                     display_result(ctx, result, json)?;
                 }
                 SubmitCommand::SetNone {} => {
@@ -1126,26 +1127,21 @@ pub async fn validate_service(
 pub fn set_aggregator_submit(
     file_path: &Path,
     workflow_id: WorkflowId,
-    url: String,
-) -> Result<WorkflowSetAggregatorUrlResult> {
-    let _ = reqwest::Url::parse(&url).context(format!("Invalid URL format: {}", url))?;
-
+) -> Result<WorkflowSetSubmitAggregatorResult> {
     modify_service_file(file_path, |mut service| {
         let workflow = service.workflows.get_mut(&workflow_id).ok_or_else(|| {
             anyhow::anyhow!("Workflow with ID '{}' not found in service", workflow_id)
         })?;
 
         workflow.submit = SubmitBuilder::AggregatorBuilder(AggregatorBuilder::Aggregator {
-            url: url.clone(),
             component: ComponentBuilder::new_unset(),
             signature_kind: SignatureKind::evm_default(),
         });
 
         Ok((
             service,
-            WorkflowSetAggregatorUrlResult {
+            WorkflowSetSubmitAggregatorResult {
                 workflow_id,
-                url,
                 file_path: file_path.to_path_buf(),
             },
         ))

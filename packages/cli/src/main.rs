@@ -25,8 +25,8 @@ use wavs_cli::{
     context::CliContext,
     util::{write_output_file, ComponentInput},
 };
-use wavs_types::EnvelopeSigner;
 use wavs_types::SignatureKind;
+use wavs_types::WavsSigner;
 use wavs_types::{ChainKeyId, Envelope, IWavsServiceHandler};
 
 // Shared function to create EVM client with any credential
@@ -371,7 +371,7 @@ async fn main() {
             .unwrap(),
         Command::ExecAggregator {
             component,
-            packet,
+            input,
             fuel_limit,
             time_limit,
             config,
@@ -394,7 +394,7 @@ async fn main() {
                 &ctx.config,
                 ExecAggregatorArgs {
                     component,
-                    packet,
+                    input,
                     fuel_limit,
                     time_limit,
                     config,

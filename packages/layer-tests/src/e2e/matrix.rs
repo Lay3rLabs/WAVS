@@ -37,8 +37,8 @@ pub enum EvmService {
     SimpleAggregator,
     TimerAggregator,
     TimerAggregatorReorg,
-    MultipleServicesWithDifferentAggregators,
     GasPrice,
+    MultiOperator,
 }
 
 #[derive(
@@ -130,6 +130,10 @@ impl TestMatrix {
                 .cross_chain
                 .contains(&CrossChainService::CosmosToEvmEchoData)
     }
+
+    pub fn multi_operator_enabled(&self) -> bool {
+        self.evm.contains(&EvmService::MultiOperator)
+    }
 }
 
 impl From<EvmService> for Vec<ComponentName> {
@@ -189,17 +193,14 @@ impl From<EvmService> for Vec<ComponentName> {
             EvmService::TimerAggregatorReorg => {
                 vec![ComponentName::Operator(OperatorComponent::EchoData)]
             }
-            EvmService::MultipleServicesWithDifferentAggregators => {
-                vec![
-                    ComponentName::Operator(OperatorComponent::EchoData),
-                    ComponentName::Operator(OperatorComponent::Square),
-                ]
-            }
             EvmService::GasPrice => {
                 vec![
                     ComponentName::Operator(OperatorComponent::EchoData),
                     ComponentName::Aggregator(AggregatorComponent::SimpleAggregator),
                 ]
+            }
+            EvmService::MultiOperator => {
+                vec![ComponentName::Operator(OperatorComponent::EchoData)]
             }
         }
     }

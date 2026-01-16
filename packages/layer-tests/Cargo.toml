@@ -16,7 +16,6 @@ wavs = { workspace = true }
 wavs-types = { workspace = true, features = ["full"] }
 utils = { workspace = true, features = ["test-utils"] }
 wavs-cli = { workspace = true }
-wavs-aggregator = { workspace = true }
 cw-wavs-mock-api = { workspace = true }
 cw-wavs-trigger-api = { workspace = true }
 clap = { workspace = true }

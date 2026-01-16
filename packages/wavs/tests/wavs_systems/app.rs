@@ -35,8 +35,6 @@ impl TestApp {
         config.chains = mock_chain_configs();
         config.dev_endpoints_enabled = true;
 
-        wavs::init_tracing_tests();
-
         Self {
             config: Arc::new(config),
             _temp_home_dir_handle: temp_home_dir_handle,
@@ -65,8 +63,9 @@ fn zeroed_cli_args(
         cors_allowed_origins: Vec::new(),
         wasm_lru_size: None,
         wasm_threads: None,
-        submission_mnemonic: None,
-        cosmos_submission_mnemonic: None,
+        signing_mnemonic: None,
+        aggregator_evm_credential: None,
+        aggregator_cosmos_credential: None,
         max_wasm_fuel: None,
         max_execution_seconds: None,
         ipfs_gateway: None,

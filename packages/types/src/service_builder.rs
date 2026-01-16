@@ -60,7 +60,6 @@ pub enum SubmitBuilder {
 #[serde(rename_all = "snake_case")]
 pub enum AggregatorBuilder {
     Aggregator {
-        url: String,
         component: ComponentBuilder,
         signature_kind: SignatureKind,
     },

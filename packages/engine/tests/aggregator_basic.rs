@@ -5,11 +5,8 @@ use std::collections::BTreeMap;
 use crate::helpers::{aggregator_exec::execute_aggregator_component, service::make_service};
 use alloy_primitives::Address;
 use utils::init_tracing_tests;
-use wavs_engine::bindings::aggregator::world::wavs::aggregator::aggregator::AggregatorAction;
-use wavs_types::{
-    ComponentDigest, Envelope, EnvelopeSignature, EvmSubmitAction, Packet, SignatureKind,
-    SubmitAction,
-};
+use wavs_engine::bindings::aggregator::world::wavs::aggregator::output::AggregatorAction;
+use wavs_types::{AggregatorInput, ComponentDigest, EvmSubmitAction, SubmitAction, WasmResponse};
 
 const COMPONENT_SIMPLE_AGGREGATOR_BYTES: &[u8] =
     include_bytes!("../../../examples/build/components/simple_aggregator.wasm");
@@ -29,22 +26,24 @@ async fn basic_aggregator_execution() {
     );
     let workflow_id = service.workflows.keys().last().unwrap().clone();
 
-    let packet = Packet {
-        service,
-        workflow_id,
-        envelope: Envelope {
-            eventId: [1u8; 20].into(),
-            ordering: [0u8; 12].into(),
-            payload: vec![].into(),
+    let input = AggregatorInput {
+        trigger_action: wavs_types::TriggerAction {
+            config: wavs_types::TriggerConfig {
+                service_id: service.id(),
+                workflow_id,
+                trigger: service.workflows.iter().next().unwrap().1.trigger.clone(),
+            },
+            data: wavs_types::TriggerData::default(),
         },
-        signature: EnvelopeSignature {
-            data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
-            kind: SignatureKind::evm_default(),
+        operator_response: WasmResponse {
+            event_id_salt: None,
+            payload: vec![],
+            ordering: None,
         },
-        trigger_data: wavs_types::TriggerData::default(),
     };
 
-    let actions = execute_aggregator_component(COMPONENT_SIMPLE_AGGREGATOR_BYTES, packet).await;
+    let actions =
+        execute_aggregator_component(COMPONENT_SIMPLE_AGGREGATOR_BYTES, input, service).await;
 
     assert_eq!(actions.len(), 1, "Expected one action");
 

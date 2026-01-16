@@ -2,7 +2,7 @@ mod cosmos;
 mod evm;
 pub mod hypercore;
 
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
@@ -11,17 +11,22 @@ use utils::{
     telemetry::Metrics,
     test_utils::middleware::{
         cosmos::{CosmosMiddleware, CosmosMiddlewareKind},
-        evm::{EvmMiddleware, EvmMiddlewareType},
+        evm::EvmMiddleware,
     },
 };
 use wavs::dispatcher::Dispatcher;
+use wavs::subsystems::aggregator::p2p::P2pConfig;
+use wavs_cli::clients::HttpClient;
 use wavs_types::{ChainKey, ChainKeyNamespace};
 
+use crate::config::TestP2pMode;
+
 use super::config::Configs;
+use super::matrix::EvmService;
 
 pub struct AppHandles {
-    pub wavs_handle: std::thread::JoinHandle<()>,
-    pub aggregator_handles: Vec<std::thread::JoinHandle<()>>,
+    /// One handle per WAVS operator instance
+    pub wavs_handles: Vec<std::thread::JoinHandle<()>>,
     pub evm_middleware: Option<EvmMiddleware>,
     pub cosmos_middlewares: CosmosMiddlewares,
     _evm_chains: Vec<EvmInstance>,
@@ -32,15 +37,18 @@ pub struct AppHandles {
 pub type CosmosMiddlewares = Arc<HashMap<ChainKey, CosmosMiddleware>>;
 
 impl AppHandles {
-    pub fn start(
-        ctx: &AppContext,
-        configs: &mut Configs,
-        metrics: Metrics,
-        evm_middleware_type: EvmMiddlewareType,
-    ) -> Self {
-        let (bootstrap_addr, bootstrap_handle) = start_hyperswarm_bootstrap();
+    pub fn start(ctx: &AppContext, configs: &mut Configs, metrics: Metrics) -> Self {
+        let (bootstrap_addr, bootstrap_handle) =
+            if configs.matrix.evm.contains(&EvmService::HypercoreEchoData) {
+                Self::start_hyperswarm_bootstrap()
+            } else {
+                (None, None)
+            };
         if let Some(addr) = bootstrap_addr {
-            configs.wavs.hyperswarm_bootstrap = Some(addr.to_string());
+            let addr = addr.to_string();
+            for wavs_config in configs.wavs_configs.iter_mut() {
+                wavs_config.hyperswarm_bootstrap = Some(addr.clone());
+            }
         }
 
         let mut evm_chains = Vec::new();
@@ -76,42 +84,30 @@ impl AppHandles {
             }
         }
 
-        let dispatcher = Arc::new(Dispatcher::new(&configs.wavs, metrics.wavs).unwrap());
+        // Spawn one WAVS instance per operator
+        let mut wavs_handles = Vec::with_capacity(configs.num_operators());
 
-        let wavs_handle = std::thread::spawn({
-            let dispatcher = dispatcher.clone();
-            let ctx = ctx.clone();
-            let config = configs.wavs.clone();
+        // Check if we're using Remote P2P mode (Kademlia)
 
-            move || {
-                let health_status = wavs::health::SharedHealthStatus::new();
-                wavs::run_server(ctx, config, dispatcher, metrics.http, health_status);
+        if configs.p2p == TestP2pMode::Kademlia && configs.num_operators() > 1 {
+            // Remote mode: start operator 0 first, get bootstrap address, then start others
+            wavs_handles = Self::start_wavs_remote_mode(ctx, configs, &metrics);
+        } else {
+            // Local mode or single operator: start all at once
+            for (operator_index, wavs_config) in configs.wavs_configs.iter().enumerate() {
+                let handle = Self::spawn_wavs_operator(ctx, wavs_config, &metrics, operator_index);
+                wavs_handles.push(handle);
             }
-        });
-
-        let mut aggregator_handles = Vec::new();
-
-        for config in &configs.aggregators {
-            aggregator_handles.push(std::thread::spawn({
-                let ctx = ctx.clone();
-                let config = config.clone();
-                move || {
-                    let meter = opentelemetry::global::meter("aggregator_test");
-                    let metrics = utils::telemetry::AggregatorMetrics::new(meter);
-                    wavs_aggregator::run_server(ctx, config, metrics);
-                }
-            }));
         }
 
         let evm_middleware = if evm_chains.is_empty() {
             None
         } else {
-            Some(EvmMiddleware::new(evm_middleware_type).unwrap())
+            Some(EvmMiddleware::new(configs.evm_middleware_type).unwrap())
         };
 
         Self {
-            wavs_handle,
-            aggregator_handles,
+            wavs_handles,
             evm_middleware,
             cosmos_middlewares: Arc::new(cosmos_middlewares),
             _evm_chains: evm_chains,
@@ -122,39 +118,158 @@ impl AppHandles {
 
     pub fn try_join(self) -> Vec<std::thread::Result<()>> {
         let mut results = Vec::new();
-        results.push(self.wavs_handle.join());
-        for handle in self.aggregator_handles {
+        for handle in self.wavs_handles {
             results.push(handle.join());
         }
-
         results
     }
-}
 
-fn start_hyperswarm_bootstrap() -> (
-    Option<SocketAddr>,
-    Option<async_std::task::JoinHandle<std::io::Result<()>>>,
-) {
-    match async_std::task::block_on(hyperswarm::run_bootstrap_node::<SocketAddr>(None)) {
-        Ok((addr, handle)) => {
-            let announce_addr = if addr.ip().is_unspecified() {
-                SocketAddr::new(
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                    addr.port(),
-                )
-            } else {
-                addr
-            };
+    /// Spawn a single WAVS operator
+    fn spawn_wavs_operator(
+        ctx: &AppContext,
+        wavs_config: &wavs::config::Config,
+        metrics: &Metrics,
+        operator_index: usize,
+    ) -> std::thread::JoinHandle<()> {
+        let dispatcher = Arc::new(Dispatcher::new(wavs_config, metrics.wavs.clone()).unwrap());
+
+        std::thread::spawn({
+            let dispatcher = dispatcher.clone();
+            let ctx = ctx.clone();
+            let config = wavs_config.clone();
+            let http_metrics = metrics.http.clone();
+
+            move || {
+                tracing::info!(
+                    "Starting WAVS operator {} on port {}",
+                    operator_index,
+                    config.port
+                );
+                let health_status = wavs::health::SharedHealthStatus::new();
+                wavs::run_server(ctx, config, dispatcher, http_metrics, health_status);
+            }
+        })
+    }
+
+    /// Start WAVS operators in Remote P2P mode (Kademlia)
+    /// Operator 0 starts first as bootstrap server, others connect to it
+    fn start_wavs_remote_mode(
+        ctx: &AppContext,
+        configs: &Configs,
+        metrics: &Metrics,
+    ) -> Vec<std::thread::JoinHandle<()>> {
+        let mut handles = Vec::with_capacity(configs.num_operators());
+
+        // Start operator 0 (bootstrap server)
+        let op0_config = &configs.wavs_configs[0];
+        tracing::info!("Starting operator 0 as bootstrap server");
+        handles.push(Self::spawn_wavs_operator(ctx, op0_config, metrics, 0));
+
+        // Wait for operator 0 to be ready and get its bootstrap address
+        let op0_url = format!("http://127.0.0.1:{}", op0_config.port);
+        let bootstrap_addr = ctx.rt.block_on(async {
+            let client = HttpClient::new(op0_url);
+
+            // Wait for the server to be ready
+            tokio::time::sleep(Duration::from_millis(500)).await;
+
+            // Poll until we get an address
+            for _ in 0..60 {
+                match client.get_p2p_status().await {
+                    Ok(status) => {
+                        // Prefer external_addresses, fall back to listen_addresses
+                        let addr = status
+                            .external_addresses
+                            .first()
+                            .or(status.listen_addresses.first())
+                            .cloned();
+
+                        if let Some(addr) = addr {
+                            tracing::info!("Got bootstrap address from operator 0: {}", addr);
+                            return Some(addr);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::debug!("Waiting for operator 0 P2P status: {:?}", e);
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            tracing::error!("Failed to get bootstrap address from operator 0");
+            None
+        });
+
+        let bootstrap_addr =
+            bootstrap_addr.expect("Failed to get bootstrap address from operator 0");
+
+        // Start remaining operators with the bootstrap address
+        for (operator_index, wavs_config) in configs.wavs_configs.iter().enumerate().skip(1) {
+            // Clone and modify config to add bootstrap address
+            let mut config = wavs_config.clone();
+            if let P2pConfig::Remote {
+                listen_port,
+                bootstrap_nodes: _,
+                max_retry_duration_secs,
+                retry_interval_ms,
+                submission_ttl_secs,
+                max_catchup_submissions,
+                cleanup_interval_secs,
+                kademlia_discovery_interval_secs,
+            } = &config.p2p
+            {
+                config.p2p = P2pConfig::Remote {
+                    listen_port: *listen_port,
+                    bootstrap_nodes: vec![bootstrap_addr.clone()],
+                    max_retry_duration_secs: *max_retry_duration_secs,
+                    retry_interval_ms: *retry_interval_ms,
+                    submission_ttl_secs: *submission_ttl_secs,
+                    max_catchup_submissions: *max_catchup_submissions,
+                    cleanup_interval_secs: *cleanup_interval_secs,
+                    kademlia_discovery_interval_secs: *kademlia_discovery_interval_secs,
+                };
+            }
+
             tracing::info!(
-                "Started hyperswarm bootstrap node at {} (announcing {})",
-                addr,
-                announce_addr
+                "Starting operator {} with bootstrap: {}",
+                operator_index,
+                bootstrap_addr
             );
-            (Some(announce_addr), Some(handle))
+            handles.push(Self::spawn_wavs_operator(
+                ctx,
+                &config,
+                metrics,
+                operator_index,
+            ));
         }
-        Err(err) => {
-            tracing::warn!("Failed to start hyperswarm bootstrap node: {err}");
-            (None, None)
+
+        handles
+    }
+
+    fn start_hyperswarm_bootstrap() -> (
+        Option<SocketAddr>,
+        Option<async_std::task::JoinHandle<std::io::Result<()>>>,
+    ) {
+        match async_std::task::block_on(hyperswarm::run_bootstrap_node::<SocketAddr>(None)) {
+            Ok((addr, handle)) => {
+                let announce_addr = if addr.ip().is_unspecified() {
+                    SocketAddr::new(
+                        std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                        addr.port(),
+                    )
+                } else {
+                    addr
+                };
+                tracing::info!(
+                    "Started hyperswarm bootstrap node at {} (announcing {})",
+                    addr,
+                    announce_addr
+                );
+                (Some(announce_addr), Some(handle))
+            }
+            Err(err) => {
+                tracing::warn!("Failed to start hyperswarm bootstrap node: {err}");
+                (None, None)
+            }
         }
     }
 }

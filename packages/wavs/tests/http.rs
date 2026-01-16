@@ -116,7 +116,6 @@ fn http_save_service() {
         mock_evm_event_trigger(),
         ComponentSource::Digest(ComponentDigest::hash([1, 2, 3])),
         wavs_types::Submit::Aggregator {
-            url: "http://example.com/aggregator".to_string(),
             component: Box::new(Component::new(ComponentSource::Digest(
                 ComponentDigest::hash([1, 2, 3]),
             ))),
@@ -368,7 +367,6 @@ fn test_add_chain_prevents_duplicates() {
 
 #[test]
 fn body_size_limit() {
-    wavs::init_tracing_tests();
     let app = TestHttpApp::new();
 
     // 14MB body succeeds (under default 15MB limit)

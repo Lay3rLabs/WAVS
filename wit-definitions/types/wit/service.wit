@@ -140,7 +140,6 @@ interface service {
     }
 
     record aggregator-submit {
-        url: string,
         component: component,
         signature-kind: signature-kind
     }

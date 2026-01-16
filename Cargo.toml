@@ -89,6 +89,7 @@ futures-lite = "1.11.3"
 ctrlc = "3.5.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.89"
+async-stream = "0.3.6"
 hypercore = { version = "0.14.0", default-features = false, features = [
     "tokio",
     "replication",
@@ -213,13 +214,31 @@ crossbeam = "0.8.4"
 # versioning
 semver = { version = "1.0.27", features = ["serde"] }
 
+# p2p
+# Cargo.toml
+libp2p = { version = "0.56", features = [
+    "tokio",            # tokio runtime
+    "tcp",
+    "dns",
+    "noise",
+    "yamux",
+    "identify",
+    "ping",
+    "gossipsub",
+    "request-response",
+    "kad",              # WAN discovery
+    "mdns",             # local dev discovery
+    "autonat",          # NAT detection for external address discovery
+    "macros",
+] }
+
+
 # local
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
 wavs-engine = { path = "packages/engine" }
 wavs-types = { path = "packages/types" }
 wavs-cli = { path = "packages/cli" }
-wavs-aggregator = { path = "packages/aggregator" }
 wavs-benchmark-common = { path = "packages/wavs/benches/common" }
 example-helpers = { path = "examples/components/_helpers" }
 example-types = { path = "examples/components/_types" }
