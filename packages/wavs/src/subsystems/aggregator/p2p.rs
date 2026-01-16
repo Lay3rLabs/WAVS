@@ -1329,7 +1329,7 @@ fn handle_command(
 
 /// Create a GossipSub topic name for a service
 fn service_topic_name(service_id: &ServiceId) -> String {
-    format!("wavs/{}/packets/v1", service_id)
+    format!("wavs/{}/topic/v1", service_id)
 }
 
 /// Check if a multiaddr is dialable by other peers.
