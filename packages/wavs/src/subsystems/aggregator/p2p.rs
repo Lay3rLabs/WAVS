@@ -1054,7 +1054,7 @@ fn request_catchup_from_peer(
         let peer_set = state
             .catchup_requested_peers
             .entry(service_id.clone())
-            .or_insert_with(HashSet::new);
+            .or_default();
 
         // Skip if we've already requested from this peer for this service
         if peer_set.contains(&peer_id) {

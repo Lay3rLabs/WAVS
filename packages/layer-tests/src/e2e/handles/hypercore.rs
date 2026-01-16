@@ -13,10 +13,10 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
+use std::time::Duration;
 use tempfile::TempDir;
 use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinHandle;
-use std::time::Duration;
 use wavs::subsystems::trigger::streams::hypercore_protocol;
 
 /// Test client for creating and managing hypercore feeds in e2e tests.

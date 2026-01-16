@@ -22,20 +22,12 @@ pub enum HealthCheckMode {
 }
 
 /// Configuration for the aggregator subsystem
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Default)]
 #[serde(default)]
 pub struct AggregatorConfig {
     /// Time-to-live for burned quorum queues in seconds (default: 172800 = 48 hours)
     /// Burned queues older than this will be cleaned up
     pub burned_queue_ttl_secs: Option<u64>,
-}
-
-impl Default for AggregatorConfig {
-    fn default() -> Self {
-        Self {
-            burned_queue_ttl_secs: None,
-        }
-    }
 }
 
 impl AggregatorConfig {
