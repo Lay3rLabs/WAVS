@@ -598,13 +598,15 @@ impl Aggregator {
 
             Err(err) => {
                 // SignerNotRegistered is a transient error that can occur during operator registration
-                // Log as warning instead of error since it's expected during setup and may resolve
+                // Treat it like insufficient quorum - save the queue for retry
                 let err_str = format!("{:?}", err);
                 if err_str.contains("SignerNotRegistered") || err_str.contains("0x3dda1739") {
                     tracing::warn!(
-                        "Aggregator: Signer not registered yet for submission {}. This is expected during operator registration and should resolve shortly.",
+                        "Aggregator: Signer not registered yet for submission {}. Saving queue for retry.",
                         submission.label()
                     );
+                    // Save the queue so it can be retried once operators are registered
+                    self.save_quorum_queue(queue_id, queue).await?;
                 } else {
                     tracing::error!(
                         "Aggregator: Error submitting on-chain for submission {}: {:?}",
