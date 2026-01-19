@@ -94,9 +94,20 @@ impl Aggregator {
                 },
                 None => match err.as_revert_data() {
                     Some(raw) => {
-                        return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(
-                            raw.to_string(),
-                        ));
+                        let raw_str = raw.to_string();
+                        // SignerNotRegistered() error selector is 0x3dda1739
+                        // This is a transient error that can occur when submissions arrive
+                        // via P2P before operator registration completes on-chain
+                        if raw_str == "0x3dda1739" {
+                            tracing::warn!(
+                                "Signer not registered yet for submission {}. This may resolve as operator registration completes.",
+                                queue.last().unwrap().label()
+                            );
+                            return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(
+                                format!("SignerNotRegistered ({})", raw_str),
+                            ));
+                        }
+                        return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(raw_str));
                     }
                     None => {
                         return Err(AggregatorError::EvmServiceManagerValidateUnknown(err));

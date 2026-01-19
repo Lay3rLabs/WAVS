@@ -597,11 +597,21 @@ impl Aggregator {
             }
 
             Err(err) => {
-                tracing::error!(
-                    "Aggregator: Error submitting on-chain for submission {}: {:?}",
-                    submission.label(),
-                    err
-                );
+                // SignerNotRegistered is a transient error that can occur during operator registration
+                // Log as warning instead of error since it's expected during setup and may resolve
+                let err_str = format!("{:?}", err);
+                if err_str.contains("SignerNotRegistered") || err_str.contains("0x3dda1739") {
+                    tracing::warn!(
+                        "Aggregator: Signer not registered yet for submission {}. This is expected during operator registration and should resolve shortly.",
+                        submission.label()
+                    );
+                } else {
+                    tracing::error!(
+                        "Aggregator: Error submitting on-chain for submission {}: {:?}",
+                        submission.label(),
+                        err
+                    );
+                }
             }
         }
 
