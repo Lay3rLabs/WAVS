@@ -885,7 +885,7 @@ fn handle_swarm_event(
             message: request_response::Message::Response { response, .. },
             ..
         })) => {
-            handle_catchup_response(peer, response, aggregator_tx);
+            handle_catchup_response(peer, response, aggregator_tx, state);
         }
         // Catch-up request/response errors
         SwarmEvent::Behaviour(WavsBehaviourEvent::Catchup(
@@ -1092,8 +1092,21 @@ fn handle_catchup_request(
         request.service_id
     );
 
+    // Check if we're even subscribed to this service
+    let is_subscribed = state.subscribed_services.contains(&request.service_id);
+
     let submissions = state.get_submissions_for_catchup(&request.service_id);
     let count = submissions.len();
+
+    if count > 0 {
+        tracing::info!(
+            "Catch-up request from {} for service {} (subscribed: {}): returning {} submissions",
+            peer,
+            request.service_id,
+            is_subscribed,
+            count
+        );
+    }
 
     let response = CatchUpResponse { submissions };
 
@@ -1103,11 +1116,12 @@ fn handle_catchup_request(
         .send_response(channel, response)
     {
         tracing::warn!("Failed to send catch-up response to {}: {:?}", peer, e);
-    } else {
+    } else if count > 0 {
         tracing::debug!(
-            "Sent {} submissions in catch-up response to {}",
+            "Sent {} submissions in catch-up response to {} for service {}",
             count,
-            peer
+            peer,
+            request.service_id
         );
     }
 }
@@ -1117,6 +1131,7 @@ fn handle_catchup_response(
     peer: PeerId,
     response: CatchUpResponse,
     aggregator_tx: &crossbeam::channel::Sender<AggregatorCommand>,
+    state: &EventLoopState,
 ) {
     if response.submissions.is_empty() {
         tracing::debug!("Received empty catch-up response from {}", peer);
@@ -1129,15 +1144,42 @@ fn handle_catchup_response(
         response.submissions.len()
     );
 
-    // Forward each submission to the aggregator
+    let mut processed = 0;
+    let mut skipped = 0;
+
+    // Forward each submission to the aggregator, but only for subscribed services
     for submission in response.submissions {
+        let service_id = submission.service_id();
+
+        // Validate that we're actually subscribed to this service
+        // This prevents processing stale submissions from previous test runs
+        // or services we're no longer interested in
+        if !state.subscribed_services.contains(service_id) {
+            tracing::warn!(
+                "Ignoring catch-up submission from {} for unsubscribed service: {}",
+                peer,
+                service_id
+            );
+            skipped += 1;
+            continue;
+        }
+
         if let Err(e) = aggregator_tx.send(AggregatorCommand::Receive {
             submission,
             peer: Peer::Other(format!("catchup:{}", peer)),
         }) {
             tracing::error!("Failed to send catch-up submission to aggregator: {}", e);
+        } else {
+            processed += 1;
         }
     }
+
+    tracing::info!(
+        "Processed {} catch-up submissions from {} ({} skipped as unsubscribed)",
+        processed,
+        peer,
+        skipped
+    );
 }
 
 /// Handle a received gossip message
