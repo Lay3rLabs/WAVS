@@ -47,6 +47,31 @@ use super::{error::AggregatorError, peer::Peer, AggregatorCommand};
 const PROTOCOL_VERSION: &str = "/wavs/1.0.0";
 const CATCHUP_PROTOCOL: &str = "/wavs/catchup/1.0.0";
 
+// ============================================================================
+// Resource Limits & Timeouts
+// ============================================================================
+// These constants prevent unbounded resource consumption during network issues,
+// peer misbehavior, or high load scenarios.
+
+/// Maximum pending publishes in retry queue.
+/// Prevents memory exhaustion during prolonged network partitions where publishes
+/// accumulate faster than the 10-second retry timeout can clear them.
+const MAX_PENDING_PUBLISHES: usize = 1000;
+
+/// Maximum submissions stored per service for catch-up responses.
+/// This is independent of `max_catchup_submissions` (which limits response size).
+/// Prevents memory growth when receiving many submissions within the TTL window.
+const MAX_STORED_SUBMISSIONS_PER_SERVICE: usize = 500;
+
+/// Timeout for catch-up request/response protocol.
+/// Explicitly set rather than relying on libp2p defaults for predictable behavior.
+const CATCHUP_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Maximum concurrent outstanding catch-up requests per service.
+/// Prevents overwhelming peers/network when many peers connect simultaneously.
+/// Requests beyond this limit are skipped (peers cleared on response/failure allow retry).
+const MAX_CONCURRENT_CATCHUP_REQUESTS_PER_SERVICE: usize = 3;
+
 /// Pending publish entry for retry queue
 struct PendingPublish {
     topic_name: String,
@@ -537,10 +562,10 @@ fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorErr
             )
             .map_err(|e| format!("Failed to create gossipsub: {}", e))?;
 
-            // Catch-up request/response protocol
+            // Catch-up request/response protocol with explicit timeout
             let catchup = request_response::Behaviour::new(
                 iter::once((StreamProtocol::new(CATCHUP_PROTOCOL), ProtocolSupport::Full)),
-                request_response::Config::default(),
+                request_response::Config::default().with_request_timeout(CATCHUP_REQUEST_TIMEOUT),
             );
 
             // Discovery: mDNS for Local mode, Kademlia for Remote mode
@@ -611,18 +636,44 @@ impl EventLoopState {
         }
     }
 
-    /// Store a submission for catch-up responses
+    /// Store a submission for catch-up responses.
+    /// Deduplicates by signer address and enforces per-service storage limits.
     fn store_submission(&mut self, submission: Submission) {
         let service_id = submission.service_id().clone();
+
+        // Check for duplicate by signer address
+        let signer = submission
+            .envelope_signature
+            .evm_signer_address(&submission.envelope);
+
+        let subs = self.stored_submissions.entry(service_id).or_default();
+
+        // Skip if we already have a submission from this signer
+        if let Ok(signer_addr) = &signer {
+            let already_exists = subs.iter().any(|s| {
+                s.submission
+                    .envelope_signature
+                    .evm_signer_address(&s.submission.envelope)
+                    .map(|a| &a == signer_addr)
+                    .unwrap_or(false)
+            });
+            if already_exists {
+                tracing::debug!("Skipping duplicate submission from signer {}", signer_addr);
+                return;
+            }
+        }
+
+        // Enforce per-service storage limit by removing oldest entries
+        while subs.len() >= MAX_STORED_SUBMISSIONS_PER_SERVICE {
+            subs.remove(0);
+            tracing::debug!("Removed oldest stored submission due to storage limit");
+        }
+
         let stored = StoredSubmission {
             submission,
             created_at: Instant::now(),
         };
-
-        self.stored_submissions
-            .entry(service_id)
-            .or_default()
-            .push(stored);
+        subs.push(stored);
     }
 
     /// Get submissions for a service (for catch-up response)
@@ -762,12 +813,18 @@ async fn run_event_loop(
 // Event Handlers
 // ============================================================================
 
-/// Retry any pending publishes in the queue
+/// Retry any pending publishes in the queue.
+/// Skips retries when no peers are connected to avoid wasting CPU cycles.
 fn retry_pending_publishes(
     swarm: &mut Swarm<WavsBehaviour>,
     pending_publishes: &mut VecDeque<PendingPublish>,
     p2p_config: &P2pConfig,
 ) {
+    // Skip retries entirely if no peers are connected - no point burning CPU
+    if swarm.connected_peers().next().is_none() {
+        return;
+    }
+
     let now = Instant::now();
     let max_age = Duration::from_secs(p2p_config.max_retry_duration_secs());
 
@@ -892,6 +949,11 @@ fn handle_swarm_event(
             request_response::Event::OutboundFailure { peer, error, .. },
         )) => {
             tracing::warn!("Catch-up request to {} failed: {:?}", peer, error);
+            // Clear peer from catchup_requested_peers to allow retry on next opportunity
+            // (e.g., if the connection is still alive but the request just timed out)
+            for peer_set in state.catchup_requested_peers.values_mut() {
+                peer_set.remove(&peer);
+            }
         }
         SwarmEvent::Behaviour(WavsBehaviourEvent::Catchup(
             request_response::Event::InboundFailure { peer, error, .. },
@@ -1043,7 +1105,8 @@ fn handle_swarm_event(
     }
 }
 
-/// Request catch-up from a newly connected peer
+/// Request catch-up from a newly connected peer.
+/// Rate-limits requests to avoid overwhelming peers/network.
 fn request_catchup_from_peer(
     swarm: &mut Swarm<WavsBehaviour>,
     peer_id: PeerId,
@@ -1058,6 +1121,17 @@ fn request_catchup_from_peer(
 
         // Skip if we've already requested from this peer for this service
         if peer_set.contains(&peer_id) {
+            continue;
+        }
+
+        // Rate limit: don't send too many concurrent requests per service
+        if peer_set.len() >= MAX_CONCURRENT_CATCHUP_REQUESTS_PER_SERVICE {
+            tracing::debug!(
+                "Skipping catch-up request to {} for service {} (rate limited: {} outstanding)",
+                peer_id,
+                service_id,
+                peer_set.len()
+            );
             continue;
         }
 
@@ -1159,23 +1233,19 @@ fn handle_catchup_response(
         response.submissions.len()
     );
 
-    let mut processed = 0;
-    let mut skipped = 0;
-
-    // Forward each submission to the aggregator, but only for subscribed services
+    // Forward each submission to the aggregator, but only for services we're subscribed to
+    let mut accepted = 0;
+    let mut rejected = 0;
     for submission in response.submissions {
+        // Validate: only accept submissions for services we're subscribed to
         let service_id = submission.service_id();
-
-        // Validate that we're actually subscribed to this service
-        // This prevents processing stale submissions from previous test runs
-        // or services we're no longer interested in
         if !state.subscribed_services.contains(service_id) {
             tracing::warn!(
-                "Ignoring catch-up submission from {} for unsubscribed service: {}",
+                "Rejecting catch-up submission from {} for unsubscribed service {}",
                 peer,
                 service_id
             );
-            skipped += 1;
+            rejected += 1;
             continue;
         }
 
@@ -1185,16 +1255,18 @@ fn handle_catchup_response(
         }) {
             tracing::error!("Failed to send catch-up submission to aggregator: {}", e);
         } else {
-            processed += 1;
+            accepted += 1;
         }
     }
 
-    tracing::info!(
-        "Processed {} catch-up submissions from {} ({} skipped as unsubscribed)",
-        processed,
-        peer,
-        skipped
-    );
+    if rejected > 0 {
+        tracing::warn!(
+            "Catch-up from {}: accepted {} submissions, rejected {} for unsubscribed services",
+            peer,
+            accepted,
+            rejected
+        );
+    }
 }
 
 /// Handle a received gossip message
@@ -1293,6 +1365,14 @@ fn handle_command(
                 }
                 Err(gossipsub::PublishError::NoPeersSubscribedToTopic) => {
                     tracing::debug!("No peers subscribed to {}, queueing for retry", topic_name);
+                    // Enforce queue limit to prevent unbounded memory growth during network issues
+                    if state.pending_publishes.len() >= MAX_PENDING_PUBLISHES {
+                        tracing::warn!(
+                            "Pending publishes queue full ({}), dropping oldest entry",
+                            MAX_PENDING_PUBLISHES
+                        );
+                        state.pending_publishes.pop_front();
+                    }
                     state.pending_publishes.push_back(PendingPublish {
                         topic_name,
                         data,
@@ -1323,6 +1403,7 @@ fn handle_command(
             tracing::info!("Subscribed to P2P topic: {}", topic_name);
 
             // Request catch-up from already-connected peers for this new service
+            // Rate-limited to avoid overwhelming the network
             let connected_peers: Vec<PeerId> = swarm.connected_peers().cloned().collect();
             for peer_id in connected_peers {
                 let peer_set = state
@@ -1330,21 +1411,33 @@ fn handle_command(
                     .entry(service_id.clone())
                     .or_default();
 
-                if !peer_set.contains(&peer_id) {
+                if peer_set.contains(&peer_id) {
+                    continue;
+                }
+
+                // Rate limit: don't send too many concurrent requests per service
+                if peer_set.len() >= MAX_CONCURRENT_CATCHUP_REQUESTS_PER_SERVICE {
                     tracing::debug!(
-                        "Requesting catch-up from {} for newly subscribed service {}",
+                        "Skipping catch-up request to {} for service {} (rate limited)",
                         peer_id,
                         service_id
                     );
-                    let request = CatchUpRequest {
-                        service_id: service_id.clone(),
-                    };
-                    swarm
-                        .behaviour_mut()
-                        .catchup
-                        .send_request(&peer_id, request);
-                    peer_set.insert(peer_id);
+                    continue;
                 }
+
+                tracing::debug!(
+                    "Requesting catch-up from {} for newly subscribed service {}",
+                    peer_id,
+                    service_id
+                );
+                let request = CatchUpRequest {
+                    service_id: service_id.clone(),
+                };
+                swarm
+                    .behaviour_mut()
+                    .catchup
+                    .send_request(&peer_id, request);
+                peer_set.insert(peer_id);
             }
         }
         P2pCommand::Unsubscribe { service_id } => {
