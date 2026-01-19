@@ -95,12 +95,21 @@ impl Aggregator {
                 None => match err.as_revert_data() {
                     Some(raw) => {
                         let raw_str = raw.to_string();
-                        // SignerNotRegistered() error selector is 0x3dda1739
-                        // This is a transient error that can occur when submissions arrive
-                        // via P2P before operator registration completes on-chain
+                        // Detect SignerNotRegistered() error (selector 0x3dda1739)
+                        //
+                        // This is a transient error indicating operators haven't completed registration
+                        // on-chain yet. Common scenarios:
+                        // - P2P catch-up delivers submissions before operator registration completes
+                        // - PoA middleware: Sequential docker exec calls for operator registration are slow
+                        // - EigenLayer middleware: Batch registration is fast but still has a small timing window
+                        //
+                        // The aggregator's retry mechanism will:
+                        // 1. Save the queue when this error is detected
+                        // 2. Retry submission when next submission arrives
+                        // 3. Succeed once operators are registered on-chain
                         if raw_str == "0x3dda1739" {
                             tracing::warn!(
-                                "Signer not registered yet for submission {}. This may resolve as operator registration completes.",
+                                "Signer not registered yet for submission {}. Queue will be saved for retry.",
                                 queue.last().unwrap().label()
                             );
                             return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(

@@ -308,13 +308,17 @@ impl Aggregator {
                                         event_id: submission.event_id.clone(),
                                         action: action.clone(),
                                     };
-                                    // other queue ids can run concurrently, but this makes sure that
-                                    // we lock this queue_id against changes from other requests coming in while we process it
+                                    // Lock this queue_id to prevent concurrent modifications from other submissions
+                                    // Other queue IDs can still run concurrently
                                     _self
                                         .queue_transaction
                                         .run(queue_id.clone(), {
                                             let _self = _self.clone();
                                             move || async move {
+                                                // Load existing queue or start fresh
+                                                // Queue lifecycle:
+                                                // 1. Active: Contains submissions waiting for quorum
+                                                // 2. Burned: Successfully submitted on-chain, no longer valid
                                                 let mut queue = match _self.get_quorum_queue(&queue_id).await {
                                                     Ok(queue) => {
                                                         match queue {
@@ -335,8 +339,9 @@ impl Aggregator {
                                                     },
                                                 };
 
-                                                // This is pushed into the queue temporarily for signature aggregation
-                                                // but will only be saved to the current queue if we get a "InsufficientQuorum" error
+                                                // CRITICAL: Append current submission to the queue
+                                                // This submission is now IN the queue, so we must save it if submission fails
+                                                // Otherwise this submission will be lost and never retried
                                                 if let Err(err) = append_submission_to_queue(&queue_id, &mut queue,submission.clone()) {
                                                     tracing::error!("{}", err);
                                                     return;
@@ -514,6 +519,30 @@ impl Aggregator {
         Ok(())
     }
 
+    /// Handle submission to blockchain with automatic retry mechanism
+    ///
+    /// This function implements the core retry logic for on-chain submissions:
+    ///
+    /// ## Queue Lifecycle
+    /// - **Active**: Queue contains submissions waiting for quorum or retrying after errors
+    /// - **Burned**: Successfully submitted on-chain, queue is marked completed
+    ///
+    /// ## Retry Mechanism
+    /// When submission fails (insufficient quorum, transient errors, etc.):
+    /// 1. Queue is saved with all accumulated submissions
+    /// 2. Next submission (from P2P or local operator) loads the saved queue
+    /// 3. Appends its own submission to the queue
+    /// 4. Retries with all signatures combined
+    ///
+    /// ## P2P Interaction
+    /// - P2P catch-up may deliver submissions before operators are fully registered
+    /// - SignerNotRegistered errors are treated as transient and trigger retry
+    /// - Common scenario: PoA middleware does sequential operator registration,
+    ///   causing a timing gap between P2P submission delivery and on-chain registration
+    ///
+    /// ## Important
+    /// The queue passed to this function already has the current submission appended,
+    /// so we must always save it on error to avoid losing submissions.
     async fn handle_submit_action(
         &self,
         submission: &Submission,
@@ -522,7 +551,7 @@ impl Aggregator {
         queue: Vec<Submission>,
         action: SubmitAction,
     ) -> Result<(), AggregatorError> {
-        // running in a transaction keyed by chain to avoid nonce errors
+        // Running in a transaction keyed by chain to avoid nonce errors
         let result: Result<Option<AnyTransactionReceipt>, AggregatorError> = self
             .chain_transaction
             .run(action.chain().clone(), {
@@ -571,6 +600,11 @@ impl Aggregator {
             Err(e) => Err(e),
         };
 
+        // Process the submission result and manage queue state
+        // Three outcomes determine queue lifecycle:
+        // 1. InsufficientQuorum: Save queue for retry when more operators sign
+        // 2. Success: Burn queue to prevent duplicate submissions
+        // 3. Other errors: Save queue because we appended the submission above
         match &result {
             Err(AggregatorError::InsufficientQuorum {
                 signer_weight,
@@ -585,6 +619,7 @@ impl Aggregator {
                         total_weight
                     );
 
+                // Save queue: Next submission from another operator will retry with accumulated signatures
                 self.save_quorum_queue(queue_id, queue).await?;
             }
             Ok(tx_resp) => {
@@ -593,27 +628,37 @@ impl Aggregator {
                     submission.label(),
                     tx_resp.tx_hash()
                 );
+                // Burn queue: Mark as completed to prevent duplicate on-chain submissions
                 self.burn_quorum_queue(queue_id).await?;
             }
 
             Err(err) => {
-                // SignerNotRegistered is a transient error that can occur during operator registration
-                // Treat it like insufficient quorum - save the queue for retry
+                // Handle submission errors with appropriate logging
                 let err_str = format!("{:?}", err);
                 if err_str.contains("SignerNotRegistered") || err_str.contains("0x3dda1739") {
+                    // Transient error: Operators are still being registered on-chain
+                    // Common during startup, especially with PoA middleware which does
+                    // sequential operator registration via multiple docker exec calls
                     tracing::warn!(
-                        "Aggregator: Signer not registered yet for submission {}. Saving queue for retry.",
+                        "Aggregator: Signer not registered yet for submission {}. Will retry when operators complete registration.",
                         submission.label()
                     );
-                    // Save the queue so it can be retried once operators are registered
-                    self.save_quorum_queue(queue_id, queue).await?;
                 } else {
+                    // Unexpected error: Log as error for investigation
                     tracing::error!(
                         "Aggregator: Error submitting on-chain for submission {}: {:?}",
                         submission.label(),
                         err
                     );
                 }
+                // IMPORTANT: Always save the queue on error
+                // We appended the current submission above, so failing to save it would lose this submission
+                // When the next submission arrives (from P2P or operator), it will:
+                // 1. Load this saved queue with accumulated submissions
+                // 2. Append its own submission
+                // 3. Retry submission with all signatures
+                // This implements automatic retry for transient errors like SignerNotRegistered
+                self.save_quorum_queue(queue_id, queue).await?;
             }
         }
 

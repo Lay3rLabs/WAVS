@@ -1127,6 +1127,21 @@ fn handle_catchup_request(
 }
 
 /// Handle an incoming catch-up response
+///
+/// Validates and forwards submissions received during P2P catch-up to the aggregator.
+///
+/// ## Validation
+/// Only processes submissions for services we're actively subscribed to. This prevents:
+/// - Processing stale submissions from previous test runs (e2e tests reuse P2P connections)
+/// - Wasting resources on services we've unsubscribed from
+/// - Race conditions where catch-up delivers submissions before service initialization completes
+///
+/// ## Retry Interaction
+/// Submissions forwarded here may arrive before operators are fully registered on-chain.
+/// The aggregator's retry mechanism (see handle_submit_action) handles this by:
+/// 1. Detecting SignerNotRegistered errors
+/// 2. Saving the queue for retry
+/// 3. Automatically retrying when next submission arrives
 fn handle_catchup_response(
     peer: PeerId,
     response: CatchUpResponse,
