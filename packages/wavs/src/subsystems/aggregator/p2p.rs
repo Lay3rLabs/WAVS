@@ -1262,8 +1262,33 @@ fn handle_command(
             }
 
             state.subscribed_topics.insert(topic_name.clone());
-            state.subscribed_services.insert(service_id);
+            state.subscribed_services.insert(service_id.clone());
             tracing::info!("Subscribed to P2P topic: {}", topic_name);
+
+            // Request catch-up from already-connected peers for this new service
+            let connected_peers: Vec<PeerId> = swarm.connected_peers().cloned().collect();
+            for peer_id in connected_peers {
+                let peer_set = state
+                    .catchup_requested_peers
+                    .entry(service_id.clone())
+                    .or_default();
+
+                if !peer_set.contains(&peer_id) {
+                    tracing::debug!(
+                        "Requesting catch-up from {} for newly subscribed service {}",
+                        peer_id,
+                        service_id
+                    );
+                    let request = CatchUpRequest {
+                        service_id: service_id.clone(),
+                    };
+                    swarm
+                        .behaviour_mut()
+                        .catchup
+                        .send_request(&peer_id, request);
+                    peer_set.insert(peer_id);
+                }
+            }
         }
         P2pCommand::Unsubscribe { service_id } => {
             let topic_name = service_topic_name(&service_id);
