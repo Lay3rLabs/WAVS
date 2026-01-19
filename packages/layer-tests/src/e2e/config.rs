@@ -311,7 +311,7 @@ impl From<TestConfig> for Configs {
             middleware_concurrency: test_config.middleware_concurrency,
             wavs_concurrency: test_config.wavs_concurrency,
             grouping: test_config.grouping,
-            evm_middleware_type: test_config.middleware_type,
+            evm_middleware_type: test_config.evm_middleware_type,
             p2p: test_config.p2p,
         }
     }
