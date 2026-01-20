@@ -637,7 +637,7 @@ impl EventLoopState {
     }
 
     /// Store a submission for catch-up responses.
-    /// Deduplicates by signer address and enforces per-service storage limits.
+    /// Deduplicates by event ID and signer address, and enforces per-service storage limits.
     fn store_submission(&mut self, submission: Submission) {
         let service_id = submission.service_id().clone();
 
@@ -648,17 +648,22 @@ impl EventLoopState {
 
         let subs = self.stored_submissions.entry(service_id).or_default();
 
-        // Skip if we already have a submission from this signer
+        // Skip if we already have a submission from this signer for this event
         if let Ok(signer_addr) = &signer {
             let already_exists = subs.iter().any(|s| {
-                s.submission
-                    .envelope_signature
-                    .evm_signer_address(&s.submission.envelope)
-                    .map(|a| &a == signer_addr)
-                    .unwrap_or(false)
+                s.submission.event_id == submission.event_id
+                    && s.submission
+                        .envelope_signature
+                        .evm_signer_address(&s.submission.envelope)
+                        .map(|a| &a == signer_addr)
+                        .unwrap_or(false)
             });
             if already_exists {
-                tracing::debug!("Skipping duplicate submission from signer {}", signer_addr);
+                tracing::debug!(
+                    "Skipping duplicate submission from signer {} for event {}",
+                    signer_addr,
+                    submission.event_id
+                );
                 return;
             }
         }
