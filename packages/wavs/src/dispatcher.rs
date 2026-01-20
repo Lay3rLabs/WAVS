@@ -645,6 +645,11 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         // Remove the old service - after this, no await points until the new service is added
         self.remove_service(service_id.clone())?;
 
+        // Store the service BEFORE setting up triggers/P2P subscription
+        // This ensures the service is in the database before any triggers can fire
+        // or P2P catch-up can deliver submissions for this service
+        self.services.save(&service)?;
+
         // Set up triggers and submissions
         add_service_to_managers(
             &service,
@@ -653,9 +658,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             &self.dispatcher_to_aggregator_tx,
             Some(hd_index),
         )?;
-
-        // Store the service
-        self.services.save(&service)?;
 
         Ok(())
     }
