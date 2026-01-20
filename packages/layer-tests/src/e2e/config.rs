@@ -265,6 +265,10 @@ impl From<TestConfig> for Configs {
                             max_catchup_submissions: None,
                             cleanup_interval_secs: None,
                             kademlia_discovery_interval_secs: Some(2),
+                            catchup_request_timeout_secs: None,
+                            max_concurrent_catchup_requests_per_service: None,
+                            max_pending_publishes: None,
+                            max_stored_submissions_per_service: None,
                         };
                     }
                     TestP2pMode::Mdns => {
@@ -276,6 +280,10 @@ impl From<TestConfig> for Configs {
                             submission_ttl_secs: None,
                             max_catchup_submissions: None,
                             cleanup_interval_secs: None,
+                            catchup_request_timeout_secs: None,
+                            max_concurrent_catchup_requests_per_service: None,
+                            max_pending_publishes: None,
+                            max_stored_submissions_per_service: None,
                         };
                     }
                 }
