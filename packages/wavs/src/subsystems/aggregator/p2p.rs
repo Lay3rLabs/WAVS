@@ -47,31 +47,6 @@ use super::{error::AggregatorError, peer::Peer, AggregatorCommand};
 const PROTOCOL_VERSION: &str = "/wavs/1.0.0";
 const CATCHUP_PROTOCOL: &str = "/wavs/catchup/1.0.0";
 
-// ============================================================================
-// Resource Limits & Timeouts
-// ============================================================================
-// These constants prevent unbounded resource consumption during network issues,
-// peer misbehavior, or high load scenarios.
-
-/// Maximum pending publishes in retry queue.
-/// Prevents memory exhaustion during prolonged network partitions where publishes
-/// accumulate faster than the 10-second retry timeout can clear them.
-const MAX_PENDING_PUBLISHES: usize = 1000;
-
-/// Maximum submissions stored per service for catch-up responses.
-/// This is independent of `max_catchup_submissions` (which limits response size).
-/// Prevents memory growth when receiving many submissions within the TTL window.
-const MAX_STORED_SUBMISSIONS_PER_SERVICE: usize = 500;
-
-/// Timeout for catch-up request/response protocol.
-/// Explicitly set rather than relying on libp2p defaults for predictable behavior.
-const CATCHUP_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// Maximum concurrent outstanding catch-up requests per service.
-/// Prevents overwhelming peers/network when many peers connect simultaneously.
-/// Requests beyond this limit are skipped (peers cleared on response/failure allow retry).
-const MAX_CONCURRENT_CATCHUP_REQUESTS_PER_SERVICE: usize = 3;
-
 /// Pending publish entry for retry queue
 struct PendingPublish {
     topic_name: String,
@@ -101,6 +76,10 @@ pub enum P2pConfig {
         submission_ttl_secs: Option<u64>,
         max_catchup_submissions: Option<usize>,
         cleanup_interval_secs: Option<u64>,
+        max_pending_publishes: Option<usize>,
+        max_stored_submissions_per_service: Option<usize>,
+        catchup_request_timeout_secs: Option<u64>,
+        max_concurrent_catchup_requests_per_service: Option<usize>,
     },
     /// Remote/production - use Kademlia DHT for peer discovery with bootstrap nodes
     Remote {
@@ -114,6 +93,10 @@ pub enum P2pConfig {
         max_catchup_submissions: Option<usize>,
         cleanup_interval_secs: Option<u64>,
         kademlia_discovery_interval_secs: Option<u64>,
+        max_pending_publishes: Option<usize>,
+        max_stored_submissions_per_service: Option<usize>,
+        catchup_request_timeout_secs: Option<u64>,
+        max_concurrent_catchup_requests_per_service: Option<usize>,
     },
 }
 
@@ -128,6 +111,17 @@ impl P2pConfig {
     const DEFAULT_KADEMLIA_DISCOVERY_INTERVAL_SECS: u64 = 60;
     /// Interval between cleanup of expired stored submissions
     const DEFAULT_CLEANUP_INTERVAL_SECS: u64 = 60;
+    /// Maximum pending publishes in retry queue.
+    /// Prevents memory exhaustion during prolonged network partitions.
+    const DEFAULT_MAX_PENDING_PUBLISHES: usize = 1000;
+    /// Maximum submissions stored per service for catch-up responses.
+    /// Prevents memory growth when receiving many submissions within the TTL window.
+    const DEFAULT_MAX_STORED_SUBMISSIONS_PER_SERVICE: usize = 500;
+    /// Timeout for catch-up request/response protocol.
+    const DEFAULT_CATCHUP_REQUEST_TIMEOUT_SECS: u64 = 30;
+    /// Maximum concurrent outstanding catch-up requests per service.
+    /// Prevents overwhelming peers/network when many peers connect simultaneously.
+    const DEFAULT_MAX_CONCURRENT_CATCHUP_REQUESTS_PER_SERVICE: usize = 3;
 
     pub fn cleanup_interval_secs(&self) -> u64 {
         match self {
@@ -277,6 +271,71 @@ impl P2pConfig {
         match self {
             P2pConfig::Local { .. } => 2,
             P2pConfig::Remote { .. } | P2pConfig::Disabled => 3,
+        }
+    }
+
+    /// Maximum pending publishes in retry queue
+    pub fn max_pending_publishes(&self) -> usize {
+        match self {
+            P2pConfig::Local {
+                max_pending_publishes,
+                ..
+            } => max_pending_publishes.unwrap_or(Self::DEFAULT_MAX_PENDING_PUBLISHES),
+            P2pConfig::Remote {
+                max_pending_publishes,
+                ..
+            } => max_pending_publishes.unwrap_or(Self::DEFAULT_MAX_PENDING_PUBLISHES),
+            P2pConfig::Disabled => Self::DEFAULT_MAX_PENDING_PUBLISHES,
+        }
+    }
+
+    /// Maximum submissions stored per service for catch-up responses
+    pub fn max_stored_submissions_per_service(&self) -> usize {
+        match self {
+            P2pConfig::Local {
+                max_stored_submissions_per_service,
+                ..
+            } => max_stored_submissions_per_service
+                .unwrap_or(Self::DEFAULT_MAX_STORED_SUBMISSIONS_PER_SERVICE),
+            P2pConfig::Remote {
+                max_stored_submissions_per_service,
+                ..
+            } => max_stored_submissions_per_service
+                .unwrap_or(Self::DEFAULT_MAX_STORED_SUBMISSIONS_PER_SERVICE),
+            P2pConfig::Disabled => Self::DEFAULT_MAX_STORED_SUBMISSIONS_PER_SERVICE,
+        }
+    }
+
+    /// Timeout for catch-up request/response protocol
+    pub fn catchup_request_timeout(&self) -> Duration {
+        let secs = match self {
+            P2pConfig::Local {
+                catchup_request_timeout_secs,
+                ..
+            } => catchup_request_timeout_secs.unwrap_or(Self::DEFAULT_CATCHUP_REQUEST_TIMEOUT_SECS),
+            P2pConfig::Remote {
+                catchup_request_timeout_secs,
+                ..
+            } => catchup_request_timeout_secs.unwrap_or(Self::DEFAULT_CATCHUP_REQUEST_TIMEOUT_SECS),
+            P2pConfig::Disabled => Self::DEFAULT_CATCHUP_REQUEST_TIMEOUT_SECS,
+        };
+        Duration::from_secs(secs)
+    }
+
+    /// Maximum concurrent outstanding catch-up requests per service
+    pub fn max_concurrent_catchup_requests_per_service(&self) -> usize {
+        match self {
+            P2pConfig::Local {
+                max_concurrent_catchup_requests_per_service,
+                ..
+            } => max_concurrent_catchup_requests_per_service
+                .unwrap_or(Self::DEFAULT_MAX_CONCURRENT_CATCHUP_REQUESTS_PER_SERVICE),
+            P2pConfig::Remote {
+                max_concurrent_catchup_requests_per_service,
+                ..
+            } => max_concurrent_catchup_requests_per_service
+                .unwrap_or(Self::DEFAULT_MAX_CONCURRENT_CATCHUP_REQUESTS_PER_SERVICE),
+            P2pConfig::Disabled => Self::DEFAULT_MAX_CONCURRENT_CATCHUP_REQUESTS_PER_SERVICE,
         }
     }
 }
@@ -544,6 +603,7 @@ fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorErr
         .map_err(|e| AggregatorError::P2p(format!("Failed to build gossipsub config: {}", e)))?;
 
     let is_local = matches!(config, P2pConfig::Local { .. });
+    let catchup_request_timeout = config.catchup_request_timeout();
 
     let swarm = SwarmBuilder::with_new_identity()
         .with_tokio()
@@ -565,7 +625,7 @@ fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorErr
             // Catch-up request/response protocol with explicit timeout
             let catchup = request_response::Behaviour::new(
                 iter::once((StreamProtocol::new(CATCHUP_PROTOCOL), ProtocolSupport::Full)),
-                request_response::Config::default().with_request_timeout(CATCHUP_REQUEST_TIMEOUT),
+                request_response::Config::default().with_request_timeout(catchup_request_timeout),
             );
 
             // Discovery: mDNS for Local mode, Kademlia for Remote mode
@@ -674,7 +734,8 @@ impl EventLoopState {
         }
 
         // Enforce per-service storage limit by removing oldest entries
-        while subs.len() >= MAX_STORED_SUBMISSIONS_PER_SERVICE {
+        let max_stored = self.config.max_stored_submissions_per_service();
+        while subs.len() >= max_stored {
             subs.remove(0);
             tracing::debug!("Removed oldest stored submission due to storage limit");
         }
@@ -1139,7 +1200,7 @@ fn request_catchup_from_peer(
         }
 
         // Rate limit: don't send too many concurrent requests per service
-        if peer_set.len() >= MAX_CONCURRENT_CATCHUP_REQUESTS_PER_SERVICE {
+        if peer_set.len() >= state.config.max_concurrent_catchup_requests_per_service() {
             tracing::debug!(
                 "Skipping catch-up request to {} for service {} (rate limited: {} outstanding)",
                 peer_id,
@@ -1380,10 +1441,11 @@ fn handle_command(
                 Err(gossipsub::PublishError::NoPeersSubscribedToTopic) => {
                     tracing::debug!("No peers subscribed to {}, queueing for retry", topic_name);
                     // Enforce queue limit to prevent unbounded memory growth during network issues
-                    if state.pending_publishes.len() >= MAX_PENDING_PUBLISHES {
+                    let max_pending = state.config.max_pending_publishes();
+                    if state.pending_publishes.len() >= max_pending {
                         tracing::warn!(
                             "Pending publishes queue full ({}), dropping oldest entry",
-                            MAX_PENDING_PUBLISHES
+                            max_pending
                         );
                         state.pending_publishes.pop_front();
                     }
@@ -1430,7 +1492,7 @@ fn handle_command(
                 }
 
                 // Rate limit: don't send too many concurrent requests per service
-                if peer_set.len() >= MAX_CONCURRENT_CATCHUP_REQUESTS_PER_SERVICE {
+                if peer_set.len() >= state.config.max_concurrent_catchup_requests_per_service() {
                     tracing::debug!(
                         "Skipping catch-up request to {} for service {} (rate limited)",
                         peer_id,
