@@ -35,6 +35,7 @@ pub struct HypercoreTestClient {
     _storage_dir: TempDir,
 }
 
+#[allow(dead_code)]
 impl HypercoreTestClient {
     /// Create a new hypercore feed with a generated keypair.
     ///
