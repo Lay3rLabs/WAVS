@@ -948,6 +948,10 @@ fn handle_swarm_event(
             ..
         })) => {
             handle_catchup_response(peer, response, aggregator_tx, state);
+            // Clear peer from catchup_requested_peers to free up concurrent request slot
+            for peer_set in state.catchup_requested_peers.values_mut() {
+                peer_set.remove(&peer);
+            }
         }
         // Catch-up request/response errors
         SwarmEvent::Behaviour(WavsBehaviourEvent::Catchup(
