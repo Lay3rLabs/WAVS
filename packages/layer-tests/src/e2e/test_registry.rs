@@ -320,12 +320,6 @@ impl TestRegistry {
         chain: &ChainKey,
         hyperswarm_bootstrap: Option<String>,
     ) -> &mut Self {
-        // TODO: Re-enable when hyperswarm peer discovery is fixed in CI
-        // The test fails in CI with "Timed out waiting for 3 hyperswarm peers"
-        // due to hyperswarm UDP/networking issues in the CI environment
-        tracing::warn!("Skipping hypercore test - hyperswarm peer discovery not working in CI");
-        return self;
-
         // Create a real hypercore test client with generated feed key
         let test_name = "evm_hypercore_echo_data";
         let hypercore_client = HypercoreTestClient::new(test_name, hyperswarm_bootstrap)
