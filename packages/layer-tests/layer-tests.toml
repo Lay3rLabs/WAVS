@@ -8,8 +8,8 @@ grouping = false
 evm_middleware_type = "poa"   # "eigenlayer" or "poa"
 p2p = "kademlia"              # "mdns" (local) or "kademlia" (remote)
 # Run all tests
-# mode = "all"
-mode = { "isolated" = [{ evm = "hypercore_echo_data" }] }
+mode = "all"
+# mode = { "isolated" = [{ evm = "hypercore_echo_data" }] }
 # mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }
 # mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }
 # mode = { "isolated" = [{ evm = "multi_operator" }] }
