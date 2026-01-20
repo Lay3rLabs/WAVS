@@ -183,17 +183,51 @@ impl HypercoreTestClient {
             return Ok(0);
         }
 
+        let start = std::time::Instant::now();
+
         let count = tokio::time::timeout(timeout, async {
             loop {
-                let current = self.connection_count.load(Ordering::SeqCst);
+                let current = self.connection_count.load(Ordering::Relaxed);
                 if current >= expected {
-                    return current;
+                    // Verify connection is stable by waiting a bit and checking again
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    let stable_count = self.connection_count.load(Ordering::Relaxed);
+                    if stable_count >= expected {
+                        tracing::info!(
+                            "Verified {} stable hypercore peer connections",
+                            stable_count
+                        );
+                        return stable_count;
+                    }
+                    // Connection not stable, continue waiting
+                    tracing::debug!(
+                        "Peer count dropped from {} to {}, continuing to wait",
+                        current,
+                        stable_count
+                    );
                 }
+
+                // Log progress periodically
+                if start.elapsed().as_secs().is_multiple_of(5) {
+                    tracing::info!(
+                        "Waiting for hypercore peers: {}/{} (elapsed: {}s)",
+                        current,
+                        expected,
+                        start.elapsed().as_secs()
+                    );
+                }
+
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 self.connection_notify.notified().await;
             }
         })
         .await
-        .map_err(|_| anyhow::anyhow!("Timed out waiting for {expected} hyperswarm peers"))?;
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "Timed out waiting for {expected} hyperswarm peers (current: {})",
+                self.connection_count.load(Ordering::Relaxed)
+            )
+        })?;
 
         Ok(count)
     }

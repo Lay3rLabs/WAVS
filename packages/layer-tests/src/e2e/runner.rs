@@ -491,7 +491,8 @@ async fn run_test(
                             feed_key,
                             Some(Duration::from_secs(30)),
                         )
-                        .await;
+                        .await
+                        .context("Failed to wait for hypercore stream to finalize")?;
                     }
 
                     if clients.http_clients.len() > 1 {
