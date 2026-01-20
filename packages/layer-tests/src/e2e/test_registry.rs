@@ -95,7 +95,7 @@ impl TestRegistry {
     }
 
     /// Store a hypercore test client for a test
-    pub fn _insert_hypercore_client(&self, test_name: String, client: HypercoreTestClient) {
+    pub fn insert_hypercore_client(&self, test_name: String, client: HypercoreTestClient) {
         self.hypercore_clients.insert(test_name, Arc::new(client));
     }
 
@@ -105,7 +105,7 @@ impl TestRegistry {
         chain_configs: Arc<RwLock<ChainConfigs>>,
         clients: &Clients,
         cosmos_code_map: &CosmosCodeMap,
-        _hyperswarm_bootstrap: Option<String>,
+        hyperswarm_bootstrap: Option<String>,
     ) -> Self {
         // Convert TestMode to TestMatrix
         let matrix: TestMatrix = test_mode.into();
@@ -127,10 +127,9 @@ impl TestRegistry {
                     registry.register_evm_atproto_echo_data_test(chain);
                 }
                 EvmService::HypercoreEchoData => {
-                    // TODO - see register_evm_hypercore_echo_data_test() below
-                    // registry
-                    //     .register_evm_hypercore_echo_data_test(chain, hyperswarm_bootstrap.clone())
-                    //     .await;
+                    registry
+                        .register_evm_hypercore_echo_data_test(chain, hyperswarm_bootstrap.clone())
+                        .await;
                 }
                 EvmService::EchoDataSecondaryChain => {
                     let secondary = chains.secondary_evm().unwrap();
@@ -316,17 +315,17 @@ impl TestRegistry {
         )
     }
 
-    // TODO: Re-enable when hyperswarm peer discovery is fixed in CI
-    // The test fails in CI with "Timed out waiting for 3 hyperswarm peers"
-    // due to hyperswarm UDP/networking issues in the CI environment
-    /*
     async fn register_evm_hypercore_echo_data_test(
         &mut self,
         chain: &ChainKey,
         hyperswarm_bootstrap: Option<String>,
     ) -> &mut Self {
+        // TODO: Re-enable when hyperswarm peer discovery is fixed in CI
+        // The test fails in CI with "Timed out waiting for 3 hyperswarm peers"
+        // due to hyperswarm UDP/networking issues in the CI environment
         tracing::warn!("Skipping hypercore test - hyperswarm peer discovery not working in CI");
         return self;
+
         // Create a real hypercore test client with generated feed key
         let test_name = "evm_hypercore_echo_data";
         let hypercore_client = HypercoreTestClient::new(test_name, hyperswarm_bootstrap)
@@ -366,7 +365,6 @@ impl TestRegistry {
                 .build(),
         )
     }
-    */
 
     fn register_evm_echo_data_secondary_chain_test(
         &mut self,
