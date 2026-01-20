@@ -641,31 +641,36 @@ impl EventLoopState {
     fn store_submission(&mut self, submission: Submission) {
         let service_id = submission.service_id().clone();
 
-        // Check for duplicate by signer address
-        let signer = submission
+        // Extract signer address - reject submissions with invalid signatures
+        let signer_addr = match submission
             .envelope_signature
-            .evm_signer_address(&submission.envelope);
+            .evm_signer_address(&submission.envelope)
+        {
+            Ok(addr) => addr,
+            Err(e) => {
+                tracing::warn!("Rejecting submission with invalid signature: {}", e);
+                return;
+            }
+        };
 
         let subs = self.stored_submissions.entry(service_id).or_default();
 
         // Skip if we already have a submission from this signer for this event
-        if let Ok(signer_addr) = &signer {
-            let already_exists = subs.iter().any(|s| {
-                s.submission.event_id == submission.event_id
-                    && s.submission
-                        .envelope_signature
-                        .evm_signer_address(&s.submission.envelope)
-                        .map(|a| &a == signer_addr)
-                        .unwrap_or(false)
-            });
-            if already_exists {
-                tracing::debug!(
-                    "Skipping duplicate submission from signer {} for event {}",
-                    signer_addr,
-                    submission.event_id
-                );
-                return;
-            }
+        let already_exists = subs.iter().any(|s| {
+            s.submission.event_id == submission.event_id
+                && s.submission
+                    .envelope_signature
+                    .evm_signer_address(&s.submission.envelope)
+                    .map(|a| a == signer_addr)
+                    .unwrap_or(false)
+        });
+        if already_exists {
+            tracing::debug!(
+                "Skipping duplicate submission from signer {} for event {}",
+                signer_addr,
+                submission.event_id
+            );
+            return;
         }
 
         // Enforce per-service storage limit by removing oldest entries
