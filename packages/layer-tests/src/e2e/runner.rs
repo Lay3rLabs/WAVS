@@ -239,7 +239,8 @@ impl Runner {
             &self.registry,
         )
         .await
-        .context(test.name.clone())?;
+        .context(test.name.clone())
+        .unwrap();
 
         report.end_test(test.name.clone());
     }

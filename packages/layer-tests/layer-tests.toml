@@ -5,11 +5,11 @@ log_level = ["info", "wavs=debug"]
 wavs_concurrency = true
 middleware_concurrency = true
 grouping = false
-evm_middleware_type = "poa" # "eigenlayer" or "poa"
-p2p = "kademlia" # "mdns" (local) or "kademlia" (remote)
+evm_middleware_type = "poa"   # "eigenlayer" or "poa"
+p2p = "kademlia"              # "mdns" (local) or "kademlia" (remote)
 # Run all tests
-mode = "all"
-# mode = { "isolated" = [{ evm = "timer_aggregator_reorg" }] }
+# mode = "all"
+mode = { "isolated" = [{ evm = "hypercore_echo_data" }] }
 # mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }
 # mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }
 # mode = { "isolated" = [{ evm = "multi_operator" }] }
