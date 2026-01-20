@@ -264,6 +264,11 @@ impl AppHandles {
                     addr,
                     announce_addr
                 );
+
+                // Give the bootstrap node a moment to start listening and be ready
+                // to accept incoming connections from test clients
+                std::thread::sleep(Duration::from_millis(500));
+
                 (Some(announce_addr), Some(handle))
             }
             Err(err) => {

@@ -26,13 +26,24 @@ pub struct HypercoreTestClient {
     /// Hex-encoded feed key (public key)
     feed_key: String,
     /// Handle for the hyperswarm task
-    _swarm_handle: JoinHandle<()>,
+    swarm_handle: JoinHandle<()>,
     /// Count of active hyperswarm connections
     connection_count: Arc<AtomicUsize>,
     /// Notifies waiters when a new connection is established
     connection_notify: Arc<Notify>,
     /// TempDir storage - must be kept alive for the lifetime of the client
     _storage_dir: TempDir,
+}
+
+// Properly clean up the swarm task when the client is dropped
+impl Drop for HypercoreTestClient {
+    fn drop(&mut self) {
+        tracing::info!(
+            "Dropping HypercoreTestClient for feed_key: {}, aborting swarm task",
+            self.feed_key
+        );
+        self.swarm_handle.abort();
+    }
 }
 
 impl HypercoreTestClient {
@@ -133,16 +144,25 @@ impl HypercoreTestClient {
                         let feed_key_bytes = feed_key_bytes_for_swarm;
 
                         // Spawn a task for each peer connection
+                        let connection_count_for_peer = Arc::clone(&connection_count_for_swarm);
                         tokio::spawn(async move {
-                            if let Err(err) = hypercore_protocol::run_protocol(
+                            let result = hypercore_protocol::run_protocol(
                                 stream,
                                 is_initiator,
                                 feed,
                                 feed_key_bytes,
                             )
-                            .await
-                            {
+                            .await;
+
+                            // Decrement connection count when peer connection closes
+                            connection_count_for_peer.fetch_sub(1, Ordering::SeqCst);
+
+                            if let Err(err) = result {
                                 tracing::warn!("Hypercore protocol swarm peer error: {err:?}");
+                            } else {
+                                tracing::debug!(
+                                    "Hypercore protocol peer connection closed cleanly"
+                                );
                             }
                         });
                     }
@@ -158,7 +178,7 @@ impl HypercoreTestClient {
         Ok(Self {
             feed,
             feed_key,
-            _swarm_handle: swarm_handle,
+            swarm_handle,
             connection_count,
             connection_notify,
             _storage_dir: storage_dir,

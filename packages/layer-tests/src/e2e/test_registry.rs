@@ -356,6 +356,7 @@ impl TestRegistry {
                         .build(),
                 )
                 .with_service_manager_chain(chain)
+                .with_group(TestGroupId::Hypercore)
                 .build(),
         )
     }

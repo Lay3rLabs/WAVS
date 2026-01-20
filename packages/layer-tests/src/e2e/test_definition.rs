@@ -25,6 +25,7 @@ pub enum TestGroupId {
     Backpressure,
     AggregatorTimer,
     P2p,
+    Hypercore,
     Other(usize),
 }
 
