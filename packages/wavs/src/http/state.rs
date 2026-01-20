@@ -15,7 +15,7 @@ pub struct HttpState {
     pub dispatcher: Arc<Dispatcher<FileStorage>>,
     pub is_mock_chain_client: bool,
     pub http_client: reqwest::Client,
-    pub storage: WavsDb,
+    pub db_storage: WavsDb,
     pub metrics: HttpMetrics,
     pub health_status: SharedHealthStatus,
 }
@@ -38,14 +38,12 @@ impl HttpState {
             })?;
         }
 
-        let storage = WavsDb::new()?;
-
         Ok(Self {
             config,
+            db_storage: dispatcher.db_storage.clone(),
             dispatcher,
             is_mock_chain_client,
             http_client: reqwest::Client::new(),
-            storage,
             metrics,
             health_status,
         })
@@ -68,7 +66,7 @@ impl HttpState {
             .as_ref()
             .try_into()
             .map_err(|_| anyhow::anyhow!("invalid service hash length"))?;
-        if let Some(service) = self.storage.services_by_hash.get_cloned(&key) {
+        if let Some(service) = self.db_storage.services_by_hash.get_cloned(&key) {
             Ok(service)
         } else {
             Err(anyhow::anyhow!(
@@ -83,7 +81,9 @@ impl HttpState {
             .as_ref()
             .try_into()
             .map_err(|_| anyhow::anyhow!("invalid service hash length"))?;
-        self.storage.services_by_hash.insert(key, service.clone())?;
+        self.db_storage
+            .services_by_hash
+            .insert(key, service.clone())?;
         Ok(service_hash)
     }
 }

@@ -233,7 +233,6 @@ fn mock_e2e_same_tx_different_block_hash() {
                 trigger: trigger.clone(),
                 component: Component::new(ComponentSource::Digest(digest.clone())),
                 submit: Submit::Aggregator {
-                    url: "http://example.com".to_string(),
                     component: Box::new(Component::new(ComponentSource::Digest(digest.clone()))),
                     signature_kind: SignatureKind::evm_default(),
                 },

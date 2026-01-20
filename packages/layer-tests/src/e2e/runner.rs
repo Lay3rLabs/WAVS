@@ -20,6 +20,7 @@ use wavs_types::{
     Workflow, WorkflowId,
 };
 
+use crate::e2e::helpers::wait_for_hypercore_streams_to_finalize;
 use crate::e2e::helpers::{change_service_for_test, cosmos_wait_for_task_to_land};
 use crate::e2e::report::TestReport;
 use crate::e2e::service_managers::ServiceManagers;
@@ -134,9 +135,9 @@ impl Runner {
 
             // Then we need to deploy the update to service managers
             if futures.is_empty() {
-                tracing::info!("No changes to services in group {}", group);
+                tracing::info!("No changes to services in group {:?}", group);
             } else {
-                tracing::warn!("Running service changes for group {}", group);
+                tracing::warn!("Running service changes for group {:?}", group);
                 let mut services_to_change = Vec::new();
                 while let Some((service, change_service)) = futures.next().await {
                     // update our local copy of the service and handle changes
@@ -200,7 +201,7 @@ impl Runner {
 
             // All services are now deployed and ready for the tests
             // From here on in we're strictly testing the trigger->execute->aggregate->submit flow
-            tracing::info!("Running group {} with {} tests", group, group_tests.len());
+            tracing::info!("Running group {:?} with {} tests", group, group_tests.len());
             let mut futures = FuturesUnordered::new();
 
             for test in group_tests {
@@ -253,6 +254,35 @@ async fn run_test(
     component_sources: &ComponentSources,
     registry: &TestRegistry,
 ) -> anyhow::Result<()> {
+    // For multi-operator tests, wait for P2P mesh to form before triggering
+    if test.multi_operator && clients.http_clients.len() > 1 {
+        let expected_peers = clients.http_clients.len() - 1;
+        tracing::info!(
+            "Multi-operator test: waiting for P2P mesh formation ({} expected peers)",
+            expected_peers
+        );
+
+        // Wait for all operators to have connected to peers
+        for (idx, http_client) in clients.http_clients.iter().enumerate() {
+            let status = http_client
+                .wait_for_p2p_ready(expected_peers, Some(Duration::from_secs(30)))
+                .await
+                .map_err(|e| {
+                    anyhow!(
+                        "Operator {} P2P readiness check failed: {}. \
+                         Multi-operator tests require P2P mesh to be ready.",
+                        idx,
+                        e
+                    )
+                })?;
+            tracing::info!(
+                "Operator {} P2P ready: {} connected peers",
+                idx,
+                status.connected_peers
+            );
+        }
+    }
+
     // Group workflows by trigger to handle multi-triggers
     let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowId, &Workflow)>> = OrderMap::new();
 
@@ -406,29 +436,32 @@ async fn run_test(
                 let record_payload = input_bytes.clone().unwrap_or_default();
                 let record_text = String::from_utf8_lossy(&record_payload).to_string();
 
-                let atproto_data = TriggerData::AtProtoEvent {
-                    sequence: sequence as i64,
-                    timestamp: 0,
-                    repo: "did:example:alice".to_string(),
-                    collection: "app.bsky.feed.post".to_string(),
-                    rkey: "rkey-1".to_string(),
-                    action: AtProtoAction::Create,
-                    cid: Some("bafytestcid".to_string()),
-                    record: Some(json!({ "text": record_text })),
-                    rev: Some("rev-test".to_string()),
-                    op_index: Some(0),
-                };
+                // Send simulated trigger to all WAVS instances
+                for http_client in clients.http_clients.iter() {
+                    let atproto_data = TriggerData::AtProtoEvent {
+                        sequence: sequence as i64,
+                        timestamp: 0,
+                        repo: "did:example:alice".to_string(),
+                        collection: "app.bsky.feed.post".to_string(),
+                        rkey: "rkey-1".to_string(),
+                        action: AtProtoAction::Create,
+                        cid: Some("bafytestcid".to_string()),
+                        record: Some(json!({ "text": record_text.clone() })),
+                        rev: Some("rev-test".to_string()),
+                        op_index: Some(0),
+                    };
 
-                let req = SimulatedTriggerRequest {
-                    service_id: service_deployment.service.id(),
-                    workflow_id: first_workflow_id.clone(),
-                    trigger: trigger.clone(),
-                    data: atproto_data,
-                    count: 1,
-                    wait_for_completion: true,
-                };
+                    let req = SimulatedTriggerRequest {
+                        service_id: service_deployment.service.id(),
+                        workflow_id: first_workflow_id.clone(),
+                        trigger: trigger.clone(),
+                        data: atproto_data,
+                        count: 1,
+                        wait_for_completion: true,
+                    };
 
-                clients.http_client.simulate_trigger(req).await?;
+                    http_client.simulate_trigger(req).await?;
+                }
 
                 vec![trigger_id]
             }
@@ -446,6 +479,32 @@ async fn run_test(
                         client_feed_key,
                         feed_key
                     );
+
+                    for (idx, http_client) in clients.http_clients.iter().enumerate() {
+                        tracing::info!(
+                            "Waiting for hypercore stream readiness on instance {} for feed_key {}",
+                            idx,
+                            feed_key
+                        );
+                        wait_for_hypercore_streams_to_finalize(
+                            http_client,
+                            feed_key,
+                            Some(Duration::from_secs(30)),
+                        )
+                        .await;
+                    }
+
+                    if clients.http_clients.len() > 1 {
+                        let expected = clients.http_clients.len();
+                        tracing::info!(
+                            "Waiting for {} hyperswarm peers before appending",
+                            expected
+                        );
+                        let connected = hypercore_client
+                            .wait_for_peers(expected, Duration::from_secs(30))
+                            .await?;
+                        tracing::info!("Hypercore peers connected: {}", connected);
+                    }
 
                     // Verify feed keys match
                     if client_feed_key != *feed_key {
@@ -487,7 +546,11 @@ async fn run_test(
                         wait_for_completion: true,
                     };
 
-                    clients.http_client.simulate_trigger(req).await?;
+                    let http_client = clients
+                        .http_clients
+                        .first()
+                        .ok_or_else(|| anyhow!("No HTTP clients available"))?;
+                    http_client.simulate_trigger(req).await?;
 
                     vec![trigger_id]
                 }
@@ -523,7 +586,7 @@ async fn run_test(
                             anyhow!("Could not get workflow definition from id: {}", workflow_id)
                         })?;
 
-                        let SubmitDefinition::Aggregator { aggregator, .. } = &workflow_def.submit;
+                        let SubmitDefinition::Aggregator(aggregator) = &workflow_def.submit;
                         let AggregatorDefinition::ComponentBasedAggregator { chain, .. } =
                             aggregator;
 
@@ -645,14 +708,51 @@ async fn run_test(
         tracing::info!("Test completed successfully!");
     }
 
+    // Wait for the aggregator submit callback to complete on all WAVS instances
+    // before cleaning up the service. This ensures the after-submit callback
+    // has finished writing to the KV store.
+    // Only do this if:
+    // 1. Any workflow uses an aggregator submit
+    // 2. No workflow expects dropped output (e.g., reorg tests where submission is intentionally skipped)
+    let has_aggregator = service_deployment
+        .service
+        .workflows
+        .values()
+        .any(|w| matches!(w.submit, Submit::Aggregator { .. }));
+
+    let expects_dropped = test.workflows.values().any(|w| w.expects_reorg());
+
+    if has_aggregator && !expects_dropped {
+        let service_id = service_deployment.service.id().to_string();
+        tracing::info!(
+            "Waiting for submit callback to complete for service: {}",
+            service_id
+        );
+        for (idx, http_client) in clients.http_clients.iter().enumerate() {
+            http_client
+                .wait_for_submit_callback(&service_id, None)
+                .await
+                .map_err(|e| {
+                    anyhow!("Instance {} failed waiting for submit callback: {}", idx, e)
+                })?;
+            tracing::info!(
+                "Submit callback completed on instance {} for service: {}",
+                idx,
+                service_id
+            );
+        }
+    }
+
     tracing::info!(
         "Cleaning up service: {0:?}",
         service_deployment.service.manager
     );
-    clients
-        .http_client
-        .delete_service(vec![service_deployment.service.manager])
-        .await?;
+    // Delete service from all WAVS instances
+    for http_client in clients.http_clients.iter() {
+        http_client
+            .delete_service(vec![service_deployment.service.manager.clone()])
+            .await?;
+    }
 
     Ok(())
 }

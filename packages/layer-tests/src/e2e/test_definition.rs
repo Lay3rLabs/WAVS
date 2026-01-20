@@ -14,6 +14,20 @@ use crate::e2e::components::{
     AggregatorComponent, ComponentName, ComponentSources, OperatorComponent,
 };
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+pub enum TestGroupId {
+    Default,
+    EvmInterval,
+    EvmIntervalStartStop,
+    CronInterval,
+    CosmosInterval,
+    CosmosIntervalStartStop,
+    Backpressure,
+    AggregatorTimer,
+    P2p,
+    Other(usize),
+}
+
 /// Defines a complete end-to-end test case
 #[derive(Clone, Debug)]
 pub struct TestDefinition {
@@ -35,7 +49,10 @@ pub struct TestDefinition {
     pub service_manager_chain: Option<ChainKey>,
 
     /// Execution group (ascending priority)
-    pub group: u64,
+    pub group: TestGroupId,
+
+    /// If true, this test requires multiple operators with 2/3 quorum
+    pub multi_operator: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -175,10 +192,7 @@ pub enum EvmTriggerDefinition {
 /// Configuration for a submit
 #[derive(Clone, Debug)]
 pub enum SubmitDefinition {
-    Aggregator {
-        url: String,
-        aggregator: AggregatorDefinition,
-    },
+    Aggregator(AggregatorDefinition),
 }
 
 /// Different types of input data
@@ -276,7 +290,8 @@ impl TestBuilder {
                 workflows: BTreeMap::new(),
                 service_manager_chain: None,
                 change_service: None,
-                group: u64::MAX,
+                group: TestGroupId::Default,
+                multi_operator: false,
             },
         }
     }
@@ -288,8 +303,14 @@ impl TestBuilder {
     }
 
     /// Set the execution group
-    pub fn with_group(mut self, group: u64) -> Self {
+    pub fn with_group(mut self, group: TestGroupId) -> Self {
         self.definition.group = group;
+        self
+    }
+
+    /// Mark this test as requiring multiple operators with 2/3 quorum
+    pub fn with_multi_operator(mut self) -> Self {
+        self.definition.multi_operator = true;
         self
     }
 

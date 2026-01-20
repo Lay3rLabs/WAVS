@@ -4,14 +4,15 @@ use std::{path::Path, sync::RwLock};
 use tracing::{event, instrument, span};
 use utils::storage::db::WavsDb;
 use utils::telemetry::EngineMetrics;
+use wavs_engine::bindings::aggregator::world::wavs::types::chain::AnyTxHash;
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     common::base_engine::{BaseEngine, BaseEngineConfig},
     worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
 };
 use wavs_types::{
-    ChainConfigs, ComponentDigest, ComponentSource, Service, ServiceId, TriggerAction,
-    WasmResponse, WorkflowId,
+    AggregatorAction, AggregatorInput, ChainConfigs, ComponentDigest, ComponentSource, EventId,
+    Service, ServiceId, TriggerAction, WasmResponse, WorkflowId,
 };
 
 use utils::storage::CAStorage;
@@ -91,9 +92,9 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         Ok(digests?)
     }
 
-    /// This will execute a contract that implements the wavs:worker wit interface
+    /// This will execute a contract that implements the wavs:operator wit interface
     #[instrument(skip(self), fields(subsys = "Engine"))]
-    pub async fn execute(
+    pub async fn execute_operator_component(
         &self,
         service: Service,
         trigger_action: TriggerAction,
@@ -101,44 +102,10 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         #[cfg(feature = "dev")]
         if std::env::var("WAVS_FORCE_ENGINE_ERROR_XXX").is_ok() {
             self.metrics.total_errors.add(1, &[]);
-            self.metrics.executions_failed.add(1, &[]);
+            self.metrics.operator_executions_failed.add(1, &[]);
             return Err(EngineError::Compile(anyhow::anyhow!(
                 "Forced engine error for testing alerts"
             )));
-        }
-
-        fn log(
-            service_id: &ServiceId,
-            workflow_id: &WorkflowId,
-            digest: &ComponentDigest,
-            level: wavs_engine::bindings::operator::world::host::LogLevel,
-            message: String,
-        ) {
-            let span = span!(
-                tracing::Level::INFO,
-                "component_log",
-                service_id = %service_id,
-                workflow_id = %workflow_id,
-                digest = %digest
-            );
-
-            match level {
-                wavs_engine::bindings::operator::world::host::LogLevel::Error => {
-                    event!(parent: &span, tracing::Level::ERROR, "{}", message)
-                }
-                wavs_engine::bindings::operator::world::host::LogLevel::Warn => {
-                    event!(parent: &span, tracing::Level::WARN, "{}", message)
-                }
-                wavs_engine::bindings::operator::world::host::LogLevel::Info => {
-                    event!(parent: &span, tracing::Level::INFO, "{}", message)
-                }
-                wavs_engine::bindings::operator::world::host::LogLevel::Debug => {
-                    event!(parent: &span, tracing::Level::DEBUG, "{}", message)
-                }
-                wavs_engine::bindings::operator::world::host::LogLevel::Trace => {
-                    event!(parent: &span, tracing::Level::TRACE, "{}", message)
-                }
-            }
         }
 
         let workflow = service
@@ -173,7 +140,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 .app_data_dir
                 .join(trigger_action.config.service_id.to_string()),
             chain_configs: &chain_configs,
-            log: HostComponentLogger::OperatorHostComponentLogger(log),
+            log: HostComponentLogger::OperatorHostComponentLogger(log_operator),
         }
         .build()?;
 
@@ -193,7 +160,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let duration = start_time.elapsed().as_secs_f64();
         let fuel_consumed = initial_fuel.saturating_sub(final_fuel);
 
-        self.metrics.record_execution(
+        self.metrics.record_operator_execution(
             duration,
             fuel_consumed,
             &service_id.to_string(),
@@ -207,10 +174,272 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             duration_seconds = duration,
             fuel_consumed = fuel_consumed,
             success = results.is_ok(),
-            "WASM execution completed"
+            "WASM operator execution completed"
         );
 
         results.map_err(|e| e.into())
+    }
+
+    /// This will execute a contract that implements the wavs:aggregator wit interface
+    #[instrument(
+        skip(self, service, trigger_action, operator_response),
+        fields(subsys = "Engine")
+    )]
+    pub async fn execute_aggregator_component(
+        &self,
+        service: Service,
+        trigger_action: TriggerAction,
+        operator_response: WasmResponse,
+        event_id: EventId,
+    ) -> Result<Vec<AggregatorAction>, EngineError> {
+        let service_id = service.id();
+        let workflow_id = trigger_action.config.workflow_id.clone();
+
+        let AggregatorDeps {
+            mut instance_deps,
+            input,
+        } = match self
+            .get_aggregator_deps(service, trigger_action, operator_response, event_id)
+            .await?
+        {
+            Some(deps) => deps,
+            None => {
+                return Ok(Vec::new());
+            }
+        };
+
+        let initial_fuel = instance_deps.store.get_fuel().unwrap_or(0);
+        let start_time = Instant::now();
+
+        let results =
+            wavs_engine::worlds::aggregator::execute::execute_input(&mut instance_deps, input)
+                .await;
+
+        let final_fuel = instance_deps.store.get_fuel().unwrap_or(0);
+
+        let duration = start_time.elapsed().as_secs_f64();
+        let fuel_consumed = initial_fuel.saturating_sub(final_fuel);
+
+        self.metrics.record_aggregator_execution(
+            duration,
+            fuel_consumed,
+            &service_id.to_string(),
+            workflow_id.as_ref(),
+            results.is_ok(),
+        );
+
+        tracing::info!(
+            service_id = %service_id,
+            workflow_id = %workflow_id,
+            duration_seconds = duration,
+            fuel_consumed = fuel_consumed,
+            success = results.is_ok(),
+            "WASM aggregator execution completed"
+        );
+
+        let results = results?;
+
+        results
+            .into_iter()
+            .map(|r| r.try_into().map_err(EngineError::ConvertAggregatorAction))
+            .collect::<Result<_, _>>()
+    }
+
+    #[instrument(
+        skip(self, service, trigger_action, operator_response),
+        fields(subsys = "Engine")
+    )]
+    pub async fn execute_aggregator_component_timer_callback(
+        &self,
+        service: Service,
+        trigger_action: TriggerAction,
+        operator_response: WasmResponse,
+        event_id: EventId,
+    ) -> Result<Vec<AggregatorAction>, EngineError> {
+        let service_id = service.id();
+        let workflow_id = trigger_action.config.workflow_id.clone();
+
+        let AggregatorDeps {
+            mut instance_deps,
+            input,
+        } = match self
+            .get_aggregator_deps(service, trigger_action, operator_response, event_id)
+            .await?
+        {
+            Some(deps) => deps,
+            None => {
+                return Ok(Vec::new());
+            }
+        };
+
+        let initial_fuel = instance_deps.store.get_fuel().unwrap_or(0);
+        let start_time = Instant::now();
+
+        let results = wavs_engine::worlds::aggregator::execute::execute_timer_callback(
+            &mut instance_deps,
+            input,
+        )
+        .await;
+        let final_fuel = instance_deps.store.get_fuel().unwrap_or(0);
+
+        let duration = start_time.elapsed().as_secs_f64();
+        let fuel_consumed = initial_fuel.saturating_sub(final_fuel);
+
+        self.metrics.record_aggregator_execution(
+            duration,
+            fuel_consumed,
+            &service_id.to_string(),
+            workflow_id.as_ref(),
+            results.is_ok(),
+        );
+
+        tracing::info!(
+            service_id = %service_id,
+            workflow_id = %workflow_id,
+            duration_seconds = duration,
+            fuel_consumed = fuel_consumed,
+            success = results.is_ok(),
+            "WASM aggregator timer callback execution completed"
+        );
+
+        let results = results?;
+
+        results
+            .into_iter()
+            .map(|r| r.try_into().map_err(EngineError::ConvertAggregatorAction))
+            .collect::<Result<_, _>>()
+    }
+
+    #[instrument(
+        skip(self, service, trigger_action, operator_response),
+        fields(subsys = "Engine")
+    )]
+    pub async fn execute_aggregator_component_submit_callback(
+        &self,
+        service: Service,
+        trigger_action: TriggerAction,
+        operator_response: WasmResponse,
+        tx_result: Result<AnyTxHash, String>,
+        event_id: EventId,
+    ) -> Result<(), EngineError> {
+        let service_id = service.id();
+        let workflow_id = trigger_action.config.workflow_id.clone();
+
+        let AggregatorDeps {
+            mut instance_deps,
+            input,
+        } = match self
+            .get_aggregator_deps(service, trigger_action, operator_response, event_id)
+            .await?
+        {
+            Some(deps) => deps,
+            None => {
+                return Ok(());
+            }
+        };
+
+        let initial_fuel = instance_deps.store.get_fuel().unwrap_or(0);
+        let start_time = Instant::now();
+
+        let result = wavs_engine::worlds::aggregator::execute::execute_submit_callback(
+            &mut instance_deps,
+            input,
+            tx_result,
+        )
+        .await;
+        let final_fuel = instance_deps.store.get_fuel().unwrap_or(0);
+
+        let duration = start_time.elapsed().as_secs_f64();
+        let fuel_consumed = initial_fuel.saturating_sub(final_fuel);
+
+        self.metrics.record_aggregator_execution(
+            duration,
+            fuel_consumed,
+            &service_id.to_string(),
+            workflow_id.as_ref(),
+            result.is_ok(),
+        );
+
+        tracing::info!(
+            service_id = %service_id,
+            workflow_id = %workflow_id,
+            duration_seconds = duration,
+            fuel_consumed = fuel_consumed,
+            success = result.is_ok(),
+            "WASM aggregator submit callback execution completed"
+        );
+
+        result.map_err(|e| e.into())
+    }
+
+    #[instrument(skip(self), fields(subsys = "Engine"))]
+    async fn get_aggregator_deps(
+        &self,
+        service: Service,
+        trigger_action: TriggerAction,
+        operator_response: WasmResponse,
+        event_id: EventId,
+    ) -> Result<Option<AggregatorDeps>, EngineError> {
+        #[cfg(feature = "dev")]
+        if std::env::var("WAVS_FORCE_ENGINE_ERROR_XXX").is_ok() {
+            self.metrics.total_errors.add(1, &[]);
+            self.metrics.aggregator_executions_failed.add(1, &[]);
+            return Err(EngineError::Compile(anyhow::anyhow!(
+                "Forced engine error for testing alerts"
+            )));
+        }
+
+        let workflow = service
+            .workflows
+            .get(&trigger_action.config.workflow_id)
+            .ok_or_else(|| {
+                EngineError::UnknownWorkflow(
+                    service.id(),
+                    trigger_action.config.workflow_id.clone(),
+                )
+            })?;
+
+        let digest = match &workflow.submit {
+            wavs_types::Submit::Aggregator { component, .. } => component.source.digest().clone(),
+            wavs_types::Submit::None => {
+                tracing::info!("Submit is None for service_id: {}", service.id(),);
+                return Ok(None);
+            }
+        };
+
+        let chain_configs = self.engine.get_chain_configs()?;
+
+        let component = self.engine.load_component(&digest).await?;
+
+        let instance_deps = InstanceDepsBuilder {
+            keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
+            workflow_id: trigger_action.config.workflow_id.clone(),
+            component,
+            data: wavs_engine::worlds::instance::InstanceData::new_aggregator(event_id),
+            engine: &self.engine.wasm_engine,
+            data_dir: self
+                .engine
+                .app_data_dir
+                .join(trigger_action.config.service_id.to_string()),
+            chain_configs: &chain_configs,
+            log: HostComponentLogger::AggregatorHostComponentLogger(log_aggregator),
+            service,
+        }
+        .build()?;
+
+        let input = AggregatorInput {
+            trigger_action,
+            operator_response,
+        };
+
+        #[cfg(feature = "dev")]
+        if std::env::var("WAVS_FORCE_SLOW_ENGINE_XXX").is_ok() {
+            std::thread::sleep(std::time::Duration::from_secs(6));
+        }
+        Ok(Some(AggregatorDeps {
+            instance_deps,
+            input,
+        }))
     }
 
     #[instrument(skip(self), fields(subsys = "Engine", service_id = %service_id))]
@@ -228,6 +457,79 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             }
         } else {
             tracing::warn!("Storage directory {:?} does not exist", dir_path);
+        }
+    }
+}
+
+struct AggregatorDeps {
+    instance_deps: wavs_engine::worlds::instance::InstanceDeps,
+    input: AggregatorInput,
+}
+
+fn log_operator(
+    service_id: &ServiceId,
+    workflow_id: &WorkflowId,
+    digest: &ComponentDigest,
+    level: wavs_engine::bindings::operator::world::host::LogLevel,
+    message: String,
+) {
+    let span = span!(
+        tracing::Level::INFO,
+        "component_log",
+        service_id = %service_id,
+        workflow_id = %workflow_id,
+        digest = %digest
+    );
+
+    match level {
+        wavs_engine::bindings::operator::world::host::LogLevel::Error => {
+            event!(parent: &span, tracing::Level::ERROR, "{}", message)
+        }
+        wavs_engine::bindings::operator::world::host::LogLevel::Warn => {
+            event!(parent: &span, tracing::Level::WARN, "{}", message)
+        }
+        wavs_engine::bindings::operator::world::host::LogLevel::Info => {
+            event!(parent: &span, tracing::Level::INFO, "{}", message)
+        }
+        wavs_engine::bindings::operator::world::host::LogLevel::Debug => {
+            event!(parent: &span, tracing::Level::DEBUG, "{}", message)
+        }
+        wavs_engine::bindings::operator::world::host::LogLevel::Trace => {
+            event!(parent: &span, tracing::Level::TRACE, "{}", message)
+        }
+    }
+}
+
+fn log_aggregator(
+    service_id: &ServiceId,
+    workflow_id: &WorkflowId,
+    digest: &ComponentDigest,
+    level: wavs_engine::bindings::aggregator::world::host::LogLevel,
+    message: String,
+) {
+    let span = span!(
+        tracing::Level::INFO,
+        "component_log",
+        service_id = %service_id,
+        workflow_id = %workflow_id,
+        digest = %digest
+    );
+
+    match level {
+        wavs_engine::bindings::aggregator::world::host::LogLevel::Error => {
+            event!(parent: &span, tracing::Level::ERROR, "{}", message)
+        }
+        wavs_engine::bindings::aggregator::world::host::LogLevel::Warn => {
+            event!(parent: &span, tracing::Level::WARN, "{}", message)
+        }
+        wavs_engine::bindings::aggregator::world::host::LogLevel::Info => {
+            event!(parent: &span, tracing::Level::INFO, "{}", message)
+        }
+        wavs_engine::bindings::aggregator::world::host::LogLevel::Debug => {
+            event!(parent: &span, tracing::Level::DEBUG, "{}", message)
+        }
+        wavs_engine::bindings::aggregator::world::host::LogLevel::Trace => {
+            event!(parent: &span, tracing::Level::TRACE, "{}", message)
         }
     }
 }
@@ -362,7 +664,7 @@ pub mod tests {
         let service_id = service.id();
         // execute it and get bytes back
         let results = engine
-            .execute(
+            .execute_operator_component(
                 service,
                 TriggerAction {
                     config: TriggerConfig {
@@ -424,7 +726,7 @@ pub mod tests {
 
         // verify service config kv is accessible
         let results = engine
-            .execute(
+            .execute_operator_component(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
@@ -442,7 +744,7 @@ pub mod tests {
 
         // verify whitelisted host env var is accessible
         let results = engine
-            .execute(
+            .execute_operator_component(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
@@ -460,7 +762,7 @@ pub mod tests {
 
         // verify the non-enabled env var is not accessible
         let result = engine
-            .execute(
+            .execute_operator_component(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
@@ -521,7 +823,7 @@ pub mod tests {
         let service_id = service.id();
 
         let results = engine
-            .execute(
+            .execute_operator_component(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
@@ -586,7 +888,7 @@ pub mod tests {
         let service_id = service.id();
 
         let results = engine
-            .execute(
+            .execute_operator_component(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
@@ -610,7 +912,7 @@ pub mod tests {
         );
 
         engine
-            .execute(
+            .execute_operator_component(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
@@ -668,7 +970,7 @@ pub mod tests {
 
         // execute it and get the error
         let err = engine
-            .execute(
+            .execute_operator_component(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
@@ -789,7 +1091,7 @@ pub mod tests {
         let service_id = service.id();
 
         engine
-            .execute(
+            .execute_operator_component(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
@@ -827,7 +1129,7 @@ pub mod tests {
         let service_id = service.id();
 
         engine
-            .execute(
+            .execute_operator_component(
                 service.clone(),
                 TriggerAction {
                     config: TriggerConfig {
@@ -865,7 +1167,7 @@ pub mod tests {
         let service_id = service.id();
 
         let err = engine
-            .execute(
+            .execute_operator_component(
                 service,
                 TriggerAction {
                     config: TriggerConfig {
@@ -908,7 +1210,7 @@ pub mod tests {
         let service_id = service.id();
 
         let err = engine
-            .execute(
+            .execute_operator_component(
                 service,
                 TriggerAction {
                     config: TriggerConfig {

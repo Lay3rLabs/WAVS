@@ -22,11 +22,12 @@
  *
  ***/
 
-use alloy_provider::ProviderBuilder;
+use alloy_provider::{DynProvider, ProviderBuilder};
 use anyhow::Result;
 use futures::{stream, StreamExt};
 use iri_string::types::{CreationError, UriString};
 use layer_climb::querier::QueryClient;
+use std::collections::HashMap;
 use std::ops::Bound;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
@@ -39,16 +40,19 @@ use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessage
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, ServiceManager,
-    WorkflowIdError,
+    Submission, WorkflowIdError,
 };
 use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction};
 
 use crate::config::Config;
 use crate::services::{Services, ServicesError};
+use crate::subsystems::aggregator::error::AggregatorError;
+use crate::subsystems::aggregator::{Aggregator, AggregatorCommand};
 use crate::subsystems::engine::error::EngineError;
 use crate::subsystems::engine::wasm_engine::WasmEngine;
-use crate::subsystems::engine::{EngineCommand, EngineManager};
-use crate::subsystems::submission::chain_message::ChainMessage;
+use crate::subsystems::engine::{
+    AggregatorExecuteKind, EngineCommand, EngineManager, EngineResponse,
+};
 use crate::subsystems::submission::error::SubmissionError;
 use crate::subsystems::submission::{SubmissionCommand, SubmissionManager};
 use crate::subsystems::trigger::error::TriggerError;
@@ -62,14 +66,20 @@ pub struct Dispatcher<S: CAStorage> {
     pub trigger_manager: TriggerManager,
     pub engine_manager: EngineManager<S>,
     pub submission_manager: SubmissionManager,
+    pub aggregator: Aggregator,
     pub services: Services,
     pub chain_configs: Arc<RwLock<ChainConfigs>>,
     pub metrics: DispatcherMetrics,
     pub ipfs_gateway: String,
-    pub trigger_to_dispatcher_rx: crossbeam::channel::Receiver<DispatcherCommand>,
+    pub subsystem_to_dispatcher_rx: crossbeam::channel::Receiver<DispatcherCommand>,
     pub dispatcher_to_engine_tx: crossbeam::channel::Sender<EngineCommand>,
-    pub engine_to_dispatcher_rx: crossbeam::channel::Receiver<ChainMessage>,
     pub dispatcher_to_submission_tx: crossbeam::channel::Sender<SubmissionCommand>,
+    pub dispatcher_to_aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
+    pub db_storage: WavsDb,
+    /// Cached EVM HTTP providers per chain to avoid creating new connections for each query
+    evm_http_providers: Arc<RwLock<HashMap<ChainKey, DynProvider>>>,
+    /// Cached Cosmos query clients per chain to avoid creating new connections for each query
+    cosmos_query_clients: Arc<RwLock<HashMap<ChainKey, QueryClient>>>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -80,22 +90,30 @@ pub enum DispatcherCommand {
         service_id: ServiceId,
         uri: UriString,
     },
+    EngineResponse(EngineResponse),
+    SubmissionResponse(Submission),
+    AggregatorExecute {
+        submission: Submission,
+        service: Service,
+        kind: AggregatorExecuteKind,
+    },
 }
 
 impl Dispatcher<FileStorage> {
     pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, DispatcherError> {
         // Create all our channels for communication
         // except dispatcher_to_trigger calls its local stream channel
-        let (trigger_to_dispatcher_tx, trigger_to_dispatcher_rx) =
+        let (subsystem_to_dispatcher_tx, subsystem_to_dispatcher_rx) =
             crossbeam::channel::unbounded::<DispatcherCommand>();
 
         let (dispatcher_to_engine_tx, dispatcher_to_engine_rx) =
             crossbeam::channel::unbounded::<EngineCommand>();
-        let (engine_to_dispatcher_tx, engine_to_dispatcher_rx) =
-            crossbeam::channel::unbounded::<ChainMessage>();
 
         let (dispatcher_to_submission_tx, dispatcher_to_submission_rx) =
             crossbeam::channel::unbounded::<SubmissionCommand>();
+
+        let (dispatcher_to_aggregator_tx, dispatcher_to_aggregator_rx) =
+            crossbeam::channel::unbounded::<AggregatorCommand>();
 
         let file_storage = FileStorage::new(config.data.join("ca"))?;
         let db_storage = WavsDb::new()?;
@@ -106,7 +124,7 @@ impl Dispatcher<FileStorage> {
             config,
             metrics.trigger,
             services.clone(),
-            trigger_to_dispatcher_tx,
+            subsystem_to_dispatcher_tx.clone(),
         )?;
 
         let app_storage = config.data.join("app");
@@ -118,14 +136,14 @@ impl Dispatcher<FileStorage> {
             Some(config.max_wasm_fuel),
             Some(config.max_execution_seconds),
             metrics.engine,
-            db_storage,
+            db_storage.clone(),
             config.ipfs_gateway.clone(),
         );
         let engine_manager = EngineManager::new(
             engine,
             services.clone(),
             dispatcher_to_engine_rx,
-            engine_to_dispatcher_tx,
+            subsystem_to_dispatcher_tx.clone(),
         );
 
         let submission_manager = SubmissionManager::new(
@@ -133,20 +151,34 @@ impl Dispatcher<FileStorage> {
             metrics.submission,
             services.clone(),
             dispatcher_to_submission_rx,
+            subsystem_to_dispatcher_tx.clone(),
+        )?;
+
+        let aggregator = Aggregator::new(
+            config,
+            metrics.aggregator,
+            services.clone(),
+            dispatcher_to_aggregator_rx,
+            dispatcher_to_aggregator_tx.clone(),
+            subsystem_to_dispatcher_tx.clone(),
         )?;
 
         Ok(Self {
             trigger_manager,
             engine_manager,
             submission_manager,
+            aggregator,
             services,
+            db_storage,
             chain_configs: config.chains.clone(),
             metrics: metrics.dispatcher.clone(),
             ipfs_gateway: config.ipfs_gateway.clone(),
-            trigger_to_dispatcher_rx,
+            subsystem_to_dispatcher_rx,
             dispatcher_to_engine_tx,
-            engine_to_dispatcher_rx,
             dispatcher_to_submission_tx,
+            dispatcher_to_aggregator_tx,
+            evm_http_providers: Arc::new(RwLock::new(HashMap::new())),
+            cosmos_query_clients: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 }
@@ -182,6 +214,14 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             }
         }));
 
+        handles.push(std::thread::spawn({
+            let _self = self.clone();
+            let ctx = ctx.clone();
+            move || {
+                _self.aggregator.start(ctx);
+            }
+        }));
+
         // Kill all subsystems on demand
         handles.push(std::thread::spawn({
             let _self = self.clone();
@@ -209,17 +249,24 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                         {
                             tracing::error!("Error sending kill to submission manager: {:?}", err);
                         }
+                        // shut down aggregator
+                        if let Err(err) = _self
+                            .dispatcher_to_aggregator_tx
+                            .send(AggregatorCommand::Kill)
+                        {
+                            tracing::error!("Error sending kill to aggregator: {:?}", err);
+                        }
                     }
                 });
             }
         }));
 
-        // handle incoming commands from trigger manager
+        // handle incoming commands from subsystems
         std::thread::spawn({
             let _self = self.clone();
             let ctx_rt = ctx.rt.clone();
             move || {
-                while let Ok(command) = _self.trigger_to_dispatcher_rx.recv() {
+                while let Ok(command) = _self.subsystem_to_dispatcher_rx.recv() {
                     match command {
                         DispatcherCommand::Trigger(action) => {
                             let service = match _self.services.get(&action.config.service_id) {
@@ -237,10 +284,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             );
                             if let Err(err) = _self
                                 .dispatcher_to_engine_tx
-                                .send(EngineCommand::Execute { service, action })
+                                .send(EngineCommand::ExecuteOperator { service, action })
                             {
                                 tracing::error!("Error sending work to engine: {:?}", err);
-                                // blocking_send only fails if the receiver has been dropped (channel closed)
                                 _self.metrics.channel_closed_errors.add(
                                     1,
                                     &[opentelemetry::KeyValue::new("channel", "engine_work")],
@@ -258,21 +304,66 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                 }
                             });
                         }
-                    }
-                }
-            }
-        });
 
-        // handle incoming commands from engine manager
-        std::thread::spawn({
-            let _self = self.clone();
-            move || {
-                while let Ok(msg) = _self.engine_to_dispatcher_rx.recv() {
-                    if let Err(e) = _self
-                        .dispatcher_to_submission_tx
-                        .send(SubmissionCommand::Submit(msg))
-                    {
-                        tracing::error!("Error sending message to submission manager: {:?}", e);
+                        DispatcherCommand::EngineResponse(response) => match response {
+                            EngineResponse::Operator(msg) => {
+                                if let Err(e) = _self
+                                    .dispatcher_to_submission_tx
+                                    .send(SubmissionCommand::Submit(msg))
+                                {
+                                    tracing::error!(
+                                        "Error sending message to submission manager: {:?}",
+                                        e
+                                    );
+                                }
+                            }
+
+                            // This is AFTER aggregator has aggregated, and executed the component
+                            EngineResponse::Aggregator {
+                                submission,
+                                actions,
+                                kind,
+                            } => {
+                                if let Err(e) = _self.dispatcher_to_aggregator_tx.send(
+                                    AggregatorCommand::Actions {
+                                        submission,
+                                        actions,
+                                        kind,
+                                    },
+                                ) {
+                                    tracing::error!("Error sending message to aggregator: {:?}", e);
+                                }
+                            }
+                        },
+
+                        DispatcherCommand::SubmissionResponse(submission) => {
+                            // This is BEFORE aggregator has even broadcast
+                            if let Err(e) = _self
+                                .dispatcher_to_aggregator_tx
+                                .send(AggregatorCommand::Broadcast(submission))
+                            {
+                                tracing::error!("Error sending message to aggregator: {:?}", e);
+                            }
+                        }
+                        DispatcherCommand::AggregatorExecute {
+                            submission,
+                            service,
+                            kind,
+                        } => {
+                            if let Err(err) = _self.dispatcher_to_engine_tx.send(
+                                EngineCommand::ExecuteAggregator {
+                                    submission,
+                                    service,
+                                    kind,
+                                },
+                            ) {
+                                tracing::error!("Error sending work to engine: {:?}", err);
+                                _self.metrics.channel_closed_errors.add(
+                                    1,
+                                    &[opentelemetry::KeyValue::new("channel", "engine_work")],
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -293,6 +384,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                 service,
                 &self.trigger_manager,
                 &self.submission_manager,
+                &self.dispatcher_to_aggregator_tx,
                 None,
             )?;
         }
@@ -300,9 +392,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         // Check ServiceURI for each service at startup and update if needed (bounded concurrency)
         let chain_configs = self.chain_configs.read().unwrap().clone();
         let ipfs_gateway = self.ipfs_gateway.clone();
+        let evm_http_providers = self.evm_http_providers.clone();
+        let cosmos_query_clients = self.cosmos_query_clients.clone();
         ctx.rt.block_on(async {
             let ipfs_gateway = ipfs_gateway.as_ref();
             let chain_configs = &chain_configs;
+            let evm_http_providers = &evm_http_providers;
+            let cosmos_query_clients = &cosmos_query_clients;
 
             // Limit concurrent ServiceURI checks
             const MAX_CONCURRENT_CHECKS: usize = 10;
@@ -312,7 +408,14 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                     async move {
                         (
                             original_service_id,
-                            check_service_needs_update(service, chain_configs, ipfs_gateway).await,
+                            check_service_needs_update(
+                                service,
+                                chain_configs,
+                                ipfs_gateway,
+                                evm_http_providers,
+                                cosmos_query_clients,
+                            )
+                            .await,
                         )
                     }
                 })
@@ -397,8 +500,15 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             }
         };
         let chain_configs = self.chain_configs.read().unwrap().clone();
-        let service =
-            query_service_from_address(chain, address, &chain_configs, &self.ipfs_gateway).await?;
+        let service = query_service_from_address(
+            chain,
+            address,
+            &chain_configs,
+            &self.ipfs_gateway,
+            &self.evm_http_providers,
+            &self.cosmos_query_clients,
+        )
+        .await?;
 
         self.add_service_direct(service.clone()).await?;
 
@@ -435,6 +545,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             &service,
             &self.trigger_manager,
             &self.submission_manager,
+            &self.dispatcher_to_aggregator_tx,
             None,
         )?;
 
@@ -447,6 +558,20 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         self.engine_manager.engine.remove_storage(&id);
         self.trigger_manager.remove_service(id.clone())?;
         // no need to remove from submission manager, it has nothing to do
+
+        // Unsubscribe from P2P topic for this service (if P2P is enabled)
+        if let Err(err) =
+            self.dispatcher_to_aggregator_tx
+                .send(AggregatorCommand::UnsubscribeService {
+                    service_id: id.clone(),
+                })
+        {
+            tracing::warn!(
+                "Failed to send UnsubscribeService command for service {}: {:?}",
+                id,
+                err
+            );
+        }
 
         // Get current service count for logging
         let current_services = self.services.list(Bound::Unbounded, Bound::Unbounded)?;
@@ -520,16 +645,19 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         // Remove the old service - after this, no await points until the new service is added
         self.remove_service(service_id.clone())?;
 
+        // Store the service BEFORE setting up triggers/P2P subscription
+        // This ensures the service is in the database before any triggers can fire
+        // or P2P catch-up can deliver submissions for this service
+        self.services.save(&service)?;
+
         // Set up triggers and submissions
         add_service_to_managers(
             &service,
             &self.trigger_manager,
             &self.submission_manager,
+            &self.dispatcher_to_aggregator_tx,
             Some(hd_index),
         )?;
-
-        // Store the service
-        self.services.save(&service)?;
 
         Ok(())
     }
@@ -541,6 +669,8 @@ async fn check_service_needs_update(
     service: &Service,
     chain_configs: &ChainConfigs,
     ipfs_gateway: &str,
+    evm_http_providers: &Arc<RwLock<HashMap<ChainKey, DynProvider>>>,
+    cosmos_query_clients: &Arc<RwLock<HashMap<ChainKey, QueryClient>>>,
 ) -> Result<Option<Service>, DispatcherError> {
     let service_id = service.id();
     let cached_hash = service.hash()?;
@@ -553,6 +683,8 @@ async fn check_service_needs_update(
                 (*address).into(),
                 chain_configs,
                 ipfs_gateway,
+                evm_http_providers,
+                cosmos_query_clients,
             )
             .await?
         }
@@ -562,6 +694,8 @@ async fn check_service_needs_update(
                 address.clone().into(),
                 chain_configs,
                 ipfs_gateway,
+                evm_http_providers,
+                cosmos_query_clients,
             )
             .await?
         }
@@ -588,6 +722,8 @@ async fn query_service_from_address(
     address: layer_climb::prelude::Address,
     chain_configs: &ChainConfigs,
     ipfs_gateway: &str,
+    evm_http_providers: &Arc<RwLock<HashMap<ChainKey, DynProvider>>>,
+    cosmos_query_clients: &Arc<RwLock<HashMap<ChainKey, QueryClient>>>,
 ) -> Result<Service, DispatcherError> {
     // Get the chain config
     let chain_config = chain_configs.get_chain(&chain).ok_or_else(|| {
@@ -597,16 +733,35 @@ async fn query_service_from_address(
     // Handle different chain types
     let service_uri = match chain_config {
         AnyChainConfig::Evm(evm_config) => {
-            // Get the HTTP endpoint, required for contract calls
-            let http_endpoint = evm_config.http_endpoint.clone().ok_or_else(|| {
-                DispatcherError::Config(format!("No HTTP endpoint configured for chain {chain}"))
-            })?;
+            // Get or create cached provider for this chain
+            let provider = {
+                let providers = evm_http_providers.read().unwrap();
+                providers.get(&chain).cloned()
+            };
 
-            // Create a provider using the HTTP endpoint
-            let provider = ProviderBuilder::new().connect_http(
-                reqwest::Url::parse(&http_endpoint)
-                    .unwrap_or_else(|_| panic!("Could not parse http endpoint {}", http_endpoint)),
-            );
+            let provider = match provider {
+                Some(p) => p,
+                None => {
+                    // Get the HTTP endpoint, required for contract calls
+                    let http_endpoint = evm_config.http_endpoint.clone().ok_or_else(|| {
+                        DispatcherError::Config(format!(
+                            "No HTTP endpoint configured for chain {chain}"
+                        ))
+                    })?;
+
+                    // Create a provider using the HTTP endpoint
+                    let new_provider = DynProvider::new(ProviderBuilder::new().connect_http(
+                        reqwest::Url::parse(&http_endpoint).unwrap_or_else(|_| {
+                            panic!("Could not parse http endpoint {}", http_endpoint)
+                        }),
+                    ));
+
+                    // Cache the provider
+                    let mut providers = evm_http_providers.write().unwrap();
+                    providers.insert(chain.clone(), new_provider.clone());
+                    new_provider
+                }
+            };
 
             let contract = IWavsServiceManagerInstance::new(
                 address
@@ -619,9 +774,26 @@ async fn query_service_from_address(
             service_uri
         }
         AnyChainConfig::Cosmos(config) => {
-            let query_client = QueryClient::new(config.into(), None)
-                .await
-                .map_err(DispatcherError::CosmosQuery)?;
+            // Get or create cached query client for this chain
+            let query_client = {
+                let clients = cosmos_query_clients.read().unwrap();
+                clients.get(&chain).cloned()
+            };
+
+            let query_client = match query_client {
+                Some(c) => c,
+                None => {
+                    // Create a new query client
+                    let new_client = QueryClient::new(config.into(), None)
+                        .await
+                        .map_err(DispatcherError::CosmosQuery)?;
+
+                    // Cache the client
+                    let mut clients = cosmos_query_clients.write().unwrap();
+                    clients.insert(chain.clone(), new_client.clone());
+                    new_client
+                }
+            };
 
             let service_uri: String = query_client
                 .contract_smart(&address, &ServiceManagerQueryMessages::WavsServiceUri {})
@@ -647,6 +819,8 @@ fn add_service_to_managers(
     service: &Service,
     triggers: &TriggerManager,
     submissions: &SubmissionManager,
+    // needs to be through channel because subscription is async
+    aggregator_tx: &crossbeam::channel::Sender<AggregatorCommand>,
     hd_index: Option<u32>,
 ) -> Result<(), DispatcherError> {
     if let Err(err) = submissions.add_service_key(service.id(), hd_index) {
@@ -657,6 +831,17 @@ fn add_service_to_managers(
     if let Err(err) = triggers.add_service(service) {
         tracing::error!("Error adding service to trigger manager: {:?}", err);
         return Err(err.into());
+    }
+
+    // Subscribe to P2P topic for this service (if P2P is enabled)
+    if let Err(err) = aggregator_tx.send(AggregatorCommand::SubscribeService {
+        service_id: service.id(),
+    }) {
+        tracing::warn!(
+            "Failed to send SubscribeService command for service {}: {:?}",
+            service.name,
+            err
+        );
     }
 
     Ok(())
@@ -696,6 +881,9 @@ pub enum DispatcherError {
 
     #[error("Submission: {0}")]
     Submission(#[from] SubmissionError),
+
+    #[error("Aggregator: {0}")]
+    Aggregator(#[from] AggregatorError),
 
     #[error("Chain config error: {0}")]
     ChainConfig(#[from] ChainConfigError),

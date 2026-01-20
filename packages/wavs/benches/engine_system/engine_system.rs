@@ -1,7 +1,13 @@
 use criterion::Criterion;
 use std::sync::Arc;
 use tokio::sync::oneshot;
-use wavs::subsystems::{engine::EngineCommand, submission::chain_message::ChainMessage};
+use wavs::{
+    dispatcher::DispatcherCommand,
+    subsystems::{
+        engine::{EngineCommand, EngineResponse},
+        submission::data::SubmissionRequest,
+    },
+};
 use wavs_benchmark_common::app_context::APP_CONTEXT;
 
 use crate::setup::{SystemConfig, SystemSetup};
@@ -43,19 +49,23 @@ pub fn benchmark(c: &mut Criterion) {
 /// thread coordination, and WASM execution time.
 fn run_simulation(setup: Arc<SystemSetup>) {
     // This channel will signal when the simulation is finished
-    let (finished_sender, finished_receiver) = oneshot::channel::<Vec<ChainMessage>>();
+    let (finished_sender, finished_receiver) = oneshot::channel::<Vec<SubmissionRequest>>();
     let total_actions = setup.config.n_actions;
 
     // Collect all results
-    let results_receiver = setup.engine_to_dispatcher_rx.clone();
+    let results_receiver = setup.subsystem_to_dispatcher_rx.clone();
     std::thread::spawn(move || {
         let mut received_results = Vec::new();
         while let Ok(result) = results_receiver.recv() {
-            received_results.push(result);
-            if received_results.len() == total_actions as usize {
-                // Notify that all results have been received
-                let _ = finished_sender.send(received_results);
-                break;
+            if let DispatcherCommand::EngineResponse(EngineResponse::Operator(submission_request)) =
+                result
+            {
+                received_results.push(submission_request);
+                if received_results.len() == total_actions as usize {
+                    // Notify that all results have been received
+                    let _ = finished_sender.send(received_results);
+                    break;
+                }
             }
         }
     });
@@ -64,7 +74,7 @@ fn run_simulation(setup: Arc<SystemSetup>) {
     for (action, service) in actions.drain(..) {
         setup
             .dispatcher_to_engine_tx
-            .send(EngineCommand::Execute { action, service })
+            .send(EngineCommand::ExecuteOperator { action, service })
             .unwrap();
     }
 

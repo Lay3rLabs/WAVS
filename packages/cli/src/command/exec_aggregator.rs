@@ -1,26 +1,25 @@
-use alloy_primitives::FixedBytes;
 use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_engine::worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder};
 use wavs_types::{
-    AggregatorAction, AllowedHostPermission, Component, ComponentDigest, ComponentSource, Envelope,
-    EnvelopeSignature, Packet, Permissions, Service, ServiceManager, ServiceStatus, SignatureKind,
-    Submit, Trigger, Workflow, WorkflowId,
+    AggregatorAction, AggregatorInput, AllowedHostPermission, Component, ComponentDigest,
+    ComponentSource, Permissions, Service, ServiceManager, ServiceStatus, SignatureKind, Submit,
+    Trigger, TriggerAction, TriggerConfig, WasmResponse, Workflow, WorkflowId,
 };
 
 use crate::util::read_component;
 
-fn create_dummy_packet(
-    digest: ComponentDigest,
+fn create_dummy_service(
+    source: ComponentSource,
     env_keys: BTreeSet<String>,
     config: BTreeMap<String, String>,
     fuel_limit: Option<u64>,
     time_limit_seconds: Option<u64>,
-) -> Packet {
+) -> Service {
     let component = Component {
-        source: ComponentSource::Digest(digest),
+        source,
         permissions: Permissions {
             allowed_http_hosts: AllowedHostPermission::All,
             file_system: true,
@@ -32,7 +31,7 @@ fn create_dummy_packet(
         config,
         env_keys,
     };
-    let service = Service {
+    Service {
         name: "dummy-service".to_string(),
         workflows: [(
             WorkflowId::default(),
@@ -40,7 +39,6 @@ fn create_dummy_packet(
                 trigger: Trigger::Manual,
                 component: component.clone(),
                 submit: Submit::Aggregator {
-                    url: "https://api.example.com/aggregator".to_string(),
                     component: Box::new(component),
                     signature_kind: SignatureKind::evm_default(),
                 },
@@ -52,21 +50,23 @@ fn create_dummy_packet(
             chain: "evm:dummy".parse().unwrap(),
             address: alloy_primitives::Address::ZERO,
         },
-    };
-
-    Packet {
-        envelope: Envelope {
-            eventId: FixedBytes::new(rand::random()),
-            ordering: [0u8; 12].into(),
-            payload: vec![].into(),
+    }
+}
+fn create_dummy_input(service: &Service) -> AggregatorInput {
+    AggregatorInput {
+        trigger_action: TriggerAction {
+            config: TriggerConfig {
+                service_id: service.id(),
+                workflow_id: service.workflows.keys().next().cloned().unwrap(),
+                trigger: service.workflows.values().next().unwrap().trigger.clone(),
+            },
+            data: wavs_types::TriggerData::default(),
         },
-        workflow_id: WorkflowId::default(),
-        service,
-        signature: EnvelopeSignature {
-            data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
-            kind: SignatureKind::evm_default(),
+        operator_response: WasmResponse {
+            event_id_salt: None,
+            ordering: None,
+            payload: vec![],
         },
-        trigger_data: wavs_types::TriggerData::default(),
     }
 }
 
@@ -74,7 +74,7 @@ pub struct ExecAggregator;
 
 pub struct ExecAggregatorArgs {
     pub component: String,
-    pub packet: Option<String>,
+    pub input: Option<String>,
     pub fuel_limit: Option<u64>,
     pub time_limit: Option<u64>,
     pub config: BTreeMap<String, String>,
@@ -85,7 +85,7 @@ impl ExecAggregator {
         cli_config: &crate::config::Config,
         ExecAggregatorArgs {
             component,
-            packet,
+            input,
             fuel_limit,
             time_limit,
             config,
@@ -98,33 +98,22 @@ impl ExecAggregator {
             component_path
         );
 
-        // Create a minimal aggregator config from CLI config (similar to how exec component works)
-        let aggregator_config = wavs_aggregator::config::Config {
-            data: tempfile::tempdir()?.keep(),
-            ..Default::default()
-        };
-        let data_dir = aggregator_config.data.clone();
-        let meter = opentelemetry::global::meter("aggregator_cli");
-        let metrics = utils::telemetry::AggregatorMetrics::new(meter);
-        let state = wavs_aggregator::http::state::HttpState::new(aggregator_config, metrics)?;
-
         let wasm_bytes = read_component(&component_path)?;
-        let digest = state
-            .aggregator_engine
-            .upload_component(wasm_bytes.clone())
-            .await?;
 
         let env_keys = std::env::vars()
             .map(|(key, _)| key)
             .filter(|key| key.starts_with(WAVS_ENV_PREFIX))
             .collect();
 
-        // Read packet from file or create a dummy one
-        let packet = if let Some(packet_path) = packet {
-            let packet_json = std::fs::read_to_string(&packet_path)?;
-            serde_json::from_str(&packet_json)?
+        let source = ComponentSource::Digest(ComponentDigest::hash(&wasm_bytes));
+        let service = create_dummy_service(source, env_keys, config, fuel_limit, time_limit);
+
+        // Read input from file or create a dummy one
+        let input: AggregatorInput = if let Some(input_path) = input {
+            let input_json = std::fs::read_to_string(&input_path)?;
+            serde_json::from_str(&input_json)?
         } else {
-            create_dummy_packet(digest, env_keys, config, time_limit, fuel_limit)
+            create_dummy_input(&service)
         };
 
         let mut wt_config = wasmtime::Config::new();
@@ -135,12 +124,11 @@ impl ExecAggregator {
 
         let mut instance_deps = InstanceDepsBuilder {
             component: wasmtime::component::Component::new(&engine, &wasm_bytes)?,
-            service: packet.service.clone(),
-            workflow_id: packet.workflow_id.clone(),
-            data: InstanceData::new_aggregator(packet.event_id()),
+            workflow_id: input.trigger_action.config.workflow_id.clone(),
+            data: InstanceData::new_aggregator(input.event_id().unwrap()),
 
             engine: &engine,
-            data_dir: &data_dir,
+            data_dir: tempfile::tempdir()?.keep(),
             chain_configs: &cli_config.chains.read().unwrap(),
             log: HostComponentLogger::AggregatorHostComponentLogger(
                 |_service_id, _workflow_id, _digest, level, message| {
@@ -165,15 +153,16 @@ impl ExecAggregator {
             ),
             keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
                 utils::storage::db::WavsDb::new()?,
-                packet.service.id().to_string(),
+                service.id().to_string(),
             ),
+            service,
         }
         .build()?;
 
         let initial_fuel = instance_deps.store.get_fuel()?;
         let start_time = Instant::now();
         let actions =
-            wavs_engine::worlds::aggregator::execute::execute_packet(&mut instance_deps, &packet)
+            wavs_engine::worlds::aggregator::execute::execute_input(&mut instance_deps, input)
                 .await?;
         let fuel_used = initial_fuel - instance_deps.store.get_fuel()?;
         let time_elapsed = start_time.elapsed().as_millis();
@@ -224,17 +213,16 @@ impl std::fmt::Display for ExecAggregatorResult {
 #[cfg(test)]
 mod test {
     use super::*;
-    use alloy_primitives::FixedBytes;
     use layer_climb::prelude::EvmAddr;
     use std::io::Write;
     use tempfile::NamedTempFile;
     use utils::filesystem::workspace_path;
     use wavs_types::{
-        AllowedHostPermission, Envelope, EnvelopeSignature, EvmChainConfig, Service,
-        ServiceManager, ServiceStatus, Submit, Trigger, Workflow, WorkflowId,
+        AllowedHostPermission, EvmChainConfig, Service, ServiceManager, ServiceStatus, Submit,
+        Trigger, Workflow, WorkflowId,
     };
 
-    fn create_test_packet(component_path: &str) -> Packet {
+    fn create_test_service(component_path: &str) -> Service {
         let wasm_bytes = read_component(component_path).unwrap();
         let digest = wavs_types::ComponentDigest::hash(&wasm_bytes);
 
@@ -259,7 +247,7 @@ mod test {
             .collect(),
             env_keys: Default::default(),
         };
-        let service = Service {
+        Service {
             name: "test-service".to_string(),
             workflows: [(
                 WorkflowId::default(),
@@ -267,7 +255,6 @@ mod test {
                     trigger: Trigger::Manual,
                     component: component.clone(),
                     submit: Submit::Aggregator {
-                        url: "https://api.example.com/aggregator".to_string(),
                         component: Box::new(component),
                         signature_kind: SignatureKind::evm_default(),
                     },
@@ -279,26 +266,29 @@ mod test {
                 chain: "evm:anvil".parse().unwrap(),
                 address: alloy_primitives::Address::ZERO,
             },
-        };
+        }
+    }
 
-        Packet {
-            service,
-            workflow_id: WorkflowId::default(),
-            envelope: Envelope {
-                eventId: FixedBytes::new(rand::random()),
-                ordering: [0u8; 12].into(),
-                payload: b"test data".to_vec().into(),
+    fn create_test_input(service: &Service) -> AggregatorInput {
+        AggregatorInput {
+            trigger_action: wavs_types::TriggerAction {
+                config: wavs_types::TriggerConfig {
+                    service_id: service.id(),
+                    workflow_id: service.workflows.keys().next().cloned().unwrap(),
+                    trigger: service.workflows.values().next().unwrap().trigger.clone(),
+                },
+                data: wavs_types::TriggerData::default(),
             },
-            signature: EnvelopeSignature {
-                data: alloy_primitives::Signature::from_bytes_and_parity(&[0u8; 64], false).into(),
-                kind: SignatureKind::evm_default(),
+            operator_response: wavs_types::WasmResponse {
+                event_id_salt: None,
+                ordering: None,
+                payload: b"test data".to_vec(),
             },
-            trigger_data: wavs_types::TriggerData::default(),
         }
     }
 
     #[tokio::test]
-    async fn test_exec_aggregator_packet() {
+    async fn test_exec_aggregator_input() {
         let component_path = workspace_path()
             .join("examples")
             .join("build")
@@ -307,10 +297,11 @@ mod test {
             .to_string_lossy()
             .to_string();
 
-        let packet = create_test_packet(&component_path);
-        let mut packet_file = NamedTempFile::new().unwrap();
-        packet_file
-            .write_all(serde_json::to_string(&packet).unwrap().as_bytes())
+        let service = create_test_service(&component_path);
+        let input = create_test_input(&service);
+        let mut input_file = NamedTempFile::new().unwrap();
+        input_file
+            .write_all(serde_json::to_string(&input).unwrap().as_bytes())
             .unwrap();
 
         let config = [
@@ -325,7 +316,7 @@ mod test {
 
         let args = ExecAggregatorArgs {
             component: component_path,
-            packet: Some(packet_file.path().to_string_lossy().to_string()),
+            input: Some(input_file.path().to_string_lossy().to_string()),
             fuel_limit: None,
             time_limit: None,
             config,
@@ -389,7 +380,7 @@ mod test {
 
         let args = ExecAggregatorArgs {
             component: component_path,
-            packet: None,
+            input: None,
             fuel_limit: None,
             time_limit: None,
             config,

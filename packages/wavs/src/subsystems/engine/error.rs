@@ -36,4 +36,7 @@ pub enum EngineError {
 
     #[error("{0:?}")]
     Services(#[from] crate::services::ServicesError),
+
+    #[error("{0:?}")]
+    ConvertAggregatorAction(#[from] anyhow::Error),
 }

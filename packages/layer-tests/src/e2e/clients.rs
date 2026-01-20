@@ -7,12 +7,12 @@ use utils::{config::EvmChainConfigExt, evm_client::EvmSigningClient};
 use wavs_cli::clients::HttpClient;
 use wavs_types::ChainKey;
 
-use super::config::Configs;
+use super::config::{Configs, WAVS_BASE_PORT};
 
 #[derive(Clone)]
 pub struct Clients {
-    pub http_client: HttpClient,
-    pub aggregator_clients: Vec<HttpClient>,
+    /// HTTP clients for each WAVS operator instance (one per port)
+    pub http_clients: Vec<HttpClient>,
     pub cli_ctx: Arc<wavs_cli::context::CliContext>,
     pub evm_clients: Arc<HashMap<ChainKey, EvmSigningClient>>,
     pub cosmos_client_pools: Arc<HashMap<ChainKey, SigningClientPool>>,
@@ -20,39 +20,34 @@ pub struct Clients {
 
 impl Clients {
     pub async fn new(configs: &Configs) -> Self {
-        let http_client = HttpClient::new(configs.cli.wavs_endpoint.clone());
+        // Create HTTP clients for each WAVS instance
+        let mut http_clients = Vec::with_capacity(configs.num_operators());
+        for operator_index in 0..configs.num_operators() {
+            let port = WAVS_BASE_PORT + operator_index as u32;
+            let endpoint = format!("http://127.0.0.1:{}", port);
+            let http_client = HttpClient::new(endpoint);
 
-        // Create clients for all aggregator endpoints
-        let aggregator_clients: Vec<HttpClient> = configs
-            .aggregators
-            .iter()
-            .map(|aggregator_config| {
-                let endpoint = format!(
-                    "http://{}:{}",
-                    aggregator_config.host, aggregator_config.port
-                );
-                HttpClient::new(endpoint)
-            })
-            .collect();
-
-        if aggregator_clients.is_empty() {
-            panic!("No aggregator configuration found");
-        }
-
-        // give the server a bit of time to start
-        tokio::time::timeout(Duration::from_secs(2), async {
-            loop {
-                match http_client.get_config().await {
-                    Ok(_) => break,
-                    Err(_) => {
-                        tracing::info!("Waiting for server to start...");
-                        tokio::time::sleep(Duration::from_millis(100)).await;
+            // Wait for this server to start
+            tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    match http_client.get_config().await {
+                        Ok(_) => break,
+                        Err(_) => {
+                            tracing::info!(
+                                "Waiting for WAVS instance {} (port {}) to start...",
+                                operator_index,
+                                port
+                            );
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                        }
                     }
                 }
-            }
-        })
-        .await
-        .unwrap();
+            })
+            .await
+            .unwrap();
+
+            http_clients.push(http_client);
+        }
 
         let chains = { configs.chains.read().unwrap().clone() };
 
@@ -121,8 +116,7 @@ impl Clients {
         }
 
         Self {
-            http_client,
-            aggregator_clients,
+            http_clients,
             cli_ctx: Arc::new(cli_ctx),
             evm_clients: Arc::new(evm_clients),
             cosmos_client_pools: Arc::new(cosmos_client_pools),

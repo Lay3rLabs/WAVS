@@ -180,17 +180,6 @@ pub struct WorkflowSetSubmitNoneResult {
     pub file_path: PathBuf,
 }
 
-/// Result of setting an aggregator URL
-#[derive(Debug, Clone, Serialize)]
-pub struct WorkflowSetAggregatorUrlResult {
-    /// The workflow id that was updated
-    pub workflow_id: WorkflowId,
-    /// The aggregator URL that was set
-    pub url: String,
-    /// The file path where the updated service JSON was saved
-    pub file_path: PathBuf,
-}
-
 impl std::fmt::Display for WorkflowSetSubmitNoneResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Workflow submit set to None successfully!")?;
@@ -199,11 +188,19 @@ impl std::fmt::Display for WorkflowSetSubmitNoneResult {
     }
 }
 
-impl std::fmt::Display for WorkflowSetAggregatorUrlResult {
+/// Result of setting the submit to None
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkflowSetSubmitAggregatorResult {
+    /// The workflow id that was updated
+    pub workflow_id: WorkflowId,
+    /// The file path where the updated service JSON was saved
+    pub file_path: PathBuf,
+}
+
+impl std::fmt::Display for WorkflowSetSubmitAggregatorResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Workflow aggregator URL set successfully!")?;
+        writeln!(f, "Workflow aggregator set successfully!")?;
         writeln!(f, "  Workflow ID: {}", self.workflow_id)?;
-        writeln!(f, "  URL:         {}", self.url)?;
         writeln!(f, "  Updated:     {}", self.file_path.display())
     }
 }

@@ -31,8 +31,8 @@ use tracing::instrument;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::{
     contracts::cosmwasm::service_manager::event::WavsServiceUriUpdatedEvent, AnyChainConfig,
-    ByteArray, ChainConfigs, ChainKey, IWavsServiceManager, ServiceId, Trigger, TriggerAction,
-    TriggerConfig, TriggerData,
+    ByteArray, ChainConfigs, ChainKey, DevHypercoreStreamState, IWavsServiceManager, ServiceId,
+    Trigger, TriggerAction, TriggerConfig, TriggerData,
 };
 
 #[derive(Debug)]
@@ -129,7 +129,7 @@ enum StreamStartState {
 pub struct TriggerManager {
     pub chain_configs: Arc<std::sync::RwLock<ChainConfigs>>,
     pub command_sender: tokio::sync::mpsc::UnboundedSender<TriggerCommand>,
-    trigger_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
+    subsystem_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
     command_receiver:
         Arc<std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<TriggerCommand>>>>,
     lookup_maps: Arc<LookupMaps>,
@@ -138,6 +138,7 @@ pub struct TriggerManager {
     pub disable_networking: bool,
     pub services: Services,
     pub evm_controllers: Arc<std::sync::RwLock<HashMap<ChainKey, EvmTriggerStreamsController>>>,
+    hypercore_stream_states: Arc<std::sync::RwLock<HashMap<String, StreamStartState>>>,
     pub config: Config,
 }
 
@@ -148,14 +149,14 @@ impl TriggerManager {
         config: &Config,
         metrics: TriggerMetrics,
         services: Services,
-        trigger_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
+        subsystem_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
     ) -> Result<Self, TriggerError> {
         let (command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel();
 
         Ok(Self {
             chain_configs: config.chains.clone(),
             lookup_maps: Arc::new(LookupMaps::new(services.clone(), metrics.clone())),
-            trigger_to_dispatcher_tx,
+            subsystem_to_dispatcher_tx,
             command_sender,
             command_receiver: Arc::new(std::sync::Mutex::new(Some(command_receiver))),
             metrics,
@@ -163,8 +164,25 @@ impl TriggerManager {
             disable_networking: config.disable_trigger_networking,
             services,
             evm_controllers: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            hypercore_stream_states: Arc::new(std::sync::RwLock::new(HashMap::new())),
             config: config.clone(),
         })
+    }
+
+    pub fn hypercore_streams_info(&self) -> HashMap<String, DevHypercoreStreamState> {
+        self.hypercore_stream_states
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(feed_key, state)| {
+                let mapped = match state {
+                    StreamStartState::Waiting => DevHypercoreStreamState::Waiting,
+                    StreamStartState::Connecting => DevHypercoreStreamState::Connecting,
+                    StreamStartState::Connected => DevHypercoreStreamState::Connected,
+                };
+                (feed_key.clone(), mapped)
+            })
+            .collect()
     }
 
     #[instrument(skip(self), fields(subsys = "TriggerManager"))]
@@ -268,10 +286,11 @@ impl TriggerManager {
                         uri
                     );
                 }
+                _ => {}
             }
 
             let start = std::time::Instant::now();
-            self.trigger_to_dispatcher_tx
+            self.subsystem_to_dispatcher_tx
                 .send(command)
                 .map_err(Box::new)?;
 
@@ -306,7 +325,7 @@ impl TriggerManager {
         let mut listening_chain_states: HashMap<ChainKey, StreamStartState> = HashMap::new();
         let mut cron_stream_state = StreamStartState::Waiting;
         let mut atproto_stream_state = StreamStartState::Waiting;
-        let mut hypercore_stream_states: HashMap<String, StreamStartState> = HashMap::new();
+        let hypercore_stream_states = Arc::clone(&self.hypercore_stream_states);
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
@@ -655,6 +674,8 @@ impl TriggerManager {
                                 continue;
                             }
                             let current_state = hypercore_stream_states
+                                .read()
+                                .unwrap()
                                 .get(&feed_key)
                                 .copied()
                                 .unwrap_or(StreamStartState::Waiting);
@@ -675,6 +696,8 @@ impl TriggerManager {
                                 }
                                 StreamStartState::Waiting => {
                                     hypercore_stream_states
+                                        .write()
+                                        .unwrap()
                                         .insert(feed_key.clone(), StreamStartState::Connecting);
                                 }
                             }
@@ -704,6 +727,8 @@ impl TriggerManager {
                                     tracing::info!("Started hypercore stream");
                                     if was_connecting {
                                         hypercore_stream_states
+                                            .write()
+                                            .unwrap()
                                             .insert(feed_key.clone(), StreamStartState::Connected);
                                     }
                                 }
@@ -711,6 +736,8 @@ impl TriggerManager {
                                     tracing::error!("Failed to start hypercore stream: {:?}", err);
                                     if was_connecting {
                                         hypercore_stream_states
+                                            .write()
+                                            .unwrap()
                                             .insert(feed_key.clone(), StreamStartState::Waiting);
                                     }
                                     continue;
@@ -1206,7 +1233,6 @@ mod tests {
                         [0; 32],
                     ))),
                     submit: Submit::Aggregator {
-                        url: "http://example.com".to_string(),
                         component: Box::new(Component::new(ComponentSource::Digest(
                             ComponentDigest::hash([0; 32]),
                         ))),
@@ -1300,7 +1326,6 @@ mod tests {
                         [0; 32],
                     ))),
                     submit: Submit::Aggregator {
-                        url: "http://example.com".to_string(),
                         component: Box::new(Component::new(ComponentSource::Digest(
                             ComponentDigest::hash([0; 32]),
                         ))),

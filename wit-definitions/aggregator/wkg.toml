@@ -8,3 +8,4 @@ repository = "https://github.com/Lay3rLabs/wavs-wasi"
 [overrides]
 "wavs:types" = { path = "../types/wit" }
 "wasi:tls" = { path = "../wasi-tls/wit" }
+"wavs:operator" = { path = "../operator/wit" }

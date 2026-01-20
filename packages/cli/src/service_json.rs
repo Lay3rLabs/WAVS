@@ -2,7 +2,6 @@ use std::{num::NonZeroU64, str::FromStr};
 
 use alloy_primitives::Address;
 use cron::Schedule;
-use reqwest::Url;
 use wavs_types::{
     AggregatorBuilder, ServiceBuilder, ServiceManagerBuilder, Submit, SubmitBuilder, Timestamp,
     Trigger, TriggerBuilder, WAVS_ENV_PREFIX,
@@ -126,16 +125,9 @@ impl ServiceJsonExt for ServiceBuilder {
                 }
                 SubmitBuilder::AggregatorBuilder(aggregator_json) => match aggregator_json {
                     AggregatorBuilder::Aggregator {
-                        url,
                         component,
                         signature_kind: _,
                     } => {
-                        if Url::parse(url).is_err() {
-                            errors.push(format!(
-                                "Workflow '{}' has an invalid URL: {}",
-                                workflow_id, url
-                            ));
-                        }
                         if component.is_unset() {
                             errors.push(format!(
                                 "Workflow '{}' has an unset aggregator component",
@@ -145,14 +137,7 @@ impl ServiceJsonExt for ServiceBuilder {
                     }
                 },
                 SubmitBuilder::Submit(Submit::None) => {}
-                SubmitBuilder::Submit(Submit::Aggregator { url, component, .. }) => {
-                    if Url::parse(url).is_err() {
-                        errors.push(format!(
-                            "Workflow '{}' has an invalid URL: {}",
-                            workflow_id, url
-                        ));
-                    }
-
+                SubmitBuilder::Submit(Submit::Aggregator { component, .. }) => {
                     if let Some(limit) = component.fuel_limit {
                         if limit == 0 {
                             errors.push(format!(

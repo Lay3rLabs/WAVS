@@ -25,7 +25,9 @@ use super::{
     handlers::{
         debug::handle_debug_trigger,
         handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_health,
-        handle_info, handle_list_services, handle_not_found, handle_upload_component,
+        handle_info, handle_list_services, handle_not_found, handle_p2p_status,
+        handle_upload_component,
+        kv::handle_get_kv,
         openapi::ApiDoc,
         service::{
             get::handle_get_service, key::handle_get_service_signer, save::handle_save_service,
@@ -96,7 +98,8 @@ pub async fn make_router(
         .route("/services", get(handle_list_services))
         .route("/services/{chain}/{address}", get(handle_get_service))
         .route("/info", get(handle_info))
-        .route("/health", get(handle_health));
+        .route("/health", get(handle_health))
+        .route("/p2p/status", get(handle_p2p_status));
 
     // protected routes (POST/DELETE)
     let mut protected = axum::Router::new()
@@ -111,7 +114,8 @@ pub async fn make_router(
                 "/dev/services/{service_hash}",
                 get(handle_get_service_by_hash),
             )
-            .route("/dev/trigger-streams", get(handle_dev_trigger_streams_info));
+            .route("/dev/trigger-streams", get(handle_dev_trigger_streams_info))
+            .route("/dev/kv/{service_id}/{bucket}/{key}", get(handle_get_kv));
 
         protected = protected
             .route("/dev/triggers", post(handle_debug_trigger))

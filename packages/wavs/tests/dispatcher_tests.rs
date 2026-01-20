@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use alloy_sol_types::SolValue;
 use example_types::{SquareRequest, SquareResponse};
+use utils::init_tracing_tests;
 use utils::test_utils::test_contracts::ISimpleSubmit::DataWithId;
 use utils::{
     context::AppContext,
@@ -12,7 +13,6 @@ use utils::{
     },
 };
 use wavs::dispatcher::DispatcherCommand;
-use wavs::init_tracing_tests;
 use wavs_types::{
     Component, ComponentSource, Service, ServiceManager, ServiceStatus, SignatureKind, Submit,
     Workflow, WorkflowId,
@@ -53,7 +53,6 @@ fn dispatcher_pipeline() {
                 component: Component::new(ComponentSource::Digest(digest.clone())),
                 trigger: mock_cosmos_event_trigger(),
                 submit: Submit::Aggregator {
-                    url: "http://example.com/aggregator".to_string(),
                     component: Box::new(Component::new(ComponentSource::Digest(digest))),
                     signature_kind: SignatureKind::evm_default(),
                 },
@@ -104,7 +103,7 @@ fn dispatcher_pipeline() {
 
     // check that the events were properly handled and arrived at submission
     wait_for_submission_messages(&dispatcher.submission_manager, 2, None).unwrap();
-    let processed = dispatcher.submission_manager.get_debug_packets();
+    let processed = dispatcher.submission_manager.get_debug_submissions();
 
     assert_eq!(processed.len(), 2);
 

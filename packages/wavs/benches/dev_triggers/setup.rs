@@ -40,7 +40,7 @@ impl DevTriggersRuntime {
             ..Default::default()
         };
         // Provide a test mnemonic so SubmissionManager can create a signer
-        config.submission_mnemonic = Some(wavs_types::Credential::new(
+        config.signing_mnemonic = Some(wavs_types::Credential::new(
             "test test test test test test test test test test test junk".to_string(),
         ));
 
@@ -86,7 +86,6 @@ impl DevTriggersRuntime {
                     },
                     // Use aggregator submit so the submission manager produces packets
                     submit: Submit::Aggregator {
-                        url: "http://127.0.0.1:12345".to_string(), // dummy; networking disabled in bench
                         component: Box::new(Component {
                             source: ComponentSource::Digest(component_digest.clone()),
                             permissions: wavs_types::Permissions {
@@ -241,7 +240,13 @@ impl DevTriggersRuntime {
     pub async fn wait_for_messages(&self, expected: usize) {
         let mut tick = tokio::time::interval(Self::POLL_INTERVAL);
         loop {
-            if self.dispatcher.submission_manager.get_message_count() >= expected as u64 {
+            if self
+                .dispatcher
+                .submission_manager
+                .metrics
+                .get_request_count()
+                >= expected as u64
+            {
                 break;
             }
             tick.tick().await;
@@ -251,18 +256,24 @@ impl DevTriggersRuntime {
     pub async fn wait_and_validate_packets(&self, expected: usize) {
         let mut tick = tokio::time::interval(Self::POLL_INTERVAL);
         loop {
-            if self.dispatcher.submission_manager.get_debug_packets().len() >= expected {
+            if self
+                .dispatcher
+                .submission_manager
+                .get_debug_submissions()
+                .len()
+                >= expected
+            {
                 break;
             }
             tick.tick().await;
         }
 
-        let packets = self.dispatcher.submission_manager.get_debug_packets();
-        assert_eq!(packets.len(), expected);
-        for pkt in packets {
-            assert_eq!(pkt.envelope.payload.0, &self.payload);
-            assert_eq!(pkt.workflow_id, self.workflow_id);
-            assert_eq!(pkt.service.id(), self.service.id());
+        let submissions = self.dispatcher.submission_manager.get_debug_submissions();
+        assert_eq!(submissions.len(), expected);
+        for submission in submissions {
+            assert_eq!(submission.envelope.payload.0, &self.payload);
+            assert_eq!(submission.workflow_id().clone(), self.workflow_id);
+            assert_eq!(submission.service_id().clone(), self.service.id());
         }
     }
 }

@@ -9,9 +9,13 @@ use hyperswarm::{Config as SwarmConfig, Hyperswarm, TopicConfig};
 use rand_core::OsRng;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
+use std::time::Duration;
 use tempfile::TempDir;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinHandle;
 use wavs::subsystems::trigger::streams::hypercore_protocol;
 
@@ -23,10 +27,15 @@ pub struct HypercoreTestClient {
     feed_key: String,
     /// Handle for the hyperswarm task
     _swarm_handle: JoinHandle<()>,
+    /// Count of active hyperswarm connections
+    connection_count: Arc<AtomicUsize>,
+    /// Notifies waiters when a new connection is established
+    connection_notify: Arc<Notify>,
     /// TempDir storage - must be kept alive for the lifetime of the client
     _storage_dir: TempDir,
 }
 
+#[allow(dead_code)]
 impl HypercoreTestClient {
     /// Create a new hypercore feed with a generated keypair.
     ///
@@ -94,10 +103,14 @@ impl HypercoreTestClient {
 
         let feed = Arc::new(Mutex::new(core));
         let swarm_feed = Arc::clone(&feed);
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let connection_notify = Arc::new(Notify::new());
 
         // Spawn hyperswarm task to handle incoming connections
         let feed_key_for_swarm = feed_key.clone();
         let feed_key_bytes_for_swarm = feed_key_bytes;
+        let connection_count_for_swarm = Arc::clone(&connection_count);
+        let connection_notify_for_swarm = Arc::clone(&connection_notify);
         let swarm_handle = tokio::spawn(async move {
             let mut swarm = swarm;
             tracing::info!(
@@ -109,6 +122,8 @@ impl HypercoreTestClient {
             while let Some(result) = swarm.next().await {
                 match result {
                     Ok(stream) => {
+                        connection_count_for_swarm.fetch_add(1, Ordering::SeqCst);
+                        connection_notify_for_swarm.notify_waiters();
                         tracing::info!(
                             "Hyperswarm connection established (initiator={}) for feed_key: {}",
                             stream.is_initiator(),
@@ -145,6 +160,8 @@ impl HypercoreTestClient {
             feed,
             feed_key,
             _swarm_handle: swarm_handle,
+            connection_count,
+            connection_notify,
             _storage_dir: storage_dir,
         })
     }
@@ -155,6 +172,31 @@ impl HypercoreTestClient {
     /// in service definitions.
     pub fn feed_key(&self) -> String {
         self.feed_key.clone()
+    }
+
+    /// Wait until at least `expected` hyperswarm connections are established.
+    pub async fn wait_for_peers(
+        &self,
+        expected: usize,
+        timeout: Duration,
+    ) -> anyhow::Result<usize> {
+        if expected == 0 {
+            return Ok(0);
+        }
+
+        let count = tokio::time::timeout(timeout, async {
+            loop {
+                let current = self.connection_count.load(Ordering::SeqCst);
+                if current >= expected {
+                    return current;
+                }
+                self.connection_notify.notified().await;
+            }
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("Timed out waiting for {expected} hyperswarm peers"))?;
+
+        Ok(count)
     }
 
     /// Append data to the hypercore feed.
