@@ -289,14 +289,9 @@ impl AppHandles {
     ) {
         match async_std::task::block_on(hyperswarm::run_bootstrap_node::<SocketAddr>(None)) {
             Ok((addr, handle)) => {
-                let announce_addr = if addr.ip().is_unspecified() {
-                    SocketAddr::new(
-                        std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                        addr.port(),
-                    )
-                } else {
-                    addr
-                };
+                // Use the actual bound address instead of converting 0.0.0.0 to 127.0.0.1
+                // This allows the bootstrap to work across network namespaces (e.g., in CI)
+                let announce_addr = addr;
                 tracing::info!(
                     "Started hyperswarm bootstrap node at {} (announcing {})",
                     addr,
