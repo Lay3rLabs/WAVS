@@ -107,8 +107,9 @@ impl HypercoreTestClient {
         swarm.configure(topic, TopicConfig::announce_and_lookup());
 
         tracing::info!(
-            "Hyperswarm configured for discovery key: {}",
-            const_hex::encode(topic)
+            "Hyperswarm configured for discovery key: {}, topic: {:?}",
+            const_hex::encode(topic),
+            topic
         );
 
         let feed = Arc::new(Mutex::new(core));
@@ -135,8 +136,9 @@ impl HypercoreTestClient {
                         connection_count_for_swarm.fetch_add(1, Ordering::SeqCst);
                         connection_notify_for_swarm.notify_waiters();
                         tracing::info!(
-                            "Hyperswarm connection established (initiator={}) for feed_key: {}",
+                            "Hyperswarm connection established (initiator={}, peer_addr={:?}) for feed_key: {}",
                             stream.is_initiator(),
+                            stream.peer_addr(),
                             feed_key_for_swarm
                         );
                         let feed = Arc::clone(&swarm_feed);

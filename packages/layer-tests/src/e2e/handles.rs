@@ -298,15 +298,14 @@ impl AppHandles {
     ) {
         // Bind directly to 172.17.0.1 so bound address matches announced address
         // Hyperswarm lacks libp2p's auto address discovery, so we must be explicit
-        let bind_addr =
-            SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(172, 17, 0, 1)), 49737);
+        let bind_addr = SocketAddr::new(
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(172, 17, 0, 1)),
+            49737,
+        );
 
         match async_std::task::block_on(hyperswarm::run_bootstrap_node(Some(bind_addr))) {
             Ok((addr, handle)) => {
-                tracing::info!(
-                    "Started hyperswarm bootstrap node at {}",
-                    addr
-                );
+                tracing::info!("Started hyperswarm bootstrap node at {}", addr);
 
                 // Give the bootstrap node time to start listening
                 std::thread::sleep(Duration::from_secs(1));

@@ -164,17 +164,33 @@ async fn start_swarm_replication(
 ) -> Result<(), TriggerError> {
     let topic = discovery_key(&feed_key);
 
+    tracing::info!(
+        "Starting hyperswarm replication for feed_key: {}, discovery_key: {:?}",
+        const_hex::encode(feed_key),
+        topic
+    );
+
     let mut swarm = Hyperswarm::bind(build_swarm_config(hyperswarm_bootstrap.as_deref()))
         .await
         .map_err(|err| TriggerError::Hypercore(format!("bind hyperswarm: {err:?}")))?;
+
     swarm.configure(topic, TopicConfig::announce_and_lookup());
+
+    tracing::info!(
+        "Configured hyperswarm with announce_and_lookup for discovery_key: {:?}",
+        topic
+    );
 
     // Hyperswarm is async-std based but exposes futures-compatible streams, so it
     // can be polled directly from the tokio runtime that owns hypercore.
     tokio::spawn(async move {
+        tracing::info!("Hyperswarm task started, waiting for peer connections...");
         loop {
             tokio::select! {
-                _ = shutdown.recv() => break,
+                _ = shutdown.recv() => {
+                    tracing::info!("Hyperswarm task received shutdown signal");
+                    break;
+                }
                 stream = futures_lite::StreamExt::next(&mut swarm) => {
                     let stream = match stream {
                         Some(Ok(stream)) => stream,
@@ -182,11 +198,15 @@ async fn start_swarm_replication(
                             tracing::warn!("Hyperswarm connection error: {err:?}");
                             continue;
                         }
-                        None => break,
+                        None => {
+                            tracing::info!("Hyperswarm stream ended");
+                            break;
+                        }
                     };
                     tracing::info!(
-                        "Hyperswarm connection established (initiator={})",
-                        stream.is_initiator()
+                        "Hyperswarm connection established (initiator={}, peer_addr={:?})",
+                        stream.is_initiator(),
+                        stream.peer_addr()
                     );
                     let replication_core = Arc::clone(&core);
                     let is_initiator = stream.is_initiator();
