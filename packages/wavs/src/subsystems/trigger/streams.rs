@@ -2,6 +2,8 @@ pub mod atproto_jetstream;
 pub mod cosmos_stream;
 pub mod cron_stream;
 pub mod evm_stream;
+#[cfg(feature = "reth-exex")]
+pub mod exex_stream;
 pub mod hypercore_protocol;
 pub mod hypercore_stream;
 pub mod local_command_stream;

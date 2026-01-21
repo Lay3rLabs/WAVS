@@ -65,4 +65,8 @@ pub enum TriggerError {
     JetstreamParse(String),
     #[error("Hypercore error: {0}")]
     Hypercore(String),
+    #[error("ExEx connection error: {0}")]
+    ExExConnection(String),
+    #[error("ExEx deserialization error: {0}")]
+    ExExDeserialization(String),
 }

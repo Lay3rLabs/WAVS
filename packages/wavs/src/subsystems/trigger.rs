@@ -490,84 +490,149 @@ impl TriggerManager {
                                     }
                                 }
                                 AnyChainConfig::Evm(chain_config) => {
-                                    if chain_config.ws_endpoints.is_empty() {
-                                        return Err(TriggerError::EvmMissingWebsocket(
-                                            chain.clone(),
-                                        ));
+                                    // Check if ExEx endpoint is configured - use gRPC stream instead of WebSocket
+                                    #[cfg(feature = "reth-exex")]
+                                    if let Some(exex_endpoint) = &chain_config.exex_endpoint {
+                                        tracing::info!(
+                                            "Using ExEx gRPC stream for chain {} at {}",
+                                            chain,
+                                            exex_endpoint
+                                        );
+
+                                        let exex_config = streams::exex_stream::ExExConfig {
+                                            endpoint: exex_endpoint.clone(),
+                                            chain: chain.clone(),
+                                        };
+
+                                        match streams::exex_stream::start_exex_stream(
+                                            exex_config,
+                                            self.metrics.clone(),
+                                        )
+                                        .await
+                                        {
+                                            Ok(exex_stream) => {
+                                                multiplexed_stream.push(exex_stream);
+                                                if let Some(chain_state) =
+                                                    listening_chain_states.get_mut(&chain)
+                                                {
+                                                    *chain_state = StreamStartState::Connected;
+                                                }
+                                                tracing::info!(
+                                                    "Started ExEx stream for chain {}",
+                                                    chain
+                                                );
+                                            }
+                                            Err(err) => {
+                                                tracing::error!(
+                                                    "Failed to start ExEx stream: {:?}",
+                                                    err
+                                                );
+                                                if let Some(chain_state) =
+                                                    listening_chain_states.get_mut(&chain)
+                                                {
+                                                    *chain_state = StreamStartState::Waiting;
+                                                }
+                                                continue;
+                                            }
+                                        }
                                     }
 
-                                    let chain_key: ChainKey = (&chain_config).into();
-                                    let EvmTriggerStreams {
-                                        controller,
-                                        block_height_stream,
-                                        log_stream,
-                                        // ignoring this for now
-                                        new_pending_transaction_stream: _,
-                                    } = EvmTriggerStreams::new(
-                                        chain_config.ws_endpoints,
-                                        chain_key,
-                                        chain_config.ws_priority_endpoint_index,
-                                    );
+                                    // Log warning if exex_endpoint is configured but feature not enabled
+                                    #[cfg(not(feature = "reth-exex"))]
+                                    if chain_config.exex_endpoint.is_some() {
+                                        tracing::warn!(
+                                            "ExEx endpoint configured for chain {} but reth-exex feature not enabled, falling back to WebSocket",
+                                            chain
+                                        );
+                                    }
 
-                                    // Start the EVM event stream
-                                    // however, the actual subscription for log filters is set via the controller
-                                    let evm_event_stream = match evm_stream::start_evm_event_stream(
-                                        chain.clone(),
-                                        log_stream,
-                                        self.metrics.clone(),
-                                    )
-                                    .await
-                                    {
-                                        Ok(stream) => stream,
-                                        Err(err) => {
-                                            tracing::error!(
-                                                "Failed to start EVM event stream: {:?}",
-                                                err
-                                            );
-                                            if let Some(chain_state) =
-                                                listening_chain_states.get_mut(&chain)
-                                            {
-                                                *chain_state = StreamStartState::Waiting;
-                                            }
-                                            continue;
+                                    // Use WebSocket streams (or when reth-exex feature is disabled)
+                                    #[cfg(feature = "reth-exex")]
+                                    let should_use_ws = chain_config.exex_endpoint.is_none();
+                                    #[cfg(not(feature = "reth-exex"))]
+                                    let should_use_ws = true;
+
+                                    if should_use_ws {
+                                        // Fall back to WebSocket streams
+                                        if chain_config.ws_endpoints.is_empty() {
+                                            return Err(TriggerError::EvmMissingWebsocket(
+                                                chain.clone(),
+                                            ));
                                         }
-                                    };
 
-                                    // Start the EVM block stream
-                                    // however, the actual subscription for blocks is gated via the controller
-                                    let evm_block_stream = match evm_stream::start_evm_block_stream(
-                                        chain.clone(),
-                                        block_height_stream,
-                                        self.metrics.clone(),
-                                    )
-                                    .await
-                                    {
-                                        Ok(stream) => stream,
-                                        Err(err) => {
-                                            tracing::error!(
-                                                "Failed to start EVM block stream: {:?}",
-                                                err
-                                            );
-                                            if let Some(chain_state) =
-                                                listening_chain_states.get_mut(&chain)
-                                            {
-                                                *chain_state = StreamStartState::Waiting;
+                                        let chain_key: ChainKey = (&chain_config).into();
+                                        let EvmTriggerStreams {
+                                            controller,
+                                            block_height_stream,
+                                            log_stream,
+                                            // ignoring this for now
+                                            new_pending_transaction_stream: _,
+                                        } = EvmTriggerStreams::new(
+                                            chain_config.ws_endpoints,
+                                            chain_key,
+                                            chain_config.ws_priority_endpoint_index,
+                                        );
+
+                                        // Start the EVM event stream
+                                        // however, the actual subscription for log filters is set via the controller
+                                        let evm_event_stream = match evm_stream::start_evm_event_stream(
+                                            chain.clone(),
+                                            log_stream,
+                                            self.metrics.clone(),
+                                        )
+                                        .await
+                                        {
+                                            Ok(stream) => stream,
+                                            Err(err) => {
+                                                tracing::error!(
+                                                    "Failed to start EVM event stream: {:?}",
+                                                    err
+                                                );
+                                                if let Some(chain_state) =
+                                                    listening_chain_states.get_mut(&chain)
+                                                {
+                                                    *chain_state = StreamStartState::Waiting;
+                                                }
+                                                continue;
                                             }
-                                            continue;
+                                        };
+
+                                        // Start the EVM block stream
+                                        // however, the actual subscription for blocks is gated via the controller
+                                        let evm_block_stream = match evm_stream::start_evm_block_stream(
+                                            chain.clone(),
+                                            block_height_stream,
+                                            self.metrics.clone(),
+                                        )
+                                        .await
+                                        {
+                                            Ok(stream) => stream,
+                                            Err(err) => {
+                                                tracing::error!(
+                                                    "Failed to start EVM block stream: {:?}",
+                                                    err
+                                                );
+                                                if let Some(chain_state) =
+                                                    listening_chain_states.get_mut(&chain)
+                                                {
+                                                    *chain_state = StreamStartState::Waiting;
+                                                }
+                                                continue;
+                                            }
+                                        };
+
+                                        multiplexed_stream.push(evm_event_stream);
+                                        multiplexed_stream.push(evm_block_stream);
+
+                                        self.evm_controllers
+                                            .write()
+                                            .unwrap()
+                                            .insert(chain.clone(), controller);
+                                        if let Some(chain_state) =
+                                            listening_chain_states.get_mut(&chain)
+                                        {
+                                            *chain_state = StreamStartState::Connected;
                                         }
-                                    };
-
-                                    multiplexed_stream.push(evm_event_stream);
-                                    multiplexed_stream.push(evm_block_stream);
-
-                                    self.evm_controllers
-                                        .write()
-                                        .unwrap()
-                                        .insert(chain.clone(), controller);
-                                    if let Some(chain_state) =
-                                        listening_chain_states.get_mut(&chain)
-                                    {
-                                        *chain_state = StreamStartState::Connected;
                                     }
                                 }
                             }

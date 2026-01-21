@@ -12,6 +12,14 @@ publish = false
 [features]
 test-utils = []
 dev = []
+# Enable reth ExEx integration
+reth-exex = [
+    "dep:reth-exex-types",
+    "dep:reth-execution-types",
+    "dep:reth-primitives-traits",
+    "dep:reth-ethereum-primitives",
+    "dep:alloy-consensus",
+]
 
 [dependencies]
 wavs-types = { workspace = true, features = ["full"] }
@@ -68,6 +76,19 @@ hypercore = { workspace = true }
 hypercore-protocol = { workspace = true }
 hyperswarm = { workspace = true }
 tokio-util = { workspace = true }
+tonic = { workspace = true }
+prost = { workspace = true }
+serde_with = { version = "3.12", default-features = false, features = ["macros"] }
+
+# reth dependencies (for ExEx integration)
+reth-exex-types = { path = "../../../../crates/exex/types", features = ["serde", "serde-bincode-compat"], optional = true }
+reth-execution-types = { path = "../../../../crates/evm/execution-types", features = ["serde", "serde-bincode-compat"], optional = true }
+reth-primitives-traits = { path = "../../../../crates/primitives-traits", features = ["serde", "serde-bincode-compat"], optional = true }
+reth-ethereum-primitives = { path = "../../../../crates/ethereum/primitives", features = ["serde", "serde-bincode-compat"], optional = true }
+alloy-consensus = { workspace = true, optional = true }
+
+[build-dependencies]
+tonic-build = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

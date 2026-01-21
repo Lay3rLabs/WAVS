@@ -244,7 +244,7 @@ impl EvmSigningClient {
         let builder = ProviderBuilder::default()
             .with_nonce_management(nonce_manager.clone())
             .filler(GasFiller)
-            .filler(BlobGasFiller)
+            .filler(BlobGasFiller::default())
             .filler(ChainIdFiller::new(None))
             .wallet(wallet.clone());
 

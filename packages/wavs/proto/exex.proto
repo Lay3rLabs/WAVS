@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package exex;
+
+// RemoteExEx service streams execution notifications from reth to connected clients.
+// The notifications are bincode-serialized ExExNotification structs.
+service RemoteExEx {
+  // Subscribe to execution notifications stream.
+  // Returns a stream of bincode-encoded ExExNotification messages.
+  rpc Subscribe(SubscribeRequest) returns (stream ExExNotification) {}
+}
+
+// Empty request message for subscribing to the notification stream.
+message SubscribeRequest {}
+
+// Execution notification containing bincode-serialized ExExNotification data.
+message ExExNotification {
+  // Bincode-serialized ExExNotification (ChainCommitted, ChainReorged, or ChainReverted).
+  bytes data = 1;
+}

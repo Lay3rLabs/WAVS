@@ -63,6 +63,10 @@ pub struct EvmChainConfig {
     pub http_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
     pub ws_priority_endpoint_index: Option<usize>,
+    /// Optional gRPC endpoint for reth remote ExEx notifications.
+    /// When set, WAVS will connect to the reth ExEx server instead of using WebSocket subscriptions.
+    /// Example: "http://[::1]:10000"
+    pub exex_endpoint: Option<String>,
 }
 
 impl From<&EvmChainConfig> for ChainKey {
@@ -362,6 +366,7 @@ impl ChainConfigs {
                         http_endpoint: evm_config.http_endpoint,
                         faucet_endpoint: evm_config.faucet_endpoint,
                         ws_priority_endpoint_index: evm_config.ws_priority_endpoint_index,
+                        exex_endpoint: evm_config.exex_endpoint,
                     };
                     self.evm.insert(key.id, evm_config);
                 }
@@ -424,6 +429,8 @@ pub struct EvmChainConfigBuilder {
     pub http_endpoint: Option<String>,
     pub faucet_endpoint: Option<String>,
     pub ws_priority_endpoint_index: Option<usize>,
+    /// Optional gRPC endpoint for reth remote ExEx notifications.
+    pub exex_endpoint: Option<String>,
 }
 
 impl EvmChainConfigBuilder {
@@ -434,6 +441,7 @@ impl EvmChainConfigBuilder {
             http_endpoint: self.http_endpoint,
             faucet_endpoint: self.faucet_endpoint,
             ws_priority_endpoint_index: self.ws_priority_endpoint_index,
+            exex_endpoint: self.exex_endpoint,
         }
     }
 }
