@@ -14,6 +14,7 @@ pub fn mock_chain_configs() -> Arc<RwLock<ChainConfigs>> {
                 http_endpoint: Some("http://localhost:8545".to_string()),
                 faucet_endpoint: None,
                 ws_priority_endpoint_index: None,
+                exex_endpoint: None,
             },
         )]
         .into_iter()

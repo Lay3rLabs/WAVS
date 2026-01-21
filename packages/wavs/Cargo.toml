@@ -97,6 +97,12 @@ utils = { workspace = true, features = ["test-utils"] }
 example-types = { workspace = true }
 alloy-node-bindings = { workspace = true }
 
+# ExEx integration testing
+reth-exex-remote = { path = "../../../../crates/exex/remote" }
+reth-execution-types = { path = "../../../../crates/evm/execution-types" }
+reth-ethereum-primitives = { path = "../../../../crates/ethereum/primitives" }
+reth-exex-types = { path = "../../../../crates/exex/types", features = ["serde", "serde-bincode-compat"] }
+
 
 [[bench]]
 name = "intervals"
