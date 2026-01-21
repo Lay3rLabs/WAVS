@@ -287,20 +287,27 @@ impl AppHandles {
         Option<SocketAddr>,
         Option<async_std::task::JoinHandle<std::io::Result<()>>>,
     ) {
-        match async_std::task::block_on(hyperswarm::run_bootstrap_node::<SocketAddr>(None)) {
+        // Bind to 0.0.0.0 to listen on all interfaces, but announce the Docker bridge IP
+        // This matches how P2P works: it binds to 0.0.0.0 but peers connect via 172.17.0.1
+        let bind_addr = SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 49737);
+
+        match async_std::task::block_on(hyperswarm::run_bootstrap_node(Some(bind_addr))) {
             Ok((addr, handle)) => {
-                // Use the actual bound address instead of converting 0.0.0.0 to 127.0.0.1
-                // This allows the bootstrap to work across network namespaces (e.g., in CI)
-                let announce_addr = addr;
+                // Announce the Docker bridge IP (172.17.0.1) instead of 127.0.0.1
+                // This works both locally (via Docker Desktop/route) and in CI
+                let announce_addr = SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::new(172, 17, 0, 1)),
+                    addr.port()
+                );
+
                 tracing::info!(
                     "Started hyperswarm bootstrap node at {} (announcing {})",
                     addr,
                     announce_addr
                 );
 
-                // Give the bootstrap node more time to start listening and be ready
-                // to accept incoming connections from test clients
-                std::thread::sleep(Duration::from_secs(1)); // Increased from 500ms to 1s
+                // Give the bootstrap node time to start listening
+                std::thread::sleep(Duration::from_secs(1));
 
                 (Some(announce_addr), Some(handle))
             }
