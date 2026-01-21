@@ -2,7 +2,7 @@ mod cosmos;
 mod evm;
 pub mod hypercore;
 
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
+use std::{collections::HashMap, io, net::SocketAddr, sync::Arc, time::Duration};
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
@@ -23,6 +23,18 @@ use crate::config::TestP2pMode;
 
 use super::config::Configs;
 use super::matrix::EvmService;
+
+/// Check if a port is available for binding
+fn check_port_availability(port: u16) -> bool {
+    match std::net::TcpListener::bind(format!("127.0.0.1:{}", port)) {
+        Ok(_) => true,
+        Err(e) if e.kind() == io::ErrorKind::AddrInUse => {
+            tracing::warn!("Port {} is already in use", port);
+            false
+        }
+        Err(_) => false,
+    }
+}
 
 pub struct AppHandles {
     /// One handle per WAVS operator instance
@@ -91,7 +103,8 @@ impl AppHandles {
 
         if configs.p2p == TestP2pMode::Kademlia && configs.num_operators() > 1 {
             // Remote mode: start operator 0 first, get bootstrap address, then start others
-            wavs_handles = Self::start_wavs_remote_mode(ctx, configs, &metrics);
+            wavs_handles = Self::start_wavs_remote_mode(ctx, configs, &metrics)
+                .expect("Failed to start operators in remote mode");
         } else {
             // Local mode or single operator: start all at once
             for (operator_index, wavs_config) in configs.wavs_configs.iter().enumerate() {
@@ -157,8 +170,27 @@ impl AppHandles {
         ctx: &AppContext,
         configs: &Configs,
         metrics: &Metrics,
-    ) -> Vec<std::thread::JoinHandle<()>> {
+    ) -> Result<Vec<std::thread::JoinHandle<()>>, anyhow::Error> {
         let mut handles = Vec::with_capacity(configs.num_operators());
+
+        // Log port availability for better diagnostics
+        for (idx, config) in configs.wavs_configs.iter().enumerate() {
+            let http_port = config.port as u16;
+            let p2p_port = match &config.p2p {
+                P2pConfig::Remote { listen_port, .. } => *listen_port,
+                P2pConfig::Local { listen_port, .. } => *listen_port,
+                P2pConfig::Disabled => continue,
+            };
+
+            tracing::info!(
+                "Operator {} - HTTP port {} availability: {}, P2P port {} availability: {}",
+                idx,
+                http_port,
+                check_port_availability(http_port),
+                p2p_port,
+                check_port_availability(p2p_port)
+            );
+        }
 
         // Start operator 0 (bootstrap server)
         let op0_config = &configs.wavs_configs[0];
@@ -173,8 +205,11 @@ impl AppHandles {
             // Wait for the server to be ready
             tokio::time::sleep(Duration::from_millis(500)).await;
 
-            // Poll until we get an address
-            for _ in 0..60 {
+            let start = std::time::Instant::now();
+            let timeout = Duration::from_secs(30); // Increased from 6s to 30s
+            let mut delay = Duration::from_millis(100);
+
+            loop {
                 match client.get_p2p_status().await {
                     Ok(status) => {
                         // Prefer external_addresses, fall back to listen_addresses
@@ -186,21 +221,24 @@ impl AppHandles {
 
                         if let Some(addr) = addr {
                             tracing::info!("Got bootstrap address from operator 0: {}", addr);
-                            return Some(addr);
+                            return Ok(addr);
                         }
                     }
                     Err(e) => {
                         tracing::debug!("Waiting for operator 0 P2P status: {:?}", e);
                     }
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-            tracing::error!("Failed to get bootstrap address from operator 0");
-            None
-        });
 
-        let bootstrap_addr =
-            bootstrap_addr.expect("Failed to get bootstrap address from operator 0");
+                if start.elapsed() >= timeout {
+                    return Err(anyhow::anyhow!(
+                        "Timed out waiting for operator 0 bootstrap address after 30s"
+                    ));
+                }
+
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(Duration::from_secs(5)); // Exponential backoff, max 5s
+            }
+        })?;
 
         // Start remaining operators with the bootstrap address
         for (operator_index, wavs_config) in configs.wavs_configs.iter().enumerate().skip(1) {
@@ -242,7 +280,7 @@ impl AppHandles {
             ));
         }
 
-        handles
+        Ok(handles)
     }
 
     fn start_hyperswarm_bootstrap() -> (
@@ -265,9 +303,9 @@ impl AppHandles {
                     announce_addr
                 );
 
-                // Give the bootstrap node a moment to start listening and be ready
+                // Give the bootstrap node more time to start listening and be ready
                 // to accept incoming connections from test clients
-                std::thread::sleep(Duration::from_millis(500));
+                std::thread::sleep(Duration::from_secs(1)); // Increased from 500ms to 1s
 
                 (Some(announce_addr), Some(handle))
             }

@@ -55,8 +55,8 @@ pub fn start(
         let router = make_router(config, dispatcher, false, metrics, health_status).await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
-
-        tracing::info!("Http server starting on: {}", listener.local_addr()?);
+        let actual_port = listener.local_addr()?.port();
+        tracing::info!("HTTP server bound to port {}", actual_port);
 
         axum::serve(listener, router)
             .with_graceful_shutdown(async move {

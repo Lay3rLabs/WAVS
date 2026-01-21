@@ -495,7 +495,7 @@ async fn run_test(
                         .context("Failed to wait for hypercore stream to finalize")?;
                     }
 
-                    if clients.http_clients.len() > 1 {
+                    if test.multi_operator && clients.http_clients.len() > 1 {
                         let expected = clients.http_clients.len();
                         tracing::info!(
                             "Waiting for {} hyperswarm peers before appending",

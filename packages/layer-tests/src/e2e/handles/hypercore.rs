@@ -207,10 +207,15 @@ impl HypercoreTestClient {
 
         let count = tokio::time::timeout(timeout, async {
             loop {
+                // Wait for notification first
+                self.connection_notify.notified().await;
+
+                // Immediately check if we have enough connections after being notified
                 let current = self.connection_count.load(Ordering::Relaxed);
                 if current >= expected {
                     // Verify connection is stable by waiting a bit and checking again
-                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    // Reduced from 200ms to 50ms - P2P connections can flap during discovery
+                    tokio::time::sleep(Duration::from_millis(50)).await;
                     let stable_count = self.connection_count.load(Ordering::Relaxed);
                     if stable_count >= expected {
                         tracing::info!(
@@ -225,7 +230,11 @@ impl HypercoreTestClient {
                         current,
                         stable_count
                     );
+                    // Continue waiting, don't return yet
                 }
+
+                // Sleep for stability check only if still waiting
+                tokio::time::sleep(Duration::from_millis(100)).await;
 
                 // Log progress periodically
                 if start.elapsed().as_secs().is_multiple_of(5) {
@@ -236,9 +245,6 @@ impl HypercoreTestClient {
                         start.elapsed().as_secs()
                     );
                 }
-
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                self.connection_notify.notified().await;
             }
         })
         .await

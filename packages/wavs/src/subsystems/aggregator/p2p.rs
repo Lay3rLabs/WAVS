@@ -581,6 +581,18 @@ fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorErr
 // Event Loop
 // ============================================================================
 
+/// Check if a port is available for binding
+fn check_port_available(port: u16) -> bool {
+    match std::net::TcpListener::bind(format!("0.0.0.0:{}", port)) {
+        Ok(_) => true,
+        Err(e) if e.kind() == io::ErrorKind::AddrInUse => {
+            tracing::warn!("P2P port {} is already in use", port);
+            false
+        }
+        Err(_) => false,
+    }
+}
+
 /// State for the P2P event loop
 struct EventLoopState {
     /// Topics we're subscribed to
@@ -672,7 +684,16 @@ async fn run_event_loop(
             return;
         }
     };
-    let listen_addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{}", listen_port)
+
+    // Check if the preferred port is available, fall back to port 0 if not
+    let actual_port = if check_port_available(listen_port) {
+        listen_port
+    } else {
+        tracing::info!("Falling back to OS-assigned P2P port");
+        0
+    };
+
+    let listen_addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{}", actual_port)
         .parse()
         .expect("Valid multiaddr");
 
