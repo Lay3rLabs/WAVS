@@ -253,6 +253,10 @@ impl AppHandles {
                 max_catchup_submissions,
                 cleanup_interval_secs,
                 kademlia_discovery_interval_secs,
+                max_pending_publishes,
+                max_stored_submissions_per_service,
+                catchup_request_timeout_secs,
+                max_concurrent_catchup_requests_per_service,
             } = &config.p2p
             {
                 config.p2p = P2pConfig::Remote {
@@ -264,6 +268,11 @@ impl AppHandles {
                     max_catchup_submissions: *max_catchup_submissions,
                     cleanup_interval_secs: *cleanup_interval_secs,
                     kademlia_discovery_interval_secs: *kademlia_discovery_interval_secs,
+                    max_pending_publishes: *max_pending_publishes,
+                    max_stored_submissions_per_service: *max_stored_submissions_per_service,
+                    catchup_request_timeout_secs: *catchup_request_timeout_secs,
+                    max_concurrent_catchup_requests_per_service:
+                        *max_concurrent_catchup_requests_per_service,
                 };
             }
 
