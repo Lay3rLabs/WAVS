@@ -17,6 +17,7 @@ use crate::e2e::components::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub enum TestGroupId {
     Default,
+    Hypercore,
     EvmInterval,
     EvmIntervalStartStop,
     CronInterval,
@@ -25,7 +26,6 @@ pub enum TestGroupId {
     Backpressure,
     AggregatorTimer,
     P2p,
-    Hypercore,
     Other(usize),
 }
 

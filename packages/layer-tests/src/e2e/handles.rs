@@ -289,7 +289,8 @@ impl AppHandles {
     ) {
         // Bind to 0.0.0.0 to listen on all interfaces, but announce the Docker bridge IP
         // This matches how P2P works: it binds to 0.0.0.0 but peers connect via 172.17.0.1
-        let bind_addr = SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 49737);
+        let bind_addr =
+            SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), 49737);
 
         match async_std::task::block_on(hyperswarm::run_bootstrap_node(Some(bind_addr))) {
             Ok((addr, handle)) => {
@@ -297,7 +298,7 @@ impl AppHandles {
                 // This works both locally (via Docker Desktop/route) and in CI
                 let announce_addr = SocketAddr::new(
                     std::net::IpAddr::V4(std::net::Ipv4Addr::new(172, 17, 0, 1)),
-                    addr.port()
+                    addr.port(),
                 );
 
                 tracing::info!(
