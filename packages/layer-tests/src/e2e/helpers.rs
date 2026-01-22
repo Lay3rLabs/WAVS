@@ -689,15 +689,14 @@ pub async fn wait_for_hypercore_streams_to_finalize(
                             tracing::info!("Hypercore stream connected for feed_key {}", feed_key);
                             return Ok(());
                         }
-                        Some(state) => {
-                            tracing::debug!(
-                                "Hypercore stream not ready for feed_key {} (state={:?})",
-                                feed_key,
-                                state
-                            );
+                        Some(DevHypercoreStreamState::Connecting) => {
+                            tracing::info!("Hypercore stream connecting for feed_key {}", feed_key);
+                        }
+                        Some(DevHypercoreStreamState::Waiting) => {
+                            tracing::info!("Hypercore stream waiting for feed_key {}", feed_key);
                         }
                         None => {
-                            tracing::debug!(
+                            tracing::info!(
                                 "Hypercore stream not registered yet for feed_key {}",
                                 feed_key
                             );
