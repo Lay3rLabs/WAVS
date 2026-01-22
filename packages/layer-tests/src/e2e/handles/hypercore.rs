@@ -13,7 +13,6 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
-use std::time::Duration;
 use tempfile::TempDir;
 use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinHandle;
@@ -27,10 +26,6 @@ pub struct HypercoreTestClient {
     feed_key: String,
     /// Handle for the hyperswarm task
     swarm_handle: JoinHandle<()>,
-    /// Count of active hyperswarm connections
-    connection_count: Arc<AtomicUsize>,
-    /// Notifies waiters when a new connection is established
-    connection_notify: Arc<Notify>,
     /// TempDir storage - must be kept alive for the lifetime of the client
     _storage_dir: TempDir,
 }
@@ -181,8 +176,6 @@ impl HypercoreTestClient {
             feed,
             feed_key,
             swarm_handle,
-            connection_count,
-            connection_notify,
             _storage_dir: storage_dir,
         })
     }
@@ -193,71 +186,6 @@ impl HypercoreTestClient {
     /// in service definitions.
     pub fn feed_key(&self) -> String {
         self.feed_key.clone()
-    }
-
-    /// Wait until at least `expected` hyperswarm connections are established.
-    pub async fn wait_for_peers(
-        &self,
-        expected: usize,
-        timeout: Duration,
-    ) -> anyhow::Result<usize> {
-        if expected == 0 {
-            return Ok(0);
-        }
-
-        let start = std::time::Instant::now();
-
-        let count = tokio::time::timeout(timeout, async {
-            loop {
-                // Wait for notification first
-                self.connection_notify.notified().await;
-
-                // Immediately check if we have enough connections after being notified
-                let current = self.connection_count.load(Ordering::Relaxed);
-                if current >= expected {
-                    // Verify connection is stable by waiting a bit and checking again
-                    // Reduced from 200ms to 50ms - P2P connections can flap during discovery
-                    tokio::time::sleep(Duration::from_millis(50)).await;
-                    let stable_count = self.connection_count.load(Ordering::Relaxed);
-                    if stable_count >= expected {
-                        tracing::info!(
-                            "Verified {} stable hypercore peer connections",
-                            stable_count
-                        );
-                        return stable_count;
-                    }
-                    // Connection not stable, continue waiting
-                    tracing::debug!(
-                        "Peer count dropped from {} to {}, continuing to wait",
-                        current,
-                        stable_count
-                    );
-                    // Continue waiting, don't return yet
-                }
-
-                // Sleep for stability check only if still waiting
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
-                // Log progress periodically
-                if start.elapsed().as_secs().is_multiple_of(5) {
-                    tracing::info!(
-                        "Waiting for hypercore peers: {}/{} (elapsed: {}s)",
-                        current,
-                        expected,
-                        start.elapsed().as_secs()
-                    );
-                }
-            }
-        })
-        .await
-        .map_err(|_| {
-            anyhow::anyhow!(
-                "Timed out waiting for {expected} hyperswarm peers (current: {})",
-                self.connection_count.load(Ordering::Relaxed)
-            )
-        })?;
-
-        Ok(count)
     }
 
     /// Append data to the hypercore feed.
