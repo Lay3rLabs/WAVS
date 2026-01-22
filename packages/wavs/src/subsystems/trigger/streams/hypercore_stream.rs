@@ -35,8 +35,13 @@ pub async fn start_hypercore_stream(
     config: HypercoreStreamConfig,
     metrics: TriggerMetrics,
     shutdown: tokio::sync::broadcast::Receiver<()>,
-) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
-{
+) -> Result<
+    (
+        Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>,
+        tokio::sync::oneshot::Receiver<()>,
+    ),
+    TriggerError,
+> {
     std::fs::create_dir_all(&config.storage_dir).map_err(|err| {
         TriggerError::Hypercore(format!(
             "create storage dir {}: {}",
@@ -54,6 +59,7 @@ pub async fn start_hypercore_stream(
 
     let mut next_index = core.info().length;
     let core = Arc::new(Mutex::new(core));
+    let (peer_connected_tx, peer_connected_rx) = tokio::sync::oneshot::channel();
     let stream_core = Arc::clone(&core);
     let mut receiver = {
         let core = stream_core.lock().await;
@@ -124,10 +130,11 @@ pub async fn start_hypercore_stream(
         Arc::clone(&core),
         shutdown,
         config.hyperswarm_bootstrap.clone(),
+        Some(peer_connected_tx),
     )
     .await?;
 
-    Ok(Box::pin(event_stream))
+    Ok((Box::pin(event_stream), peer_connected_rx))
 }
 
 async fn build_core_with_feed_key(
@@ -161,6 +168,7 @@ async fn start_swarm_replication(
     core: Arc<Mutex<Hypercore>>,
     mut shutdown: tokio::sync::broadcast::Receiver<()>,
     hyperswarm_bootstrap: Option<String>,
+    mut peer_connected_tx: Option<tokio::sync::oneshot::Sender<()>>,
 ) -> Result<(), TriggerError> {
     let topic = discovery_key(&feed_key);
 
@@ -208,6 +216,12 @@ async fn start_swarm_replication(
                         stream.is_initiator(),
                         stream.peer_addr()
                     );
+
+                    // Notify that first peer is connected (fire-and-forget if receiver dropped)
+                    if let Some(tx) = peer_connected_tx.take() {
+                        let _ = tx.send(());
+                    }
+
                     let replication_core = Arc::clone(&core);
                     let is_initiator = stream.is_initiator();
 

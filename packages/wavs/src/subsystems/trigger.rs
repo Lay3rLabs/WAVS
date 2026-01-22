@@ -25,6 +25,7 @@ use std::{
     collections::{HashMap, HashSet},
     num::NonZeroU64,
     sync::Arc,
+    time::Duration,
 };
 use streams::{cosmos_stream, cron_stream, evm_stream, MultiplexedStream, StreamTriggers};
 use tracing::instrument;
@@ -720,26 +721,58 @@ impl TriggerManager {
                                     kill_receiver.resubscribe(),
                                 )
                                 .await;
-                            let was_connecting = matches!(current_state, StreamStartState::Waiting);
                             match hypercore_start_result {
-                                Ok(hypercore_stream) => {
+                                Ok((hypercore_stream, peer_connected_rx)) => {
                                     multiplexed_stream.push(hypercore_stream);
-                                    tracing::info!("Started hypercore stream");
-                                    if was_connecting {
-                                        hypercore_stream_states
-                                            .write()
-                                            .unwrap()
-                                            .insert(feed_key.clone(), StreamStartState::Connected);
-                                    }
+
+                                    // Spawn task to wait for first peer connection
+                                    let feed_key_clone = feed_key.clone();
+                                    let hypercore_stream_states_clone =
+                                        Arc::clone(&hypercore_stream_states);
+                                    tokio::spawn(async move {
+                                        // Wait up to 30 seconds for peer connection
+                                        match tokio::time::timeout(
+                                            Duration::from_secs(30),
+                                            peer_connected_rx,
+                                        )
+                                        .await
+                                        {
+                                            Ok(_) => {
+                                                tracing::info!(
+                                                    "Hypercore peers connected for feed {}",
+                                                    feed_key_clone
+                                                );
+                                                hypercore_stream_states_clone
+                                                    .write()
+                                                    .unwrap()
+                                                    .insert(
+                                                        feed_key_clone,
+                                                        StreamStartState::Connected,
+                                                    );
+                                            }
+                                            Err(_) => {
+                                                tracing::warn!(
+                                                    "Timeout waiting for hypercore peer connection for feed {}",
+                                                    feed_key_clone
+                                                );
+                                                // Reset to Waiting so it can be retried
+                                                hypercore_stream_states_clone
+                                                    .write()
+                                                    .unwrap()
+                                                    .insert(
+                                                        feed_key_clone,
+                                                        StreamStartState::Waiting,
+                                                    );
+                                            }
+                                        }
+                                    });
                                 }
                                 Err(err) => {
                                     tracing::error!("Failed to start hypercore stream: {:?}", err);
-                                    if was_connecting {
-                                        hypercore_stream_states
-                                            .write()
-                                            .unwrap()
-                                            .insert(feed_key.clone(), StreamStartState::Waiting);
-                                    }
+                                    hypercore_stream_states
+                                        .write()
+                                        .unwrap()
+                                        .insert(feed_key.clone(), StreamStartState::Waiting);
                                     continue;
                                 }
                             }

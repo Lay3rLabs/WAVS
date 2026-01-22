@@ -296,10 +296,8 @@ impl AppHandles {
         Option<SocketAddr>,
         Option<async_std::task::JoinHandle<std::io::Result<()>>>,
     ) {
-        // Bind directly to 172.17.0.1 so bound address matches announced address
-        // Hyperswarm lacks libp2p's auto address discovery, so we must be explicit
         let bind_addr = SocketAddr::new(
-            std::net::IpAddr::V4(std::net::Ipv4Addr::new(172, 17, 0, 1)),
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
             49737,
         );
 
