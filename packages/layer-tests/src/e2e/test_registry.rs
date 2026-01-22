@@ -6,6 +6,7 @@ use example_types::{
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use wavs_types::AtProtoAction;
 
 use super::clients::Clients;
@@ -353,6 +354,7 @@ impl TestRegistry {
                         .with_submit(SubmitDefinition::Aggregator(Self::simple_aggregator(chain)))
                         .with_input_data(InputData::Text("hypercore-echo".to_string()))
                         .with_expected_output(ExpectedOutput::Text("hypercore-echo".to_string()))
+                        .with_timeout(Duration::from_secs(60))
                         .build(),
                 )
                 .with_service_manager_chain(chain)
