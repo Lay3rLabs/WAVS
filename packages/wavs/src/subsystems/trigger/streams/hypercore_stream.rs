@@ -219,7 +219,9 @@ async fn start_swarm_replication(
 
                     // Notify that first peer is connected (fire-and-forget if receiver dropped)
                     if let Some(tx) = peer_connected_tx.take() {
-                        let _ = tx.send(());
+                        if let Err(err) = tx.send(()) {
+                            tracing::warn!("Failed to send peer connected notification: {:?}", err);
+                        }
                     }
 
                     let replication_core = Arc::clone(&core);
