@@ -2,7 +2,7 @@ mod cosmos;
 mod evm;
 pub mod hypercore;
 
-use std::{collections::HashMap, io, net::SocketAddr, sync::Arc, time::Duration};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
@@ -23,18 +23,6 @@ use crate::config::TestP2pMode;
 
 use super::config::Configs;
 use super::matrix::EvmService;
-
-/// Check if a port is available for binding
-fn check_port_availability(port: u16) -> bool {
-    match std::net::TcpListener::bind(format!("127.0.0.1:{}", port)) {
-        Ok(_) => true,
-        Err(e) if e.kind() == io::ErrorKind::AddrInUse => {
-            tracing::warn!("Port {} is already in use", port);
-            false
-        }
-        Err(_) => false,
-    }
-}
 
 pub struct AppHandles {
     /// One handle per WAVS operator instance
@@ -172,25 +160,6 @@ impl AppHandles {
         metrics: &Metrics,
     ) -> Result<Vec<std::thread::JoinHandle<()>>, anyhow::Error> {
         let mut handles = Vec::with_capacity(configs.num_operators());
-
-        // Log port availability for better diagnostics
-        for (idx, config) in configs.wavs_configs.iter().enumerate() {
-            let http_port = config.port as u16;
-            let p2p_port = match &config.p2p {
-                P2pConfig::Remote { listen_port, .. } => *listen_port,
-                P2pConfig::Local { listen_port, .. } => *listen_port,
-                P2pConfig::Disabled => continue,
-            };
-
-            tracing::info!(
-                "Operator {} - HTTP port {} availability: {}, P2P port {} availability: {}",
-                idx,
-                http_port,
-                check_port_availability(http_port),
-                p2p_port,
-                check_port_availability(p2p_port)
-            );
-        }
 
         // Start operator 0 (bootstrap server)
         let op0_config = &configs.wavs_configs[0];
