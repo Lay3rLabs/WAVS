@@ -21,6 +21,9 @@ use wavs_types::{ChainKey, ChainKeyNamespace};
 
 use crate::config::TestP2pMode;
 
+/// Default port for the hyperswarm bootstrap node
+const HYPERSWARM_BOOTSTRAP_PORT: u16 = 49737;
+
 use super::config::Configs;
 use super::matrix::EvmService;
 
@@ -267,7 +270,7 @@ impl AppHandles {
     ) {
         let bind_addr = SocketAddr::new(
             std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
-            49737,
+            HYPERSWARM_BOOTSTRAP_PORT,
         );
 
         match async_std::task::block_on(hyperswarm::run_bootstrap_node(Some(bind_addr))) {
