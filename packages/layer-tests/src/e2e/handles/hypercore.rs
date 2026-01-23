@@ -109,14 +109,12 @@ impl HypercoreTestClient {
 
         let feed = Arc::new(Mutex::new(core));
         let swarm_feed = Arc::clone(&feed);
-        let connection_count = Arc::new(AtomicUsize::new(0));
-        let connection_notify = Arc::new(Notify::new());
 
         // Spawn hyperswarm task to handle incoming connections
         let feed_key_for_swarm = feed_key.clone();
         let feed_key_bytes_for_swarm = feed_key_bytes;
-        let connection_count_for_swarm = Arc::clone(&connection_count);
-        let connection_notify_for_swarm = Arc::clone(&connection_notify);
+        let connection_count_for_swarm = Arc::new(AtomicUsize::new(0));
+        let connection_notify_for_swarm = Arc::new(Notify::new());
         let swarm_handle = tokio::spawn(async move {
             let mut swarm = swarm;
             tracing::info!(
