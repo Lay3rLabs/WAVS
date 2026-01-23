@@ -731,3 +731,38 @@ pub async fn wait_for_hypercore_streams_to_finalize(
         )
     })?
 }
+
+/// Wait for hypercore mesh to form by checking the test client's peer connection count directly.
+///
+/// This is used in multi-operator tests to ensure all operators have discovered each other
+/// via hyperswarm before proceeding with test execution.
+pub async fn wait_for_hypercore_mesh_ready(
+    hypercore_client: &std::sync::Arc<crate::e2e::handles::hypercore::HypercoreTestClient>,
+    expected_peers: usize,
+    timeout: Duration,
+) -> anyhow::Result<usize> {
+    let start = std::time::Instant::now();
+
+    loop {
+        let peer_count = hypercore_client.connected_peer_count();
+
+        if peer_count >= expected_peers {
+            tracing::info!(
+                "Hypercore mesh ready: {} connected peers (expected {})",
+                peer_count,
+                expected_peers
+            );
+            return Ok(peer_count);
+        }
+
+        if start.elapsed() > timeout {
+            anyhow::bail!(
+                "Timeout waiting for hypercore mesh: {} peers connected, expected {}",
+                peer_count,
+                expected_peers
+            );
+        }
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}

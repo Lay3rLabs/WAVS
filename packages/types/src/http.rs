@@ -97,7 +97,7 @@ impl DevTriggerStreamsInfo {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DevHypercoreStreamState {
     Waiting,

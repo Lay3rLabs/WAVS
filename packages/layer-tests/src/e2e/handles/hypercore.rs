@@ -28,6 +28,8 @@ pub struct HypercoreTestClient {
     swarm_handle: JoinHandle<()>,
     /// TempDir storage - must be kept alive for the lifetime of the client
     _storage_dir: TempDir,
+    /// Connection count for testing mesh formation
+    connection_count_for_swarm: Arc<AtomicUsize>,
 }
 
 // Properly clean up the swarm task when the client is dropped
@@ -115,6 +117,9 @@ impl HypercoreTestClient {
         let feed_key_bytes_for_swarm = feed_key_bytes;
         let connection_count_for_swarm = Arc::new(AtomicUsize::new(0));
         let connection_notify_for_swarm = Arc::new(Notify::new());
+
+        // Clone the Arc for the spawned task (we keep the original for the struct)
+        let swarm_connection_count = Arc::clone(&connection_count_for_swarm);
         let swarm_handle = tokio::spawn(async move {
             let mut swarm = swarm;
             tracing::info!(
@@ -126,7 +131,7 @@ impl HypercoreTestClient {
             while let Some(result) = swarm.next().await {
                 match result {
                     Ok(stream) => {
-                        connection_count_for_swarm.fetch_add(1, Ordering::SeqCst);
+                        swarm_connection_count.fetch_add(1, Ordering::SeqCst);
                         connection_notify_for_swarm.notify_waiters();
                         tracing::info!(
                             "Hyperswarm connection established (initiator={}, peer_addr={:?}) for feed_key: {}",
@@ -139,7 +144,7 @@ impl HypercoreTestClient {
                         let feed_key_bytes = feed_key_bytes_for_swarm;
 
                         // Spawn a task for each peer connection
-                        let connection_count_for_peer = Arc::clone(&connection_count_for_swarm);
+                        let connection_count_for_peer = Arc::clone(&swarm_connection_count);
                         tokio::spawn(async move {
                             let result = hypercore_protocol::run_protocol(
                                 stream,
@@ -175,6 +180,7 @@ impl HypercoreTestClient {
             feed_key,
             swarm_handle,
             _storage_dir: storage_dir,
+            connection_count_for_swarm,
         })
     }
 
@@ -184,6 +190,14 @@ impl HypercoreTestClient {
     /// in service definitions.
     pub fn feed_key(&self) -> String {
         self.feed_key.clone()
+    }
+
+    /// Get the current number of connected peers for this hypercore feed.
+    ///
+    /// This is used in tests to wait for mesh formation before proceeding.
+    pub fn connected_peer_count(&self) -> usize {
+        self.connection_count_for_swarm
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Append data to the hypercore feed.

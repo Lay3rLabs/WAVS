@@ -21,7 +21,9 @@ use wavs_types::{
 };
 
 use crate::e2e::helpers::wait_for_hypercore_streams_to_finalize;
-use crate::e2e::helpers::{change_service_for_test, cosmos_wait_for_task_to_land};
+use crate::e2e::helpers::{
+    change_service_for_test, cosmos_wait_for_task_to_land, wait_for_hypercore_mesh_ready,
+};
 use crate::e2e::report::TestReport;
 use crate::e2e::service_managers::ServiceManagers;
 use crate::e2e::test_definition::{
@@ -495,10 +497,33 @@ async fn run_test(
                         .context("Failed to wait for hypercore stream to finalize")?;
                     }
 
-                    // Wait for hyperswarm mesh to stabilize after all instances are connected
-                    // This ensures all instances have discovered each other and are ready to receive appends
+                    // Wait for hypercore mesh to stabilize after all instances have connected streams
+                    // This ensures all instances have discovered each other via hyperswarm and are ready to replicate appends
                     if clients.http_clients.len() > 1 {
-                        tokio::time::sleep(Duration::from_secs(3)).await;
+                        let expected_peers = clients.http_clients.len() - 1;
+                        tracing::info!(
+                            "Waiting for hypercore mesh to stabilize ({} expected peers) before append",
+                            expected_peers
+                        );
+
+                        let peer_count = wait_for_hypercore_mesh_ready(
+                            &hypercore_client,
+                            expected_peers,
+                            Duration::from_secs(30),
+                        )
+                        .await
+                        .map_err(|e| {
+                            anyhow!(
+                                "Hypercore mesh readiness check failed before append: {}. \
+                                 Cannot proceed with append until hypercore mesh is ready.",
+                                e
+                            )
+                        })?;
+
+                        tracing::info!(
+                            "Hypercore mesh ready for append: {} connected peers",
+                            peer_count
+                        );
                     }
 
                     // Verify feed keys match
