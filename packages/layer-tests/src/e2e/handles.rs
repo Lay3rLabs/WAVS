@@ -275,10 +275,13 @@ impl AppHandles {
 
         match async_std::task::block_on(hyperswarm::run_bootstrap_node(Some(bind_addr))) {
             Ok((addr, handle)) => {
-                tracing::info!("Started hyperswarm bootstrap node at {}", addr);
+                tracing::info!(
+                    "Bootstrap node bound to {}, listening for peer connections",
+                    addr
+                );
 
-                // Give the bootstrap node time to start listening
-                std::thread::sleep(Duration::from_secs(1));
+                // Give the bootstrap node time to bind and initialize its DHT
+                std::thread::sleep(Duration::from_secs(5));
 
                 (Some(addr), Some(handle))
             }

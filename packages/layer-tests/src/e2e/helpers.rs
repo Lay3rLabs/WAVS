@@ -742,6 +742,7 @@ pub async fn wait_for_hypercore_mesh_ready(
     timeout: Duration,
 ) -> anyhow::Result<usize> {
     let start = std::time::Instant::now();
+    let mut poll_interval = Duration::from_millis(100);
 
     loop {
         let peer_count = hypercore_client.connected_peer_count();
@@ -763,6 +764,9 @@ pub async fn wait_for_hypercore_mesh_ready(
             );
         }
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        // Exponential backoff with jitter for mesh formation
+        let wait_time = poll_interval;
+        poll_interval = std::cmp::min(Duration::from_secs(2), poll_interval * 2);
+        tokio::time::sleep(wait_time).await;
     }
 }

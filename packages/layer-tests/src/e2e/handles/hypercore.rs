@@ -6,7 +6,6 @@
 use ::hypercore_protocol::discovery_key;
 use hypercore::{Hypercore, HypercoreBuilder, PartialKeypair, SigningKey, Storage, VerifyingKey};
 use hyperswarm::{Config as SwarmConfig, Hyperswarm, TopicConfig};
-use rand_core::OsRng;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{
@@ -14,7 +13,7 @@ use std::sync::{
     Arc,
 };
 use tempfile::TempDir;
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use wavs::subsystems::trigger::streams::hypercore_protocol;
 
@@ -44,21 +43,21 @@ impl Drop for HypercoreTestClient {
 }
 
 impl HypercoreTestClient {
-    /// Create a new hypercore feed with a generated keypair.
+    /// Create a new hypercore feed with a pre-generated signing key.
     ///
-    /// This creates a unique temporary storage directory for this test's
-    /// hypercore data, which will be automatically cleaned up when the
-    /// client is dropped.
+    /// This is used when we need the feed_key early (for trigger registration)
+    /// but want to delay creating the full client until services are ready.
     pub async fn new(
         test_name: &str,
         hyperswarm_bootstrap: Option<String>,
+        signing_key_bytes: &[u8],
     ) -> anyhow::Result<Self> {
         // Create unique tempdir for this test
         let storage_dir = TempDir::new()?;
         let storage_path: PathBuf = storage_dir.path().to_path_buf();
 
         tracing::info!(
-            "Creating hypercore test client for '{}' with storage at: {}",
+            "Creating hypercore test client with pre-generated key for '{}' with storage at: {}",
             test_name,
             storage_path.display()
         );
@@ -68,13 +67,18 @@ impl HypercoreTestClient {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create hypercore storage: {e:?}"))?;
 
-        // Generate a new signing keypair with a CSPRNG
-        let signing_key = SigningKey::generate(&mut OsRng);
+        // Reconstruct the signing key from bytes
+        // Convert slice to array for SigningKey::from_bytes
+        let key_array: [u8; 32] = signing_key_bytes
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Invalid signing key length, expected 32 bytes"))?;
+        let signing_key = SigningKey::from_bytes(&key_array);
+
         let public_key_bytes = signing_key.verifying_key().to_bytes();
         let feed_key_bytes = public_key_bytes;
         let feed_key = const_hex::encode(public_key_bytes);
 
-        tracing::info!("Generated hypercore feed key: {}", feed_key);
+        tracing::info!("Using hypercore feed key: {}", feed_key);
 
         // Reconstruct VerifyingKey from bytes for owned value
         let public = VerifyingKey::from_bytes(&public_key_bytes)
@@ -116,7 +120,6 @@ impl HypercoreTestClient {
         let feed_key_for_swarm = feed_key.clone();
         let feed_key_bytes_for_swarm = feed_key_bytes;
         let connection_count_for_swarm = Arc::new(AtomicUsize::new(0));
-        let connection_notify_for_swarm = Arc::new(Notify::new());
 
         // Clone the Arc for the spawned task (we keep the original for the struct)
         let swarm_connection_count = Arc::clone(&connection_count_for_swarm);
@@ -132,7 +135,12 @@ impl HypercoreTestClient {
                 match result {
                     Ok(stream) => {
                         swarm_connection_count.fetch_add(1, Ordering::SeqCst);
-                        connection_notify_for_swarm.notify_waiters();
+                        tracing::debug!(
+                            "Hyperswarm peer discovery attempt (initiator={}, peer_addr={:?}) for feed_key: {}",
+                            stream.is_initiator(),
+                            stream.peer_addr(),
+                            feed_key_for_swarm
+                        );
                         tracing::info!(
                             "Hyperswarm connection established (initiator={}, peer_addr={:?}) for feed_key: {}",
                             stream.is_initiator(),
@@ -158,7 +166,11 @@ impl HypercoreTestClient {
                             connection_count_for_peer.fetch_sub(1, Ordering::SeqCst);
 
                             if let Err(err) = result {
-                                tracing::warn!("Hypercore protocol swarm peer error: {err:?}");
+                                tracing::error!(
+                                    "Hyperswarm connection failed for feed_key {}: {:?}",
+                                    const_hex::encode(feed_key_bytes),
+                                    err
+                                );
                             } else {
                                 tracing::debug!(
                                     "Hypercore protocol peer connection closed cleanly"
@@ -167,7 +179,11 @@ impl HypercoreTestClient {
                         });
                     }
                     Err(err) => {
-                        tracing::warn!("Hyperswarm connection error: {:?}", err);
+                        tracing::error!(
+                            "Hyperswarm connection failed for feed_key {}: {:?}",
+                            feed_key_for_swarm,
+                            err
+                        );
                     }
                 }
             }
