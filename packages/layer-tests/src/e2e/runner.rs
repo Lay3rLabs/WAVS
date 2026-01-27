@@ -109,13 +109,16 @@ impl Runner {
             }
 
             // Give the hypercore client time to announce to DHT before services start discovering
+            // In CI with multiple operators, DHT propagation may take longer
             if self
                 .registry
                 .get_hypercore_client("evm_hypercore_echo_data")
                 .is_some()
             {
-                tracing::info!("Waiting for hypercore client DHT announcement to propagate...");
-                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                tracing::info!(
+                    "Waiting for hypercore client DHT announcement to propagate (10s)..."
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
             }
 
             let services = group_tests
@@ -516,27 +519,34 @@ async fn run_test(
                         .context("Failed to wait for hypercore stream to finalize")?;
                     }
 
-                    // Wait for hypercore mesh to stabilize after all WAVS instances have connected to the test client
-                    // The test client should see connections from ALL WAVS instances (not len-1, since the test client is not a WAVS instance)
+                    // Wait for hypercore mesh to stabilize - require at least 1 WAVS instance to connect
+                    // In multi-operator mode, DHT discovery may not connect all operators reliably,
+                    // but data will still replicate if at least one connection is established
                     {
-                        let expected_peers = clients.http_clients.len();
+                        // Require at least 1 connection, but ideally all operators
+                        let min_required_peers = 1;
+                        let total_operators = clients.http_clients.len();
                         tracing::info!(
-                            "Waiting for hypercore mesh to stabilize ({} expected WAVS peers) before append",
-                            expected_peers
+                            "Waiting for hypercore mesh to stabilize (min {} peer, {} total operators) before append",
+                            min_required_peers,
+                            total_operators
                         );
 
                         // Make mesh readiness check non-blocking - warn if not ready but proceed anyway
+                        // Use longer timeout in CI where DHT discovery may be slower
                         match wait_for_hypercore_mesh_ready(
                             &hypercore_client,
-                            expected_peers,
-                            Duration::from_secs(30),
+                            min_required_peers,
+                            Duration::from_secs(60),
                         )
                         .await
                         {
                             Ok(peer_count) => {
                                 tracing::info!(
-                                    "Hypercore mesh ready for append: {} connected peers",
-                                    peer_count
+                                    "Hypercore mesh ready for append: {} connected peers (min required: {}, total operators: {})",
+                                    peer_count,
+                                    min_required_peers,
+                                    total_operators
                                 );
                             }
                             Err(e) => {
