@@ -84,7 +84,10 @@ impl DevTriggerStreamsInfo {
     pub fn finalized(&self) -> bool {
         self.chains.values().all(|info| {
             !info.any_active_rpcs_in_flight && info.is_connected && info.current_endpoint.is_some()
-        })
+        }) && self
+            .hypercore
+            .values()
+            .all(|info| matches!(info, DevHypercoreStreamState::Connected))
     }
 
     pub fn any_active_subscriptions(&self) -> bool {
@@ -94,7 +97,7 @@ impl DevTriggerStreamsInfo {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DevHypercoreStreamState {
     Waiting,

@@ -6,6 +6,7 @@ use example_types::{
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use wavs_types::AtProtoAction;
 
 use super::clients::Clients;
@@ -39,10 +40,21 @@ pub enum CosmosContractDefinition {
 
 use super::handles::hypercore::HypercoreTestClient;
 
+/// Factory data to create a hypercore test client
+#[derive(Clone)]
+pub struct HypercoreClientFactory {
+    pub test_name: String,
+    pub hyperswarm_bootstrap: Option<String>,
+    pub signing_key_bytes: Vec<u8>,
+}
+
 /// Registry for managing test definitions and their deployed services
 pub struct TestRegistry {
     tests: Vec<TestDefinition>,
-    /// Map of test name to hypercore test client for real hypercore e2e tests
+    /// Map of test name to hypercore client factory for real hypercore e2e tests
+    /// Client is created just before test runs to avoid DHT announcement expiration
+    hypercore_client_factories: DashMap<String, HypercoreClientFactory>,
+    /// Map of test name to actually created hypercore test client
     hypercore_clients: DashMap<String, Arc<HypercoreTestClient>>,
 }
 
@@ -50,6 +62,7 @@ impl Default for TestRegistry {
     fn default() -> Self {
         Self {
             tests: Vec::new(),
+            hypercore_client_factories: DashMap::new(),
             hypercore_clients: DashMap::new(),
         }
     }
@@ -94,9 +107,37 @@ impl TestRegistry {
         self.hypercore_clients.get(test_name).map(|v| v.clone())
     }
 
-    /// Store a hypercore test client for a test
-    pub fn _insert_hypercore_client(&self, test_name: String, client: HypercoreTestClient) {
-        self.hypercore_clients.insert(test_name, Arc::new(client));
+    /// Store a hypercore client factory for a test (client will be created later)
+    pub fn insert_hypercore_client_factory(
+        &self,
+        test_name: String,
+        factory: HypercoreClientFactory,
+    ) {
+        self.hypercore_client_factories.insert(test_name, factory);
+    }
+
+    /// Create hypercore clients from factories for all tests that need them
+    /// Called right before tests run to ensure DHT announcements are fresh
+    pub async fn create_hypercore_clients(&self) -> anyhow::Result<()> {
+        for entry in self.hypercore_client_factories.iter() {
+            let test_name = entry.key();
+            let factory = entry.value();
+            if !self.hypercore_clients.contains_key(test_name) {
+                tracing::info!(
+                    "Creating hypercore client for test '{}' right before test execution",
+                    test_name
+                );
+                let client = HypercoreTestClient::new(
+                    &factory.test_name,
+                    factory.hyperswarm_bootstrap.clone(),
+                    &factory.signing_key_bytes,
+                )
+                .await?;
+                self.hypercore_clients
+                    .insert(test_name.clone(), Arc::new(client));
+            }
+        }
+        Ok(())
     }
 
     /// Create a registry based on the test mode
@@ -105,7 +146,7 @@ impl TestRegistry {
         chain_configs: Arc<RwLock<ChainConfigs>>,
         clients: &Clients,
         cosmos_code_map: &CosmosCodeMap,
-        _hyperswarm_bootstrap: Option<String>,
+        hyperswarm_bootstrap: Option<String>,
     ) -> Self {
         // Convert TestMode to TestMatrix
         let matrix: TestMatrix = test_mode.into();
@@ -127,10 +168,9 @@ impl TestRegistry {
                     registry.register_evm_atproto_echo_data_test(chain);
                 }
                 EvmService::HypercoreEchoData => {
-                    // TODO - see register_evm_hypercore_echo_data_test() below
-                    // registry
-                    //     .register_evm_hypercore_echo_data_test(chain, hyperswarm_bootstrap.clone())
-                    //     .await;
+                    registry
+                        .register_evm_hypercore_echo_data_test(chain, hyperswarm_bootstrap.clone())
+                        .await;
                 }
                 EvmService::EchoDataSecondaryChain => {
                     let secondary = chains.secondary_evm().unwrap();
@@ -316,33 +356,37 @@ impl TestRegistry {
         )
     }
 
-    // TODO: Re-enable when hyperswarm peer discovery is fixed in CI
-    // The test fails in CI with "Timed out waiting for 3 hyperswarm peers"
-    // due to hyperswarm UDP/networking issues in the CI environment
-    /*
     async fn register_evm_hypercore_echo_data_test(
         &mut self,
         chain: &ChainKey,
         hyperswarm_bootstrap: Option<String>,
     ) -> &mut Self {
-        tracing::warn!("Skipping hypercore test - hyperswarm peer discovery not working in CI");
-        return self;
-        // Create a real hypercore test client with generated feed key
+        // Generate signing key now to get feed_key for the trigger,
+        // but delay creating the full client until right before test runs
         let test_name = "evm_hypercore_echo_data";
-        let hypercore_client = HypercoreTestClient::new(test_name, hyperswarm_bootstrap)
-            .await
-            .expect("Failed to create hypercore test client");
+        use hypercore::SigningKey;
+        use rand_core::OsRng;
 
-        let feed_key = hypercore_client.feed_key();
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let public_key_bytes = signing_key.verifying_key().to_bytes();
+        let feed_key = const_hex::encode(public_key_bytes);
+        let signing_key_bytes = signing_key.to_bytes();
 
         tracing::info!(
-            "Created hypercore test client for '{}' with feed key: {}",
+            "Generated signing key for hypercore test '{}' with feed key: {}",
             test_name,
             feed_key
         );
 
-        // Store the client for use during test execution
-        self.insert_hypercore_client(test_name.to_string(), hypercore_client);
+        // Store the factory to create the client later
+        self.insert_hypercore_client_factory(
+            test_name.to_string(),
+            HypercoreClientFactory {
+                test_name: test_name.to_string(),
+                hyperswarm_bootstrap,
+                signing_key_bytes: signing_key_bytes.to_vec(),
+            },
+        );
 
         self.register(
             TestBuilder::new(test_name)
@@ -360,13 +404,14 @@ impl TestRegistry {
                         .with_submit(SubmitDefinition::Aggregator(Self::simple_aggregator(chain)))
                         .with_input_data(InputData::Text("hypercore-echo".to_string()))
                         .with_expected_output(ExpectedOutput::Text("hypercore-echo".to_string()))
+                        .with_timeout(Duration::from_secs(60))
                         .build(),
                 )
                 .with_service_manager_chain(chain)
+                .with_group(TestGroupId::Hypercore)
                 .build(),
         )
     }
-    */
 
     fn register_evm_echo_data_secondary_chain_test(
         &mut self,

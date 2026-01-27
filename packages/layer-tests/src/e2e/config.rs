@@ -145,10 +145,10 @@ impl TestMnemonics {
 
 /// Number of operators for multi-operator tests
 pub const MULTI_OPERATOR_COUNT: usize = 3;
-/// Base port for WAVS HTTP servers
-pub const WAVS_BASE_PORT: u32 = 8000;
-/// Base port for WAVS P2P servers
-pub const P2P_BASE_PORT: u16 = 9000;
+/// Default base port for WAVS HTTP servers
+pub const DEFAULT_WAVS_BASE_PORT: u32 = 8000;
+/// Default base port for WAVS P2P servers
+pub const DEFAULT_P2P_BASE_PORT: u16 = 9000;
 
 impl From<TestConfig> for Configs {
     fn from(test_config: TestConfig) -> Self {
@@ -246,8 +246,7 @@ impl From<TestConfig> for Configs {
             wavs_config.aggregator_cosmos_credential = Some(mnemonics.aggregator_cosmos.clone());
             wavs_config.aggregator_evm_credential = Some(mnemonics.aggregator_evm.clone());
             wavs_config.dev_endpoints_enabled = true;
-            // Each operator gets a unique port
-            wavs_config.port = WAVS_BASE_PORT + operator_index as u32;
+            wavs_config.port = DEFAULT_WAVS_BASE_PORT + operator_index as u32;
 
             // Enable P2P for multi-operator tests
             if num_operators > 1 {
@@ -257,7 +256,7 @@ impl From<TestConfig> for Configs {
                         // Operator 0 is the bootstrap server (empty bootstrap_nodes)
                         // Operators 1+ will have bootstrap_nodes set at runtime after operator 0 starts
                         wavs_config.p2p = P2pConfig::Remote {
-                            listen_port: P2P_BASE_PORT + operator_index as u16,
+                            listen_port: DEFAULT_P2P_BASE_PORT + operator_index as u16,
                             bootstrap_nodes: vec![], // Set at runtime for operators 1+
                             max_retry_duration_secs: None,
                             retry_interval_ms: None,
@@ -274,7 +273,7 @@ impl From<TestConfig> for Configs {
                     TestP2pMode::Mdns => {
                         // Local mode: mDNS discovery
                         wavs_config.p2p = P2pConfig::Local {
-                            listen_port: P2P_BASE_PORT + operator_index as u16,
+                            listen_port: DEFAULT_P2P_BASE_PORT + operator_index as u16,
                             max_retry_duration_secs: None,
                             retry_interval_ms: None,
                             submission_ttl_secs: None,

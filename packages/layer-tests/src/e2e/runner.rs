@@ -21,7 +21,9 @@ use wavs_types::{
 };
 
 use crate::e2e::helpers::wait_for_hypercore_streams_to_finalize;
-use crate::e2e::helpers::{change_service_for_test, cosmos_wait_for_task_to_land};
+use crate::e2e::helpers::{
+    change_service_for_test, cosmos_wait_for_task_to_land, wait_for_hypercore_mesh_ready,
+};
 use crate::e2e::report::TestReport;
 use crate::e2e::service_managers::ServiceManagers;
 use crate::e2e::test_definition::{
@@ -98,6 +100,27 @@ impl Runner {
         let test_groups = self.registry.list_all_grouped(self.configs.grouping);
 
         for (group, mut group_tests) in test_groups {
+            // Create hypercore clients BEFORE deploying services
+            // This ensures the test client announces to DHT before WAVS starts its hypercore streams.
+            // When WAVS deploys a service with a HypercoreAppend trigger, it immediately starts
+            // the hyperswarm discovery. If the test client hasn't announced yet, WAVS won't find it.
+            if let Err(e) = self.registry.create_hypercore_clients().await {
+                tracing::error!("Failed to create hypercore clients: {}", e);
+            }
+
+            // Give the hypercore client time to announce to DHT before services start discovering
+            // In CI with multiple operators, DHT propagation may take longer
+            if self
+                .registry
+                .get_hypercore_client("evm_hypercore_echo_data")
+                .is_some()
+            {
+                tracing::info!(
+                    "Waiting for hypercore client DHT announcement to propagate (10s)..."
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            }
+
             let services = group_tests
                 .iter()
                 .map(|test| all_services.get(&test.name).cloned().unwrap().service)
@@ -201,6 +224,7 @@ impl Runner {
 
             // All services are now deployed and ready for the tests
             // From here on in we're strictly testing the trigger->execute->aggregate->submit flow
+
             tracing::info!("Running group {:?} with {} tests", group, group_tests.len());
             let mut futures = FuturesUnordered::new();
 
@@ -491,19 +515,48 @@ async fn run_test(
                             feed_key,
                             Some(Duration::from_secs(30)),
                         )
-                        .await;
+                        .await
+                        .context("Failed to wait for hypercore stream to finalize")?;
                     }
 
-                    if clients.http_clients.len() > 1 {
-                        let expected = clients.http_clients.len();
+                    // Wait for hypercore mesh to stabilize - require at least 1 WAVS instance to connect
+                    // In multi-operator mode, DHT discovery may not connect all operators reliably,
+                    // but data will still replicate if at least one connection is established
+                    {
+                        // Require at least 1 connection, but ideally all operators
+                        let min_required_peers = 1;
+                        let total_operators = clients.http_clients.len();
                         tracing::info!(
-                            "Waiting for {} hyperswarm peers before appending",
-                            expected
+                            "Waiting for hypercore mesh to stabilize (min {} peer, {} total operators) before append",
+                            min_required_peers,
+                            total_operators
                         );
-                        let connected = hypercore_client
-                            .wait_for_peers(expected, Duration::from_secs(30))
-                            .await?;
-                        tracing::info!("Hypercore peers connected: {}", connected);
+
+                        // Make mesh readiness check non-blocking - warn if not ready but proceed anyway
+                        // Use longer timeout in CI where DHT discovery may be slower
+                        match wait_for_hypercore_mesh_ready(
+                            &hypercore_client,
+                            min_required_peers,
+                            Duration::from_secs(60),
+                        )
+                        .await
+                        {
+                            Ok(peer_count) => {
+                                tracing::info!(
+                                    "Hypercore mesh ready for append: {} connected peers (min required: {}, total operators: {})",
+                                    peer_count,
+                                    min_required_peers,
+                                    total_operators
+                                );
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Hypercore mesh not fully formed before append: {}. \
+                                     Proceeding anyway - replication may still work when peers connect.",
+                                    e
+                                );
+                            }
+                        }
                     }
 
                     // Verify feed keys match

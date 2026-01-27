@@ -720,26 +720,22 @@ impl TriggerManager {
                                     kill_receiver.resubscribe(),
                                 )
                                 .await;
-                            let was_connecting = matches!(current_state, StreamStartState::Waiting);
                             match hypercore_start_result {
                                 Ok(hypercore_stream) => {
                                     multiplexed_stream.push(hypercore_stream);
-                                    tracing::info!("Started hypercore stream");
-                                    if was_connecting {
-                                        hypercore_stream_states
-                                            .write()
-                                            .unwrap()
-                                            .insert(feed_key.clone(), StreamStartState::Connected);
-                                    }
+
+                                    // Mark as connected once stream starts successfully
+                                    hypercore_stream_states
+                                        .write()
+                                        .unwrap()
+                                        .insert(feed_key.clone(), StreamStartState::Connected);
                                 }
                                 Err(err) => {
                                     tracing::error!("Failed to start hypercore stream: {:?}", err);
-                                    if was_connecting {
-                                        hypercore_stream_states
-                                            .write()
-                                            .unwrap()
-                                            .insert(feed_key.clone(), StreamStartState::Waiting);
-                                    }
+                                    hypercore_stream_states
+                                        .write()
+                                        .unwrap()
+                                        .insert(feed_key.clone(), StreamStartState::Waiting);
                                     continue;
                                 }
                             }

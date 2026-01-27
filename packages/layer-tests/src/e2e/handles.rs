@@ -21,6 +21,9 @@ use wavs_types::{ChainKey, ChainKeyNamespace};
 
 use crate::config::TestP2pMode;
 
+/// Default port for the hyperswarm bootstrap node
+const HYPERSWARM_BOOTSTRAP_PORT: u16 = 49737;
+
 use super::config::Configs;
 use super::matrix::EvmService;
 
@@ -91,7 +94,8 @@ impl AppHandles {
 
         if configs.p2p == TestP2pMode::Kademlia && configs.num_operators() > 1 {
             // Remote mode: start operator 0 first, get bootstrap address, then start others
-            wavs_handles = Self::start_wavs_remote_mode(ctx, configs, &metrics);
+            wavs_handles = Self::start_wavs_remote_mode(ctx, configs, &metrics)
+                .expect("Failed to start operators in remote mode");
         } else {
             // Local mode or single operator: start all at once
             for (operator_index, wavs_config) in configs.wavs_configs.iter().enumerate() {
@@ -157,7 +161,7 @@ impl AppHandles {
         ctx: &AppContext,
         configs: &Configs,
         metrics: &Metrics,
-    ) -> Vec<std::thread::JoinHandle<()>> {
+    ) -> Result<Vec<std::thread::JoinHandle<()>>, anyhow::Error> {
         let mut handles = Vec::with_capacity(configs.num_operators());
 
         // Start operator 0 (bootstrap server)
@@ -173,8 +177,11 @@ impl AppHandles {
             // Wait for the server to be ready
             tokio::time::sleep(Duration::from_millis(500)).await;
 
-            // Poll until we get an address
-            for _ in 0..60 {
+            let start = std::time::Instant::now();
+            let timeout = Duration::from_secs(30); // Increased from 6s to 30s
+            let mut delay = Duration::from_millis(100);
+
+            loop {
                 match client.get_p2p_status().await {
                     Ok(status) => {
                         // Prefer external_addresses, fall back to listen_addresses
@@ -186,21 +193,24 @@ impl AppHandles {
 
                         if let Some(addr) = addr {
                             tracing::info!("Got bootstrap address from operator 0: {}", addr);
-                            return Some(addr);
+                            return Ok(addr);
                         }
                     }
                     Err(e) => {
                         tracing::debug!("Waiting for operator 0 P2P status: {:?}", e);
                     }
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-            tracing::error!("Failed to get bootstrap address from operator 0");
-            None
-        });
 
-        let bootstrap_addr =
-            bootstrap_addr.expect("Failed to get bootstrap address from operator 0");
+                if start.elapsed() >= timeout {
+                    return Err(anyhow::anyhow!(
+                        "Timed out waiting for operator 0 bootstrap address after 30s"
+                    ));
+                }
+
+                tokio::time::sleep(delay).await;
+                delay = (delay * 2).min(Duration::from_secs(5)); // Exponential backoff, max 5s
+            }
+        })?;
 
         // Start remaining operators with the bootstrap address
         for (operator_index, wavs_config) in configs.wavs_configs.iter().enumerate().skip(1) {
@@ -251,29 +261,29 @@ impl AppHandles {
             ));
         }
 
-        handles
+        Ok(handles)
     }
 
     fn start_hyperswarm_bootstrap() -> (
         Option<SocketAddr>,
         Option<async_std::task::JoinHandle<std::io::Result<()>>>,
     ) {
-        match async_std::task::block_on(hyperswarm::run_bootstrap_node::<SocketAddr>(None)) {
+        let bind_addr = SocketAddr::new(
+            std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+            HYPERSWARM_BOOTSTRAP_PORT,
+        );
+
+        match async_std::task::block_on(hyperswarm::run_bootstrap_node(Some(bind_addr))) {
             Ok((addr, handle)) => {
-                let announce_addr = if addr.ip().is_unspecified() {
-                    SocketAddr::new(
-                        std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                        addr.port(),
-                    )
-                } else {
-                    addr
-                };
                 tracing::info!(
-                    "Started hyperswarm bootstrap node at {} (announcing {})",
-                    addr,
-                    announce_addr
+                    "Bootstrap node bound to {}, listening for peer connections",
+                    addr
                 );
-                (Some(announce_addr), Some(handle))
+
+                // Give the bootstrap node time to bind and initialize its DHT
+                std::thread::sleep(Duration::from_secs(5));
+
+                (Some(addr), Some(handle))
             }
             Err(err) => {
                 tracing::warn!("Failed to start hyperswarm bootstrap node: {err}");

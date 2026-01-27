@@ -7,7 +7,7 @@ use utils::{config::EvmChainConfigExt, evm_client::EvmSigningClient};
 use wavs_cli::clients::HttpClient;
 use wavs_types::ChainKey;
 
-use super::config::{Configs, WAVS_BASE_PORT};
+use super::config::Configs;
 
 #[derive(Clone)]
 pub struct Clients {
@@ -22,8 +22,8 @@ impl Clients {
     pub async fn new(configs: &Configs) -> Self {
         // Create HTTP clients for each WAVS instance
         let mut http_clients = Vec::with_capacity(configs.num_operators());
-        for operator_index in 0..configs.num_operators() {
-            let port = WAVS_BASE_PORT + operator_index as u32;
+        for (operator_index, wavs_config) in configs.wavs_configs.iter().enumerate() {
+            let port = wavs_config.port;
             let endpoint = format!("http://127.0.0.1:{}", port);
             let http_client = HttpClient::new(endpoint);
 

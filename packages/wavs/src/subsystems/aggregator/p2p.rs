@@ -794,16 +794,27 @@ async fn run_event_loop(
             return;
         }
     };
+
+    // Try the preferred port first, fall back to OS-assigned if it fails
     let listen_addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{}", listen_port)
         .parse()
         .expect("Valid multiaddr");
 
     if let Err(e) = swarm.listen_on(listen_addr.clone()) {
-        tracing::error!("Failed to listen on {}: {}", listen_addr, e);
-        return;
+        tracing::warn!(
+            "Failed to listen on preferred port {}: {}, falling back to OS-assigned port",
+            listen_addr,
+            e
+        );
+        let fallback_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0".parse().expect("Valid multiaddr");
+        if let Err(e) = swarm.listen_on(fallback_addr.clone()) {
+            tracing::error!("Failed to listen on fallback address: {}", e);
+            return;
+        }
+        tracing::info!("P2P listening on {}", fallback_addr);
+    } else {
+        tracing::info!("P2P listening on {}", listen_addr);
     }
-
-    tracing::info!("P2P listening on {}", listen_addr);
 
     let bootstrap_nodes = match &p2p_config {
         P2pConfig::Remote {
