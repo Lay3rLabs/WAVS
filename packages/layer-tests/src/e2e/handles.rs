@@ -41,12 +41,23 @@ pub type CosmosMiddlewares = Arc<HashMap<ChainKey, CosmosMiddleware>>;
 
 impl AppHandles {
     pub fn start(ctx: &AppContext, configs: &mut Configs, metrics: Metrics) -> Self {
-        let (bootstrap_addr, bootstrap_handle) =
-            if configs.matrix.evm.contains(&EvmService::HypercoreEchoData) {
-                Self::start_hyperswarm_bootstrap()
-            } else {
+        let (bootstrap_addr, bootstrap_handle): (
+            Option<std::net::SocketAddr>,
+            Option<async_std::task::JoinHandle<std::io::Result<()>>>,
+        ) = {
+            #[cfg(feature = "hypercore-tests")]
+            {
+                if configs.matrix.evm.contains(&EvmService::HypercoreEchoData) {
+                    Self::start_hyperswarm_bootstrap()
+                } else {
+                    (None, None)
+                }
+            }
+            #[cfg(not(feature = "hypercore-tests"))]
+            {
                 (None, None)
-            };
+            }
+        };
         if let Some(addr) = bootstrap_addr {
             let addr = addr.to_string();
             for wavs_config in configs.wavs_configs.iter_mut() {

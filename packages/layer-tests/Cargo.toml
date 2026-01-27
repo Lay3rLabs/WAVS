@@ -9,6 +9,9 @@ repository.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+hypercore-tests = []
+
 # Only dev-dependencies since we only run this package via `cargo test`
 [dev-dependencies]
 wasm-pkg-common = { workspace = true }

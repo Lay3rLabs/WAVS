@@ -167,6 +167,7 @@ impl TestRegistry {
                 EvmService::AtprotoEchoData => {
                     registry.register_evm_atproto_echo_data_test(chain);
                 }
+                #[cfg(feature = "hypercore-tests")]
                 EvmService::HypercoreEchoData => {
                     registry
                         .register_evm_hypercore_echo_data_test(chain, hyperswarm_bootstrap.clone())
@@ -356,6 +357,7 @@ impl TestRegistry {
         )
     }
 
+    #[cfg(feature = "hypercore-tests")]
     async fn register_evm_hypercore_echo_data_test(
         &mut self,
         chain: &ChainKey,
