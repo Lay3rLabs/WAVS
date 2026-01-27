@@ -28,7 +28,7 @@ split-debuginfo = "unpacked"
 
 [workspace.package]
 edition = "2021"
-version = "2.0.0-rc.9"
+version = "2.0.0-rc.10"
 license = "GPL-3.0-or-later"
 authors = ["Layer Labs (Cayman)"]
 repository = "https://github.com/Lay3rLabs/WAVS"
