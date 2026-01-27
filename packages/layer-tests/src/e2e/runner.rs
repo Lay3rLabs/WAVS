@@ -100,6 +100,24 @@ impl Runner {
         let test_groups = self.registry.list_all_grouped(self.configs.grouping);
 
         for (group, mut group_tests) in test_groups {
+            // Create hypercore clients BEFORE deploying services
+            // This ensures the test client announces to DHT before WAVS starts its hypercore streams.
+            // When WAVS deploys a service with a HypercoreAppend trigger, it immediately starts
+            // the hyperswarm discovery. If the test client hasn't announced yet, WAVS won't find it.
+            if let Err(e) = self.registry.create_hypercore_clients().await {
+                tracing::error!("Failed to create hypercore clients: {}", e);
+            }
+
+            // Give the hypercore client time to announce to DHT before services start discovering
+            if self
+                .registry
+                .get_hypercore_client("evm_hypercore_echo_data")
+                .is_some()
+            {
+                tracing::info!("Waiting for hypercore client DHT announcement to propagate...");
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            }
+
             let services = group_tests
                 .iter()
                 .map(|test| all_services.get(&test.name).cloned().unwrap().service)
@@ -203,12 +221,6 @@ impl Runner {
 
             // All services are now deployed and ready for the tests
             // From here on in we're strictly testing the trigger->execute->aggregate->submit flow
-
-            // Create hypercore clients now that services are ready
-            // This ensures DHT announcements are fresh when services try to discover peers
-            if let Err(e) = self.registry.create_hypercore_clients().await {
-                tracing::error!("Failed to create hypercore clients: {}", e);
-            }
 
             tracing::info!("Running group {:?} with {} tests", group, group_tests.len());
             let mut futures = FuturesUnordered::new();
@@ -504,12 +516,12 @@ async fn run_test(
                         .context("Failed to wait for hypercore stream to finalize")?;
                     }
 
-                    // Wait for hypercore mesh to stabilize after all instances have connected streams
-                    // This ensures all instances have discovered each other via hyperswarm and are ready to replicate appends
-                    if clients.http_clients.len() > 1 {
-                        let expected_peers = clients.http_clients.len() - 1;
+                    // Wait for hypercore mesh to stabilize after all WAVS instances have connected to the test client
+                    // The test client should see connections from ALL WAVS instances (not len-1, since the test client is not a WAVS instance)
+                    {
+                        let expected_peers = clients.http_clients.len();
                         tracing::info!(
-                            "Waiting for hypercore mesh to stabilize ({} expected peers) before append",
+                            "Waiting for hypercore mesh to stabilize ({} expected WAVS peers) before append",
                             expected_peers
                         );
 
