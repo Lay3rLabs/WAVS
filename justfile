@@ -220,12 +220,6 @@ start-dev:
     trap 'kill $(jobs -pr)' EXIT
     wait
 
-start-wavs-dev-full:
-    #!/bin/bash -eux
-    just start-telemetry &
-    trap 'kill $(jobs -pr)' EXIT
-    wait
-
 start-wavs-dev:
     #!/bin/bash -eu
     ROOT_DIR="$(pwd)"
