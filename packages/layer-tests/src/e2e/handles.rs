@@ -2,7 +2,7 @@ mod cosmos;
 mod evm;
 pub mod hypercore;
 
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use cosmos::CosmosInstance;
 use evm::EvmInstance;
@@ -22,10 +22,9 @@ use wavs_types::{ChainKey, ChainKeyNamespace};
 use crate::config::TestP2pMode;
 
 /// Default port for the hyperswarm bootstrap node
-const HYPERSWARM_BOOTSTRAP_PORT: u16 = 49737;
-
+//const HYPERSWARM_BOOTSTRAP_PORT: u16 = 49737;
 use super::config::Configs;
-use super::matrix::EvmService;
+//use super::matrix::EvmService;
 
 pub struct AppHandles {
     /// One handle per WAVS operator instance
@@ -45,18 +44,15 @@ impl AppHandles {
             Option<std::net::SocketAddr>,
             Option<async_std::task::JoinHandle<std::io::Result<()>>>,
         ) = {
-            #[cfg(feature = "hypercore-tests")]
-            {
-                if configs.matrix.evm.contains(&EvmService::HypercoreEchoData) {
-                    Self::start_hyperswarm_bootstrap()
-                } else {
-                    (None, None)
-                }
-            }
-            #[cfg(not(feature = "hypercore-tests"))]
-            {
-                (None, None)
-            }
+            // #[cfg(feature = "hypercore-tests")]
+            // {
+            //     if configs.matrix.evm.contains(&EvmService::HypercoreEchoData) {
+            //         Self::start_hyperswarm_bootstrap()
+            //     } else {
+            //         (None, None)
+            //     }
+            // }
+            (None, None)
         };
         if let Some(addr) = bootstrap_addr {
             let addr = addr.to_string();
@@ -275,31 +271,31 @@ impl AppHandles {
         Ok(handles)
     }
 
-    fn start_hyperswarm_bootstrap() -> (
-        Option<SocketAddr>,
-        Option<async_std::task::JoinHandle<std::io::Result<()>>>,
-    ) {
-        let bind_addr = SocketAddr::new(
-            std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
-            HYPERSWARM_BOOTSTRAP_PORT,
-        );
+    // fn start_hyperswarm_bootstrap() -> (
+    //     Option<SocketAddr>,
+    //     Option<async_std::task::JoinHandle<std::io::Result<()>>>,
+    // ) {
+    //     let bind_addr = SocketAddr::new(
+    //         std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)),
+    //         HYPERSWARM_BOOTSTRAP_PORT,
+    //     );
 
-        match async_std::task::block_on(hyperswarm::run_bootstrap_node(Some(bind_addr))) {
-            Ok((addr, handle)) => {
-                tracing::info!(
-                    "Bootstrap node bound to {}, listening for peer connections",
-                    addr
-                );
+    //     match async_std::task::block_on(hyperswarm::run_bootstrap_node(Some(bind_addr))) {
+    //         Ok((addr, handle)) => {
+    //             tracing::info!(
+    //                 "Bootstrap node bound to {}, listening for peer connections",
+    //                 addr
+    //             );
 
-                // Give the bootstrap node time to bind and initialize its DHT
-                std::thread::sleep(Duration::from_secs(5));
+    //             // Give the bootstrap node time to bind and initialize its DHT
+    //             std::thread::sleep(Duration::from_secs(5));
 
-                (Some(addr), Some(handle))
-            }
-            Err(err) => {
-                tracing::warn!("Failed to start hyperswarm bootstrap node: {err}");
-                (None, None)
-            }
-        }
-    }
+    //             (Some(addr), Some(handle))
+    //         }
+    //         Err(err) => {
+    //             tracing::warn!("Failed to start hyperswarm bootstrap node: {err}");
+    //             (None, None)
+    //         }
+    //     }
+    // }
 }

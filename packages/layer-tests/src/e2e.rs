@@ -150,10 +150,10 @@ async fn _run(
         configs.chains.clone(),
         &clients,
         &cosmos_code_map,
-        configs
-            .wavs_configs
-            .first()
-            .and_then(|config| config.hyperswarm_bootstrap.clone()),
+        // configs
+        //     .wavs_configs
+        //     .first()
+        //     .and_then(|config| config.hyperswarm_bootstrap.clone()),
     )
     .await;
 
