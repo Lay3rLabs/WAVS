@@ -44,15 +44,12 @@ _install-native HOME DATA:
     @cp "./.env.example" "{{HOME}}/.env"
     @cargo install --path ./packages/wavs
     @cargo install --path ./packages/cli
-    @cargo install --path ./packages/aggregator
     @echo "Add these variables to your system environment:"
     @echo ""
     @echo "export WAVS_HOME=\"{{HOME}}\""
     @echo "export WAVS_DATA=\"{{DATA}}/wavs\""
     @echo "export WAVS_CLI_HOME=\"{{HOME}}\""
     @echo "export WAVS_CLI_DATA=\"{{DATA}}/wavs-cli\""
-    @echo "export WAVS_AGGREGATOR_HOME=\"{{HOME}}\""
-    @echo "export WAVS_AGGREGATOR_DATA=\"{{DATA}}/wavs-aggregator\""
     @echo "export WAVS_DOTENV=\"{{HOME}}/.env\""
 
 wasi-build-native COMPONENT="*":
@@ -209,7 +206,6 @@ lint-fix:
 start-all:
   #!/bin/bash -eux
   just start-anvil &
-  just start-aggregator &
   just start-wavs &
   trap 'kill $(jobs -pr)' EXIT
   wait
@@ -221,13 +217,6 @@ start-dev:
     #!/bin/bash -eux
     just start-telemetry &
     just start-wavs-dev &
-    trap 'kill $(jobs -pr)' EXIT
-    wait
-
-start-aggregator-dev-full:
-    #!/bin/bash -eux
-    just start-telemetry &
-    just start-aggregator-dev &
     trap 'kill $(jobs -pr)' EXIT
     wait
 
@@ -262,22 +251,6 @@ start-telemetry:
 
 dev-tool *args:
     cd packages/dev-tool && RUST_LOG=info cargo run -- {{args}}
-
-start-aggregator:
-    cd packages/aggregator && cargo run
-
-start-aggregator-dev:
-    #!/bin/bash -eux
-    ROOT_DIR="$(pwd)"
-    TEMP_DIR="$(mktemp -d)"
-    trap 'rm -rf "$TEMP_DIR"' EXIT
-    cd packages/aggregator && \
-    WAVS_HOME="../.." WAVS_AGGREGATOR_DATA="$TEMP_DIR" \
-    cargo run -- \
-        --dev-endpoints-enabled=true \
-        --disable-networking=true \
-        --prometheus="http://127.0.0.1:9090" \
-        --jaeger="http://127.0.0.1:4317"
 
 start-anvil:
     anvil
