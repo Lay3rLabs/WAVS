@@ -1,16 +1,13 @@
 pub mod error;
 pub mod wasm_engine;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use error::EngineError;
 use tracing::instrument;
 use utils::storage::CAStorage;
 use wavs_engine::bindings::aggregator::world::AnyTxHash;
-use wavs_types::{
-    AggregatorAction, ComponentDigest, Service, Submission, TriggerAction, WorkflowId,
-};
+use wavs_types::{AggregatorAction, Service, Submission, Submit, TriggerAction};
 
 use crate::dispatcher::DispatcherCommand;
 use crate::services::Services;
@@ -162,21 +159,20 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
     }
 
     #[instrument(skip(self), fields(subsys = "Engine"))]
-    pub async fn store_components_for_service(
-        &self,
-        service: &Service,
-    ) -> Result<HashMap<WorkflowId, ComponentDigest>, EngineError> {
-        let mut digests = HashMap::new();
-
-        for (workflow_id, workflow) in service.workflows.iter() {
-            let digest = self
-                .engine
+    pub async fn store_components_for_service(&self, service: &Service) -> Result<(), EngineError> {
+        for workflow in service.workflows.values() {
+            self.engine
                 .store_component_from_source(&workflow.component.source)
                 .await?;
-            digests.insert(workflow_id.clone(), digest);
+
+            if let Submit::Aggregator { component, .. } = &workflow.submit {
+                self.engine
+                    .store_component_from_source(&component.source)
+                    .await?;
+            }
         }
 
-        Ok(digests)
+        Ok(())
     }
 
     async fn run_trigger(
