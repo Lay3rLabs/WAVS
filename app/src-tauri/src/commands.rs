@@ -12,6 +12,9 @@ use wavs_gui_shared::{
     error::{AppError, AppResult},
     settings::Settings,
 };
+
+const KEYCHAIN_SERVICE: &str = "wavs-app";
+const KEYCHAIN_ACCOUNT: &str = "mnemonic";
 use wavs_types::{ChainConfigs, Service, ServiceManager};
 
 use crate::state::{SettingsState, WavsConfigState, WavsInstance, WavsInstanceState};
@@ -165,4 +168,53 @@ pub async fn cmd_add_service(
         .add_service(manager)
         .await
         .map_err(|e| AppError::Service(format!("Failed to add service: {}", e)))
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn cmd_has_mnemonic() -> bool {
+    match keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) {
+        Ok(entry) => entry.get_password().is_ok(),
+        Err(_) => false,
+    }
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn cmd_store_mnemonic(mnemonic: String) -> AppResult<()> {
+    // Validate mnemonic format (basic check for word count)
+    let word_count = mnemonic.trim().split_whitespace().count();
+    if word_count != 12 && word_count != 24 {
+        return Err(AppError::Keychain(
+            "Invalid mnemonic: must be 12 or 24 words".to_string(),
+        ));
+    }
+
+    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+        .map_err(|e| AppError::Keychain(e.to_string()))?;
+    entry
+        .set_password(&mnemonic)
+        .map_err(|e| AppError::Keychain(e.to_string()))?;
+
+    log::info!("Mnemonic stored in keychain ({} words)", word_count);
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn cmd_get_mnemonic() -> AppResult<String> {
+    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+        .map_err(|e| AppError::Keychain(e.to_string()))?;
+    entry
+        .get_password()
+        .map_err(|e| AppError::Keychain(e.to_string()))
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn cmd_delete_mnemonic() -> AppResult<()> {
+    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+        .map_err(|e| AppError::Keychain(e.to_string()))?;
+    entry
+        .delete_credential()
+        .map_err(|e| AppError::Keychain(e.to_string()))?;
+
+    log::info!("Mnemonic deleted from keychain");
+    Ok(())
 }
