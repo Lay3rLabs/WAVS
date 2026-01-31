@@ -5,6 +5,7 @@ import type {
   ChainConfigs,
   Service,
   ServiceManager,
+  HealthStatus,
 } from '../types';
 
 export async function setWavsHome(): Promise<string | null> {
@@ -55,4 +56,9 @@ export async function getMnemonic(): Promise<string> {
 
 export async function deleteMnemonic(): Promise<void> {
   return invoke<void>('cmd_delete_mnemonic');
+}
+
+// Health commands
+export async function getHealthStatus(): Promise<HealthStatus> {
+  return invoke<HealthStatus>('cmd_get_health_status');
 }

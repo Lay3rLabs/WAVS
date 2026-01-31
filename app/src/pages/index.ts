@@ -6,3 +6,4 @@ export { Submissions } from './Submissions';
 export { NotFound } from './NotFound';
 export { WalletSetup } from './WalletSetup';
 export { POARegistry } from './POARegistry';
+export { Health } from './Health';

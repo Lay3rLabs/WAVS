@@ -4,9 +4,9 @@
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::commands::{
-    cmd_add_service, cmd_delete_mnemonic, cmd_get_chain_configs, cmd_get_mnemonic,
-    cmd_get_services, cmd_get_settings, cmd_has_mnemonic, cmd_restart, cmd_set_wavs_home,
-    cmd_start_wavs, cmd_store_mnemonic,
+    cmd_add_service, cmd_delete_mnemonic, cmd_get_chain_configs, cmd_get_health_status,
+    cmd_get_mnemonic, cmd_get_services, cmd_get_settings, cmd_has_mnemonic, cmd_restart,
+    cmd_set_wavs_home, cmd_start_wavs, cmd_store_mnemonic,
 };
 use crate::state::{SettingsState, WavsConfigState, WavsInstanceState};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -90,7 +90,8 @@ pub fn run() {
             cmd_has_mnemonic,
             cmd_store_mnemonic,
             cmd_get_mnemonic,
-            cmd_delete_mnemonic
+            cmd_delete_mnemonic,
+            cmd_get_health_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
