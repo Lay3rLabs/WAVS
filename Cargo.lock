@@ -12241,6 +12241,7 @@ dependencies = [
  "log",
  "opentelemetry",
  "opentelemetry_sdk",
+ "reqwest",
  "serde",
  "serde_json",
  "tauri",

@@ -3,6 +3,28 @@ export interface Settings {
   wavs_home: string | null;
 }
 
+// Health types
+// Rust enum serializes as: "healthy" (string) or { "unhealthy": { "error": "..." } }
+export type ChainHealthResult =
+  | 'healthy'
+  | { unhealthy: { error: string } };
+
+export interface HealthStatus {
+  timestamp: number;
+  chains: Record<ChainKey, ChainHealthResult>;
+}
+
+export function isChainHealthy(result: ChainHealthResult): boolean {
+  return result === 'healthy';
+}
+
+export function getChainError(result: ChainHealthResult): string | null {
+  if (typeof result === 'object' && 'unhealthy' in result) {
+    return result.unhealthy.error;
+  }
+  return null;
+}
+
 // Command types
 export type DirectoryChooserResponse =
   | { none: null }
@@ -21,6 +43,21 @@ export type AppError =
   | { MissingChain: string }
   | { WavsNotRunning: null }
   | { Service: string };
+
+export function getErrorMessage(err: unknown): string {
+  if (typeof err === 'string') return err;
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'object' && err !== null) {
+    // Handle AppError variants like { Service: "message" }
+    const values = Object.values(err);
+    if (values.length > 0 && typeof values[0] === 'string') {
+      return values[0];
+    }
+    // Fallback to JSON
+    return JSON.stringify(err);
+  }
+  return String(err);
+}
 
 // Log types
 export type LogLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | 'TRACE';

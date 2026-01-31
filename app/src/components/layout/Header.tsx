@@ -3,6 +3,7 @@ import { Button } from '../atoms';
 import { useAppStore } from '../../stores/appStore';
 
 const navItems = [
+  { path: '/health', label: 'Health' },
   { path: '/services', label: 'Services' },
   { path: '/triggers', label: 'Triggers' },
   { path: '/submissions', label: 'Submissions' },
