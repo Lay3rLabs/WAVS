@@ -3,7 +3,7 @@ import { Button, Dropdown, Expander, Modal, type DropdownOption } from '../compo
 import { useAppStore } from '../stores/appStore';
 import { getChainConfigs, getServices, addService as addServiceCmd } from '../tauri';
 import type { ChainKey, Service, ServiceManager } from '../types';
-import { getServiceId } from '../types';
+import { getServiceId, getErrorMessage } from '../types';
 
 export function Services() {
   const services = useAppStore((state) => state.services);
@@ -34,7 +34,7 @@ export function Services() {
         setChains(chainKeys);
       } catch (err) {
         console.error('Failed to load services:', err);
-        Modal.openError(`Failed to load services: ${err}`);
+        Modal.openError(`Failed to load services: ${getErrorMessage(err)}`);
       } finally {
         setLoading(false);
       }
@@ -78,7 +78,7 @@ export function Services() {
       Modal.openInfo(`Service added for address ${address} on chain ${chain}!`);
     } catch (err) {
       console.error('Failed to add service:', err);
-      Modal.openError(`Failed to add service: ${err}`);
+      Modal.openError(`Failed to add service: ${getErrorMessage(err)}`);
     }
   };
 

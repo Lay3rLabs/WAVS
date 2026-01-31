@@ -17,6 +17,8 @@ const KEYCHAIN_SERVICE: &str = "wavs-app";
 const KEYCHAIN_ACCOUNT: &str = "mnemonic";
 use wavs_types::{ChainConfigs, Service, ServiceManager};
 
+use wavs::health::HealthStatus;
+
 use crate::state::{SettingsState, WavsConfigState, WavsInstance, WavsInstanceState};
 
 #[tauri::command(rename_all = "snake_case")]
@@ -217,4 +219,40 @@ pub fn cmd_delete_mnemonic() -> AppResult<()> {
 
     log::info!("Mnemonic deleted from keychain");
     Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_health_status(
+    wavs_config: State<'_, WavsConfigState>,
+) -> AppResult<HealthStatus> {
+    let config = match wavs_config.get_cloned() {
+        Some(cfg) => cfg,
+        None => {
+            return Err(AppError::WavsConfig("WAVS config not loaded".to_string()));
+        }
+    };
+
+    let url = format!("http://{}:{}/health", config.host, config.port);
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+        .map_err(|e| AppError::HealthCheck(format!("Failed to connect to WAVS node: {}", e)))?;
+
+    if !response.status().is_success() {
+        return Err(AppError::HealthCheck(format!(
+            "WAVS node returned error status: {}",
+            response.status()
+        )));
+    }
+
+    let health_status: HealthStatus = response
+        .json()
+        .await
+        .map_err(|e| AppError::HealthCheck(format!("Failed to parse health response: {}", e)))?;
+
+    Ok(health_status)
 }
