@@ -5,3 +5,4 @@ export { Triggers } from './Triggers';
 export { Submissions } from './Submissions';
 export { NotFound } from './NotFound';
 export { WalletSetup } from './WalletSetup';
+export { POARegistry } from './POARegistry';

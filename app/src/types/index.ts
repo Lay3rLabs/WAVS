@@ -191,8 +191,8 @@ export interface EvmChainConfig {
 
 // Service Manager types (for adding services)
 export type ServiceManager =
-  | { Evm: { chain: ChainKey; address: string } }
-  | { Cosmos: { chain: ChainKey; address: string } };
+  | { evm: { chain: ChainKey; address: string } }
+  | { cosmos: { chain: ChainKey; address: string } };
 
 // Envelope type (simplified, used for display)
 export type Envelope = unknown;
@@ -200,11 +200,11 @@ export type Envelope = unknown;
 // Helper to get service ID from manager
 export function getServiceId(service: Service): string {
   const manager = service.manager;
-  if ('Evm' in manager) {
-    return `evm:${manager.Evm.chain}:${manager.Evm.address}`;
+  if ('evm' in manager) {
+    return `evm:${manager.evm.chain}:${manager.evm.address}`;
   }
-  if ('Cosmos' in manager) {
-    return `cosmos:${manager.Cosmos.chain}:${manager.Cosmos.address}`;
+  if ('cosmos' in manager) {
+    return `cosmos:${manager.cosmos.chain}:${manager.cosmos.address}`;
   }
   return 'unknown';
 }
@@ -233,14 +233,14 @@ export function getTriggerDataLabel(data: TriggerData): string {
 
 // Helper to get chain from service manager
 export function getServiceChain(manager: ServiceManager): ChainKey {
-  if ('Evm' in manager) return manager.Evm.chain;
-  if ('Cosmos' in manager) return manager.Cosmos.chain;
+  if ('evm' in manager) return manager.evm.chain;
+  if ('cosmos' in manager) return manager.cosmos.chain;
   return 'unknown';
 }
 
 // Helper to get address from service manager
 export function getServiceAddress(manager: ServiceManager): string {
-  if ('Evm' in manager) return manager.Evm.address;
-  if ('Cosmos' in manager) return manager.Cosmos.address;
+  if ('evm' in manager) return manager.evm.address;
+  if ('cosmos' in manager) return manager.cosmos.address;
   return 'unknown';
 }

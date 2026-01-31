@@ -66,8 +66,8 @@ export function Services() {
       // Determine if it's EVM or Cosmos based on address format
       // Simple heuristic: 0x prefix = EVM
       const manager: ServiceManager = address.startsWith('0x')
-        ? { Evm: { chain, address } }
-        : { Cosmos: { chain, address } };
+        ? { evm: { chain, address } }
+        : { cosmos: { chain, address } };
 
       await addServiceCmd(manager);
 
