@@ -12194,6 +12194,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "wavs-app"
+version = "2.0.0-rc.10"
+dependencies = [
+ "anyhow",
+ "fix-path-env",
+ "log",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "utils",
+ "wavs",
+ "wavs-gui-shared",
+ "wavs-types",
+]
+
+[[package]]
 name = "wavs-benchmark-common"
 version = "2.0.0-rc.13"
 dependencies = [
