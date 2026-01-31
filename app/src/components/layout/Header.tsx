@@ -6,6 +6,7 @@ const navItems = [
   { path: '/services', label: 'Services' },
   { path: '/triggers', label: 'Triggers' },
   { path: '/submissions', label: 'Submissions' },
+  { path: '/poa-registry', label: 'POA Registry' },
   { path: '/logs', label: 'Logs' },
   { path: '/settings', label: 'Settings' },
 ];
