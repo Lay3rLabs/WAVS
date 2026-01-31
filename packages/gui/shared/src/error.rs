@@ -37,4 +37,7 @@ pub enum AppError {
 
     #[error("Service: {0}")]
     Service(String),
+
+    #[error("Keychain: {0}")]
+    Keychain(String),
 }

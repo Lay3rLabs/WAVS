@@ -39,3 +39,20 @@ export async function getServices(): Promise<Service[]> {
 export async function addService(manager: ServiceManager): Promise<Service> {
   return invoke<Service>('cmd_add_service', { manager });
 }
+
+// Keychain commands
+export async function hasMnemonic(): Promise<boolean> {
+  return invoke<boolean>('cmd_has_mnemonic');
+}
+
+export async function storeMnemonic(mnemonic: string): Promise<void> {
+  return invoke<void>('cmd_store_mnemonic', { mnemonic });
+}
+
+export async function getMnemonic(): Promise<string> {
+  return invoke<string>('cmd_get_mnemonic');
+}
+
+export async function deleteMnemonic(): Promise<void> {
+  return invoke<void>('cmd_delete_mnemonic');
+}
