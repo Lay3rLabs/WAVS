@@ -2,12 +2,21 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Header, Body } from './components/layout';
 import { ModalContainer } from './components/atoms';
-import { Settings, Logs, Services, Triggers, Submissions, NotFound } from './pages';
+import {
+  Settings,
+  Logs,
+  Services,
+  Triggers,
+  Submissions,
+  NotFound,
+  WalletSetup,
+} from './pages';
 import { useAppStore } from './stores/appStore';
+import { useWalletStore } from './stores/walletStore';
 import { getSettings, startWavs } from './tauri';
 import { startListeners } from './tauri/listeners';
 
-function AppContent() {
+function MainAppContent() {
   const isSettingsComplete = useAppStore((state) => state.isSettingsComplete());
 
   return (
@@ -36,6 +45,56 @@ function AppContent() {
   );
 }
 
+function AppContent() {
+  const settings = useAppStore((state) => state.settings);
+  const { hasMnemonic, checkMnemonic } = useWalletStore();
+  const [wavsStarted, setWavsStarted] = useState(false);
+  const [walletChecked, setWalletChecked] = useState(false);
+
+  // Check for mnemonic in keychain on mount
+  useEffect(() => {
+    const check = async () => {
+      await checkMnemonic();
+      setWalletChecked(true);
+    };
+    check();
+  }, [checkMnemonic]);
+
+  // Start WAVS after wallet is set up and wavs_home is set
+  useEffect(() => {
+    const startWavsIfReady = async () => {
+      if (hasMnemonic && settings.wavs_home && !wavsStarted) {
+        try {
+          await startWavs();
+          setWavsStarted(true);
+        } catch (err) {
+          console.warn('Failed to start WAVS:', err);
+          // Still allow the app to function
+          setWavsStarted(true);
+        }
+      }
+    };
+    startWavsIfReady();
+  }, [hasMnemonic, settings.wavs_home, wavsStarted]);
+
+  // Wait for wallet check to complete
+  if (!walletChecked) {
+    return (
+      <div className="h-full flex items-center justify-center bg-charcoal-darkest">
+        <div className="text-lg text-beige-warm">Loading...</div>
+      </div>
+    );
+  }
+
+  // If no mnemonic in keychain, show wallet setup
+  if (!hasMnemonic) {
+    return <WalletSetup />;
+  }
+
+  // Wallet is set up, show main app
+  return <MainAppContent />;
+}
+
 function App() {
   const [initialized, setInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,16 +109,6 @@ function App() {
 
         // Start event listeners
         await startListeners();
-
-        // If settings are complete, start WAVS
-        if (settings.wavs_home) {
-          try {
-            await startWavs();
-          } catch (err) {
-            console.warn('Failed to start WAVS:', err);
-            // Don't fail initialization if WAVS fails to start
-          }
-        }
 
         setInitialized(true);
       } catch (err) {
