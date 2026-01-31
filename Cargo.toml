@@ -28,6 +28,7 @@ members = [
     "examples/contracts/cosmwasm/trigger/simple",
     "examples/contracts/cosmwasm/mock/api",
     "examples/contracts/cosmwasm/mock/service-handler",
+    "app/src-tauri",
 ]
 resolver = "2"
 
