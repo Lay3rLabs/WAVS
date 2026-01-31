@@ -26,6 +26,22 @@ gui-build-debug:
 gui-build-frontend:
     cd packages/gui/frontend && trunk build --release
 
+# WAVS Desktop App (React/TypeScript frontend)
+app-dev:
+    cd app && pnpm tauri dev
+
+app-dev-frontend:
+    cd app && pnpm dev
+
+app-build-release:
+    cd app && pnpm tauri build
+
+app-build-debug:
+    cd app && pnpm tauri build --debug
+
+app-build-frontend:
+    cd app && pnpm build
+
 # builds wavs
 docker-build TAG="local":
     {{SUDO}} docker build . -t ghcr.io/lay3rlabs/wavs:{{TAG}}

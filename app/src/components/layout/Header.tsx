@@ -1,0 +1,54 @@
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Button } from '../atoms';
+import { useAppStore } from '../../stores/appStore';
+
+const navItems = [
+  { path: '/services', label: 'Services' },
+  { path: '/triggers', label: 'Triggers' },
+  { path: '/submissions', label: 'Submissions' },
+  { path: '/logs', label: 'Logs' },
+  { path: '/settings', label: 'Settings' },
+];
+
+export function Header() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isSettingsComplete = useAppStore((state) => state.isSettingsComplete());
+
+  return (
+    <header className="flex items-center justify-between px-8 py-4 border-b border-charcoal-medium bg-charcoal-dark shadow-md">
+      {/* Logo */}
+      <div className="flex items-center">
+        <img
+          src="/wavs-logo.png"
+          alt="WAVS"
+          className="h-10"
+          onError={(e) => {
+            // Fallback if logo doesn't load
+            (e.target as HTMLImageElement).style.display = 'none';
+          }}
+        />
+        <span className="ml-3 text-xl font-semibold text-cream-light">WAVS</span>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex items-center gap-2">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          const isDisabled = item.path !== '/settings' && !isSettingsComplete;
+
+          return (
+            <Button
+              key={item.path}
+              text={item.label}
+              size="lg"
+              disabled={isDisabled}
+              selected={isActive}
+              onClick={() => navigate(item.path)}
+            />
+          );
+        })}
+      </nav>
+    </header>
+  );
+}
