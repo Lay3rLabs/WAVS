@@ -1069,11 +1069,12 @@ fn handle_swarm_event(
             info,
             ..
         })) => {
-            tracing::debug!(
-                "Identified peer {}: {} with {} addresses",
+            tracing::info!(
+                "Identified peer {}: protocol={}, agent={}, addresses={:?}",
                 peer_id,
                 info.protocol_version,
-                info.listen_addrs.len()
+                info.agent_version,
+                info.listen_addrs
             );
             // Add peer's addresses to Kademlia routing table if in Remote mode
             if let Some(kademlia) = swarm.behaviour_mut().kademlia.as_mut() {
@@ -1083,6 +1084,33 @@ fn handle_swarm_event(
                     }
                 }
             }
+        }
+        // Identify sent
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Identify(identify::Event::Sent {
+            peer_id,
+            ..
+        })) => {
+            tracing::debug!("Sent identify info to peer {}", peer_id);
+        }
+        // Identify push received
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Identify(identify::Event::Pushed {
+            peer_id,
+            info,
+            ..
+        })) => {
+            tracing::debug!(
+                "Received identify push from {}: protocol={}",
+                peer_id,
+                info.protocol_version
+            );
+        }
+        // Identify error
+        SwarmEvent::Behaviour(WavsBehaviourEvent::Identify(identify::Event::Error {
+            peer_id,
+            error,
+            ..
+        })) => {
+            tracing::warn!("Identify error with peer {}: {:?}", peer_id, error);
         }
         // Kademlia routing table updated - peer discovered via DHT
         SwarmEvent::Behaviour(WavsBehaviourEvent::Kademlia(kad::Event::RoutingUpdated {
@@ -1211,8 +1239,18 @@ fn handle_swarm_event(
             request_catchup_from_peer(swarm, peer_id, state);
         }
         // Connection closed
-        SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
-            tracing::info!("Connection closed with {}: {:?}", peer_id, cause);
+        SwarmEvent::ConnectionClosed {
+            peer_id,
+            cause,
+            num_established,
+            ..
+        } => {
+            tracing::info!(
+                "Connection closed with {} (remaining: {}): {:?}",
+                peer_id,
+                num_established,
+                cause
+            );
             // Remove from GossipSub explicit peers to prevent accumulation
             swarm
                 .behaviour_mut()
@@ -1222,6 +1260,38 @@ fn handle_swarm_event(
             for peer_set in state.catchup_requested_peers.values_mut() {
                 peer_set.remove(&peer_id);
             }
+        }
+        // Outgoing connection error
+        SwarmEvent::OutgoingConnectionError {
+            peer_id,
+            error,
+            connection_id,
+            ..
+        } => {
+            tracing::warn!(
+                "Outgoing connection error to {:?} (conn_id={:?}): {:?}",
+                peer_id,
+                connection_id,
+                error
+            );
+        }
+        // Incoming connection error
+        SwarmEvent::IncomingConnectionError {
+            local_addr,
+            send_back_addr,
+            error,
+            ..
+        } => {
+            tracing::warn!(
+                "Incoming connection error from {} to {}: {:?}",
+                send_back_addr,
+                local_addr,
+                error
+            );
+        }
+        // Dialing
+        SwarmEvent::Dialing { peer_id, .. } => {
+            tracing::debug!("Dialing peer: {:?}", peer_id);
         }
         // Other events we don't need to handle explicitly
         _ => {}
