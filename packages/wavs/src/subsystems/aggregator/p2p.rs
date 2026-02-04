@@ -681,6 +681,8 @@ struct EventLoopState {
     config: P2pConfig,
     /// Actual listen addresses (from NewListenAddr events, filtered for usable addresses)
     listen_addresses: Vec<Multiaddr>,
+    /// Whether Kademlia bootstrap has completed successfully (for retry logic)
+    kademlia_bootstrap_complete: bool,
 }
 
 impl EventLoopState {
@@ -693,6 +695,7 @@ impl EventLoopState {
             catchup_requested_peers: HashMap::new(),
             listen_addresses: Vec::new(),
             config,
+            kademlia_bootstrap_complete: false,
         }
     }
 
@@ -828,6 +831,20 @@ async fn run_event_loop(
         for addr_str in bootstrap_nodes {
             match addr_str.parse::<Multiaddr>() {
                 Ok(addr) => {
+                    // Extract peer ID from the multiaddr (e.g., /ip4/.../tcp/.../p2p/<peer_id>)
+                    // and add to Kademlia BEFORE dialing so bootstrap has peers to contact
+                    if let Some(peer_id) = extract_peer_id(&addr) {
+                        if let Some(kademlia) = swarm.behaviour_mut().kademlia.as_mut() {
+                            // Add address without the /p2p/ suffix for Kademlia
+                            let addr_without_peer_id = remove_peer_id_suffix(&addr);
+                            kademlia.add_address(&peer_id, addr_without_peer_id);
+                            tracing::debug!(
+                                "Added bootstrap node {} to Kademlia routing table",
+                                peer_id
+                            );
+                        }
+                    }
+
                     tracing::info!("Dialing bootstrap node: {}", addr);
                     if let Err(e) = swarm.dial(addr.clone()) {
                         tracing::warn!("Failed to dial bootstrap node {}: {:?}", addr, e);
@@ -1107,6 +1124,7 @@ fn handle_swarm_event(
             kad::QueryResult::Bootstrap(Ok(kad::BootstrapOk { num_remaining, .. })) => {
                 if num_remaining == 0 {
                     tracing::info!("Kademlia bootstrap complete");
+                    state.kademlia_bootstrap_complete = true;
                 }
             }
             kad::QueryResult::Bootstrap(Err(e)) => {
@@ -1165,11 +1183,30 @@ fn handle_swarm_event(
                 swarm.add_external_address(address);
             }
         }
-        // Connection established - request catch-up
+        // Connection established - request catch-up and retry Kademlia bootstrap
         SwarmEvent::ConnectionEstablished {
             peer_id, endpoint, ..
         } => {
             tracing::info!("Connection established with {} via {:?}", peer_id, endpoint);
+
+            // Retry Kademlia bootstrap if it hasn't succeeded yet
+            // This handles race conditions where bootstrap was called before connections completed
+            if !state.kademlia_bootstrap_complete {
+                if let Some(kademlia) = swarm.behaviour_mut().kademlia.as_mut() {
+                    match kademlia.bootstrap() {
+                        Ok(_) => {
+                            tracing::info!(
+                                "Kademlia bootstrap retry initiated after connection to {}",
+                                peer_id
+                            );
+                        }
+                        Err(e) => {
+                            tracing::debug!("Kademlia bootstrap retry failed: {:?}", e);
+                        }
+                    }
+                }
+            }
+
             // Request catch-up for all subscribed services
             request_catchup_from_peer(swarm, peer_id, state);
         }
@@ -1610,4 +1647,28 @@ fn service_topic_name(service_id: &ServiceId) -> String {
 /// on the local machine, not a specific IP that external peers can connect to.
 fn is_dialable_address(addr: &Multiaddr) -> bool {
     !addr.to_string().contains("/ip4/0.0.0.0/")
+}
+
+/// Extract the peer ID from a multiaddr if present.
+/// Multiaddrs with peer IDs look like: /ip4/1.2.3.4/tcp/9000/p2p/12D3KooW...
+fn extract_peer_id(addr: &Multiaddr) -> Option<PeerId> {
+    use libp2p::multiaddr::Protocol;
+
+    addr.iter().find_map(|p| {
+        if let Protocol::P2p(peer_id) = p {
+            Some(peer_id)
+        } else {
+            None
+        }
+    })
+}
+
+/// Remove the /p2p/<peer_id> suffix from a multiaddr.
+/// Kademlia expects addresses without the peer ID suffix.
+fn remove_peer_id_suffix(addr: &Multiaddr) -> Multiaddr {
+    use libp2p::multiaddr::Protocol;
+
+    addr.iter()
+        .filter(|p| !matches!(p, Protocol::P2p(_)))
+        .collect()
 }
