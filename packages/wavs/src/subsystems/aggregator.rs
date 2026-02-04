@@ -126,9 +126,12 @@ impl Aggregator {
 
         // Initialize P2P network if configured
         ctx.rt.block_on(async {
+            // Pass signing_mnemonic to derive a persistent P2P identity
+            let signing_mnemonic = self.config.signing_mnemonic.as_ref().map(|c| c.as_str());
             match P2pHandle::new(
                 ctx.clone(),
                 self.config.p2p.clone(),
+                signing_mnemonic,
                 self.aggregator_to_self_tx.clone(),
             )
             .await

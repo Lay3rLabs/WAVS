@@ -485,16 +485,21 @@ impl P2pHandle {
     /// Create a new P2P handle, spawning the network event loop.
     ///
     /// Returns None if P2P is disabled.
+    ///
+    /// If `signing_mnemonic` is provided, the P2P identity will be derived from it
+    /// at HD index 0, ensuring a consistent peer ID across restarts.
     pub async fn new(
         ctx: AppContext,
         p2p_config: P2pConfig,
+        signing_mnemonic: Option<&str>,
         aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
     ) -> Result<Option<Self>, AggregatorError> {
         if matches!(p2p_config, P2pConfig::Disabled) {
             tracing::info!("P2P networking is disabled");
             Ok(None)
         } else {
-            let handle = Self::create_network(ctx, p2p_config, aggregator_tx).await?;
+            let handle =
+                Self::create_network(ctx, p2p_config, signing_mnemonic, aggregator_tx).await?;
             Ok(Some(handle))
         }
     }
@@ -546,9 +551,10 @@ impl P2pHandle {
     async fn create_network(
         ctx: AppContext,
         p2p_config: P2pConfig,
+        signing_mnemonic: Option<&str>,
         aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
     ) -> Result<Self, AggregatorError> {
-        let swarm = build_swarm(&p2p_config)?;
+        let swarm = build_swarm(&p2p_config, signing_mnemonic)?;
         let local_peer_id = *swarm.local_peer_id();
 
         let mode_name = match p2p_config {
@@ -577,7 +583,10 @@ impl P2pHandle {
 // ============================================================================
 
 /// Build the libp2p swarm with all required behaviours
-fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorError> {
+fn build_swarm(
+    config: &P2pConfig,
+    signing_mnemonic: Option<&str>,
+) -> Result<Swarm<WavsBehaviour>, AggregatorError> {
     // Message ID function for deduplication
     // Exclude sequence_number so the same content gets the same ID for proper deduplication
     let message_id_fn = |message: &gossipsub::Message| {
@@ -605,7 +614,20 @@ fn build_swarm(config: &P2pConfig) -> Result<Swarm<WavsBehaviour>, AggregatorErr
     let is_local = matches!(config, P2pConfig::Local { .. });
     let catchup_request_timeout = config.catchup_request_timeout();
 
-    let swarm = SwarmBuilder::with_new_identity()
+    // Build swarm with identity derived from signing_mnemonic (if provided) or new random identity
+    let swarm_builder = if let Some(mnemonic) = signing_mnemonic {
+        let keypair = keypair_from_mnemonic(mnemonic)?;
+        tracing::info!(
+            "Using P2P identity derived from signing_mnemonic (peer_id: {})",
+            keypair.public().to_peer_id()
+        );
+        SwarmBuilder::with_existing_identity(keypair)
+    } else {
+        tracing::info!("Generating new random P2P identity (will change on restart)");
+        SwarmBuilder::with_new_identity()
+    };
+
+    let swarm = swarm_builder
         .with_tokio()
         .with_tcp(
             libp2p::tcp::Config::default(),
@@ -1741,4 +1763,41 @@ fn remove_peer_id_suffix(addr: &Multiaddr) -> Multiaddr {
     addr.iter()
         .filter(|p| !matches!(p, Protocol::P2p(_)))
         .collect()
+}
+
+// ============================================================================
+// Identity Management
+// ============================================================================
+
+/// Derive a libp2p secp256k1 Keypair from a BIP-39 mnemonic at HD index 0.
+/// This uses the same derivation path as EVM wallets (m/44'/60'/0'/0/0).
+fn keypair_from_mnemonic(mnemonic: &str) -> Result<libp2p::identity::Keypair, AggregatorError> {
+    use alloy_signer_local::{coins_bip39::English, MnemonicBuilder};
+
+    // Derive EVM signer at HD index 0 (same path as signing keys)
+    let signer = MnemonicBuilder::<English>::default()
+        .phrase(mnemonic)
+        .index(0)
+        .map_err(|e| AggregatorError::P2p(format!("Invalid mnemonic: {}", e)))?
+        .build()
+        .map_err(|e| {
+            AggregatorError::P2p(format!("Failed to build signer from mnemonic: {}", e))
+        })?;
+
+    // Get the raw 32-byte private key
+    let secret_key_bytes = signer.credential().to_bytes();
+
+    // Create libp2p secp256k1 keypair from the same private key
+    let secret_key = libp2p::identity::secp256k1::SecretKey::try_from_bytes(secret_key_bytes)
+        .map_err(|e| AggregatorError::P2p(format!("Failed to create secp256k1 key: {}", e)))?;
+    let keypair = libp2p::identity::secp256k1::Keypair::from(secret_key);
+
+    Ok(keypair.into())
+}
+
+/// Get the P2P peer ID that would be derived from a given mnemonic.
+/// Useful for determining the peer ID before starting the node.
+pub fn peer_id_from_mnemonic(mnemonic: &str) -> Result<String, AggregatorError> {
+    let keypair = keypair_from_mnemonic(mnemonic)?;
+    Ok(keypair.public().to_peer_id().to_string())
 }

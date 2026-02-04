@@ -230,6 +230,7 @@ libp2p = { version = "0.56", features = [
     "mdns",             # local dev discovery
     "autonat",          # NAT detection for external address discovery
     "macros",
+    "secp256k1",        # secp256k1 identity for P2P (derived from signing_mnemonic)
 ] }
 
 
