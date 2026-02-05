@@ -58,13 +58,25 @@ fn http_config() {
 
     // Verify credentials are redacted
     if let Some(cred) = &config.signing_mnemonic {
-        assert_eq!(cred.as_str(), "redacted", "signing_mnemonic should be redacted");
+        assert_eq!(
+            cred.as_str(),
+            "redacted",
+            "signing_mnemonic should be redacted"
+        );
     }
     if let Some(cred) = &config.aggregator_cosmos_credential {
-        assert_eq!(cred.as_str(), "redacted", "aggregator_cosmos_credential should be redacted");
+        assert_eq!(
+            cred.as_str(),
+            "redacted",
+            "aggregator_cosmos_credential should be redacted"
+        );
     }
     if let Some(cred) = &config.aggregator_evm_credential {
-        assert_eq!(cred.as_str(), "redacted", "aggregator_evm_credential should be redacted");
+        assert_eq!(
+            cred.as_str(),
+            "redacted",
+            "aggregator_evm_credential should be redacted"
+        );
     }
     if let Some(cred) = &config.bearer_token {
         assert_eq!(cred.as_str(), "redacted", "bearer_token should be redacted");
