@@ -141,6 +141,23 @@ pub struct Config {
     pub hyperswarm_bootstrap: Option<String>,
 }
 
+impl Config {
+    /// Normalize empty credentials to None.
+    /// This ensures that empty strings (e.g. from env vars set to "") are treated the same as unset.
+    pub fn normalize_credentials(&mut self) {
+        fn normalize(cred: &mut Option<Credential>) {
+            if cred.as_ref().is_some_and(|c| c.is_empty()) {
+                *cred = None;
+            }
+        }
+
+        normalize(&mut self.signing_mnemonic);
+        normalize(&mut self.aggregator_cosmos_credential);
+        normalize(&mut self.aggregator_evm_credential);
+        normalize(&mut self.bearer_token);
+    }
+}
+
 impl ConfigExt for Config {
     fn with_data_dir(&mut self, f: fn(&mut PathBuf)) {
         f(&mut self.data);

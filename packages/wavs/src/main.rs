@@ -17,7 +17,10 @@ use wavs::{
 
 fn main() {
     let args = CliArgs::parse();
-    let config: Config = ConfigBuilder::new(args).build().unwrap();
+    let mut config: Config = ConfigBuilder::new(args).build().unwrap();
+
+    // Normalize empty credentials to None (e.g. env vars set to "" are treated as unset)
+    config.normalize_credentials();
 
     let ctx = AppContext::new();
 
@@ -94,6 +97,20 @@ fn main() {
     });
     let meter = global::meter("wavs_metrics");
     let metrics = Metrics::new(meter);
+
+    // Log aggregator credential status at startup
+    let has_aggregator_cosmos = config.aggregator_cosmos_credential.is_some();
+    let has_aggregator_evm = config.aggregator_evm_credential.is_some();
+
+    if has_aggregator_cosmos || has_aggregator_evm {
+        tracing::info!(
+            "Aggregator credentials configured: Cosmos={}, EVM={}",
+            has_aggregator_cosmos,
+            has_aggregator_evm
+        );
+    } else {
+        tracing::info!("No aggregator credentials configured - will not submit to chains");
+    }
 
     let config_clone = config.clone();
     let dispatcher = Arc::new(Dispatcher::new(&config_clone, metrics.wavs).unwrap());
