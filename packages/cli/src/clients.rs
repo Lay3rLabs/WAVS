@@ -28,7 +28,7 @@ impl HttpClient {
 
     pub async fn get_config(&self) -> Result<serde_json::Value> {
         self.inner
-            .get(format!("{}/config", self.endpoint))
+            .get(format!("{}/dev/config", self.endpoint))
             .send()
             .await?
             .json()

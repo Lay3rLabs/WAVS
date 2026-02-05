@@ -1,22 +1,39 @@
-use crate::http::{error::HttpResult, state::HttpState};
+use std::ops::Bound;
+
+use crate::{
+    http::{error::HttpResult, state::HttpState},
+    subsystems::aggregator::p2p::P2pConfig,
+};
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use wavs_types::ChainKey;
 
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct InfoResponse {
-    pub message: String,
+    /// Whether an aggregator credential is configured for Cosmos chains
+    pub has_aggregator_cosmos: bool,
+    /// Whether an aggregator credential is configured for EVM chains
+    pub has_aggregator_evm: bool,
+    /// P2P networking configuration
+    #[schema(value_type = String)]
+    pub p2p_config: P2pConfig,
+    /// Number of services registered on this node
+    pub services_count: usize,
+    /// Chain keys configured on this node
+    #[schema(value_type = Vec<String>)]
+    pub chain_keys: Vec<ChainKey>,
 }
 
 #[utoipa::path(
     get,
     path = "/info",
     responses(
-        (status = 200, description = "Successfully retrieved service information including the list of active operators", body = InfoResponse),
-        (status = 500, description = "Internal server error occurred while fetching service information")
+        (status = 200, description = "Successfully retrieved WAVS node information", body = InfoResponse),
+        (status = 500, description = "Internal server error occurred while fetching node information")
     ),
-    description = "Provides information about the WAVS service, including a list of all registered operators."
+    description = "Provides information about the WAVS node, including aggregator credentials, P2P config, registered services, and configured chains."
 )]
 #[axum::debug_handler]
 pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
@@ -26,10 +43,29 @@ pub async fn handle_info(State(state): State<HttpState>) -> impl IntoResponse {
     }
 }
 
-pub async fn inner_handle_info(_state: HttpState) -> HttpResult<InfoResponse> {
-    // TODO: could do things like return operator as address for each configured chain
-    // for now just return a placeholder message
+pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
+    // Get services count
+    let services_count = state
+        .dispatcher
+        .services
+        .list(Bound::Unbounded, Bound::Unbounded)
+        .map(|s| s.len())
+        .unwrap_or(0);
+
+    // Get chain keys
+    let chain_keys = state
+        .config
+        .chains
+        .read()
+        .unwrap()
+        .all_chain_keys()
+        .unwrap_or_default();
+
     Ok(InfoResponse {
-        message: "Info here :P".to_string(),
+        has_aggregator_cosmos: state.config.aggregator_cosmos_credential.is_some(),
+        has_aggregator_evm: state.config.aggregator_evm_credential.is_some(),
+        p2p_config: state.config.p2p.clone(),
+        services_count,
+        chain_keys,
     })
 }

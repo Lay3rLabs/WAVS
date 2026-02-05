@@ -94,7 +94,6 @@ pub async fn make_router(
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(TraceLayer::new_for_http())
         .layer(OtelAxumLayer::default())
-        .route("/config", get(handle_config))
         .route("/services", get(handle_list_services))
         .route("/services/{chain}/{address}", get(handle_get_service))
         .route("/info", get(handle_info))
@@ -114,6 +113,7 @@ pub async fn make_router(
                 "/dev/services/{service_hash}",
                 get(handle_get_service_by_hash),
             )
+            .route("/dev/config", get(handle_config))
             .route("/dev/trigger-streams", get(handle_dev_trigger_streams_info))
             .route("/dev/kv/{service_id}/{bucket}/{key}", get(handle_get_kv));
 
