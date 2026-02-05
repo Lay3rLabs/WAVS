@@ -705,10 +705,12 @@ struct EventLoopState {
     listen_addresses: Vec<Multiaddr>,
     /// Whether Kademlia bootstrap has completed successfully (for retry logic)
     kademlia_bootstrap_complete: bool,
+    /// Bootstrap node addresses (for reconnection when all peers disconnect)
+    bootstrap_nodes: Vec<Multiaddr>,
 }
 
 impl EventLoopState {
-    fn new(config: P2pConfig) -> Self {
+    fn new(config: P2pConfig, bootstrap_nodes: Vec<Multiaddr>) -> Self {
         Self {
             subscribed_topics: HashSet::new(),
             subscribed_services: HashSet::new(),
@@ -718,6 +720,7 @@ impl EventLoopState {
             listen_addresses: Vec::new(),
             config,
             kademlia_bootstrap_complete: false,
+            bootstrap_nodes,
         }
     }
 
@@ -841,18 +844,23 @@ async fn run_event_loop(
         tracing::info!("P2P listening on {}", listen_addr);
     }
 
-    let bootstrap_nodes = match &p2p_config {
+    // Parse bootstrap node addresses (for Remote mode)
+    let bootstrap_node_strs = match &p2p_config {
         P2pConfig::Remote {
             bootstrap_nodes, ..
-        } => bootstrap_nodes,
-        _ => &vec![],
+        } => bootstrap_nodes.clone(),
+        _ => vec![],
     };
 
+    let mut parsed_bootstrap_nodes: Vec<Multiaddr> = Vec::new();
+
     // For Remote mode: dial bootstrap nodes and trigger Kademlia bootstrap
-    if !bootstrap_nodes.is_empty() {
-        for addr_str in bootstrap_nodes {
+    if !bootstrap_node_strs.is_empty() {
+        for addr_str in &bootstrap_node_strs {
             match addr_str.parse::<Multiaddr>() {
                 Ok(addr) => {
+                    parsed_bootstrap_nodes.push(addr.clone());
+
                     // Extract peer ID from the multiaddr (e.g., /ip4/.../tcp/.../p2p/<peer_id>)
                     // and add to Kademlia BEFORE dialing so bootstrap has peers to contact
                     if let Some(peer_id) = extract_peer_id(&addr) {
@@ -867,7 +875,7 @@ async fn run_event_loop(
                         }
                     }
 
-                    tracing::info!("Dialing bootstrap node: {}", addr);
+                    tracing::debug!("Dialing bootstrap node: {}", addr);
                     if let Err(e) = swarm.dial(addr.clone()) {
                         tracing::warn!("Failed to dial bootstrap node {}: {:?}", addr, e);
                     }
@@ -883,7 +891,7 @@ async fn run_event_loop(
             if let Err(e) = kademlia.bootstrap() {
                 tracing::warn!("Kademlia bootstrap failed: {:?}", e);
             } else {
-                tracing::info!("Kademlia bootstrap initiated");
+                tracing::debug!("Kademlia bootstrap initiated");
             }
         }
     } else if swarm.behaviour().kademlia.as_ref().is_some() {
@@ -899,7 +907,7 @@ async fn run_event_loop(
         p2p_config.kademlia_discovery_interval_secs(),
     ));
     let mut shutdown_signal = ctx.get_kill_receiver();
-    let mut state = EventLoopState::new(p2p_config);
+    let mut state = EventLoopState::new(p2p_config, parsed_bootstrap_nodes);
 
     loop {
         tokio::select! {
@@ -922,8 +930,36 @@ async fn run_event_loop(
             _ = discovery_interval.tick() => {
                 // Periodic peer discovery for Kademlia mode
                 let local_peer_id = *swarm.local_peer_id();
-                if let Some(kademlia) = swarm.behaviour_mut().kademlia.as_mut() {
-                    kademlia.get_closest_peers(local_peer_id);
+                let has_peers = swarm.connected_peers().next().is_some();
+
+                if has_peers {
+                    // Normal discovery when we have peers
+                    if let Some(kademlia) = swarm.behaviour_mut().kademlia.as_mut() {
+                        kademlia.get_closest_peers(local_peer_id);
+                    }
+                } else if !state.bootstrap_nodes.is_empty() {
+                    // No peers connected - try to reconnect to bootstrap nodes
+                    tracing::debug!("No peers connected, attempting to reconnect to bootstrap nodes");
+
+                    // First, update Kademlia routing table and trigger bootstrap
+                    if let Some(kademlia) = swarm.behaviour_mut().kademlia.as_mut() {
+                        for addr in &state.bootstrap_nodes {
+                            if let Some(peer_id) = extract_peer_id(addr) {
+                                let addr_without_peer_id = remove_peer_id_suffix(addr);
+                                kademlia.add_address(&peer_id, addr_without_peer_id);
+                            }
+                        }
+                        if let Err(e) = kademlia.bootstrap() {
+                            tracing::debug!("Kademlia bootstrap retry failed: {:?}", e);
+                        }
+                    }
+
+                    // Then dial the bootstrap nodes
+                    for addr in &state.bootstrap_nodes {
+                        if let Err(e) = swarm.dial(addr.clone()) {
+                            tracing::debug!("Failed to dial bootstrap node {}: {:?}", addr, e);
+                        }
+                    }
                 }
             }
         }
@@ -1003,7 +1039,7 @@ fn handle_swarm_event(
         // mDNS discovered new peers
         SwarmEvent::Behaviour(WavsBehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
             for (peer_id, addr) in peers {
-                tracing::info!("mDNS discovered peer: {} at {}", peer_id, addr);
+                tracing::debug!("mDNS discovered peer: {} at {}", peer_id, addr);
                 swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
                 if let Err(e) = swarm.dial(addr.clone()) {
                     tracing::debug!("Could not dial peer {} at {}: {:?}", peer_id, addr, e);
@@ -1013,7 +1049,7 @@ fn handle_swarm_event(
         // mDNS peer expired
         SwarmEvent::Behaviour(WavsBehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
             for (peer_id, _addr) in peers {
-                tracing::info!("mDNS peer expired: {}", peer_id);
+                tracing::debug!("mDNS peer expired: {}", peer_id);
                 swarm
                     .behaviour_mut()
                     .gossipsub
@@ -1091,7 +1127,7 @@ fn handle_swarm_event(
             info,
             ..
         })) => {
-            tracing::info!(
+            tracing::debug!(
                 "Identified peer {}: protocol={}, agent={}, addresses={:?}",
                 peer_id,
                 info.protocol_version,
@@ -1218,7 +1254,7 @@ fn handle_swarm_event(
             old,
             new,
         })) => {
-            tracing::info!("AutoNAT status changed: {:?} -> {:?}", old, new);
+            tracing::debug!("AutoNAT status changed: {:?} -> {:?}", old, new);
         }
         // AutoNAT inbound/outbound probes - debug level
         SwarmEvent::Behaviour(WavsBehaviourEvent::Autonat(event)) => {
@@ -1226,7 +1262,7 @@ fn handle_swarm_event(
         }
         // New listen address - track usable addresses and add as external for Identify
         SwarmEvent::NewListenAddr { address, .. } => {
-            tracing::info!("P2P listening on {}", address);
+            tracing::debug!("P2P new listen address: {}", address);
             if is_dialable_address(&address) {
                 state.listen_addresses.push(address.clone());
                 // Add as external address so Identify reports it to other peers
@@ -1237,7 +1273,7 @@ fn handle_swarm_event(
         SwarmEvent::ConnectionEstablished {
             peer_id, endpoint, ..
         } => {
-            tracing::info!("Connection established with {} via {:?}", peer_id, endpoint);
+            tracing::debug!("Connection established with {} via {:?}", peer_id, endpoint);
 
             // Retry Kademlia bootstrap if it hasn't succeeded yet
             // This handles race conditions where bootstrap was called before connections completed
@@ -1245,7 +1281,7 @@ fn handle_swarm_event(
                 if let Some(kademlia) = swarm.behaviour_mut().kademlia.as_mut() {
                     match kademlia.bootstrap() {
                         Ok(_) => {
-                            tracing::info!(
+                            tracing::debug!(
                                 "Kademlia bootstrap retry initiated after connection to {}",
                                 peer_id
                             );
@@ -1267,7 +1303,7 @@ fn handle_swarm_event(
             num_established,
             ..
         } => {
-            tracing::info!(
+            tracing::debug!(
                 "Connection closed with {} (remaining: {}): {:?}",
                 peer_id,
                 num_established,
@@ -1388,7 +1424,7 @@ fn handle_catchup_request(
     let count = submissions.len();
 
     if count > 0 {
-        tracing::info!(
+        tracing::debug!(
             "Catch-up request from {} for service {} (subscribed: {}): returning {} submissions",
             peer,
             request.service_id,
@@ -1442,7 +1478,7 @@ fn handle_catchup_response(
         return;
     }
 
-    tracing::info!(
+    tracing::debug!(
         "Received catch-up response from {} with {} submissions",
         peer,
         response.submissions.len()
@@ -1515,7 +1551,7 @@ fn handle_gossip_message(
         return;
     }
 
-    tracing::info!(
+    tracing::debug!(
         "Received submission via P2P from {}: {}",
         propagation_source,
         submission.label()
@@ -1555,7 +1591,7 @@ fn handle_command(
                 }
                 state.subscribed_topics.insert(topic_name.clone());
                 state.subscribed_services.insert(service_id.clone());
-                tracing::info!("Subscribed to P2P topic: {}", topic_name);
+                tracing::debug!("Subscribed to P2P topic: {}", topic_name);
             }
 
             // Store submission for catch-up responses
@@ -1616,7 +1652,7 @@ fn handle_command(
 
             state.subscribed_topics.insert(topic_name.clone());
             state.subscribed_services.insert(service_id.clone());
-            tracing::info!("Subscribed to P2P topic: {}", topic_name);
+            tracing::debug!("Subscribed to P2P topic: {}", topic_name);
 
             // Request catch-up from already-connected peers for this new service
             // Rate-limited to avoid overwhelming the network
@@ -1683,7 +1719,7 @@ fn handle_command(
                 .retain(|p| p.topic_name != topic_name);
             // Clear catch-up state for this service to allow fresh requests on resubscribe
             state.catchup_requested_peers.remove(&service_id);
-            tracing::info!("Unsubscribed from P2P topic: {}", topic_name);
+            tracing::debug!("Unsubscribed from P2P topic: {}", topic_name);
         }
         P2pCommand::GetStatus { response_tx } => {
             let local_peer_id = *swarm.local_peer_id();
