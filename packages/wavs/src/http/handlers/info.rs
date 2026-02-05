@@ -7,7 +7,7 @@ use crate::{
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use wavs_types::ChainKey;
+use wavs_types::{ChainKey, P2pStatus};
 
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -19,6 +19,8 @@ pub struct InfoResponse {
     /// P2P networking configuration
     #[schema(value_type = String)]
     pub p2p_config: P2pConfig,
+    /// P2P network status
+    pub p2p_status: P2pStatus,
     /// Number of services registered on this node
     pub services_count: usize,
     /// Chain keys configured on this node
@@ -61,10 +63,14 @@ pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
         .all_chain_keys()
         .unwrap_or_default();
 
+    // Get P2P status
+    let p2p_status = state.dispatcher.aggregator.get_p2p_status().await;
+
     Ok(InfoResponse {
         has_aggregator_cosmos: state.config.aggregator_cosmos_credential.is_some(),
         has_aggregator_evm: state.config.aggregator_evm_credential.is_some(),
         p2p_config: state.config.p2p.clone(),
+        p2p_status,
         services_count,
         chain_keys,
     })
