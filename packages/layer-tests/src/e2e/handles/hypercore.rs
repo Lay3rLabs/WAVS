@@ -159,6 +159,7 @@ impl HypercoreTestClient {
                                 is_initiator,
                                 feed,
                                 feed_key_bytes,
+                                None,
                             )
                             .await;
 

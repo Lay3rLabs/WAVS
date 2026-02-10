@@ -35,8 +35,13 @@ pub async fn start_hypercore_stream(
     config: HypercoreStreamConfig,
     metrics: TriggerMetrics,
     shutdown: tokio::sync::broadcast::Receiver<()>,
-) -> Result<Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>, TriggerError>
-{
+) -> Result<
+    (
+        Pin<Box<dyn Stream<Item = Result<StreamTriggers, TriggerError>> + Send>>,
+        tokio::sync::oneshot::Receiver<()>,
+    ),
+    TriggerError,
+> {
     std::fs::create_dir_all(&config.storage_dir).map_err(|err| {
         TriggerError::Hypercore(format!(
             "create storage dir {}: {}",
@@ -119,7 +124,7 @@ pub async fn start_hypercore_stream(
         }
     };
 
-    start_swarm_replication(
+    let peer_connected_rx = start_swarm_replication(
         feed_key_bytes,
         Arc::clone(&core),
         shutdown,
@@ -127,7 +132,7 @@ pub async fn start_hypercore_stream(
     )
     .await?;
 
-    Ok(Box::pin(event_stream))
+    Ok((Box::pin(event_stream), peer_connected_rx))
 }
 
 async fn build_core_with_feed_key(
@@ -161,7 +166,7 @@ async fn start_swarm_replication(
     core: Arc<Mutex<Hypercore>>,
     mut shutdown: tokio::sync::broadcast::Receiver<()>,
     hyperswarm_bootstrap: Option<String>,
-) -> Result<(), TriggerError> {
+) -> Result<tokio::sync::oneshot::Receiver<()>, TriggerError> {
     let topic = discovery_key(&feed_key);
 
     tracing::info!(
@@ -181,10 +186,14 @@ async fn start_swarm_replication(
         topic
     );
 
+    let (replication_ready_tx, replication_ready_rx) = tokio::sync::oneshot::channel::<()>();
+
     // Hyperswarm is async-std based but exposes futures-compatible streams, so it
     // can be polled directly from the tokio runtime that owns hypercore.
     tokio::spawn(async move {
         tracing::info!("Hyperswarm task started, waiting for peer connections...");
+        // Only the first peer's replication readiness is signalled.
+        let mut replication_ready_tx = Some(replication_ready_tx);
 
         loop {
             tokio::select! {
@@ -214,6 +223,8 @@ async fn start_swarm_replication(
 
                     let replication_core = Arc::clone(&core);
                     let is_initiator = stream.is_initiator();
+                    // Pass the sender only to the first peer's protocol session.
+                    let ready_tx = replication_ready_tx.take();
 
                     tokio::spawn(async move {
                         if let Err(err) = hypercore_protocol::run_protocol(
@@ -221,6 +232,7 @@ async fn start_swarm_replication(
                             is_initiator,
                             replication_core,
                             feed_key,
+                            ready_tx,
                         )
                         .await
                         {
@@ -232,7 +244,7 @@ async fn start_swarm_replication(
         }
     });
 
-    Ok(())
+    Ok(replication_ready_rx)
 }
 
 fn build_swarm_config(hyperswarm_bootstrap: Option<&str>) -> SwarmConfig {
