@@ -246,6 +246,12 @@ impl SubmissionManager {
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         );
 
+        // Ensure the counter is always past the assigned index.
+        // This is a no-op for auto-incremented indices but critical for
+        // explicit indices during restoration from the service registry.
+        self.signing_mnemonic_hd_index_count
+            .fetch_max(hd_index + 1, std::sync::atomic::Ordering::SeqCst);
+
         let signer = make_signer(&self.signing_mnemonic, Some(hd_index))
             .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service_id.clone(), e))?;
 

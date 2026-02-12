@@ -64,7 +64,7 @@ pub async fn handle_add_service_direct(
 
 async fn add_service_direct_inner(state: HttpState, service_hash: String) -> HttpResult<()> {
     let service = get_service_inner_hash(&state, service_hash).await?;
-    state.dispatcher.add_service_direct(service).await?;
+    state.dispatcher.add_service_direct(service, None).await?;
 
     state.metrics.increment_registered_services();
 

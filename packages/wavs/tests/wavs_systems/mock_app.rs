@@ -173,7 +173,10 @@ impl MockE2ETestRunner {
 
         let service_id = service.id();
 
-        self.dispatcher.add_service_direct(service).await.unwrap();
+        self.dispatcher
+            .add_service_direct(service, None)
+            .await
+            .unwrap();
 
         service_id
     }
