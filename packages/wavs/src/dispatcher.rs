@@ -422,7 +422,11 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                     Ok(service) => {
                         // Store the service in DB
                         if let Err(err) = self.services.save(&service) {
-                            tracing::warn!("Failed to save restored service to DB: {:?}", err);
+                            tracing::error!(
+                                "Failed to save restored service {} to DB: {:?}",
+                                service.name,
+                                err
+                            );
                             continue;
                         }
 
@@ -432,11 +436,12 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             .store_components_for_service(&service)
                             .await
                         {
-                            tracing::warn!(
+                            tracing::error!(
                                 "Failed to store components for restored service {}: {:?}",
                                 service.name,
                                 err
                             );
+                            continue;
                         }
 
                         // Add to managers with explicit HD index from registry
@@ -447,7 +452,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             &self.dispatcher_to_aggregator_tx,
                             Some(entry.hd_index),
                         ) {
-                            tracing::warn!(
+                            tracing::error!(
                                 "Failed to add restored service {} to managers: {:?}",
                                 service.name,
                                 err
@@ -464,8 +469,8 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                         restored.push(service);
                     }
                     Err(err) => {
-                        tracing::warn!(
-                            "Failed to fetch service from chain for {:?}: {:?}",
+                        tracing::error!(
+                            "Failed to restore service from chain for {:?}: {:?}",
                             entry.service_manager,
                             err
                         );
