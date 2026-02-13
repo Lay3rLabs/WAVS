@@ -606,10 +606,18 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         .await?;
 
         // Allocate HD index from the registry (single source of truth for key derivation indices)
-        let hd_index = self.service_registry.append(service_manager)?;
+        let hd_index = self.service_registry.append(service_manager.clone())?;
 
-        self.add_service_direct(service.clone(), Some(hd_index))
-            .await?;
+        if let Err(e) = self
+            .add_service_direct(service.clone(), Some(hd_index))
+            .await
+        {
+            // Roll back the registry entry so we don't leave a stale entry on disk
+            if let Err(remove_err) = self.service_registry.remove(&service_manager) {
+                tracing::error!("Failed to roll back registry entry after add_service_direct failure: {remove_err}");
+            }
+            return Err(e);
+        }
 
         // Get current service count for logging
         let current_services = self.services.list(Bound::Unbounded, Bound::Unbounded)?;
