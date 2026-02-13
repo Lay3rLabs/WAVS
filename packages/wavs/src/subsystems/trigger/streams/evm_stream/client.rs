@@ -7,6 +7,7 @@ use alloy_primitives::B256;
 use alloy_rpc_types_eth::Log;
 use connection::Connection;
 use subscription::Subscriptions;
+use utils::telemetry::EvmStreamMetrics;
 
 // just for debug/http visibility
 pub use subscription::SubscriptionKind;
@@ -34,12 +35,18 @@ impl EvmTriggerStreams {
         ws_endpoints: Vec<String>,
         chain_key: wavs_types::ChainKey,
         ws_priority_endpoint_index: Option<usize>,
+        metrics: EvmStreamMetrics,
     ) -> Self {
         let channels = Channels::new();
 
         let rpc_ids = RpcIds::new();
 
-        let subscriptions = Subscriptions::new(rpc_ids.clone(), channels.subscription);
+        let subscriptions = Subscriptions::new(
+            rpc_ids.clone(),
+            channels.subscription,
+            metrics.clone(),
+            chain_key.clone(),
+        );
 
         let connection = Connection::new(
             rpc_ids,
@@ -47,6 +54,7 @@ impl EvmTriggerStreams {
             channels.connection,
             chain_key,
             ws_priority_endpoint_index,
+            metrics,
         );
 
         Self {
