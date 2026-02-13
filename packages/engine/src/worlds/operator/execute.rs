@@ -47,6 +47,11 @@ pub async fn execute(
         .await
         .map_err(|_| EngineError::OutOfTime(service_id.clone(), workflow_id.clone()))??;
 
+    // Validate response sizes
+    for response in &responses {
+        response.validate_size()?;
+    }
+
     // Invariant: If there are multiple responses, they must all have an event id salt
     if responses.len() > 1 {
         let mut seen_salt = HashSet::new();

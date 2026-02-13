@@ -643,6 +643,40 @@ pub struct WasmResponse {
     pub event_id_salt: Option<Vec<u8>>,
 }
 
+impl WasmResponse {
+    /// Maximum payload size: 50 MB
+    pub const MAX_PAYLOAD_SIZE: usize = 50 * 1024 * 1024;
+    /// Maximum event_id_salt size: 1 MB
+    pub const MAX_SALT_SIZE: usize = 1024 * 1024;
+
+    /// Validates that the payload and salt are within size limits.
+    pub fn validate_size(&self) -> Result<(), WasmResponseSizeError> {
+        if self.payload.len() > Self::MAX_PAYLOAD_SIZE {
+            return Err(WasmResponseSizeError::PayloadTooLarge {
+                size: self.payload.len(),
+                max: Self::MAX_PAYLOAD_SIZE,
+            });
+        }
+        if let Some(salt) = &self.event_id_salt {
+            if salt.len() > Self::MAX_SALT_SIZE {
+                return Err(WasmResponseSizeError::SaltTooLarge {
+                    size: salt.len(),
+                    max: Self::MAX_SALT_SIZE,
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum WasmResponseSizeError {
+    #[error("Payload size {size} bytes exceeds maximum of {max} bytes")]
+    PayloadTooLarge { size: usize, max: usize },
+    #[error("Event ID salt size {size} bytes exceeds maximum of {max} bytes")]
+    SaltTooLarge { size: usize, max: usize },
+}
+
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`
 // will need to go through use-cases of `test-utils`, maybe move into layer-tests or something
 mod test_ext {
