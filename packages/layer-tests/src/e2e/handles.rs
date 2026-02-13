@@ -21,8 +21,8 @@ use wavs_types::{ChainKey, ChainKeyNamespace};
 
 use crate::config::TestP2pMode;
 
-/// Default port for the hyperswarm bootstrap node
-const HYPERSWARM_BOOTSTRAP_PORT: u16 = 49737;
+/// Port for the hyperswarm bootstrap node (0 = OS-assigned to avoid conflicts in CI)
+const HYPERSWARM_BOOTSTRAP_PORT: u16 = 0;
 use super::config::Configs;
 use super::matrix::EvmService;
 
@@ -289,8 +289,7 @@ impl AppHandles {
                 (Some(addr), Some(handle))
             }
             Err(err) => {
-                tracing::warn!("Failed to start hyperswarm bootstrap node: {err}");
-                (None, None)
+                panic!("Failed to start hyperswarm bootstrap node: {err}. All hypercore tests will fail without a bootstrap node.");
             }
         }
     }

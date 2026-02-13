@@ -6,6 +6,7 @@
 use ::hypercore_protocol::discovery_key;
 use hypercore::{Hypercore, HypercoreBuilder, PartialKeypair, SigningKey, Storage, VerifyingKey};
 use hyperswarm::{Config as SwarmConfig, Hyperswarm, TopicConfig};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{
@@ -16,6 +17,57 @@ use tempfile::TempDir;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use wavs::subsystems::trigger::streams::hypercore_protocol;
+
+/// Manages hypercore test client lifecycle (deferred creation and retrieval).
+///
+/// During test registration, pending entries are inserted with the signing key
+/// and bootstrap address. Clients are created lazily right before tests run
+/// so DHT announcements stay fresh.
+#[derive(Default)]
+pub struct HypercoreClients {
+    /// Pending: (hyperswarm_bootstrap, signing_key_bytes)
+    pending: HashMap<String, (Option<String>, Vec<u8>)>,
+    clients: HashMap<String, Arc<HypercoreTestClient>>,
+}
+
+impl HypercoreClients {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Queue a test for deferred hypercore client creation.
+    pub fn insert_pending(
+        &mut self,
+        test_name: String,
+        hyperswarm_bootstrap: Option<String>,
+        signing_key_bytes: Vec<u8>,
+    ) {
+        self.pending
+            .insert(test_name, (hyperswarm_bootstrap, signing_key_bytes));
+    }
+
+    /// Create hypercore clients for all pending tests.
+    /// Called right before tests run to ensure DHT announcements are fresh.
+    pub async fn create_clients(&mut self) -> anyhow::Result<()> {
+        for (test_name, (bootstrap, key_bytes)) in &self.pending {
+            if !self.clients.contains_key(test_name) {
+                tracing::info!(
+                    "Creating hypercore client for test '{}' right before test execution",
+                    test_name
+                );
+                let client =
+                    HypercoreTestClient::new(test_name, bootstrap.clone(), key_bytes).await?;
+                self.clients.insert(test_name.clone(), Arc::new(client));
+            }
+        }
+        Ok(())
+    }
+
+    /// Get a hypercore test client by test name.
+    pub fn get(&self, test_name: &str) -> Option<Arc<HypercoreTestClient>> {
+        self.clients.get(test_name).cloned()
+    }
+}
 
 /// Test client for creating and managing hypercore feeds in e2e tests.
 pub struct HypercoreTestClient {
