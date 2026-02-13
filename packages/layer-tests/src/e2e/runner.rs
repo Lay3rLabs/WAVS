@@ -212,9 +212,10 @@ impl Runner {
             // Create hypercore clients AFTER deploying services so WAVS is already
             // doing DHT lookups when the test client announces. This avoids the stale-DHT
             // problem where the client announces 10+ seconds before WAVS starts looking.
-            if let Err(e) = self.hypercore_clients.create_clients().await {
-                tracing::error!("Failed to create hypercore clients: {}", e);
-            }
+            self.hypercore_clients
+                .create_clients()
+                .await
+                .expect("Failed to create hypercore clients");
 
             // All services are now deployed and ready for the tests
             // From here on in we're strictly testing the trigger->execute->aggregate->submit flow

@@ -46,19 +46,17 @@ impl HypercoreClients {
             .insert(test_name, (hyperswarm_bootstrap, signing_key_bytes));
     }
 
-    /// Create hypercore clients for all pending tests.
+    /// Create hypercore clients for all pending tests, draining the pending queue.
     /// Called right before tests run to ensure DHT announcements are fresh.
+    /// No-op if the queue has already been drained.
     pub async fn create_clients(&mut self) -> anyhow::Result<()> {
-        for (test_name, (bootstrap, key_bytes)) in &self.pending {
-            if !self.clients.contains_key(test_name) {
-                tracing::info!(
-                    "Creating hypercore client for test '{}' right before test execution",
-                    test_name
-                );
-                let client =
-                    HypercoreTestClient::new(test_name, bootstrap.clone(), key_bytes).await?;
-                self.clients.insert(test_name.clone(), Arc::new(client));
-            }
+        for (test_name, (bootstrap, key_bytes)) in self.pending.drain() {
+            tracing::info!(
+                "Creating hypercore client for test '{}' right before test execution",
+                test_name
+            );
+            let client = HypercoreTestClient::new(&test_name, bootstrap, &key_bytes).await?;
+            self.clients.insert(test_name, Arc::new(client));
         }
         Ok(())
     }
