@@ -350,15 +350,16 @@ impl SubscriptionsInner {
         req: RpcRequest,
         delay: Option<Duration>,
     ) -> Result<(), tokio::sync::mpsc::error::SendError<RpcRequest>> {
-        match &req {
+        // Extract metric info before req is consumed by send.
+        // Metrics are recorded only after a successful send.
+        let subscribe_type: Option<&'static str> = match &req {
             RpcRequest::Subscribe { id, params } => match params {
                 SubscribeParams::NewHeads => {
                     tracing::info!(
                         "sending newHeads subscription request (rpc id {})",
                         id.data().as_ffi()
                     );
-                    self.metrics
-                        .record_subscribe_request(&self.chain_key, "new_heads");
+                    Some("new_heads")
                 }
                 SubscribeParams::Logs { addresses, topics } => {
                     tracing::info!(
@@ -373,16 +374,14 @@ impl SubscriptionsInner {
                         addresses,
                         topics
                     );
-                    self.metrics
-                        .record_subscribe_request(&self.chain_key, "logs");
+                    Some("logs")
                 }
                 SubscribeParams::NewPendingTransactions => {
                     tracing::info!(
                         "sending newPendingTransactions subscription request (rpc id {})",
                         id.data().as_ffi()
                     );
-                    self.metrics
-                        .record_subscribe_request(&self.chain_key, "new_pending_transactions");
+                    Some("new_pending_transactions")
                 }
             },
             RpcRequest::Unsubscribe {
@@ -394,9 +393,9 @@ impl SubscriptionsInner {
                     id.data().as_ffi(),
                     subscription_id
                 );
-                self.metrics.record_unsubscribe_request(&self.chain_key);
+                None
             }
-        }
+        };
 
         // this should always be Some here, but better safe than sorry
         if let Some(kind) = self.rpc_ids.kind(req.id()) {
@@ -437,6 +436,16 @@ impl SubscriptionsInner {
                             if let Err(e) = tx.send(req) {
                                 tracing::error!("failed to send delayed RPC request: {}", e);
                                 metrics.record_rpc_request_error(&chain_key, "delayed_send_failed");
+                            } else {
+                                match subscribe_type {
+                                    Some(sub_type) => {
+                                        metrics
+                                            .record_subscribe_request(&chain_key, sub_type);
+                                    }
+                                    None => {
+                                        metrics.record_unsubscribe_request(&chain_key);
+                                    }
+                                }
                             }
                         } else {
                             metrics.record_rpc_request_dropped(&chain_key, "delayed_canceled");
@@ -445,6 +454,15 @@ impl SubscriptionsInner {
                 }
                 None => {
                     self._connection_send_rpc_tx.send(req)?;
+                    match subscribe_type {
+                        Some(sub_type) => {
+                            self.metrics
+                                .record_subscribe_request(&self.chain_key, sub_type);
+                        }
+                        None => {
+                            self.metrics.record_unsubscribe_request(&self.chain_key);
+                        }
+                    }
                 }
             }
         } else {
