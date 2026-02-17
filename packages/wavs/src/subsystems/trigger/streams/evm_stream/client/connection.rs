@@ -149,10 +149,10 @@ impl Connection {
                                                 "priority endpoint {} is healthy, preparing to switch",
                                                 priority_endpoint_url
                                             );
-                                            health_metrics.record_priority_recovery(&chain_key_clone);
                                             let already_requested =
                                                 force_switch_flag_clone.swap(true, Ordering::SeqCst);
                                             if !already_requested {
+                                                health_metrics.record_priority_recovery(&chain_key_clone);
                                                 force_switch_notify_clone.notify_waiters();
                                             }
                                         }
