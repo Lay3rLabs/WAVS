@@ -64,7 +64,21 @@ pub async fn handle_add_service_direct(
 
 async fn add_service_direct_inner(state: HttpState, service_hash: String) -> HttpResult<()> {
     let service = get_service_inner_hash(&state, service_hash).await?;
-    state.dispatcher.add_service_direct(service, None).await?;
+    let service_manager = service.manager.clone();
+    let hd_index = state
+        .dispatcher
+        .service_registry
+        .append(service_manager.clone())?;
+    if let Err(e) = state
+        .dispatcher
+        .add_service_direct(service, Some(hd_index))
+        .await
+    {
+        if let Err(remove_err) = state.dispatcher.service_registry.remove(&service_manager) {
+            tracing::error!("Failed to roll back registry entry: {remove_err}");
+        }
+        return Err(e.into());
+    }
 
     state.metrics.increment_registered_services();
 

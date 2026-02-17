@@ -392,18 +392,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                     let evm_providers = &evm_providers_for_restore;
                     let cosmos_clients = &cosmos_clients_for_restore;
                     async move {
-                        let (chain, address) = match &entry.service_manager {
-                            ServiceManager::Evm { chain, address } => {
-                                (chain.clone(), layer_climb::prelude::Address::from(*address))
-                            }
-                            ServiceManager::Cosmos { chain, address } => (
-                                chain.clone(),
-                                layer_climb::prelude::Address::from(address.clone()),
-                            ),
-                        };
                         let result = query_service_from_address(
-                            chain,
-                            address,
+                            entry.service_manager.chain().clone(),
+                            entry.service_manager.address(),
                             chain_configs,
                             ipfs_gateway,
                             evm_providers,
@@ -592,19 +583,10 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         &self,
         service_manager: ServiceManager,
     ) -> Result<Service, DispatcherError> {
-        let (chain, address) = match &service_manager {
-            ServiceManager::Evm { chain, address } => {
-                (chain.clone(), layer_climb::prelude::Address::from(*address))
-            }
-            ServiceManager::Cosmos { chain, address } => (
-                chain.clone(),
-                layer_climb::prelude::Address::from(address.clone()),
-            ),
-        };
         let chain_configs = self.chain_configs.read().unwrap().clone();
         let service = query_service_from_address(
-            chain,
-            address,
+            service_manager.chain().clone(),
+            service_manager.address(),
             &chain_configs,
             &self.ipfs_gateway,
             &self.evm_http_providers,
@@ -811,30 +793,15 @@ async fn check_service_needs_update(
     let cached_hash = service.hash()?;
 
     // Get current service from contract
-    let current_service = match &service.manager {
-        ServiceManager::Evm { chain, address } => {
-            query_service_from_address(
-                chain.clone(),
-                (*address).into(),
-                chain_configs,
-                ipfs_gateway,
-                evm_http_providers,
-                cosmos_query_clients,
-            )
-            .await?
-        }
-        ServiceManager::Cosmos { chain, address } => {
-            query_service_from_address(
-                chain.clone(),
-                address.clone().into(),
-                chain_configs,
-                ipfs_gateway,
-                evm_http_providers,
-                cosmos_query_clients,
-            )
-            .await?
-        }
-    };
+    let current_service = query_service_from_address(
+        service.manager.chain().clone(),
+        service.manager.address(),
+        chain_configs,
+        ipfs_gateway,
+        evm_http_providers,
+        cosmos_query_clients,
+    )
+    .await?;
 
     let current_hash = current_service.hash()?;
 

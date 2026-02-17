@@ -20,10 +20,15 @@ pub struct RegistryEntry {
     pub hd_index: u32,
 }
 
+#[derive(Debug)]
+struct RegistryState {
+    entries: Vec<RegistryEntry>,
+    next_hd_index: u32,
+}
+
 #[derive(Clone, Debug)]
 pub struct ServiceRegistry {
-    entries: Arc<RwLock<Vec<RegistryEntry>>>,
-    next_hd_index: Arc<RwLock<u32>>,
+    state: Arc<RwLock<RegistryState>>,
     path: PathBuf,
 }
 
@@ -55,60 +60,56 @@ impl ServiceRegistry {
         };
 
         Ok(Self {
-            entries: Arc::new(RwLock::new(entries)),
-            next_hd_index: Arc::new(RwLock::new(next_hd_index)),
+            state: Arc::new(RwLock::new(RegistryState {
+                entries,
+                next_hd_index,
+            })),
             path,
         })
     }
 
     pub fn entries(&self) -> Vec<RegistryEntry> {
-        self.entries.read().unwrap().clone()
+        self.state.read().unwrap().entries.clone()
     }
 
     pub fn next_hd_index(&self) -> u32 {
-        *self.next_hd_index.read().unwrap()
+        self.state.read().unwrap().next_hd_index
     }
 
     pub fn append(&self, sm: ServiceManager) -> Result<u32, RegistryError> {
-        let mut entries = self.entries.write().unwrap();
-        let mut next = self.next_hd_index.write().unwrap();
+        let mut state = self.state.write().unwrap();
 
         // Check for duplicates
-        if entries.iter().any(|e| e.service_manager == sm) {
+        if state.entries.iter().any(|e| e.service_manager == sm) {
             return Err(RegistryError::AlreadyRegistered);
         }
 
-        let hd_index = *next;
-        entries.push(RegistryEntry {
+        let hd_index = state.next_hd_index;
+        state.entries.push(RegistryEntry {
             service_manager: sm,
             hd_index,
         });
-        *next = hd_index + 1;
+        state.next_hd_index = hd_index + 1;
 
-        self.write_locked(&entries, *next)?;
+        self.write_locked(&state)?;
         Ok(hd_index)
     }
 
     pub fn remove(&self, sm: &ServiceManager) -> Result<(), RegistryError> {
-        let mut entries = self.entries.write().unwrap();
-        let next = *self.next_hd_index.read().unwrap();
+        let mut state = self.state.write().unwrap();
 
-        if let Some(pos) = entries.iter().position(|e| &e.service_manager == sm) {
-            entries.remove(pos);
-            self.write_locked(&entries, next)?;
+        if let Some(pos) = state.entries.iter().position(|e| &e.service_manager == sm) {
+            state.entries.remove(pos);
+            self.write_locked(&state)?;
         }
 
         Ok(())
     }
 
-    fn write_locked(
-        &self,
-        entries: &[RegistryEntry],
-        next_hd_index: u32,
-    ) -> Result<(), RegistryError> {
+    fn write_locked(&self, state: &RegistryState) -> Result<(), RegistryError> {
         let file = RegistryFile {
-            next_hd_index,
-            services: entries.to_vec(),
+            next_hd_index: state.next_hd_index,
+            services: state.entries.to_vec(),
         };
         let json = serde_json::to_string_pretty(&file)?;
 
