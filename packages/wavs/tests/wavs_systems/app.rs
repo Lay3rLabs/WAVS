@@ -83,5 +83,7 @@ fn zeroed_cli_args(
         jetstream_endpoint: None,
         jetstream_max_message_size: None,
         hyperswarm_bootstrap: None,
+        max_wasm_payload_size: None,
+        max_wasm_salt_size: None,
     }
 }

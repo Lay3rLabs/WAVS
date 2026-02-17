@@ -138,6 +138,8 @@ impl Dispatcher<FileStorage> {
             metrics.engine,
             db_storage.clone(),
             config.ipfs_gateway.clone(),
+            config.max_wasm_payload_size,
+            config.max_wasm_salt_size,
         );
         let engine_manager = EngineManager::new(
             engine,
