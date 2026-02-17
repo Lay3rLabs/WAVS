@@ -608,10 +608,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
     /// Append service to the persistent registry, then add it to the runtime.
     /// Rolls back the registry entry if adding to the runtime fails.
-    pub async fn register_and_add_service(
-        &self,
-        service: Service,
-    ) -> Result<(), DispatcherError> {
+    pub async fn register_and_add_service(&self, service: Service) -> Result<(), DispatcherError> {
         let service_manager = service.manager.clone();
         let hd_index = self.service_registry.append(service_manager.clone())?;
         if let Err(e) = self.add_service_direct(service, Some(hd_index)).await {
