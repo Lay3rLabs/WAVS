@@ -225,6 +225,8 @@ impl ExecComponent {
         let wasm_responses = match wavs_engine::worlds::operator::execute::execute(
             &mut instance_deps,
             trigger_action,
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         )
         .await
         {

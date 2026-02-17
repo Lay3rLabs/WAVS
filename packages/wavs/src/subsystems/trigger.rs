@@ -507,6 +507,7 @@ impl TriggerManager {
                                         chain_config.ws_endpoints,
                                         chain_key,
                                         chain_config.ws_priority_endpoint_index,
+                                        self.metrics.evm_stream.clone(),
                                     );
 
                                     // Start the EVM event stream

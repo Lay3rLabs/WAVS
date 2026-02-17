@@ -21,8 +21,8 @@ use wavs::{
 };
 use wavs_types::{
     ChainKey, ChainKeyError, Component, ComponentSource, Credential, DeleteServicesRequest,
-    ListServicesResponse, Service, ServiceId, ServiceManager, SignatureKind, Submit, WorkflowId,
-    WorkflowIdError,
+    ListServicesResponse, Service, ServiceId, ServiceManager, SignatureKind, Submit, WasmResponse,
+    WorkflowId, WorkflowIdError,
 };
 
 use super::mock_trigger_manager::{mock_evm_event_trigger, mock_real_trigger_action};
@@ -56,6 +56,8 @@ impl MockE2ETestRunner {
             metrics,
             WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         )
     }
     #[instrument(skip(_ctx, data_dir))]
