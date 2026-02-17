@@ -323,16 +323,15 @@ impl SubscriptionsInner {
 
         if !value {
             // Decrement active subscriptions for each kind before clearing
+            // NOTE: An in-flight subscribe response landing concurrently could cause a
+            // brief drift in the UpDownCounter (increment after this bulk decrement but
+            // before clear()). This is acceptable — the counter self-corrects on the
+            // next reconnect cycle.
             let active = self.ids.count_by_category();
             for (category, count) in &active {
-                let sub_type = match category {
-                    SubscriptionCategory::NewHeads => "new_heads",
-                    SubscriptionCategory::AllLogs => "logs",
-                    SubscriptionCategory::NewPendingTransactions => "new_pending_transactions",
-                };
                 self.metrics.record_active_subscriptions_change(
                     &self.chain_key,
-                    sub_type,
+                    category.metric_label(),
                     -(*count as i64),
                 );
             }
@@ -402,11 +401,7 @@ impl SubscriptionsInner {
                 let sub_type = self
                     .ids
                     .lookup_kind(subscription_id)
-                    .map(|kind| match kind {
-                        SubscriptionKind::NewHeads => "new_heads",
-                        SubscriptionKind::Logs { .. } => "logs",
-                        SubscriptionKind::NewPendingTransactions => "new_pending_transactions",
-                    })
+                    .map(|kind| kind.metric_label())
                     .unwrap_or("unknown");
                 RpcSendMetric::Unsubscribe(sub_type)
             }
@@ -534,14 +529,9 @@ impl SubscriptionsInner {
 
                 match SubscriptionKind::try_from(kind) {
                     Ok(kind) => {
-                        let sub_type = match &kind {
-                            SubscriptionKind::NewHeads => "new_heads",
-                            SubscriptionKind::Logs { .. } => "logs",
-                            SubscriptionKind::NewPendingTransactions => "new_pending_transactions",
-                        };
                         self.metrics.record_active_subscriptions_change(
                             &self.chain_key,
-                            sub_type,
+                            kind.metric_label(),
                             1,
                         );
 
@@ -575,16 +565,9 @@ impl SubscriptionsInner {
                         RpcRequestKind::Unsubscribe { subscription_id } => {
                             // Look up the kind before removing so we can decrement the right counter
                             if let Some(sub_kind) = self.ids.lookup_kind(&subscription_id) {
-                                let sub_type = match &sub_kind {
-                                    SubscriptionKind::NewHeads => "new_heads",
-                                    SubscriptionKind::Logs { .. } => "logs",
-                                    SubscriptionKind::NewPendingTransactions => {
-                                        "new_pending_transactions"
-                                    }
-                                };
                                 self.metrics.record_active_subscriptions_change(
                                     &self.chain_key,
-                                    sub_type,
+                                    sub_kind.metric_label(),
                                     -1,
                                 );
                             }
@@ -605,13 +588,7 @@ impl SubscriptionsInner {
                                 let sub_type = self
                                     .ids
                                     .lookup_kind(&subscription_id)
-                                    .map(|kind| match kind {
-                                        SubscriptionKind::NewHeads => "new_heads",
-                                        SubscriptionKind::Logs { .. } => "logs",
-                                        SubscriptionKind::NewPendingTransactions => {
-                                            "new_pending_transactions"
-                                        }
-                                    })
+                                    .map(|kind| kind.metric_label())
                                     .unwrap_or("unknown");
                                 self.metrics
                                     .record_unsubscribe_failure(&self.chain_key, sub_type);
@@ -880,6 +857,16 @@ pub enum SubscriptionKind {
     NewPendingTransactions,
 }
 
+impl SubscriptionKind {
+    fn metric_label(&self) -> &'static str {
+        match self {
+            SubscriptionKind::NewHeads => "new_heads",
+            SubscriptionKind::Logs { .. } => "logs",
+            SubscriptionKind::NewPendingTransactions => "new_pending_transactions",
+        }
+    }
+}
+
 impl TryFrom<RpcRequestKind> for SubscriptionKind {
     type Error = &'static str;
 
@@ -907,6 +894,16 @@ enum SubscriptionCategory {
     NewHeads,
     AllLogs,
     NewPendingTransactions,
+}
+
+impl SubscriptionCategory {
+    fn metric_label(&self) -> &'static str {
+        match self {
+            SubscriptionCategory::NewHeads => "new_heads",
+            SubscriptionCategory::AllLogs => "logs",
+            SubscriptionCategory::NewPendingTransactions => "new_pending_transactions",
+        }
+    }
 }
 
 impl From<&SubscriptionKind> for SubscriptionCategory {
