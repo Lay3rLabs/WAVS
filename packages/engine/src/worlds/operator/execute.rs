@@ -8,6 +8,8 @@ use crate::{utils::error::EngineError, worlds::instance::InstanceDeps};
 pub async fn execute(
     deps: &mut InstanceDeps,
     trigger: TriggerAction,
+    max_payload_size: usize,
+    max_salt_size: usize,
 ) -> Result<Vec<WasmResponse>, EngineError> {
     let service_id = trigger.config.service_id.clone();
     let workflow_id = trigger.config.workflow_id.clone();
@@ -49,7 +51,7 @@ pub async fn execute(
 
     // Validate response sizes
     for response in &responses {
-        response.validate_size()?;
+        response.validate_size(max_payload_size, max_salt_size)?;
     }
 
     // Invariant: If there are multiple responses, they must all have an event id salt

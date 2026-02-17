@@ -644,24 +644,28 @@ pub struct WasmResponse {
 }
 
 impl WasmResponse {
-    /// Maximum payload size: 50 MB
-    pub const MAX_PAYLOAD_SIZE: usize = 50 * 1024 * 1024;
-    /// Maximum event_id_salt size: 1 MB
-    pub const MAX_SALT_SIZE: usize = 1024 * 1024;
+    /// Default maximum payload size: 50 MB
+    pub const DEFAULT_MAX_PAYLOAD_SIZE: usize = 50 * 1024 * 1024;
+    /// Default maximum event_id_salt size: 1 MB
+    pub const DEFAULT_MAX_SALT_SIZE: usize = 1024 * 1024;
 
     /// Validates that the payload and salt are within size limits.
-    pub fn validate_size(&self) -> Result<(), WasmResponseSizeError> {
-        if self.payload.len() > Self::MAX_PAYLOAD_SIZE {
+    pub fn validate_size(
+        &self,
+        max_payload_size: usize,
+        max_salt_size: usize,
+    ) -> Result<(), WasmResponseSizeError> {
+        if self.payload.len() > max_payload_size {
             return Err(WasmResponseSizeError::PayloadTooLarge {
                 size: self.payload.len(),
-                max: Self::MAX_PAYLOAD_SIZE,
+                max: max_payload_size,
             });
         }
         if let Some(salt) = &self.event_id_salt {
-            if salt.len() > Self::MAX_SALT_SIZE {
+            if salt.len() > max_salt_size {
                 return Err(WasmResponseSizeError::SaltTooLarge {
                     size: salt.len(),
-                    max: Self::MAX_SALT_SIZE,
+                    max: max_salt_size,
                 });
             }
         }

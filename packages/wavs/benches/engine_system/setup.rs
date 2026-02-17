@@ -12,7 +12,7 @@ use wavs::{
     subsystems::engine::{wasm_engine::WasmEngine, EngineManager},
 };
 use wavs_benchmark_common::{app_context::APP_CONTEXT, engine_setup::EngineSetup};
-use wavs_types::{Service, TriggerAction};
+use wavs_types::{Service, TriggerAction, WasmResponse};
 
 /// Configuration for the system benchmark (MultiEngineRunner)
 #[derive(Clone, Copy)]
@@ -62,6 +62,8 @@ impl SystemSetup {
             metrics.wavs.engine, // Engine metrics
             db_storage.clone(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         );
 
         let digest = wasm_engine
