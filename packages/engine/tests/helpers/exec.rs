@@ -10,7 +10,7 @@ use wavs_engine::{
     utils::error::EngineError,
     worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder},
 };
-use wavs_types::{ComponentDigest, ServiceId, WorkflowId};
+use wavs_types::{ComponentDigest, ServiceId, WasmResponse, WorkflowId};
 
 use crate::helpers::service::{make_service, make_trigger_action};
 
@@ -102,8 +102,13 @@ pub async fn try_execute_component_raw(
     .build()
     .unwrap();
 
-    let responses =
-        wavs_engine::worlds::operator::execute::execute(&mut instance_deps, trigger_action).await;
+    let responses = wavs_engine::worlds::operator::execute::execute(
+        &mut instance_deps,
+        trigger_action,
+        WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+        WasmResponse::DEFAULT_MAX_SALT_SIZE,
+    )
+    .await;
 
     match responses {
         Ok(responses) => {

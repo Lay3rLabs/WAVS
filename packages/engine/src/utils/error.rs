@@ -57,6 +57,9 @@ pub enum EngineError {
     #[error("When returning multiple responses, they must all have an event id salt")]
     MissingEventIdSalt,
 
+    #[error("Wasm response size limit exceeded: {0}")]
+    ResponseSizeExceeded(#[from] wavs_types::WasmResponseSizeError),
+
     #[error("Mismatched instance data and logger. Data: {data}, Logger: {logger}")]
     MismatchedInstanceDataAndLogger {
         data: &'static str,
