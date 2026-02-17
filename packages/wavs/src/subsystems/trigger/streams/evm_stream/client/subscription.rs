@@ -439,8 +439,7 @@ impl SubscriptionsInner {
                             } else {
                                 match subscribe_type {
                                     Some(sub_type) => {
-                                        metrics
-                                            .record_subscribe_request(&chain_key, sub_type);
+                                        metrics.record_subscribe_request(&chain_key, sub_type);
                                     }
                                     None => {
                                         metrics.record_unsubscribe_request(&chain_key);
@@ -452,9 +451,8 @@ impl SubscriptionsInner {
                         }
                     });
                 }
-                None => {
-                    self._connection_send_rpc_tx.send(req)?;
-                    match subscribe_type {
+                None => match self._connection_send_rpc_tx.send(req) {
+                    Ok(()) => match subscribe_type {
                         Some(sub_type) => {
                             self.metrics
                                 .record_subscribe_request(&self.chain_key, sub_type);
@@ -462,8 +460,13 @@ impl SubscriptionsInner {
                         None => {
                             self.metrics.record_unsubscribe_request(&self.chain_key);
                         }
+                    },
+                    Err(e) => {
+                        self.metrics
+                            .record_rpc_request_error(&self.chain_key, "send_failed");
+                        return Err(e);
                     }
-                }
+                },
             }
         } else {
             tracing::warn!(
