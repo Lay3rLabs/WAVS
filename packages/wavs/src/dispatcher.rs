@@ -656,15 +656,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
     #[instrument(skip(self), fields(subsys = "Dispatcher"))]
     pub fn remove_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
-        // Look up the ServiceManager before removing so we can delete it from the registry
-        let service_manager = self.services.get(&id).ok().map(|s| s.manager.clone());
-
-        self.remove_service_inner(id.clone())?;
-
-        // Remove from persistent registry
-        if let Some(sm) = service_manager {
+        // Remove from persistent registry first so an IO failure doesn't leave
+        // the service already gone from memory but still on disk.
+        if let Some(sm) = self.services.get(&id).ok().map(|s| s.manager.clone()) {
             self.service_registry.remove(&sm)?;
         }
+
+        self.remove_service_inner(id.clone())?;
 
         Ok(())
     }

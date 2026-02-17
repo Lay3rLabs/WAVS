@@ -85,11 +85,14 @@ impl ServiceRegistry {
         }
 
         let hd_index = state.next_hd_index;
+        let next = hd_index
+            .checked_add(1)
+            .expect("HD index overflow: exceeded u32::MAX services");
         state.entries.push(RegistryEntry {
             service_manager: sm,
             hd_index,
         });
-        state.next_hd_index = hd_index + 1;
+        state.next_hd_index = next;
 
         self.write_locked(&state)?;
         Ok(hd_index)
@@ -118,11 +121,16 @@ impl ServiceRegistry {
             std::fs::create_dir_all(parent)?;
         }
 
-        let mut tmp =
-            tempfile::NamedTempFile::new_in(self.path.parent().unwrap_or_else(|| Path::new(".")))?;
+        let parent = self.path.parent().unwrap_or_else(|| Path::new("."));
+        let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
         tmp.write_all(json.as_bytes())?;
-        tmp.flush()?;
+        tmp.as_file().sync_all()?;
         tmp.persist(&self.path)?;
+
+        // Sync the parent directory so the rename is durable
+        if let Ok(dir) = std::fs::File::open(parent) {
+            let _ = dir.sync_all();
+        }
 
         Ok(())
     }
@@ -142,11 +150,21 @@ mod tests {
     }
 
     #[test]
-    fn empty_file_gives_empty_registry() {
+    fn missing_file_gives_empty_registry() {
         let dir = TempDir::new().unwrap();
         let reg = ServiceRegistry::load(dir.path()).unwrap();
         assert!(reg.entries().is_empty());
         assert_eq!(reg.next_hd_index(), 1);
+    }
+
+    #[test]
+    fn empty_file_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join(REGISTRY_FILENAME);
+        std::fs::write(&path, "").unwrap();
+
+        let err = ServiceRegistry::load(dir.path()).unwrap_err();
+        assert!(matches!(err, RegistryError::Json(_)));
     }
 
     #[test]
