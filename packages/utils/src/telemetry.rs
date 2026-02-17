@@ -561,10 +561,12 @@ pub struct EvmStreamMetrics {
     pub active_subscriptions: UpDownCounter<i64>,
     pub subscribe_request_count: Counter<u64>,
     pub unsubscribe_request_count: Counter<u64>,
+    pub unsubscribe_failure_count: Counter<u64>,
     pub rpc_request_dropped_count: Counter<u64>,
     pub rpc_request_error_count: Counter<u64>,
     pub subscription_events_received: Counter<u64>,
     pub subscription_events_forwarded: Counter<u64>,
+    pub subscription_events_stale: Counter<u64>,
 }
 
 impl EvmStreamMetrics {
@@ -615,6 +617,10 @@ impl EvmStreamMetrics {
                 .u64_counter(format!("{}.unsubscribe_request_count", Self::NAMESPACE))
                 .with_description("Unsubscribe RPC requests sent")
                 .build(),
+            unsubscribe_failure_count: meter
+                .u64_counter(format!("{}.unsubscribe_failure_count", Self::NAMESPACE))
+                .with_description("Failed unsubscribe attempts (server rejected)")
+                .build(),
             rpc_request_dropped_count: meter
                 .u64_counter(format!("{}.rpc_request_dropped_count", Self::NAMESPACE))
                 .with_description("RPC requests dropped (delayed send canceled or channel closed)")
@@ -630,6 +636,10 @@ impl EvmStreamMetrics {
             subscription_events_forwarded: meter
                 .u64_counter(format!("{}.subscription_events_forwarded", Self::NAMESPACE))
                 .with_description("Events forwarded (not stale)")
+                .build(),
+            subscription_events_stale: meter
+                .u64_counter(format!("{}.subscription_events_stale", Self::NAMESPACE))
+                .with_description("Events discarded from non-most-recent subscriptions")
                 .build(),
         }
     }
@@ -661,6 +671,18 @@ impl EvmStreamMetrics {
         );
         self.is_connected
             .record(0, &[KeyValue::new("chain", chain.to_string())]);
+    }
+
+    /// Records a disconnection counter without setting `is_connected` to 0.
+    /// Use for transparent failovers where reconnection is immediate.
+    pub fn record_intentional_disconnection(&self, chain: &ChainKey, reason: &str) {
+        self.disconnection_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("reason", reason.to_owned()),
+            ],
+        );
     }
 
     pub fn record_provider_switch(&self, chain: &ChainKey, reason: &str) {
@@ -703,9 +725,24 @@ impl EvmStreamMetrics {
         );
     }
 
-    pub fn record_unsubscribe_request(&self, chain: &ChainKey) {
-        self.unsubscribe_request_count
-            .add(1, &[KeyValue::new("chain", chain.to_string())]);
+    pub fn record_unsubscribe_request(&self, chain: &ChainKey, sub_type: &str) {
+        self.unsubscribe_request_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_unsubscribe_failure(&self, chain: &ChainKey, sub_type: &str) {
+        self.unsubscribe_failure_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
     }
 
     pub fn record_rpc_request_dropped(&self, chain: &ChainKey, reason: &str) {
@@ -740,6 +777,16 @@ impl EvmStreamMetrics {
 
     pub fn record_subscription_event_forwarded(&self, chain: &ChainKey, sub_type: &str) {
         self.subscription_events_forwarded.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_subscription_event_stale(&self, chain: &ChainKey, sub_type: &str) {
+        self.subscription_events_stale.add(
             1,
             &[
                 KeyValue::new("chain", chain.to_string()),

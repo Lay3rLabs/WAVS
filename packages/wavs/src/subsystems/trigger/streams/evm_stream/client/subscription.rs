@@ -352,14 +352,20 @@ impl SubscriptionsInner {
     ) -> Result<(), tokio::sync::mpsc::error::SendError<RpcRequest>> {
         // Extract metric info before req is consumed by send.
         // Metrics are recorded only after a successful send.
-        let subscribe_type: Option<&'static str> = match &req {
+        #[derive(Clone, Copy)]
+        enum RpcSendMetric {
+            Subscribe(&'static str),
+            Unsubscribe(&'static str),
+        }
+
+        let rpc_metric = match &req {
             RpcRequest::Subscribe { id, params } => match params {
                 SubscribeParams::NewHeads => {
                     tracing::info!(
                         "sending newHeads subscription request (rpc id {})",
                         id.data().as_ffi()
                     );
-                    Some("new_heads")
+                    RpcSendMetric::Subscribe("new_heads")
                 }
                 SubscribeParams::Logs { addresses, topics } => {
                     tracing::info!(
@@ -374,14 +380,14 @@ impl SubscriptionsInner {
                         addresses,
                         topics
                     );
-                    Some("logs")
+                    RpcSendMetric::Subscribe("logs")
                 }
                 SubscribeParams::NewPendingTransactions => {
                     tracing::info!(
                         "sending newPendingTransactions subscription request (rpc id {})",
                         id.data().as_ffi()
                     );
-                    Some("new_pending_transactions")
+                    RpcSendMetric::Subscribe("new_pending_transactions")
                 }
             },
             RpcRequest::Unsubscribe {
@@ -393,7 +399,16 @@ impl SubscriptionsInner {
                     id.data().as_ffi(),
                     subscription_id
                 );
-                None
+                let sub_type = self
+                    .ids
+                    .lookup_kind(subscription_id)
+                    .map(|kind| match kind {
+                        SubscriptionKind::NewHeads => "new_heads",
+                        SubscriptionKind::Logs { .. } => "logs",
+                        SubscriptionKind::NewPendingTransactions => "new_pending_transactions",
+                    })
+                    .unwrap_or("unknown");
+                RpcSendMetric::Unsubscribe(sub_type)
             }
         };
 
@@ -437,12 +452,12 @@ impl SubscriptionsInner {
                                 tracing::error!("failed to send delayed RPC request: {}", e);
                                 metrics.record_rpc_request_error(&chain_key, "delayed_send_failed");
                             } else {
-                                match subscribe_type {
-                                    Some(sub_type) => {
+                                match rpc_metric {
+                                    RpcSendMetric::Subscribe(sub_type) => {
                                         metrics.record_subscribe_request(&chain_key, sub_type);
                                     }
-                                    None => {
-                                        metrics.record_unsubscribe_request(&chain_key);
+                                    RpcSendMetric::Unsubscribe(sub_type) => {
+                                        metrics.record_unsubscribe_request(&chain_key, sub_type);
                                     }
                                 }
                             }
@@ -452,13 +467,14 @@ impl SubscriptionsInner {
                     });
                 }
                 None => match self._connection_send_rpc_tx.send(req) {
-                    Ok(()) => match subscribe_type {
-                        Some(sub_type) => {
+                    Ok(()) => match rpc_metric {
+                        RpcSendMetric::Subscribe(sub_type) => {
                             self.metrics
                                 .record_subscribe_request(&self.chain_key, sub_type);
                         }
-                        None => {
-                            self.metrics.record_unsubscribe_request(&self.chain_key);
+                        RpcSendMetric::Unsubscribe(sub_type) => {
+                            self.metrics
+                                .record_unsubscribe_request(&self.chain_key, sub_type);
                         }
                     },
                     Err(e) => {
@@ -586,6 +602,19 @@ impl SubscriptionsInner {
                     match kind {
                         RpcRequestKind::Unsubscribe { subscription_id } => {
                             if self.ids.exists(&subscription_id) {
+                                let sub_type = self
+                                    .ids
+                                    .lookup_kind(&subscription_id)
+                                    .map(|kind| match kind {
+                                        SubscriptionKind::NewHeads => "new_heads",
+                                        SubscriptionKind::Logs { .. } => "logs",
+                                        SubscriptionKind::NewPendingTransactions => {
+                                            "new_pending_transactions"
+                                        }
+                                    })
+                                    .unwrap_or("unknown");
+                                self.metrics
+                                    .record_unsubscribe_failure(&self.chain_key, sub_type);
                                 tracing::warn!(
                                     "failed to unsubscribe from subscription id {}, trying again in {} seconds",
                                     subscription_id,
@@ -652,6 +681,8 @@ impl SubscriptionsInner {
                         tracing::error!("failed to send new block height: {}", e);
                     }
                 } else {
+                    self.metrics
+                        .record_subscription_event_stale(&self.chain_key, "new_heads");
                     tracing::debug!(
                         "ignoring newHeads event for non-most-recent newHeads subscription id {}",
                         subscription_id
@@ -685,6 +716,8 @@ impl SubscriptionsInner {
                         tracing::error!("failed to send log: {}", e);
                     }
                 } else {
+                    self.metrics
+                        .record_subscription_event_stale(&self.chain_key, "logs");
                     tracing::debug!(
                         "ignoring log event for non-most-recent logs subscription id {}",
                         subscription_id
@@ -715,6 +748,10 @@ impl SubscriptionsInner {
                         tracing::error!("failed to send new pending transaction: {}", e);
                     }
                 } else {
+                    self.metrics.record_subscription_event_stale(
+                        &self.chain_key,
+                        "new_pending_transactions",
+                    );
                     tracing::debug!("ignoring new pending transaction event for non-most-recent newPendingTransactions subscription id {}", subscription_id);
                 }
             }

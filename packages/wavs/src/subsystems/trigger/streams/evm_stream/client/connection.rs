@@ -388,7 +388,7 @@ async fn connection_loop(
                                                 "force switching to priority endpoint at index {}",
                                                 priority_index
                                             );
-                                            metrics.record_disconnection(&chain_key, "force_switch");
+                                            metrics.record_intentional_disconnection(&chain_key, "force_switch");
                                             metrics.record_provider_switch(&chain_key, "priority_recovery");
                                             forced_switch = true;
                                             endpoint_idx = priority_index;
