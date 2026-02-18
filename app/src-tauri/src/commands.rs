@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use utils::{
     context::{AnyRuntime, AppContext},
     telemetry::{setup_metrics, Metrics},
+    wkg::WkgClient,
 };
 use wavs::{config::HealthCheckMode, dispatcher::Dispatcher, health::SharedHealthStatus};
 use wavs_gui_shared::{
@@ -12,10 +14,10 @@ use wavs_gui_shared::{
     error::{AppError, AppResult},
     settings::{SavedRegistry, Settings},
 };
+use wavs_types::{ChainConfigs, Credential, Service, ServiceManager};
 
 const KEYCHAIN_SERVICE: &str = "wavs-app";
 const KEYCHAIN_ACCOUNT: &str = "mnemonic";
-use wavs_types::{ChainConfigs, Credential, Service, ServiceManager};
 
 use wavs::health::HealthStatus;
 
@@ -76,13 +78,19 @@ pub async fn cmd_start_wavs(
     settings: State<'_, SettingsState>,
     wavs_config: State<'_, WavsConfigState>,
     wavs_instance: State<'_, WavsInstanceState>,
+    mnemonic_cache: State<'_, MnemonicCacheState>,
 ) -> AppResult<()> {
-    let config = match wavs_config.get_cloned() {
+    let mut config = match wavs_config.get_cloned() {
         Some(cfg) => cfg,
         None => {
             return Err(AppError::WavsConfig("missing".to_string()));
         }
     };
+
+    // Set the submission mnemonic from the OS keychain
+    if let Some(credential) = get_mnemonic_cached(&mnemonic_cache) {
+        config.submission_mnemonic = Some(credential);
+    }
 
     let ctx = AppContext::new_with_runtime(AnyRuntime::TokioHandle(
         tauri::async_runtime::handle().inner().clone(),
@@ -347,4 +355,166 @@ pub async fn cmd_get_health_status(
         .map_err(|e| AppError::HealthCheck(format!("Failed to parse health response: {}", e)))?;
 
     Ok(health_status)
+}
+
+// --- IPFS Upload ---
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IpfsProvider {
+    Local { api_url: String },
+    Pinata { api_key: String },
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_upload_to_ipfs(content: String, provider: IpfsProvider) -> AppResult<String> {
+    let client = reqwest::Client::new();
+
+    match provider {
+        IpfsProvider::Local { api_url } => {
+            let url = format!("{}/api/v0/add?pin=true", api_url.trim_end_matches('/'));
+            let part = reqwest::multipart::Part::bytes(content.into_bytes())
+                .file_name("service.json");
+            let form = reqwest::multipart::Form::new().part("file", part);
+
+            let response = client
+                .post(&url)
+                .multipart(form)
+                .timeout(std::time::Duration::from_secs(30))
+                .send()
+                .await
+                .map_err(|e| AppError::Service(format!("IPFS upload failed: {}", e)))?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                return Err(AppError::Service(format!(
+                    "IPFS upload returned {}: {}",
+                    status, body
+                )));
+            }
+
+            #[derive(Deserialize)]
+            struct IpfsAddResponse {
+                #[serde(rename = "Hash")]
+                hash: String,
+            }
+
+            let resp: IpfsAddResponse = response
+                .json()
+                .await
+                .map_err(|e| AppError::Service(format!("Failed to parse IPFS response: {}", e)))?;
+
+            Ok(resp.hash)
+        }
+        IpfsProvider::Pinata { api_key } => {
+            let part = reqwest::multipart::Part::bytes(content.into_bytes())
+                .file_name(format!(
+                    "service-{}.json",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis()
+                ));
+            let form = reqwest::multipart::Form::new()
+                .part("file", part)
+                .text("network", "public");
+
+            let response = client
+                .post("https://uploads.pinata.cloud/v3/files")
+                .bearer_auth(&api_key)
+                .multipart(form)
+                .timeout(std::time::Duration::from_secs(60))
+                .send()
+                .await
+                .map_err(|e| AppError::Service(format!("Pinata upload failed: {}", e)))?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                return Err(AppError::Service(format!(
+                    "Pinata upload returned {}: {}",
+                    status, body
+                )));
+            }
+
+            #[derive(Deserialize)]
+            struct PinataData {
+                cid: String,
+            }
+            #[derive(Deserialize)]
+            struct PinataResponse {
+                data: PinataData,
+            }
+
+            let resp: PinataResponse = response
+                .json()
+                .await
+                .map_err(|e| AppError::Service(format!("Failed to parse Pinata response: {}", e)))?;
+
+            Ok(resp.data.cid)
+        }
+    }
+}
+
+// --- Component Digest Lookup ---
+
+#[derive(Serialize)]
+pub struct ComponentDigestResult {
+    pub digest: String,
+    pub resolved_version: String,
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_component_digest(
+    domain: Option<String>,
+    package: String,
+    version: Option<String>,
+) -> AppResult<ComponentDigestResult> {
+    let default_domain = domain.clone().unwrap_or_else(|| "wa.dev".to_string());
+    let wkg_client = WkgClient::new(default_domain)
+        .map_err(|e| AppError::Service(format!("Failed to create Wkg client: {}", e)))?;
+
+    let package_ref: wasm_pkg_client::PackageRef = package
+        .parse()
+        .map_err(|e| AppError::Service(format!("Invalid package reference '{}': {}", package, e)))?;
+
+    let parsed_version = match &version {
+        Some(v) => {
+            let ver: wasm_pkg_client::Version = v
+                .parse()
+                .map_err(|e| AppError::Service(format!("Invalid version '{}': {}", v, e)))?;
+            Some(ver)
+        }
+        None => None,
+    };
+
+    let (digest, resolved_version) = wkg_client
+        .get_digest(domain, &package_ref, parsed_version.as_ref())
+        .await
+        .map_err(|e| AppError::Service(format!("Failed to get component digest: {}", e)))?;
+
+    Ok(ComponentDigestResult {
+        digest: digest.to_string(),
+        resolved_version: resolved_version.to_string(),
+    })
+}
+
+// --- Wasm Component Publish from File ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_publish_component(
+    wavs_instance: State<'_, WavsInstanceState>,
+    file_path: String,
+) -> AppResult<String> {
+    let bytes = tokio::fs::read(&file_path)
+        .await
+        .map_err(|e| AppError::Io(format!("Failed to read wasm file '{}': {}", file_path, e)))?;
+
+    let digest = wavs_instance
+        .dispatcher()?
+        .store_component_bytes(bytes)
+        .map_err(|e| AppError::Service(format!("Failed to store component: {}", e)))?;
+
+    Ok(digest.to_string())
 }

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 
 interface ExpanderProps {
-  label: string;
+  label: ReactNode;
   children: ReactNode;
   defaultExpanded?: boolean;
   className?: string;

@@ -29,5 +29,6 @@ opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 anyhow = { workspace = true }
 keyring = "3"
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["multipart"] }
 toml = { workspace = true }
+wasm-pkg-client = { workspace = true }

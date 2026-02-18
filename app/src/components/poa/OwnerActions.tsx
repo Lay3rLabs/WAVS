@@ -14,10 +14,14 @@ import {
   fetchOperators,
 } from '../../utils/evm';
 
-export function OwnerActions() {
-  const { getActiveRegistry, updateRegistryInfo, updateRegistryOperators, updateRegistryOwnership } =
+interface OwnerActionsProps {
+  registryKey?: string;
+}
+
+export function OwnerActions({ registryKey: registryKeyProp }: OwnerActionsProps) {
+  const { getActiveRegistry, updateRegistryInfo, updateRegistryOperators, updateRegistryOwnership, registries } =
     usePOAStore();
-  const registry = getActiveRegistry();
+  const registry = registryKeyProp ? registries.get(registryKeyProp) ?? null : getActiveRegistry();
   const { hasMnemonic, derivedAddresses, loadAddresses } = useWalletStore();
 
   useEffect(() => {

@@ -10,7 +10,6 @@ import {
   Submissions,
   NotFound,
   WalletSetup,
-  POARegistry,
   Health,
 } from './pages';
 import { useAppStore } from './stores/appStore';
@@ -31,7 +30,7 @@ function MainAppContent() {
           <Route path="/services" element={<Services />} />
           <Route path="/triggers" element={<Triggers />} />
           <Route path="/submissions" element={<Submissions />} />
-          <Route path="/poa-registry" element={<POARegistry />} />
+          <Route path="/poa-registry" element={<Navigate to="/services" replace />} />
           <Route path="/health" element={<Health />} />
           <Route path="/404" element={<NotFound />} />
           {/* Default route: go to settings if not complete, otherwise logs */}

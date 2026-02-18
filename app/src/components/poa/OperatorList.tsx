@@ -8,9 +8,13 @@ import { deregisterOperator, updateOperatorWeight, updateSigningKey, createSigni
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-export function OperatorList() {
-  const { getActiveRegistry, updateRegistryOperators } = usePOAStore();
-  const registry = getActiveRegistry();
+interface OperatorListProps {
+  registryKey?: string;
+}
+
+export function OperatorList({ registryKey: registryKeyProp }: OperatorListProps) {
+  const { getActiveRegistry, updateRegistryOperators, registries } = usePOAStore();
+  const registry = registryKeyProp ? registries.get(registryKeyProp) ?? null : getActiveRegistry();
   const { hasMnemonic, derivedAddresses, loadAddresses } = useWalletStore();
   const [loading, setLoading] = useState(false);
   const [editingWeight, setEditingWeight] = useState<Address | null>(null);
