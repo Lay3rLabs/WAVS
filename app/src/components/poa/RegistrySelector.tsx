@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { type Address, isAddress } from 'viem';
 import { Button, Dropdown, TextInput, Modal, type DropdownOption } from '../atoms';
-import { usePOAStore } from '../../stores/poaStore';
+import { usePOAStore, persistRegistries } from '../../stores/poaStore';
 import { getPublicClient, getWalletClient, getAddress } from '../../hooks/useViemClient';
 import { getChainConfigs } from '../../tauri';
 import {
@@ -162,6 +162,7 @@ export function RegistrySelector() {
         isOwner: info.owner.toLowerCase() === userAddress.toLowerCase(),
       });
 
+      await persistRegistries();
       setDeployProgress(null);
       Modal.openInfo(`Registry deployed at ${result.proxyAddress}`);
       setMode('select');
@@ -203,6 +204,7 @@ export function RegistrySelector() {
         isOwner: info.owner.toLowerCase() === userAddress.toLowerCase(),
       });
 
+      await persistRegistries();
       setDeployProgress(null);
       Modal.openInfo(`Connected to registry at ${address}`);
       setMode('select');

@@ -56,6 +56,9 @@ impl SettingsState {
 
         f(&mut settings);
 
+        // Write updated settings back to in-memory state
+        *self.inner.write().unwrap() = settings.clone();
+
         let bytes =
             serde_json::to_vec_pretty(&settings).map_err(|e| AppError::Json(e.to_string()))?;
 
