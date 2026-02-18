@@ -589,7 +589,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     // this is public just so we can call it from tests
-    #[instrument(skip(self), fields(subsys = "Dispatcher", service.name = %service.name, service.manager = ?service.manager))]
+    #[instrument(skip(self, service), fields(subsys = "Dispatcher", service.name = %service.name, service.manager = ?service.manager))]
     pub async fn add_service_direct(
         &self,
         service: Service,
@@ -692,7 +692,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         self.change_service_inner(service_id, service).await
     }
 
-    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    #[instrument(skip(self, service), fields(subsys = "Dispatcher"))]
     async fn change_service_inner(
         &self,
         service_id: ServiceId,
