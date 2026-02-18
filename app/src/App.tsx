@@ -5,13 +5,19 @@ import { ModalContainer } from './components/atoms';
 import {
   Settings,
   Logs,
-  Services,
   Triggers,
   Submissions,
   NotFound,
   WalletSetup,
   Health,
 } from './pages';
+import {
+  ServicesLayout,
+  ServiceListPage,
+  ServiceBuilderPage,
+  ServiceDetailPage,
+  ServiceEditorPage,
+} from './pages/services';
 import { useAppStore } from './stores/appStore';
 import { useWalletStore } from './stores/walletStore';
 import { getSettings, startWavs } from './tauri';
@@ -27,7 +33,12 @@ function MainAppContent() {
         <Route element={<Body />}>
           <Route path="/settings" element={<Settings />} />
           <Route path="/logs" element={<Logs />} />
-          <Route path="/services" element={<Services />} />
+          <Route path="/services" element={<ServicesLayout />}>
+            <Route index element={<ServiceListPage />} />
+            <Route path="new" element={<ServiceBuilderPage />} />
+            <Route path=":chainId/:address" element={<ServiceDetailPage />} />
+            <Route path=":chainId/:address/edit" element={<ServiceEditorPage />} />
+          </Route>
           <Route path="/triggers" element={<Triggers />} />
           <Route path="/submissions" element={<Submissions />} />
           <Route path="/poa-registry" element={<Navigate to="/services" replace />} />
