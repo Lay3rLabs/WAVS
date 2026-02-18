@@ -45,6 +45,9 @@ pub enum RegistryError {
 
     #[error("Service manager already registered")]
     AlreadyRegistered,
+
+    #[error("HD index overflow")]
+    HdIndexOverflow,
 }
 
 impl ServiceRegistry {
@@ -87,7 +90,7 @@ impl ServiceRegistry {
         let hd_index = state.next_hd_index;
         let next = hd_index
             .checked_add(1)
-            .expect("HD index overflow: exceeded u32::MAX services");
+            .ok_or(RegistryError::HdIndexOverflow)?;
         state.entries.push(RegistryEntry {
             service_manager: sm,
             hd_index,
