@@ -137,12 +137,15 @@ export async function connectToRegistry(
 }
 
 /**
- * Fetch operators from registry events
+ * Fetch operators from registry events.
+ * Pass knownAddresses to ensure specific addresses are checked even if
+ * event logs haven't been indexed yet (e.g. right after registration).
  */
 export async function fetchOperators(
   publicClient: PublicClient<Transport, Chain>,
   registryAddress: Address,
-  fromBlock?: bigint
+  fromBlock?: bigint,
+  knownAddresses?: Address[]
 ): Promise<Operator[]> {
   // Get all OperatorRegistered and OperatorDeregistered events
   const [registerLogs, deregisterLogs] = await Promise.all([
@@ -180,6 +183,14 @@ export async function fetchOperators(
   for (const log of deregisterLogs) {
     const operator = log.args.operator as Address;
     deregisteredSet.add(operator);
+  }
+
+  // Include known addresses so they get checked via contract reads
+  // even if event logs haven't been indexed yet
+  if (knownAddresses) {
+    for (const addr of knownAddresses) {
+      operatorSet.add(addr);
+    }
   }
 
   // Get currently registered operators

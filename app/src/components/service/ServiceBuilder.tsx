@@ -16,9 +16,10 @@ const STEPS: { key: BuilderStep; label: string }[] = [
 
 interface ServiceBuilderProps {
   onClose: () => void;
+  onDeployComplete?: (chainId: number, address: string) => void;
 }
 
-export function ServiceBuilder({ onClose }: ServiceBuilderProps) {
+export function ServiceBuilder({ onClose, onDeployComplete }: ServiceBuilderProps) {
   const step = useServiceBuilderStore((s) => s.step);
   const setStep = useServiceBuilderStore((s) => s.setStep);
   const reset = useServiceBuilderStore((s) => s.reset);
@@ -93,7 +94,7 @@ export function ServiceBuilder({ onClose }: ServiceBuilderProps) {
         {step === 'basics' && <ServiceBasics />}
         {step === 'workflows' && <WorkflowEditor />}
         {step === 'review' && <ServiceReview />}
-        {step === 'deploy' && <ServiceDeploy />}
+        {step === 'deploy' && <ServiceDeploy onDeployComplete={onDeployComplete} />}
       </div>
 
       {/* Navigation */}

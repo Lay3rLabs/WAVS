@@ -34,7 +34,11 @@ function StatusBadge({ status }: { status: DeployStepStatus }) {
   return <span className={`text-sm font-medium ${colors[status]}`}>{labels[status]}</span>;
 }
 
-export function ServiceDeploy() {
+interface ServiceDeployProps {
+  onDeployComplete?: (chainId: number, address: string) => void;
+}
+
+export function ServiceDeploy({ onDeployComplete }: ServiceDeployProps) {
   const buildServiceJson = useServiceBuilderStore((s) => s.buildServiceJson);
   const selectedRegistryKey = useServiceBuilderStore((s) => s.selectedRegistryKey);
   const manualChain = useServiceBuilderStore((s) => s.manualChain);
@@ -128,7 +132,11 @@ export function ServiceDeploy() {
       setServices(servicesData);
       setDeployState({ registerStatus: 'done' });
 
-      Modal.openInfo('Service deployed successfully!');
+      if (onDeployComplete && resolvedManager) {
+        onDeployComplete(resolvedManager.chainId, resolvedManager.address);
+      } else {
+        Modal.openInfo('Service deployed successfully!');
+      }
     } catch (err) {
       const msg = getErrorMessage(err);
       setDeployState({ error: msg });

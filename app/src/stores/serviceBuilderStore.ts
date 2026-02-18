@@ -51,7 +51,7 @@ export interface SubmitDraft {
 
 function createDefaultComponent(): ComponentDraft {
   return {
-    sourceType: 'registry',
+    sourceType: 'digest',
     domain: '',
     package: '',
     version: '',
@@ -132,6 +132,9 @@ interface ServiceBuilderState {
   setDeployState: (state: Partial<DeployState>) => void;
   reset: () => void;
 
+  // Hydrate from existing service
+  hydrateFromService: (service: Service, registryKey: string) => void;
+
   // Computed
   buildServiceJson: () => Service | null;
   getServiceManager: () => ServiceManager | null;
@@ -205,6 +208,68 @@ function buildSubmit(draft: SubmitDraft): Submit | null {
   };
 }
 
+function reverseComponent(comp: Component): ComponentDraft {
+  let sourceType: ComponentDraft['sourceType'] = 'digest';
+  let domain = '';
+  let pkg = '';
+  let version = '';
+  let uri = '';
+  let digest = '';
+
+  const src = comp.source;
+  if ('registry' in src) {
+    sourceType = 'registry';
+    domain = src.registry.domain ?? '';
+    pkg = src.registry.package;
+    version = src.registry.version ?? '';
+    digest = src.registry.digest;
+  } else if ('download' in src) {
+    sourceType = 'download';
+    uri = src.download.uri;
+    digest = src.download.digest;
+  } else if ('digest' in src) {
+    sourceType = 'digest';
+    digest = src.digest as string;
+  }
+
+  let httpHosts: ComponentDraft['httpHosts'] = 'none';
+  let specificHosts: string[] = [];
+  if (comp.permissions.allowed_http_hosts === 'all') {
+    httpHosts = 'all';
+  } else if (typeof comp.permissions.allowed_http_hosts === 'object' && 'only' in comp.permissions.allowed_http_hosts) {
+    httpHosts = 'specific';
+    specificHosts = comp.permissions.allowed_http_hosts.only;
+  }
+
+  return {
+    sourceType,
+    domain,
+    package: pkg,
+    version,
+    uri,
+    digest,
+    httpHosts,
+    specificHosts,
+    fileSystem: comp.permissions.file_system,
+    fuelLimit: comp.fuel_limit != null ? String(comp.fuel_limit) : '',
+    timeLimitSeconds: comp.time_limit_seconds != null ? String(comp.time_limit_seconds) : '',
+    config: comp.config,
+    envKeys: comp.env_keys,
+  };
+}
+
+function reverseSubmit(submit: Submit): SubmitDraft {
+  if (submit === 'none') return createDefaultSubmit();
+
+  return {
+    type: 'aggregator',
+    aggregatorUrl: submit.aggregator.url,
+    component: reverseComponent(submit.aggregator.component),
+    signatureAlgorithm: submit.aggregator.signature_kind.algorithm,
+    signaturePrefix: submit.aggregator.signature_kind.prefix ?? 'none',
+  };
+}
+
 const initialDeployState: DeployState = {
   ipfsStatus: 'pending',
   setUriStatus: 'pending',
@@ -272,6 +337,26 @@ export const useServiceBuilderStore = create<ServiceBuilderState>((set, get) => 
       deploying: false,
       deployState: { ...initialDeployState },
     }),
+
+  hydrateFromService: (service, registryKey) => {
+    const workflows: WorkflowDraft[] = Object.entries(service.workflows).map(([id, wf]) => ({
+      id,
+      trigger: wf.trigger,
+      component: reverseComponent(wf.component),
+      submit: reverseSubmit(wf.submit),
+    }));
+
+    set({
+      step: 'basics',
+      name: service.name,
+      selectedRegistryKey: registryKey,
+      manualChain: '',
+      manualAddress: '',
+      workflows: workflows.length > 0 ? workflows : [createWorkflowDraft()],
+      deploying: false,
+      deployState: { ...initialDeployState },
+    });
+  },
 
   getServiceManager: () => {
     // This will be resolved from the registry or manual input by the UI layer

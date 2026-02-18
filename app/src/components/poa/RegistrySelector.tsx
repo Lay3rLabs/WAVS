@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react';
 import { type Address, isAddress } from 'viem';
 import { Button, Dropdown, TextInput, Modal, type DropdownOption } from '../atoms';
 import { usePOAStore, persistRegistries, getRegistryKey } from '../../stores/poaStore';
+import { useAppStore } from '../../stores/appStore';
 import { getPublicClient, getWalletClient, getAddress } from '../../hooks/useViemClient';
 import { getChainConfigs } from '../../tauri';
+import { addService as addServiceCmd, getServices } from '../../tauri/commands';
 import {
   deployPOARegistry,
   connectToRegistry,
   fetchOperators,
 } from '../../utils/evm';
-import type { ChainConfigs } from '../../types';
+import type { ChainConfigs, ServiceManager } from '../../types';
 
 type Mode = 'select' | 'deploy' | 'connect';
 
@@ -44,6 +46,12 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
   const [addressInput, setAddressInput] = useState('');
 
   const { addRegistry, setDeployProgress, deployProgress } = usePOAStore();
+  const setServices = useAppStore((s) => s.setServices);
+
+  // Auto-register state
+  const [pendingAutoRegister, setPendingAutoRegister] = useState(false);
+  const [autoRegisterKey, setAutoRegisterKey] = useState<string | null>(null);
+  const [autoRegistering, setAutoRegistering] = useState(false);
 
   // Load chain configs on mount
   useEffect(() => {
@@ -214,12 +222,21 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
 
       await persistRegistries();
       const key = getRegistryKey(selectedChain.chainId, address);
-      onRegistryAdded?.(key);
       setDeployProgress(null);
-      Modal.openInfo(`Connected to registry at ${address}`);
-      setMode('select');
-      setAddressInput('');
-      onComplete?.();
+
+      // Check if registry has a service URI set -- prompt to auto-register
+      if (info.serviceUri) {
+        setAutoRegisterKey(key);
+        setPendingAutoRegister(true);
+        setMode('select');
+        setAddressInput('');
+      } else {
+        onRegistryAdded?.(key);
+        Modal.openInfo(`Connected to registry at ${address}`);
+        setMode('select');
+        setAddressInput('');
+        onComplete?.();
+      }
     } catch (err) {
       console.error('Failed to connect:', err);
       setDeployProgress(null);
@@ -230,6 +247,43 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
   if (loading) {
     return <div className="text-beige-warm">Loading chain configurations...</div>;
   }
+
+  const handleAutoRegister = async () => {
+    if (!autoRegisterKey) return;
+    const reg = usePOAStore.getState().registries.get(autoRegisterKey);
+    if (!reg) return;
+
+    setAutoRegistering(true);
+    try {
+      const isEvm = !reg.chainKey.startsWith('cosmos:');
+      const manager: ServiceManager = isEvm
+        ? { evm: { chain: reg.chainKey, address: reg.address } }
+        : { cosmos: { chain: reg.chainKey, address: reg.address } };
+
+      await addServiceCmd(manager);
+      const servicesData = await getServices();
+      setServices(servicesData);
+
+      setPendingAutoRegister(false);
+      onRegistryAdded?.(autoRegisterKey);
+      setAutoRegisterKey(null);
+      Modal.openInfo('Service registered with WAVS!');
+      onComplete?.();
+    } catch (err) {
+      Modal.openError(`Failed to register service: ${err}`);
+    } finally {
+      setAutoRegistering(false);
+    }
+  };
+
+  const handleSkipAutoRegister = () => {
+    setPendingAutoRegister(false);
+    if (autoRegisterKey) {
+      onRegistryAdded?.(autoRegisterKey);
+    }
+    setAutoRegisterKey(null);
+    onComplete?.();
+  };
 
   if (mode === 'select') {
     return (
@@ -250,6 +304,31 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
             onClick={() => setMode('connect')}
           />
         </div>
+
+        {/* Auto-register prompt */}
+        {pendingAutoRegister && (
+          <div className="p-4 rounded-lg bg-charcoal-medium border border-purple-1">
+            <p className="text-beige-warm text-sm mb-3">
+              This contract has a Service URI set. Register with WAVS?
+            </p>
+            <div className="flex gap-3">
+              <Button
+                text={autoRegistering ? 'Registering...' : 'Register'}
+                color="purple"
+                size="sm"
+                onClick={handleAutoRegister}
+                disabled={autoRegistering}
+              />
+              <Button
+                text="Skip"
+                size="sm"
+                variant="outline"
+                onClick={handleSkipAutoRegister}
+                disabled={autoRegistering}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }
