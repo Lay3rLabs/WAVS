@@ -1,8 +1,5 @@
+import { AddressDisplay } from '../atoms';
 import { usePOAStore } from '../../stores/poaStore';
-
-function shortenAddress(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
 
 export function RegistryInfo() {
   const { getActiveRegistry } = usePOAStore();
@@ -27,8 +24,8 @@ export function RegistryInfo() {
 
       <div className="grid grid-cols-2 gap-4">
         <InfoItem label="Chain" value={chainKey} />
-        <InfoItem label="Address" value={shortenAddress(address)} title={address} />
-        <InfoItem label="Owner" value={shortenAddress(info.owner)} title={info.owner} />
+        <InfoItem label="Address" address={address} />
+        <InfoItem label="Owner" address={info.owner} />
         <InfoItem label="Total Weight" value={info.totalWeight.toString()} />
         <InfoItem label="Threshold Weight" value={info.thresholdWeight.toString()} />
         <InfoItem
@@ -51,23 +48,24 @@ export function RegistryInfo() {
 function InfoItem({
   label,
   value,
-  title,
+  address,
   className = '',
 }: {
   label: string;
-  value: string;
-  title?: string;
+  value?: string;
+  address?: string;
   className?: string;
 }) {
   return (
-    <div className={`flex flex-col gap-1 ${className}`}>
+    <div className={`flex flex-col items-start gap-1 ${className}`}>
       <span className="text-tan-muted text-xs font-medium">{label}</span>
-      <span
-        className="text-beige-warm text-sm break-all cursor-default"
-        title={title}
-      >
-        {value}
-      </span>
+      {address ? (
+        <AddressDisplay address={address} full />
+      ) : (
+        <span className="text-beige-warm text-sm break-all cursor-default">
+          {value}
+        </span>
+      )}
     </div>
   );
 }
