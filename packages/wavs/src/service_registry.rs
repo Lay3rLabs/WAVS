@@ -7,9 +7,11 @@ use thiserror::Error;
 use wavs_types::ServiceManager;
 
 const REGISTRY_FILENAME: &str = "service_registry.json";
+const REGISTRY_VERSION: u32 = 1;
 
 #[derive(Serialize, Deserialize)]
 struct RegistryFile {
+    version: u32,
     next_hd_index: u32,
     services: Vec<RegistryEntry>,
 }
@@ -48,6 +50,9 @@ pub enum RegistryError {
 
     #[error("HD index overflow")]
     HdIndexOverflow,
+
+    #[error("unsupported registry version {found}, expected {REGISTRY_VERSION}")]
+    UnsupportedVersion { found: u32 },
 }
 
 impl ServiceRegistry {
@@ -57,6 +62,11 @@ impl ServiceRegistry {
         let (entries, next_hd_index) = if path.exists() {
             let contents = std::fs::read_to_string(&path)?;
             let file: RegistryFile = serde_json::from_str(&contents)?;
+            if file.version != REGISTRY_VERSION {
+                return Err(RegistryError::UnsupportedVersion {
+                    found: file.version,
+                });
+            }
             (file.services, file.next_hd_index)
         } else {
             (Vec::new(), 1)
@@ -114,6 +124,7 @@ impl ServiceRegistry {
 
     fn write_locked(&self, state: &RegistryState) -> Result<(), RegistryError> {
         let file = RegistryFile {
+            version: REGISTRY_VERSION,
             next_hd_index: state.next_hd_index,
             services: state.entries.to_vec(),
         };
@@ -229,6 +240,23 @@ mod tests {
         let sm3 = test_sm("0x0000000000000000000000000000000000000003");
         let hd_index = reg.append(sm3).unwrap();
         assert_eq!(hd_index, 3);
+    }
+
+    #[test]
+    fn unsupported_version_returns_error() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join(REGISTRY_FILENAME);
+        std::fs::write(
+            &path,
+            r#"{"version":999,"next_hd_index":1,"services":[]}"#,
+        )
+        .unwrap();
+
+        let err = ServiceRegistry::load(dir.path()).unwrap_err();
+        assert!(matches!(
+            err,
+            RegistryError::UnsupportedVersion { found: 999 }
+        ));
     }
 
     #[test]
