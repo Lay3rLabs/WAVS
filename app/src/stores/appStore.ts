@@ -28,6 +28,7 @@ interface AppState {
   addSubmission: (submission: SubmissionEvent) => void;
   setServices: (services: Service[]) => void;
   addService: (service: Service) => void;
+  removeService: (serviceId: ServiceId) => void;
   clearLogs: () => void;
 }
 
@@ -76,6 +77,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => {
       const newServices = new Map(state.services);
       newServices.set(getServiceId(service), service);
+      return { services: newServices };
+    }),
+
+  removeService: (serviceId) =>
+    set((state) => {
+      const newServices = new Map(state.services);
+      newServices.delete(serviceId);
       return { services: newServices };
     }),
 

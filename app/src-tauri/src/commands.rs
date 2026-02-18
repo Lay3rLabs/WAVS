@@ -14,7 +14,7 @@ use wavs_gui_shared::{
     error::{AppError, AppResult},
     settings::{SavedRegistry, Settings},
 };
-use wavs_types::{ChainConfigs, Credential, Service, ServiceManager};
+use wavs_types::{ChainConfigs, Credential, Service, ServiceId, ServiceManager};
 
 const KEYCHAIN_SERVICE: &str = "wavs-app";
 const KEYCHAIN_ACCOUNT: &str = "mnemonic";
@@ -213,6 +213,26 @@ pub async fn cmd_add_service(
         .await?;
 
     Ok(service)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_remove_service(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    wavs_instance: State<'_, WavsInstanceState>,
+    manager: ServiceManager,
+) -> AppResult<()> {
+    let service_id = ServiceId::from(&manager);
+    wavs_instance
+        .dispatcher()?
+        .remove_service(service_id)
+        .map_err(|e| AppError::Service(format!("Failed to remove service: {}", e)))?;
+    settings
+        .update(&app, |s| {
+            s.saved_service_managers.retain(|m| m != &manager);
+        })
+        .await?;
+    Ok(())
 }
 
 /// Load mnemonic from OS keyring and populate the cache.

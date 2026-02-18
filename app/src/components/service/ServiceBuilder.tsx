@@ -1,11 +1,13 @@
 import { Button } from '../atoms';
 import { useServiceBuilderStore, type BuilderStep } from '../../stores/serviceBuilderStore';
+import { ContractStep } from './ContractStep';
 import { ServiceBasics } from './ServiceBasics';
 import { WorkflowEditor } from './WorkflowEditor';
 import { ServiceReview } from './ServiceReview';
 import { ServiceDeploy } from './ServiceDeploy';
 
 const STEPS: { key: BuilderStep; label: string }[] = [
+  { key: 'contract', label: 'Contract' },
   { key: 'basics', label: 'Basics' },
   { key: 'workflows', label: 'Workflows' },
   { key: 'review', label: 'Review' },
@@ -21,6 +23,9 @@ export function ServiceBuilder({ onClose }: ServiceBuilderProps) {
   const setStep = useServiceBuilderStore((s) => s.setStep);
   const reset = useServiceBuilderStore((s) => s.reset);
   const name = useServiceBuilderStore((s) => s.name);
+  const selectedRegistryKey = useServiceBuilderStore((s) => s.selectedRegistryKey);
+  const manualChain = useServiceBuilderStore((s) => s.manualChain);
+  const manualAddress = useServiceBuilderStore((s) => s.manualAddress);
   const workflows = useServiceBuilderStore((s) => s.workflows);
   const deploying = useServiceBuilderStore((s) => s.deploying);
 
@@ -28,6 +33,8 @@ export function ServiceBuilder({ onClose }: ServiceBuilderProps) {
 
   const canGoNext = () => {
     switch (step) {
+      case 'contract':
+        return selectedRegistryKey !== null || (manualChain.trim().length > 0 && manualAddress.trim().length > 0);
       case 'basics':
         return name.trim().length > 0;
       case 'workflows':
@@ -82,6 +89,7 @@ export function ServiceBuilder({ onClose }: ServiceBuilderProps) {
 
       {/* Step Content */}
       <div className="min-h-[300px]">
+        {step === 'contract' && <ContractStep />}
         {step === 'basics' && <ServiceBasics />}
         {step === 'workflows' && <WorkflowEditor />}
         {step === 'review' && <ServiceReview />}
