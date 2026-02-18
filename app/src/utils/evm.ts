@@ -7,6 +7,7 @@ import {
   type HDAccount,
   encodeAbiParameters,
   encodeFunctionData,
+  keccak256,
 } from 'viem';
 import {
   POAStakeRegistryABI,
@@ -366,4 +367,41 @@ export async function transferOwnership(
 
   await publicClient.waitForTransactionReceipt({ hash });
   return hash;
+}
+
+/**
+ * Update an operator's signing key.
+ * Must be called by the operator themselves.
+ * The signing key signs keccak256(abi.encode(operatorAddress)) as a raw hash (no EIP-191 prefix).
+ */
+export async function updateSigningKey(
+  publicClient: PublicClient<Transport, Chain>,
+  walletClient: WalletClient<Transport, Chain, HDAccount>,
+  registryAddress: Address,
+  signingKeyAddress: Address,
+  signingKeySignature: `0x${string}`
+): Promise<`0x${string}`> {
+  const hash = await walletClient.writeContract({
+    address: registryAddress,
+    abi: POAStakeRegistryABI,
+    functionName: 'updateOperatorSigningKey',
+    args: [signingKeyAddress, signingKeySignature],
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
+/**
+ * Create the raw signature needed for updateOperatorSigningKey.
+ * Signs keccak256(abi.encode(operatorAddress)) with the signing key (no EIP-191 prefix).
+ */
+export async function createSigningKeySignature(
+  signingKeyAccount: HDAccount,
+  operatorAddress: Address
+): Promise<`0x${string}`> {
+  const messageHash = keccak256(
+    encodeAbiParameters([{ type: 'address' }], [operatorAddress])
+  );
+  return signingKeyAccount.sign({ hash: messageHash });
 }

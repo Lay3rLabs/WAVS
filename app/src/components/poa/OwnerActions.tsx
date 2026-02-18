@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { type Address, isAddress } from 'viem';
 import { Button, TextInput, Modal } from '../atoms';
 import { usePOAStore, getRegistryKey } from '../../stores/poaStore';
+import { useWalletStore } from '../../stores/walletStore';
 import { getPublicClient, getWalletClient } from '../../hooks/useViemClient';
 import {
   registerOperator,
@@ -17,6 +18,13 @@ export function OwnerActions() {
   const { getActiveRegistry, updateRegistryInfo, updateRegistryOperators, updateRegistryOwnership } =
     usePOAStore();
   const registry = getActiveRegistry();
+  const { hasMnemonic, derivedAddresses, loadAddresses } = useWalletStore();
+
+  useEffect(() => {
+    if (hasMnemonic) {
+      loadAddresses();
+    }
+  }, [hasMnemonic, loadAddresses]);
 
   // Form states
   const [loading, setLoading] = useState(false);
@@ -221,6 +229,21 @@ export function OwnerActions() {
               onChange={setOperatorWeight}
             />
           </div>
+          {derivedAddresses.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-tan-muted">Use my address:</span>
+              {derivedAddresses.map((addr, i) => (
+                <button
+                  key={i}
+                  onClick={() => setOperatorAddress(addr)}
+                  className="text-xs px-2 py-1 rounded bg-charcoal-dark hover:bg-charcoal-light text-tan-muted hover:text-beige-warm transition-colors font-mono"
+                  title={addr}
+                >
+                  Account {i}
+                </button>
+              ))}
+            </div>
+          )}
           <Button
             text="Register Operator"
             color="purple"

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Button } from '../components/atoms';
+import { useState, useEffect } from 'react';
+import { AddressDisplay, Button } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
 import { useWalletStore } from '../stores/walletStore';
 import { setWavsHome, restart } from '../tauri';
@@ -10,8 +10,10 @@ export function Settings() {
     hasMnemonic,
     isLoading,
     error: walletError,
+    derivedAddresses,
     getMnemonic,
     deleteMnemonic,
+    loadAddresses,
     clearError,
   } = useWalletStore();
 
@@ -20,6 +22,12 @@ export function Settings() {
   const [showMnemonic, setShowMnemonic] = useState(false);
   const [exportedMnemonic, setExportedMnemonic] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  useEffect(() => {
+    if (hasMnemonic) {
+      loadAddresses();
+    }
+  }, [hasMnemonic, loadAddresses]);
 
   const handleBrowse = async () => {
     setError(null);
@@ -105,6 +113,22 @@ export function Settings() {
             )}
           </div>
         </div>
+
+        {/* Derived Addresses */}
+        {hasMnemonic && derivedAddresses.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <label className="text-tan-muted text-sm">Derived Addresses</label>
+            {derivedAddresses.map((addr, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-2 p-2 rounded bg-charcoal-dark"
+              >
+                <span className="text-tan-muted text-xs w-20 shrink-0">Account {i}</span>
+                <AddressDisplay address={addr} full />
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Export/Backup */}
         {hasMnemonic && !showMnemonic && (

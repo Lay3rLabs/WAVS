@@ -26,6 +26,7 @@ interface WalletState {
   saveMnemonic: () => Promise<void>;
   getMnemonic: () => Promise<string>;
   deleteMnemonic: () => Promise<void>;
+  loadAddresses: () => Promise<void>;
   clearPendingMnemonic: () => void;
 
   // Error handling
@@ -191,6 +192,22 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     } catch (err) {
       set({
         error: `Failed to delete mnemonic from keychain: ${err}`,
+        isLoading: false,
+      });
+    }
+  },
+
+  // Load derived addresses from stored mnemonic
+  loadAddresses: async () => {
+    if (get().derivedAddresses.length > 0) return;
+    set({ isLoading: true, error: null });
+    try {
+      const mnemonic = await getMnemonicCommand();
+      const addresses = await deriveAddresses(mnemonic, 3);
+      set({ derivedAddresses: addresses, isLoading: false });
+    } catch (err) {
+      set({
+        error: `Failed to load addresses: ${err}`,
         isLoading: false,
       });
     }

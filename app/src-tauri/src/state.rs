@@ -9,7 +9,7 @@ use wavs_gui_shared::{
     event::{SettingsEvent, TauriEventEmitterExt},
     settings::Settings,
 };
-use wavs_types::ChainConfigs;
+use wavs_types::{ChainConfigs, Credential};
 
 pub struct SettingsState {
     pub path: PathBuf,
@@ -141,6 +141,29 @@ impl WavsInstanceState {
         let guard = self.inner.read().unwrap();
         let instance = guard.as_ref().ok_or(AppError::WavsNotRunning)?;
         Ok(instance.dispatcher.clone())
+    }
+}
+
+/// In-memory cache for the OS keyring mnemonic.
+/// - None: cache cold, keyring not yet accessed
+/// - Some(None): keyring checked, no mnemonic exists
+/// - Some(Some(cred)): mnemonic cached with Zeroize protection
+#[derive(Default)]
+pub struct MnemonicCacheState {
+    inner: std::sync::RwLock<Option<Option<Credential>>>,
+}
+
+impl MnemonicCacheState {
+    pub fn get_cached(&self) -> Option<Option<Credential>> {
+        self.inner.read().unwrap().clone()
+    }
+
+    pub fn set(&self, value: Option<Credential>) {
+        *self.inner.write().unwrap() = Some(value);
+    }
+
+    pub fn clear(&self) {
+        *self.inner.write().unwrap() = Some(None);
     }
 }
 

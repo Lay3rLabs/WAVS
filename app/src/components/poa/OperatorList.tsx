@@ -1,20 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { type Address } from 'viem';
-import { Button, Modal } from '../atoms';
+import { AddressDisplay, Button, Modal } from '../atoms';
 import { usePOAStore, getRegistryKey } from '../../stores/poaStore';
+import { useWalletStore } from '../../stores/walletStore';
 import { getPublicClient, getWalletClient } from '../../hooks/useViemClient';
-import { deregisterOperator, updateOperatorWeight, fetchOperators } from '../../utils/evm';
+import { deregisterOperator, updateOperatorWeight, updateSigningKey, createSigningKeySignature, fetchOperators } from '../../utils/evm';
 
-function shortenAddress(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 export function OperatorList() {
   const { getActiveRegistry, updateRegistryOperators } = usePOAStore();
   const registry = getActiveRegistry();
+  const { hasMnemonic, derivedAddresses, loadAddresses } = useWalletStore();
   const [loading, setLoading] = useState(false);
   const [editingWeight, setEditingWeight] = useState<Address | null>(null);
   const [newWeight, setNewWeight] = useState('');
+
+  useEffect(() => {
+    if (hasMnemonic) {
+      loadAddresses();
+    }
+  }, [hasMnemonic, loadAddresses]);
 
   if (!registry) {
     return null;
@@ -22,8 +28,14 @@ export function OperatorList() {
 
   const { operators, isOwner, address: registryAddress, rpcUrl, chainId } = registry;
 
+  // Map derived addresses to their index for wallet client creation
+  const addressIndexMap = new Map<string, number>();
+  derivedAddresses.forEach((addr, i) => {
+    addressIndexMap.set(addr.toLowerCase(), i);
+  });
+
   const handleDeregister = async (operatorAddress: Address) => {
-    if (!confirm(`Are you sure you want to deregister ${shortenAddress(operatorAddress)}?`)) {
+    if (!confirm(`Are you sure you want to deregister ${operatorAddress}?`)) {
       return;
     }
 
@@ -38,7 +50,7 @@ export function OperatorList() {
       const updatedOperators = await fetchOperators(publicClient, registryAddress);
       updateRegistryOperators(getRegistryKey(chainId, registryAddress), updatedOperators);
 
-      Modal.openInfo(`Operator ${shortenAddress(operatorAddress)} deregistered`);
+      Modal.openInfo(`Operator ${operatorAddress} deregistered`);
     } catch (err) {
       console.error('Failed to deregister operator:', err);
       Modal.openError(`Failed to deregister operator: ${err}`);
@@ -71,6 +83,43 @@ export function OperatorList() {
     } catch (err) {
       console.error('Failed to update weight:', err);
       Modal.openError(`Failed to update weight: ${err}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSetSigningKey = async (operatorAddress: Address) => {
+    const addressIndex = addressIndexMap.get(operatorAddress.toLowerCase());
+    if (addressIndex === undefined) return;
+
+    setLoading(true);
+    try {
+      const publicClient = getPublicClient(rpcUrl, chainId);
+      // Create wallet client as the operator (not the owner)
+      const operatorWalletClient = await getWalletClient(rpcUrl, chainId, addressIndex);
+
+      // Use the operator address itself as the signing key
+      const signature = await createSigningKeySignature(
+        operatorWalletClient.account,
+        operatorAddress
+      );
+
+      await updateSigningKey(
+        publicClient,
+        operatorWalletClient,
+        registryAddress,
+        operatorAddress,
+        signature
+      );
+
+      // Refresh operators
+      const updatedOperators = await fetchOperators(publicClient, registryAddress);
+      updateRegistryOperators(getRegistryKey(chainId, registryAddress), updatedOperators);
+
+      Modal.openInfo('Signing key set successfully');
+    } catch (err) {
+      console.error('Failed to set signing key:', err);
+      Modal.openError(`Failed to set signing key: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -109,12 +158,7 @@ export function OperatorList() {
               {operators.map((operator) => (
                 <tr key={operator.address} className="border-b border-charcoal-dark">
                   <td className="py-3 px-3">
-                    <span
-                      className="text-beige-warm text-sm font-mono cursor-default"
-                      title={operator.address}
-                    >
-                      {shortenAddress(operator.address)}
-                    </span>
+                    <AddressDisplay address={operator.address} full />
                   </td>
                   <td className="py-3 px-3">
                     {editingWeight === operator.address ? (
@@ -150,14 +194,23 @@ export function OperatorList() {
                     )}
                   </td>
                   <td className="py-3 px-3">
-                    <span
-                      className="text-beige-warm text-sm font-mono cursor-default"
-                      title={operator.signingKey}
-                    >
-                      {operator.signingKey === '0x0000000000000000000000000000000000000000'
-                        ? '(not set)'
-                        : shortenAddress(operator.signingKey)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {operator.signingKey === ZERO_ADDRESS ? (
+                        <span className="text-tan-muted text-sm italic">(not set)</span>
+                      ) : (
+                        <AddressDisplay address={operator.signingKey} full />
+                      )}
+                      {addressIndexMap.has(operator.address.toLowerCase()) && (
+                        <Button
+                          text={operator.signingKey === ZERO_ADDRESS ? 'Set' : 'Update'}
+                          size="sm"
+                          color="purple"
+                          variant="outline"
+                          disabled={loading}
+                          onClick={() => handleSetSigningKey(operator.address)}
+                        />
+                      )}
+                    </div>
                   </td>
                   {isOwner && (
                     <td className="py-3 px-3 text-right">

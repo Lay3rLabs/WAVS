@@ -15,11 +15,11 @@ use wavs_gui_shared::{
 
 const KEYCHAIN_SERVICE: &str = "wavs-app";
 const KEYCHAIN_ACCOUNT: &str = "mnemonic";
-use wavs_types::{ChainConfigs, Service, ServiceManager};
+use wavs_types::{ChainConfigs, Credential, Service, ServiceManager};
 
 use wavs::health::HealthStatus;
 
-use crate::state::{SettingsState, WavsConfigState, WavsInstance, WavsInstanceState};
+use crate::state::{MnemonicCacheState, SettingsState, WavsConfigState, WavsInstance, WavsInstanceState};
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn cmd_set_wavs_home(
@@ -172,16 +172,31 @@ pub async fn cmd_add_service(
         .map_err(|e| AppError::Service(format!("Failed to add service: {}", e)))
 }
 
-#[tauri::command(rename_all = "snake_case")]
-pub fn cmd_has_mnemonic() -> bool {
-    match keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) {
-        Ok(entry) => entry.get_password().is_ok(),
-        Err(_) => false,
+/// Load mnemonic from OS keyring and populate the cache.
+fn load_from_keyring(cache: &MnemonicCacheState) -> Option<Credential> {
+    let result = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+        .ok()
+        .and_then(|entry| entry.get_password().ok())
+        .map(Credential::new);
+    cache.set(result.clone());
+    result
+}
+
+/// Return the cached mnemonic, or load from keyring on first access.
+fn get_mnemonic_cached(cache: &MnemonicCacheState) -> Option<Credential> {
+    if let Some(cached) = cache.get_cached() {
+        return cached;
     }
+    load_from_keyring(cache)
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub fn cmd_store_mnemonic(mnemonic: String) -> AppResult<()> {
+pub fn cmd_has_mnemonic(cache: State<'_, MnemonicCacheState>) -> bool {
+    get_mnemonic_cached(&cache).is_some()
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn cmd_store_mnemonic(cache: State<'_, MnemonicCacheState>, mnemonic: String) -> AppResult<()> {
     // Validate mnemonic format (basic check for word count)
     let word_count = mnemonic.trim().split_whitespace().count();
     if word_count != 12 && word_count != 24 {
@@ -196,27 +211,27 @@ pub fn cmd_store_mnemonic(mnemonic: String) -> AppResult<()> {
         .set_password(&mnemonic)
         .map_err(|e| AppError::Keychain(e.to_string()))?;
 
+    cache.set(Some(Credential::new(mnemonic)));
     log::info!("Mnemonic stored in keychain ({} words)", word_count);
     Ok(())
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub fn cmd_get_mnemonic() -> AppResult<String> {
-    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
-        .map_err(|e| AppError::Keychain(e.to_string()))?;
-    entry
-        .get_password()
-        .map_err(|e| AppError::Keychain(e.to_string()))
+pub fn cmd_get_mnemonic(cache: State<'_, MnemonicCacheState>) -> AppResult<String> {
+    get_mnemonic_cached(&cache)
+        .map(|cred| cred.to_string())
+        .ok_or_else(|| AppError::Keychain("No mnemonic found in keychain".to_string()))
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub fn cmd_delete_mnemonic() -> AppResult<()> {
+pub fn cmd_delete_mnemonic(cache: State<'_, MnemonicCacheState>) -> AppResult<()> {
     let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
         .map_err(|e| AppError::Keychain(e.to_string()))?;
     entry
         .delete_credential()
         .map_err(|e| AppError::Keychain(e.to_string()))?;
 
+    cache.clear();
     log::info!("Mnemonic deleted from keychain");
     Ok(())
 }
