@@ -246,11 +246,7 @@ mod tests {
     fn unsupported_version_returns_error() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join(REGISTRY_FILENAME);
-        std::fs::write(
-            &path,
-            r#"{"version":999,"next_hd_index":1,"services":[]}"#,
-        )
-        .unwrap();
+        std::fs::write(&path, r#"{"version":999,"next_hd_index":1,"services":[]}"#).unwrap();
 
         let err = ServiceRegistry::load(dir.path()).unwrap_err();
         assert!(matches!(
