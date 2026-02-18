@@ -62,3 +62,12 @@ export async function deleteMnemonic(): Promise<void> {
 export async function getHealthStatus(): Promise<HealthStatus> {
   return invoke<HealthStatus>('cmd_get_health_status');
 }
+
+// TOML commands
+export async function readWavsToml(): Promise<string> {
+  return invoke<string>('cmd_read_wavs_toml');
+}
+
+export async function writeWavsToml(content: string): Promise<void> {
+  return invoke<void>('cmd_write_wavs_toml', { content });
+}
