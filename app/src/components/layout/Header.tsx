@@ -22,15 +22,10 @@ export function Header() {
       {/* Logo */}
       <div className="flex items-center">
         <img
-          src="/wavs-logo.png"
+          src="/wavs.png"
           alt="WAVS"
-          className="h-10"
-          onError={(e) => {
-            // Fallback if logo doesn't load
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
+          className="h-8"
         />
-        <span className="ml-3 text-xl font-semibold text-cream-light">WAVS</span>
       </div>
 
       {/* Navigation */}
