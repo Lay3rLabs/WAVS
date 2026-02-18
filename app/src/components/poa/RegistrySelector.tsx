@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { type Address, isAddress } from 'viem';
 import { Button, Dropdown, TextInput, Modal, type DropdownOption } from '../atoms';
-import { usePOAStore, persistRegistries } from '../../stores/poaStore';
+import { usePOAStore, persistRegistries, getRegistryKey } from '../../stores/poaStore';
 import { getPublicClient, getWalletClient, getAddress } from '../../hooks/useViemClient';
 import { getChainConfigs } from '../../tauri';
 import {
@@ -25,9 +25,10 @@ function isNumericKey(key: string): boolean {
 
 interface RegistrySelectorProps {
   onComplete?: () => void;
+  onRegistryAdded?: (key: string) => void;
 }
 
-export function RegistrySelector({ onComplete }: RegistrySelectorProps = {}) {
+export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelectorProps = {}) {
   const [mode, setMode] = useState<Mode>('select');
   const [, setChainConfigs] = useState<ChainConfigs | null>(null);
   const [evmChains, setEvmChains] = useState<EvmChainOption[]>([]);
@@ -167,6 +168,8 @@ export function RegistrySelector({ onComplete }: RegistrySelectorProps = {}) {
       });
 
       await persistRegistries();
+      const key = getRegistryKey(selectedChain.chainId, result.proxyAddress);
+      onRegistryAdded?.(key);
       setDeployProgress(null);
       Modal.openInfo(`Registry deployed at ${result.proxyAddress}`);
       setMode('select');
@@ -210,6 +213,8 @@ export function RegistrySelector({ onComplete }: RegistrySelectorProps = {}) {
       });
 
       await persistRegistries();
+      const key = getRegistryKey(selectedChain.chainId, address);
+      onRegistryAdded?.(key);
       setDeployProgress(null);
       Modal.openInfo(`Connected to registry at ${address}`);
       setMode('select');
