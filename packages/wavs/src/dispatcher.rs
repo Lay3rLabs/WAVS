@@ -411,67 +411,35 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             // Process results sequentially (DB writes and manager registration are not async-safe to parallelize)
             let mut restored = Vec::new();
             for (entry, result) in fetched {
-                match result {
-                    Ok(service) => {
-                        // Store the service in DB
-                        if let Err(err) = self.services.save(&service) {
-                            tracing::error!(
-                                "Failed to save restored service {} to DB: {:?}",
-                                service.name,
-                                err
-                            );
-                            continue;
-                        }
+                let service = result?;
 
-                        // Store components
-                        if let Err(err) = self
-                            .engine_manager
-                            .store_components_for_service(&service)
-                            .await
-                        {
-                            tracing::error!(
-                                "Failed to store components for restored service {}: {:?}",
-                                service.name,
-                                err
-                            );
-                            continue;
-                        }
+                // Store the service in DB
+                self.services.save(&service)?;
 
-                        // Add to managers with explicit HD index from registry
-                        if let Err(err) = add_service_to_managers(
-                            &service,
-                            &self.trigger_manager,
-                            &self.submission_manager,
-                            &self.dispatcher_to_aggregator_tx,
-                            Some(entry.hd_index),
-                        ) {
-                            tracing::error!(
-                                "Failed to add restored service {} to managers: {:?}",
-                                service.name,
-                                err
-                            );
-                            continue;
-                        }
+                // Store components
+                self.engine_manager
+                    .store_components_for_service(&service)
+                    .await?;
 
-                        tracing::info!(
-                            "Restored service {} [{:?}] with HD index {}",
-                            service.name,
-                            service.manager,
-                            entry.hd_index
-                        );
-                        restored.push(service);
-                    }
-                    Err(err) => {
-                        tracing::error!(
-                            "Failed to restore service from chain for {:?}: {:?}",
-                            entry.service_manager,
-                            err
-                        );
-                    }
-                }
+                // Add to managers with explicit HD index from registry
+                add_service_to_managers(
+                    &service,
+                    &self.trigger_manager,
+                    &self.submission_manager,
+                    &self.dispatcher_to_aggregator_tx,
+                    Some(entry.hd_index),
+                )?;
+
+                tracing::info!(
+                    "Restored service {} [{:?}] with HD index {}",
+                    service.name,
+                    service.manager,
+                    entry.hd_index
+                );
+                restored.push(service);
             }
-            restored
-        });
+            Ok::<_, DispatcherError>(restored)
+        })?;
 
         let total_workflows: usize = initial_services.iter().map(|s| s.workflows.len()).sum();
         tracing::info!(
