@@ -1,5 +1,5 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { useAppStore } from '../stores/appStore';
+import { useAppStore, nextActivityId } from '../stores/appStore';
 import type {
   SettingsEvent,
   LogEvent,
@@ -30,8 +30,6 @@ export async function startListeners(): Promise<void> {
   // Log listener
   const unlistenLog = await listen<LogEvent>(EVENTS.LOG, (event) => {
     const { level, target, fields } = event.payload;
-
-    // Parse level string to LogLevel
     const logLevel = (level.toUpperCase() as LogLevel) || 'INFO';
 
     store.addLogItem({
@@ -43,15 +41,34 @@ export async function startListeners(): Promise<void> {
   });
   unlistenFns.push(unlistenLog);
 
-  // Trigger listener
+  // Trigger listener -> ActivityItem
   const unlistenTrigger = await listen<TriggerEvent>(EVENTS.TRIGGER, (event) => {
-    store.addTrigger(event.payload.action);
+    const action = event.payload.action;
+    store.addActivity({
+      id: nextActivityId(),
+      ts: Date.now(),
+      kind: 'trigger',
+      serviceId: action.config.service_id,
+      workflowId: action.config.workflow_id,
+      triggerData: action.data,
+      triggerConfig: action.config,
+    });
   });
   unlistenFns.push(unlistenTrigger);
 
-  // Submission listener
+  // Submission listener -> ActivityItem
   const unlistenSubmission = await listen<SubmissionEvent>(EVENTS.SUBMISSION, (event) => {
-    store.addSubmission(event.payload);
+    const payload = event.payload;
+    store.addActivity({
+      id: nextActivityId(),
+      ts: Date.now(),
+      kind: 'submission',
+      serviceId: payload.service_id,
+      workflowId: payload.workflow_id,
+      triggerData: payload.trigger_data,
+      envelope: payload.envelope,
+      submit: payload.submit,
+    });
   });
   unlistenFns.push(unlistenSubmission);
 

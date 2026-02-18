@@ -8,7 +8,7 @@ import { getServices, getSettings } from '../../tauri';
 import { getPublicClient, getAddress } from '../../hooks/useViemClient';
 import { connectToRegistry, fetchOperators } from '../../utils/evm';
 import type { Service } from '../../types';
-import { getServiceAddress, getErrorMessage } from '../../types';
+import { getServiceAddress, getErrorMessage, buildServiceMap } from '../../types';
 
 export function getRegistryKeyFromParams(chainId: string, address: string): string {
   return `${chainId}:${address.toLowerCase()}`;
@@ -32,7 +32,7 @@ export function ServicesLayout() {
           getSettings(),
         ]);
 
-        setServices(servicesData);
+        setServices(await buildServiceMap(servicesData));
 
         for (const saved of settings.saved_registries) {
           const key = getRegistryKey(saved.chain_id, saved.address as Address);
