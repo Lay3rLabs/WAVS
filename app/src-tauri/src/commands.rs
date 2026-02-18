@@ -237,6 +237,48 @@ pub fn cmd_delete_mnemonic(cache: State<'_, MnemonicCacheState>) -> AppResult<()
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_read_wavs_toml(
+    settings: State<'_, SettingsState>,
+) -> AppResult<String> {
+    let wavs_home = settings
+        .get_cloned()
+        .wavs_home
+        .ok_or_else(|| AppError::WavsConfig("wavs_home not set".to_string()))?;
+
+    let path = wavs_home.join("wavs.toml");
+    tokio::fs::read_to_string(&path)
+        .await
+        .map_err(|e| AppError::Io(format!("Failed to read wavs.toml: {}", e)))
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_write_wavs_toml(
+    settings: State<'_, SettingsState>,
+    wavs_config: State<'_, WavsConfigState>,
+    content: String,
+) -> AppResult<()> {
+    // Validate TOML syntax
+    content
+        .parse::<toml::Table>()
+        .map_err(|e| AppError::WavsConfig(format!("Invalid TOML: {}", e)))?;
+
+    let wavs_home = settings
+        .get_cloned()
+        .wavs_home
+        .ok_or_else(|| AppError::WavsConfig("wavs_home not set".to_string()))?;
+
+    let path = wavs_home.join("wavs.toml");
+    tokio::fs::write(&path, &content)
+        .await
+        .map_err(|e| AppError::Io(format!("Failed to write wavs.toml: {}", e)))?;
+
+    // Reload config to pick up changes
+    wavs_config.reload(wavs_home).await?;
+
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn cmd_get_health_status(
     wavs_config: State<'_, WavsConfigState>,
 ) -> AppResult<HealthStatus> {

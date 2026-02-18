@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { AddressDisplay, Button } from '../components/atoms';
+import { useState, useEffect, useCallback } from 'react';
+import { AddressDisplay, Button, TomlEditor } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
 import { useWalletStore } from '../stores/walletStore';
-import { setWavsHome, restart } from '../tauri';
+import { setWavsHome, restart, readWavsToml, writeWavsToml } from '../tauri';
 
 export function Settings() {
   const settings = useAppStore((state) => state.settings);
@@ -23,11 +23,56 @@ export function Settings() {
   const [exportedMnemonic, setExportedMnemonic] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  // TOML editor state
+  const [tomlContent, setTomlContent] = useState('');
+  const [savedContent, setSavedContent] = useState('');
+  const [tomlLoading, setTomlLoading] = useState(false);
+  const [tomlError, setTomlError] = useState<string | null>(null);
+  const [tomlSaveSuccess, setTomlSaveSuccess] = useState(false);
+  const hasUnsavedChanges = tomlContent !== savedContent;
+
   useEffect(() => {
     if (hasMnemonic) {
       loadAddresses();
     }
   }, [hasMnemonic, loadAddresses]);
+
+  const loadToml = useCallback(async () => {
+    if (!settings.wavs_home) return;
+    setTomlLoading(true);
+    setTomlError(null);
+    setTomlSaveSuccess(false);
+    try {
+      const content = await readWavsToml();
+      setTomlContent(content);
+      setSavedContent(content);
+    } catch (err) {
+      setTomlError(String(err));
+    } finally {
+      setTomlLoading(false);
+    }
+  }, [settings.wavs_home]);
+
+  useEffect(() => {
+    loadToml();
+  }, [loadToml]);
+
+  const handleSaveToml = async () => {
+    setTomlError(null);
+    setTomlSaveSuccess(false);
+    try {
+      await writeWavsToml(tomlContent);
+      setSavedContent(tomlContent);
+      setTomlSaveSuccess(true);
+      setChanged(true);
+    } catch (err) {
+      setTomlError(String(err));
+    }
+  };
+
+  const handleReloadToml = async () => {
+    await loadToml();
+  };
 
   const handleBrowse = async () => {
     setError(null);
@@ -215,6 +260,56 @@ export function Settings() {
           <Button text="Browse..." onClick={handleBrowse} />
         </div>
       </div>
+
+      {/* TOML Editor */}
+      {settings.wavs_home && (
+        <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h2 className="text-beige-light text-lg font-semibold">
+                Configuration (wavs.toml)
+              </h2>
+              {hasUnsavedChanges && (
+                <span className="text-tan-muted text-sm italic">
+                  (unsaved changes)
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                text="Reload"
+                variant="outline"
+                onClick={handleReloadToml}
+                disabled={tomlLoading}
+              />
+              <Button
+                text={tomlLoading ? 'Saving...' : 'Save'}
+                onClick={handleSaveToml}
+                disabled={tomlLoading || !hasUnsavedChanges}
+              />
+            </div>
+          </div>
+
+          {tomlLoading && !tomlContent ? (
+            <div className="text-tan-muted text-sm p-4">Loading...</div>
+          ) : (
+            <TomlEditor
+              value={tomlContent}
+              onChange={setTomlContent}
+              height="400px"
+            />
+          )}
+
+          {tomlError && (
+            <p className="text-red-4 text-sm">{tomlError}</p>
+          )}
+          {tomlSaveSuccess && (
+            <p className="text-green-4 text-sm">
+              Configuration saved successfully.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Error display */}
       {displayError && (

@@ -6,3 +6,4 @@ export { TextInput, type TextInputKind } from './TextInput';
 export { TextArea } from './TextArea';
 export { Dropdown, type DropdownOption, type DropdownSize } from './Dropdown';
 export { Expander } from './Expander';
+export { TomlEditor } from './TomlEditor';

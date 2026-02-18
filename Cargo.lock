@@ -12211,6 +12211,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
  "tokio",
+ "toml 0.9.8",
  "tracing",
  "tracing-subscriber",
  "utils",
