@@ -6,7 +6,7 @@ MVP Requirements:
 - [x] Wallet Support! Let's go with just porto.sh for now.
 - [x] Add UI for health
 - [x] Ability to create a POA contract onchain
-- [ ] Add UI to edit wavs.toml file and managing chains
+- [x] Add UI to edit wavs.toml file and managing chains
 - [ ] Ability to upload new components and manage services
 - [ ] Warg publishing support?
 - [ ] State management (persist services and registries)
