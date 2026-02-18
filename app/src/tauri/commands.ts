@@ -48,6 +48,10 @@ export async function addService(manager: ServiceManager): Promise<Service> {
   return invoke<Service>('cmd_add_service', { manager });
 }
 
+export async function removeService(manager: ServiceManager): Promise<void> {
+  return invoke<void>('cmd_remove_service', { manager });
+}
+
 // Keychain commands
 export async function hasMnemonic(): Promise<boolean> {
   return invoke<boolean>('cmd_has_mnemonic');

@@ -10,7 +10,7 @@ import type {
   ServiceManager,
 } from '../types';
 
-export type BuilderStep = 'basics' | 'workflows' | 'review' | 'deploy';
+export type BuilderStep = 'contract' | 'basics' | 'workflows' | 'review' | 'deploy';
 
 export interface WorkflowDraft {
   id: string;
@@ -214,7 +214,7 @@ const initialDeployState: DeployState = {
 };
 
 export const useServiceBuilderStore = create<ServiceBuilderState>((set, get) => ({
-  step: 'basics',
+  step: 'contract',
   name: '',
   selectedRegistryKey: null,
   manualChain: '',
@@ -260,7 +260,7 @@ export const useServiceBuilderStore = create<ServiceBuilderState>((set, get) => 
 
   reset: () =>
     set({
-      step: 'basics',
+      step: 'contract',
       name: '',
       selectedRegistryKey: null,
       manualChain: '',
