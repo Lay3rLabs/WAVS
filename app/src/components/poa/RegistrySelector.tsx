@@ -23,7 +23,11 @@ function isNumericKey(key: string): boolean {
   return /^\d+$/.test(key);
 }
 
-export function RegistrySelector() {
+interface RegistrySelectorProps {
+  onComplete?: () => void;
+}
+
+export function RegistrySelector({ onComplete }: RegistrySelectorProps = {}) {
   const [mode, setMode] = useState<Mode>('select');
   const [, setChainConfigs] = useState<ChainConfigs | null>(null);
   const [evmChains, setEvmChains] = useState<EvmChainOption[]>([]);
@@ -166,6 +170,7 @@ export function RegistrySelector() {
       setDeployProgress(null);
       Modal.openInfo(`Registry deployed at ${result.proxyAddress}`);
       setMode('select');
+      onComplete?.();
     } catch (err) {
       console.error('Deployment failed:', err);
       setDeployProgress(null);
@@ -209,6 +214,7 @@ export function RegistrySelector() {
       Modal.openInfo(`Connected to registry at ${address}`);
       setMode('select');
       setAddressInput('');
+      onComplete?.();
     } catch (err) {
       console.error('Failed to connect:', err);
       setDeployProgress(null);
@@ -223,13 +229,13 @@ export function RegistrySelector() {
   if (mode === 'select') {
     return (
       <div className="flex flex-col gap-6">
-        <h2 className="text-xl font-semibold text-beige-light">POA Registry</h2>
+        <h2 className="text-xl font-semibold text-beige-light">Service Contracts</h2>
         <p className="text-tan-muted">
-          Deploy a new POA Stake Registry or connect to an existing one.
+          Deploy a new service contract or connect to an existing one.
         </p>
         <div className="flex gap-4">
           <Button
-            text="Deploy New Registry"
+            text="Deploy New Contract"
             color="purple"
             onClick={() => setMode('deploy')}
           />
@@ -247,7 +253,7 @@ export function RegistrySelector() {
     return (
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-beige-light">Deploy New Registry</h2>
+          <h2 className="text-xl font-semibold text-beige-light">Deploy New Contract</h2>
           <Button text="Back" size="sm" onClick={() => setMode('select')} />
         </div>
 
@@ -316,7 +322,7 @@ export function RegistrySelector() {
             )}
 
             <Button
-              text="Deploy Registry"
+              text="Deploy Contract"
               color="purple"
               onClick={handleDeploy}
               disabled={!selectedChain || !!deployProgress}
@@ -331,7 +337,7 @@ export function RegistrySelector() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-beige-light">Connect to Registry</h2>
+        <h2 className="text-xl font-semibold text-beige-light">Connect to Contract</h2>
         <Button text="Back" size="sm" onClick={() => setMode('select')} />
       </div>
 

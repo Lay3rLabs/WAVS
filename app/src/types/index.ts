@@ -131,9 +131,9 @@ export interface Component {
 }
 
 export type ComponentSource =
-  | { Download: { uri: string; digest: string } }
-  | { Registry: { digest: string; domain: string | null; version: string | null; package: string } }
-  | { Digest: string };
+  | { download: { uri: string; digest: string } }
+  | { registry: { digest: string; domain: string | null; version: string | null; package: string } }
+  | { digest: string };
 
 export interface Permissions {
   allowed_http_hosts: AllowedHostPermission;
@@ -149,12 +149,12 @@ export type AllowedHostPermission =
 
 // Trigger types
 export type Trigger =
-  | { CosmosContractEvent: { address: string; chain: ChainKey; event_type: string } }
-  | { EvmContractEvent: { address: string; chain: ChainKey; event_hash: string } }
-  | { BlockInterval: { chain: ChainKey; n_blocks: number; start_block: number | null; end_block: number | null } }
-  | { Cron: { schedule: string; start_time: number | null; end_time: number | null } }
-  | { AtProtoEvent: { collection: string; repo_did: string | null; action: AtProtoAction | null } }
-  | 'Manual';
+  | { cosmos_contract_event: { address: string; chain: ChainKey; event_type: string } }
+  | { evm_contract_event: { address: string; chain: ChainKey; event_hash: string } }
+  | { block_interval: { chain: ChainKey; n_blocks: number; start_block: number | null; end_block: number | null } }
+  | { cron: { schedule: string; start_time: number | null; end_time: number | null } }
+  | { at_proto_event: { collection: string; repo_did: string | null; action: AtProtoAction | null } }
+  | 'manual';
 
 export type AtProtoAction = 'create' | 'update' | 'delete';
 
@@ -179,8 +179,8 @@ export type TriggerData =
 
 // Submit types
 export type Submit =
-  | 'None'
-  | { Aggregator: { url: string; component: Component; signature_kind: SignatureKind } };
+  | 'none'
+  | { aggregator: { url: string; component: Component; signature_kind: SignatureKind } };
 
 export interface SignatureKind {
   algorithm: SignatureAlgorithm;
@@ -243,6 +243,17 @@ export type ServiceManager =
 // Envelope type (simplified, used for display)
 export type Envelope = unknown;
 
+// IPFS types
+export type IpfsProvider =
+  | { local: { api_url: string } }
+  | { pinata: { api_key: string } };
+
+// Component digest result
+export interface ComponentDigestResult {
+  digest: string;
+  resolved_version: string;
+}
+
 // Helper to get service ID from manager
 export function getServiceId(service: Service): string {
   const manager = service.manager;
@@ -257,12 +268,12 @@ export function getServiceId(service: Service): string {
 
 // Helper to get trigger label
 export function getTriggerLabel(trigger: Trigger): string {
-  if (trigger === 'Manual') return 'Manual';
-  if ('CosmosContractEvent' in trigger) return 'Cosmos Contract Event';
-  if ('EvmContractEvent' in trigger) return 'EVM Contract Event';
-  if ('BlockInterval' in trigger) return 'Block Interval';
-  if ('Cron' in trigger) return 'Cron';
-  if ('AtProtoEvent' in trigger) return 'AtProto Event';
+  if (trigger === 'manual') return 'Manual';
+  if ('cosmos_contract_event' in trigger) return 'Cosmos Contract Event';
+  if ('evm_contract_event' in trigger) return 'EVM Contract Event';
+  if ('block_interval' in trigger) return 'Block Interval';
+  if ('cron' in trigger) return 'Cron';
+  if ('at_proto_event' in trigger) return 'AtProto Event';
   return 'Unknown';
 }
 

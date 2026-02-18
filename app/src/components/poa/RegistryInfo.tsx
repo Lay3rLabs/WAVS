@@ -1,9 +1,13 @@
 import { AddressDisplay } from '../atoms';
 import { usePOAStore } from '../../stores/poaStore';
 
-export function RegistryInfo() {
-  const { getActiveRegistry } = usePOAStore();
-  const registry = getActiveRegistry();
+interface RegistryInfoProps {
+  registryKey?: string;
+}
+
+export function RegistryInfo({ registryKey }: RegistryInfoProps) {
+  const { getActiveRegistry, registries } = usePOAStore();
+  const registry = registryKey ? registries.get(registryKey) ?? null : getActiveRegistry();
 
   if (!registry || !registry.info) {
     return null;
@@ -14,7 +18,7 @@ export function RegistryInfo() {
   return (
     <div className="p-6 rounded-lg bg-charcoal-medium border border-charcoal-light">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-beige-light">Registry Info</h3>
+        <h3 className="text-lg font-semibold text-beige-light">Contract Info</h3>
         {isOwner && (
           <span className="px-2 py-1 text-xs font-medium bg-purple-1 text-cream-light rounded">
             Owner

@@ -74,7 +74,7 @@
 # WAVS specific settings
 # ----------------------------
 [wavs]
-
+ipfs_gateway = "http://127.0.0.1:8080/ipfs/"
 cors_allowed_origins = [
     "https://lay3rlabs.github.io/*",
     "http://localhost:*",
