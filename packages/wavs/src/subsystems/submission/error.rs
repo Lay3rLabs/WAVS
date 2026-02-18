@@ -66,4 +66,6 @@ pub enum SubmissionError {
     SendCommand(#[from] Box<crossbeam::channel::SendError<DispatcherCommand>>),
     #[error("could not encode EventId {0:?}")]
     EncodeEventId(bincode::error::EncodeError),
+    #[error("HD index overflow")]
+    HdIndexOverflow,
 }

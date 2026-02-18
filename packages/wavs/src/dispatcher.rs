@@ -45,6 +45,7 @@ use wavs_types::{
 use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction};
 
 use crate::config::Config;
+use crate::service_registry::{RegistryError, ServiceRegistry};
 use crate::services::{Services, ServicesError};
 use crate::subsystems::aggregator::error::AggregatorError;
 use crate::subsystems::aggregator::{Aggregator, AggregatorCommand};
@@ -76,6 +77,7 @@ pub struct Dispatcher<S: CAStorage> {
     pub dispatcher_to_submission_tx: crossbeam::channel::Sender<SubmissionCommand>,
     pub dispatcher_to_aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
     pub db_storage: WavsDb,
+    pub service_registry: ServiceRegistry,
     /// Cached EVM HTTP providers per chain to avoid creating new connections for each query
     evm_http_providers: Arc<RwLock<HashMap<ChainKey, DynProvider>>>,
     /// Cached Cosmos query clients per chain to avoid creating new connections for each query
@@ -117,6 +119,7 @@ impl Dispatcher<FileStorage> {
 
         let file_storage = FileStorage::new(config.data.join("ca"))?;
         let db_storage = WavsDb::new()?;
+        let service_registry = ServiceRegistry::load(&config.data)?;
 
         let services = Services::new(db_storage.clone());
 
@@ -172,6 +175,7 @@ impl Dispatcher<FileStorage> {
             aggregator,
             services,
             db_storage,
+            service_registry,
             chain_configs: config.chains.clone(),
             metrics: metrics.dispatcher.clone(),
             ipfs_gateway: config.ipfs_gateway.clone(),
@@ -371,8 +375,72 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             }
         });
 
-        // populate the initial triggers
-        let initial_services = self.services.list(Bound::Unbounded, Bound::Unbounded)?;
+        // Restore services from the persisted registry
+        let registry_entries = self.service_registry.entries();
+        let chain_configs_for_restore = self.chain_configs.read().unwrap().clone();
+        let ipfs_gateway_for_restore = self.ipfs_gateway.clone();
+        let evm_providers_for_restore = self.evm_http_providers.clone();
+        let cosmos_clients_for_restore = self.cosmos_query_clients.clone();
+
+        let initial_services: Vec<Service> = ctx.rt.block_on(async {
+            // Fetch all services from chain in parallel (bounded concurrency)
+            const MAX_CONCURRENT_RESTORES: usize = 10;
+            let fetched: Vec<_> = stream::iter(&registry_entries)
+                .map(|entry| {
+                    let chain_configs = &chain_configs_for_restore;
+                    let ipfs_gateway = &ipfs_gateway_for_restore;
+                    let evm_providers = &evm_providers_for_restore;
+                    let cosmos_clients = &cosmos_clients_for_restore;
+                    async move {
+                        let result = query_service_from_address(
+                            entry.service_manager.chain().clone(),
+                            entry.service_manager.address(),
+                            chain_configs,
+                            ipfs_gateway,
+                            evm_providers,
+                            cosmos_clients,
+                        )
+                        .await;
+                        (entry, result)
+                    }
+                })
+                .buffer_unordered(MAX_CONCURRENT_RESTORES)
+                .collect::<Vec<_>>()
+                .await;
+
+            // Process results sequentially (DB writes and manager registration are not async-safe to parallelize)
+            let mut restored = Vec::new();
+            for (entry, result) in fetched {
+                let service = result?;
+
+                // Store the service in DB
+                self.services.save(&service)?;
+
+                // Store components
+                self.engine_manager
+                    .store_components_for_service(&service)
+                    .await?;
+
+                // Add to managers with explicit HD index from registry
+                add_service_to_managers(
+                    &service,
+                    &self.trigger_manager,
+                    &self.submission_manager,
+                    &self.dispatcher_to_aggregator_tx,
+                    Some(entry.hd_index),
+                )?;
+
+                tracing::info!(
+                    "Restored service {} [{:?}] with HD index {}",
+                    service.name,
+                    service.manager,
+                    entry.hd_index
+                );
+                restored.push(service);
+            }
+            Ok::<_, DispatcherError>(restored)
+        })?;
+
         let total_workflows: usize = initial_services.iter().map(|s| s.workflows.len()).sum();
         tracing::info!(
             "Initializing dispatcher: services={}, workflows={}, components={}",
@@ -380,16 +448,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             total_workflows,
             self.list_component_digests()?.len()
         );
-
-        for service in initial_services.iter() {
-            add_service_to_managers(
-                service,
-                &self.trigger_manager,
-                &self.submission_manager,
-                &self.dispatcher_to_aggregator_tx,
-                None,
-            )?;
-        }
 
         // Check ServiceURI for each service at startup and update if needed (bounded concurrency)
         let chain_configs = self.chain_configs.read().unwrap().clone();
@@ -493,18 +551,10 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         &self,
         service_manager: ServiceManager,
     ) -> Result<Service, DispatcherError> {
-        let (chain, address) = match service_manager {
-            ServiceManager::Evm { chain, address } => {
-                (chain, layer_climb::prelude::Address::from(address))
-            }
-            ServiceManager::Cosmos { chain, address } => {
-                (chain, layer_climb::prelude::Address::from(address))
-            }
-        };
         let chain_configs = self.chain_configs.read().unwrap().clone();
         let service = query_service_from_address(
-            chain,
-            address,
+            service_manager.chain().clone(),
+            service_manager.address(),
             &chain_configs,
             &self.ipfs_gateway,
             &self.evm_http_providers,
@@ -512,7 +562,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         )
         .await?;
 
-        self.add_service_direct(service.clone()).await?;
+        self.register_and_add_service(service.clone()).await?;
 
         // Get current service count for logging
         let current_services = self.services.list(Bound::Unbounded, Bound::Unbounded)?;
@@ -524,9 +574,27 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         Ok(service)
     }
 
+    /// Append service to the persistent registry, then add it to the runtime.
+    /// Rolls back the registry entry if adding to the runtime fails.
+    pub async fn register_and_add_service(&self, service: Service) -> Result<(), DispatcherError> {
+        let service_manager = service.manager.clone();
+        let hd_index = self.service_registry.append(service_manager.clone())?;
+        if let Err(e) = self.add_service_direct(service, Some(hd_index)).await {
+            if let Err(remove_err) = self.service_registry.remove(&service_manager) {
+                tracing::error!("Failed to roll back registry entry: {remove_err}");
+            }
+            return Err(e);
+        }
+        Ok(())
+    }
+
     // this is public just so we can call it from tests
     #[instrument(skip(self), fields(subsys = "Dispatcher", service.name = %service.name, service.manager = ?service.manager))]
-    pub async fn add_service_direct(&self, service: Service) -> Result<(), DispatcherError> {
+    pub async fn add_service_direct(
+        &self,
+        service: Service,
+        hd_index: Option<u32>,
+    ) -> Result<(), DispatcherError> {
         let service_id = service.id();
         tracing::info!("Adding service: {} [{:?}]", service.name, service.manager);
         // Check if service is already registered
@@ -548,7 +616,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             &self.trigger_manager,
             &self.submission_manager,
             &self.dispatcher_to_aggregator_tx,
-            None,
+            hd_index,
         )?;
 
         Ok(())
@@ -556,6 +624,20 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
     #[instrument(skip(self), fields(subsys = "Dispatcher"))]
     pub fn remove_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
+        // Remove from persistent registry first so an IO failure doesn't leave
+        // the service already gone from memory but still on disk.
+        if let Some(sm) = self.services.get(&id).ok().map(|s| s.manager.clone()) {
+            self.service_registry.remove(&sm)?;
+        }
+
+        self.remove_service_inner(id.clone())?;
+
+        Ok(())
+    }
+
+    /// Remove a service from in-memory state without mutating the persistent registry.
+    /// Used by `change_service_inner` where the ServiceManager hasn't changed.
+    fn remove_service_inner(&self, id: ServiceId) -> Result<(), DispatcherError> {
         self.services.remove(&id)?;
         self.engine_manager.engine.remove_storage(&id);
         self.trigger_manager.remove_service(id.clone())?;
@@ -644,8 +726,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             .store_components_for_service(&service)
             .await?;
 
-        // Remove the old service - after this, no await points until the new service is added
-        self.remove_service(service_id.clone())?;
+        // Remove the old service from in-memory state only (ServiceManager hasn't changed,
+        // so no registry mutation needed)
+        self.remove_service_inner(service_id.clone())?;
 
         // Store the service BEFORE setting up triggers/P2P subscription
         // This ensures the service is in the database before any triggers can fire
@@ -678,30 +761,15 @@ async fn check_service_needs_update(
     let cached_hash = service.hash()?;
 
     // Get current service from contract
-    let current_service = match &service.manager {
-        ServiceManager::Evm { chain, address } => {
-            query_service_from_address(
-                chain.clone(),
-                (*address).into(),
-                chain_configs,
-                ipfs_gateway,
-                evm_http_providers,
-                cosmos_query_clients,
-            )
-            .await?
-        }
-        ServiceManager::Cosmos { chain, address } => {
-            query_service_from_address(
-                chain.clone(),
-                address.clone().into(),
-                chain_configs,
-                ipfs_gateway,
-                evm_http_providers,
-                cosmos_query_clients,
-            )
-            .await?
-        }
-    };
+    let current_service = query_service_from_address(
+        service.manager.chain().clone(),
+        service.manager.address(),
+        chain_configs,
+        ipfs_gateway,
+        evm_http_providers,
+        cosmos_query_clients,
+    )
+    .await?;
 
     let current_hash = current_service.hash()?;
 
@@ -925,4 +993,7 @@ pub enum DispatcherError {
 
     #[error("Cosmos query error: {0}")]
     CosmosQuery(anyhow::Error),
+
+    #[error("Service registry: {0}")]
+    Registry(#[from] RegistryError),
 }
