@@ -9,7 +9,7 @@ import { useServiceBuilderStore } from '../../stores/serviceBuilderStore';
 import { uploadToIpfs, addService as addServiceCmd, removeService as removeServiceCmd, getServices } from '../../tauri/commands';
 import { setServiceURI } from '../../utils/evm';
 import { getPublicClient, getWalletClient } from '../../hooks/useViemClient';
-import { getServiceAddress, getErrorMessage } from '../../types';
+import { getServiceAddress, getErrorMessage, buildServiceMap } from '../../types';
 import type { Service, ServiceManager, IpfsProvider } from '../../types';
 import { getRegistryKeyFromParams } from './ServicesLayout';
 
@@ -186,7 +186,7 @@ export function ServiceEditorPage() {
       setDeployStatus((s) => ({ ...s, register: 'in_progress' }));
       await addServiceCmd(manager);
       const servicesData = await getServices();
-      setServices(servicesData);
+      setServices(await buildServiceMap(servicesData));
       setDeployStatus((s) => ({ ...s, register: 'done' }));
 
       // Navigate back to detail page

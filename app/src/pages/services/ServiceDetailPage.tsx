@@ -4,17 +4,19 @@ import { AddressDisplay, Button, Modal, Tabs } from '../../components/atoms';
 import { OperatorList } from '../../components/poa';
 import { OwnerActionsMenu } from '../../components/poa/OwnerActionsMenu';
 import { WorkflowViewer } from '../../components/service/WorkflowViewer';
+import { ServiceActivity } from '../../components/service/ServiceActivity';
 import { useAppStore } from '../../stores/appStore';
 import { usePOAStore, persistRegistries } from '../../stores/poaStore';
 import { getServices, removeService as removeServiceCmd } from '../../tauri';
 import { getPublicClient, getAddress } from '../../hooks/useViemClient';
 import { connectToRegistry, fetchOperators } from '../../utils/evm';
-import { getServiceAddress, getServiceId, getErrorMessage } from '../../types';
+import { getServiceAddress, getErrorMessage, buildServiceMap } from '../../types';
 import type { Service } from '../../types';
 import { getRegistryKeyFromParams } from './ServicesLayout';
 
 const TABS = [
   { key: 'workflows', label: 'Workflows' },
+  { key: 'activity', label: 'Activity' },
   { key: 'operators', label: 'Operators' },
 ];
 
@@ -46,11 +48,16 @@ export function ServiceDetailPage() {
     );
   }
 
-  // Find matching service
-  const serviceList = Array.from(services.values());
-  const service: Service | null = serviceList.find(
-    (s) => getServiceAddress(s.manager).toLowerCase() === registry.address.toLowerCase()
-  ) ?? null;
+  // Find matching service (iterate map entries to get both hash ID and service)
+  let serviceHashId: string | null = null;
+  let service: Service | null = null;
+  for (const [hashId, s] of services.entries()) {
+    if (getServiceAddress(s.manager).toLowerCase() === registry.address.toLowerCase()) {
+      serviceHashId = hashId;
+      service = s;
+      break;
+    }
+  }
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -67,7 +74,7 @@ export function ServiceDetailPage() {
 
       // Also refresh services
       const servicesData = await getServices();
-      setServices(servicesData);
+      setServices(await buildServiceMap(servicesData));
     } catch (err) {
       Modal.openError(`Failed to refresh: ${getErrorMessage(err)}`);
     } finally {
@@ -90,10 +97,10 @@ export function ServiceDetailPage() {
     if (!confirmed) return;
     try {
       await removeServiceCmd(service.manager);
-      removeServiceFromStore(getServiceId(service));
+      if (serviceHashId) removeServiceFromStore(serviceHashId);
       // Refresh to get updated state
       const servicesData = await getServices();
-      setServices(servicesData);
+      setServices(await buildServiceMap(servicesData));
       Modal.openInfo('Service removed from WAVS.');
     } catch (err) {
       Modal.openError(`Failed to remove service: ${getErrorMessage(err)}`);
@@ -199,6 +206,15 @@ export function ServiceDetailPage() {
           ) : (
             <p className="text-tan-muted italic">Register a service to see its workflows.</p>
           )
+        )}
+        {activeTab === 'activity' && service && serviceHashId && (
+          <ServiceActivity
+            serviceId={serviceHashId}
+            workflowIds={Object.keys(service.workflows)}
+          />
+        )}
+        {activeTab === 'activity' && !service && (
+          <p className="text-tan-muted italic">Register a service to see its activity.</p>
         )}
         {activeTab === 'operators' && (
           <OperatorList registryKey={registryKey} />

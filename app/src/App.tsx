@@ -5,8 +5,7 @@ import { ModalContainer } from './components/atoms';
 import {
   Settings,
   Logs,
-  Triggers,
-  Submissions,
+  Activity,
   NotFound,
   WalletSetup,
   Health,
@@ -20,8 +19,9 @@ import {
 } from './pages/services';
 import { useAppStore } from './stores/appStore';
 import { useWalletStore } from './stores/walletStore';
-import { getSettings, startWavs } from './tauri';
+import { getSettings, startWavs, getServices } from './tauri';
 import { startListeners } from './tauri/listeners';
+import { buildServiceMap } from './types';
 
 function MainAppContent() {
   const isSettingsComplete = useAppStore((state) => state.isSettingsComplete());
@@ -39,8 +39,9 @@ function MainAppContent() {
             <Route path=":chainId/:address" element={<ServiceDetailPage />} />
             <Route path=":chainId/:address/edit" element={<ServiceEditorPage />} />
           </Route>
-          <Route path="/triggers" element={<Triggers />} />
-          <Route path="/submissions" element={<Submissions />} />
+          <Route path="/activity" element={<Activity />} />
+          <Route path="/triggers" element={<Navigate to="/activity" replace />} />
+          <Route path="/submissions" element={<Navigate to="/activity" replace />} />
           <Route path="/poa-registry" element={<Navigate to="/services" replace />} />
           <Route path="/health" element={<Health />} />
           <Route path="/404" element={<NotFound />} />
@@ -74,6 +75,8 @@ function AppContent() {
     check();
   }, [checkMnemonic]);
 
+  const setServices = useAppStore((state) => state.setServices);
+
   // Start WAVS after wallet is set up and wavs_home is set
   useEffect(() => {
     const startWavsIfReady = async () => {
@@ -81,6 +84,13 @@ function AppContent() {
         try {
           await startWavs();
           setWavsStarted(true);
+          // Refresh services now that WAVS is running
+          try {
+            const services = await getServices();
+            setServices(await buildServiceMap(services));
+          } catch {
+            // Services may not be available yet
+          }
         } catch (err) {
           console.warn('Failed to start WAVS:', err);
           // Still allow the app to function
@@ -89,7 +99,7 @@ function AppContent() {
       }
     };
     startWavsIfReady();
-  }, [hasMnemonic, settings.wavs_home, wavsStarted]);
+  }, [hasMnemonic, settings.wavs_home, wavsStarted, setServices]);
 
   // Wait for wallet check to complete
   if (!walletChecked) {
@@ -113,6 +123,7 @@ function App() {
   const [initialized, setInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setSettings = useAppStore((state) => state.setSettings);
+  const setServices = useAppStore((state) => state.setServices);
 
   useEffect(() => {
     const init = async () => {
@@ -124,6 +135,14 @@ function App() {
         // Start event listeners
         await startListeners();
 
+        // Load services early so getServiceLabel() works everywhere
+        try {
+          const services = await getServices();
+          setServices(await buildServiceMap(services));
+        } catch {
+          // WAVS may not be running yet -- services will load when it starts
+        }
+
         setInitialized(true);
       } catch (err) {
         console.error('Failed to initialize app:', err);
@@ -132,7 +151,7 @@ function App() {
     };
 
     init();
-  }, [setSettings]);
+  }, [setSettings, setServices]);
 
   if (error) {
     return (

@@ -254,8 +254,23 @@ export interface ComponentDigestResult {
   resolved_version: string;
 }
 
-// Helper to get service ID from manager
-export function getServiceId(service: Service): string {
+// Activity types (unified triggers + submissions)
+export type ActivityKind = 'trigger' | 'submission';
+
+export interface ActivityItem {
+  id: number;
+  ts: number;
+  kind: ActivityKind;
+  serviceId: ServiceId;
+  workflowId: WorkflowId;
+  triggerData: TriggerData;
+  triggerConfig?: TriggerConfig;
+  envelope?: Envelope;
+  submit?: Submit;
+}
+
+// Helper to get a human-readable service key from manager (for display/fallback only)
+export function getServiceKey(service: Service): string {
   const manager = service.manager;
   if ('evm' in manager) {
     return `evm:${manager.evm.chain}:${manager.evm.address}`;
@@ -264,6 +279,63 @@ export function getServiceId(service: Service): string {
     return `cosmos:${manager.cosmos.chain}:${manager.cosmos.address}`;
   }
   return 'unknown';
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const clean = hex.replace(/^0x/i, '');
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(clean.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+// Compute the same ServiceId hash as the Rust backend:
+// SHA256(prefix_bytes + chain_string_bytes + address_bytes)
+export async function computeServiceHash(manager: ServiceManager): Promise<string> {
+  const encoder = new TextEncoder();
+  const parts: Uint8Array[] = [];
+
+  if ('evm' in manager) {
+    parts.push(encoder.encode('evm'));
+    parts.push(encoder.encode(manager.evm.chain));
+    // Rust uses address.as_slice() which gives raw 20 bytes
+    parts.push(hexToBytes(manager.evm.address));
+  } else if ('cosmos' in manager) {
+    parts.push(encoder.encode('cosmos'));
+    parts.push(encoder.encode(manager.cosmos.chain));
+    // Rust uses address.to_vec() -- UTF-8 bytes of the address string
+    parts.push(encoder.encode(manager.cosmos.address));
+  }
+
+  const totalLen = parts.reduce((sum, p) => sum + p.length, 0);
+  const combined = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const part of parts) {
+    combined.set(part, offset);
+    offset += part.length;
+  }
+
+  const hash = await crypto.subtle.digest('SHA-256', combined);
+  return bytesToHex(new Uint8Array(hash));
+}
+
+// Build a Map<hashId, Service> from a list of services
+export async function buildServiceMap(
+  services: Service[],
+): Promise<Map<string, Service>> {
+  const map = new Map<string, Service>();
+  for (const service of services) {
+    const hashId = await computeServiceHash(service.manager);
+    map.set(hashId, service);
+  }
+  return map;
 }
 
 // Helper to get trigger label

@@ -9,7 +9,7 @@ import { setServiceURI } from '../../utils/evm';
 import { getPublicClient, getWalletClient } from '../../hooks/useViemClient';
 import { useAppStore } from '../../stores/appStore';
 import type { ServiceManager, IpfsProvider } from '../../types';
-import { getErrorMessage } from '../../types';
+import { getErrorMessage, buildServiceMap } from '../../types';
 
 type IpfsProviderType = 'local' | 'pinata';
 
@@ -129,7 +129,7 @@ export function ServiceDeploy({ onDeployComplete }: ServiceDeployProps) {
       setDeployState({ registerStatus: 'in_progress' });
       await addServiceCmd(resolvedManager.manager);
       const servicesData = await getServices();
-      setServices(servicesData);
+      setServices(await buildServiceMap(servicesData));
       setDeployState({ registerStatus: 'done' });
 
       if (onDeployComplete && resolvedManager) {

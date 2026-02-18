@@ -10,7 +10,7 @@ MVP Requirements:
 - [x] State management (persist services and registries)
 - [x] Ability to upload new components and manage services
 - [x] Easy way to test (deploy local PoA service, add a component, trigger)
-- [ ] Better logging
+- [x] Better logging
 - [ ] Better aesthetics
 - [ ] Health page should have better indicator (not a normal button)
 - [ ] Leverage touch id for key management? (need macOS code signing)

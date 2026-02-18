@@ -2,19 +2,24 @@ import { create } from 'zustand';
 import type {
   Settings,
   LogItem,
-  TriggerAction,
-  SubmissionEvent,
+  ActivityItem,
   Service,
   ServiceId,
 } from '../types';
-import { getServiceId } from '../types';
+
+const MAX_LOG_ITEMS = 5000;
+const MAX_ACTIVITY_ITEMS = 2000;
+
+let activityIdCounter = 0;
+export function nextActivityId(): number {
+  return ++activityIdCounter;
+}
 
 interface AppState {
   // State
   settings: Settings;
   logList: LogItem[];
-  triggersList: TriggerAction[];
-  submissionsList: SubmissionEvent[];
+  activityList: ActivityItem[];
   services: Map<ServiceId, Service>;
 
   // Computed
@@ -24,20 +29,18 @@ interface AppState {
   // Actions
   setSettings: (settings: Settings) => void;
   addLogItem: (item: LogItem) => void;
-  addTrigger: (trigger: TriggerAction) => void;
-  addSubmission: (submission: SubmissionEvent) => void;
-  setServices: (services: Service[]) => void;
-  addService: (service: Service) => void;
+  addActivity: (item: ActivityItem) => void;
+  setServices: (serviceMap: Map<string, Service>) => void;
   removeService: (serviceId: ServiceId) => void;
   clearLogs: () => void;
+  clearActivity: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   // Initial state
   settings: { wavs_home: null, saved_registries: [], saved_service_managers: [] },
   logList: [],
-  triggersList: [],
-  submissionsList: [],
+  activityList: [],
   services: new Map(),
 
   // Computed
@@ -54,31 +57,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSettings: (settings) => set({ settings }),
 
   addLogItem: (item) =>
-    set((state) => ({
-      logList: [...state.logList, item],
-    })),
-
-  addTrigger: (trigger) =>
-    set((state) => ({
-      triggersList: [...state.triggersList, trigger],
-    })),
-
-  addSubmission: (submission) =>
-    set((state) => ({
-      submissionsList: [...state.submissionsList, submission],
-    })),
-
-  setServices: (services) =>
-    set({
-      services: new Map(services.map((s) => [getServiceId(s), s])),
-    }),
-
-  addService: (service) =>
     set((state) => {
-      const newServices = new Map(state.services);
-      newServices.set(getServiceId(service), service);
-      return { services: newServices };
+      const next = [...state.logList, item];
+      if (next.length > MAX_LOG_ITEMS) {
+        return { logList: next.slice(next.length - MAX_LOG_ITEMS) };
+      }
+      return { logList: next };
     }),
+
+  addActivity: (item) =>
+    set((state) => {
+      const next = [...state.activityList, item];
+      if (next.length > MAX_ACTIVITY_ITEMS) {
+        return { activityList: next.slice(next.length - MAX_ACTIVITY_ITEMS) };
+      }
+      return { activityList: next };
+    }),
+
+  setServices: (serviceMap) =>
+    set({ services: serviceMap }),
 
   removeService: (serviceId) =>
     set((state) => {
@@ -88,4 +85,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     }),
 
   clearLogs: () => set({ logList: [] }),
+
+  clearActivity: () => set({ activityList: [] }),
 }));

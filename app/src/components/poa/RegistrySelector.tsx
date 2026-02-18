@@ -12,6 +12,7 @@ import {
   fetchOperators,
 } from '../../utils/evm';
 import type { ChainConfigs, ServiceManager } from '../../types';
+import { buildServiceMap } from '../../types';
 
 type Mode = 'select' | 'deploy' | 'connect';
 
@@ -262,7 +263,7 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
 
       await addServiceCmd(manager);
       const servicesData = await getServices();
-      setServices(servicesData);
+      setServices(await buildServiceMap(servicesData));
 
       setPendingAutoRegister(false);
       onRegistryAdded?.(autoRegisterKey);
