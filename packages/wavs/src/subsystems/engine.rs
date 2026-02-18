@@ -77,7 +77,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         S: 'static,
     {
         while let Ok(command) = self.dispatcher_to_engine_rx.recv() {
-            tracing::info!(
+            tracing::debug!(
                 "Got Engine Command: {}",
                 match &command {
                     EngineCommand::Kill => "Kill".to_string(),
@@ -217,10 +217,9 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         // if there are results, send them down the pipeline to the submit processor
         // otherwise, just end early here, performing no action (but updating local state if needed)
         if wasm_responses.is_empty() {
-            tracing::info!(
+            tracing::debug!(
                 service_id = %trigger_config.service_id,
                 service.name = %service.name,
-                service.manager = ?service.manager,
                 workflow_id = %trigger_config.workflow_id,
                 "Service {} (workflow {}) component execution produced no result",
                 service.name,
@@ -244,7 +243,6 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                 tracing::info!(
                     service_id = %trigger_config.service_id,
                     service.name = %service.name,
-                    service.manager = ?service.manager,
                     workflow_id = %trigger_config.workflow_id,
                     payload_size = %payload_size,
                     event_id = %event_id,
@@ -305,7 +303,6 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                 tracing::info!(
                     service_id = %trigger_action.config.service_id,
                     service.name = %service.name,
-                    service.manager = ?service.manager,
                     workflow_id = %trigger_action.config.workflow_id,
                     event_id = %event_id,
                     "Service {} (workflow {}) aggregator submit callback execution completed",
@@ -321,7 +318,6 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
             tracing::info!(
                 service_id = %trigger_action.config.service_id,
                 service.name = %service.name,
-                service.manager = ?service.manager,
                 workflow_id = %trigger_action.config.workflow_id,
                 event_id = %event_id,
                 "Service {} (workflow {}) aggregator execution produced no result",
@@ -332,7 +328,6 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
             tracing::info!(
                 service_id = %trigger_action.config.service_id,
                 service.name = %service.name,
-                service.manager = ?service.manager,
                 workflow_id = %trigger_action.config.workflow_id,
                 event_id = %event_id,
                 "Service {} (workflow {}) aggregator execution completed with {} actions",

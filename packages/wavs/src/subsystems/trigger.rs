@@ -1057,7 +1057,7 @@ impl TriggerManager {
             }
 
             if !dispatcher_commands.is_empty() {
-                tracing::info!(
+                tracing::debug!(
                     "Sending {} commands to dispatcher",
                     dispatcher_commands.len()
                 );

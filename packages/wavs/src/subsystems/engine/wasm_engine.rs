@@ -102,7 +102,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
     }
 
     /// This will execute a contract that implements the wavs:operator wit interface
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self, service, trigger_action), fields(subsys = "Engine"))]
     pub async fn execute_operator_component(
         &self,
         service: Service,
@@ -385,7 +385,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         result.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self, service, trigger_action, operator_response), fields(subsys = "Engine"))]
     async fn get_aggregator_deps(
         &self,
         service: Service,
