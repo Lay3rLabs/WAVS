@@ -249,7 +249,13 @@ fn mock_e2e_same_tx_different_block_hash() {
     runner.ctx.rt.block_on({
         let runner = runner.clone();
         let service = service.clone();
-        async move { runner.dispatcher.add_service_direct(service).await.unwrap() }
+        async move {
+            runner
+                .dispatcher
+                .add_service_direct(service, None)
+                .await
+                .unwrap()
+        }
     });
 
     let same_tx_hash = alloy_primitives::TxHash::from_slice(&[1u8; 32]);
