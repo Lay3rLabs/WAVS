@@ -33,7 +33,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set, get) => ({
   // Initial state
-  settings: { wavs_home: null },
+  settings: { wavs_home: null, saved_registries: [], saved_service_managers: [] },
   logList: [],
   triggersList: [],
   submissionsList: [],

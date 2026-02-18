@@ -10,7 +10,7 @@ use wavs::{config::HealthCheckMode, dispatcher::Dispatcher, health::SharedHealth
 use wavs_gui_shared::{
     command::DirectoryChooserResponse,
     error::{AppError, AppResult},
-    settings::Settings,
+    settings::{SavedRegistry, Settings},
 };
 
 const KEYCHAIN_SERVICE: &str = "wavs-app";
@@ -53,6 +53,19 @@ pub async fn cmd_get_settings(settings: State<'_, SettingsState>) -> AppResult<S
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_save_poa_registries(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    registries: Vec<SavedRegistry>,
+) -> AppResult<()> {
+    settings
+        .update(&app, |s| {
+            s.saved_registries = registries.clone();
+        })
+        .await
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn cmd_restart(app: AppHandle) {
     tauri::process::restart(&app.env());
 }
@@ -60,6 +73,7 @@ pub async fn cmd_restart(app: AppHandle) {
 #[tauri::command(rename_all = "snake_case")]
 pub async fn cmd_start_wavs(
     app: AppHandle,
+    settings: State<'_, SettingsState>,
     wavs_config: State<'_, WavsConfigState>,
     wavs_instance: State<'_, WavsInstanceState>,
 ) -> AppResult<()> {
@@ -126,6 +140,14 @@ pub async fn cmd_start_wavs(
 
     let dispatcher = Arc::new(Dispatcher::new(&config, metrics.wavs, app).unwrap());
 
+    // Restore saved services from settings
+    let saved_managers = settings.get_cloned().saved_service_managers.clone();
+    for manager in &saved_managers {
+        if let Err(e) = dispatcher.add_service(manager.clone()).await {
+            log::warn!("Failed to restore saved service: {}", e);
+        }
+    }
+
     let handle = std::thread::spawn({
         let ctx = ctx.clone();
         let dispatcher = dispatcher.clone();
@@ -162,14 +184,27 @@ pub async fn cmd_get_services(
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn cmd_add_service(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
     wavs_instance: State<'_, WavsInstanceState>,
     manager: ServiceManager,
 ) -> AppResult<Service> {
-    wavs_instance
+    let service = wavs_instance
         .dispatcher()?
-        .add_service(manager)
+        .add_service(manager.clone())
         .await
-        .map_err(|e| AppError::Service(format!("Failed to add service: {}", e)))
+        .map_err(|e| AppError::Service(format!("Failed to add service: {}", e)))?;
+
+    // Persist the manager for restart recovery
+    settings
+        .update(&app, |s| {
+            if !s.saved_service_managers.contains(&manager) {
+                s.saved_service_managers.push(manager.clone());
+            }
+        })
+        .await?;
+
+    Ok(service)
 }
 
 /// Load mnemonic from OS keyring and populate the cache.

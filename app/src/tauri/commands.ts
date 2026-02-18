@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   Settings,
+  SavedRegistry,
   DirectoryChooserResponse,
   ChainConfigs,
   Service,
@@ -19,6 +20,10 @@ export async function setWavsHome(): Promise<string | null> {
 
 export async function getSettings(): Promise<Settings> {
   return invoke<Settings>('cmd_get_settings');
+}
+
+export async function savePoaRegistries(registries: SavedRegistry[]): Promise<void> {
+  return invoke<void>('cmd_save_poa_registries', { registries });
 }
 
 export async function restart(): Promise<void> {

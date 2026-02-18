@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { Address } from 'viem';
 import type { RegistryInfo, Operator } from '../contracts/POAStakeRegistry';
+import type { SavedRegistry } from '../types';
+import { savePoaRegistries } from '../tauri/commands';
 
 export interface ConnectedRegistry {
   chainId: number;
@@ -111,3 +113,17 @@ export const usePOAStore = create<POAState>((set, get) => ({
     return state.registries.get(state.activeRegistryKey) ?? null;
   },
 }));
+
+/**
+ * Persist the current registries to settings.json via the backend.
+ */
+export async function persistRegistries() {
+  const registries = usePOAStore.getState().registries;
+  const entries: SavedRegistry[] = Array.from(registries.values()).map((r) => ({
+    chain_id: r.chainId,
+    chain_key: r.chainKey,
+    rpc_url: r.rpcUrl,
+    address: r.address,
+  }));
+  await savePoaRegistries(entries);
+}
