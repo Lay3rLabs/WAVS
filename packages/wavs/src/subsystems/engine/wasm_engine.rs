@@ -93,7 +93,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
     }
 
     /// This will execute a contract that implements the wavs:worker wit interface
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self, service, trigger_action), fields(subsys = "Engine"))]
     pub async fn execute(
         &self,
         service: Service,

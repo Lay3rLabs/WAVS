@@ -44,7 +44,11 @@ pub fn setup_tracing(
 
     let subscriber = tracing_subscriber::Registry::default()
         .with(filters)
-        .with(tracing_subscriber::fmt::layer()) // console logging layer
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_line_number(true)
+                .compact(),
+        ) // console logging layer
         .with(telemetry);
 
     tracing::subscriber::set_global_default(subscriber)
