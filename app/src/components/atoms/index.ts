@@ -7,3 +7,6 @@ export { TextArea } from './TextArea';
 export { Dropdown, type DropdownOption, type DropdownSize } from './Dropdown';
 export { Expander } from './Expander';
 export { TomlEditor } from './TomlEditor';
+export { Breadcrumb, type BreadcrumbItem } from './Breadcrumb';
+export { Tabs, type Tab } from './Tabs';
+export { DropdownMenu, type MenuOption } from './DropdownMenu';

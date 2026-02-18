@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { type Address } from 'viem';
-import { AddressDisplay, Button, Modal } from '../atoms';
+import { type Address, isAddress } from 'viem';
+import { AddressDisplay, Button, Modal, TextInput } from '../atoms';
 import { usePOAStore, getRegistryKey } from '../../stores/poaStore';
 import { useWalletStore } from '../../stores/walletStore';
 import { getPublicClient, getWalletClient } from '../../hooks/useViemClient';
-import { deregisterOperator, updateOperatorWeight, updateSigningKey, createSigningKeySignature, fetchOperators } from '../../utils/evm';
+import { deregisterOperator, updateOperatorWeight, updateSigningKey, createSigningKeySignature, fetchOperators, registerOperator } from '../../utils/evm';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -102,6 +102,15 @@ export function OperatorList({ registryKey: registryKeyProp }: OperatorListProps
       // Create wallet client as the operator (not the owner)
       const operatorWalletClient = await getWalletClient(rpcUrl, chainId, addressIndex);
 
+      // Operator must have ETH to pay for gas
+      const balance = await publicClient.getBalance({ address: operatorAddress });
+      if (balance === 0n) {
+        Modal.openError(
+          `Operator ${operatorAddress} has no ETH to pay for gas. Fund this address before setting a signing key.`
+        );
+        return;
+      }
+
       // Use the operator address itself as the signing key
       const signature = await createSigningKeySignature(
         operatorWalletClient.account,
@@ -136,7 +145,12 @@ export function OperatorList({ registryKey: registryKeyProp }: OperatorListProps
       </h3>
 
       {operators.length === 0 ? (
-        <p className="text-tan-muted italic">No operators registered</p>
+        <OperatorEmptyState
+          isOwner={isOwner}
+          registryAddress={registryAddress}
+          rpcUrl={rpcUrl}
+          chainId={chainId}
+        />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -246,6 +260,108 @@ export function OperatorList({ registryKey: registryKeyProp }: OperatorListProps
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function OperatorEmptyState({
+  isOwner,
+  registryAddress,
+  rpcUrl,
+  chainId,
+}: {
+  isOwner: boolean;
+  registryAddress: Address;
+  rpcUrl: string;
+  chainId: number;
+}) {
+  const { hasMnemonic, derivedAddresses, loadAddresses } = useWalletStore();
+  const { updateRegistryOperators } = usePOAStore();
+  const [operatorAddress, setOperatorAddress] = useState('');
+  const [operatorWeight, setOperatorWeight] = useState('1');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (hasMnemonic) loadAddresses();
+  }, [hasMnemonic, loadAddresses]);
+
+  if (!isOwner) {
+    return (
+      <p className="text-tan-muted italic">
+        No operators registered. The contract owner can register operators.
+      </p>
+    );
+  }
+
+  const handleRegister = async () => {
+    if (!isAddress(operatorAddress)) {
+      Modal.openError('Please enter a valid operator address');
+      return;
+    }
+    const weight = BigInt(operatorWeight);
+    if (weight <= 0n) {
+      Modal.openError('Weight must be greater than 0');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const publicClient = getPublicClient(rpcUrl, chainId);
+      const walletClient = await getWalletClient(rpcUrl, chainId);
+      await registerOperator(publicClient, walletClient, registryAddress, operatorAddress as Address, weight);
+
+      const updatedOperators = await fetchOperators(publicClient, registryAddress, undefined, [operatorAddress as Address]);
+      updateRegistryOperators(getRegistryKey(chainId, registryAddress), updatedOperators);
+
+      setOperatorAddress('');
+      setOperatorWeight('1');
+      Modal.openInfo('Operator registered successfully');
+    } catch (err) {
+      Modal.openError(`Failed to register operator: ${err}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-tan-muted">No operators registered yet.</p>
+      <p className="text-beige-warm text-sm">Register your first operator:</p>
+      <div className="grid grid-cols-2 gap-3">
+        <TextInput
+          placeholder="Operator address (0x...)"
+          value={operatorAddress}
+          onChange={setOperatorAddress}
+        />
+        <TextInput
+          kind="number"
+          placeholder="Weight"
+          value={operatorWeight}
+          onChange={setOperatorWeight}
+        />
+      </div>
+      {derivedAddresses.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-tan-muted">Use my address:</span>
+          {derivedAddresses.map((addr, i) => (
+            <button
+              key={i}
+              onClick={() => setOperatorAddress(addr)}
+              className="text-xs px-2 py-1 rounded bg-charcoal-dark hover:bg-charcoal-light text-tan-muted hover:text-beige-warm transition-colors font-mono"
+              title={addr}
+            >
+              Account {i}
+            </button>
+          ))}
+        </div>
+      )}
+      <Button
+        text="Register Operator"
+        color="purple"
+        size="sm"
+        disabled={loading}
+        onClick={handleRegister}
+      />
     </div>
   );
 }

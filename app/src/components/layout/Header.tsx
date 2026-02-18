@@ -30,7 +30,9 @@ export function Header() {
       {/* Navigation */}
       <nav className="flex items-center gap-2">
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive = item.path === '/services'
+            ? location.pathname.startsWith('/services')
+            : location.pathname === item.path;
           const isDisabled = item.path !== '/settings' && !isSettingsComplete;
 
           return (

@@ -1,12 +1,17 @@
-import { useState, useMemo } from 'react';
-import { Button, Modal, TextInput, Dropdown, type DropdownOption } from '../atoms';
-import { usePOAStore } from '../../stores/poaStore';
+import { useState, useMemo, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Button, Modal, TextInput, Dropdown, Tabs, type DropdownOption } from '../../components/atoms';
+import { ServiceBasics } from '../../components/service/ServiceBasics';
+import { WorkflowEditor } from '../../components/service/WorkflowEditor';
 import { useAppStore } from '../../stores/appStore';
+import { usePOAStore } from '../../stores/poaStore';
+import { useServiceBuilderStore } from '../../stores/serviceBuilderStore';
 import { uploadToIpfs, addService as addServiceCmd, removeService as removeServiceCmd, getServices } from '../../tauri/commands';
 import { setServiceURI } from '../../utils/evm';
 import { getPublicClient, getWalletClient } from '../../hooks/useViemClient';
+import { getServiceAddress, getErrorMessage } from '../../types';
 import type { Service, ServiceManager, IpfsProvider } from '../../types';
-import { getErrorMessage } from '../../types';
+import { getRegistryKeyFromParams } from './ServicesLayout';
 
 type IpfsProviderType = 'local' | 'pinata';
 type DeployStepStatus = 'pending' | 'in_progress' | 'done' | 'error';
@@ -14,6 +19,11 @@ type DeployStepStatus = 'pending' | 'in_progress' | 'done' | 'error';
 const IPFS_OPTIONS: DropdownOption<IpfsProviderType>[] = [
   { label: 'Local IPFS', value: 'local' },
   { label: 'Pinata', value: 'pinata' },
+];
+
+const EDITOR_TABS = [
+  { key: 'visual', label: 'Visual' },
+  { key: 'json', label: 'JSON' },
 ];
 
 function StatusBadge({ status }: { status: DeployStepStatus }) {
@@ -32,17 +42,27 @@ function StatusBadge({ status }: { status: DeployStepStatus }) {
   return <span className={`text-sm font-medium ${colors[status]}`}>{labels[status]}</span>;
 }
 
-interface ServiceEditorProps {
-  service: Service;
-  registryKey: string;
-  onClose: () => void;
-}
+export function ServiceEditorPage() {
+  const { chainId, address } = useParams<{ chainId: string; address: string }>();
+  const navigate = useNavigate();
 
-export function ServiceEditor({ service, registryKey, onClose }: ServiceEditorProps) {
-  const [jsonText, setJsonText] = useState(() => JSON.stringify(service, null, 2));
+  const services = useAppStore((state) => state.services);
+  const setServices = useAppStore((state) => state.setServices);
+  const registries = usePOAStore((state) => state.registries);
+
+  const hydrateFromService = useServiceBuilderStore((s) => s.hydrateFromService);
+  const buildServiceJson = useServiceBuilderStore((s) => s.buildServiceJson);
+
+  const [editorTab, setEditorTab] = useState('visual');
+  const [jsonText, setJsonText] = useState('');
+  const [hydrated, setHydrated] = useState(false);
+
+  // IPFS config
   const [ipfsProvider, setIpfsProvider] = useState<IpfsProviderType>('local');
   const [localIpfsUrl, setLocalIpfsUrl] = useState('http://127.0.0.1:5001');
   const [pinataApiKey, setPinataApiKey] = useState('');
+
+  // Deploy state
   const [deploying, setDeploying] = useState(false);
   const [deployStatus, setDeployStatus] = useState({
     ipfs: 'pending' as DeployStepStatus,
@@ -53,9 +73,27 @@ export function ServiceEditor({ service, registryKey, onClose }: ServiceEditorPr
     error: null as string | null,
   });
 
-  const registries = usePOAStore((s) => s.registries);
+  if (!chainId || !address) {
+    return <div className="text-red-3">Invalid URL parameters.</div>;
+  }
+
+  const registryKey = getRegistryKeyFromParams(chainId, address);
   const registry = registries.get(registryKey) ?? null;
-  const setServices = useAppStore((s) => s.setServices);
+
+  // Find matching service
+  const serviceList = Array.from(services.values());
+  const service: Service | null = serviceList.find(
+    (s) => getServiceAddress(s.manager).toLowerCase() === address.toLowerCase()
+  ) ?? null;
+
+  // Hydrate the builder store from the existing service
+  useEffect(() => {
+    if (service && !hydrated) {
+      hydrateFromService(service, registryKey);
+      setJsonText(JSON.stringify(service, null, 2));
+      setHydrated(true);
+    }
+  }, [service, hydrated, hydrateFromService, registryKey]);
 
   const jsonValid = useMemo(() => {
     try {
@@ -66,15 +104,45 @@ export function ServiceEditor({ service, registryKey, onClose }: ServiceEditorPr
     }
   }, [jsonText]);
 
-  const handleSaveAndRedeploy = async () => {
-    if (!jsonValid || !registry) return;
+  if (!registry) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="text-tan-muted">Registry not found.</div>
+        <Button text="Back to Services" size="sm" onClick={() => navigate('/services')} />
+      </div>
+    );
+  }
 
+  if (!service) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="text-tan-muted">No service registered for this contract. Register a service first.</div>
+        <Button text="Back" size="sm" onClick={() => navigate(`/services/${chainId}/${address}`)} />
+      </div>
+    );
+  }
+
+  const handleSaveAndRedeploy = async () => {
     let parsedService: Service;
-    try {
-      parsedService = JSON.parse(jsonText) as Service;
-    } catch {
-      Modal.openError('Invalid JSON');
-      return;
+
+    if (editorTab === 'visual') {
+      const built = buildServiceJson();
+      if (!built) {
+        Modal.openError('Failed to build service JSON from visual editor. Please check all fields.');
+        return;
+      }
+      parsedService = built;
+    } else {
+      if (!jsonValid) {
+        Modal.openError('Invalid JSON');
+        return;
+      }
+      try {
+        parsedService = JSON.parse(jsonText) as Service;
+      } catch {
+        Modal.openError('Invalid JSON');
+        return;
+      }
     }
 
     // Ensure manager matches the registry
@@ -121,8 +189,9 @@ export function ServiceEditor({ service, registryKey, onClose }: ServiceEditorPr
       setServices(servicesData);
       setDeployStatus((s) => ({ ...s, register: 'done' }));
 
+      // Navigate back to detail page
+      navigate(`/services/${chainId}/${address}`);
       Modal.openInfo('Service updated and redeployed successfully!');
-      onClose();
     } catch (err) {
       const msg = getErrorMessage(err);
       setDeployStatus((s) => {
@@ -146,24 +215,40 @@ export function ServiceEditor({ service, registryKey, onClose }: ServiceEditorPr
         <h2 className="text-beige-light text-xl font-semibold">
           Edit Service: {service.name}
         </h2>
-        <Button text="Cancel" size="sm" variant="outline" onClick={onClose} disabled={deploying} />
-      </div>
-
-      {/* JSON Editor */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <label className="text-beige-warm text-sm font-medium">Service JSON</label>
-          <span className={`text-xs font-medium ${jsonValid ? 'text-green-400' : 'text-red-3'}`}>
-            {jsonValid ? 'Valid JSON' : 'Invalid JSON'}
-          </span>
-        </div>
-        <textarea
-          className="w-full h-80 p-3 rounded bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-xs resize-y focus:outline-none focus:border-purple-1"
-          value={jsonText}
-          onChange={(e) => setJsonText(e.target.value)}
-          spellCheck={false}
+        <Button
+          text="Cancel"
+          size="sm"
+          variant="outline"
+          onClick={() => navigate(`/services/${chainId}/${address}`)}
+          disabled={deploying}
         />
       </div>
+
+      {/* Editor Tabs */}
+      <Tabs tabs={EDITOR_TABS} activeTab={editorTab} onChange={setEditorTab} />
+
+      {/* Tab Content */}
+      {editorTab === 'visual' ? (
+        <div className="flex flex-col gap-6">
+          <ServiceBasics />
+          <WorkflowEditor />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-beige-warm text-sm font-medium">Service JSON</label>
+            <span className={`text-xs font-medium ${jsonValid ? 'text-green-400' : 'text-red-3'}`}>
+              {jsonValid ? 'Valid JSON' : 'Invalid JSON'}
+            </span>
+          </div>
+          <textarea
+            className="w-full h-80 p-3 rounded bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-xs resize-y focus:outline-none focus:border-purple-1"
+            value={jsonText}
+            onChange={(e) => setJsonText(e.target.value)}
+            spellCheck={false}
+          />
+        </div>
+      )}
 
       {/* IPFS Provider Config */}
       <div className="p-4 rounded bg-charcoal-medium border border-charcoal-light flex flex-col gap-4">
@@ -228,7 +313,7 @@ export function ServiceEditor({ service, registryKey, onClose }: ServiceEditorPr
         color="purple"
         size="lg"
         onClick={handleSaveAndRedeploy}
-        disabled={deploying || !jsonValid}
+        disabled={deploying || (editorTab === 'json' && !jsonValid)}
       />
     </div>
   );
