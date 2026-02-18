@@ -93,7 +93,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         }
     }
 
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self, service), fields(subsys = "Engine"))]
     pub async fn store_components_for_service(
         &self,
         service: &Service,
@@ -137,7 +137,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
 
         let trigger_config = action.config.clone();
 
-        tracing::info!(
+        tracing::debug!(
             "Executing component: service_id={}, workflow_id={}, component_digest={:?}",
             trigger_config.service_id,
             trigger_config.workflow_id,

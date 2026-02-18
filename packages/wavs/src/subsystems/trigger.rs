@@ -148,7 +148,7 @@ impl TriggerManager {
         })
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(skip(self, service), fields(subsys = "TriggerManager"))]
     pub fn add_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
         // The mechanics of adding a trigger are that we:
 
