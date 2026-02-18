@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import type { Address } from 'viem';
 import { Button, Dropdown, type DropdownOption } from '../components/atoms';
 import {
   RegistrySelector,
@@ -6,15 +7,17 @@ import {
   OperatorList,
   OwnerActions,
 } from '../components/poa';
-import { usePOAStore, getRegistryKey } from '../stores/poaStore';
+import { usePOAStore, getRegistryKey, persistRegistries } from '../stores/poaStore';
 import { getPublicClient, getAddress } from '../hooks/useViemClient';
 import { connectToRegistry, fetchOperators } from '../utils/evm';
+import { getSettings } from '../tauri';
 
 export function POARegistry() {
   const {
     registries,
     activeRegistryKey,
     setActiveRegistry,
+    addRegistry,
     updateRegistryInfo,
     updateRegistryOperators,
     updateRegistryOwnership,
@@ -23,6 +26,42 @@ export function POARegistry() {
   } = usePOAStore();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingRegistries, setLoadingRegistries] = useState(true);
+
+  // Load saved registries from settings on mount
+  useEffect(() => {
+    const loadSaved = async () => {
+      try {
+        const settings = await getSettings();
+        for (const saved of settings.saved_registries) {
+          const key = getRegistryKey(saved.chain_id, saved.address as Address);
+          if (registries.has(key)) continue;
+
+          const publicClient = getPublicClient(saved.rpc_url, saved.chain_id);
+          const userAddress = await getAddress();
+          const [info, operators] = await Promise.all([
+            connectToRegistry(publicClient, saved.address as Address),
+            fetchOperators(publicClient, saved.address as Address),
+          ]);
+
+          addRegistry({
+            chainId: saved.chain_id,
+            chainKey: saved.chain_key,
+            rpcUrl: saved.rpc_url,
+            address: saved.address as Address,
+            info,
+            operators,
+            isOwner: info.owner.toLowerCase() === userAddress.toLowerCase(),
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load saved registries:', err);
+      } finally {
+        setLoadingRegistries(false);
+      }
+    };
+    loadSaved();
+  }, []);
 
   const activeRegistry = getActiveRegistry();
   const registryList = Array.from(registries.entries());
@@ -57,11 +96,22 @@ export function POARegistry() {
     }
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
     if (activeRegistryKey) {
       removeRegistry(activeRegistryKey);
+      // Wait for store update then persist
+      await persistRegistries();
     }
   };
+
+  // Show loading while restoring saved registries
+  if (loadingRegistries) {
+    return (
+      <div className="flex flex-col gap-3 max-h-[calc(100vh-12rem)] overflow-y-auto pr-2">
+        <div className="text-beige-warm">Loading saved registries...</div>
+      </div>
+    );
+  }
 
   // If no registries connected, show the selector
   if (registryList.length === 0) {

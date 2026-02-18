@@ -1,6 +1,15 @@
 // Settings types
+export interface SavedRegistry {
+  chain_id: number;
+  chain_key: string;
+  rpc_url: string;
+  address: string;
+}
+
 export interface Settings {
   wavs_home: string | null;
+  saved_registries: SavedRegistry[];
+  saved_service_managers: ServiceManager[];
 }
 
 // Health types

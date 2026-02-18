@@ -7,11 +7,12 @@ MVP Requirements:
 - [x] Add UI for health
 - [x] Ability to create a POA contract onchain
 - [x] Add UI to edit wavs.toml file and managing chains
+- [x] State management (persist services and registries)
 - [ ] Ability to upload new components and manage services
-- [ ] Warg publishing support?
-- [ ] State management (persist services and registries)
+- [ ] Warg publishing support? To upload components?
 - [ ] Better aesthetics
 
+- [ ] Leverage touch id for key management?
 - [ ] Easy way to test (deploy local PoA service, add a component, trigger)
 - [ ] Run headless?
 - [ ] Figure out what to do with aggregator
