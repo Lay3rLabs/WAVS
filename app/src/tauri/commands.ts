@@ -7,6 +7,8 @@ import type {
   Service,
   ServiceManager,
   HealthStatus,
+  IpfsProvider,
+  ComponentDigestResult,
 } from '../types';
 
 export async function setWavsHome(): Promise<string | null> {
@@ -75,4 +77,26 @@ export async function readWavsToml(): Promise<string> {
 
 export async function writeWavsToml(content: string): Promise<void> {
   return invoke<void>('cmd_write_wavs_toml', { content });
+}
+
+// IPFS commands
+export async function uploadToIpfs(content: string, provider: IpfsProvider): Promise<string> {
+  return invoke<string>('cmd_upload_to_ipfs', { content, provider });
+}
+
+// Component commands
+export async function getComponentDigest(
+  domain: string | null,
+  packageName: string,
+  version: string | null
+): Promise<ComponentDigestResult> {
+  return invoke<ComponentDigestResult>('cmd_get_component_digest', {
+    domain,
+    package: packageName,
+    version,
+  });
+}
+
+export async function publishComponent(filePath: string): Promise<string> {
+  return invoke<string>('cmd_publish_component', { file_path: filePath });
 }
