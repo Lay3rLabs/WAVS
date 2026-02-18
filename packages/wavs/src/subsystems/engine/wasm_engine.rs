@@ -385,7 +385,10 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         result.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self, service, trigger_action, operator_response), fields(subsys = "Engine"))]
+    #[instrument(
+        skip(self, service, trigger_action, operator_response),
+        fields(subsys = "Engine")
+    )]
     async fn get_aggregator_deps(
         &self,
         service: Service,
