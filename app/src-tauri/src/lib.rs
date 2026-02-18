@@ -8,7 +8,7 @@ use crate::commands::{
     cmd_get_mnemonic, cmd_get_services, cmd_get_settings, cmd_has_mnemonic, cmd_restart,
     cmd_set_wavs_home, cmd_start_wavs, cmd_store_mnemonic,
 };
-use crate::state::{SettingsState, WavsConfigState, WavsInstanceState};
+use crate::state::{MnemonicCacheState, SettingsState, WavsConfigState, WavsInstanceState};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod commands;
@@ -53,6 +53,7 @@ pub fn run() {
             app.manage(settings_state);
             app.manage(wavs_config_state);
             app.manage(WavsInstanceState::default());
+            app.manage(MnemonicCacheState::default());
 
             // Get primary monitor to calculate window size
             let monitors = app.primary_monitor()?;

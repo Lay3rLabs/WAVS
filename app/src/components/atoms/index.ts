@@ -1,3 +1,4 @@
+export { AddressDisplay } from './AddressDisplay';
 export { Button, type ButtonSize, type ButtonColor, type ButtonStyle } from './Button';
 export { Modal, ModalContainer, useModalStore } from './Modal';
 export { CloseX } from './CloseX';
