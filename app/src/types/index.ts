@@ -10,6 +10,7 @@ export interface Settings {
   wavs_home: string | null;
   saved_registries: SavedRegistry[];
   saved_service_managers: ServiceManager[];
+  saved_services: Service[];
 }
 
 // Health types

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { type Address, isAddress } from 'viem';
-import { AddressDisplay, Button, Modal, TextInput } from '../atoms';
+import { AddressDisplay, Button, Toast, TextInput } from '../atoms';
 import { usePOAStore, getRegistryKey } from '../../stores/poaStore';
 import { useWalletStore } from '../../stores/walletStore';
 import { getPublicClient, getWalletClient } from '../../hooks/useViemClient';
@@ -54,10 +54,10 @@ export function OperatorList({ registryKey: registryKeyProp }: OperatorListProps
       const updatedOperators = await fetchOperators(publicClient, registryAddress);
       updateRegistryOperators(getRegistryKey(chainId, registryAddress), updatedOperators);
 
-      Modal.openInfo(`Operator ${operatorAddress} deregistered`);
+      Toast.info(`Operator ${operatorAddress} deregistered`);
     } catch (err) {
       console.error('Failed to deregister operator:', err);
-      Modal.openError(`Failed to deregister operator: ${err}`);
+      Toast.error(`Failed to deregister operator: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -66,7 +66,7 @@ export function OperatorList({ registryKey: registryKeyProp }: OperatorListProps
   const handleUpdateWeight = async (operatorAddress: Address) => {
     const weight = BigInt(newWeight);
     if (weight <= 0n) {
-      Modal.openError('Weight must be greater than 0');
+      Toast.error('Weight must be greater than 0');
       return;
     }
 
@@ -83,10 +83,10 @@ export function OperatorList({ registryKey: registryKeyProp }: OperatorListProps
 
       setEditingWeight(null);
       setNewWeight('');
-      Modal.openInfo('Operator weight updated');
+      Toast.info('Operator weight updated');
     } catch (err) {
       console.error('Failed to update weight:', err);
-      Modal.openError(`Failed to update weight: ${err}`);
+      Toast.error(`Failed to update weight: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -105,7 +105,7 @@ export function OperatorList({ registryKey: registryKeyProp }: OperatorListProps
       // Operator must have ETH to pay for gas
       const balance = await publicClient.getBalance({ address: operatorAddress });
       if (balance === 0n) {
-        Modal.openError(
+        Toast.error(
           `Operator ${operatorAddress} has no ETH to pay for gas. Fund this address before setting a signing key.`
         );
         return;
@@ -129,10 +129,10 @@ export function OperatorList({ registryKey: registryKeyProp }: OperatorListProps
       const updatedOperators = await fetchOperators(publicClient, registryAddress);
       updateRegistryOperators(getRegistryKey(chainId, registryAddress), updatedOperators);
 
-      Modal.openInfo('Signing key set successfully');
+      Toast.info('Signing key set successfully');
     } catch (err) {
       console.error('Failed to set signing key:', err);
-      Modal.openError(`Failed to set signing key: ${err}`);
+      Toast.error(`Failed to set signing key: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -295,12 +295,12 @@ function OperatorEmptyState({
 
   const handleRegister = async () => {
     if (!isAddress(operatorAddress)) {
-      Modal.openError('Please enter a valid operator address');
+      Toast.error('Please enter a valid operator address');
       return;
     }
     const weight = BigInt(operatorWeight);
     if (weight <= 0n) {
-      Modal.openError('Weight must be greater than 0');
+      Toast.error('Weight must be greater than 0');
       return;
     }
 
@@ -315,9 +315,9 @@ function OperatorEmptyState({
 
       setOperatorAddress('');
       setOperatorWeight('1');
-      Modal.openInfo('Operator registered successfully');
+      Toast.info('Operator registered successfully');
     } catch (err) {
-      Modal.openError(`Failed to register operator: ${err}`);
+      Toast.error(`Failed to register operator: ${err}`);
     } finally {
       setLoading(false);
     }

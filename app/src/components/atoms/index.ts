@@ -10,3 +10,4 @@ export { TomlEditor } from './TomlEditor';
 export { Breadcrumb, type BreadcrumbItem } from './Breadcrumb';
 export { Tabs, type Tab } from './Tabs';
 export { DropdownMenu, type MenuOption } from './DropdownMenu';
+export { Toast, ToastContainer } from './Toast';

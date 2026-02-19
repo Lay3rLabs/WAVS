@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useParams } from 'react-router-dom';
 import type { Address } from 'viem';
-import { Breadcrumb, Modal, type BreadcrumbItem } from '../../components/atoms';
+import { Breadcrumb, Toast, type BreadcrumbItem } from '../../components/atoms';
 import { useAppStore } from '../../stores/appStore';
 import { usePOAStore, getRegistryKey, type ConnectedRegistry } from '../../stores/poaStore';
 import { getServices, getSettings } from '../../tauri';
@@ -32,7 +32,18 @@ export function ServicesLayout() {
           getSettings(),
         ]);
 
-        setServices(await buildServiceMap(servicesData));
+        // Merge cached services for any address WAVS didn't load
+        const allServices: Service[] = [...servicesData];
+        const wavsAddrs = new Set(
+          servicesData.map(s => getServiceAddress(s.manager).toLowerCase())
+        );
+        for (const cached of settings.saved_services ?? []) {
+          if (!wavsAddrs.has(getServiceAddress(cached.manager).toLowerCase())) {
+            allServices.push({ ...cached, status: 'paused' });
+          }
+        }
+
+        setServices(await buildServiceMap(allServices));
 
         for (const saved of settings.saved_registries) {
           const key = getRegistryKey(saved.chain_id, saved.address as Address);
@@ -57,7 +68,7 @@ export function ServicesLayout() {
         }
       } catch (err) {
         console.error('Failed to load services:', err);
-        Modal.openError(`Failed to load services: ${getErrorMessage(err)}`);
+        Toast.error(`Failed to load services: ${getErrorMessage(err)}`);
       } finally {
         setLoading(false);
       }

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Button, Modal } from '../atoms';
+import { Button, Toast } from '../atoms';
 import { useServiceBuilderStore, type DeployStepStatus } from '../../stores/serviceBuilderStore';
 import { usePOAStore } from '../../stores/poaStore';
 import { TextInput, Dropdown, type DropdownOption } from '../atoms';
@@ -94,7 +94,7 @@ export function ServiceDeploy({ onDeployComplete }: ServiceDeployProps) {
 
   const handleDeploy = async () => {
     if (!service || !resolvedManager) {
-      Modal.openError('Service or manager is not configured properly.');
+      Toast.error('Service or manager is not configured properly.');
       return;
     }
 
@@ -135,7 +135,7 @@ export function ServiceDeploy({ onDeployComplete }: ServiceDeployProps) {
       if (onDeployComplete && resolvedManager) {
         onDeployComplete(resolvedManager.chainId, resolvedManager.address);
       } else {
-        Modal.openInfo('Service deployed successfully!');
+        Toast.info('Service deployed successfully!');
       }
     } catch (err) {
       const msg = getErrorMessage(err);
@@ -150,7 +150,7 @@ export function ServiceDeploy({ onDeployComplete }: ServiceDeployProps) {
         setDeployState({ registerStatus: 'error' });
       }
 
-      Modal.openError(`Deploy failed: ${msg}`);
+      Toast.error(`Deploy failed: ${msg}`);
     } finally {
       setDeploying(false);
     }
