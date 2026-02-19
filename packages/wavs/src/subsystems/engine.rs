@@ -77,7 +77,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         S: 'static,
     {
         while let Ok(command) = self.dispatcher_to_engine_rx.recv() {
-            tracing::info!(
+            tracing::debug!(
                 "Got Engine Command: {}",
                 match &command {
                     EngineCommand::Kill => "Kill".to_string(),
@@ -158,7 +158,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         }
     }
 
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self, service), fields(subsys = "Engine"))]
     pub async fn store_components_for_service(&self, service: &Service) -> Result<(), EngineError> {
         for workflow in service.workflows.values() {
             self.engine
@@ -201,7 +201,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
 
         let trigger_config = action.config.clone();
 
-        tracing::info!(
+        tracing::debug!(
             "Executing component: service_id={}, workflow_id={}, component_digest={:?}",
             trigger_config.service_id,
             trigger_config.workflow_id,
@@ -217,14 +217,11 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         // if there are results, send them down the pipeline to the submit processor
         // otherwise, just end early here, performing no action (but updating local state if needed)
         if wasm_responses.is_empty() {
-            tracing::info!(
+            tracing::debug!(
                 service_id = %trigger_config.service_id,
                 service.name = %service.name,
-                service.manager = ?service.manager,
                 workflow_id = %trigger_config.workflow_id,
-                "Service {} (workflow {}) component execution produced no result",
-                service.name,
-                trigger_config.workflow_id
+                "Component execution produced no result",
             );
         } else {
             for operator_response in wasm_responses.drain(..) {
@@ -244,13 +241,10 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                 tracing::info!(
                     service_id = %trigger_config.service_id,
                     service.name = %service.name,
-                    service.manager = ?service.manager,
                     workflow_id = %trigger_config.workflow_id,
                     payload_size = %payload_size,
                     event_id = %event_id,
-                    "Service {} (workflow {}) component execution completed",
-                    service.name,
-                    trigger_config.workflow_id
+                    "Component execution completed",
                 );
 
                 submission_datas.push(submission_data);
@@ -305,12 +299,9 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
                 tracing::info!(
                     service_id = %trigger_action.config.service_id,
                     service.name = %service.name,
-                    service.manager = ?service.manager,
                     workflow_id = %trigger_action.config.workflow_id,
                     event_id = %event_id,
-                    "Service {} (workflow {}) aggregator submit callback execution completed",
-                    service.name,
-                    trigger_action.config.workflow_id,
+                    "Aggregator submit callback execution completed",
                 );
 
                 return Ok(Vec::new());
@@ -321,24 +312,18 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
             tracing::info!(
                 service_id = %trigger_action.config.service_id,
                 service.name = %service.name,
-                service.manager = ?service.manager,
                 workflow_id = %trigger_action.config.workflow_id,
                 event_id = %event_id,
-                "Service {} (workflow {}) aggregator execution produced no result",
-                service.name,
-                trigger_action.config.workflow_id
+                "Aggregator execution produced no result",
             );
         } else {
             tracing::info!(
                 service_id = %trigger_action.config.service_id,
                 service.name = %service.name,
-                service.manager = ?service.manager,
                 workflow_id = %trigger_action.config.workflow_id,
                 event_id = %event_id,
-                "Service {} (workflow {}) aggregator execution completed with {} actions",
-                service.name,
-                trigger_action.config.workflow_id,
-                aggregator_actions.len()
+                actions = %aggregator_actions.len(),
+                "Aggregator execution completed",
             );
         }
 
