@@ -12,13 +12,18 @@ MVP Requirements:
 - [x] Easy way to test (deploy local PoA service, add a component, trigger)
 - [x] Better logging
 - [x] Rebase on main
+- [x] Figure out what is actually being used in the gui package
+- [x] Health page should have better indicator (not a normal button)
 - [ ] Better aesthetics
-- [ ] Health page should have better indicator (not a normal button)
+- [ ] Ability to pause / unpause service?
+- [ ] Rearrange actions on service detail page (rename some)
+- [ ] Bug: Some log entries are showing up twice?
+- [ ] Add toasts and replace annoying modals you have to close
 - [ ] Leverage touch id for key management? (need macOS code signing)
 - [ ] Figure out what to do with aggregator
-- [ ] Figure out what is actually being used in the gui package
 
 Post MVP:
 - Start building out proof of reputation system
+- Update docs
 - WAVS plus ZK sidecar
 - Commonware

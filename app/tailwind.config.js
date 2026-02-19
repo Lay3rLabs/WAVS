@@ -39,6 +39,30 @@ export default {
       fontFamily: {
         'sans': ['"Noto Sans"', 'sans-serif'],
       },
+      keyframes: {
+        'glow-green': {
+          '0%, 100%': { boxShadow: '0 0 3px 1px rgba(34,197,94,0.2)' },
+          '50%':       { boxShadow: '0 0 7px 2px rgba(34,197,94,0.45)' },
+        },
+        'glow-amber': {
+          '0%, 100%': { boxShadow: '0 0 3px 1px rgba(245,158,11,0.2)' },
+          '50%':       { boxShadow: '0 0 7px 2px rgba(245,158,11,0.45)' },
+        },
+        'glow-red': {
+          '0%, 100%': { boxShadow: '0 0 3px 1px rgba(239,68,68,0.2)' },
+          '50%':       { boxShadow: '0 0 7px 2px rgba(239,68,68,0.45)' },
+        },
+        'glow-yellow': {
+          '0%, 100%': { boxShadow: '0 0 3px 1px rgba(234,179,8,0.2)' },
+          '50%':       { boxShadow: '0 0 7px 2px rgba(234,179,8,0.45)' },
+        },
+      },
+      animation: {
+        'glow-green':  'glow-green  2.5s ease-in-out infinite',
+        'glow-amber':  'glow-amber  2.5s ease-in-out infinite',
+        'glow-red':    'glow-red    2.5s ease-in-out infinite',
+        'glow-yellow': 'glow-yellow 2.5s ease-in-out infinite',
+      },
     },
   },
   plugins: [],
