@@ -76,6 +76,9 @@ function TriggerSection({ trigger }: { trigger: Trigger }) {
             )}
           </>
         )}
+        {trigger !== 'manual' && 'hypercore_append' in trigger && (
+          <InfoRow label="Feed Key" value={truncate(trigger.hypercore_append.feed_key)} />
+        )}
       </div>
     </div>
   );
@@ -115,7 +118,6 @@ function SubmitSection({ submit }: { submit: Submit }) {
       <h5 className="text-beige-warm text-sm font-medium mb-2">Submit</h5>
       <div className="pl-3 flex flex-col gap-1 text-sm">
         <InfoRow label="Type" value="Aggregator" />
-        <InfoRow label="URL" value={submit.aggregator.url} />
         <InfoRow
           label="Signature"
           value={`${submit.aggregator.signature_kind.algorithm}${submit.aggregator.signature_kind.prefix ? ` (${submit.aggregator.signature_kind.prefix})` : ''}`}
