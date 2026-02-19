@@ -14,10 +14,10 @@ MVP Requirements:
 - [x] Rebase on main
 - [x] Figure out what is actually being used in the gui package
 - [x] Health page should have better indicator (not a normal button)
+- [x] Ability to pause / unpause service?
+- [x] Rearrange actions on service detail page (rename some)
+- [X] Bug: Some log entries are showing up twice?
 - [ ] Better aesthetics
-- [ ] Ability to pause / unpause service?
-- [ ] Rearrange actions on service detail page (rename some)
-- [ ] Bug: Some log entries are showing up twice?
 - [ ] Add toasts and replace annoying modals you have to close
 - [ ] Better wallet (show balances on chains?)
 - [ ] Leverage touch id for key management? (need macOS code signing)
