@@ -1,5 +1,0 @@
-[watch]
-ignore = ["../backend"]
-
-[serve]
-ws_protocol = "ws"

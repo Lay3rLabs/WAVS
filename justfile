@@ -10,21 +10,6 @@ COSMWASM_OPTIMIZER_VERSION := env_var_or_default("COSMWASM_OPTIMIZER_VERSION", "
 help:
   just --list
 
-gui-dev:
-    cd packages/gui && cargo tauri dev
-
-gui-dev-frontend:
-    cd packages/gui/frontend && TAURI_BROWSER_DEV=true trunk serve --watch . --watch ../shared
-
-gui-build-release:
-    cd packages/gui && cargo tauri build
-
-gui-build-debug:
-    cd packages/gui && cargo tauri build --debug
-
-gui-build-frontend:
-    cd packages/gui/frontend && trunk build --release
-
 # WAVS Desktop App (React/TypeScript frontend)
 app-dev:
     cd app && pnpm tauri dev
