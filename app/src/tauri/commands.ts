@@ -52,6 +52,14 @@ export async function removeService(manager: ServiceManager): Promise<void> {
   return invoke<void>('cmd_remove_service', { manager });
 }
 
+export async function pauseService(manager: ServiceManager): Promise<void> {
+  return invoke<void>('cmd_pause_service', { manager });
+}
+
+export async function resumeService(manager: ServiceManager): Promise<void> {
+  return invoke<void>('cmd_resume_service', { manager });
+}
+
 // Keychain commands
 export async function hasMnemonic(): Promise<boolean> {
   return invoke<boolean>('cmd_has_mnemonic');

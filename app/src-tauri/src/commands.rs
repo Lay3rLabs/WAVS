@@ -235,6 +235,32 @@ pub async fn cmd_remove_service(
     Ok(())
 }
 
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_pause_service(
+    wavs_instance: State<'_, WavsInstanceState>,
+    manager: ServiceManager,
+) -> AppResult<()> {
+    let service_id = ServiceId::from(&manager);
+    wavs_instance
+        .dispatcher()?
+        .pause_service(service_id)
+        .map_err(|e| AppError::Service(format!("Failed to pause service: {}", e)))?;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_resume_service(
+    wavs_instance: State<'_, WavsInstanceState>,
+    manager: ServiceManager,
+) -> AppResult<()> {
+    let service_id = ServiceId::from(&manager);
+    wavs_instance
+        .dispatcher()?
+        .resume_service(service_id)
+        .map_err(|e| AppError::Service(format!("Failed to resume service: {}", e)))?;
+    Ok(())
+}
+
 /// Load mnemonic from OS keyring and populate the cache.
 fn load_from_keyring(cache: &MnemonicCacheState) -> Option<Credential> {
     let result = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)

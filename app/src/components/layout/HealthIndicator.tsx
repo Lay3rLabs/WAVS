@@ -4,7 +4,7 @@ import { getHealthStatus } from '../../tauri';
 import type { HealthStatus, ChainHealthResult, ChainKey } from '../../types';
 import { isChainHealthy } from '../../types';
 
-const POLL_INTERVAL_MS = 30000;
+const POLL_INTERVAL_MS = 10000;
 
 type OverallStatus = 'loading' | 'online' | 'degraded' | 'offline';
 
@@ -39,7 +39,16 @@ export function HealthIndicator() {
   useEffect(() => {
     fetchHealth();
     const interval = setInterval(fetchHealth, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') fetchHealth();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [fetchHealth]);
 
   const status = getOverallStatus(nodeOnline, healthStatus);

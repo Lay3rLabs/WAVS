@@ -19,6 +19,7 @@ MVP Requirements:
 - [ ] Rearrange actions on service detail page (rename some)
 - [ ] Bug: Some log entries are showing up twice?
 - [ ] Add toasts and replace annoying modals you have to close
+- [ ] Better wallet (show balances on chains?)
 - [ ] Leverage touch id for key management? (need macOS code signing)
 - [ ] Figure out what to do with aggregator
 

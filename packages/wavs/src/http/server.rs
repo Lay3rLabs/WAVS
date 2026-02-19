@@ -30,7 +30,10 @@ use super::{
         kv::handle_get_kv,
         openapi::ApiDoc,
         service::{
-            get::handle_get_service, key::handle_get_service_signer, save::handle_save_service,
+            get::handle_get_service,
+            key::handle_get_service_signer,
+            pause::{handle_pause_service, handle_resume_service},
+            save::handle_save_service,
         },
     },
     state::HttpState,
@@ -103,6 +106,8 @@ pub async fn make_router(
     // protected routes (POST/DELETE)
     let mut protected = axum::Router::new()
         .route("/services/signer", post(handle_get_service_signer))
+        .route("/services/pause", post(handle_pause_service))
+        .route("/services/resume", post(handle_resume_service))
         .route("/services", post(handle_add_service))
         .route("/services", delete(handle_delete_service));
 
