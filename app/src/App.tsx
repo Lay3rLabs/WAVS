@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Header, Body } from './components/layout';
-import { ModalContainer } from './components/atoms';
+import { ModalContainer, ToastContainer } from './components/atoms';
 import {
   Settings,
   Logs,
@@ -56,6 +56,7 @@ function MainAppContent() {
         </Route>
       </Routes>
       <ModalContainer />
+      <ToastContainer />
     </div>
   );
 }

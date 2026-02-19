@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { type Address, isAddress } from 'viem';
-import { Button, TextInput, Modal, DropdownMenu, type MenuOption } from '../atoms';
+import { Button, TextInput, Modal, DropdownMenu, Toast, type MenuOption } from '../atoms';
 import { usePOAStore, getRegistryKey } from '../../stores/poaStore';
 import { useWalletStore } from '../../stores/walletStore';
 import { getPublicClient, getWalletClient } from '../../hooks/useViemClient';
@@ -137,12 +137,12 @@ function RegisterOperatorModal({
 
   const handleSubmit = async () => {
     if (!isAddress(operatorAddress)) {
-      Modal.openError('Please enter a valid operator address');
+      Toast.error('Please enter a valid operator address');
       return;
     }
     const weight = BigInt(operatorWeight);
     if (weight <= 0n) {
-      Modal.openError('Weight must be greater than 0');
+      Toast.error('Weight must be greater than 0');
       return;
     }
 
@@ -153,9 +153,9 @@ function RegisterOperatorModal({
       await registerOperator(publicClient, walletClient, registryAddress, operatorAddress as Address, weight);
       await onSuccess([operatorAddress as Address]);
       Modal.close();
-      Modal.openInfo('Operator registered successfully');
+      Toast.info('Operator registered successfully');
     } catch (err) {
-      Modal.openError(`Failed to register operator: ${err}`);
+      Toast.error(`Failed to register operator: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -197,7 +197,7 @@ function SetServiceURIModal({ registryAddress, rpcUrl, chainId, onSuccess }: Mod
 
   const handleSubmit = async () => {
     if (!uri.trim()) {
-      Modal.openError('Please enter a service URI');
+      Toast.error('Please enter a service URI');
       return;
     }
     setLoading(true);
@@ -207,9 +207,9 @@ function SetServiceURIModal({ registryAddress, rpcUrl, chainId, onSuccess }: Mod
       await setServiceURI(publicClient, walletClient, registryAddress, uri);
       await onSuccess();
       Modal.close();
-      Modal.openInfo('Service URI updated');
+      Toast.info('Service URI updated');
     } catch (err) {
-      Modal.openError(`Failed to set service URI: ${err}`);
+      Toast.error(`Failed to set service URI: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -234,7 +234,7 @@ function UpdateThresholdModal({ registryAddress, rpcUrl, chainId, onSuccess }: M
   const handleSubmit = async () => {
     const val = BigInt(threshold);
     if (val <= 0n) {
-      Modal.openError('Threshold must be greater than 0');
+      Toast.error('Threshold must be greater than 0');
       return;
     }
     setLoading(true);
@@ -244,9 +244,9 @@ function UpdateThresholdModal({ registryAddress, rpcUrl, chainId, onSuccess }: M
       await updateStakeThreshold(publicClient, walletClient, registryAddress, val);
       await onSuccess();
       Modal.close();
-      Modal.openInfo('Threshold weight updated');
+      Toast.info('Threshold weight updated');
     } catch (err) {
-      Modal.openError(`Failed to update threshold: ${err}`);
+      Toast.error(`Failed to update threshold: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -273,11 +273,11 @@ function UpdateQuorumModal({ registryAddress, rpcUrl, chainId, onSuccess }: Moda
     const numVal = BigInt(num);
     const denVal = BigInt(den);
     if (denVal <= 0n) {
-      Modal.openError('Denominator must be greater than 0');
+      Toast.error('Denominator must be greater than 0');
       return;
     }
     if (numVal > denVal) {
-      Modal.openError('Numerator cannot exceed denominator');
+      Toast.error('Numerator cannot exceed denominator');
       return;
     }
     setLoading(true);
@@ -287,9 +287,9 @@ function UpdateQuorumModal({ registryAddress, rpcUrl, chainId, onSuccess }: Moda
       await updateQuorum(publicClient, walletClient, registryAddress, numVal, denVal);
       await onSuccess();
       Modal.close();
-      Modal.openInfo('Quorum updated');
+      Toast.info('Quorum updated');
     } catch (err) {
-      Modal.openError(`Failed to update quorum: ${err}`);
+      Toast.error(`Failed to update quorum: ${err}`);
     } finally {
       setLoading(false);
     }
@@ -323,7 +323,7 @@ function TransferOwnershipModal({
 
   const handleSubmit = async () => {
     if (!isAddress(newOwner)) {
-      Modal.openError('Please enter a valid address');
+      Toast.error('Please enter a valid address');
       return;
     }
     setLoading(true);
@@ -333,9 +333,9 @@ function TransferOwnershipModal({
       await transferOwnership(publicClient, walletClient, registryAddress, newOwner as Address);
       await onSuccess();
       Modal.close();
-      Modal.openInfo('Ownership transferred. You are no longer the owner.');
+      Toast.info('Ownership transferred. You are no longer the owner.');
     } catch (err) {
-      Modal.openError(`Failed to transfer ownership: ${err}`);
+      Toast.error(`Failed to transfer ownership: ${err}`);
     } finally {
       setLoading(false);
     }

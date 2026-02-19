@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { AddressDisplay, Button, Modal, Tabs } from '../../components/atoms';
+import { AddressDisplay, Button, Modal, Toast, Tabs } from '../../components/atoms';
 import { OperatorList } from '../../components/poa';
 import { OwnerActionsMenu } from '../../components/poa/OwnerActionsMenu';
 import { WorkflowViewer } from '../../components/service/WorkflowViewer';
@@ -131,7 +131,7 @@ export function ServiceDetailPage() {
 
       await refreshServices();
     } catch (err) {
-      Modal.openError(`Failed to refresh: ${getErrorMessage(err)}`);
+      Toast.error(`Failed to refresh: ${getErrorMessage(err)}`);
     } finally {
       setRefreshing(false);
     }
@@ -155,7 +155,7 @@ export function ServiceDetailPage() {
             await persistRegistries();
             navigate('/services');
           } catch (err) {
-            Modal.openError(`Failed to delete: ${getErrorMessage(err)}`);
+            Toast.error(`Failed to delete: ${getErrorMessage(err)}`);
           }
         }}
       />
@@ -173,7 +173,7 @@ export function ServiceDetailPage() {
       }
       await refreshServices();
     } catch (err) {
-      Modal.openError(`Failed to ${service.status === 'active' ? 'pause' : 'resume'} service: ${getErrorMessage(err)}`);
+      Toast.error(`Failed to ${service.status === 'active' ? 'pause' : 'resume'} service: ${getErrorMessage(err)}`);
     } finally {
       setPauseLoading(false);
     }

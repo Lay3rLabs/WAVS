@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { TextInput, Button, Dropdown, type DropdownOption } from '../atoms';
+import { TextInput, Button, Dropdown, Toast, type DropdownOption } from '../atoms';
 import type { ComponentDraft } from '../../stores/serviceBuilderStore';
 import { getComponentDigest, publishComponent } from '../../tauri/commands';
-import { Modal } from '../atoms';
 import { getErrorMessage } from '../../types';
 import { open } from '@tauri-apps/plugin-dialog';
 
@@ -40,7 +39,7 @@ export function ComponentEditor({ component, onChange, label = 'Component' }: Co
 
   const handleLookupDigest = async () => {
     if (!component.package) {
-      Modal.openError('Please enter a package name.');
+      Toast.error('Please enter a package name.');
       return;
     }
     setLookingUpDigest(true);
@@ -51,9 +50,9 @@ export function ComponentEditor({ component, onChange, label = 'Component' }: Co
         component.version || null
       );
       update({ digest: result.digest, version: result.resolved_version });
-      Modal.openInfo(`Digest resolved: ${result.digest.slice(0, 16)}... (v${result.resolved_version})`);
+      Toast.info(`Digest resolved: ${result.digest.slice(0, 16)}... (v${result.resolved_version})`);
     } catch (err) {
-      Modal.openError(`Failed to lookup digest: ${getErrorMessage(err)}`);
+      Toast.error(`Failed to lookup digest: ${getErrorMessage(err)}`);
     } finally {
       setLookingUpDigest(false);
     }
@@ -69,9 +68,9 @@ export function ComponentEditor({ component, onChange, label = 'Component' }: Co
 
       const digest = await publishComponent(filePath);
       update({ digest, sourceType: 'digest' });
-      Modal.openInfo(`Component digest: ${digest.slice(0, 16)}...`);
+      Toast.info(`Component digest: ${digest.slice(0, 16)}...`);
     } catch (err) {
-      Modal.openError(`Failed to process wasm file: ${getErrorMessage(err)}`);
+      Toast.error(`Failed to process wasm file: ${getErrorMessage(err)}`);
     }
   };
 

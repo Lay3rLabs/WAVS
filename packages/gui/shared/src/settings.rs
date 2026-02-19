@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use wavs_types::ServiceManager;
+use wavs_types::{Service, ServiceManager};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SavedRegistry {
@@ -18,4 +18,6 @@ pub struct Settings {
     pub saved_registries: Vec<SavedRegistry>,
     #[serde(default)]
     pub saved_service_managers: Vec<ServiceManager>,
+    #[serde(default)]
+    pub saved_services: Vec<Service>,
 }
