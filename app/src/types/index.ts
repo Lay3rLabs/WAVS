@@ -96,9 +96,7 @@ export interface TriggerEvent {
 export interface SubmissionEvent {
   service_id: ServiceId;
   workflow_id: WorkflowId;
-  envelope: Envelope;
   trigger_data: TriggerData;
-  submit: Submit;
 }
 
 // Service types
