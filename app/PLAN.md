@@ -11,12 +11,12 @@ MVP Requirements:
 - [x] Ability to upload new components and manage services
 - [x] Easy way to test (deploy local PoA service, add a component, trigger)
 - [x] Better logging
+- [x] Rebase on main
 - [ ] Better aesthetics
 - [ ] Health page should have better indicator (not a normal button)
 - [ ] Leverage touch id for key management? (need macOS code signing)
 - [ ] Figure out what to do with aggregator
-- [ ] Rebase on main
-
+- [ ] Figure out what is actually being used in the gui package
 
 Post MVP:
 - Start building out proof of reputation system

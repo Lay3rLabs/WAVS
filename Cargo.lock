@@ -14757,7 +14757,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-app"
-version = "2.0.0-rc.12"
+version = "2.0.0-rc.13"
 dependencies = [
  "anyhow",
  "fix-path-env",
@@ -14873,7 +14873,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-gui-backend"
-version = "2.0.0-rc.12"
+version = "2.0.0-rc.13"
 dependencies = [
  "anyhow",
  "cw-wavs-mock-api",
@@ -14902,7 +14902,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-gui-frontend"
-version = "2.0.0-rc.12"
+version = "2.0.0-rc.13"
 dependencies = [
  "anyhow",
  "awsm_web 0.45.0",
@@ -14933,7 +14933,7 @@ dependencies = [
 
 [[package]]
 name = "wavs-gui-shared"
-version = "2.0.0-rc.12"
+version = "2.0.0-rc.13"
 dependencies = [
  "anyhow",
  "serde",
