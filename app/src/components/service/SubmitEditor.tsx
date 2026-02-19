@@ -1,7 +1,6 @@
 import { Dropdown, type DropdownOption } from '../atoms';
 import { ComponentEditor } from './ComponentEditor';
 import type { SubmitDraft } from '../../stores/serviceBuilderStore';
-import { TextInput } from '../atoms';
 
 type SubmitType = 'none' | 'aggregator';
 
@@ -43,15 +42,6 @@ export function SubmitEditor({ submit, onChange }: SubmitEditorProps) {
 
       {submit.type === 'aggregator' && (
         <div className="flex flex-col gap-4 p-4 rounded bg-charcoal-dark border border-charcoal-light">
-          <div className="flex flex-col gap-2">
-            <label className="text-beige-warm text-sm">Aggregator URL</label>
-            <TextInput
-              placeholder="https://..."
-              value={submit.aggregatorUrl}
-              onChange={(v) => update({ aggregatorUrl: v })}
-            />
-          </div>
-
           <div className="flex flex-col gap-2">
             <label className="text-beige-warm text-sm">Signature Prefix</label>
             <Dropdown

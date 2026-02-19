@@ -51,7 +51,8 @@ export type AppError =
   | { HealthCheck: string }
   | { MissingChain: string }
   | { WavsNotRunning: null }
-  | { Service: string };
+  | { Service: string }
+  | { Keychain: string };
 
 export function getErrorMessage(err: unknown): string {
   if (typeof err === 'string') return err;
@@ -152,6 +153,7 @@ export type Trigger =
   | { block_interval: { chain: ChainKey; n_blocks: number; start_block: number | null; end_block: number | null } }
   | { cron: { schedule: string; start_time: number | null; end_time: number | null } }
   | { at_proto_event: { collection: string; repo_did: string | null; action: AtProtoAction | null } }
+  | { hypercore_append: { feed_key: string } }
   | 'manual';
 
 export type AtProtoAction = 'create' | 'update' | 'delete';
@@ -173,12 +175,13 @@ export type TriggerData =
   | { BlockInterval: { chain: ChainKey; block_height: number } }
   | { Cron: { trigger_time: number } }
   | { AtProtoEvent: { sequence: number; timestamp: number; repo: string; collection: string; rkey: string; action: AtProtoAction; cid: string | null; record: unknown | null; rev: string | null; op_index: number | null } }
+  | { HypercoreAppend: { feed_key: string; index: number; data: number[] } }
   | { Raw: number[] };
 
 // Submit types
 export type Submit =
   | 'none'
-  | { aggregator: { url: string; component: Component; signature_kind: SignatureKind } };
+  | { aggregator: { component: Component; signature_kind: SignatureKind } };
 
 export interface SignatureKind {
   algorithm: SignatureAlgorithm;
@@ -195,42 +198,43 @@ export interface ChainConfigs {
   dev: Record<string, AnyChainConfig>;
 }
 
+// Rust uses #[serde(tag = "type", rename_all = "snake_case")] -- internally tagged
 export type AnyChainConfig =
-  | { Cosmos: CosmosChainConfig }
-  | { Evm: EvmChainConfig };
+  | ({ type: 'cosmos' } & CosmosChainConfig)
+  | ({ type: 'evm' } & EvmChainConfig);
 
 export interface CosmosChainConfigBuilder {
-  chain_id: string | null;
+  bech32_prefix: string;
   rpc_endpoint: string | null;
   grpc_endpoint: string | null;
-  address_kind: string | null;
-  gas_denom: string | null;
-  gas_adjustment: number | null;
-  min_gas_price: string | null;
+  gas_price: number;
+  gas_denom: string;
+  faucet_endpoint: string | null;
 }
 
 export interface EvmChainConfigBuilder {
-  chain_id: number | null;
-  rpc_endpoint: string | null;
-  ws_endpoint: string | null;
+  ws_endpoints: string[];
+  http_endpoint: string | null;
+  faucet_endpoint: string | null;
+  ws_priority_endpoint_index: number | null;
 }
 
 export interface CosmosChainConfig {
-  name: string;
   chain_id: string;
-  rpc_endpoint: string;
+  bech32_prefix: string;
+  rpc_endpoint: string | null;
   grpc_endpoint: string | null;
-  address_kind: string;
+  gas_price: number;
   gas_denom: string;
-  gas_adjustment: number;
-  min_gas_price: string;
+  faucet_endpoint: string | null;
 }
 
 export interface EvmChainConfig {
-  name: string;
-  chain_id: number;
-  rpc_endpoint: string;
-  ws_endpoint: string | null;
+  chain_id: string;
+  ws_endpoints: string[];
+  http_endpoint: string | null;
+  faucet_endpoint: string | null;
+  ws_priority_endpoint_index: number | null;
 }
 
 // Service Manager types (for adding services)
@@ -263,8 +267,6 @@ export interface ActivityItem {
   workflowId: WorkflowId;
   triggerData: TriggerData;
   triggerConfig?: TriggerConfig;
-  envelope?: Envelope;
-  submit?: Submit;
 }
 
 // Helper to get a human-readable service key from manager (for display/fallback only)
@@ -344,6 +346,7 @@ export function getTriggerLabel(trigger: Trigger): string {
   if ('block_interval' in trigger) return 'Block Interval';
   if ('cron' in trigger) return 'Cron';
   if ('at_proto_event' in trigger) return 'AtProto Event';
+  if ('hypercore_append' in trigger) return 'Hypercore Append';
   return 'Unknown';
 }
 
@@ -354,6 +357,7 @@ export function getTriggerDataLabel(data: TriggerData): string {
   if ('BlockInterval' in data) return 'Block Interval';
   if ('Cron' in data) return 'Cron';
   if ('AtProtoEvent' in data) return 'AtProto Event';
+  if ('HypercoreAppend' in data) return 'Hypercore Append';
   if ('Raw' in data) return 'Raw';
   return 'Unknown';
 }
