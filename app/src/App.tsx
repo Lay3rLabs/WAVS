@@ -20,7 +20,7 @@ import {
 import { useAppStore } from './stores/appStore';
 import { useWalletStore } from './stores/walletStore';
 import { getSettings, startWavs, getServices } from './tauri';
-import { startListeners } from './tauri/listeners';
+import { startListeners, stopListeners } from './tauri/listeners';
 import { buildServiceMap } from './types';
 
 function MainAppContent() {
@@ -126,31 +126,44 @@ function App() {
   const setServices = useAppStore((state) => state.setServices);
 
   useEffect(() => {
+    let cancelled = false;
+
     const init = async () => {
       try {
         // Load initial settings
         const settings = await getSettings();
+        if (cancelled) return;
         setSettings(settings);
 
         // Start event listeners
         await startListeners();
+        if (cancelled) {
+          stopListeners();
+          return;
+        }
 
         // Load services early so getServiceLabel() works everywhere
         try {
           const services = await getServices();
-          setServices(await buildServiceMap(services));
+          if (!cancelled) setServices(await buildServiceMap(services));
         } catch {
           // WAVS may not be running yet -- services will load when it starts
         }
 
-        setInitialized(true);
+        if (!cancelled) setInitialized(true);
       } catch (err) {
-        console.error('Failed to initialize app:', err);
-        setError(String(err));
+        if (!cancelled) {
+          console.error('Failed to initialize app:', err);
+          setError(String(err));
+        }
       }
     };
 
     init();
+    return () => {
+      cancelled = true;
+      stopListeners();
+    };
   }, [setSettings, setServices]);
 
   if (error) {
