@@ -61,7 +61,7 @@ pub async fn handle_packet(
         Ok(resp) => {
             state.metrics.packets_processed.add(1, &[]);
             let duration = start_time.elapsed().as_secs_f64();
-            tracing::info!("Packet processing took {} seconds", duration);
+            tracing::debug!("Packet processing took {} seconds", duration);
             state.metrics.processing_latency.record(duration, &[]);
             Json(resp).into_response()
         }
@@ -83,7 +83,7 @@ async fn process_packet(
         return Err(AggregatorError::MissingService(packet.service.id()));
     }
 
-    tracing::info!(
+    tracing::debug!(
         "Processing packet for service: {}, workflow: {}",
         packet.service.id(),
         packet.workflow_id
@@ -192,7 +192,7 @@ impl AggregatorProcess<'_> {
         };
 
         if actions.is_empty() {
-            tracing::info!("Component returned no actions - packet processing complete");
+            tracing::debug!("Component returned no actions - packet processing complete");
             return Ok(vec![]);
         }
 
@@ -251,11 +251,11 @@ async fn process_action(
                                 add_packet_to_quorum_queue(&packet, queue, signer)?
                             }
                             QuorumQueue::Burned => {
-                                tracing::info!("Quorum queue already burned for this event - packet rejected");
+                                tracing::debug!("Quorum queue already burned for this event - packet rejected");
                                 return Ok(AddPacketResponse::Burned);
                             }
                         };
-                        tracing::info!("Attempting quorum validation with {} signatures", queue.len());
+                        tracing::debug!("Attempting quorum validation with {} signatures", queue.len());
                         match handle_custom_submit(&state, &packet, &queue, submit_action).await {
                             Ok(tx_receipt) => {
                                 tracing::info!(
@@ -276,7 +276,7 @@ async fn process_action(
                                     ServiceManagerError::InsufficientQuorum(required),
                                 ) = &e
                                 {
-                                    tracing::info!(
+                                    tracing::debug!(
                                         "Insufficient quorum: have {}, need {:?}. Keeping packet in queue.",
                                         queue.len(),
                                         required
@@ -298,7 +298,7 @@ async fn process_action(
         }
         AggregatorAction::Timer(timer_action) => {
             let delay: wavs_types::Duration = timer_action.delay.into();
-            tracing::info!(
+            tracing::debug!(
                 "Starting timer for {} seconds - will execute callback on expiry",
                 delay.secs
             );
@@ -391,7 +391,7 @@ async fn handle_custom_submit(
 
     match result {
         Ok(_) => {
-            tracing::info!("Service manager validation passed for custom submit");
+            tracing::debug!("Service manager validation passed for custom submit");
         }
         Err(err) => match err.as_decoded_interface_error::<ServiceManagerError>() {
             Some(err) => {
@@ -442,7 +442,7 @@ fn handle_timer_callback(
     async move {
         tokio::time::sleep(delay.into()).await;
 
-        tracing::info!(
+        tracing::debug!(
             "Timer expired after {} seconds, executing callback for event {}",
             delay.secs,
             packet.event_id()
@@ -463,7 +463,7 @@ fn handle_timer_callback(
             .await
         {
             Ok(actions) => {
-                tracing::info!(
+                tracing::debug!(
                     "Timer callback executed successfully, {} actions returned",
                     actions.len()
                 );
@@ -492,7 +492,7 @@ fn handle_timer_callback(
 
             match result {
                 Ok(response) => {
-                    tracing::info!("Timer callback action {} completed: {:?}", i + 1, response);
+                    tracing::debug!("Timer callback action {} completed: {:?}", i + 1, response);
                 }
                 Err(e) => {
                     tracing::error!("Timer callback action {} failed: {:?}", i + 1, e);

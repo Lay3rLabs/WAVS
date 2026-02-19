@@ -81,7 +81,7 @@ impl Services {
             .map_err(|e| e.into())
     }
 
-    #[instrument(skip(self), fields(subsys = "Services"))]
+    #[instrument(skip(self, service), fields(subsys = "Services"))]
     pub fn save(&self, service: &Service) -> Result<()> {
         self.db_storage
             .set(SERVICE_TABLE, service.id().inner(), service)
@@ -204,10 +204,10 @@ macro_rules! tracing_service_info {
         if tracing::enabled!(tracing::Level::INFO) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::info!(service.name = %service.name, service.manager = ?service.manager, "Service {} [{:?}]: {}", service.name, service.manager, format_args!($($msg)*));
+                    tracing::info!(service.name = %service.name, service.manager = ?service.manager, "{}", format_args!($($msg)*));
                 },
                 None => {
-                    tracing::info!(service.id = %$service_id, "Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::info!(service.id = %$service_id, "{}", format_args!($($msg)*));
                 }
             }
         }
@@ -220,10 +220,10 @@ macro_rules! tracing_service_debug {
         if tracing::enabled!(tracing::Level::DEBUG) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::debug!(service.name = %service.name, service.manager = ?service.manager, "Service {} [{:?}]: {}", service.name, service.manager, format_args!($($msg)*));
+                    tracing::debug!(service.name = %service.name, service.manager = ?service.manager, "{}", format_args!($($msg)*));
                 },
                 None => {
-                    tracing::debug!(service.id = %$service_id, "Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::debug!(service.id = %$service_id, "{}", format_args!($($msg)*));
                 }
             }
         }
@@ -236,25 +236,26 @@ macro_rules! tracing_service_trace {
         if tracing::enabled!(tracing::Level::TRACE) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::trace!(service.name = %service.name, service.manager = ?service.manager, "Service {} [{:?}]: {}", service.name, service.manager, format_args!($($msg)*));
+                    tracing::trace!(service.name = %service.name, service.manager = ?service.manager, "{}", format_args!($($msg)*));
                 },
                 None => {
-                    tracing::trace!(service.id = %$service_id, "Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::trace!(service.id = %$service_id, "{}", format_args!($($msg)*));
                 }
             }
         }
     };
 }
+
 #[macro_export]
 macro_rules! tracing_service_warn {
     ($services:expr, $service_id:expr, $($msg:tt)*) => {
         if tracing::enabled!(tracing::Level::WARN) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::warn!(service.name = %service.name, service.manager = ?service.manager, "Service {} [{:?}]: {}", service.name, service.manager, format_args!($($msg)*));
+                    tracing::warn!(service.name = %service.name, service.manager = ?service.manager, "{}", format_args!($($msg)*));
                 },
                 None => {
-                    tracing::warn!(service.id = %$service_id, "Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::warn!(service.id = %$service_id, "{}", format_args!($($msg)*));
                 }
             }
         }
@@ -267,10 +268,10 @@ macro_rules! tracing_service_error {
         if tracing::enabled!(tracing::Level::ERROR) {
             match $services.get(&$service_id).ok() {
                 Some(service) => {
-                    tracing::error!(service.name = %service.name, service.manager = ?service.manager, "Service {} [{:?}]: {}", service.name, service.manager, format_args!($($msg)*));
+                    tracing::error!(service.name = %service.name, service.manager = ?service.manager, "{}", format_args!($($msg)*));
                 },
                 None => {
-                    tracing::error!(service.id = %$service_id, "Service [id: {}]: {}", $service_id, format_args!($($msg)*));
+                    tracing::error!(service.id = %$service_id, "{}", format_args!($($msg)*));
                 }
             }
         }

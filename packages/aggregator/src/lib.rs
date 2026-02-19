@@ -33,12 +33,12 @@ pub fn run_server(
     let server_handle = std::thread::spawn({
         let ctx = ctx.clone();
         move || {
-            tracing::info!("Starting HTTP server thread");
+            tracing::debug!("Starting HTTP server thread");
             http::server::start(ctx.clone(), config, metrics).unwrap();
         }
     });
 
-    tracing::info!("Waiting for server thread to complete");
+    tracing::debug!("Waiting for server thread to complete");
     server_handle.join().unwrap();
     tracing::info!("Aggregator server shutdown complete");
 }

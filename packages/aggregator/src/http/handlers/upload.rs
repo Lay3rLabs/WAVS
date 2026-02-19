@@ -27,13 +27,12 @@ async fn inner_handle_upload(
     state: HttpState,
     bytes: Bytes,
 ) -> HttpResult<UploadComponentResponse> {
-    tracing::info!("Upload handler called with {} bytes", bytes.len());
-    tracing::info!("Calling upload_component on engine");
+    tracing::debug!("Upload handler called with {} bytes", bytes.len());
     let digest = state
         .aggregator_engine
         .upload_component(bytes.to_vec())
         .await?;
-    tracing::info!("Component uploaded successfully: {}", digest);
+    tracing::debug!("Component uploaded successfully: {}", digest);
 
     Ok(UploadComponentResponse { digest })
 }

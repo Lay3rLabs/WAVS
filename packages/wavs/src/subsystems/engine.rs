@@ -56,6 +56,16 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         S: 'static,
     {
         while let Ok(command) = self.dispatcher_to_engine_rx.recv() {
+            tracing::debug!(
+                "Got Engine Command: {}",
+                match &command {
+                    EngineCommand::Kill => "Kill".to_string(),
+                    EngineCommand::Execute { action, service: _ } => format!(
+                        "Execute: service_id={}, workflow_id={}",
+                        action.config.service_id, action.config.workflow_id
+                    ),
+                }
+            );
             match command {
                 EngineCommand::Kill => {
                     tracing::info!("Received kill command, shutting down engine manager");
@@ -83,7 +93,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         }
     }
 
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self, service), fields(subsys = "Engine"))]
     pub async fn store_components_for_service(
         &self,
         service: &Service,
@@ -127,7 +137,7 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
 
         let trigger_config = action.config.clone();
 
-        tracing::info!(
+        tracing::debug!(
             "Executing component: service_id={}, workflow_id={}, component_digest={:?}",
             trigger_config.service_id,
             trigger_config.workflow_id,
@@ -139,7 +149,13 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         // If Ok(Some(x)), send the result down the pipeline to the submit processor
         // If Ok(None), just end early here, performing no action (but updating local state if needed)
         if let Some(wasm_response) = wasm_response {
-            tracing::info!(service.name = %service.name, service.manager = ?service.manager, workflow_id = %trigger_config.workflow_id, payload_size = %wasm_response.payload.len(), "Component execution produced result: service={} [{:?}], workflow_id={}, payload_size={}", service.name, service.manager, trigger_config.workflow_id, wasm_response.payload.len());
+            tracing::info!(
+                service.name = %service.name,
+                service.manager = ?service.manager,
+                workflow_id = %trigger_config.workflow_id,
+                payload_size = %wasm_response.payload.len(),
+                "Component execution produced result"
+            );
 
             let msg = ChainMessage {
                 service_id: trigger_config.service_id,
@@ -162,10 +178,11 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
 
             Ok(Some(msg))
         } else {
-            tracing::info!(
-                "Component execution produced no result: service_id={}, workflow_id={}",
-                trigger_config.service_id,
-                trigger_config.workflow_id
+            tracing::debug!(
+                service_id = %trigger_config.service_id,
+                service.name = %service.name,
+                workflow_id = %trigger_config.workflow_id,
+                "Component execution produced no result"
             );
             Ok(None)
         }
