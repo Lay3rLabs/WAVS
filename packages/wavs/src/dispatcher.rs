@@ -689,6 +689,22 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    pub fn pause_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
+        let mut service = self.services.get(&id)?;
+        service.status = wavs_types::ServiceStatus::Paused;
+        self.services.save(&service)?;
+        Ok(())
+    }
+
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    pub fn resume_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
+        let mut service = self.services.get(&id)?;
+        service.status = wavs_types::ServiceStatus::Active;
+        self.services.save(&service)?;
+        Ok(())
+    }
+
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
     pub fn remove_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
         // Remove from persistent registry first so an IO failure doesn't leave
         // the service already gone from memory but still on disk.
