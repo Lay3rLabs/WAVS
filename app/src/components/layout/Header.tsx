@@ -1,9 +1,9 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../atoms';
 import { useAppStore } from '../../stores/appStore';
+import { HealthIndicator } from './HealthIndicator';
 
 const navItems = [
-  { path: '/health', label: 'Health' },
   { path: '/services', label: 'Services' },
   { path: '/activity', label: 'Activity' },
   { path: '/logs', label: 'Logs' },
@@ -17,13 +17,14 @@ export function Header() {
 
   return (
     <header className="flex items-center justify-between px-8 py-4 border-b border-charcoal-medium bg-charcoal-dark shadow-md">
-      {/* Logo */}
-      <div className="flex items-center">
+      {/* Logo + health indicator */}
+      <div className="flex items-center gap-3">
         <img
           src="/wavs.png"
           alt="WAVS"
           className="h-8"
         />
+        {isSettingsComplete && <HealthIndicator />}
       </div>
 
       {/* Navigation */}
