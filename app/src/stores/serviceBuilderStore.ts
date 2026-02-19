@@ -43,7 +43,6 @@ export interface ComponentDraft {
 
 export interface SubmitDraft {
   type: 'none' | 'aggregator';
-  aggregatorUrl: string;
   component: ComponentDraft;
   signatureAlgorithm: 'secp256k1';
   signaturePrefix: 'eip191' | 'none';
@@ -70,7 +69,6 @@ function createDefaultComponent(): ComponentDraft {
 function createDefaultSubmit(): SubmitDraft {
   return {
     type: 'none',
-    aggregatorUrl: '',
     component: createDefaultComponent(),
     signatureAlgorithm: 'secp256k1',
     signaturePrefix: 'eip191',
@@ -194,11 +192,10 @@ function buildSubmit(draft: SubmitDraft): Submit | null {
   if (draft.type === 'none') return 'none';
 
   const component = buildComponent(draft.component);
-  if (!component || !draft.aggregatorUrl) return null;
+  if (!component) return null;
 
   return {
     aggregator: {
-      url: draft.aggregatorUrl,
       component,
       signature_kind: {
         algorithm: draft.signatureAlgorithm,
@@ -263,7 +260,6 @@ function reverseSubmit(submit: Submit): SubmitDraft {
 
   return {
     type: 'aggregator',
-    aggregatorUrl: submit.aggregator.url,
     component: reverseComponent(submit.aggregator.component),
     signatureAlgorithm: submit.aggregator.signature_kind.algorithm,
     signaturePrefix: submit.aggregator.signature_kind.prefix ?? 'none',

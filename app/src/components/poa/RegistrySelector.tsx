@@ -71,9 +71,7 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
             console.log(`Checking evm config [${key}]:`, config);
             // Chain ID comes from the key (e.g., "31337")
             const chainId = isNumericKey(key) ? parseInt(key, 10) : null;
-            // Handle both possible field names: http_endpoint (actual) or rpc_endpoint (typed)
-            const configAny = config as unknown as Record<string, unknown>;
-            const rpcUrl = (configAny.http_endpoint as string | undefined) ?? config.rpc_endpoint;
+            const rpcUrl = config.http_endpoint;
 
             if (chainId != null && rpcUrl) {
               chains.push({
@@ -86,15 +84,20 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
         }
 
         // Check configs.dev for fully-configured EVM chains
+        // AnyChainConfig uses internal tagging: { type: 'evm', chain_id: '...', ... }
         if (configs.dev) {
           for (const [key, config] of Object.entries(configs.dev)) {
             console.log(`Checking dev config [${key}]:`, config);
-            if ('Evm' in config && config.Evm) {
-              chains.push({
-                key: key,
-                chainId: config.Evm.chain_id,
-                rpcUrl: config.Evm.rpc_endpoint,
-              });
+            if (config.type === 'evm') {
+              const chainId = isNumericKey(config.chain_id) ? parseInt(config.chain_id, 10) : null;
+              const rpcUrl = config.http_endpoint;
+              if (chainId != null && rpcUrl) {
+                chains.push({
+                  key: key,
+                  chainId,
+                  rpcUrl,
+                });
+              }
             }
           }
         }

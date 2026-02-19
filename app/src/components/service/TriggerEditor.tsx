@@ -3,7 +3,7 @@ import { TextInput, Dropdown, type DropdownOption } from '../atoms';
 import type { Trigger, ChainKey, AtProtoAction } from '../../types';
 import { keccak256, toHex } from 'viem';
 
-type TriggerType = 'evm_contract_event' | 'block_interval' | 'cron' | 'cosmos_contract_event' | 'at_proto_event' | 'manual';
+type TriggerType = 'evm_contract_event' | 'block_interval' | 'cron' | 'cosmos_contract_event' | 'at_proto_event' | 'hypercore_append' | 'manual';
 
 const TRIGGER_OPTIONS: DropdownOption<TriggerType>[] = [
   { label: 'EVM Contract Event', value: 'evm_contract_event' },
@@ -11,6 +11,7 @@ const TRIGGER_OPTIONS: DropdownOption<TriggerType>[] = [
   { label: 'Cron', value: 'cron' },
   { label: 'Cosmos Contract Event', value: 'cosmos_contract_event' },
   { label: 'AT Proto Event', value: 'at_proto_event' },
+  { label: 'Hypercore Append', value: 'hypercore_append' },
   { label: 'Manual', value: 'manual' },
 ];
 
@@ -36,6 +37,7 @@ export function TriggerEditor({ trigger, onChange, chains }: TriggerEditorProps)
     if ('cron' in trigger) return 'cron';
     if ('cosmos_contract_event' in trigger) return 'cosmos_contract_event';
     if ('at_proto_event' in trigger) return 'at_proto_event';
+    if ('hypercore_append' in trigger) return 'hypercore_append';
     return null;
   });
 
@@ -65,6 +67,9 @@ export function TriggerEditor({ trigger, onChange, chains }: TriggerEditorProps)
   const [atRepoDid, setAtRepoDid] = useState('');
   const [atAction, setAtAction] = useState<AtProtoAction | 'any'>('any');
 
+  // Hypercore fields
+  const [hcFeedKey, setHcFeedKey] = useState('');
+
   // Initialize from existing trigger
   useEffect(() => {
     if (!trigger || trigger === 'manual') return;
@@ -88,6 +93,8 @@ export function TriggerEditor({ trigger, onChange, chains }: TriggerEditorProps)
       setAtCollection(trigger.at_proto_event.collection);
       setAtRepoDid(trigger.at_proto_event.repo_did ?? '');
       setAtAction(trigger.at_proto_event.action ?? 'any');
+    } else if ('hypercore_append' in trigger) {
+      setHcFeedKey(trigger.hypercore_append.feed_key);
     }
   }, []);
 
@@ -152,6 +159,13 @@ export function TriggerEditor({ trigger, onChange, chains }: TriggerEditorProps)
         repo_did: atRepoDid || null,
         action: atAction === 'any' ? null : atAction,
       },
+    });
+  };
+
+  const buildHypercoreTrigger = () => {
+    if (!hcFeedKey) return;
+    onChange({
+      hypercore_append: { feed_key: hcFeedKey },
     });
   };
 
@@ -273,6 +287,18 @@ export function TriggerEditor({ trigger, onChange, chains }: TriggerEditorProps)
             <Dropdown options={ATPROTO_ACTIONS} value={atAction} onChange={setAtAction} placeholder="Select action..." size="sm" />
           </div>
           <button type="button" onClick={buildAtProtoTrigger} className="self-start px-4 py-1.5 rounded bg-purple-1 text-cream-light text-sm hover:bg-purple-2 cursor-pointer transition-colors">
+            Apply
+          </button>
+        </div>
+      )}
+
+      {triggerType === 'hypercore_append' && (
+        <div className="flex flex-col gap-3 p-4 rounded bg-charcoal-dark border border-charcoal-light">
+          <div className="flex flex-col gap-2">
+            <label className="text-beige-warm text-sm">Feed Key</label>
+            <TextInput placeholder="Hypercore feed key" value={hcFeedKey} onChange={setHcFeedKey} />
+          </div>
+          <button type="button" onClick={buildHypercoreTrigger} className="self-start px-4 py-1.5 rounded bg-purple-1 text-cream-light text-sm hover:bg-purple-2 cursor-pointer transition-colors">
             Apply
           </button>
         </div>

@@ -36,6 +36,10 @@ export function getActivitySummary(data: TriggerData): string {
     const d = data.AtProtoEvent;
     return `${d.action} ${d.collection} seq:${d.sequence}`;
   }
+  if ('HypercoreAppend' in data) {
+    const d = data.HypercoreAppend;
+    return `Feed ${d.feed_key.slice(0, 12)}... index:${d.index}`;
+  }
   if ('Raw' in data) {
     return `${data.Raw.length} bytes`;
   }
