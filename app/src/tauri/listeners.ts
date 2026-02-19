@@ -66,8 +66,6 @@ export async function startListeners(): Promise<void> {
       serviceId: payload.service_id,
       workflowId: payload.workflow_id,
       triggerData: payload.trigger_data,
-      envelope: payload.envelope,
-      submit: payload.submit,
     });
   });
   unlistenFns.push(unlistenSubmission);

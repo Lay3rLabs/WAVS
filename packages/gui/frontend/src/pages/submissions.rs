@@ -44,6 +44,7 @@ fn render_item(state: &AppState, item: SubmissionEvent) -> Dom {
         TriggerData::Cron { .. } => "Cron",
         TriggerData::AtProtoEvent { .. } => "AtProto Event",
         TriggerData::Raw { .. } => "Raw",
+        TriggerData::HypercoreAppend { .. } => "Hypercore Append",
     };
 
     let label = format!(

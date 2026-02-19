@@ -87,9 +87,9 @@ pub async fn cmd_start_wavs(
         }
     };
 
-    // Set the submission mnemonic from the OS keychain
+    // Set the signing mnemonic from the OS keychain
     if let Some(credential) = get_mnemonic_cached(&mnemonic_cache) {
-        config.submission_mnemonic = Some(credential);
+        config.signing_mnemonic = Some(credential);
     }
 
     let ctx = AppContext::new_with_runtime(AnyRuntime::TokioHandle(

@@ -43,6 +43,7 @@ fn render_item(state: &AppState, item: TriggerAction) -> Dom {
         Trigger::Cron { .. } => "Cron",
         Trigger::AtProtoEvent { .. } => "AtProto Event",
         Trigger::Manual => "Manual",
+        Trigger::HypercoreAppend { .. } => "Hypercore Append",
     };
 
     let label = format!(

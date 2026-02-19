@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use wavs_types::{Envelope, ServiceId, Submit, TriggerAction, TriggerData, WorkflowId};
+use wavs_types::{ServiceId, TriggerAction, TriggerData, WorkflowId};
 
 use crate::error::AppResult;
 use crate::settings::Settings;
@@ -56,9 +56,7 @@ impl TauriEventExt for TriggerEvent {
 pub struct SubmissionEvent {
     pub service_id: ServiceId,
     pub workflow_id: WorkflowId,
-    pub envelope: Envelope,
     pub trigger_data: TriggerData,
-    pub submit: Submit,
 }
 
 impl TauriEventExt for SubmissionEvent {
