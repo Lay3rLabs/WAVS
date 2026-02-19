@@ -40,7 +40,7 @@ use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessage
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, ServiceManager,
-    Submission, WorkflowIdError,
+    Submission, Submit, WorkflowIdError,
 };
 use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction};
 
@@ -313,14 +313,37 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
 
                         DispatcherCommand::EngineResponse(response) => match response {
                             EngineResponse::Operator(msg) => {
-                                if let Err(e) = _self
-                                    .dispatcher_to_submission_tx
-                                    .send(SubmissionCommand::Submit(msg))
-                                {
-                                    tracing::error!(
-                                        "Error sending message to submission manager: {:?}",
-                                        e
-                                    );
+                                let workflow = match msg.service.workflows.get(msg.workflow_id()) {
+                                    Some(wf) => wf,
+                                    None => {
+                                        tracing::error!(
+                                            "Error fetching workflow {} for service {}",
+                                            msg.workflow_id(),
+                                            msg.service.name
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                match &workflow.submit {
+                                    Submit::None => {
+                                        tracing::debug!(
+                                            "Workflow {} for service {} has no submit action, skipping submission",
+                                            msg.workflow_id(),
+                                            msg.service.name
+                                        );
+                                    }
+                                    _ => {
+                                        if let Err(e) = _self
+                                            .dispatcher_to_submission_tx
+                                            .send(SubmissionCommand::Submit(msg))
+                                        {
+                                            tracing::error!(
+                                                "Error sending message to submission manager: {:?}",
+                                                e
+                                            );
+                                        }
+                                    }
                                 }
                             }
 
