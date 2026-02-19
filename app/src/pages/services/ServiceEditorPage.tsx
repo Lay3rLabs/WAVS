@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Modal, TextInput, Dropdown, Tabs, type DropdownOption } from '../../components/atoms';
+import { Button, Toast, TextInput, Dropdown, Tabs, type DropdownOption } from '../../components/atoms';
 import { ServiceBasics } from '../../components/service/ServiceBasics';
 import { WorkflowEditor } from '../../components/service/WorkflowEditor';
 import { useAppStore } from '../../stores/appStore';
@@ -128,19 +128,19 @@ export function ServiceEditorPage() {
     if (editorTab === 'visual') {
       const built = buildServiceJson();
       if (!built) {
-        Modal.openError('Failed to build service JSON from visual editor. Please check all fields.');
+        Toast.error('Failed to build service JSON from visual editor. Please check all fields.');
         return;
       }
       parsedService = built;
     } else {
       if (!jsonValid) {
-        Modal.openError('Invalid JSON');
+        Toast.error('Invalid JSON');
         return;
       }
       try {
         parsedService = JSON.parse(jsonText) as Service;
       } catch {
-        Modal.openError('Invalid JSON');
+        Toast.error('Invalid JSON');
         return;
       }
     }
@@ -191,7 +191,7 @@ export function ServiceEditorPage() {
 
       // Navigate back to detail page
       navigate(`/services/${chainId}/${address}`);
-      Modal.openInfo('Service updated and redeployed successfully!');
+      Toast.info('Service updated and redeployed successfully!');
     } catch (err) {
       const msg = getErrorMessage(err);
       setDeployStatus((s) => {
@@ -202,7 +202,7 @@ export function ServiceEditorPage() {
         else if (s.register === 'in_progress') updated.register = 'error';
         return updated;
       });
-      Modal.openError(`Redeploy failed: ${msg}`);
+      Toast.error(`Redeploy failed: ${msg}`);
     } finally {
       setDeploying(false);
     }

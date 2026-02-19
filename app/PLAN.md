@@ -17,11 +17,11 @@ MVP Requirements:
 - [x] Ability to pause / unpause service?
 - [x] Rearrange actions on service detail page (rename some)
 - [X] Bug: Some log entries are showing up twice?
+- [x] Add toasts and replace annoying modals you have to close
 - [ ] Better aesthetics
-- [ ] Add toasts and replace annoying modals you have to close
 - [ ] Better wallet (show balances on chains?)
 - [ ] Leverage touch id for key management? (need macOS code signing)
-- [ ] Figure out what to do with aggregator
+- [ ] Test submission with an actual solidity contract
 
 Post MVP:
 - Start building out proof of reputation system

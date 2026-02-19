@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { type Address, isAddress } from 'viem';
-import { Button, Dropdown, TextInput, Modal, type DropdownOption } from '../atoms';
+import { Button, Dropdown, TextInput, Toast, type DropdownOption } from '../atoms';
 import { usePOAStore, persistRegistries, getRegistryKey } from '../../stores/poaStore';
 import { useAppStore } from '../../stores/appStore';
 import { getPublicClient, getWalletClient, getAddress } from '../../hooks/useViemClient';
@@ -110,7 +110,7 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
         }
       } catch (err) {
         console.error('Failed to load chain configs:', err);
-        Modal.openError(`Failed to load chain configs: ${err}`);
+        Toast.error(`Failed to load chain configs: ${err}`);
       } finally {
         setLoading(false);
       }
@@ -130,7 +130,7 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
 
   const handleDeploy = async () => {
     if (!selectedChain) {
-      Modal.openError('Please select a chain');
+      Toast.error('Please select a chain');
       return;
     }
 
@@ -139,11 +139,11 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
     const qDen = BigInt(quorumDenominator);
 
     if (threshold <= 0n) {
-      Modal.openError('Threshold weight must be greater than 0');
+      Toast.error('Threshold weight must be greater than 0');
       return;
     }
     if (qDen <= 0n || qNum > qDen) {
-      Modal.openError('Invalid quorum: numerator must be <= denominator, denominator must be > 0');
+      Toast.error('Invalid quorum: numerator must be <= denominator, denominator must be > 0');
       return;
     }
 
@@ -183,24 +183,24 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
       const key = getRegistryKey(selectedChain.chainId, result.proxyAddress);
       onRegistryAdded?.(key);
       setDeployProgress(null);
-      Modal.openInfo(`Registry deployed at ${result.proxyAddress}`);
+      Toast.info(`Registry deployed at ${result.proxyAddress}`);
       setMode('select');
       onComplete?.();
     } catch (err) {
       console.error('Deployment failed:', err);
       setDeployProgress(null);
-      Modal.openError(`Deployment failed: ${err}`);
+      Toast.error(`Deployment failed: ${err}`);
     }
   };
 
   const handleConnect = async () => {
     if (!selectedChain) {
-      Modal.openError('Please select a chain');
+      Toast.error('Please select a chain');
       return;
     }
 
     if (!isAddress(addressInput)) {
-      Modal.openError('Please enter a valid address');
+      Toast.error('Please enter a valid address');
       return;
     }
 
@@ -236,7 +236,7 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
         setAddressInput('');
       } else {
         onRegistryAdded?.(key);
-        Modal.openInfo(`Connected to registry at ${address}`);
+        Toast.info(`Connected to registry at ${address}`);
         setMode('select');
         setAddressInput('');
         onComplete?.();
@@ -244,7 +244,7 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
     } catch (err) {
       console.error('Failed to connect:', err);
       setDeployProgress(null);
-      Modal.openError(`Failed to connect to registry: ${err}`);
+      Toast.error(`Failed to connect to registry: ${err}`);
     }
   };
 
@@ -271,10 +271,10 @@ export function RegistrySelector({ onComplete, onRegistryAdded }: RegistrySelect
       setPendingAutoRegister(false);
       onRegistryAdded?.(autoRegisterKey);
       setAutoRegisterKey(null);
-      Modal.openInfo('Service registered with WAVS!');
+      Toast.info('Service registered with WAVS!');
       onComplete?.();
     } catch (err) {
-      Modal.openError(`Failed to register service: ${err}`);
+      Toast.error(`Failed to register service: ${err}`);
     } finally {
       setAutoRegistering(false);
     }

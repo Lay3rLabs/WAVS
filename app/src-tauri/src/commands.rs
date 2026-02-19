@@ -149,10 +149,23 @@ pub async fn cmd_start_wavs(
     let dispatcher = Arc::new(Dispatcher::new(&config, metrics.wavs, app).unwrap());
 
     // Restore saved services from settings
-    let saved_managers = settings.get_cloned().saved_service_managers.clone();
+    let saved_settings = settings.get_cloned();
+    let saved_managers = saved_settings.saved_service_managers.clone();
+    let saved_services = saved_settings.saved_services.clone();
     for manager in &saved_managers {
-        if let Err(e) = dispatcher.add_service(manager.clone()).await {
-            log::warn!("Failed to restore saved service: {}", e);
+        match dispatcher.add_service(manager.clone()).await {
+            Ok(_) => {}
+            Err(e) => {
+                log::warn!("Failed to restore saved service from chain: {}", e);
+                // Fall back to the cached service definition to keep the service
+                // registered in the dispatcher (so pause/resume work correctly).
+                if let Some(cached) = saved_services.iter().find(|s| &s.manager == manager) {
+                    match dispatcher.add_service_direct(cached.clone(), None).await {
+                        Ok(_) => log::info!("Restored service from local cache: {:?}", manager),
+                        Err(e2) => log::warn!("Failed to restore service from cache: {}", e2),
+                    }
+                }
+            }
         }
     }
 
@@ -203,12 +216,14 @@ pub async fn cmd_add_service(
         .await
         .map_err(|e| AppError::Service(format!("Failed to add service: {}", e)))?;
 
-    // Persist the manager for restart recovery
+    // Persist the manager and full service definition for restart recovery
     settings
         .update(&app, |s| {
             if !s.saved_service_managers.contains(&manager) {
                 s.saved_service_managers.push(manager.clone());
             }
+            s.saved_services.retain(|svc| svc.manager != manager);
+            s.saved_services.push(service.clone());
         })
         .await?;
 
@@ -230,6 +245,7 @@ pub async fn cmd_remove_service(
     settings
         .update(&app, |s| {
             s.saved_service_managers.retain(|m| m != &manager);
+            s.saved_services.retain(|svc| svc.manager != manager);
         })
         .await?;
     Ok(())
