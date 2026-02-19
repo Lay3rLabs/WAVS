@@ -3,8 +3,6 @@ members = [
     "packages/cli",
     "packages/dev-tool",
     "packages/engine",
-    "packages/gui/backend",
-    "packages/gui/frontend",
     "packages/gui/shared",
     "packages/layer-tests",
     "packages/types",
@@ -253,7 +251,7 @@ libp2p = { version = "0.56", features = [
 ] }
 
 # Tauri - backend
-tauri = { version = "2.9.5", features = ["protocol-asset"] }
+tauri = { version = "2.10.2", features = ["protocol-asset"] }
 log = "0.4"
 tauri-plugin-log = "2"
 tauri-plugin-fs = "2"
