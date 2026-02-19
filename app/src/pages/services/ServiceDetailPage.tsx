@@ -7,7 +7,12 @@ import { WorkflowViewer } from '../../components/service/WorkflowViewer';
 import { ServiceActivity } from '../../components/service/ServiceActivity';
 import { useAppStore } from '../../stores/appStore';
 import { usePOAStore, persistRegistries } from '../../stores/poaStore';
-import { getServices, removeService as removeServiceCmd } from '../../tauri';
+import {
+  getServices,
+  removeService as removeServiceCmd,
+  pauseService as pauseServiceCmd,
+  resumeService as resumeServiceCmd,
+} from '../../tauri';
 import { getPublicClient, getAddress } from '../../hooks/useViemClient';
 import { connectToRegistry, fetchOperators } from '../../utils/evm';
 import { getServiceAddress, getErrorMessage, buildServiceMap } from '../../types';
@@ -20,11 +25,58 @@ const TABS = [
   { key: 'operators', label: 'Operators' },
 ];
 
+function ConfirmModal({
+  title,
+  message,
+  confirmLabel,
+  confirmColor,
+  onConfirm,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  confirmColor: 'red' | 'primary' | 'purple';
+  onConfirm: () => Promise<void>;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      await onConfirm();
+      Modal.close();
+    } catch {
+      // errors are handled in onConfirm
+      Modal.close();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h3 className="text-beige-light text-lg font-semibold">{title}</h3>
+      <p className="text-tan-muted">{message}</p>
+      <div className="flex gap-2 justify-end">
+        <Button text="Cancel" size="sm" onClick={() => Modal.close()} />
+        <Button
+          text={loading ? '...' : confirmLabel}
+          size="sm"
+          color={confirmColor}
+          disabled={loading}
+          onClick={handleConfirm}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function ServiceDetailPage() {
   const { chainId, address } = useParams<{ chainId: string; address: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('workflows');
   const [refreshing, setRefreshing] = useState(false);
+  const [pauseLoading, setPauseLoading] = useState(false);
 
   const services = useAppStore((state) => state.services);
   const setServices = useAppStore((state) => state.setServices);
@@ -59,6 +111,11 @@ export function ServiceDetailPage() {
     }
   }
 
+  const refreshServices = async () => {
+    const servicesData = await getServices();
+    setServices(await buildServiceMap(servicesData));
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -72,9 +129,7 @@ export function ServiceDetailPage() {
       updateRegistryOperators(registryKey, operators);
       updateRegistryOwnership(registryKey, info.owner.toLowerCase() === userAddress.toLowerCase());
 
-      // Also refresh services
-      const servicesData = await getServices();
-      setServices(await buildServiceMap(servicesData));
+      await refreshServices();
     } catch (err) {
       Modal.openError(`Failed to refresh: ${getErrorMessage(err)}`);
     } finally {
@@ -82,30 +137,49 @@ export function ServiceDetailPage() {
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!confirm('Disconnect from this registry? You can reconnect later.')) return;
-    removeRegistry(registryKey);
-    await persistRegistries();
-    navigate('/services');
+  const handleDelete = () => {
+    const manager = service?.manager;
+    Modal.open(
+      <ConfirmModal
+        title="Delete Registry"
+        message="Remove this registry from the app? Any running service will be stopped. The contract remains on-chain and can be re-added later."
+        confirmLabel="Delete"
+        confirmColor="red"
+        onConfirm={async () => {
+          try {
+            if (manager) {
+              await removeServiceCmd(manager);
+              if (serviceHashId) removeServiceFromStore(serviceHashId);
+            }
+            removeRegistry(registryKey);
+            await persistRegistries();
+            navigate('/services');
+          } catch (err) {
+            Modal.openError(`Failed to delete: ${getErrorMessage(err)}`);
+          }
+        }}
+      />
+    );
   };
 
-  const handleRemoveService = async () => {
+  const handlePauseResume = async () => {
     if (!service) return;
-    const confirmed = window.confirm(
-      `Remove "${service.name}" from WAVS? This will stop all workflows. The contract remains on-chain.`
-    );
-    if (!confirmed) return;
+    setPauseLoading(true);
     try {
-      await removeServiceCmd(service.manager);
-      if (serviceHashId) removeServiceFromStore(serviceHashId);
-      // Refresh to get updated state
-      const servicesData = await getServices();
-      setServices(await buildServiceMap(servicesData));
-      Modal.openInfo('Service removed from WAVS.');
+      if (service.status === 'active') {
+        await pauseServiceCmd(service.manager);
+      } else {
+        await resumeServiceCmd(service.manager);
+      }
+      await refreshServices();
     } catch (err) {
-      Modal.openError(`Failed to remove service: ${getErrorMessage(err)}`);
+      Modal.openError(`Failed to ${service.status === 'active' ? 'pause' : 'resume'} service: ${getErrorMessage(err)}`);
+    } finally {
+      setPauseLoading(false);
     }
   };
+
+  const isPaused = service?.status === 'paused';
 
   return (
     <div className="flex flex-col gap-6">
@@ -116,9 +190,14 @@ export function ServiceDetailPage() {
           <h2 className="text-beige-light text-xl font-semibold">
             {service?.name ?? `${registry.chainKey} Registry`}
           </h2>
-          {service && (
+          {service && !isPaused && (
             <span className="px-1.5 py-0.5 text-xs font-medium bg-green-700 text-green-100 rounded">
               Active
+            </span>
+          )}
+          {service && isPaused && (
+            <span className="px-1.5 py-0.5 text-xs font-medium bg-yellow-700 text-yellow-100 rounded">
+              Paused
             </span>
           )}
           {!service && (
@@ -174,24 +253,37 @@ export function ServiceDetailPage() {
           )}
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {service ? (
-            <>
-              <Button text="Edit" size="sm" color="purple" onClick={() => navigate(`/services/${chainId}/${address}/edit`)} />
-              <Button text="Remove from WAVS" size="sm" color="red" variant="outline" onClick={handleRemoveService} />
-            </>
-          ) : (
-            <Button text="Register Service" size="sm" color="purple" onClick={() => navigate(`/services/new?registry=${registryKey}`)} />
-          )}
-          <Button
-            text={refreshing ? 'Refreshing...' : 'Refresh'}
-            size="sm"
-            disabled={refreshing}
-            onClick={handleRefresh}
-          />
-          <Button text="Disconnect" size="sm" color="red" variant="outline" onClick={handleDisconnect} />
-          {registry.isOwner && <OwnerActionsMenu registryKey={registryKey} />}
+        {/* Actions — primary left, destructive right */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          {/* Primary actions */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {service ? (
+              <>
+                <Button text="Edit" size="sm" color="purple" onClick={() => navigate(`/services/${chainId}/${address}/edit`)} />
+                <Button
+                  text={pauseLoading ? '...' : isPaused ? 'Resume' : 'Pause'}
+                  size="sm"
+                  variant="outline"
+                  disabled={pauseLoading}
+                  onClick={handlePauseResume}
+                />
+              </>
+            ) : (
+              <Button text="Register Service" size="sm" color="purple" onClick={() => navigate(`/services/new?registry=${registryKey}`)} />
+            )}
+          </div>
+
+          {/* Secondary / destructive actions */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              text={refreshing ? 'Refreshing...' : 'Refresh'}
+              size="sm"
+              disabled={refreshing}
+              onClick={handleRefresh}
+            />
+            {registry.isOwner && <OwnerActionsMenu registryKey={registryKey} />}
+            <Button text="Delete" size="sm" color="red" variant="outline" onClick={handleDelete} />
+          </div>
         </div>
       </div>
 
