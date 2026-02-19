@@ -91,7 +91,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         component: &Component,
         packet: &Packet,
     ) -> AggregatorResult<Vec<AggregatorAction>> {
-        tracing::info!("Processing packet with custom aggregator component");
+        tracing::debug!("Processing packet with custom aggregator component");
 
         #[cfg(debug_assertions)]
         if std::env::var("WAVS_FORCE_AGGREGATOR_ENGINE_ERROR_XXX").is_ok() {
@@ -157,7 +157,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         component: &Component,
         packet: &Packet,
     ) -> AggregatorResult<Vec<AggregatorAction>> {
-        tracing::info!("Handling timer callback with custom aggregator component");
+        tracing::debug!("Handling timer callback with custom aggregator component");
 
         let start_time = std::time::Instant::now();
         let wasm_component = self.load_component(component).await?;
@@ -201,7 +201,7 @@ impl<S: CAStorage + Send + Sync + 'static> AggregatorEngine<S> {
         packet: &Packet,
         tx_result: Result<AnyTxHash, String>,
     ) -> AggregatorResult<()> {
-        tracing::info!("Handling submit callback with custom aggregator component");
+        tracing::debug!("Handling submit callback with custom aggregator component");
 
         let start_time = std::time::Instant::now();
         let wasm_component = self.load_component(component).await?;

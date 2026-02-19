@@ -86,7 +86,7 @@ impl HttpState {
         config: Config,
         metrics: utils::telemetry::AggregatorMetrics,
     ) -> AggregatorResult<Self> {
-        tracing::info!("Creating file storage at: {:?}", config.data);
+        tracing::debug!("Creating file storage at: {:?}", config.data);
         let file_storage = FileStorage::new(&config.data)?;
         let ca_storage = Arc::new(file_storage);
         let storage = RedbStorage::new(config.data.join("db"))?;
@@ -143,7 +143,7 @@ impl HttpState {
                 .ok_or(AggregatorError::MissingEvmCredential)?,
         )?;
 
-        tracing::info!("Creating new EVM client for chain: {}", chain);
+        tracing::debug!("Creating new EVM client for chain: {}", chain);
         let evm_client = EvmSigningClient::new(client_config)
             .await
             .map_err(AggregatorError::CreateEvmClient)?;

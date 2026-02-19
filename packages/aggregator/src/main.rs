@@ -33,7 +33,8 @@ fn main() {
             .with(
                 tracing_subscriber::fmt::layer()
                     .without_time()
-                    .with_target(false),
+                    .with_target(false)
+                    .compact(),
             )
             .with(filters)
             .try_init()
