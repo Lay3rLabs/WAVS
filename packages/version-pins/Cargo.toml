@@ -22,3 +22,4 @@ alloy-tx-macros = { workspace = true }
 alloy-eip2930 = { workspace = true }
 alloy-eip7702 = { workspace = true }
 alloy-transport = { workspace = true }
+alloy-json-rpc = { workspace = true }
