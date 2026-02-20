@@ -76,6 +76,12 @@ If `bootstrap_nodes` is an empty list, this node acts as the bootstrap server fo
 
 ---
 
+## Multi-Node Setup
+
+For step-by-step instructions on configuring multiple nodes with P2P, see the [V2 migration guide](https://github.com/Lay3rLabs/Layer-Wiki/wiki/V2-migration-guide) (the "setup p2p" section).
+
+---
+
 ## Status Endpoint
 
 `GET /p2p/status` returns the current P2P state of the node, including:

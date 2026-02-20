@@ -29,7 +29,7 @@ Set `submit` to `None` when on-chain confirmation isn't needed. The operator com
 
 ## Submit::Aggregator
 
-When targeting a blockchain, the aggregator component (not the WAVS node directly) is responsible for calling the on-chain service handler contract after quorum is reached. The contract must satisfy the appropriate interface for its chain.
+When targeting a blockchain, the aggregator component decides which on-chain service handler contract to call and what data to submit — but the actual transaction (including gas fees) is submitted by the WAVS node. The contract must satisfy the appropriate interface for its chain.
 
 ### EVM
 
@@ -39,4 +39,4 @@ It doesn't do very much — that's precisely the point. It's completely up to yo
 
 ### Cosmos
 
-For Cosmos chains, a CosmWasm contract plays the same role as the EVM service handler. A reference implementation is available at `examples/contracts/cosmwasm/mock/` — you can use it as a starting point or replace it with your own contract that contains your business logic.
+For Cosmos chains, a CosmWasm contract plays the same role as the EVM service handler. The reference implementation lives at [Lay3rLabs/cw-middleware](https://github.com/Lay3rLabs/cw-middleware/tree/main/packages/contracts/mock) — use it as a starting point or replace it with your own contract. (A copy is pulled into `examples/contracts/cosmwasm/mock/` for local e2e tests only.)

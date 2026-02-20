@@ -22,7 +22,7 @@ impl Guest for Component {
 
 The `TriggerAction` contains both the trigger configuration (service ID, workflow ID, trigger type) and the raw trigger data (decoded event, block, cron tick, etc.).
 
-Each call can return **multiple** `WasmResponse` values. Each response becomes a separate signed submission. If multiple responses are returned, each must supply a unique `event_id_salt` to distinguish them.
+Each call can return **multiple** `WasmResponse` values. Each response becomes a separate signed submission. The `event_id_salt` is used to key aggregations — it isn't limited to distinguishing responses within a single trigger. It can be any arbitrary value chosen by the component, such as a Telegram message ID or any other domain-specific identifier, regardless of the trigger type.
 
 ### Registration
 
@@ -33,13 +33,9 @@ use example_helpers::export_layer_trigger_world;
 export_layer_trigger_world!(Component);
 ```
 
-### Examples
+### Internal Test Components
 
-- `examples/components/echo-data` — echoes trigger data, demonstrates multiple trigger types
-- `examples/components/echo-block-interval` — responds to block interval triggers
-- `examples/components/echo-cron-interval` — responds to cron schedule triggers
-- `examples/components/kv-store` — demonstrates WASI key-value store access
-- `examples/components/square` — minimal example with simple computation
+The `examples/components/` directory contains components used for **internal testing only** — "examples" is a legacy name. Do not use them as a reference for building your own components: they rely on a shared `TriggerId` abstraction and common test infrastructure specific to this repo, which is not part of the core WAVS API and has historically caused confusion.
 
 ---
 
@@ -85,6 +81,10 @@ struct AggregatorInput {
 
 When quorum is met, the aggregator component receives the full signed submission set, allowing it to validate or select among the collected operator signatures.
 
+### Multiple Actions
+
+Each entry point returns `Vec<AggregatorAction>`, so a single invocation can produce more than one action. For example, an aggregator can submit to multiple chains simultaneously, or return both a `Submit` and a `Timer` in the same response to post on-chain immediately and also schedule a follow-up callback.
+
 ### AggregatorAction Variants
 
 ```rust
@@ -113,10 +113,9 @@ Export the component using the `export_aggregator_world!` macro:
 export_aggregator_world!(Component);
 ```
 
-### Examples
+### Internal Test Components
 
-- `examples/components/simple-aggregator` — submits immediately in `process_input`; supports both EVM and Cosmos targets; optionally fetches gas price from an oracle
-- `examples/components/timer-aggregator` — defers submission via a `Timer` action in `process_input`, then submits in `handle_timer_callback`; validates trigger data before committing
+As with operator components, the aggregator components under `examples/components/` (`simple-aggregator`, `timer-aggregator`) are for internal testing only. See the note above about not using them as a reference.
 
 ---
 
@@ -127,8 +126,9 @@ Each workflow in a service definition has a `submit` field that controls what ha
 ```rust
 enum Submit {
     /// Execute the operator component but make no on-chain submission.
-    /// Useful when the component performs side effects (e.g. posting to an API)
-    /// or when on-chain confirmation is not required.
+    /// The typical use-case is stashing local state in WASI key-value storage
+    /// or the filesystem. Also valid when the component posts to an external
+    /// API and no on-chain confirmation is needed.
     None,
 
     /// After quorum is reached, run the specified aggregator component
