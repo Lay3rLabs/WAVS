@@ -635,7 +635,7 @@ pub async fn wait_for_evm_trigger_streams_to_finalize(
             tracing::info!("Getting trigger stream info...");
             let info = client.get_trigger_streams_info().await.unwrap();
 
-            if info.finalized() {
+            if info.chains_finalized() {
                 if let Some(service_manager) = &service_manager {
                     match service_manager {
                         ServiceManager::Evm { chain, address } => {

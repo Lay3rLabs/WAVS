@@ -483,8 +483,9 @@ impl ServiceManagers {
                 match http_client.get_trigger_streams_info().await {
                     Ok(streams) => {
                         tracing::info!(
-                            "Trigger streams finalized={}, chains={:?}, hypercore_feeds={:?}",
-                            streams.finalized(),
+                            "Trigger streams chains_finalized={}, hypercore_finalized={}, chains={:?}, hypercore_feeds={:?}",
+                            streams.chains_finalized(),
+                            streams.hypercore_finalized(),
                             streams.chains,
                             streams.hypercore
                         );
