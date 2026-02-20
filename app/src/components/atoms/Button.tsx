@@ -83,7 +83,7 @@ export function Button({
       disabled={disabled}
       onClick={onClick}
       className={clsx(
-        'inline-flex items-center justify-center gap-2.5 rounded font-medium transition-colors select-none',
+        'inline-flex items-center justify-center gap-2 rounded font-medium transition-colors select-none',
         sizeClasses[size],
         disabled
           ? 'bg-charcoal-medium text-tan-muted cursor-not-allowed opacity-60'
@@ -93,9 +93,9 @@ export function Button({
         className
       )}
     >
-      {contentBefore}
+      {contentBefore && <span className="flex shrink-0 items-center leading-none">{contentBefore}</span>}
       {text || children}
-      {contentAfter}
+      {contentAfter && <span className="flex shrink-0 items-center leading-none">{contentAfter}</span>}
     </button>
   );
 }

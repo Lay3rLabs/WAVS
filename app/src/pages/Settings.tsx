@@ -1,8 +1,49 @@
 import { useState, useEffect, useCallback } from 'react';
+import { formatEther, type Address } from 'viem';
+import { mainnet, sepolia, holesky } from 'viem/chains';
 import { AddressDisplay, Button, TomlEditor } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
 import { useWalletStore } from '../stores/walletStore';
 import { setWavsHome, restart, readWavsToml, writeWavsToml } from '../tauri';
+import { getPublicClient } from '../hooks/useViemClient';
+import { getChainConfigs } from '../tauri';
+
+const KNOWN_CHAIN_NAMES: Record<number, string> = {
+  [mainnet.id]: mainnet.name,
+  [sepolia.id]: sepolia.name,
+  [holesky.id]: holesky.name,
+};
+
+function isNumericKey(key: string): boolean {
+  return /^\d+$/.test(key);
+}
+
+interface ChainBalance {
+  chainId: number;
+  name: string;
+  balance: bigint | null;
+  loading: boolean;
+  noEndpoint: boolean;
+}
+
+function BalanceRow({ chain }: { chain: ChainBalance }) {
+  return (
+    <div className="flex items-center justify-between py-1.5 px-2 rounded bg-charcoal-darkest">
+      <span className="text-tan-muted text-xs">{chain.name}</span>
+      <span className="text-beige-warm text-xs font-mono">
+        {chain.noEndpoint ? (
+          <span className="text-charcoal-light">—</span>
+        ) : chain.loading ? (
+          <span className="inline-block w-16 h-3 rounded bg-charcoal-medium animate-pulse" />
+        ) : chain.balance !== null ? (
+          `${parseFloat(formatEther(chain.balance)).toFixed(4)} ETH`
+        ) : (
+          <span className="text-red-3 text-xs">error</span>
+        )}
+      </span>
+    </div>
+  );
+}
 
 export function Settings() {
   const settings = useAppStore((state) => state.settings);
@@ -23,6 +64,9 @@ export function Settings() {
   const [exportedMnemonic, setExportedMnemonic] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  // Per-account, per-chain balances: balances[accountIndex][chainIndex]
+  const [balances, setBalances] = useState<ChainBalance[][]>([]);
+
   // TOML editor state
   const [tomlContent, setTomlContent] = useState('');
   const [savedContent, setSavedContent] = useState('');
@@ -36,6 +80,91 @@ export function Settings() {
       loadAddresses();
     }
   }, [hasMnemonic, loadAddresses]);
+
+  // Fetch balances once addresses are loaded
+  useEffect(() => {
+    if (derivedAddresses.length === 0) return;
+
+    const fetchBalances = async () => {
+      let chains: { chainId: number; name: string; rpcUrl: string | null }[] = [];
+
+      try {
+        const configs = await getChainConfigs();
+
+        if (configs.evm) {
+          for (const [key, config] of Object.entries(configs.evm)) {
+            const chainId = isNumericKey(key) ? parseInt(key, 10) : null;
+            if (chainId == null) continue;
+            chains.push({
+              chainId,
+              name: KNOWN_CHAIN_NAMES[chainId] ?? `Chain ${chainId}`,
+              rpcUrl: config.http_endpoint ?? null,
+            });
+          }
+        }
+
+        if (configs.dev) {
+          for (const [, config] of Object.entries(configs.dev)) {
+            if (config.type === 'evm') {
+              const chainId = isNumericKey(config.chain_id)
+                ? parseInt(config.chain_id, 10)
+                : null;
+              if (chainId == null) continue;
+              chains.push({
+                chainId,
+                name: KNOWN_CHAIN_NAMES[chainId] ?? `Chain ${chainId}`,
+                rpcUrl: config.http_endpoint ?? null,
+              });
+            }
+          }
+        }
+      } catch {
+        // No chain config — balances will show "—"
+      }
+
+      const initialBalances: ChainBalance[][] = derivedAddresses.map(() =>
+        chains.map((c) => ({
+          chainId: c.chainId,
+          name: c.name,
+          balance: null,
+          loading: c.rpcUrl != null,
+          noEndpoint: c.rpcUrl == null,
+        }))
+      );
+      setBalances(initialBalances);
+
+      for (let addrIdx = 0; addrIdx < derivedAddresses.length; addrIdx++) {
+        const address = derivedAddresses[addrIdx] as Address;
+        for (let chainIdx = 0; chainIdx < chains.length; chainIdx++) {
+          const chain = chains[chainIdx];
+          if (!chain.rpcUrl) continue;
+
+          getPublicClient(chain.rpcUrl, chain.chainId)
+            .getBalance({ address })
+            .then((balance) => {
+              setBalances((prev) => {
+                const next = prev.map((row) => [...row]);
+                if (next[addrIdx]?.[chainIdx]) {
+                  next[addrIdx][chainIdx] = { ...next[addrIdx][chainIdx], balance, loading: false };
+                }
+                return next;
+              });
+            })
+            .catch(() => {
+              setBalances((prev) => {
+                const next = prev.map((row) => [...row]);
+                if (next[addrIdx]?.[chainIdx]) {
+                  next[addrIdx][chainIdx] = { ...next[addrIdx][chainIdx], balance: null, loading: false };
+                }
+                return next;
+              });
+            });
+        }
+      }
+    };
+
+    fetchBalances();
+  }, [derivedAddresses]);
 
   const loadToml = useCallback(async () => {
     if (!settings.wavs_home) return;
@@ -102,7 +231,7 @@ export function Settings() {
       const mnemonic = await getMnemonic();
       setExportedMnemonic(mnemonic);
       setShowMnemonic(true);
-    } catch (err) {
+    } catch {
       setError('Failed to export wallet. Please try again.');
     }
   };
@@ -118,8 +247,7 @@ export function Settings() {
     try {
       await deleteMnemonic();
       setShowResetConfirm(false);
-      // The app will automatically show the wallet setup screen
-    } catch (err) {
+    } catch {
       setError('Failed to reset wallet. Please try again.');
     }
   };
@@ -148,28 +276,22 @@ export function Settings() {
       <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
         <h2 className="text-beige-light text-lg font-semibold">Wallet</h2>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-tan-muted text-sm">Status</label>
-          <div className="text-sm text-beige-warm bg-charcoal-dark p-2 rounded">
-            {hasMnemonic ? (
-              <span className="text-green-4">Wallet configured (stored in OS keychain)</span>
-            ) : (
-              <span className="text-red-4">No wallet configured</span>
-            )}
-          </div>
-        </div>
-
-        {/* Derived Addresses */}
+        {/* Accounts with balances */}
         {hasMnemonic && derivedAddresses.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <label className="text-tan-muted text-sm">Derived Addresses</label>
+          <div className="flex flex-col gap-3">
             {derivedAddresses.map((addr, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 p-2 rounded bg-charcoal-dark"
-              >
-                <span className="text-tan-muted text-xs w-20 shrink-0">Account {i}</span>
-                <AddressDisplay address={addr} full />
+              <div key={i} className="flex flex-col gap-2 p-3 rounded bg-charcoal-dark">
+                <div className="flex items-center gap-2">
+                  <span className="text-tan-muted text-xs w-20 shrink-0">Account {i}</span>
+                  <AddressDisplay address={addr} full />
+                </div>
+                {balances[i] && balances[i].length > 0 && (
+                  <div className="flex flex-col gap-1 ml-[5.5rem]">
+                    {balances[i].map((chain) => (
+                      <BalanceRow key={chain.chainId} chain={chain} />
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -296,7 +418,7 @@ export function Settings() {
             <TomlEditor
               value={tomlContent}
               onChange={setTomlContent}
-              height="400px"
+              height="60vh"
             />
           )}
 
