@@ -20,7 +20,13 @@ use alloy_primitives::U256;
 use alloy_sol_types::SolEvent;
 use futures::StreamExt;
 use tokio::time::{timeout, Duration};
-use utils::{init_tracing_tests, test_utils::anvil::safe_spawn_anvil_extra};
+use utils::{
+    init_tracing_tests, telemetry::EvmStreamMetrics, test_utils::anvil::safe_spawn_anvil_extra,
+};
+
+fn test_evm_stream_metrics() -> EvmStreamMetrics {
+    EvmStreamMetrics::new(opentelemetry::global::meter("test"))
+}
 
 #[tokio::test]
 async fn block_height_stream() {
@@ -36,6 +42,7 @@ async fn block_height_stream() {
         vec![anvil.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     controller.subscriptions.toggle_block_height(true);
@@ -80,6 +87,7 @@ async fn simple_log_stream() {
         vec![anvil.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
@@ -182,6 +190,7 @@ async fn multi_log_stream(add_kind: AddKind) {
         vec![anvil.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
@@ -325,6 +334,7 @@ async fn multi_contract_log_stream() {
         vec![anvil.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     let contract_1 = EventEmitterClient::new(&anvil, 0).deploy().await;
@@ -458,6 +468,7 @@ async fn fallback_chain_log_stream() {
         vec![anvil_1.ws_endpoint(), anvil_2.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     let contract_1 = EventEmitterClient::new(&anvil_1, 0).deploy().await;
@@ -580,6 +591,7 @@ async fn unsubscribe_log_stream(wait_for_subscriptions: bool) {
         vec![anvil.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
@@ -700,6 +712,7 @@ async fn controller_drop() {
         vec![anvil.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     controller.subscriptions.toggle_block_height(true);
@@ -753,6 +766,7 @@ async fn all_log_stream() {
         vec![anvil.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
@@ -846,6 +860,7 @@ async fn unsubscribe_all_log_stream(explicit: bool) {
         vec![anvil.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     let contract = EventEmitterClient::new(&anvil, 0).deploy().await;
@@ -924,6 +939,7 @@ async fn multiple_clients() {
         vec![anvil_1.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     let EvmTriggerStreams {
@@ -934,6 +950,7 @@ async fn multiple_clients() {
         vec![anvil_2.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     let contract_1 = EventEmitterClient::new(&anvil_1, 0).deploy().await;
@@ -1082,6 +1099,7 @@ async fn multiple_clients_drop_one() {
         vec![anvil_1.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     let EvmTriggerStreams {
@@ -1092,6 +1110,7 @@ async fn multiple_clients_drop_one() {
         vec![anvil_2.ws_endpoint()],
         wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
         None,
+        test_evm_stream_metrics(),
     );
 
     let contract_1 = EventEmitterClient::new(&anvil_1, 0).deploy().await;

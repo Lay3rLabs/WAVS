@@ -5,7 +5,7 @@ use std::{
 };
 use utils::{config::ConfigExt, service::DEFAULT_IPFS_GATEWAY};
 use utoipa::ToSchema;
-use wavs_types::{ChainConfigs, Credential, Workflow};
+use wavs_types::{ChainConfigs, Credential, WasmResponse, Workflow};
 
 use crate::subsystems::aggregator::p2p::P2pConfig;
 
@@ -139,6 +139,12 @@ pub struct Config {
 
     /// Optional hyperswarm bootstrap address (host:port) for Hypercore discovery
     pub hyperswarm_bootstrap: Option<String>,
+
+    /// Maximum WASM response payload size in bytes (default: 50MB)
+    pub max_wasm_payload_size: usize,
+
+    /// Maximum WASM response event_id_salt size in bytes (default: 1MB)
+    pub max_wasm_salt_size: usize,
 }
 
 impl Config {
@@ -202,6 +208,8 @@ impl Default for Config {
             jetstream_endpoint: "wss://jetstream1.us-east.bsky.network/subscribe".to_string(),
             jetstream_max_message_size: 1024 * 1024, // 1MB
             hyperswarm_bootstrap: None,
+            max_wasm_payload_size: WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            max_wasm_salt_size: WasmResponse::DEFAULT_MAX_SALT_SIZE,
         }
     }
 }

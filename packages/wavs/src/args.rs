@@ -154,6 +154,16 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hyperswarm_bootstrap: Option<String>,
+
+    /// Maximum WASM response payload size in bytes (default: 50MB)
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_wasm_payload_size: Option<usize>,
+
+    /// Maximum WASM response event_id_salt size in bytes (default: 1MB)
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_wasm_salt_size: Option<usize>,
 }
 
 impl CliEnvExt for CliArgs {

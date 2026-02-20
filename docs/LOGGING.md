@@ -26,10 +26,12 @@ For tests, something like this is often useful:
 The available subsys values are:
 
 * AppContext
+* Aggregator
+* CaStorage
 * Dispatcher
 * Engine
 * EngineRunner
-* DbStorage
-* CaStorage
+* Services
 * Submission
 * TriggerManager
+* WavsDb

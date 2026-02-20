@@ -185,7 +185,7 @@ impl TriggerManager {
             .collect()
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    #[instrument(skip(self, service), fields(subsys = "TriggerManager"))]
     pub fn add_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
         // The mechanics of adding a trigger are that we:
 
@@ -507,6 +507,7 @@ impl TriggerManager {
                                         chain_config.ws_endpoints,
                                         chain_key,
                                         chain_config.ws_priority_endpoint_index,
+                                        self.metrics.evm_stream.clone(),
                                     );
 
                                     // Start the EVM event stream
@@ -1064,7 +1065,7 @@ impl TriggerManager {
             }
 
             if !dispatcher_commands.is_empty() {
-                tracing::info!(
+                tracing::debug!(
                     "Sending {} commands to dispatcher",
                     dispatcher_commands.len()
                 );

@@ -137,7 +137,7 @@ impl DevTriggersRuntime {
         assert_eq!(digest, component_digest);
 
         // Register service
-        futures::executor::block_on(dispatcher.add_service_direct(service.clone()))
+        futures::executor::block_on(dispatcher.add_service_direct(service.clone(), None))
             .expect("add service to dispatcher");
 
         // Start dispatcher (store handle + context for graceful shutdown)

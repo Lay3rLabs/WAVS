@@ -22,6 +22,8 @@ use super::error::EngineError;
 pub struct WasmEngine<S: CAStorage> {
     engine: BaseEngine<S>,
     metrics: EngineMetrics,
+    max_payload_size: usize,
+    max_salt_size: usize,
 }
 
 impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
@@ -37,6 +39,8 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         metrics: EngineMetrics,
         db: WavsDb,
         ipfs_gateway: String,
+        max_payload_size: usize,
+        max_salt_size: usize,
     ) -> Self {
         let config = BaseEngineConfig {
             app_data_dir: app_data_dir.as_ref().to_path_buf(),
@@ -49,7 +53,12 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
 
         let engine = BaseEngine::new(config, db, Arc::new(wasm_storage)).unwrap();
 
-        Self { engine, metrics }
+        Self {
+            engine,
+            metrics,
+            max_payload_size,
+            max_salt_size,
+        }
     }
 
     #[instrument(skip(self), fields(subsys = "Engine"))]
@@ -93,7 +102,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
     }
 
     /// This will execute a contract that implements the wavs:operator wit interface
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(skip(self, service, trigger_action), fields(subsys = "Engine"))]
     pub async fn execute_operator_component(
         &self,
         service: Service,
@@ -152,9 +161,13 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             std::thread::sleep(std::time::Duration::from_secs(6));
         }
 
-        let results =
-            wavs_engine::worlds::operator::execute::execute(&mut instance_deps, trigger_action)
-                .await;
+        let results = wavs_engine::worlds::operator::execute::execute(
+            &mut instance_deps,
+            trigger_action,
+            self.max_payload_size,
+            self.max_salt_size,
+        )
+        .await;
         let final_fuel = instance_deps.store.get_fuel().unwrap_or(0);
 
         let duration = start_time.elapsed().as_secs_f64();
@@ -372,7 +385,10 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         result.map_err(|e| e.into())
     }
 
-    #[instrument(skip(self), fields(subsys = "Engine"))]
+    #[instrument(
+        skip(self, service, trigger_action, operator_response),
+        fields(subsys = "Engine")
+    )]
     async fn get_aggregator_deps(
         &self,
         service: Service,
@@ -573,6 +589,8 @@ pub mod tests {
             metrics(),
             WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         );
 
         // store two blobs
@@ -605,6 +623,8 @@ pub mod tests {
             metrics(),
             WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         );
 
         // store valid wasm
@@ -633,6 +653,8 @@ pub mod tests {
             metrics(),
             WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         );
 
         // store echo digest
@@ -695,6 +717,8 @@ pub mod tests {
             metrics(),
             WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         );
 
         std::env::set_var("WAVS_ENV_TEST", "testing");
@@ -796,6 +820,8 @@ pub mod tests {
             metrics(),
             WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         );
 
         let digest = engine
@@ -857,6 +883,8 @@ pub mod tests {
             metrics(),
             WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         );
 
         let digest = engine
@@ -942,6 +970,8 @@ pub mod tests {
             metrics(),
             WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         );
 
         // store square digest
@@ -1006,6 +1036,8 @@ pub mod tests {
             metrics(),
             WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         );
 
         // Create a service ID
@@ -1056,6 +1088,8 @@ pub mod tests {
             metrics(),
             WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         );
 
         let digest = engine

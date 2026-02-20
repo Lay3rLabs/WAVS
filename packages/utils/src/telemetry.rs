@@ -46,7 +46,11 @@ pub fn setup_tracing(
 
     let subscriber = tracing_subscriber::Registry::default()
         .with(filters)
-        .with(tracing_subscriber::fmt::layer().with_line_number(true)) // console logging layer
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_line_number(true)
+                .compact(),
+        ) // console logging layer
         .with(telemetry);
 
     tracing::subscriber::set_global_default(subscriber)
@@ -498,6 +502,7 @@ pub struct TriggerMetrics {
     pub total_errors: Counter<u64>,
     pub triggers_fired: Counter<u64>,
     pub sent_dispatcher_command_latency: Histogram<f64>,
+    pub evm_stream: EvmStreamMetrics,
 }
 
 impl TriggerMetrics {
@@ -521,6 +526,7 @@ impl TriggerMetrics {
                 .with_description("Time taken to send command to dispatcher")
                 .with_boundaries(vec![0.001, 0.01, 0.05, 0.1, 0.2, 0.5, 1.0])
                 .build(),
+            evm_stream: EvmStreamMetrics::new(meter),
         }
     }
 
@@ -541,6 +547,256 @@ impl TriggerMetrics {
 
     pub fn record_trigger_sent_dispatcher_command(&self, duration: f64) {
         self.sent_dispatcher_command_latency.record(duration, &[]);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EvmStreamMetrics {
+    // Connection metrics
+    pub connection_success_count: Counter<u64>,
+    pub connection_error_count: Counter<u64>,
+    pub disconnection_count: Counter<u64>,
+    pub provider_switch_count: Counter<u64>,
+    pub priority_endpoint_recovery_count: Counter<u64>,
+    pub is_connected: Gauge<u64>,
+
+    // Subscription metrics
+    pub active_log_filters: Gauge<u64>,
+    pub active_subscriptions: UpDownCounter<i64>,
+    pub subscribe_request_count: Counter<u64>,
+    pub unsubscribe_request_count: Counter<u64>,
+    pub unsubscribe_failure_count: Counter<u64>,
+    pub rpc_request_dropped_count: Counter<u64>,
+    pub rpc_request_error_count: Counter<u64>,
+    pub subscription_events_received: Counter<u64>,
+    pub subscription_events_forwarded: Counter<u64>,
+    pub subscription_events_stale: Counter<u64>,
+}
+
+impl EvmStreamMetrics {
+    pub const NAMESPACE: &'static str = "trigger.evm_stream";
+
+    pub fn new(meter: Meter) -> Self {
+        Self {
+            connection_success_count: meter
+                .u64_counter(format!("{}.connection_success_count", Self::NAMESPACE))
+                .with_description("Successful WS connections")
+                .build(),
+            connection_error_count: meter
+                .u64_counter(format!("{}.connection_error_count", Self::NAMESPACE))
+                .with_description("Failed connection attempts")
+                .build(),
+            disconnection_count: meter
+                .u64_counter(format!("{}.disconnection_count", Self::NAMESPACE))
+                .with_description("Total disconnections")
+                .build(),
+            provider_switch_count: meter
+                .u64_counter(format!("{}.provider_switch_count", Self::NAMESPACE))
+                .with_description("Endpoint switches")
+                .build(),
+            priority_endpoint_recovery_count: meter
+                .u64_counter(format!(
+                    "{}.priority_endpoint_recovery_count",
+                    Self::NAMESPACE
+                ))
+                .with_description("Health check triggered switch back to priority")
+                .build(),
+            is_connected: meter
+                .u64_gauge(format!("{}.is_connected", Self::NAMESPACE))
+                .with_description("1 if connected, 0 if not")
+                .build(),
+            active_log_filters: meter
+                .u64_gauge(format!("{}.active_log_filters", Self::NAMESPACE))
+                .with_description("Number of addresses+topics in current filter")
+                .build(),
+            active_subscriptions: meter
+                .i64_up_down_counter(format!("{}.active_subscriptions", Self::NAMESPACE))
+                .with_description("Current active subscription count")
+                .build(),
+            subscribe_request_count: meter
+                .u64_counter(format!("{}.subscribe_request_count", Self::NAMESPACE))
+                .with_description("Subscribe RPC requests sent")
+                .build(),
+            unsubscribe_request_count: meter
+                .u64_counter(format!("{}.unsubscribe_request_count", Self::NAMESPACE))
+                .with_description("Unsubscribe RPC requests sent")
+                .build(),
+            unsubscribe_failure_count: meter
+                .u64_counter(format!("{}.unsubscribe_failure_count", Self::NAMESPACE))
+                .with_description("Failed unsubscribe attempts (server rejected)")
+                .build(),
+            rpc_request_dropped_count: meter
+                .u64_counter(format!("{}.rpc_request_dropped_count", Self::NAMESPACE))
+                .with_description("RPC requests dropped (delayed send canceled or channel closed)")
+                .build(),
+            rpc_request_error_count: meter
+                .u64_counter(format!("{}.rpc_request_error_count", Self::NAMESPACE))
+                .with_description("RPC request errors (unknown id or send failure)")
+                .build(),
+            subscription_events_received: meter
+                .u64_counter(format!("{}.subscription_events_received", Self::NAMESPACE))
+                .with_description("Events received from WS")
+                .build(),
+            subscription_events_forwarded: meter
+                .u64_counter(format!("{}.subscription_events_forwarded", Self::NAMESPACE))
+                .with_description("Events forwarded (not stale)")
+                .build(),
+            subscription_events_stale: meter
+                .u64_counter(format!("{}.subscription_events_stale", Self::NAMESPACE))
+                .with_description("Events discarded from non-most-recent subscriptions")
+                .build(),
+        }
+    }
+
+    pub fn record_connection_success(&self, chain: &ChainKey, is_priority: bool) {
+        self.connection_success_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("is_priority", is_priority),
+            ],
+        );
+        self.is_connected
+            .record(1, &[KeyValue::new("chain", chain.to_string())]);
+    }
+
+    pub fn record_connection_error(&self, chain: &ChainKey) {
+        self.connection_error_count
+            .add(1, &[KeyValue::new("chain", chain.to_string())]);
+    }
+
+    pub fn record_disconnection(&self, chain: &ChainKey, reason: &str) {
+        self.disconnection_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("reason", reason.to_owned()),
+            ],
+        );
+        self.is_connected
+            .record(0, &[KeyValue::new("chain", chain.to_string())]);
+    }
+
+    /// Records a disconnection counter without setting `is_connected` to 0.
+    /// Use for transparent failovers where reconnection is immediate.
+    pub fn record_intentional_disconnection(&self, chain: &ChainKey, reason: &str) {
+        self.disconnection_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("reason", reason.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_provider_switch(&self, chain: &ChainKey, reason: &str) {
+        self.provider_switch_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("reason", reason.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_priority_recovery(&self, chain: &ChainKey) {
+        self.priority_endpoint_recovery_count
+            .add(1, &[KeyValue::new("chain", chain.to_string())]);
+    }
+
+    pub fn record_active_log_filters(&self, chain: &ChainKey, count: u64) {
+        self.active_log_filters
+            .record(count, &[KeyValue::new("chain", chain.to_string())]);
+    }
+
+    pub fn record_active_subscriptions_change(&self, chain: &ChainKey, sub_type: &str, delta: i64) {
+        self.active_subscriptions.add(
+            delta,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_subscribe_request(&self, chain: &ChainKey, sub_type: &str) {
+        self.subscribe_request_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_unsubscribe_request(&self, chain: &ChainKey, sub_type: &str) {
+        self.unsubscribe_request_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_unsubscribe_failure(&self, chain: &ChainKey, sub_type: &str) {
+        self.unsubscribe_failure_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_rpc_request_dropped(&self, chain: &ChainKey, reason: &str) {
+        self.rpc_request_dropped_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("reason", reason.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_rpc_request_error(&self, chain: &ChainKey, reason: &str) {
+        self.rpc_request_error_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("reason", reason.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_subscription_event_received(&self, chain: &ChainKey, sub_type: &str) {
+        self.subscription_events_received.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_subscription_event_forwarded(&self, chain: &ChainKey, sub_type: &str) {
+        self.subscription_events_forwarded.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_subscription_event_stale(&self, chain: &ChainKey, sub_type: &str) {
+        self.subscription_events_stale.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
     }
 }
 

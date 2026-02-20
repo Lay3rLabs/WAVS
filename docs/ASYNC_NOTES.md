@@ -35,7 +35,7 @@ The other problem is that WASI 0.2 does not perform well with deeply nested asyn
 
 ## Problems to be solved with WASI 0.3
 
-WASI 0.3 solves these problems with “deleting” `wasi:io` by implementing async and streams in the ABI. This largely solves both problems of WASI 0.2 composition. WASI 0.3 is tracking for Q1 or Q2 2025, so should start planning for it.
+WASI 0.3 solves these problems with “deleting” `wasi:io` by implementing async and streams in the ABI. This largely solves both problems of WASI 0.2 composition. WASI 0.3 ("WASI Preview 3") has been shipping with async component support; async streams and IO are now part of the ABI rather than requiring the `wasi:io` poll model.
 
 [https://youtu.be/hgWkiWeGEzk?si=vzWCA3FRKG6Y0oXy](https://youtu.be/hgWkiWeGEzk?si=vzWCA3FRKG6Y0oXy)
 [https://youtu.be/y3x4-nQeXxc?si=mKl0napmyn5w3q3l](https://youtu.be/y3x4-nQeXxc?si=mKl0napmyn5w3q3l)
@@ -44,9 +44,9 @@ WASI 0.3 solves these problems with “deleting” `wasi:io` by implementing asy
 
 Wasmtime can be used in both async and sync mode. Tokio shouldn’t be a requirement, though we do use async with the Tokio runtime.
 
-[https://docs.rs/wasmtime/27.0.0/wasmtime/struct.Config.html\#method.async\_support](https://docs.rs/wasmtime/27.0.0/wasmtime/struct.Config.html#method.async_support)
+[https://docs.rs/wasmtime/38.0.3/wasmtime/struct.Config.html\#method.async\_support](https://docs.rs/wasmtime/38.0.3/wasmtime/struct.Config.html#method.async_support)
 
 However, the `wasmtime-wasi` and `wasmtime-wasi-http` implementations are wired up with Tokio. To use an alternative runtime, the host implementation for the WASI interfaces would need to be rewritten.
 
-[https://docs.rs/wasmtime-wasi/27.0.0/wasmtime\_wasi/](https://docs.rs/wasmtime-wasi/27.0.0/wasmtime_wasi/)
-[https://docs.rs/wasmtime-wasi-http/27.0.0/wasmtime\_wasi\_http/](https://docs.rs/wasmtime-wasi-http/27.0.0/wasmtime_wasi_http/)
+[https://docs.rs/wasmtime-wasi/38.0.3/wasmtime\_wasi/](https://docs.rs/wasmtime-wasi/38.0.3/wasmtime_wasi/)
+[https://docs.rs/wasmtime-wasi-http/38.0.3/wasmtime\_wasi\_http/](https://docs.rs/wasmtime-wasi-http/38.0.3/wasmtime_wasi_http/)

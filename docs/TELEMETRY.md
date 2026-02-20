@@ -58,7 +58,7 @@ http://localhost:16686
 ### For production usage
 
 - Setup Jaeger to use a persistent storage backend (e.g., Elasticsearch, Cassandra, etc.) instead of the default in-memory storage.
-- The service names will be `wavs` and `wavs-aggregator`
+- The service name will be `wavs`
 
 ---
 

@@ -14,9 +14,11 @@ Most of the developer tasks are executed via justfiles. Run `just` to see a full
 
 ### Documents
 - [WAVS API](API.md)
+- [Components](COMPONENTS.md)
 - [Wit Authoring Notes](WIT_AUTHORING_NOTES.md)
 - [Async notes](./ASYNC_NOTES.md)
+- [Telemetry](TELEMETRY.md)
 
 ### Architecture
 - [Architecture](ARCHITECTURE.md)
-
+- [P2P](P2P.md)
