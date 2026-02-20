@@ -507,49 +507,7 @@ async fn run_test(
                         feed_key
                     );
 
-                    for (idx, http_client) in clients.http_clients.iter().enumerate() {
-                        tracing::info!(
-                            "Waiting for hypercore stream readiness on instance {} for feed_key {}",
-                            idx,
-                            feed_key
-                        );
-                        wait_for_hypercore_streams_to_finalize(
-                            http_client,
-                            feed_key,
-                            Some(Duration::from_secs(30)),
-                        )
-                        .await
-                        .context("Failed to wait for hypercore stream to finalize")?;
-                    }
-
-                    // Wait for hypercore mesh to stabilize - require at least 1 WAVS instance to connect.
-                    // If 0 peers are connected the append will never replicate, so fail fast.
-                    {
-                        let min_required_peers = 1;
-                        let total_operators = clients.http_clients.len();
-                        tracing::info!(
-                            "Waiting for hypercore mesh to stabilize (min {} peer, {} total operators) before append",
-                            min_required_peers,
-                            total_operators
-                        );
-
-                        let peer_count = wait_for_hypercore_mesh_ready(
-                            &hypercore_client,
-                            min_required_peers,
-                            Duration::from_secs(90),
-                        )
-                        .await
-                        .context("Hypercore mesh not ready: 0 peers connected, append will never replicate")?;
-
-                        tracing::info!(
-                            "Hypercore mesh ready for append: {} connected peers (min required: {}, total operators: {})",
-                            peer_count,
-                            min_required_peers,
-                            total_operators
-                        );
-                    }
-
-                    // Verify feed keys match
+                    // Verify feed keys match before waiting for connectivity
                     if client_feed_key != *feed_key {
                         tracing::error!(
                             "FEED KEY MISMATCH! Client has: {}, Service has: {}",
@@ -560,6 +518,68 @@ async fn run_test(
                             "Feed key mismatch between client and service"
                         ));
                     }
+
+                    // Wait for all instances' hypercore streams AND the test client mesh
+                    // to be ready concurrently. Both check the same underlying DHT
+                    // connectivity from different sides, so running them in parallel
+                    // avoids wasting the timeout budget on sequential per-instance waits.
+                    let connectivity_timeout = Duration::from_secs(60);
+                    let min_required_peers = 1;
+                    let total_operators = clients.http_clients.len();
+
+                    tracing::info!(
+                        "Waiting for hypercore streams and mesh (min {} peer, {} total operators, timeout {}s)",
+                        min_required_peers,
+                        total_operators,
+                        connectivity_timeout.as_secs(),
+                    );
+
+                    let stream_futs: Vec<_> = clients
+                        .http_clients
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, http_client)| async move {
+                            tracing::info!(
+                                "Waiting for hypercore stream readiness on instance {} for feed_key {}",
+                                idx,
+                                feed_key
+                            );
+                            wait_for_hypercore_streams_to_finalize(
+                                http_client,
+                                feed_key,
+                                Some(connectivity_timeout),
+                            )
+                            .await
+                            .with_context(|| {
+                                format!(
+                                    "Hypercore stream failed to finalize on instance {idx}"
+                                )
+                            })
+                        })
+                        .collect();
+
+                    let mesh_fut = wait_for_hypercore_mesh_ready(
+                        &hypercore_client,
+                        min_required_peers,
+                        connectivity_timeout,
+                    );
+
+                    let (streams_result, mesh_result) = tokio::join!(
+                        futures::future::try_join_all(stream_futs),
+                        mesh_fut,
+                    );
+
+                    streams_result
+                        .context("Failed to wait for hypercore streams to finalize")?;
+                    let peer_count = mesh_result
+                        .context("Hypercore mesh not ready: 0 peers connected, append will never replicate")?;
+
+                    tracing::info!(
+                        "Hypercore streams and mesh ready: {} connected peers (min required: {}, total operators: {})",
+                        peer_count,
+                        min_required_peers,
+                        total_operators
+                    );
 
                     // Append data to the hypercore feed
                     tracing::info!("Appending {} bytes to hypercore feed...", payload.len());
