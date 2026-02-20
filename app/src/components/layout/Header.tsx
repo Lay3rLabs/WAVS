@@ -2,12 +2,59 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../atoms';
 import { useAppStore } from '../../stores/appStore';
 import { HealthIndicator } from './HealthIndicator';
+import type { ReactNode } from 'react';
 
-const navItems = [
-  { path: '/services', label: 'Services' },
-  { path: '/activity', label: 'Activity' },
-  { path: '/logs', label: 'Logs' },
-  { path: '/settings', label: 'Settings' },
+// Services — 2×2 grid of tiles
+function ServicesIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+      <rect x="1" y="1" width="6" height="6" rx="1.25" />
+      <rect x="9" y="1" width="6" height="6" rx="1.25" />
+      <rect x="1" y="9" width="6" height="6" rx="1.25" />
+      <rect x="9" y="9" width="6" height="6" rx="1.25" />
+    </svg>
+  );
+}
+
+// Activity — lightning bolt
+function ActivityIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+      <polygon points="9.5,1 3.5,9 7.5,9 6.5,15 12.5,7 8.5,7" />
+    </svg>
+  );
+}
+
+// Logs — three lines like a list, last one shorter
+function LogsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+      <rect x="2" y="2" width="12" height="2" rx="1" />
+      <rect x="2" y="7" width="12" height="2" rx="1" />
+      <rect x="2" y="12" width="8" height="2" rx="1" />
+    </svg>
+  );
+}
+
+// Settings — horizontal sliders with knobs
+function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+      <rect x="2" y="2.5" width="12" height="1.5" rx="0.75" />
+      <circle cx="5" cy="3.25" r="2.25" />
+      <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" />
+      <circle cx="10" cy="8" r="2.25" />
+      <rect x="2" y="12" width="12" height="1.5" rx="0.75" />
+      <circle cx="7" cy="12.75" r="2.25" />
+    </svg>
+  );
+}
+
+const navItems: { path: string; label: string; icon: ReactNode }[] = [
+  { path: '/services', label: 'Services', icon: <ServicesIcon /> },
+  { path: '/activity', label: 'Activity', icon: <ActivityIcon /> },
+  { path: '/logs',     label: 'Logs',     icon: <LogsIcon /> },
+  { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
 ];
 
 export function Header() {
@@ -42,6 +89,8 @@ export function Header() {
               size="lg"
               disabled={isDisabled}
               selected={isActive}
+              contentBefore={item.icon}
+              className="px-5"
               onClick={() => navigate(item.path)}
             />
           );
