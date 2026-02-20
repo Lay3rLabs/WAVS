@@ -564,15 +564,13 @@ async fn run_test(
                         connectivity_timeout,
                     );
 
-                    let (streams_result, mesh_result) = tokio::join!(
-                        futures::future::try_join_all(stream_futs),
-                        mesh_fut,
-                    );
+                    let (streams_result, mesh_result) =
+                        tokio::join!(futures::future::try_join_all(stream_futs), mesh_fut,);
 
-                    streams_result
-                        .context("Failed to wait for hypercore streams to finalize")?;
-                    let peer_count = mesh_result
-                        .context("Hypercore mesh not ready: 0 peers connected, append will never replicate")?;
+                    streams_result.context("Failed to wait for hypercore streams to finalize")?;
+                    let peer_count = mesh_result.context(
+                        "Hypercore mesh not ready: 0 peers connected, append will never replicate",
+                    )?;
 
                     tracing::info!(
                         "Hypercore streams and mesh ready: {} connected peers (min required: {}, total operators: {})",
