@@ -8,7 +8,8 @@ use alloy_primitives::{Address, B256};
 use alloy_rpc_types_eth::Log;
 use slotmap::Key;
 use tokio::{sync::oneshot, task::JoinHandle};
-use wavs_types::ChainKeyNamespace;
+use utils::telemetry::EvmStreamMetrics;
+use wavs_types::{ChainKey, ChainKeyNamespace};
 
 use crate::subsystems::trigger::streams::evm_stream::client::rpc_types::outbound::SubscribeParams;
 
@@ -32,7 +33,12 @@ pub struct Subscriptions {
 
 impl Subscriptions {
     #[tracing::instrument(skip_all, fields(namespace = %ChainKeyNamespace::EVM))]
-    pub fn new(rpc_ids: RpcIds, channels: SubscriptionChannels) -> Self {
+    pub fn new(
+        rpc_ids: RpcIds,
+        channels: SubscriptionChannels,
+        metrics: EvmStreamMetrics,
+        chain_key: ChainKey,
+    ) -> Self {
         let SubscriptionChannels {
             mut subscription_block_height_tx,
             mut subscription_log_tx,
@@ -42,7 +48,12 @@ impl Subscriptions {
             mut connection_data_rx,
         } = channels;
 
-        let inner = Arc::new(SubscriptionsInner::new(rpc_ids, connection_send_rpc_tx));
+        let inner = Arc::new(SubscriptionsInner::new(
+            rpc_ids,
+            connection_send_rpc_tx,
+            metrics,
+            chain_key,
+        ));
 
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
 
@@ -191,12 +202,16 @@ struct SubscriptionsInner {
     rpc_ids: RpcIds,
     rpc_ids_in_flight: RpcIdsInFlight,
     _connection_send_rpc_tx: tokio::sync::mpsc::UnboundedSender<RpcRequest>,
+    metrics: EvmStreamMetrics,
+    chain_key: ChainKey,
 }
 
 impl SubscriptionsInner {
     pub fn new(
         rpc_ids: RpcIds,
         connection_send_rpc_tx: tokio::sync::mpsc::UnboundedSender<RpcRequest>,
+        metrics: EvmStreamMetrics,
+        chain_key: ChainKey,
     ) -> Self {
         Self {
             _blocks: AtomicBool::new(false),
@@ -207,6 +222,8 @@ impl SubscriptionsInner {
             rpc_ids,
             rpc_ids_in_flight: RpcIdsInFlight::default(),
             _connection_send_rpc_tx: connection_send_rpc_tx,
+            metrics,
+            chain_key,
         }
     }
 
@@ -235,6 +252,11 @@ impl SubscriptionsInner {
             for topic in topics {
                 lock.topics.insert(topic);
             }
+
+            self.metrics.record_active_log_filters(
+                &self.chain_key,
+                (lock.addresses.len() + lock.topics.len()) as u64,
+            );
         }
         self.unsubscribe(SubscriptionCategory::AllLogs);
 
@@ -263,6 +285,12 @@ impl SubscriptionsInner {
                     if logs.addresses.is_empty() && logs.topics.is_empty() {
                         tracing::warn!("No more filters remaining, disabling *all* log filters. If you meant to remove all the filters in order to subractively get a catch-all, call `enable_logs()` with empty vecs instead");
                         *lock = None;
+                        self.metrics.record_active_log_filters(&self.chain_key, 0);
+                    } else {
+                        self.metrics.record_active_log_filters(
+                            &self.chain_key,
+                            (logs.addresses.len() + logs.topics.len()) as u64,
+                        );
                     }
                 }
             }
@@ -273,6 +301,7 @@ impl SubscriptionsInner {
 
     pub fn disable_all_logs(&self) {
         *self._logs.write().unwrap() = None;
+        self.metrics.record_active_log_filters(&self.chain_key, 0);
         self.unsubscribe(SubscriptionCategory::AllLogs);
         // no need to resubscribe
     }
@@ -293,6 +322,19 @@ impl SubscriptionsInner {
             .store(value, std::sync::atomic::Ordering::SeqCst);
 
         if !value {
+            // Decrement active subscriptions for each kind before clearing
+            // NOTE: An in-flight subscribe response landing concurrently could cause a
+            // brief drift in the UpDownCounter (increment after this bulk decrement but
+            // before clear()). This is acceptable — the counter self-corrects on the
+            // next reconnect cycle.
+            let active = self.ids.count_by_category();
+            for (category, count) in &active {
+                self.metrics.record_active_subscriptions_change(
+                    &self.chain_key,
+                    category.metric_label(),
+                    -(*count as i64),
+                );
+            }
             self.ids.clear();
             self.rpc_ids_in_flight.clear();
         } else {
@@ -307,13 +349,22 @@ impl SubscriptionsInner {
         req: RpcRequest,
         delay: Option<Duration>,
     ) -> Result<(), tokio::sync::mpsc::error::SendError<RpcRequest>> {
-        match &req {
+        // Extract metric info before req is consumed by send.
+        // Metrics are recorded only after a successful send.
+        #[derive(Clone, Copy)]
+        enum RpcSendMetric {
+            Subscribe(&'static str),
+            Unsubscribe(&'static str),
+        }
+
+        let rpc_metric = match &req {
             RpcRequest::Subscribe { id, params } => match params {
                 SubscribeParams::NewHeads => {
                     tracing::info!(
                         "sending newHeads subscription request (rpc id {})",
                         id.data().as_ffi()
                     );
+                    RpcSendMetric::Subscribe("new_heads")
                 }
                 SubscribeParams::Logs { addresses, topics } => {
                     tracing::info!(
@@ -328,12 +379,14 @@ impl SubscriptionsInner {
                         addresses,
                         topics
                     );
+                    RpcSendMetric::Subscribe("logs")
                 }
                 SubscribeParams::NewPendingTransactions => {
                     tracing::info!(
                         "sending newPendingTransactions subscription request (rpc id {})",
                         id.data().as_ffi()
                     );
+                    RpcSendMetric::Subscribe("new_pending_transactions")
                 }
             },
             RpcRequest::Unsubscribe {
@@ -345,8 +398,14 @@ impl SubscriptionsInner {
                     id.data().as_ffi(),
                     subscription_id
                 );
+                let sub_type = self
+                    .ids
+                    .lookup_kind(subscription_id)
+                    .map(|kind| kind.metric_label())
+                    .unwrap_or("unknown");
+                RpcSendMetric::Unsubscribe(sub_type)
             }
-        }
+        };
 
         // this should always be Some here, but better safe than sorry
         if let Some(kind) = self.rpc_ids.kind(req.id()) {
@@ -355,6 +414,8 @@ impl SubscriptionsInner {
                 Some(d) => {
                     let tx = self._connection_send_rpc_tx.clone();
                     let rpc_ids_in_flight = self.rpc_ids_in_flight.clone();
+                    let metrics = self.metrics.clone();
+                    let chain_key = self.chain_key.clone();
                     tokio::spawn(async move {
                         tokio::time::sleep(d).await;
 
@@ -384,19 +445,47 @@ impl SubscriptionsInner {
                         if should_send {
                             if let Err(e) = tx.send(req) {
                                 tracing::error!("failed to send delayed RPC request: {}", e);
+                                metrics.record_rpc_request_error(&chain_key, "delayed_send_failed");
+                            } else {
+                                match rpc_metric {
+                                    RpcSendMetric::Subscribe(sub_type) => {
+                                        metrics.record_subscribe_request(&chain_key, sub_type);
+                                    }
+                                    RpcSendMetric::Unsubscribe(sub_type) => {
+                                        metrics.record_unsubscribe_request(&chain_key, sub_type);
+                                    }
+                                }
                             }
+                        } else {
+                            metrics.record_rpc_request_dropped(&chain_key, "delayed_canceled");
                         }
                     });
                 }
-                None => {
-                    self._connection_send_rpc_tx.send(req)?;
-                }
+                None => match self._connection_send_rpc_tx.send(req) {
+                    Ok(()) => match rpc_metric {
+                        RpcSendMetric::Subscribe(sub_type) => {
+                            self.metrics
+                                .record_subscribe_request(&self.chain_key, sub_type);
+                        }
+                        RpcSendMetric::Unsubscribe(sub_type) => {
+                            self.metrics
+                                .record_unsubscribe_request(&self.chain_key, sub_type);
+                        }
+                    },
+                    Err(e) => {
+                        self.metrics
+                            .record_rpc_request_error(&self.chain_key, "send_failed");
+                        return Err(e);
+                    }
+                },
             }
         } else {
             tracing::warn!(
                 "couldn't get in-flight kind for rpc id {}",
                 req.id().data().as_ffi()
             );
+            self.metrics
+                .record_rpc_request_error(&self.chain_key, "unknown_rpc_id");
         }
 
         Ok(())
@@ -440,6 +529,12 @@ impl SubscriptionsInner {
 
                 match SubscriptionKind::try_from(kind) {
                     Ok(kind) => {
+                        self.metrics.record_active_subscriptions_change(
+                            &self.chain_key,
+                            kind.metric_label(),
+                            1,
+                        );
+
                         let most_recent_category = {
                             match removed_rpc_latest_subscription_category {
                                 Some(category) => {
@@ -468,6 +563,14 @@ impl SubscriptionsInner {
                 if success {
                     match kind {
                         RpcRequestKind::Unsubscribe { subscription_id } => {
+                            // Look up the kind before removing so we can decrement the right counter
+                            if let Some(sub_kind) = self.ids.lookup_kind(&subscription_id) {
+                                self.metrics.record_active_subscriptions_change(
+                                    &self.chain_key,
+                                    sub_kind.metric_label(),
+                                    -1,
+                                );
+                            }
                             tracing::info!("unsubscribed from subscription id {}", subscription_id);
                             self.ids.remove(&subscription_id);
                         }
@@ -482,6 +585,13 @@ impl SubscriptionsInner {
                     match kind {
                         RpcRequestKind::Unsubscribe { subscription_id } => {
                             if self.ids.exists(&subscription_id) {
+                                let sub_type = self
+                                    .ids
+                                    .lookup_kind(&subscription_id)
+                                    .map(|kind| kind.metric_label())
+                                    .unwrap_or("unknown");
+                                self.metrics
+                                    .record_unsubscribe_failure(&self.chain_key, sub_type);
                                 tracing::warn!(
                                     "failed to unsubscribe from subscription id {}, trying again in {} seconds",
                                     subscription_id,
@@ -529,6 +639,8 @@ impl SubscriptionsInner {
     ) {
         match event {
             RpcSubscriptionEvent::NewHeads(header) => {
+                self.metrics
+                    .record_subscription_event_received(&self.chain_key, "new_heads");
                 if !self.ids.compare(&subscription_id, |kind| {
                     matches!(kind, SubscriptionKind::NewHeads)
                 }) {
@@ -540,10 +652,14 @@ impl SubscriptionsInner {
                     .ids
                     .is_most_recent(&subscription_id, SubscriptionCategory::NewHeads)
                 {
+                    self.metrics
+                        .record_subscription_event_forwarded(&self.chain_key, "new_heads");
                     if let Err(e) = subscription_block_height_tx.send(header.number) {
                         tracing::error!("failed to send new block height: {}", e);
                     }
                 } else {
+                    self.metrics
+                        .record_subscription_event_stale(&self.chain_key, "new_heads");
                     tracing::debug!(
                         "ignoring newHeads event for non-most-recent newHeads subscription id {}",
                         subscription_id
@@ -551,6 +667,8 @@ impl SubscriptionsInner {
                 }
             }
             RpcSubscriptionEvent::Logs(log) => {
+                self.metrics
+                    .record_subscription_event_received(&self.chain_key, "logs");
                 tracing::info!("received log event for subscription id {}", subscription_id);
                 tracing::debug!(
                     "log event details: address={:?}, topics={:?}",
@@ -569,10 +687,14 @@ impl SubscriptionsInner {
                     .ids
                     .is_most_recent(&subscription_id, SubscriptionCategory::AllLogs)
                 {
+                    self.metrics
+                        .record_subscription_event_forwarded(&self.chain_key, "logs");
                     if let Err(e) = subscription_log_tx.send(log) {
                         tracing::error!("failed to send log: {}", e);
                     }
                 } else {
+                    self.metrics
+                        .record_subscription_event_stale(&self.chain_key, "logs");
                     tracing::debug!(
                         "ignoring log event for non-most-recent logs subscription id {}",
                         subscription_id
@@ -580,6 +702,10 @@ impl SubscriptionsInner {
                 }
             }
             RpcSubscriptionEvent::NewPendingTransaction(tx) => {
+                self.metrics.record_subscription_event_received(
+                    &self.chain_key,
+                    "new_pending_transactions",
+                );
                 if !self.ids.compare(&subscription_id, |kind| {
                     matches!(kind, SubscriptionKind::NewPendingTransactions)
                 }) {
@@ -591,10 +717,18 @@ impl SubscriptionsInner {
                     &subscription_id,
                     SubscriptionCategory::NewPendingTransactions,
                 ) {
+                    self.metrics.record_subscription_event_forwarded(
+                        &self.chain_key,
+                        "new_pending_transactions",
+                    );
                     if let Err(e) = subscription_new_pending_transaction_tx.send(tx) {
                         tracing::error!("failed to send new pending transaction: {}", e);
                     }
                 } else {
+                    self.metrics.record_subscription_event_stale(
+                        &self.chain_key,
+                        "new_pending_transactions",
+                    );
                     tracing::debug!("ignoring new pending transaction event for non-most-recent newPendingTransactions subscription id {}", subscription_id);
                 }
             }
@@ -723,6 +857,16 @@ pub enum SubscriptionKind {
     NewPendingTransactions,
 }
 
+impl SubscriptionKind {
+    fn metric_label(&self) -> &'static str {
+        match self {
+            SubscriptionKind::NewHeads => "new_heads",
+            SubscriptionKind::Logs { .. } => "logs",
+            SubscriptionKind::NewPendingTransactions => "new_pending_transactions",
+        }
+    }
+}
+
 impl TryFrom<RpcRequestKind> for SubscriptionKind {
     type Error = &'static str;
 
@@ -750,6 +894,16 @@ enum SubscriptionCategory {
     NewHeads,
     AllLogs,
     NewPendingTransactions,
+}
+
+impl SubscriptionCategory {
+    fn metric_label(&self) -> &'static str {
+        match self {
+            SubscriptionCategory::NewHeads => "new_heads",
+            SubscriptionCategory::AllLogs => "logs",
+            SubscriptionCategory::NewPendingTransactions => "new_pending_transactions",
+        }
+    }
 }
 
 impl From<&SubscriptionKind> for SubscriptionCategory {
@@ -838,6 +992,18 @@ impl SubscriptionIds {
 
     fn exists(&self, id: &str) -> bool {
         self._lookup.read().unwrap().contains_key(id)
+    }
+
+    fn lookup_kind(&self, id: &str) -> Option<SubscriptionKind> {
+        self._lookup.read().unwrap().get(id).cloned()
+    }
+
+    fn count_by_category(&self) -> HashMap<SubscriptionCategory, usize> {
+        let categories = self._categories.read().unwrap();
+        categories
+            .iter()
+            .map(|(cat, data)| (*cat, data.ids.len()))
+            .collect()
     }
 }
 
@@ -965,9 +1131,11 @@ mod tests {
     ) {
         let rpc_ids = RpcIds::new();
         let (connection_tx, connection_rx) = unbounded_channel();
+        let metrics = EvmStreamMetrics::new(opentelemetry::global::meter("test"));
+        let chain_key = wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format");
         // Return the inner subscriptions object alongside the channel we use to inspect outbound RPCs.
         (
-            SubscriptionsInner::new(rpc_ids, connection_tx),
+            SubscriptionsInner::new(rpc_ids, connection_tx, metrics, chain_key),
             connection_rx,
         )
     }

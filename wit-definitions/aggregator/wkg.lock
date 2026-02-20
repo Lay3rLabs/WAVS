@@ -21,6 +21,15 @@ version = "0.2.0"
 digest = "sha256:5a568e6e2d60c1ce51220e1833cdd5b88db9f615720edc762a9b4a6f36b383bd"
 
 [[packages]]
+name = "wasi:io"
+registry = "wa.dev"
+
+[[packages.versions]]
+requirement = "=0.2.0"
+version = "0.2.0"
+digest = "sha256:c33b1dbf050f64229ff4decbf9a3d3420e0643a86f5f0cea29f81054820020a6"
+
+[[packages]]
 name = "wasi:keyvalue"
 registry = "wa.dev"
 
@@ -28,3 +37,12 @@ registry = "wa.dev"
 requirement = "=0.2.0-draft2"
 version = "0.2.0-draft2"
 digest = "sha256:18b704b3d1682ab0f63d0a96715352e26977beaf55acd7cc5641a7ca579fb52e"
+
+[[packages]]
+name = "wasi:sockets"
+registry = "wa.dev"
+
+[[packages.versions]]
+requirement = "=0.2.0"
+version = "0.2.0"
+digest = "sha256:68640584237d98077cec4631264ff28ed74fe04619ce5dcd8020383df5c3969f"

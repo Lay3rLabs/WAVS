@@ -7,8 +7,6 @@ use cosmwasm_std::{StdError, Uint256};
 pub enum WavsValidateError {
     #[error("Invalid signature length")]
     InvalidSignatureLength,
-    #[error("Invalid signature block")]
-    InvalidSignatureBlock,
     #[error("Invalid signature order")]
     InvalidSignatureOrder,
     #[error("Invalid signature: {0}")]
@@ -23,12 +21,6 @@ pub enum WavsValidateError {
     },
     #[error("Invalid quorum parameters")]
     InvalidQuorumParameters,
-    #[error("Registry not found")]
-    MissingRegistry,
-    #[error("Unable to decode envelope")]
-    EnvelopeDecode,
-    #[error("Could not parse signature")]
-    SignatureParse,
 }
 
 impl TryFrom<StdError> for WavsValidateError {

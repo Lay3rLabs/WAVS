@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
 use std::time::Duration;
 
 use opentelemetry::metrics::{Counter, Gauge, Histogram, Meter, UpDownCounter};
@@ -10,7 +12,7 @@ use opentelemetry_sdk::{
     trace::{self, Sampler, SdkTracerProvider},
 };
 use tracing_subscriber::layer::SubscriberExt;
-use wavs_types::ChainKey;
+use wavs_types::{ChainKey, Service, WorkflowId};
 
 const DEFAULT_PROMETHEUS_PUSH_INTERVAL: u64 = 30; // seconds
 
@@ -44,7 +46,11 @@ pub fn setup_tracing(
 
     let subscriber = tracing_subscriber::Registry::default()
         .with(filters)
-        .with(tracing_subscriber::fmt::layer()) // console logging layer
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_line_number(true)
+                .compact(),
+        ) // console logging layer
         .with(telemetry);
 
     tracing::subscriber::set_global_default(subscriber)
@@ -90,6 +96,7 @@ pub fn setup_metrics(
     meter_provider
 }
 
+#[derive(Clone, Debug)]
 pub struct Metrics {
     pub http: HttpMetrics,
     pub wavs: WavsMetrics,
@@ -100,47 +107,6 @@ impl Metrics {
         Self {
             http: HttpMetrics::new(meter.clone()),
             wavs: WavsMetrics::new(meter),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct AggregatorMetrics {
-    pub packets_received: Counter<u64>,
-    pub packets_processed: Counter<u64>,
-    pub packets_failed: Counter<u64>,
-    pub processing_latency: Histogram<f64>,
-    pub total_errors: Counter<u64>,
-    pub engine: EngineMetrics,
-}
-
-impl AggregatorMetrics {
-    pub const NAMESPACE: &'static str = "aggregator";
-
-    pub fn new(meter: Meter) -> Self {
-        Self {
-            packets_received: meter
-                .u64_counter(format!("{}.packets_received", Self::NAMESPACE))
-                .with_description("Total packets received by aggregator")
-                .build(),
-            packets_processed: meter
-                .u64_counter(format!("{}.packets_processed", Self::NAMESPACE))
-                .with_description("Total packets successfully processed")
-                .build(),
-            packets_failed: meter
-                .u64_counter(format!("{}.packets_failed", Self::NAMESPACE))
-                .with_description("Total packets that failed processing")
-                .build(),
-            processing_latency: meter
-                .f64_histogram(format!("{}.processing_latency_seconds", Self::NAMESPACE))
-                .with_description("Packet processing latency in seconds")
-                .with_boundaries(vec![0.001, 0.01, 0.1, 0.5, 1.0, 5.0, 10.0])
-                .build(),
-            total_errors: meter
-                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
-                .with_description("Total errors in aggregator")
-                .build(),
-            engine: EngineMetrics::new(meter.clone()),
         }
     }
 }
@@ -218,6 +184,7 @@ pub struct WavsMetrics {
     pub dispatcher: DispatcherMetrics,
     pub submission: SubmissionMetrics,
     pub trigger: TriggerMetrics,
+    pub aggregator: AggregatorMetrics,
 }
 
 impl WavsMetrics {
@@ -226,7 +193,8 @@ impl WavsMetrics {
             engine: EngineMetrics::new(meter.clone()),
             dispatcher: DispatcherMetrics::new(meter.clone()),
             submission: SubmissionMetrics::new(meter.clone()),
-            trigger: TriggerMetrics::new(meter),
+            trigger: TriggerMetrics::new(meter.clone()),
+            aggregator: AggregatorMetrics::new(meter),
         }
     }
 }
@@ -237,8 +205,10 @@ pub struct EngineMetrics {
     pub total_errors: Counter<u64>,
     pub execution_duration: Histogram<f64>,
     pub fuel_consumption: Histogram<u64>,
-    pub executions_success: Counter<u64>,
-    pub executions_failed: Counter<u64>,
+    pub operator_executions_success: Counter<u64>,
+    pub operator_executions_failed: Counter<u64>,
+    pub aggregator_executions_success: Counter<u64>,
+    pub aggregator_executions_failed: Counter<u64>,
 }
 
 impl EngineMetrics {
@@ -271,13 +241,21 @@ impl EngineMetrics {
                     100000000.0,
                 ])
                 .build(),
-            executions_success: meter
-                .u64_counter(format!("{}.executions_success", Self::NAMESPACE))
-                .with_description("Successful WASM executions")
+            operator_executions_success: meter
+                .u64_counter(format!("{}.operator_executions_success", Self::NAMESPACE))
+                .with_description("Successful WASM operator executions")
                 .build(),
-            executions_failed: meter
-                .u64_counter(format!("{}.executions_failed", Self::NAMESPACE))
-                .with_description("Failed WASM executions")
+            operator_executions_failed: meter
+                .u64_counter(format!("{}.operator_executions_failed", Self::NAMESPACE))
+                .with_description("Failed WASM operator executions")
+                .build(),
+            aggregator_executions_success: meter
+                .u64_counter(format!("{}.aggregator_executions_success", Self::NAMESPACE))
+                .with_description("Successful WASM operator executions")
+                .build(),
+            aggregator_executions_failed: meter
+                .u64_counter(format!("{}.aggregator_executions_failed", Self::NAMESPACE))
+                .with_description("Failed WASM operator executions")
                 .build(),
         }
     }
@@ -287,7 +265,7 @@ impl EngineMetrics {
             .add(1, &[KeyValue::new("error", error.to_owned())]);
     }
 
-    pub fn record_execution(
+    pub fn record_operator_execution(
         &self,
         duration: f64,
         fuel: u64,
@@ -304,9 +282,32 @@ impl EngineMetrics {
         self.fuel_consumption.record(fuel, labels);
 
         if success {
-            self.executions_success.add(1, labels);
+            self.operator_executions_success.add(1, labels);
         } else {
-            self.executions_failed.add(1, labels);
+            self.operator_executions_failed.add(1, labels);
+        }
+    }
+
+    pub fn record_aggregator_execution(
+        &self,
+        duration: f64,
+        fuel: u64,
+        service_id: &str,
+        workflow_id: &str,
+        success: bool,
+    ) {
+        let labels = &[
+            KeyValue::new("service_id", service_id.to_owned()),
+            KeyValue::new("workflow_id", workflow_id.to_owned()),
+        ];
+
+        self.execution_duration.record(duration, labels);
+        self.fuel_consumption.record(fuel, labels);
+
+        if success {
+            self.aggregator_executions_success.add(1, labels);
+        } else {
+            self.aggregator_executions_failed.add(1, labels);
         }
     }
 }
@@ -352,11 +353,20 @@ impl Default for DispatcherMetrics {
 
 #[derive(Clone, Debug)]
 pub struct SubmissionMetrics {
-    pub total_messages_processed: Counter<u64>,
-    pub total_errors: Counter<u64>,
-    pub submission_latency: Histogram<f64>, // Time from WASM completion to chain submission
-    pub submissions_success: Counter<u64>,
-    pub submissions_failed: Counter<u64>,
+    request_count: Counter<u64>,
+    request_count_raw: Arc<AtomicU64>,
+
+    sign_count: Counter<u64>,
+    sign_count_raw: Arc<AtomicU64>,
+
+    dispatch_count: Counter<u64>,
+    dispatch_count_raw: Arc<AtomicU64>,
+
+    sign_error_count: Counter<u64>,
+    sign_error_count_raw: Arc<AtomicU64>,
+
+    dispatch_error_count: Counter<u64>,
+    dispatch_error_count_raw: Arc<AtomicU64>,
 }
 
 impl SubmissionMetrics {
@@ -364,50 +374,126 @@ impl SubmissionMetrics {
 
     pub fn new(meter: Meter) -> Self {
         Self {
-            total_messages_processed: meter
-                .u64_counter(format!("{}.total_messages_processed", Self::NAMESPACE))
-                .with_description("Total number of messages processed")
+            request_count: meter
+                .u64_counter(format!("{}.request_count", Self::NAMESPACE))
+                .with_description("Total number of submissions requested")
                 .build(),
-            total_errors: meter
-                .u64_counter(format!("{}.total_errors", Self::NAMESPACE))
-                .with_description("Total number of errors encountered")
+            request_count_raw: Arc::new(AtomicU64::new(0)),
+
+            sign_count: meter
+                .u64_counter(format!("{}.sign_count", Self::NAMESPACE))
+                .with_description("Total number of submissions signed")
                 .build(),
-            submission_latency: meter
-                .f64_histogram(format!("{}.submission_latency_seconds", Self::NAMESPACE))
-                .with_description("Time from WASM completion to chain submission")
-                .with_boundaries(vec![0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0])
+            sign_count_raw: Arc::new(AtomicU64::new(0)),
+
+            dispatch_count: meter
+                .u64_counter(format!("{}.dispatch_count", Self::NAMESPACE))
+                .with_description("Total number of submissions dispatched to aggregator")
                 .build(),
-            submissions_success: meter
-                .u64_counter(format!("{}.submissions_success", Self::NAMESPACE))
-                .with_description("Successful chain submissions")
+            dispatch_count_raw: Arc::new(AtomicU64::new(0)),
+
+            sign_error_count: meter
+                .u64_counter(format!("{}.sign_error_count", Self::NAMESPACE))
+                .with_description("Total number of submissions failed on signing")
                 .build(),
-            submissions_failed: meter
-                .u64_counter(format!("{}.submissions_failed", Self::NAMESPACE))
-                .with_description("Failed chain submissions")
+            sign_error_count_raw: Arc::new(AtomicU64::new(0)),
+
+            dispatch_error_count: meter
+                .u64_counter(format!("{}.dispatch_error_count", Self::NAMESPACE))
+                .with_description("Total number of submissions failed on dispatched to aggregator")
                 .build(),
+            dispatch_error_count_raw: Arc::new(AtomicU64::new(0)),
         }
     }
 
-    pub fn increment_total_processed_messages(&self, source: &str) {
-        self.total_messages_processed
-            .add(1, &[KeyValue::new("source", source.to_owned())]);
+    pub fn increment_request_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.request_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.request_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub fn increment_total_errors(&self, error: &str) {
-        self.total_errors
-            .add(1, &[KeyValue::new("error", error.to_owned())]);
+    pub fn increment_sign_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.sign_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.sign_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub fn record_submission(&self, latency: f64, chain: &str, success: bool) {
-        let labels = &[KeyValue::new("chain", chain.to_owned())];
+    pub fn increment_sign_error_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.sign_error_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.sign_error_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
 
-        self.submission_latency.record(latency, labels);
+    pub fn increment_dispatch_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.dispatch_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.dispatch_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
 
-        if success {
-            self.submissions_success.add(1, labels);
-        } else {
-            self.submissions_failed.add(1, labels);
-        }
+    pub fn increment_dispatch_error_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.dispatch_error_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.dispatch_error_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn get_request_count(&self) -> u64 {
+        self.request_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_sign_count(&self) -> u64 {
+        self.sign_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_dispatch_count(&self) -> u64 {
+        self.dispatch_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_sign_error_count(&self) -> u64 {
+        self.sign_error_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_dispatch_error_count(&self) -> u64 {
+        self.dispatch_error_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -416,6 +502,7 @@ pub struct TriggerMetrics {
     pub total_errors: Counter<u64>,
     pub triggers_fired: Counter<u64>,
     pub sent_dispatcher_command_latency: Histogram<f64>,
+    pub evm_stream: EvmStreamMetrics,
 }
 
 impl TriggerMetrics {
@@ -439,6 +526,7 @@ impl TriggerMetrics {
                 .with_description("Time taken to send command to dispatcher")
                 .with_boundaries(vec![0.001, 0.01, 0.05, 0.1, 0.2, 0.5, 1.0])
                 .build(),
+            evm_stream: EvmStreamMetrics::new(meter),
         }
     }
 
@@ -459,5 +547,374 @@ impl TriggerMetrics {
 
     pub fn record_trigger_sent_dispatcher_command(&self, duration: f64) {
         self.sent_dispatcher_command_latency.record(duration, &[]);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EvmStreamMetrics {
+    // Connection metrics
+    pub connection_success_count: Counter<u64>,
+    pub connection_error_count: Counter<u64>,
+    pub disconnection_count: Counter<u64>,
+    pub provider_switch_count: Counter<u64>,
+    pub priority_endpoint_recovery_count: Counter<u64>,
+    pub is_connected: Gauge<u64>,
+
+    // Subscription metrics
+    pub active_log_filters: Gauge<u64>,
+    pub active_subscriptions: UpDownCounter<i64>,
+    pub subscribe_request_count: Counter<u64>,
+    pub unsubscribe_request_count: Counter<u64>,
+    pub unsubscribe_failure_count: Counter<u64>,
+    pub rpc_request_dropped_count: Counter<u64>,
+    pub rpc_request_error_count: Counter<u64>,
+    pub subscription_events_received: Counter<u64>,
+    pub subscription_events_forwarded: Counter<u64>,
+    pub subscription_events_stale: Counter<u64>,
+}
+
+impl EvmStreamMetrics {
+    pub const NAMESPACE: &'static str = "trigger.evm_stream";
+
+    pub fn new(meter: Meter) -> Self {
+        Self {
+            connection_success_count: meter
+                .u64_counter(format!("{}.connection_success_count", Self::NAMESPACE))
+                .with_description("Successful WS connections")
+                .build(),
+            connection_error_count: meter
+                .u64_counter(format!("{}.connection_error_count", Self::NAMESPACE))
+                .with_description("Failed connection attempts")
+                .build(),
+            disconnection_count: meter
+                .u64_counter(format!("{}.disconnection_count", Self::NAMESPACE))
+                .with_description("Total disconnections")
+                .build(),
+            provider_switch_count: meter
+                .u64_counter(format!("{}.provider_switch_count", Self::NAMESPACE))
+                .with_description("Endpoint switches")
+                .build(),
+            priority_endpoint_recovery_count: meter
+                .u64_counter(format!(
+                    "{}.priority_endpoint_recovery_count",
+                    Self::NAMESPACE
+                ))
+                .with_description("Health check triggered switch back to priority")
+                .build(),
+            is_connected: meter
+                .u64_gauge(format!("{}.is_connected", Self::NAMESPACE))
+                .with_description("1 if connected, 0 if not")
+                .build(),
+            active_log_filters: meter
+                .u64_gauge(format!("{}.active_log_filters", Self::NAMESPACE))
+                .with_description("Number of addresses+topics in current filter")
+                .build(),
+            active_subscriptions: meter
+                .i64_up_down_counter(format!("{}.active_subscriptions", Self::NAMESPACE))
+                .with_description("Current active subscription count")
+                .build(),
+            subscribe_request_count: meter
+                .u64_counter(format!("{}.subscribe_request_count", Self::NAMESPACE))
+                .with_description("Subscribe RPC requests sent")
+                .build(),
+            unsubscribe_request_count: meter
+                .u64_counter(format!("{}.unsubscribe_request_count", Self::NAMESPACE))
+                .with_description("Unsubscribe RPC requests sent")
+                .build(),
+            unsubscribe_failure_count: meter
+                .u64_counter(format!("{}.unsubscribe_failure_count", Self::NAMESPACE))
+                .with_description("Failed unsubscribe attempts (server rejected)")
+                .build(),
+            rpc_request_dropped_count: meter
+                .u64_counter(format!("{}.rpc_request_dropped_count", Self::NAMESPACE))
+                .with_description("RPC requests dropped (delayed send canceled or channel closed)")
+                .build(),
+            rpc_request_error_count: meter
+                .u64_counter(format!("{}.rpc_request_error_count", Self::NAMESPACE))
+                .with_description("RPC request errors (unknown id or send failure)")
+                .build(),
+            subscription_events_received: meter
+                .u64_counter(format!("{}.subscription_events_received", Self::NAMESPACE))
+                .with_description("Events received from WS")
+                .build(),
+            subscription_events_forwarded: meter
+                .u64_counter(format!("{}.subscription_events_forwarded", Self::NAMESPACE))
+                .with_description("Events forwarded (not stale)")
+                .build(),
+            subscription_events_stale: meter
+                .u64_counter(format!("{}.subscription_events_stale", Self::NAMESPACE))
+                .with_description("Events discarded from non-most-recent subscriptions")
+                .build(),
+        }
+    }
+
+    pub fn record_connection_success(&self, chain: &ChainKey, is_priority: bool) {
+        self.connection_success_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("is_priority", is_priority),
+            ],
+        );
+        self.is_connected
+            .record(1, &[KeyValue::new("chain", chain.to_string())]);
+    }
+
+    pub fn record_connection_error(&self, chain: &ChainKey) {
+        self.connection_error_count
+            .add(1, &[KeyValue::new("chain", chain.to_string())]);
+    }
+
+    pub fn record_disconnection(&self, chain: &ChainKey, reason: &str) {
+        self.disconnection_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("reason", reason.to_owned()),
+            ],
+        );
+        self.is_connected
+            .record(0, &[KeyValue::new("chain", chain.to_string())]);
+    }
+
+    /// Records a disconnection counter without setting `is_connected` to 0.
+    /// Use for transparent failovers where reconnection is immediate.
+    pub fn record_intentional_disconnection(&self, chain: &ChainKey, reason: &str) {
+        self.disconnection_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("reason", reason.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_provider_switch(&self, chain: &ChainKey, reason: &str) {
+        self.provider_switch_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("reason", reason.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_priority_recovery(&self, chain: &ChainKey) {
+        self.priority_endpoint_recovery_count
+            .add(1, &[KeyValue::new("chain", chain.to_string())]);
+    }
+
+    pub fn record_active_log_filters(&self, chain: &ChainKey, count: u64) {
+        self.active_log_filters
+            .record(count, &[KeyValue::new("chain", chain.to_string())]);
+    }
+
+    pub fn record_active_subscriptions_change(&self, chain: &ChainKey, sub_type: &str, delta: i64) {
+        self.active_subscriptions.add(
+            delta,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_subscribe_request(&self, chain: &ChainKey, sub_type: &str) {
+        self.subscribe_request_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_unsubscribe_request(&self, chain: &ChainKey, sub_type: &str) {
+        self.unsubscribe_request_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_unsubscribe_failure(&self, chain: &ChainKey, sub_type: &str) {
+        self.unsubscribe_failure_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_rpc_request_dropped(&self, chain: &ChainKey, reason: &str) {
+        self.rpc_request_dropped_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("reason", reason.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_rpc_request_error(&self, chain: &ChainKey, reason: &str) {
+        self.rpc_request_error_count.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("reason", reason.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_subscription_event_received(&self, chain: &ChainKey, sub_type: &str) {
+        self.subscription_events_received.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_subscription_event_forwarded(&self, chain: &ChainKey, sub_type: &str) {
+        self.subscription_events_forwarded.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+
+    pub fn record_subscription_event_stale(&self, chain: &ChainKey, sub_type: &str) {
+        self.subscription_events_stale.add(
+            1,
+            &[
+                KeyValue::new("chain", chain.to_string()),
+                KeyValue::new("type", sub_type.to_owned()),
+            ],
+        );
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AggregatorMetrics {
+    receive_count: Counter<u64>,
+    receive_count_raw: Arc<AtomicU64>,
+
+    broadcast_count: Counter<u64>,
+    broadcast_count_raw: Arc<AtomicU64>,
+
+    action_count: Counter<u64>,
+    action_count_raw: Arc<AtomicU64>,
+
+    submit_count: Counter<u64>,
+    submit_count_raw: Arc<AtomicU64>,
+}
+
+impl AggregatorMetrics {
+    pub const NAMESPACE: &'static str = "aggregator";
+
+    pub fn new(meter: Meter) -> Self {
+        Self {
+            receive_count: meter
+                .u64_counter(format!("{}.receive_count", Self::NAMESPACE))
+                .with_description("Total submissions received by aggregator")
+                .build(),
+            receive_count_raw: Arc::new(AtomicU64::new(0)),
+
+            broadcast_count: meter
+                .u64_counter(format!("{}.broadcast_count", Self::NAMESPACE))
+                .with_description("Total submissions broadcasted by aggregator")
+                .build(),
+            broadcast_count_raw: Arc::new(AtomicU64::new(0)),
+
+            action_count: meter
+                .u64_counter(format!("{}.action_count", Self::NAMESPACE))
+                .with_description("Total actions handled by aggregator")
+                .build(),
+            action_count_raw: Arc::new(AtomicU64::new(0)),
+
+            submit_count: meter
+                .u64_counter(format!("{}.submit_count", Self::NAMESPACE))
+                .with_description("Total submissions sent by aggregator")
+                .build(),
+            submit_count_raw: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    pub fn increment_receive_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.receive_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.receive_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn increment_broadcast_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.broadcast_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.broadcast_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn increment_action_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.action_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.submit_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn increment_submit_count(&self, service: &Service, workflow_id: &WorkflowId) {
+        self.submit_count.add(
+            1,
+            &[
+                KeyValue::new("service_name", service.name.clone()),
+                KeyValue::new("service_id", service.id().to_string()),
+                KeyValue::new("workflow_id", workflow_id.to_string()),
+            ],
+        );
+        self.submit_count_raw
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub fn get_receive_count(&self) -> u64 {
+        self.receive_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_broadcast_count(&self) -> u64 {
+        self.broadcast_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_action_count(&self) -> u64 {
+        self.action_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn get_submit_count(&self) -> u64 {
+        self.submit_count_raw
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }

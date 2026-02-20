@@ -1,17 +1,13 @@
+use std::convert::TryInto;
 use std::sync::Arc;
 
 use utils::{
-    storage::{
-        db::{RedbStorage, Table, JSON},
-        fs::FileStorage,
-    },
+    storage::{db::WavsDb, fs::FileStorage},
     telemetry::HttpMetrics,
 };
 use wavs_types::{Service, ServiceDigest, ServiceId};
 
 use crate::{config::Config, dispatcher::Dispatcher, health::SharedHealthStatus};
-
-const LOCAL_SERVICE_BY_HASH_TABLE: Table<&[u8], JSON<Service>> = Table::new("services-by-hash");
 
 #[derive(Clone)]
 pub struct HttpState {
@@ -19,7 +15,7 @@ pub struct HttpState {
     pub dispatcher: Arc<Dispatcher<FileStorage>>,
     pub is_mock_chain_client: bool,
     pub http_client: reqwest::Client,
-    pub storage: RedbStorage,
+    pub db_storage: WavsDb,
     pub metrics: HttpMetrics,
     pub health_status: SharedHealthStatus,
 }
@@ -42,14 +38,12 @@ impl HttpState {
             })?;
         }
 
-        let storage = RedbStorage::new()?;
-
         Ok(Self {
             config,
+            db_storage: dispatcher.db_storage.clone(),
             dispatcher,
             is_mock_chain_client,
             http_client: reqwest::Client::new(),
-            storage,
             metrics,
             health_status,
         })
@@ -68,22 +62,28 @@ impl HttpState {
         &self,
         service_hash: &ServiceDigest,
     ) -> anyhow::Result<wavs_types::Service> {
-        match self
-            .storage
-            .get(LOCAL_SERVICE_BY_HASH_TABLE, service_hash.as_ref())
-        {
-            Ok(Some(service)) => Ok(service.value()),
-            Ok(None) => Err(anyhow::anyhow!(
+        let key: [u8; 32] = service_hash
+            .as_ref()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("invalid service hash length"))?;
+        if let Some(service) = self.db_storage.services_by_hash.get_cloned(&key) {
+            Ok(service)
+        } else {
+            Err(anyhow::anyhow!(
                 "Service Hash {} has not been set on the http server",
                 service_hash
-            )),
-            Err(e) => Err(anyhow::anyhow!("Failed to load service by hash: {}", e)),
+            ))
         }
     }
     pub fn save_service_by_hash(&self, service: &Service) -> anyhow::Result<ServiceDigest> {
         let service_hash = service.hash()?;
-        self.storage
-            .set(LOCAL_SERVICE_BY_HASH_TABLE, service_hash.as_ref(), service)?;
+        let key: [u8; 32] = service_hash
+            .as_ref()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("invalid service hash length"))?;
+        self.db_storage
+            .services_by_hash
+            .insert(key, service.clone())?;
         Ok(service_hash)
     }
 }

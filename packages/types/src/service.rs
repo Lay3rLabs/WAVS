@@ -1,22 +1,74 @@
-use alloy_primitives::{hex, LogData};
+use alloy_primitives::LogData;
+use anyhow::bail;
 use iri_string::types::UriString;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::{NonZeroU32, NonZeroU64};
 use std::str::FromStr;
+use thiserror::Error;
 use utoipa::ToSchema;
 use wasm_pkg_common::package::PackageRef;
+
+#[cfg(feature = "ts-bindings")]
+use ts_rs::TS;
 
 use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
 
 use super::{ChainKey, ServiceId, WorkflowId};
+
+/// ATProto Jetstream commit action types
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum AtProtoAction {
+    /// Create a new record
+    Create,
+    /// Update an existing record
+    Update,
+    /// Delete a record
+    Delete,
+}
+
+impl std::fmt::Display for AtProtoAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AtProtoAction::Create => write!(f, "create"),
+            AtProtoAction::Update => write!(f, "update"),
+            AtProtoAction::Delete => write!(f, "delete"),
+        }
+    }
+}
+
+impl FromStr for AtProtoAction {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "create" => Ok(AtProtoAction::Create),
+            "update" => Ok(AtProtoAction::Update),
+            "delete" => Ok(AtProtoAction::Delete),
+            _ => bail!(
+                "Invalid action '{}'. Must be one of: create, update, delete",
+                s
+            ),
+        }
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum ServiceError {
+    #[error("Failed to serialize service for hashing: {0}")]
+    SerializationError(#[from] serde_json::Error),
+}
 
 /// Service validation is a runtime check, and depends on:
 ///
 /// 1. All service handlers on a given chain use the same service manager
 /// 2. All service managers on non-source chains properly mirror the operator set of the source
 /// 3. All components are legitimate (e.g. can be downloaded, match the provided digest, execute as expected, etc.)
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Service {
@@ -33,7 +85,7 @@ pub struct Service {
 
 impl Service {
     // this is only used for local/tests, but we want to keep it consistent
-    pub fn hash(&self) -> anyhow::Result<ServiceDigest> {
+    pub fn hash(&self) -> Result<ServiceDigest, ServiceError> {
         let service_bytes = serde_json::to_vec(self)?;
         Ok(ServiceDigest::hash(&service_bytes))
     }
@@ -43,17 +95,21 @@ impl Service {
     }
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceManager {
     Evm {
         chain: ChainKey,
         #[schema(value_type = String)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         address: alloy_primitives::Address,
     },
     Cosmos {
         chain: ChainKey,
         #[schema(value_type = String)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         address: layer_climb_address::CosmosAddr,
     },
 }
@@ -121,6 +177,8 @@ impl Service {
     }
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Component {
@@ -146,13 +204,17 @@ pub struct Component {
     pub env_keys: BTreeSet<String>,
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ComponentSource {
     /// The wasm bytecode provided at fixed url, digest provided to ensure no tampering
     Download {
         #[schema(value_type = String)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         uri: UriString,
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         digest: ComponentDigest,
     },
     /// The wasm bytecode downloaded from a standard registry, digest provided to ensure no tampering
@@ -161,9 +223,12 @@ pub enum ComponentSource {
         registry: Registry,
     },
     /// An already deployed component
+    #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
     Digest(ComponentDigest),
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 pub struct Registry {
     pub digest: ComponentDigest,
@@ -173,9 +238,11 @@ pub struct Registry {
     pub domain: Option<String>,
     /// Optional semver value, if absent then latest is used
     #[schema(value_type = Option<String>)]
+    #[cfg_attr(feature = "ts-bindings", ts(type = "string | null"))]
     pub version: Option<Version>,
     /// Package identifier of form <namespace>:<packagename>
     #[schema(value_type = String)]
+    #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
     pub package: PackageRef,
 }
 
@@ -191,6 +258,8 @@ impl ComponentSource {
 
 // FIXME: happy for a better name.
 /// This captures the triggers we listen to, the components we run, and how we submit the result
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Workflow {
@@ -210,20 +279,25 @@ impl Workflow {
 }
 
 // The TriggerManager reacts to these triggers
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Trigger {
     // A contract that emits an event
     CosmosContractEvent {
         #[schema(value_type = String)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         address: layer_climb_address::CosmosAddr,
         chain: ChainKey,
         event_type: String,
     },
     EvmContractEvent {
         #[schema(value_type = String)]
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         address: alloy_primitives::Address,
         chain: ChainKey,
+        #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
         event_hash: ByteArray<32>,
     },
     BlockInterval {
@@ -246,6 +320,23 @@ pub enum Trigger {
         start_time: Option<Timestamp>,
         /// Optional end time (timestamp in nanoseconds) indicating when the schedule ends.
         end_time: Option<Timestamp>,
+    },
+    /// ATProto Jetstream event trigger
+    AtProtoEvent {
+        /// Collection NSID to filter for (e.g., "app.bsky.feed.post")
+        /// Supports wildcards with prefix matching (e.g., "app.bsky.feed.*")
+        collection: String,
+        /// Optional DID to filter for specific repositories
+        /// If None, will match events from any repository
+        repo_did: Option<String>,
+        /// Action type to filter for (create, update, delete)
+        /// If None, will match all action types
+        action: Option<AtProtoAction>,
+    },
+    /// Hypercore append event trigger
+    HypercoreAppend {
+        /// Feed key to filter on.
+        feed_key: String,
     },
     // not a real trigger, just for testing
     Manual,
@@ -305,6 +396,37 @@ pub enum TriggerData {
         /// The trigger time
         trigger_time: Timestamp,
     },
+    /// ATProto Jetstream event data
+    AtProtoEvent {
+        /// Sequence number of the event in the stream
+        sequence: i64,
+        /// Timestamp in microseconds
+        timestamp: i64,
+        /// Repository DID that generated the event
+        repo: String,
+        /// Collection NSID (e.g., "app.bsky.feed.post")
+        collection: String,
+        /// Record key within the collection
+        rkey: String,
+        /// Action type (create, update, delete)
+        action: AtProtoAction,
+        /// CID of the record (None for delete events)
+        cid: Option<String>,
+        /// Record data as JSON (None for delete events)
+        record: Option<serde_json::Value>,
+        /// Repository revision identifier for this commit (if provided by the event)
+        rev: Option<String>,
+        /// Index of the operation within the commit (0-based)
+        op_index: Option<u32>,
+    },
+    HypercoreAppend {
+        /// Hypercore feed key that emitted the append
+        feed_key: String,
+        /// Index of the appended entry
+        index: u64,
+        /// Raw entry data
+        data: Vec<u8>,
+    },
     Raw(Vec<u8>),
 }
 
@@ -325,6 +447,8 @@ impl TriggerData {
             TriggerData::EvmContractEvent { .. } => "evm_contract_event",
             TriggerData::BlockInterval { .. } => "block_interval",
             TriggerData::Cron { .. } => "cron",
+            TriggerData::AtProtoEvent { .. } => "atproto_event",
+            TriggerData::HypercoreAppend { .. } => "hypercore_append",
             TriggerData::Raw(_) => "manual",
         }
     }
@@ -334,13 +458,18 @@ impl TriggerData {
             TriggerData::CosmosContractEvent { chain, .. }
             | TriggerData::EvmContractEvent { chain, .. }
             | TriggerData::BlockInterval { chain, .. } => Some(chain),
-            TriggerData::Cron { .. } | TriggerData::Raw(_) => None,
+            TriggerData::Cron { .. }
+            | TriggerData::AtProtoEvent { .. }
+            | TriggerData::HypercoreAppend { .. }
+            | TriggerData::Raw(_) => None,
         }
     }
 }
 
 /// A bundle of the trigger and the associated data needed to take action on it
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, bincode::Decode, bincode::Encode)]
+#[derive(
+    Serialize, Deserialize, Clone, Debug, PartialEq, Eq, bincode::Decode, bincode::Encode, ToSchema,
+)]
 pub struct TriggerAction {
     #[bincode(with_serde)]
     /// Identify which trigger this came from
@@ -351,7 +480,7 @@ pub struct TriggerAction {
     pub data: TriggerData,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 // Trigger with metadata so it can be identified in relation to services and workflows
 pub struct TriggerConfig {
     pub service_id: ServiceId,
@@ -360,14 +489,14 @@ pub struct TriggerConfig {
 }
 
 // TODO - rename this? Trigger is a noun, Submit is a verb.. feels a bit weird
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Submit {
     // useful for when the component just does something with its own state
     None,
     Aggregator {
-        /// The aggregator endpoint
-        url: String,
         /// component dynamically determines the destination
         component: Box<Component>,
         signature_kind: SignatureKind,
@@ -395,7 +524,9 @@ pub enum Submit {
 /// 3. **Future Extensibility**: As new signature algorithms (BLS12-381, Ed25519, etc.)
 ///    and prefix schemes are added, this structure can accommodate them without
 ///    breaking changes.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema, Hash)]
 pub struct SignatureKind {
     /// The cryptographic algorithm used for signature generation and verification.
     ///
@@ -420,19 +551,25 @@ impl SignatureKind {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum SignatureAlgorithm {
     Secp256k1,
     // Future: Bls12381, Ed25519, Secp256r1, etc.
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum SignaturePrefix {
     Eip191,
 }
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Copy, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceStatus {
@@ -454,14 +591,19 @@ impl FromStr for ServiceStatus {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema, Default)]
 #[serde(default, rename_all = "snake_case")]
-#[derive(Default)]
 pub struct Permissions {
     /// If it can talk to http hosts on the network
     pub allowed_http_hosts: AllowedHostPermission,
     /// If it can write to it's own local directory in the filesystem
     pub file_system: bool,
+    /// If it can use the host's raw sockets (not needed for http)
+    pub raw_sockets: bool,
+    /// If it can perform DNS resolution (not needed for http)
+    pub dns_resolution: bool,
 }
 
 #[test]
@@ -479,6 +621,8 @@ fn permission_defaults() {
 
 // TODO: remove / change defaults?
 
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AllowedHostPermission {
@@ -488,13 +632,53 @@ pub enum AllowedHostPermission {
     None,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
 #[serde(default, rename_all = "snake_case")]
 #[derive(Default)]
 pub struct WasmResponse {
-    #[serde(with = "hex")]
+    #[serde(with = "const_hex")]
     pub payload: Vec<u8>,
     pub ordering: Option<u64>,
+    #[serde(with = "crate::serde_helpers::option_const_hex")]
+    pub event_id_salt: Option<Vec<u8>>,
+}
+
+impl WasmResponse {
+    /// Default maximum payload size: 50 MB
+    pub const DEFAULT_MAX_PAYLOAD_SIZE: usize = 50 * 1024 * 1024;
+    /// Default maximum event_id_salt size: 1 MB
+    pub const DEFAULT_MAX_SALT_SIZE: usize = 1024 * 1024;
+
+    /// Validates that the payload and salt are within size limits.
+    pub fn validate_size(
+        &self,
+        max_payload_size: usize,
+        max_salt_size: usize,
+    ) -> Result<(), WasmResponseSizeError> {
+        if self.payload.len() > max_payload_size {
+            return Err(WasmResponseSizeError::PayloadTooLarge {
+                size: self.payload.len(),
+                max: max_payload_size,
+            });
+        }
+        if let Some(salt) = &self.event_id_salt {
+            if salt.len() > max_salt_size {
+                return Err(WasmResponseSizeError::SaltTooLarge {
+                    size: salt.len(),
+                    max: max_salt_size,
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum WasmResponseSizeError {
+    #[error("Payload size {size} bytes exceeds maximum of {max} bytes")]
+    PayloadTooLarge { size: usize, max: usize },
+    #[error("Event ID salt size {size} bytes exceeds maximum of {max} bytes")]
+    SaltTooLarge { size: usize, max: usize },
 }
 
 // TODO - these shouldn't be needed in main code... gate behind `debug_assertions`

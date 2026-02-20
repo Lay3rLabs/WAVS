@@ -3,6 +3,10 @@ wit_bindgen::generate!({
     path: "../../../wit-definitions/aggregator/wit",
     pub_export_macro: true,
     generate_all,
+    with: {
+        "wasi:io/poll@0.2.0": wasip2::io::poll
+    },
+    features: ["tls"]
 });
 
 #[macro_export]

@@ -202,7 +202,11 @@ fn test_service_component_config_parsing() {
             ServiceCommand::Workflow {
                 command:
                     WorkflowCommand::Component {
-                        command: ComponentCommand::Config { values },
+                        command:
+                            ComponentCommand::Config {
+                                values,
+                                config_file: _,
+                            },
                         ..
                     },
             },
@@ -237,7 +241,11 @@ fn test_service_component_config_clear() {
             ServiceCommand::Workflow {
                 command:
                     WorkflowCommand::Component {
-                        command: ComponentCommand::Config { values },
+                        command:
+                            ComponentCommand::Config {
+                                values,
+                                config_file: _,
+                            },
                         ..
                     },
             },

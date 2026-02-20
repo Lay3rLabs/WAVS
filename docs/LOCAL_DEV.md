@@ -13,6 +13,12 @@ mode = {"isolated" = [
 Then running:
 
 ```bash
+just test-wavs-e2e
+```
+
+This is the preferred command — it sets `RUST_LOG` defaults, raises the open-file limit (`ulimit -n 65536`), and runs the layer-tests suite. You can also run directly with:
+
+```bash
 cd packages/layer-tests && cargo test
 ```
 

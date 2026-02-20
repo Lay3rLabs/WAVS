@@ -1,12 +1,14 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use tempfile::{tempdir, TempDir};
-use utils::{filesystem::workspace_path, storage::db::RedbStorage};
+use utils::{filesystem::workspace_path, storage::db::WavsDb};
 use wasmtime::{component::Component, Engine as WTEngine};
-use wavs_engine::worlds::instance::{HostComponentLogger, InstanceDeps, InstanceDepsBuilder};
+use wavs_engine::worlds::instance::{
+    HostComponentLogger, InstanceData, InstanceDeps, InstanceDepsBuilder,
+};
 use wavs_types::{
-    AllowedHostPermission, ChainConfigs, ComponentDigest, EventId, Service, TriggerAction,
-    TriggerConfig, TriggerData, Workflow, WorkflowId,
+    AllowedHostPermission, ChainConfigs, ComponentDigest, Service, TriggerAction, TriggerConfig,
+    TriggerData, Workflow, WorkflowId,
 };
 
 /// Handle provides the setup and infrastructure needed for engine benchmarks
@@ -56,6 +58,8 @@ impl EngineSetup {
                 permissions: wavs_types::Permissions {
                     file_system: false,
                     allowed_http_hosts: AllowedHostPermission::None,
+                    raw_sockets: false,
+                    dns_resolution: false,
                 },
                 fuel_limit: None,
                 time_limit_seconds: None,
@@ -78,7 +82,7 @@ impl EngineSetup {
         let chain_configs = ChainConfigs::default();
 
         let keyvalue_ctx = wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             "engine".to_string(),
         );
 
@@ -110,11 +114,9 @@ impl EngineSetup {
             },
         );
 
-        let event_id: EventId = (&self.service, trigger_action).try_into().unwrap();
-
         let builder = InstanceDepsBuilder {
             component: self.component.clone(),
-            event_id,
+            data: InstanceData::new_operator(trigger_action.data.clone()),
             service: self.service.clone(),
             workflow_id: self.workflow_id.clone(),
             engine: &self.engine,

@@ -14,15 +14,15 @@ use utils::{
     storage::{fs::FileStorage, memory::MemoryStorage},
     telemetry::{EngineMetrics, Metrics},
 };
-use utils::{storage::db::RedbStorage, test_utils::address::rand_address_evm};
+use utils::{storage::db::WavsDb, test_utils::address::rand_address_evm};
 use wavs::{
     dispatcher::{Dispatcher, DispatcherCommand},
     subsystems::engine::wasm_engine::WasmEngine,
 };
 use wavs_types::{
     ChainKey, ChainKeyError, Component, ComponentSource, Credential, DeleteServicesRequest,
-    ListServicesResponse, Service, ServiceId, ServiceManager, SignatureKind, Submit, WorkflowId,
-    WorkflowIdError,
+    ListServicesResponse, Service, ServiceId, ServiceManager, SignatureKind, Submit, WasmResponse,
+    WorkflowId, WorkflowIdError,
 };
 
 use super::mock_trigger_manager::{mock_evm_event_trigger, mock_real_trigger_action};
@@ -54,8 +54,10 @@ impl MockE2ETestRunner {
             None,
             None,
             metrics,
-            RedbStorage::new().unwrap(),
+            WavsDb::new().unwrap(),
             DEFAULT_IPFS_GATEWAY.to_owned(),
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         )
     }
     #[instrument(skip(_ctx, data_dir))]
@@ -64,7 +66,7 @@ impl MockE2ETestRunner {
         data_dir: impl AsRef<std::path::Path>,
     ) -> Dispatcher<FileStorage> {
         let config = wavs::config::Config {
-            submission_mnemonic: Some(Credential::new(
+            signing_mnemonic: Some(Credential::new(
                 "test test test test test test test test test test test junk".to_string(),
             )),
             data: data_dir.as_ref().to_path_buf(),
@@ -155,7 +157,6 @@ impl MockE2ETestRunner {
         let trigger = mock_evm_event_trigger();
 
         let submit = Submit::Aggregator {
-            url: "http://example.com".to_string(),
             // just use the same component for submit for simplicity
             component: Box::new(Component::new(component_source.clone())),
             signature_kind: SignatureKind::evm_default(),
@@ -174,7 +175,10 @@ impl MockE2ETestRunner {
 
         let service_id = service.id();
 
-        self.dispatcher.add_service_direct(service).await.unwrap();
+        self.dispatcher
+            .add_service_direct(service, None)
+            .await
+            .unwrap();
 
         service_id
     }

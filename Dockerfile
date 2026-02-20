@@ -42,8 +42,6 @@ COPY --from=builder /myapp/wavs.toml /var/wavs/wavs.toml
 
 COPY --from=builder /myapp/target/release/wavs-cli /usr/local/bin/wavs-cli
 
-COPY --from=builder /myapp/target/release/wavs-aggregator /usr/local/bin/wavs-aggregator
-
 # copy /usr/local/bin/forge, cast, anvil, and chisel from foundry
 COPY --from=foundry /usr/local/bin/forge /usr/local/bin/forge
 COPY --from=foundry /usr/local/bin/cast /usr/local/bin/cast

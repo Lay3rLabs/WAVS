@@ -6,7 +6,11 @@ use wasmtime::Store;
 use wasmtime::{component::Linker, Engine as WTEngine};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
-use wavs_types::{AllowedHostPermission, ChainConfigs, Permissions, Service, Workflow, WorkflowId};
+use wasmtime_wasi_tls::{WasiTls, WasiTlsCtxBuilder};
+use wavs_types::{
+    AllowedHostPermission, ChainConfigs, EventId, Permissions, Service, TriggerData, Workflow,
+    WorkflowId,
+};
 
 use crate::backend::wasi_keyvalue::context::KeyValueCtxProvider;
 use crate::worlds::aggregator::component::{
@@ -76,12 +80,29 @@ pub struct InstanceDepsBuilder<'a, P> {
     pub component: wasmtime::component::Component,
     pub service: Service,
     pub workflow_id: WorkflowId,
-    pub event_id: wavs_types::EventId,
+    pub data: InstanceData,
     pub engine: &'a WTEngine,
     pub data_dir: P,
     pub chain_configs: &'a ChainConfigs,
     pub log: HostComponentLogger,
     pub keyvalue_ctx: KeyValueCtx,
+}
+
+pub enum InstanceData {
+    Operator { trigger_data: Box<TriggerData> },
+    Aggregator { event_id: EventId },
+}
+
+impl InstanceData {
+    pub fn new_operator(trigger_data: TriggerData) -> Self {
+        InstanceData::Operator {
+            trigger_data: Box::new(trigger_data),
+        }
+    }
+
+    pub fn new_aggregator(event_id: EventId) -> Self {
+        InstanceData::Aggregator { event_id }
+    }
 }
 
 pub struct InstanceDeps {
@@ -97,13 +118,35 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             component,
             service,
             workflow_id,
-            event_id,
+            data,
             engine,
             data_dir,
             chain_configs,
             log,
             keyvalue_ctx,
         } = self;
+
+        match (&data, &log) {
+            (
+                InstanceData::Operator { .. },
+                HostComponentLogger::AggregatorHostComponentLogger(_),
+            ) => {
+                return Err(EngineError::MismatchedInstanceDataAndLogger {
+                    data: "Operator",
+                    logger: "Aggregator",
+                });
+            }
+            (
+                InstanceData::Aggregator { .. },
+                HostComponentLogger::OperatorHostComponentLogger(_),
+            ) => {
+                return Err(EngineError::MismatchedInstanceDataAndLogger {
+                    data: "Aggregator",
+                    logger: "Operator",
+                });
+            }
+            _ => {}
+        }
 
         // create linker
         let (linker, wavs_component) = {
@@ -113,6 +156,10 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                     workflow_id: workflow_id.clone(),
                 }
             })?;
+
+            let mut tls_opts = wasmtime_wasi_tls::LinkOptions::default();
+            tls_opts.tls(true);
+
             match log {
                 HostComponentLogger::OperatorHostComponentLogger(_) => {
                     let mut linker = Linker::new(engine);
@@ -125,6 +172,13 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
                     let component = workflow.component.clone();
                     configure_linker(&mut linker, &component.permissions)?;
+
+                    wasmtime_wasi_tls::add_to_linker(
+                        &mut linker,
+                        &mut tls_opts,
+                        |h: &mut OperatorHostComponent| WasiTls::new(&h.tls_ctx, &mut h.table),
+                    )
+                    .map_err(EngineError::AddToLinker)?;
 
                     (ComponentLinker::OperatorComponentLinker(linker), component)
                 }
@@ -142,6 +196,13 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                         wavs_types::Submit::Aggregator { component, .. } => (**component).clone(),
                     };
                     configure_linker(&mut linker, &component.permissions)?;
+
+                    wasmtime_wasi_tls::add_to_linker(
+                        &mut linker,
+                        &mut tls_opts,
+                        |h: &mut AggregatorHostComponent| WasiTls::new(&h.tls_ctx, &mut h.table),
+                    )
+                    .map_err(EngineError::AddToLinker)?;
 
                     (
                         ComponentLinker::AggregatorComponentLinker(linker),
@@ -169,6 +230,16 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                 .map_err(EngineError::Filesystem)?;
         }
 
+        // conditionally allow raw network access
+        if wavs_component.permissions.raw_sockets {
+            builder.inherit_network();
+        }
+
+        // conditionally allow dns resolution
+        if wavs_component.permissions.dns_resolution {
+            builder.allow_ip_name_lookup(true);
+        }
+
         // read in system env variables that are prefixed with WAVS_ENV and are allowed to access via the component config
         let env: Vec<_> = std::env::vars()
             .filter(|(key, _)| {
@@ -190,19 +261,25 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
         let ctx = builder.build();
 
+        let tls_ctx = WasiTlsCtxBuilder::new().build();
+
         // create host (what is this actually? some state needed for the linker?)
-        let store = match log {
-            HostComponentLogger::OperatorHostComponentLogger(log) => {
+        let store = match data {
+            InstanceData::Operator { trigger_data } => {
                 let host = OperatorHostComponent {
                     service,
                     workflow_id,
-                    event_id,
+                    trigger_data: *trigger_data,
                     chain_configs: chain_configs.clone(),
                     table: wasmtime::component::ResourceTable::new(),
                     ctx,
                     keyvalue_ctx,
-                    http: WasiHttpCtx::new(),
-                    inner_log: log,
+                    http_ctx: WasiHttpCtx::new(),
+                    tls_ctx,
+                    inner_log: match log {
+                        HostComponentLogger::OperatorHostComponentLogger(log) => log,
+                        _ => unreachable!(),
+                    },
                 };
                 let mut store = wasmtime::Store::new(engine, host);
 
@@ -210,17 +287,21 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 
                 ComponentStore::OperatorComponentStore(store)
             }
-            HostComponentLogger::AggregatorHostComponentLogger(log) => {
+            InstanceData::Aggregator { event_id } => {
                 let host = AggregatorHostComponent {
                     service,
                     workflow_id,
-                    event_id,
                     chain_configs: chain_configs.clone(),
                     table: wasmtime::component::ResourceTable::new(),
+                    event_id,
                     ctx,
                     keyvalue_ctx,
-                    http: WasiHttpCtx::new(),
-                    inner_log: log,
+                    http_ctx: WasiHttpCtx::new(),
+                    tls_ctx,
+                    inner_log: match log {
+                        HostComponentLogger::AggregatorHostComponentLogger(log) => log,
+                        _ => unreachable!(),
+                    },
                 };
                 let mut store = wasmtime::Store::new(engine, host);
 

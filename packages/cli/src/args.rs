@@ -1,5 +1,5 @@
 use alloy_primitives::{Address, LogData};
-use clap::{arg, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use iri_string::types::UriString;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -11,7 +11,9 @@ use utils::{
     serde::deserialize_vec_string,
 };
 use wasm_pkg_client::{PackageRef, Version};
-use wavs_types::{ChainKey, ComponentDigest, Credential, ServiceStatus, Timestamp, WorkflowId};
+use wavs_types::{
+    AtProtoAction, ChainKey, ComponentDigest, Credential, ServiceStatus, Timestamp, WorkflowId,
+};
 
 use crate::config::Config;
 
@@ -130,9 +132,9 @@ pub enum Command {
         #[clap(long)]
         component: String,
 
-        /// Optional path to the packet JSON file (creates dummy packet if not provided)
+        /// Optional path to the input JSON file (creates dummy input if not provided)
         #[clap(long)]
-        packet: Option<String>,
+        input: Option<String>,
 
         /// Optional fuel limit for component execution
         #[clap(long)]
@@ -241,8 +243,14 @@ pub enum ComponentCommand {
     Config {
         /// Configuration key-value pairs in format 'key=value'
         /// Omit to clear all config values
-        #[clap(long)]
+        #[clap(long, conflicts_with = "config_file")]
         values: Option<Vec<String>>,
+
+        /// Configuration as JSON file containing flat key-value pairs
+        /// Example: --config-file config.json
+        /// Cannot be used together with --values
+        #[clap(long = "config-file", conflicts_with = "values")]
+        config_file: Option<PathBuf>,
     },
     /// Manage the workflow component env
     Env {
@@ -304,11 +312,7 @@ pub enum ManagerCommand {
 #[derive(Debug, Subcommand, Clone, Serialize, Deserialize)]
 pub enum SubmitCommand {
     /// Set an aggregator submit for a workflow
-    SetAggregator {
-        /// The URL of the aggregator
-        #[clap(long)]
-        url: String,
-    },
+    SetAggregator {},
     /// Set the submit to None for a workflow
     SetNone {},
     /// Commands for the aggregator component
@@ -379,6 +383,32 @@ pub enum TriggerCommand {
         /// Optional end time (timestamp in nanoseconds)
         #[clap(long)]
         end_time: Option<Timestamp>,
+    },
+
+    /// Set an ATProto Jetstream event trigger for a workflow
+    SetAtProtocol {
+        /// Collection NSID to filter for (e.g., "app.bsky.feed.post")
+        /// Supports wildcards with prefix matching (e.g., "app.bsky.feed.*")
+        #[clap(long)]
+        collection: String,
+
+        /// Optional DID to filter for specific repositories
+        /// If not provided, will match events from any repository
+        #[clap(long)]
+        repo_did: Option<String>,
+
+        /// Action type to filter for (create, update, delete)
+        /// If not provided, will match all action types
+        #[clap(long)]
+        action: Option<AtProtoAction>,
+    },
+
+    /// Set a Hypercore append trigger for a workflow
+    /// Hypercore is a distributed data structure for secure log replication.
+    SetHypercoreAppend {
+        /// Hex-encoded public key of the Hypercore feed to monitor
+        #[clap(long)]
+        feed_key: String,
     },
 }
 

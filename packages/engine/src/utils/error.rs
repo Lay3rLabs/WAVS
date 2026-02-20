@@ -9,7 +9,7 @@ pub enum EngineError {
     #[error("Wasm exec result: {0}")]
     ExecResult(String),
 
-    #[error("Component returned an error: {0}")]
+    #[error("Component returned an error: {0:?}")]
     ComponentError(anyhow::Error),
 
     #[error("Workflow {workflow_id} not found for service {service_id}")]
@@ -39,6 +39,9 @@ pub enum EngineError {
     #[error("Compile error: {0}")]
     Compile(anyhow::Error),
 
+    #[error("Wasm response is malformed: {0}")]
+    WasmResponseMalformed(anyhow::Error),
+
     #[error("Storage error: {0}")]
     StorageError(String),
 
@@ -47,4 +50,19 @@ pub enum EngineError {
 
     #[error("Unknown digest: {0}")]
     UnknownDigest(ComponentDigest),
+
+    #[error("Registry: {0}")]
+    Registry(#[from] wasm_pkg_client::Error),
+
+    #[error("When returning multiple responses, they must all have an event id salt")]
+    MissingEventIdSalt,
+
+    #[error("Wasm response size limit exceeded: {0}")]
+    ResponseSizeExceeded(#[from] wavs_types::WasmResponseSizeError),
+
+    #[error("Mismatched instance data and logger. Data: {data}, Logger: {logger}")]
+    MismatchedInstanceDataAndLogger {
+        data: &'static str,
+        logger: &'static str,
+    },
 }

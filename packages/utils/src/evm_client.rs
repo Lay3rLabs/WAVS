@@ -335,6 +335,10 @@ impl FastNonceManager {
             )),
         }
     }
+
+    pub fn current_nonce(&self) -> u64 {
+        self.counter.load(std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]

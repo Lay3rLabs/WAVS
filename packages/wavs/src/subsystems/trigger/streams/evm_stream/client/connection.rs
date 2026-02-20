@@ -20,6 +20,7 @@ use super::{
 };
 use utils::evm_client::EvmEndpoint;
 use utils::health::check_evm_chain_endpoint_health_query;
+use utils::telemetry::EvmStreamMetrics;
 use wavs_types::{ChainKey, ChainKeyNamespace};
 
 // A handle for managing WebSocket connections with intelligent retry logic
@@ -78,6 +79,7 @@ impl Connection {
         channels: ConnectionChannels,
         chain_key: ChainKey,
         priority_endpoint_index: Option<usize>,
+        metrics: EvmStreamMetrics,
     ) -> Self {
         let ConnectionChannels {
             connection_send_rpc_rx,
@@ -122,6 +124,7 @@ impl Connection {
                     let force_switch_flag_clone = force_switch_flag.clone();
                     let force_switch_notify_clone = force_switch_notify.clone();
                     let is_using_priority_clone = is_using_priority.clone();
+                    let health_metrics = metrics.clone();
 
                     Some(tokio::spawn(async move {
                         let mut interval =
@@ -149,6 +152,7 @@ impl Connection {
                                             let already_requested =
                                                 force_switch_flag_clone.swap(true, Ordering::SeqCst);
                                             if !already_requested {
+                                                health_metrics.record_priority_recovery(&chain_key_clone);
                                                 force_switch_notify_clone.notify_waiters();
                                             }
                                         }
@@ -191,6 +195,7 @@ impl Connection {
             force_switch_flag,
             force_switch_notify,
             is_using_priority,
+            metrics,
         ));
 
         let message_handle = tokio::spawn(message_loop(
@@ -297,6 +302,7 @@ async fn connection_loop(
     force_switch_flag: Arc<AtomicBool>,
     force_switch_notify: Arc<Notify>,
     is_using_priority: Arc<std::sync::RwLock<bool>>,
+    metrics: EvmStreamMetrics,
 ) {
     let mut endpoint_idx = 0;
     let mut current_backoff = Connection::BACKOFF_BASE;
@@ -344,6 +350,8 @@ async fn connection_loop(
                         };
                         *is_using_priority.write().unwrap() = using_priority;
 
+                        metrics.record_connection_success(&chain_key, using_priority);
+
                         if using_priority {
                             force_switch_flag.store(false, Ordering::SeqCst);
                             tracing::info!("connected to priority endpoint {}", endpoint);
@@ -380,6 +388,8 @@ async fn connection_loop(
                                                 "force switching to priority endpoint at index {}",
                                                 priority_index
                                             );
+                                            metrics.record_intentional_disconnection(&chain_key, "force_switch");
+                                            metrics.record_provider_switch(&chain_key, "priority_recovery");
                                             forced_switch = true;
                                             endpoint_idx = priority_index;
                                             current_backoff = Connection::BACKOFF_BASE;
@@ -410,6 +420,7 @@ async fn connection_loop(
                                         }
                                         Some(Ok(Message::Close(_))) => {
                                             tracing::info!("WebSocket closed gracefully from {}", endpoint);
+                                            metrics.record_disconnection(&chain_key, "close");
                                             break;
                                         }
                                         Some(Ok(_)) => {
@@ -417,10 +428,12 @@ async fn connection_loop(
                                         }
                                         Some(Err(err)) => {
                                             tracing::error!("EVM connection lost from {endpoint}: {err:?}");
+                                            metrics.record_disconnection(&chain_key, "error");
                                             break;
                                         }
                                         None => {
                                             tracing::info!("disconnected {endpoint}");
+                                            metrics.record_disconnection(&chain_key, "eof");
                                             break;
                                         }
                                     }
@@ -450,6 +463,7 @@ async fn connection_loop(
                         if forced_switch {
                             continue;
                         } else {
+                            metrics.record_provider_switch(&chain_key, "disconnect");
                             endpoint_idx = (endpoint_idx + 1) % endpoints.len(); // cycle to next endpoint on disconnection
                         }
                     }
@@ -458,6 +472,8 @@ async fn connection_loop(
                             tracing::error!("Failed to send disconnected state: {}", e);
                         }
                         tracing::error!("connect error to {endpoint}: {err:?}");
+
+                        metrics.record_connection_error(&chain_key);
 
                         // Clear force_switch_flag if we failed to connect to priority endpoint
                         if let Some(priority_index) = priority_endpoint_index {
@@ -469,6 +485,7 @@ async fn connection_loop(
                         }
 
                         failures_in_cycle += 1;
+                        metrics.record_provider_switch(&chain_key, "failure");
                         endpoint_idx = (endpoint_idx + 1) % endpoints.len(); // cycle the endpoints
 
                         rpc_ids.clear_all(); // clear pending requests on failure
@@ -553,15 +570,19 @@ pub enum ConnectionError {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        init_tracing_tests, subsystems::trigger::streams::evm_stream::client::channels::Channels,
-    };
+    use crate::subsystems::trigger::streams::evm_stream::client::channels::Channels;
 
     use super::*;
     use alloy_node_bindings::Anvil;
 
     use tokio::time::{timeout, Duration};
-    use utils::test_utils::anvil::safe_spawn_anvil;
+    use utils::{
+        init_tracing_tests, telemetry::EvmStreamMetrics, test_utils::anvil::safe_spawn_anvil,
+    };
+
+    fn test_metrics() -> EvmStreamMetrics {
+        EvmStreamMetrics::new(opentelemetry::global::meter("test"))
+    }
 
     #[tokio::test]
     async fn connection_works() {
@@ -582,6 +603,7 @@ mod test {
             channels.connection,
             wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
             None,
+            test_metrics(),
         );
 
         let message_count = std::sync::Arc::new(std::sync::Mutex::new(0u32));
@@ -648,6 +670,7 @@ mod test {
             channels.connection,
             wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
             None,
+            test_metrics(),
         );
 
         // Wait for connection to be established and current_endpoint to be set
@@ -700,6 +723,7 @@ mod test {
             channels.connection,
             wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
             None,
+            test_metrics(),
         );
 
         // Step 1: Wait for initial connection to anvil_1
@@ -811,6 +835,7 @@ mod test {
             channels.connection,
             wavs_types::ChainKey::new("evm:31337").expect("Invalid chain key format"),
             Some(1),
+            test_metrics(),
         );
 
         // Step 1: Should connect to priority endpoint (anvil_2) first

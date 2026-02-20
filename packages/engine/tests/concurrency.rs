@@ -97,7 +97,7 @@ async fn do_it(kind: impl ToString) {
         .await
         .unwrap();
 
-    assert_eq!(res, b"short".to_vec());
+    assert_eq!(res[0], b"short".to_vec());
 
     if time.elapsed() >= Duration::from_secs(10) {
         panic!(

@@ -2,15 +2,15 @@ use std::collections::BTreeMap;
 
 use alloy_sol_types::SolValue;
 use serde::{de::DeserializeOwned, Serialize};
-use utils::{storage::db::RedbStorage, test_utils::test_contracts::ISimpleSubmit::DataWithId};
+use utils::{storage::db::WavsDb, test_utils::test_contracts::ISimpleSubmit::DataWithId};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     bindings::operator::world::host::LogLevel,
     utils::error::EngineError,
-    worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
+    worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder},
 };
-use wavs_types::{ComponentDigest, EventId, ServiceId, WorkflowId};
+use wavs_types::{ComponentDigest, ServiceId, WasmResponse, WorkflowId};
 
 use crate::helpers::service::{make_service, make_trigger_action};
 
@@ -20,7 +20,7 @@ pub async fn execute_component<D: DeserializeOwned>(
     config: BTreeMap<String, String>,
     keyvalue_ctx: Option<KeyValueCtx>,
     input: impl Serialize,
-) -> D {
+) -> Vec<D> {
     try_execute_component(wasm_bytes, config, keyvalue_ctx, input)
         .await
         .unwrap()
@@ -33,7 +33,7 @@ pub async fn execute_component_raw(
     config: BTreeMap<String, String>,
     keyvalue_ctx: Option<KeyValueCtx>,
     input: Vec<u8>,
-) -> Vec<u8> {
+) -> Vec<Vec<u8>> {
     try_execute_component_raw(engine, wasm_bytes, config, keyvalue_ctx, input)
         .await
         .unwrap()
@@ -45,7 +45,7 @@ pub async fn try_execute_component<D: DeserializeOwned>(
     config: BTreeMap<String, String>,
     keyvalue_ctx: Option<KeyValueCtx>,
     input: impl Serialize,
-) -> std::result::Result<D, String> {
+) -> std::result::Result<Vec<D>, String> {
     let mut wt_config = WTConfig::new();
 
     wt_config.wasm_component_model(true);
@@ -54,7 +54,7 @@ pub async fn try_execute_component<D: DeserializeOwned>(
 
     let engine = WTEngine::new(&wt_config).unwrap();
 
-    let res = try_execute_component_raw(
+    let responses = try_execute_component_raw(
         engine,
         wasm_bytes,
         config,
@@ -63,8 +63,14 @@ pub async fn try_execute_component<D: DeserializeOwned>(
     )
     .await?;
 
-    let data_with_id: DataWithId = DataWithId::abi_decode(&res).unwrap();
-    Ok(serde_json::from_slice::<D>(&data_with_id.data).unwrap())
+    let mut out = Vec::new();
+
+    for response in responses {
+        let data_with_id: DataWithId = DataWithId::abi_decode(&response).unwrap();
+        out.push(serde_json::from_slice::<D>(&data_with_id.data).unwrap());
+    }
+
+    Ok(out)
 }
 
 #[allow(dead_code)]
@@ -74,22 +80,18 @@ pub async fn try_execute_component_raw(
     config: BTreeMap<String, String>,
     keyvalue_ctx: Option<KeyValueCtx>,
     input: Vec<u8>,
-) -> std::result::Result<Vec<u8>, String> {
+) -> std::result::Result<Vec<Vec<u8>>, String> {
     let service = make_service(ComponentDigest::hash(wasm_bytes), config);
     let trigger_action = make_trigger_action(&service, None, input);
 
-    let event_id: EventId = (&service, &trigger_action)
-        .try_into()
-        .map_err(|e: anyhow::Error| e.to_string())?;
-
     let data_dir = tempfile::tempdir().unwrap();
     let keyvalue_ctx = keyvalue_ctx
-        .unwrap_or_else(|| KeyValueCtx::new(RedbStorage::new().unwrap(), "test".to_string()));
+        .unwrap_or_else(|| KeyValueCtx::new(WavsDb::new().unwrap(), "test".to_string()));
 
     let mut instance_deps = InstanceDepsBuilder {
         workflow_id: service.workflows.keys().next().cloned().unwrap(),
         service,
-        event_id,
+        data: InstanceData::new_operator(trigger_action.data.clone()),
         component: WasmtimeComponent::new(&engine, wasm_bytes).unwrap(),
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),
@@ -100,12 +102,26 @@ pub async fn try_execute_component_raw(
     .build()
     .unwrap();
 
-    let resp =
-        wavs_engine::worlds::operator::execute::execute(&mut instance_deps, trigger_action).await;
+    let responses = wavs_engine::worlds::operator::execute::execute(
+        &mut instance_deps,
+        trigger_action,
+        WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+        WasmResponse::DEFAULT_MAX_SALT_SIZE,
+    )
+    .await;
 
-    match resp {
-        Ok(Some(response)) => Ok(response.payload),
-        Ok(None) => Err("No response from component".to_string()),
+    match responses {
+        Ok(responses) => {
+            if responses.is_empty() {
+                Err("No responses from component".to_string())
+            } else {
+                let mut payloads = Vec::new();
+                for response in responses {
+                    payloads.push(response.payload);
+                }
+                Ok(payloads)
+            }
+        }
         Err(e) => {
             match e {
                 // return the inner error directly so callers can handle it

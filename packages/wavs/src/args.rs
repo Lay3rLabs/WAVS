@@ -63,14 +63,20 @@ pub struct CliArgs {
     pub wasm_threads: Option<usize>,
 
     /// mnemonic for the submission client (usually leave this as None and override in env)
+    /// signing keys are _derived_ from this using monotonic HD index
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub submission_mnemonic: Option<Credential>,
+    pub signing_mnemonic: Option<Credential>,
 
-    /// mnemonic for the submission client (usually leave this as None and override in env)
+    /// Optional aggregator credential for submitting to cosmos chains
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cosmos_submission_mnemonic: Option<Credential>,
+    pub aggregator_cosmos_credential: Option<Credential>,
+
+    /// Optional aggregator credential for submitting to evm chains
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aggregator_evm_credential: Option<Credential>,
 
     /// The maximum amount of fuel (compute metering) to allow for 1 component's execution
     #[arg(long)]
@@ -133,6 +139,31 @@ pub struct CliArgs {
     #[arg(long)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_submission_networking: Option<bool>,
+
+    /// Jetstream WebSocket endpoint URL for ATProto events
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jetstream_endpoint: Option<String>,
+
+    /// Maximum jetstream message size in bytes
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jetstream_max_message_size: Option<usize>,
+
+    /// Optional hyperswarm bootstrap address (host:port) for Hypercore discovery
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hyperswarm_bootstrap: Option<String>,
+
+    /// Maximum WASM response payload size in bytes (default: 50MB)
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_wasm_payload_size: Option<usize>,
+
+    /// Maximum WASM response event_id_salt size in bytes (default: 1MB)
+    #[arg(long)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_wasm_salt_size: Option<usize>,
 }
 
 impl CliEnvExt for CliArgs {

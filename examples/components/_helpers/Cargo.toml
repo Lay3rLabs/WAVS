@@ -20,6 +20,7 @@ cosmwasm-std = { workspace = true }
 wit-bindgen = { workspace = true }
 cw-wavs-trigger-api = {workspace = true}
 cw-wavs-mock-api = {workspace = true}
+wasip2 = {workspace = true}
 
 [lib]
 crate-type = ["rlib", "cdylib"]

@@ -1,7 +1,5 @@
 use std::str::FromStr as _;
 
-use crate::service_json::Json;
-
 use super::*;
 use alloy_primitives::address;
 use alloy_primitives::hex;
@@ -11,9 +9,9 @@ use tempfile::tempdir;
 use utils::init_tracing_tests;
 use utils::service::DEFAULT_IPFS_GATEWAY;
 use wasm_pkg_client::PackageRef;
-use wavs_types::ComponentDigest;
-use wavs_types::SignatureKind;
-use wavs_types::Submit;
+use wavs_types::{Builder, ComponentDigest, SignatureKind, Submit};
+
+use crate::service_json::ServiceJsonExt;
 
 #[test]
 fn test_service_init() {
@@ -33,7 +31,7 @@ fn test_service_init() {
 
     // Parse the created file to verify its contents
     let file_content = std::fs::read_to_string(file_path).unwrap();
-    let parsed_service: ServiceJson = serde_json::from_str(&file_content).unwrap();
+    let parsed_service: ServiceBuilder = serde_json::from_str(&file_content).unwrap();
 
     assert_eq!(parsed_service.name, "Test Service");
 
@@ -51,7 +49,7 @@ fn test_service_init() {
 
     // Parse file to verify contents
     let auto_id_content = std::fs::read_to_string(auto_id_file_path).unwrap();
-    let auto_id_parsed: ServiceJson = serde_json::from_str(&auto_id_content).unwrap();
+    let auto_id_parsed: ServiceBuilder = serde_json::from_str(&auto_id_content).unwrap();
 
     assert_eq!(auto_id_parsed.name, "Auto ID Service");
 }
@@ -101,7 +99,7 @@ async fn test_workflow_component_operations() {
     assert_eq!(add_result.file_path(), &file_path);
 
     // Verify the file was modified by adding the component
-    let service_after_add: ServiceJson =
+    let service_after_add: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     assert!(service_after_add
         .workflows
@@ -159,7 +157,7 @@ async fn test_workflow_component_operations() {
     }
 
     // Verify the service was updated with new permissions
-    let service_after_permissions: ServiceJson =
+    let service_after_permissions: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let updated_component = service_after_permissions
         .workflows
@@ -203,7 +201,7 @@ async fn test_workflow_component_operations() {
     }
 
     // Verify the service was updated with specific hosts
-    let service_after_specific: ServiceJson =
+    let service_after_specific: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let specific_component = service_after_specific
         .workflows
@@ -246,7 +244,7 @@ async fn test_workflow_component_operations() {
     }
 
     // Verify the service was updated with no hosts permission
-    let service_after_no_hosts: ServiceJson =
+    let service_after_no_hosts: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let no_hosts_component = service_after_no_hosts
         .workflows
@@ -305,7 +303,7 @@ async fn test_workflow_component_operations() {
     }
 
     // Verify the third component was added
-    let service_after_third_add: ServiceJson =
+    let service_after_third_add: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     assert!(service_after_third_add
         .workflows
@@ -340,7 +338,7 @@ async fn test_workflow_component_operations() {
     assert_eq!(fuel_limit_result.file_path(), &file_path);
 
     // Verify the service was updated with the fuel limit
-    let service_after_fuel_limit: ServiceJson =
+    let service_after_fuel_limit: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let component_with_fuel_limit = service_after_fuel_limit
         .workflows
@@ -371,7 +369,7 @@ async fn test_workflow_component_operations() {
     assert_eq!(no_fuel_limit_result.file_path(), &file_path);
 
     // Verify the service was updated with no fuel limit
-    let service_after_no_fuel: ServiceJson =
+    let service_after_no_fuel: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let component_with_no_fuel = service_after_no_fuel
         .workflows
@@ -394,6 +392,7 @@ async fn test_workflow_component_operations() {
         workflow_id.clone(),
         ComponentCommand::Config {
             values: Some(config_values.clone()),
+            config_file: None,
         },
     )
     .await
@@ -412,7 +411,7 @@ async fn test_workflow_component_operations() {
     assert_eq!(config_result.file_path(), &file_path);
 
     // Verify the service was updated with the config
-    let service_after_config: ServiceJson =
+    let service_after_config: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let component_with_config = service_after_config
         .workflows
@@ -440,7 +439,10 @@ async fn test_workflow_component_operations() {
         DEFAULT_IPFS_GATEWAY,
         &file_path,
         workflow_id.clone(),
-        ComponentCommand::Config { values: None },
+        ComponentCommand::Config {
+            values: None,
+            config_file: None,
+        },
     )
     .await
     .unwrap();
@@ -455,7 +457,7 @@ async fn test_workflow_component_operations() {
     assert_eq!(clear_config_result.file_path(), &file_path);
 
     // Verify the service was updated with empty config
-    let service_after_clear_config: ServiceJson =
+    let service_after_clear_config: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let component_with_clear_config = service_after_clear_config
         .workflows
@@ -474,6 +476,7 @@ async fn test_workflow_component_operations() {
         workflow_id.clone(),
         ComponentCommand::Config {
             values: Some(invalid_config),
+            config_file: None,
         },
     )
     .await;
@@ -514,7 +517,7 @@ async fn test_workflow_component_operations() {
     }
 
     // Verify the service was updated with env keys
-    let service_after_env: ServiceJson =
+    let service_after_env: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let component_with_env = service_after_env
         .workflows
@@ -594,7 +597,7 @@ async fn test_workflow_component_operations() {
     assert_eq!(max_exec_result.file_path(), &file_path);
 
     // Verify the service was updated with max exec time
-    let service_after_max_exec: ServiceJson =
+    let service_after_max_exec: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let component_with_max_exec = service_after_max_exec
         .workflows
@@ -630,7 +633,7 @@ async fn test_workflow_component_operations() {
     assert_eq!(no_max_exec_result.file_path(), &file_path);
 
     // Verify the service was updated with no max exec time
-    let service_after_no_max_exec: ServiceJson =
+    let service_after_no_max_exec: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let component_with_no_max_exec = service_after_no_max_exec
         .workflows
@@ -660,7 +663,7 @@ fn test_workflow_operations() {
     assert_eq!(add_result.file_path, file_path);
 
     // Verify the file was modified by adding the workflow
-    let service_after_add: ServiceJson =
+    let service_after_add: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     assert!(service_after_add.workflows.contains_key(&workflow_id));
     assert_eq!(service_after_add.workflows.len(), 1);
@@ -669,8 +672,8 @@ fn test_workflow_operations() {
     let added_workflow = service_after_add.workflows.get(&workflow_id).unwrap();
 
     // Check trigger type with pattern matching for TriggerJson
-    if let TriggerJson::Json(json) = &added_workflow.trigger {
-        assert!(matches!(json, Json::Unset));
+    if let TriggerBuilder::Builder(json) = &added_workflow.trigger {
+        assert!(matches!(json, Builder::Unset));
     } else {
         panic!("Expected Json::Unset");
     }
@@ -679,8 +682,8 @@ fn test_workflow_operations() {
     assert!(added_workflow.component.is_unset());
 
     // Check submit type with pattern matching for SubmitJson
-    if let SubmitJson::Json(json) = &added_workflow.submit {
-        assert!(matches!(json, Json::Unset));
+    if let SubmitBuilder::Builder(json) = &added_workflow.submit {
+        assert!(matches!(json, Builder::Unset));
     } else {
         panic!("Expected Json::Unset");
     }
@@ -690,7 +693,7 @@ fn test_workflow_operations() {
     let auto_workflow_id = auto_id_result.workflow_id;
 
     // Verify the auto-generated workflow was added
-    let service_after_auto: ServiceJson =
+    let service_after_auto: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     assert!(service_after_auto.workflows.contains_key(&auto_workflow_id));
     assert_eq!(service_after_auto.workflows.len(), 2); // Two workflows now
@@ -703,7 +706,7 @@ fn test_workflow_operations() {
     assert_eq!(delete_result.file_path, file_path);
 
     // Verify the file was modified by deleting the workflow
-    let service_after_delete: ServiceJson =
+    let service_after_delete: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     assert!(!service_after_delete.workflows.contains_key(&workflow_id));
     assert_eq!(service_after_delete.workflows.len(), 1); // One workflow remaining
@@ -737,7 +740,7 @@ async fn test_update_status() {
 
     // Re-read the service file and assert the status was updated
     let contents = std::fs::read_to_string(&file_path).unwrap();
-    let service: ServiceJson = serde_json::from_str(&contents).unwrap();
+    let service: ServiceBuilder = serde_json::from_str(&contents).unwrap();
     assert_eq!(service.status, ServiceStatus::Paused);
 }
 
@@ -755,13 +758,13 @@ async fn test_workflow_trigger_operations() {
     add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
 
     // Initial workflow should have manual trigger (default when created)
-    let service_initial: ServiceJson =
+    let service_initial: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let initial_workflow = service_initial.workflows.get(&workflow_id).unwrap();
 
     // Check the trigger type with proper handling of TriggerJson wrapper
-    if let TriggerJson::Json(json) = &initial_workflow.trigger {
-        assert!(matches!(json, Json::Unset));
+    if let TriggerBuilder::Builder(json) = &initial_workflow.trigger {
+        assert!(matches!(json, Builder::Unset));
     } else {
         panic!("Expected Json::Unset");
     }
@@ -813,12 +816,12 @@ async fn test_workflow_trigger_operations() {
     }
 
     // Verify the service was updated with cosmos trigger
-    let service_after_cosmos: ServiceJson =
+    let service_after_cosmos: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let cosmos_workflow = service_after_cosmos.workflows.get(&workflow_id).unwrap();
 
     // Handle TriggerJson wrapper
-    if let TriggerJson::Trigger(trigger) = &cosmos_workflow.trigger {
+    if let TriggerBuilder::Trigger(trigger) = &cosmos_workflow.trigger {
         if let Trigger::CosmosContractEvent {
             address,
             chain,
@@ -886,12 +889,12 @@ async fn test_workflow_trigger_operations() {
     }
 
     // Verify the service was updated with EVM trigger
-    let service_after: ServiceJson =
+    let service_after: ServiceBuilder =
         serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
     let evm_workflow = service_after.workflows.get(&workflow_id).unwrap();
 
     // Handle TriggerJson wrapper
-    if let TriggerJson::Trigger(trigger) = &evm_workflow.trigger {
+    if let TriggerBuilder::Trigger(trigger) = &evm_workflow.trigger {
         if let Trigger::EvmContractEvent {
             address,
             chain,
@@ -1029,13 +1032,12 @@ async fn test_service_validation() {
     };
 
     let submit = Submit::Aggregator {
-        url: "https://api.example.com/aggregator".to_string(),
         component: Box::new(component.clone()),
         signature_kind: SignatureKind::evm_default(),
     };
 
     // Create service manager
-    let manager = ServiceManagerJson::Manager(ServiceManager::Evm {
+    let manager = ServiceManagerBuilder::Manager(ServiceManager::Evm {
         chain: evm_chain.clone(),
         address: evm_address,
     });
@@ -1045,14 +1047,14 @@ async fn test_service_validation() {
         let mut workflows = BTreeMap::new();
         workflows.insert(
             workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(component.clone()),
-                submit: SubmitJson::Submit(submit.clone()),
+            WorkflowBuilder {
+                trigger: TriggerBuilder::Trigger(trigger.clone()),
+                component: ComponentBuilder::Component(component.clone()),
+                submit: SubmitBuilder::Submit(submit.clone()),
             },
         );
 
-        let valid_service = ServiceJson {
+        let valid_service = ServiceBuilder {
             name: "Test Service".to_string(),
             workflows,
             status: ServiceStatus::Active,
@@ -1077,10 +1079,10 @@ async fn test_service_validation() {
         // Add original workflow
         workflows.insert(
             workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(component.clone()),
-                submit: SubmitJson::Submit(submit.clone()),
+            WorkflowBuilder {
+                trigger: TriggerBuilder::Trigger(trigger.clone()),
+                component: ComponentBuilder::Component(component.clone()),
+                submit: SubmitBuilder::Submit(submit.clone()),
             },
         );
 
@@ -1088,14 +1090,14 @@ async fn test_service_validation() {
         let invalid_workflow_id = WorkflowId::new("invalid-workflow").unwrap();
         workflows.insert(
             invalid_workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::new_unset(),
-                submit: SubmitJson::Submit(submit.clone()),
+            WorkflowBuilder {
+                trigger: TriggerBuilder::Trigger(trigger.clone()),
+                component: ComponentBuilder::new_unset(),
+                submit: SubmitBuilder::Submit(submit.clone()),
             },
         );
 
-        let invalid_service = ServiceJson {
+        let invalid_service = ServiceBuilder {
             name: "Test Service".to_string(),
             workflows,
             status: ServiceStatus::Active,
@@ -1129,14 +1131,14 @@ async fn test_service_validation() {
 
         workflows.insert(
             workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(zero_fuel_component),
-                submit: SubmitJson::Submit(submit.clone()),
+            WorkflowBuilder {
+                trigger: TriggerBuilder::Trigger(trigger.clone()),
+                component: ComponentBuilder::Component(zero_fuel_component),
+                submit: SubmitBuilder::Submit(submit.clone()),
             },
         );
 
-        let zero_fuel_service = ServiceJson {
+        let zero_fuel_service = ServiceBuilder {
             name: "Test Service".to_string(),
             workflows,
             status: ServiceStatus::Active,
@@ -1167,14 +1169,14 @@ async fn test_service_validation() {
         let mut workflows = BTreeMap::new();
         workflows.insert(
             workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(component.clone()),
-                submit: SubmitJson::Submit(submit.clone()),
+            WorkflowBuilder {
+                trigger: TriggerBuilder::Trigger(trigger.clone()),
+                component: ComponentBuilder::Component(component.clone()),
+                submit: SubmitBuilder::Submit(submit.clone()),
             },
         );
 
-        let empty_name_service = ServiceJson {
+        let empty_name_service = ServiceBuilder {
             name: "".to_string(), // Empty name
             workflows,
             status: ServiceStatus::Active,
@@ -1207,14 +1209,14 @@ async fn test_service_validation() {
 
         workflows.insert(
             workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(env_component),
-                submit: SubmitJson::Submit(submit.clone()),
+            WorkflowBuilder {
+                trigger: TriggerBuilder::Trigger(trigger.clone()),
+                component: ComponentBuilder::Component(env_component),
+                submit: SubmitBuilder::Submit(submit.clone()),
             },
         );
 
-        let invalid_env_service = ServiceJson {
+        let invalid_env_service = ServiceBuilder {
             name: "Test Service".to_string(),
             workflows,
             status: ServiceStatus::Active,
@@ -1244,14 +1246,14 @@ async fn test_service_validation() {
         let mut workflows = BTreeMap::new();
         workflows.insert(
             workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Json(Json::Unset),
-                component: ComponentJson::Component(component.clone()),
-                submit: SubmitJson::Submit(submit.clone()),
+            WorkflowBuilder {
+                trigger: TriggerBuilder::Builder(Builder::Unset),
+                component: ComponentBuilder::Component(component.clone()),
+                submit: SubmitBuilder::Submit(submit.clone()),
             },
         );
 
-        let unset_trigger_service = ServiceJson {
+        let unset_trigger_service = ServiceBuilder {
             name: "Test Service".to_string(),
             workflows,
             status: ServiceStatus::Active,
@@ -1281,14 +1283,14 @@ async fn test_service_validation() {
         let mut workflows = BTreeMap::new();
         workflows.insert(
             workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(component.clone()),
-                submit: SubmitJson::Json(Json::Unset),
+            WorkflowBuilder {
+                trigger: TriggerBuilder::Trigger(trigger.clone()),
+                component: ComponentBuilder::Component(component.clone()),
+                submit: SubmitBuilder::Builder(Builder::Unset),
             },
         );
 
-        let unset_submit_service = ServiceJson {
+        let unset_submit_service = ServiceBuilder {
             name: "Test Service".to_string(),
             workflows,
             status: ServiceStatus::Active,
@@ -1313,64 +1315,23 @@ async fn test_service_validation() {
         );
     }
 
-    // Test invalid URL in Aggregator submit
-    {
-        let mut workflows = BTreeMap::new();
-        workflows.insert(
-            workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(component.clone()),
-                submit: SubmitJson::Submit(Submit::Aggregator {
-                    url: "not-a-valid-url".to_string(),
-                    component: Box::new(component.clone()),
-                    signature_kind: SignatureKind::evm_default(),
-                }),
-            },
-        );
-
-        let invalid_url_service = ServiceJson {
-            name: "Test Service".to_string(),
-            workflows,
-            status: ServiceStatus::Active,
-            manager: manager.clone(),
-        };
-
-        let file_path = temp_dir.path().join("invalid_url.json");
-        let service_json = serde_json::to_string_pretty(&invalid_url_service).unwrap();
-        std::fs::write(&file_path, service_json).unwrap();
-
-        let result = validate_service(&file_path, None).await.unwrap();
-        assert!(
-            !result.errors.is_empty(),
-            "Invalid URL service should have validation errors"
-        );
-        assert!(
-            result
-                .errors
-                .iter()
-                .any(|error| error.contains("invalid URL")),
-            "Validation should catch invalid URL in Aggregator submit"
-        );
-    }
-
     // Test unset service manager
     {
         let mut workflows = BTreeMap::new();
         workflows.insert(
             workflow_id.clone(),
-            WorkflowJson {
-                trigger: TriggerJson::Trigger(trigger.clone()),
-                component: ComponentJson::Component(component.clone()),
-                submit: SubmitJson::Submit(submit.clone()),
+            WorkflowBuilder {
+                trigger: TriggerBuilder::Trigger(trigger.clone()),
+                component: ComponentBuilder::Component(component.clone()),
+                submit: SubmitBuilder::Submit(submit.clone()),
             },
         );
 
-        let unset_manager_service = ServiceJson {
+        let unset_manager_service = ServiceBuilder {
             name: "Test Service".to_string(),
             workflows,
             status: ServiceStatus::Active,
-            manager: ServiceManagerJson::Json(Json::Unset),
+            manager: ServiceManagerBuilder::Builder(Builder::Unset),
         };
 
         let file_path = temp_dir.path().join("unset_manager.json");
@@ -1455,11 +1416,11 @@ async fn test_set_component_source_registry() {
 
     // Verify the service was updated with the registry source
     let service_json = std::fs::read_to_string(&file_path).unwrap();
-    let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+    let service: ServiceBuilder = serde_json::from_str(&service_json).unwrap();
 
     let workflow = service.workflows.get(&workflow_id).unwrap();
 
-    if let ComponentJson::Component(component) = &workflow.component {
+    if let ComponentBuilder::Component(component) = &workflow.component {
         if let ComponentSource::Registry { registry } = &component.source {
             assert_eq!(registry.package, package);
             assert!(
@@ -1498,27 +1459,22 @@ fn test_set_aggregator_submit() {
     let workflow_id = workflow_result.workflow_id;
 
     // Set aggregator submit
-    let test_url = "https://example.com/aggregator";
-    let result =
-        set_aggregator_submit(&file_path, workflow_id.clone(), test_url.to_string()).unwrap();
+    let result = set_aggregator_submit(&file_path, workflow_id.clone()).unwrap();
 
     // Verify result
     assert_eq!(result.workflow_id, workflow_id);
-    assert_eq!(result.url, test_url);
 
     // Verify the service file was updated
     let service_json = std::fs::read_to_string(&file_path).unwrap();
-    let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+    let service: ServiceBuilder = serde_json::from_str(&service_json).unwrap();
     let workflow = service.workflows.get(&workflow_id).unwrap();
 
     // Should create AggregatorJson with unset component
     match &workflow.submit {
-        SubmitJson::AggregatorJson(AggregatorJson::Aggregator {
-            url,
+        SubmitBuilder::AggregatorBuilder(AggregatorBuilder::Aggregator {
             component,
             signature_kind,
         }) => {
-            assert_eq!(url, test_url);
             assert!(component.is_unset());
             assert_eq!(*signature_kind, SignatureKind::evm_default());
         }
@@ -1545,12 +1501,12 @@ fn test_set_none_submit() {
 
     // Verify the service file was updated
     let service_json = std::fs::read_to_string(&file_path).unwrap();
-    let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+    let service: ServiceBuilder = serde_json::from_str(&service_json).unwrap();
     let workflow = service.workflows.get(&workflow_id).unwrap();
 
     // Should be Submit::None
     match &workflow.submit {
-        SubmitJson::Submit(Submit::None) => {
+        SubmitBuilder::Submit(Submit::None) => {
             // Expected
         }
         _ => panic!("Expected Submit::None variant"),
@@ -1569,8 +1525,7 @@ async fn test_modify_aggregator_component() {
     let workflow_id = workflow_result.workflow_id;
 
     // First set aggregator submit
-    let test_url = "https://example.com/aggregator";
-    set_aggregator_submit(&file_path, workflow_id.clone(), test_url.to_string()).unwrap();
+    set_aggregator_submit(&file_path, workflow_id.clone()).unwrap();
 
     // Create test digest
     let test_digest = ComponentDigest::hash(b"test_component");
@@ -1593,18 +1548,16 @@ async fn test_modify_aggregator_component() {
 
     // Verify the component was created and set
     let service_json = std::fs::read_to_string(&file_path).unwrap();
-    let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+    let service: ServiceBuilder = serde_json::from_str(&service_json).unwrap();
     let workflow = service.workflows.get(&workflow_id).unwrap();
 
     match &workflow.submit {
-        SubmitJson::AggregatorJson(AggregatorJson::Aggregator {
-            url,
+        SubmitBuilder::AggregatorBuilder(AggregatorBuilder::Aggregator {
             component,
             signature_kind: _,
         }) => {
-            assert_eq!(url, test_url);
             assert!(component.is_set());
-            if let ComponentJson::Component(comp) = component {
+            if let ComponentBuilder::Component(comp) = component {
                 match &comp.source {
                     ComponentSource::Digest(digest) => {
                         assert_eq!(*digest, test_digest);
@@ -1613,13 +1566,11 @@ async fn test_modify_aggregator_component() {
                 }
             }
         }
-        SubmitJson::Submit(Submit::Aggregator {
-            url,
+        SubmitBuilder::Submit(Submit::Aggregator {
             component,
             signature_kind: _,
         }) => {
             // This might be matched first due to enum ordering
-            assert_eq!(*url, test_url);
             match &component.source {
                 ComponentSource::Digest(digest) => {
                     assert_eq!(*digest, test_digest);
@@ -1646,19 +1597,19 @@ async fn test_modify_aggregator_component() {
 
     // Verify permissions were updated
     let service_json = std::fs::read_to_string(&file_path).unwrap();
-    let service: ServiceJson = serde_json::from_str(&service_json).unwrap();
+    let service: ServiceBuilder = serde_json::from_str(&service_json).unwrap();
     let workflow = service.workflows.get(&workflow_id).unwrap();
 
     match &workflow.submit {
-        SubmitJson::AggregatorJson(AggregatorJson::Aggregator { component, .. }) => {
-            if let ComponentJson::Component(comp) = component {
+        SubmitBuilder::AggregatorBuilder(AggregatorBuilder::Aggregator { component, .. }) => {
+            if let ComponentBuilder::Component(comp) = component {
                 assert_eq!(
                     comp.permissions.allowed_http_hosts,
                     AllowedHostPermission::All
                 );
             }
         }
-        SubmitJson::Submit(Submit::Aggregator { component, .. }) => {
+        SubmitBuilder::Submit(Submit::Aggregator { component, .. }) => {
             // This might be matched first due to enum ordering
             assert_eq!(
                 component.permissions.allowed_http_hosts,
@@ -1674,24 +1625,23 @@ fn test_aggregator_validation() {
     init_tracing_tests();
 
     // Test case 1: Valid aggregator with proper fuel limit
-    let mut service = ServiceJson {
+    let mut service = ServiceBuilder {
         name: "Test Service".to_string(),
         workflows: std::collections::BTreeMap::new(),
         status: ServiceStatus::Active,
-        manager: ServiceManagerJson::Json(Json::Unset),
+        manager: ServiceManagerBuilder::Builder(Builder::Unset),
     };
 
     let workflow_id = WorkflowId::default();
     let test_digest = ComponentDigest::hash(b"test");
     let component = Component::new(ComponentSource::Digest(test_digest));
 
-    let workflow = WorkflowJson {
-        trigger: TriggerJson::Json(Json::Unset),
-        component: ComponentJson::Component(Component::new(ComponentSource::Digest(
+    let workflow = WorkflowBuilder {
+        trigger: TriggerBuilder::Builder(Builder::Unset),
+        component: ComponentBuilder::Component(Component::new(ComponentSource::Digest(
             ComponentDigest::hash(b"workflow_component"),
         ))),
-        submit: SubmitJson::Submit(Submit::Aggregator {
-            url: "https://valid-url.com".to_string(),
+        submit: SubmitBuilder::Submit(Submit::Aggregator {
             component: Box::new(component.clone()),
             signature_kind: SignatureKind::evm_default(),
         }),
@@ -1711,13 +1661,12 @@ fn test_aggregator_validation() {
     let mut invalid_component = component.clone();
     invalid_component.fuel_limit = Some(0);
 
-    let invalid_workflow = WorkflowJson {
-        trigger: TriggerJson::Json(Json::Unset),
-        component: ComponentJson::Component(Component::new(ComponentSource::Digest(
+    let invalid_workflow = WorkflowBuilder {
+        trigger: TriggerBuilder::Builder(Builder::Unset),
+        component: ComponentBuilder::Component(Component::new(ComponentSource::Digest(
             ComponentDigest::hash(b"workflow_component"),
         ))),
-        submit: SubmitJson::Submit(Submit::Aggregator {
-            url: "https://valid-url.com".to_string(),
+        submit: SubmitBuilder::Submit(Submit::Aggregator {
             component: Box::new(invalid_component),
             signature_kind: SignatureKind::evm_default(),
         }),
@@ -1744,13 +1693,12 @@ fn test_aggregator_validation() {
         .env_keys
         .insert("INVALID_PREFIX_KEY".to_string());
 
-    let invalid_env_workflow = WorkflowJson {
-        trigger: TriggerJson::Json(Json::Unset),
-        component: ComponentJson::Component(Component::new(ComponentSource::Digest(
+    let invalid_env_workflow = WorkflowBuilder {
+        trigger: TriggerBuilder::Builder(Builder::Unset),
+        component: ComponentBuilder::Component(Component::new(ComponentSource::Digest(
             ComponentDigest::hash(b"workflow_component"),
         ))),
-        submit: SubmitJson::Submit(Submit::Aggregator {
-            url: "https://valid-url.com".to_string(),
+        submit: SubmitBuilder::Submit(Submit::Aggregator {
             component: Box::new(invalid_env_component),
             signature_kind: SignatureKind::evm_default(),
         }),
@@ -1764,4 +1712,195 @@ fn test_aggregator_validation() {
         .filter(|e| e.contains("doesn't start with"))
         .collect();
     assert_eq!(env_errors.len(), 1, "Should have env key validation error");
+}
+
+#[tokio::test]
+async fn test_config_file_functionality() {
+    // Test comprehensive config file functionality including parsing and end-to-end integration
+    let temp_dir = tempdir().unwrap();
+    let file_path = temp_dir.path().join("config_test_service.json");
+    let config_file = temp_dir.path().join("component_config.json");
+
+    // Test comprehensive config with all data types
+    let comprehensive_config = r#"{
+        "database_host": "localhost",
+        "database_port": "5432",
+        "api_timeout": "30",
+        "debug_enabled": "true",
+        "max_connections": "100",
+        "retry_count": "3",
+        "allowed_ips": ["127.0.0.1", "192.168.1.100"],
+        "database_config": {"ssl": true, "pool_size": 10},
+        "feature_flags": {"new_ui": true, "beta_access": false}
+    }"#;
+
+    std::fs::write(&config_file, comprehensive_config).unwrap();
+
+    let result = parse_config_from_file(&config_file).unwrap();
+    assert_eq!(result.len(), 9);
+
+    // Test error conditions
+    let non_existent_file = temp_dir.path().join("non_existent.json");
+    let result = parse_config_from_file(&non_existent_file);
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Failed to read config file"));
+
+    let invalid_json_file = temp_dir.path().join("invalid.json");
+    std::fs::write(&invalid_json_file, "{ invalid json }").unwrap();
+
+    let result = parse_config_from_file(&invalid_json_file);
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("Failed to parse JSON"));
+
+    let array_file = temp_dir.path().join("array.json");
+    std::fs::write(&array_file, "[]").unwrap();
+
+    let result = parse_config_from_file(&array_file);
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("must contain a JSON object"));
+
+    let null_file = temp_dir.path().join("null.json");
+    std::fs::write(
+        &null_file,
+        r#"{"database_host": "localhost", "optional_value": null}"#,
+    )
+    .unwrap();
+
+    let result = parse_config_from_file(&null_file);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("null value"));
+
+    // Initialize a service
+    init_service(&file_path, "Test Service".to_string()).unwrap();
+
+    // Add a workflow
+    let workflow_id = WorkflowId::new("workflow-config-test").unwrap();
+    add_workflow(&file_path, Some(workflow_id.clone())).unwrap();
+
+    // Set component source first
+    let test_digest = ComponentDigest::from_str(
+        "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    )
+    .unwrap();
+    update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::SetSourceDigest {
+            digest: test_digest.clone(),
+        },
+    )
+    .await
+    .unwrap();
+
+    // Test setting config from file
+    let _config_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::Config {
+            values: None,
+            config_file: Some(config_file.clone()),
+        },
+    )
+    .await
+    .unwrap();
+
+    // Verify the service was updated by reading the service file
+    let service_after_config: ServiceBuilder =
+        serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+    let component_with_config = service_after_config
+        .workflows
+        .get(&workflow_id)
+        .unwrap()
+        .component
+        .as_component()
+        .unwrap();
+
+    assert_eq!(component_with_config.config.len(), 9);
+    assert_eq!(
+        component_with_config.config.get("database_host"),
+        Some(&"localhost".to_string())
+    );
+    assert_eq!(
+        component_with_config.config.get("database_port"),
+        Some(&"5432".to_string())
+    );
+    assert_eq!(
+        component_with_config.config.get("api_timeout"),
+        Some(&"30".to_string())
+    );
+    assert_eq!(
+        component_with_config.config.get("debug_enabled"),
+        Some(&"true".to_string())
+    );
+    assert_eq!(
+        component_with_config.config.get("max_connections"),
+        Some(&"100".to_string())
+    );
+    assert_eq!(
+        component_with_config.config.get("retry_count"),
+        Some(&"3".to_string())
+    );
+
+    // Verify complex types are properly serialized in the service file
+    if let Some(ips_str) = component_with_config.config.get("allowed_ips") {
+        let ips: Vec<String> = serde_json::from_str(ips_str).unwrap();
+        assert_eq!(ips.len(), 2);
+        assert!(ips.contains(&"127.0.0.1".to_string()));
+        assert!(ips.contains(&"192.168.1.100".to_string()));
+    }
+
+    if let Some(db_config_str) = component_with_config.config.get("database_config") {
+        let db_config: serde_json::Value = serde_json::from_str(db_config_str).unwrap();
+        if let serde_json::Value::Object(obj) = db_config {
+            assert_eq!(obj.get("ssl").and_then(|v| v.as_bool()), Some(true));
+            assert_eq!(obj.get("pool_size").and_then(|v| v.as_u64()), Some(10));
+        }
+    }
+
+    if let Some(feature_flags_str) = component_with_config.config.get("feature_flags") {
+        let feature_flags: serde_json::Value = serde_json::from_str(feature_flags_str).unwrap();
+        if let serde_json::Value::Object(obj) = feature_flags {
+            assert_eq!(obj.get("new_ui").and_then(|v| v.as_bool()), Some(true));
+            assert_eq!(
+                obj.get("beta_access").and_then(|v| v.as_bool()),
+                Some(false)
+            );
+        }
+    }
+
+    // Test clearing config
+    let _clear_config_result = update_workflow_component(
+        DEFAULT_IPFS_GATEWAY,
+        &file_path,
+        workflow_id.clone(),
+        ComponentCommand::Config {
+            values: None,
+            config_file: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    // Verify the service file was cleared
+    let service_after_clear: ServiceBuilder =
+        serde_json::from_str(&std::fs::read_to_string(&file_path).unwrap()).unwrap();
+    let component_with_clear_config = service_after_clear
+        .workflows
+        .get(&workflow_id)
+        .unwrap()
+        .component
+        .as_component()
+        .unwrap();
+    assert_eq!(component_with_clear_config.config.len(), 0);
 }

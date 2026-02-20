@@ -1,8 +1,10 @@
 use wavs_wasi_utils::impl_u128_conversions;
 
 use crate::bindings::{
+    aggregator::world::wavs::operator::input as aggregator_operator_input,
     aggregator::world::wavs::{
-        aggregator::aggregator::{self as aggregator_types, U128},
+        aggregator::input as aggregator_input,
+        aggregator::output::{self as aggregator_output, U128},
         types::{
             chain as aggregator_chain, core as aggregator_core, events as aggregator_events,
             service as aggregator_service,
@@ -69,6 +71,20 @@ impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
                 start_time: start_time.map(Into::into),
                 end_time: end_time.map(Into::into),
             }),
+            wavs_types::Trigger::AtProtoEvent {
+                collection,
+                repo_did,
+                action,
+            } => component_service::Trigger::AtprotoEvent(component_service::TriggerAtprotoEvent {
+                collection,
+                repo_did,
+                action: action.map(|a| a.to_string()),
+            }),
+            wavs_types::Trigger::HypercoreAppend { feed_key } => {
+                component_service::Trigger::HypercoreAppend(
+                    component_service::TriggerHypercoreAppend { feed_key },
+                )
+            }
         })
     }
 }
@@ -234,6 +250,8 @@ impl From<wavs_types::Permissions> for component_service::Permissions {
         Self {
             allowed_http_hosts: src.allowed_http_hosts.into(),
             file_system: src.file_system,
+            raw_sockets: src.raw_sockets,
+            dns_resolution: src.dns_resolution,
         }
     }
 }
@@ -243,11 +261,9 @@ impl From<wavs_types::Submit> for component_service::Submit {
         match src {
             wavs_types::Submit::None => component_service::Submit::None,
             wavs_types::Submit::Aggregator {
-                url,
                 component,
                 signature_kind,
             } => component_service::Submit::Aggregator(component_service::AggregatorSubmit {
-                url,
                 component: (*component).into(),
                 signature_kind: signature_kind.into(),
             }),
@@ -329,6 +345,7 @@ impl From<wavs_types::WasmResponse> for component_output::WasmResponse {
         Self {
             payload: src.payload,
             ordering: src.ordering,
+            event_id_salt: src.event_id_salt,
         }
     }
 }
@@ -429,6 +446,48 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                     trigger_time: trigger_time.into(),
                 }),
             ),
+            wavs_types::TriggerData::AtProtoEvent {
+                sequence,
+                timestamp,
+                repo,
+                collection,
+                rkey,
+                action,
+                cid,
+                record,
+                rev,
+                op_index,
+            } => {
+                let record_data = record
+                    .map(|value| serde_json::to_string(&value))
+                    .transpose()?;
+
+                Ok(component_input::TriggerData::AtprotoEvent(
+                    component_events::TriggerDataAtprotoEvent {
+                        sequence,
+                        timestamp,
+                        repo,
+                        collection,
+                        rkey,
+                        action: action.to_string(),
+                        cid,
+                        record_data,
+                        rev,
+                        op_index,
+                    },
+                ))
+            }
+            wavs_types::TriggerData::HypercoreAppend {
+                feed_key,
+                index,
+                data,
+            } => Ok(component_input::TriggerData::HypercoreAppend(
+                component_events::TriggerDataHypercoreAppend {
+                    feed_key,
+                    index,
+                    data,
+                },
+            )),
             wavs_types::TriggerData::Raw(data) => Ok(component_input::TriggerData::Raw(data)),
         }
     }
@@ -436,17 +495,169 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
 
 // aggregator
 
-impl TryFrom<wavs_types::Packet> for aggregator_types::Packet {
+impl TryFrom<wavs_types::AggregatorInput> for aggregator_input::AggregatorInput {
     type Error = anyhow::Error;
 
-    fn try_from(packet: wavs_types::Packet) -> Result<Self, Self::Error> {
-        Ok(aggregator_types::Packet {
-            service: packet.service.try_into()?,
-            workflow_id: packet.workflow_id.to_string(),
-            envelope: packet.envelope.into(),
-            signature: packet.signature.into(),
-            trigger_data: packet.trigger_data.try_into()?,
+    fn try_from(input: wavs_types::AggregatorInput) -> Result<Self, Self::Error> {
+        Ok(aggregator_input::AggregatorInput {
+            trigger_action: input.trigger_action.try_into()?,
+            operator_response: input.operator_response.into(),
         })
+    }
+}
+
+impl TryFrom<wavs_types::TriggerAction> for aggregator_input::TriggerAction {
+    type Error = anyhow::Error;
+
+    fn try_from(action: wavs_types::TriggerAction) -> Result<Self, Self::Error> {
+        Ok(aggregator_input::TriggerAction {
+            config: action.config.try_into()?,
+            data: action.data.try_into()?,
+        })
+    }
+}
+
+impl From<wavs_types::WasmResponse> for aggregator_input::WasmResponse {
+    fn from(resp: wavs_types::WasmResponse) -> Self {
+        aggregator_input::WasmResponse {
+            payload: resp.payload,
+            ordering: resp.ordering,
+            event_id_salt: resp.event_id_salt,
+        }
+    }
+}
+
+impl TryFrom<wavs_types::TriggerConfig> for aggregator_operator_input::TriggerConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(config: wavs_types::TriggerConfig) -> Result<Self, Self::Error> {
+        Ok(aggregator_operator_input::TriggerConfig {
+            service_id: config.service_id.to_string(),
+            workflow_id: config.workflow_id.to_string(),
+            trigger: config.trigger.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<wavs_types::TriggerData> for aggregator_operator_input::TriggerData {
+    type Error = anyhow::Error;
+
+    fn try_from(src: wavs_types::TriggerData) -> Result<Self, Self::Error> {
+        match src {
+            wavs_types::TriggerData::EvmContractEvent {
+                chain,
+                contract_address,
+                log_data,
+                tx_hash,
+                block_number,
+                log_index,
+                block_hash,
+                block_timestamp,
+                tx_index,
+            } => Ok(aggregator_operator_input::TriggerData::EvmContractEvent(
+                aggregator_events::TriggerDataEvmContractEvent {
+                    chain: chain.to_string(),
+                    log: aggregator_events::EvmEventLog {
+                        address: contract_address.into(),
+                        data: aggregator_chain::EvmEventLogData {
+                            topics: log_data
+                                .topics()
+                                .iter()
+                                .map(|topic| topic.to_vec())
+                                .collect(),
+                            data: log_data.data.to_vec(),
+                        },
+                        tx_hash: tx_hash.to_vec(),
+                        block_number,
+                        log_index,
+                        block_hash: block_hash.to_vec(),
+                        block_timestamp,
+                        tx_index,
+                    },
+                },
+            )),
+            wavs_types::TriggerData::CosmosContractEvent {
+                contract_address,
+                chain,
+                event,
+                event_index,
+                block_height,
+            } => Ok(aggregator_operator_input::TriggerData::CosmosContractEvent(
+                aggregator_events::TriggerDataCosmosContractEvent {
+                    contract_address: contract_address.into(),
+                    chain: chain.to_string(),
+                    event: aggregator_events::CosmosEvent {
+                        ty: event.ty,
+                        attributes: event
+                            .attributes
+                            .into_iter()
+                            .map(|attr| (attr.key, attr.value))
+                            .collect(),
+                    },
+                    event_index,
+                    block_height,
+                },
+            )),
+            wavs_types::TriggerData::BlockInterval {
+                chain,
+                block_height,
+            } => Ok(aggregator_operator_input::TriggerData::BlockInterval(
+                aggregator_events::TriggerDataBlockInterval {
+                    chain: chain.to_string(),
+                    block_height,
+                },
+            )),
+            wavs_types::TriggerData::Cron { trigger_time } => Ok(
+                aggregator_operator_input::TriggerData::Cron(aggregator_events::TriggerDataCron {
+                    trigger_time: trigger_time.into(),
+                }),
+            ),
+            wavs_types::TriggerData::AtProtoEvent {
+                sequence,
+                timestamp,
+                repo,
+                collection,
+                rkey,
+                action,
+                cid,
+                record,
+                rev,
+                op_index,
+            } => {
+                let record_data = record
+                    .map(|value| serde_json::to_string(&value))
+                    .transpose()?;
+
+                Ok(aggregator_operator_input::TriggerData::AtprotoEvent(
+                    aggregator_events::TriggerDataAtprotoEvent {
+                        sequence,
+                        timestamp,
+                        repo,
+                        collection,
+                        rkey,
+                        action: action.to_string(),
+                        cid,
+                        record_data,
+                        rev,
+                        op_index,
+                    },
+                ))
+            }
+            wavs_types::TriggerData::HypercoreAppend {
+                feed_key,
+                index,
+                data,
+            } => Ok(aggregator_operator_input::TriggerData::HypercoreAppend(
+                aggregator_events::TriggerDataHypercoreAppend {
+                    feed_key,
+                    index,
+                    data,
+                },
+            )),
+            wavs_types::TriggerData::Raw(data) => {
+                Ok(aggregator_operator_input::TriggerData::Raw(data))
+            }
+        }
     }
 }
 
@@ -537,104 +748,6 @@ impl From<layer_climb::prelude::CosmosAddr> for aggregator_chain::CosmosAddress 
     }
 }
 
-impl From<wavs_types::Envelope> for aggregator_types::Envelope {
-    fn from(envelope: wavs_types::Envelope) -> Self {
-        aggregator_types::Envelope {
-            event_id: envelope.eventId.to_vec(),
-            ordering: envelope.ordering.to_vec(),
-            payload: envelope.payload.to_vec(),
-        }
-    }
-}
-
-impl From<wavs_types::EnvelopeSignature> for aggregator_types::EnvelopeSignature {
-    fn from(signature: wavs_types::EnvelopeSignature) -> Self {
-        let wavs_types::EnvelopeSignature { data, kind } = signature;
-        aggregator_types::EnvelopeSignature {
-            data,
-            kind: kind.into(),
-        }
-    }
-}
-
-impl TryFrom<wavs_types::TriggerData> for aggregator_types::TriggerData {
-    type Error = anyhow::Error;
-
-    fn try_from(src: wavs_types::TriggerData) -> Result<Self, Self::Error> {
-        match src {
-            wavs_types::TriggerData::EvmContractEvent {
-                chain,
-                contract_address,
-                log_data,
-                tx_hash,
-                block_number,
-                log_index,
-                block_hash,
-                block_timestamp,
-                tx_index,
-            } => Ok(aggregator_types::TriggerData::EvmContractEvent(
-                aggregator_events::TriggerDataEvmContractEvent {
-                    chain: chain.to_string(),
-                    log: aggregator_events::EvmEventLog {
-                        address: contract_address.into(),
-                        data: aggregator_chain::EvmEventLogData {
-                            topics: log_data
-                                .topics()
-                                .iter()
-                                .map(|topic| topic.to_vec())
-                                .collect(),
-                            data: log_data.data.to_vec(),
-                        },
-                        tx_hash: tx_hash.to_vec(),
-                        block_number,
-                        log_index,
-                        block_hash: block_hash.to_vec(),
-                        block_timestamp,
-                        tx_index,
-                    },
-                },
-            )),
-            wavs_types::TriggerData::CosmosContractEvent {
-                contract_address,
-                chain,
-                event,
-                event_index,
-                block_height,
-            } => Ok(aggregator_types::TriggerData::CosmosContractEvent(
-                aggregator_events::TriggerDataCosmosContractEvent {
-                    contract_address: contract_address.into(),
-                    chain: chain.to_string(),
-                    event: aggregator_events::CosmosEvent {
-                        ty: event.ty,
-                        attributes: event
-                            .attributes
-                            .into_iter()
-                            .map(|attr| (attr.key, attr.value))
-                            .collect(),
-                    },
-                    event_index,
-                    block_height,
-                },
-            )),
-            wavs_types::TriggerData::BlockInterval {
-                chain,
-                block_height,
-            } => Ok(aggregator_types::TriggerData::BlockInterval(
-                aggregator_events::TriggerDataBlockInterval {
-                    chain: chain.to_string(),
-                    block_height,
-                },
-            )),
-            wavs_types::TriggerData::Cron { trigger_time } => Ok(
-                aggregator_types::TriggerData::Cron(aggregator_events::TriggerDataCron {
-                    trigger_time: trigger_time.into(),
-                }),
-            ),
-            wavs_types::TriggerData::Raw(data) => Ok(aggregator_types::TriggerData::Raw(data)),
-        }
-    }
-}
-
 impl From<wavs_types::Component> for aggregator_service::Component {
     fn from(component: wavs_types::Component) -> Self {
         aggregator_service::Component {
@@ -685,6 +798,8 @@ impl From<wavs_types::Permissions> for aggregator_service::Permissions {
         aggregator_service::Permissions {
             allowed_http_hosts: permissions.allowed_http_hosts.into(),
             file_system: permissions.file_system,
+            raw_sockets: permissions.raw_sockets,
+            dns_resolution: permissions.dns_resolution,
         }
     }
 }
@@ -710,11 +825,9 @@ impl From<wavs_types::Submit> for aggregator_service::Submit {
         match submit {
             wavs_types::Submit::None => aggregator_service::Submit::None,
             wavs_types::Submit::Aggregator {
-                url,
                 component,
                 signature_kind,
             } => aggregator_service::Submit::Aggregator(aggregator_service::AggregatorSubmit {
-                url,
                 component: (*component).into(),
                 signature_kind: signature_kind.into(),
             }),
@@ -799,6 +912,22 @@ impl TryFrom<wavs_types::Trigger> for aggregator_service::Trigger {
                 start_time: start_time.map(Into::into),
                 end_time: end_time.map(Into::into),
             }),
+            wavs_types::Trigger::AtProtoEvent {
+                collection,
+                repo_did,
+                action,
+            } => {
+                aggregator_service::Trigger::AtprotoEvent(aggregator_service::TriggerAtprotoEvent {
+                    collection,
+                    repo_did,
+                    action: action.map(|a| a.to_string()),
+                })
+            }
+            wavs_types::Trigger::HypercoreAppend { feed_key } => {
+                aggregator_service::Trigger::HypercoreAppend(
+                    aggregator_service::TriggerHypercoreAppend { feed_key },
+                )
+            }
         })
     }
 }
@@ -841,14 +970,14 @@ impl From<aggregator_core::Duration> for wavs_types::Duration {
     }
 }
 
-impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
+impl From<wavs_types::AggregatorAction> for aggregator_output::AggregatorAction {
     fn from(action: wavs_types::AggregatorAction) -> Self {
         match action {
             wavs_types::AggregatorAction::Submit(action) => {
-                aggregator_types::AggregatorAction::Submit(action.into())
+                aggregator_output::AggregatorAction::Submit(action.into())
             }
             wavs_types::AggregatorAction::Timer(timer) => {
-                aggregator_types::AggregatorAction::Timer(aggregator_types::TimerAction {
+                aggregator_output::AggregatorAction::Timer(aggregator_output::TimerAction {
                     delay: timer.delay.into(),
                 })
             }
@@ -856,18 +985,18 @@ impl From<wavs_types::AggregatorAction> for aggregator_types::AggregatorAction {
     }
 }
 
-impl From<wavs_types::SubmitAction> for aggregator_types::SubmitAction {
+impl From<wavs_types::SubmitAction> for aggregator_output::SubmitAction {
     fn from(action: wavs_types::SubmitAction) -> Self {
         match action {
             wavs_types::SubmitAction::Evm(action) => {
-                aggregator_types::SubmitAction::Evm(aggregator_types::EvmSubmitAction {
+                aggregator_output::SubmitAction::Evm(aggregator_output::EvmSubmitAction {
                     chain: action.chain.to_string(),
                     address: action.address.into(),
                     gas_price: action.gas_price.map(|x| x.into()),
                 })
             }
             wavs_types::SubmitAction::Cosmos(action) => {
-                aggregator_types::SubmitAction::Cosmos(aggregator_types::CosmosSubmitAction {
+                aggregator_output::SubmitAction::Cosmos(aggregator_output::CosmosSubmitAction {
                     chain: action.chain.to_string(),
                     address: action.address.into(),
                     gas_price: action.gas_price.map(|x| x.into()),

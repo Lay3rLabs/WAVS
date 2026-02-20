@@ -5,11 +5,11 @@ use std::{
 
 use alloy_primitives::FixedBytes;
 use anyhow::{Context, Result};
-use utils::{config::WAVS_ENV_PREFIX, storage::db::RedbStorage};
+use utils::{config::WAVS_ENV_PREFIX, storage::db::WavsDb};
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
     bindings::operator::world::host::LogLevel,
-    worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
+    worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder},
 };
 use wavs_types::{
     AllowedHostPermission, ChainKey, ComponentDigest, ComponentSource, Permissions, ServiceId,
@@ -24,7 +24,7 @@ use crate::{
 };
 
 pub struct ExecComponent {
-    pub wasm_response: Option<WasmResponse>,
+    pub wasm_responses: Vec<WasmResponse>,
     pub fuel_used: u64,
     pub time_elapsed: u128,
 }
@@ -35,25 +35,46 @@ impl std::fmt::Display for ExecComponent {
         if self.time_elapsed > 0 {
             write!(f, "\n\nTime elapsed (ms): \n{}", self.time_elapsed)?;
         }
-        match &self.wasm_response {
-            Some(wasm_response) => {
+
+        if self.wasm_responses.is_empty() {
+            write!(f, "\n\nNo responses from component execution.")?;
+        } else {
+            fn write_response(
+                f: &mut std::fmt::Formatter<'_>,
+                wasm_response: &WasmResponse,
+                index: Option<usize>,
+            ) -> std::fmt::Result {
+                let prefix = if let Some(i) = index {
+                    format!("Response #{}: ", i + 1)
+                } else {
+                    "".to_string()
+                };
+
                 write!(
                     f,
-                    "\n\nResult (hex encoded): \n{}",
+                    "\n\n{prefix}Result (hex encoded): \n{}",
                     const_hex::encode(&wasm_response.payload)
                 )?;
 
                 if let Ok(s) = std::str::from_utf8(&wasm_response.payload) {
-                    write!(f, "\n\nResult (utf8): \n{}", s)?;
+                    write!(f, "\n\n{prefix}Result (utf8): \n{}", s)?;
                 }
 
                 write!(
                     f,
-                    "\n\nOrdering: \n{}",
+                    "\n\n{prefix}Ordering: \n{}",
                     wasm_response.ordering.unwrap_or_default()
                 )?;
+
+                Ok(())
             }
-            None => write!(f, "\n\nResult: None")?,
+            for (index, wasm_response) in self.wasm_responses.iter().enumerate() {
+                if self.wasm_responses.len() > 1 {
+                    write_response(f, wasm_response, Some(index))?;
+                } else {
+                    write_response(f, wasm_response, None)?;
+                }
+            }
         }
 
         Ok(())
@@ -107,6 +128,8 @@ impl ExecComponent {
                 permissions: Permissions {
                     allowed_http_hosts: AllowedHostPermission::All,
                     file_system: true,
+                    raw_sockets: true,
+                    dns_resolution: true,
                 },
                 fuel_limit,
                 time_limit_seconds: time_limit,
@@ -177,21 +200,17 @@ impl ExecComponent {
             data,
         };
 
-        let event_id = (&service, &trigger_action)
-            .try_into()
-            .context("Failed to create event ID from service and trigger action")?;
-
         let mut instance_deps = InstanceDepsBuilder {
             service,
             workflow_id: trigger_action.config.workflow_id.clone(),
             component: WasmtimeComponent::new(&engine, &wasm_bytes)?,
-            event_id,
+            data: InstanceData::new_operator(trigger_action.data.clone()),
             engine: &engine,
             data_dir: tempfile::tempdir()?.keep(),
             chain_configs: &cli_config.chains.read().unwrap(),
             log: HostComponentLogger::OperatorHostComponentLogger(log_wasi),
             keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
-                RedbStorage::new().unwrap(),
+                WavsDb::new().unwrap(),
                 "exec_component".to_string(),
             ),
         }
@@ -203,13 +222,15 @@ impl ExecComponent {
             .get_fuel()
             .context("Failed to get initial fuel value from the instance store")?;
         let start_time = Instant::now();
-        let wasm_response = match wavs_engine::worlds::operator::execute::execute(
+        let wasm_responses = match wavs_engine::worlds::operator::execute::execute(
             &mut instance_deps,
             trigger_action,
+            WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+            WasmResponse::DEFAULT_MAX_SALT_SIZE,
         )
         .await
         {
-            Ok(response) => response,
+            Ok(responses) => responses,
             Err(e) => {
                 tracing::error!("Error executing component: {}", e);
                 return Err(anyhow::anyhow!("Component execution failed: {}", e));
@@ -219,7 +240,7 @@ impl ExecComponent {
         let fuel_used = initial_fuel - instance_deps.store.get_fuel()?;
 
         Ok(ExecComponent {
-            wasm_response,
+            wasm_responses,
             fuel_used,
             time_elapsed: start_time.elapsed().as_millis(),
         })
@@ -274,7 +295,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.wasm_response.unwrap().payload, b"hello world");
+        assert_eq!(result.wasm_responses[0].payload, b"hello world");
         assert!(result.fuel_used > 0);
 
         // Same idea but hex-encoded with prefix
@@ -289,7 +310,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.wasm_response.unwrap().payload, b"hello world");
+        assert_eq!(result.wasm_responses[0].payload, b"hello world");
         assert!(result.fuel_used > 0);
 
         // Do not hex-decode without the prefix
@@ -304,10 +325,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(
-            result.wasm_response.unwrap().payload,
-            b"68656C6C6F20776F726C64"
-        );
+        assert_eq!(result.wasm_responses[0].payload, b"68656C6C6F20776F726C64");
         assert!(result.fuel_used > 0);
 
         // And filepath
@@ -326,7 +344,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.wasm_response.unwrap().payload, b"hello world");
+        assert_eq!(result.wasm_responses[0].payload, b"hello world");
         assert!(result.fuel_used > 0);
 
         // Test config var usage in the Wasm component
@@ -344,7 +362,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.wasm_response.unwrap().payload, b"config-value");
+        assert_eq!(result.wasm_responses[0].payload, b"config-value");
         assert!(result.fuel_used > 0);
 
         // Set an env var and test it via envvar:<key> lookup
@@ -362,7 +380,7 @@ mod test {
 
         let result = ExecComponent::run(&Config::default(), args).await.unwrap();
 
-        assert_eq!(result.wasm_response.unwrap().payload, b"env-value");
+        assert_eq!(result.wasm_responses[0].payload, b"env-value");
         assert!(result.fuel_used > 0);
     }
 }

@@ -1,29 +1,50 @@
 pub mod error;
 pub mod wasm_engine;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use alloy_primitives::FixedBytes;
 use error::EngineError;
 use tracing::instrument;
 use utils::storage::CAStorage;
-use wavs_types::{
-    ComponentDigest, Envelope, EventId, EventOrder, Service, TriggerAction, WorkflowId,
-};
+use wavs_engine::bindings::aggregator::world::AnyTxHash;
+use wavs_types::{AggregatorAction, Service, Submission, Submit, TriggerAction};
 
+use crate::dispatcher::DispatcherCommand;
 use crate::services::Services;
 use crate::subsystems::engine::wasm_engine::WasmEngine;
-use crate::subsystems::submission::chain_message::ChainMessage;
+use crate::subsystems::submission::data::SubmissionRequest;
 use crate::AppContext;
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum EngineCommand {
     Kill,
-    Execute {
+    ExecuteOperator {
         action: TriggerAction,
         service: Service,
+    },
+    ExecuteAggregator {
+        submission: Submission,
+        service: Service,
+        kind: AggregatorExecuteKind,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum AggregatorExecuteKind {
+    Standard,
+    TimerCallback,
+    SubmitCallback { result: Result<AnyTxHash, String> },
+}
+
+#[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
+pub enum EngineResponse {
+    Operator(SubmissionRequest),
+    Aggregator {
+        submission: Submission,
+        actions: Vec<AggregatorAction>,
+        kind: AggregatorExecuteKind,
     },
 }
 
@@ -32,7 +53,7 @@ pub struct EngineManager<S: CAStorage> {
     pub engine: Arc<WasmEngine<S>>,
     pub services: Services,
     pub dispatcher_to_engine_rx: crossbeam::channel::Receiver<EngineCommand>,
-    pub engine_to_dispatcher_tx: crossbeam::channel::Sender<ChainMessage>,
+    pub subsystem_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
 }
 
 impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
@@ -40,13 +61,13 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         engine: WasmEngine<S>,
         services: Services,
         dispatcher_to_engine_rx: crossbeam::channel::Receiver<EngineCommand>,
-        engine_to_dispatcher_tx: crossbeam::channel::Sender<ChainMessage>,
+        subsystem_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
     ) -> Self {
         Self {
             engine: Arc::new(engine),
             services,
             dispatcher_to_engine_rx,
-            engine_to_dispatcher_tx,
+            subsystem_to_dispatcher_tx,
         }
     }
 
@@ -56,25 +77,79 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         S: 'static,
     {
         while let Ok(command) = self.dispatcher_to_engine_rx.recv() {
+            tracing::debug!(
+                "Got Engine Command: {}",
+                match &command {
+                    EngineCommand::Kill => "Kill".to_string(),
+                    EngineCommand::ExecuteOperator { action, service: _ } => format!(
+                        "ExecuteOperator: service_id={}, workflow_id={}",
+                        action.config.service_id, action.config.workflow_id
+                    ),
+                    EngineCommand::ExecuteAggregator {
+                        submission,
+                        service: _,
+                        kind,
+                    } => format!(
+                        "ExecuteAggregator: service_id={}, workflow_id={}, kind={:?}",
+                        submission.trigger_action.config.service_id,
+                        submission.trigger_action.config.workflow_id,
+                        kind
+                    ),
+                }
+            );
             match command {
                 EngineCommand::Kill => {
                     tracing::info!("Received kill command, shutting down engine manager");
                     break;
                 }
-                EngineCommand::Execute { action, service } => {
+                EngineCommand::ExecuteOperator { action, service } => {
                     let _self = self.clone();
                     ctx.rt.spawn(async move {
                         match _self.run_trigger(action, service).await {
                             Err(e) => {
-                                tracing::error!("Error running trigger: {:?}", e);
+                                tracing::error!("Error running operator component: {:?}", e);
                             }
-                            Ok(Some(msg)) => {
-                                if let Err(e) = _self.engine_to_dispatcher_tx.send(msg) {
-                                    tracing::error!("Error sending message to dispatcher: {:?}", e);
+                            Ok(messages) => {
+                                for msg in messages {
+                                    if let Err(e) = _self.subsystem_to_dispatcher_tx.send(
+                                        DispatcherCommand::EngineResponse(
+                                            EngineResponse::Operator(msg),
+                                        ),
+                                    ) {
+                                        tracing::error!(
+                                            "Error sending message to dispatcher: {:?}",
+                                            e
+                                        );
+                                    }
                                 }
                             }
-                            Ok(None) => {
-                                // No message to send, just continue
+                        }
+                    });
+                }
+                EngineCommand::ExecuteAggregator {
+                    submission,
+                    service,
+                    kind,
+                } => {
+                    let _self = self.clone();
+                    ctx.rt.spawn(async move {
+                        match _self
+                            .run_aggregator(&submission, service, kind.clone())
+                            .await
+                        {
+                            Err(e) => {
+                                tracing::error!("Error running aggregator component: {:?}", e);
+                            }
+                            Ok(actions) => {
+                                if let Err(e) = _self.subsystem_to_dispatcher_tx.send(
+                                    DispatcherCommand::EngineResponse(EngineResponse::Aggregator {
+                                        submission,
+                                        actions,
+                                        kind,
+                                    }),
+                                ) {
+                                    tracing::error!("Error sending message to dispatcher: {:?}", e);
+                                }
                             }
                         }
                     });
@@ -83,36 +158,35 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         }
     }
 
-    #[instrument(skip(self), fields(subsys = "Engine"))]
-    pub async fn store_components_for_service(
-        &self,
-        service: &Service,
-    ) -> Result<HashMap<WorkflowId, ComponentDigest>, EngineError> {
-        let mut digests = HashMap::new();
-
-        for (workflow_id, workflow) in service.workflows.iter() {
-            let digest = self
-                .engine
+    #[instrument(skip(self, service), fields(subsys = "Engine"))]
+    pub async fn store_components_for_service(&self, service: &Service) -> Result<(), EngineError> {
+        for workflow in service.workflows.values() {
+            self.engine
                 .store_component_from_source(&workflow.component.source)
                 .await?;
-            digests.insert(workflow_id.clone(), digest);
+
+            if let Submit::Aggregator { component, .. } = &workflow.submit {
+                self.engine
+                    .store_component_from_source(&component.source)
+                    .await?;
+            }
         }
 
-        Ok(digests)
+        Ok(())
     }
 
     async fn run_trigger(
         &self,
         action: TriggerAction,
         service: Service,
-    ) -> Result<Option<ChainMessage>, EngineError> {
+    ) -> Result<Vec<SubmissionRequest>, EngineError> {
         // early-exit without an error if the service is not active
         if !self.services.is_active(&action.config.service_id) {
             tracing::info!(
                 "Service is not active, skipping action: service_id={}",
                 action.config.service_id
             );
-            return Ok(None);
+            return Ok(Vec::new());
         }
         // early-exit if we can't get the workflow
         let workflow = service
@@ -127,47 +201,132 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
 
         let trigger_config = action.config.clone();
 
-        tracing::info!(
+        tracing::debug!(
             "Executing component: service_id={}, workflow_id={}, component_digest={:?}",
             trigger_config.service_id,
             trigger_config.workflow_id,
             workflow.component.source.digest()
         );
 
-        let wasm_response = self.engine.execute(service.clone(), action.clone()).await?;
+        let mut wasm_responses = self
+            .engine
+            .execute_operator_component(service.clone(), action.clone())
+            .await?;
 
-        // If Ok(Some(x)), send the result down the pipeline to the submit processor
-        // If Ok(None), just end early here, performing no action (but updating local state if needed)
-        if let Some(wasm_response) = wasm_response {
-            tracing::info!(service.name = %service.name, service.manager = ?service.manager, workflow_id = %trigger_config.workflow_id, payload_size = %wasm_response.payload.len(), "Component execution produced result: service={} [{:?}], workflow_id={}, payload_size={}", service.name, service.manager, trigger_config.workflow_id, wasm_response.payload.len());
+        let mut submission_datas = Vec::new();
+        // if there are results, send them down the pipeline to the submit processor
+        // otherwise, just end early here, performing no action (but updating local state if needed)
+        if wasm_responses.is_empty() {
+            tracing::debug!(
+                service_id = %trigger_config.service_id,
+                service.name = %service.name,
+                workflow_id = %trigger_config.workflow_id,
+                "Component execution produced no result",
+            );
+        } else {
+            for operator_response in wasm_responses.drain(..) {
+                let submission_data = SubmissionRequest {
+                    trigger_action: action.clone(),
+                    operator_response,
+                    service: service.clone(),
+                    #[cfg(feature = "dev")]
+                    debug: Default::default(),
+                };
 
-            let msg = ChainMessage {
-                service_id: trigger_config.service_id,
-                workflow_id: trigger_config.workflow_id,
-                envelope: Envelope {
-                    payload: wasm_response.payload.into(),
-                    eventId: EventId::try_from((&service, &action))
-                        .map_err(EngineError::EncodeEventId)?
-                        .into(),
-                    ordering: match wasm_response.ordering {
-                        Some(ordering) => EventOrder::new_u64(ordering).into(),
-                        None => FixedBytes::default(),
-                    },
-                },
-                submit: workflow.submit.clone(),
-                #[cfg(feature = "dev")]
-                debug: Default::default(),
-                trigger_data: action.data,
-            };
+                let event_id = submission_data
+                    .event_id()
+                    .map_err(EngineError::EncodeEventId)?;
+                let payload_size = submission_data.operator_response.payload.len();
 
-            Ok(Some(msg))
+                tracing::info!(
+                    service_id = %trigger_config.service_id,
+                    service.name = %service.name,
+                    workflow_id = %trigger_config.workflow_id,
+                    payload_size = %payload_size,
+                    event_id = %event_id,
+                    "Component execution completed",
+                );
+
+                submission_datas.push(submission_data);
+            }
+        }
+        Ok(submission_datas)
+    }
+
+    async fn run_aggregator(
+        &self,
+        Submission {
+            trigger_action,
+            operator_response,
+            event_id,
+            ..
+        }: &Submission,
+        service: Service,
+        kind: AggregatorExecuteKind,
+    ) -> Result<Vec<AggregatorAction>, EngineError> {
+        let aggregator_actions = match kind {
+            AggregatorExecuteKind::Standard => {
+                self.engine
+                    .execute_aggregator_component(
+                        service.clone(),
+                        trigger_action.clone(),
+                        operator_response.clone(),
+                        event_id.clone(),
+                    )
+                    .await?
+            }
+            AggregatorExecuteKind::TimerCallback => {
+                self.engine
+                    .execute_aggregator_component_timer_callback(
+                        service.clone(),
+                        trigger_action.clone(),
+                        operator_response.clone(),
+                        event_id.clone(),
+                    )
+                    .await?
+            }
+            AggregatorExecuteKind::SubmitCallback { result } => {
+                self.engine
+                    .execute_aggregator_component_submit_callback(
+                        service.clone(),
+                        trigger_action.clone(),
+                        operator_response.clone(),
+                        result,
+                        event_id.clone(),
+                    )
+                    .await?;
+
+                tracing::info!(
+                    service_id = %trigger_action.config.service_id,
+                    service.name = %service.name,
+                    workflow_id = %trigger_action.config.workflow_id,
+                    event_id = %event_id,
+                    "Aggregator submit callback execution completed",
+                );
+
+                return Ok(Vec::new());
+            }
+        };
+
+        if aggregator_actions.is_empty() {
+            tracing::info!(
+                service_id = %trigger_action.config.service_id,
+                service.name = %service.name,
+                workflow_id = %trigger_action.config.workflow_id,
+                event_id = %event_id,
+                "Aggregator execution produced no result",
+            );
         } else {
             tracing::info!(
-                "Component execution produced no result: service_id={}, workflow_id={}",
-                trigger_config.service_id,
-                trigger_config.workflow_id
+                service_id = %trigger_action.config.service_id,
+                service.name = %service.name,
+                workflow_id = %trigger_action.config.workflow_id,
+                event_id = %event_id,
+                actions = %aggregator_actions.len(),
+                "Aggregator execution completed",
             );
-            Ok(None)
         }
+
+        Ok(aggregator_actions)
     }
 }

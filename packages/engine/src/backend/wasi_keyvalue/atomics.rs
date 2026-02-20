@@ -1,4 +1,3 @@
-use utils::storage::db::Table;
 use wasmtime::component::Resource;
 
 use super::{
@@ -9,8 +8,6 @@ use crate::bindings::operator::world::wasi::keyvalue::atomics;
 
 pub type AtomicsResult<T> = std::result::Result<T, atomics::Error>;
 pub type CasResult<T> = std::result::Result<T, atomics::CasError>;
-
-const KV_ATOMICS_TABLE_COUNTER: Table<&str, i64> = Table::new("kv_atomics_counter");
 
 impl<'a> KeyValueState<'a> {
     fn get_cas_atomics(&self, cas: &Resource<KeyValueCas>) -> AtomicsResult<&KeyValueCas> {
@@ -28,22 +25,13 @@ impl<'a> KeyValueState<'a> {
     }
 
     fn get_atomic_count(&mut self, key: &Key) -> AtomicsResult<Option<i64>> {
-        match self
-            .db
-            .get(KV_ATOMICS_TABLE_COUNTER, key.to_string().as_ref())
-        {
-            Ok(Some(kv)) => Ok(Some(kv.value())),
-            Ok(None) => Ok(None),
-            Err(err) => Err(atomics::Error::Other(format!(
-                "Failed to get key from keyvalue atomics: {}",
-                err
-            ))),
-        }
+        Ok(self.db.kv_atomics_counter.get_cloned(&key.to_string()))
     }
 
     fn save_atomic_count(&mut self, key: &Key, value: i64) -> AtomicsResult<()> {
         self.db
-            .set(KV_ATOMICS_TABLE_COUNTER, key.to_string().as_ref(), &value)
+            .kv_atomics_counter
+            .insert(key.to_string(), value)
             .map_err(|e| {
                 atomics::Error::Other(format!("Failed to set key in keyvalue atomics: {}", e))
             })

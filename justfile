@@ -45,15 +45,12 @@ _install-native HOME DATA:
     @cp "./.env.example" "{{HOME}}/.env"
     @cargo install --path ./packages/wavs
     @cargo install --path ./packages/cli
-    @cargo install --path ./packages/aggregator
     @echo "Add these variables to your system environment:"
     @echo ""
     @echo "export WAVS_HOME=\"{{HOME}}\""
     @echo "export WAVS_DATA=\"{{DATA}}/wavs\""
     @echo "export WAVS_CLI_HOME=\"{{HOME}}\""
     @echo "export WAVS_CLI_DATA=\"{{DATA}}/wavs-cli\""
-    @echo "export WAVS_AGGREGATOR_HOME=\"{{HOME}}\""
-    @echo "export WAVS_AGGREGATOR_DATA=\"{{DATA}}/wavs-aggregator\""
     @echo "export WAVS_DOTENV=\"{{HOME}}/.env\""
 
 wasi-build COMPONENT="*" TAG="latest":
@@ -133,6 +130,7 @@ solidity-build CLEAN="":
     cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
     # layer-tests mock contracts
     cp -r {{REPO_ROOT}}/out/LogSpam.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/TestServiceContracts.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     # wavs tests - some funkiness with it sometimes not creating the .sol directory so make sure to create it first
     mkdir -p {{REPO_ROOT}}/packages/wavs/tests/contracts/solidity/abi/EventEmitter.sol
     cp -r {{REPO_ROOT}}/out/EventEmitter.sol {{REPO_ROOT}}/packages/wavs/tests/contracts/solidity/abi/
@@ -164,7 +162,7 @@ cosmwasm-build-inner CONTRACT_PATH:
     fi;
 # on-chain integration test
 test-wavs-e2e:
-    RUST_LOG=debug,alloy_rpc=off,alloy_provider=off,wasmtime=off,cranelift=off,hyper_util=off cargo test -p layer-tests
+    ulimit -n 65536 && RUST_LOG=debug,alloy_rpc=off,alloy_provider=off,wasmtime=off,cranelift=off,hyper_util=off cargo test -p layer-tests
 
 update-submodules:
     git submodule update --init --recursive
@@ -183,7 +181,6 @@ lint-fix:
 start-all:
   #!/bin/bash -eux
   just start-anvil &
-  just start-aggregator &
   just start-wavs &
   trap 'kill $(jobs -pr)' EXIT
   wait
@@ -195,13 +192,6 @@ start-dev:
     #!/bin/bash -eux
     just start-telemetry &
     just start-wavs-dev &
-    trap 'kill $(jobs -pr)' EXIT
-    wait
-
-start-aggregator-dev-full:
-    #!/bin/bash -eux
-    just start-telemetry &
-    just start-aggregator-dev &
     trap 'kill $(jobs -pr)' EXIT
     wait
 
@@ -236,22 +226,6 @@ start-telemetry:
 
 dev-tool *args:
     cd packages/dev-tool && RUST_LOG=info cargo run -- {{args}}
-
-start-aggregator:
-    cd packages/aggregator && cargo run
-
-start-aggregator-dev:
-    #!/bin/bash -eux
-    ROOT_DIR="$(pwd)"
-    TEMP_DIR="$(mktemp -d)"
-    trap 'rm -rf "$TEMP_DIR"' EXIT
-    cd packages/aggregator && \
-    WAVS_HOME="../.." WAVS_AGGREGATOR_DATA="$TEMP_DIR" \
-    cargo run -- \
-        --dev-endpoints-enabled=true \
-        --disable-networking=true \
-        --prometheus="http://127.0.0.1:9090" \
-        --jaeger="http://127.0.0.1:4317"
 
 start-anvil:
     anvil
@@ -354,3 +328,11 @@ wasi-publish version component="*" flags="":
 	        fi; \
 	    done; \
 	fi
+
+ts-bindings:
+    rm -rf packages/types/bindings
+    cargo test -p wavs-types --features ts-bindings
+    cargo run --bin ts
+
+debug:
+    cargo test --package wavs --features dev --test aggregator_tests send_to_self

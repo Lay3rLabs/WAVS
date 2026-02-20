@@ -15,9 +15,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use utils::alloy_helpers::SolidityEventFinder;
-use wavs_types::{ChainKeyNamespace, Submit, Trigger, Workflow, WorkflowId};
+use wavs_types::{
+    AtProtoAction, ChainKeyNamespace, SimulatedTriggerRequest, Submit, Trigger, TriggerData,
+    Workflow, WorkflowId,
+};
 
-use crate::e2e::helpers::{change_service_for_test, cosmos_wait_for_task_to_land};
+use crate::e2e::helpers::wait_for_hypercore_streams_to_finalize;
+use crate::e2e::helpers::{
+    change_service_for_test, cosmos_wait_for_task_to_land, wait_for_hypercore_mesh_ready,
+};
 use crate::e2e::report::TestReport;
 use crate::e2e::service_managers::ServiceManagers;
 use crate::e2e::test_definition::{
@@ -32,6 +38,7 @@ use crate::{
     example_cosmos_client::SimpleCosmosTriggerClient,
     example_evm_client::{LogSpamClient, SimpleEvmTriggerClient, TriggerId},
 };
+use serde_json::json;
 
 use super::helpers::{evm_wait_for_task_to_land, simulate_anvil_reorg};
 use super::test_definition::WorkflowDefinition;
@@ -93,6 +100,27 @@ impl Runner {
         let test_groups = self.registry.list_all_grouped(self.configs.grouping);
 
         for (group, mut group_tests) in test_groups {
+            // Create hypercore clients BEFORE deploying services
+            // This ensures the test client announces to DHT before WAVS starts its hypercore streams.
+            // When WAVS deploys a service with a HypercoreAppend trigger, it immediately starts
+            // the hyperswarm discovery. If the test client hasn't announced yet, WAVS won't find it.
+            if let Err(e) = self.registry.create_hypercore_clients().await {
+                tracing::error!("Failed to create hypercore clients: {}", e);
+            }
+
+            // Give the hypercore client time to announce to DHT before services start discovering
+            // In CI with multiple operators, DHT propagation may take longer
+            if self
+                .registry
+                .get_hypercore_client("evm_hypercore_echo_data")
+                .is_some()
+            {
+                tracing::info!(
+                    "Waiting for hypercore client DHT announcement to propagate (10s)..."
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            }
+
             let services = group_tests
                 .iter()
                 .map(|test| all_services.get(&test.name).cloned().unwrap().service)
@@ -130,9 +158,9 @@ impl Runner {
 
             // Then we need to deploy the update to service managers
             if futures.is_empty() {
-                tracing::info!("No changes to services in group {}", group);
+                tracing::info!("No changes to services in group {:?}", group);
             } else {
-                tracing::warn!("Running service changes for group {}", group);
+                tracing::warn!("Running service changes for group {:?}", group);
                 let mut services_to_change = Vec::new();
                 while let Some((service, change_service)) = futures.next().await {
                     // update our local copy of the service and handle changes
@@ -196,7 +224,8 @@ impl Runner {
 
             // All services are now deployed and ready for the tests
             // From here on in we're strictly testing the trigger->execute->aggregate->submit flow
-            tracing::info!("Running group {} with {} tests", group, group_tests.len());
+
+            tracing::info!("Running group {:?} with {} tests", group, group_tests.len());
             let mut futures = FuturesUnordered::new();
 
             for test in group_tests {
@@ -226,10 +255,16 @@ impl Runner {
     ) {
         report.start_test(test.name.clone());
 
-        run_test(test, service_deployment, &clients, &component_sources)
-            .await
-            .context(test.name.clone())
-            .unwrap();
+        run_test(
+            test,
+            service_deployment,
+            &clients,
+            &component_sources,
+            &self.registry,
+        )
+        .await
+        .context(test.name.clone())
+        .unwrap();
 
         report.end_test(test.name.clone());
     }
@@ -241,7 +276,37 @@ async fn run_test(
     service_deployment: ServiceDeployment,
     clients: &Clients,
     component_sources: &ComponentSources,
+    registry: &TestRegistry,
 ) -> anyhow::Result<()> {
+    // For multi-operator tests, wait for P2P mesh to form before triggering
+    if test.multi_operator && clients.http_clients.len() > 1 {
+        let expected_peers = clients.http_clients.len() - 1;
+        tracing::info!(
+            "Multi-operator test: waiting for P2P mesh formation ({} expected peers)",
+            expected_peers
+        );
+
+        // Wait for all operators to have connected to peers
+        for (idx, http_client) in clients.http_clients.iter().enumerate() {
+            let status = http_client
+                .wait_for_p2p_ready(expected_peers, Some(Duration::from_secs(30)))
+                .await
+                .map_err(|e| {
+                    anyhow!(
+                        "Operator {} P2P readiness check failed: {}. \
+                         Multi-operator tests require P2P mesh to be ready.",
+                        idx,
+                        e
+                    )
+                })?;
+            tracing::info!(
+                "Operator {} P2P ready: {} connected peers",
+                idx,
+                status.connected_peers
+            );
+        }
+    }
+
     // Group workflows by trigger to handle multi-triggers
     let mut trigger_groups: OrderMap<&Trigger, Vec<(&WorkflowId, &Workflow)>> = OrderMap::new();
 
@@ -388,6 +453,161 @@ async fn run_test(
             }
             Trigger::BlockInterval { .. } => vec![TriggerId::new(1337)],
             Trigger::Cron { .. } => vec![TriggerId::new(1338)],
+            Trigger::AtProtoEvent { .. } => {
+                let sequence: u64 = 1339;
+                let trigger_id = TriggerId::new(sequence);
+
+                let record_payload = input_bytes.clone().unwrap_or_default();
+                let record_text = String::from_utf8_lossy(&record_payload).to_string();
+
+                // Send simulated trigger to all WAVS instances
+                for http_client in clients.http_clients.iter() {
+                    let atproto_data = TriggerData::AtProtoEvent {
+                        sequence: sequence as i64,
+                        timestamp: 0,
+                        repo: "did:example:alice".to_string(),
+                        collection: "app.bsky.feed.post".to_string(),
+                        rkey: "rkey-1".to_string(),
+                        action: AtProtoAction::Create,
+                        cid: Some("bafytestcid".to_string()),
+                        record: Some(json!({ "text": record_text.clone() })),
+                        rev: Some("rev-test".to_string()),
+                        op_index: Some(0),
+                    };
+
+                    let req = SimulatedTriggerRequest {
+                        service_id: service_deployment.service.id(),
+                        workflow_id: first_workflow_id.clone(),
+                        trigger: trigger.clone(),
+                        data: atproto_data,
+                        count: 1,
+                        wait_for_completion: true,
+                    };
+
+                    http_client.simulate_trigger(req).await?;
+                }
+
+                vec![trigger_id]
+            }
+            Trigger::HypercoreAppend { feed_key } => {
+                // Try to get the hypercore test client for this test
+                let payload = input_bytes.clone().unwrap_or_default();
+
+                tracing::info!("Hypercore trigger detected with feed_key: {}", feed_key);
+
+                if let Some(hypercore_client) = registry.get_hypercore_client(&test.name) {
+                    let client_feed_key = hypercore_client.feed_key();
+                    tracing::info!(
+                        "Using real hypercore feed for test '{}', client feed_key: {}, service feed_key: {}",
+                        test.name,
+                        client_feed_key,
+                        feed_key
+                    );
+
+                    for (idx, http_client) in clients.http_clients.iter().enumerate() {
+                        tracing::info!(
+                            "Waiting for hypercore stream readiness on instance {} for feed_key {}",
+                            idx,
+                            feed_key
+                        );
+                        wait_for_hypercore_streams_to_finalize(
+                            http_client,
+                            feed_key,
+                            Some(Duration::from_secs(30)),
+                        )
+                        .await
+                        .context("Failed to wait for hypercore stream to finalize")?;
+                    }
+
+                    // Wait for hypercore mesh to stabilize - require at least 1 WAVS instance to connect
+                    // In multi-operator mode, DHT discovery may not connect all operators reliably,
+                    // but data will still replicate if at least one connection is established
+                    {
+                        // Require at least 1 connection, but ideally all operators
+                        let min_required_peers = 1;
+                        let total_operators = clients.http_clients.len();
+                        tracing::info!(
+                            "Waiting for hypercore mesh to stabilize (min {} peer, {} total operators) before append",
+                            min_required_peers,
+                            total_operators
+                        );
+
+                        // Make mesh readiness check non-blocking - warn if not ready but proceed anyway
+                        // Use longer timeout in CI where DHT discovery may be slower
+                        match wait_for_hypercore_mesh_ready(
+                            &hypercore_client,
+                            min_required_peers,
+                            Duration::from_secs(60),
+                        )
+                        .await
+                        {
+                            Ok(peer_count) => {
+                                tracing::info!(
+                                    "Hypercore mesh ready for append: {} connected peers (min required: {}, total operators: {})",
+                                    peer_count,
+                                    min_required_peers,
+                                    total_operators
+                                );
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Hypercore mesh not fully formed before append: {}. \
+                                     Proceeding anyway - replication may still work when peers connect.",
+                                    e
+                                );
+                            }
+                        }
+                    }
+
+                    // Verify feed keys match
+                    if client_feed_key != *feed_key {
+                        tracing::error!(
+                            "FEED KEY MISMATCH! Client has: {}, Service has: {}",
+                            client_feed_key,
+                            feed_key
+                        );
+                        return Err(anyhow::anyhow!(
+                            "Feed key mismatch between client and service"
+                        ));
+                    }
+
+                    // Append data to the hypercore feed
+                    tracing::info!("Appending {} bytes to hypercore feed...", payload.len());
+                    let index = hypercore_client.append(payload).await?;
+
+                    vec![TriggerId::new(index)]
+                } else {
+                    // Fallback to simulated trigger for backward compatibility
+                    tracing::warn!(
+                        "No hypercore client found for test '{}', using simulated trigger",
+                        test.name
+                    );
+
+                    let trigger_id = TriggerId::new(0);
+                    let hypercore_data = TriggerData::HypercoreAppend {
+                        feed_key: feed_key.clone(),
+                        index: trigger_id.u64(),
+                        data: payload,
+                    };
+
+                    let req = SimulatedTriggerRequest {
+                        service_id: service_deployment.service.id(),
+                        workflow_id: first_workflow_id.clone(),
+                        trigger: trigger.clone(),
+                        data: hypercore_data,
+                        count: 1,
+                        wait_for_completion: true,
+                    };
+
+                    let http_client = clients
+                        .http_clients
+                        .first()
+                        .ok_or_else(|| anyhow!("No HTTP clients available"))?;
+                    http_client.simulate_trigger(req).await?;
+
+                    vec![trigger_id]
+                }
+            }
             Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
         };
 
@@ -419,7 +639,7 @@ async fn run_test(
                             anyhow!("Could not get workflow definition from id: {}", workflow_id)
                         })?;
 
-                        let SubmitDefinition::Aggregator { aggregator, .. } = &workflow_def.submit;
+                        let SubmitDefinition::Aggregator(aggregator) = &workflow_def.submit;
                         let AggregatorDefinition::ComponentBasedAggregator { chain, .. } =
                             aggregator;
 
@@ -541,14 +761,51 @@ async fn run_test(
         tracing::info!("Test completed successfully!");
     }
 
+    // Wait for the aggregator submit callback to complete on all WAVS instances
+    // before cleaning up the service. This ensures the after-submit callback
+    // has finished writing to the KV store.
+    // Only do this if:
+    // 1. Any workflow uses an aggregator submit
+    // 2. No workflow expects dropped output (e.g., reorg tests where submission is intentionally skipped)
+    let has_aggregator = service_deployment
+        .service
+        .workflows
+        .values()
+        .any(|w| matches!(w.submit, Submit::Aggregator { .. }));
+
+    let expects_dropped = test.workflows.values().any(|w| w.expects_reorg());
+
+    if has_aggregator && !expects_dropped {
+        let service_id = service_deployment.service.id().to_string();
+        tracing::info!(
+            "Waiting for submit callback to complete for service: {}",
+            service_id
+        );
+        for (idx, http_client) in clients.http_clients.iter().enumerate() {
+            http_client
+                .wait_for_submit_callback(&service_id, None)
+                .await
+                .map_err(|e| {
+                    anyhow!("Instance {} failed waiting for submit callback: {}", idx, e)
+                })?;
+            tracing::info!(
+                "Submit callback completed on instance {} for service: {}",
+                idx,
+                service_id
+            );
+        }
+    }
+
     tracing::info!(
         "Cleaning up service: {0:?}",
         service_deployment.service.manager
     );
-    clients
-        .http_client
-        .delete_service(vec![service_deployment.service.manager])
-        .await?;
+    // Delete service from all WAVS instances
+    for http_client in clients.http_clients.iter() {
+        http_client
+            .delete_service(vec![service_deployment.service.manager.clone()])
+            .await?;
+    }
 
     Ok(())
 }

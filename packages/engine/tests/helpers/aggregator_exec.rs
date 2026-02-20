@@ -1,16 +1,19 @@
-use utils::storage::db::RedbStorage;
+use utils::storage::db::WavsDb;
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
-    bindings::aggregator::world::{host::LogLevel, wavs::aggregator::aggregator::AggregatorAction},
-    worlds::instance::{HostComponentLogger, InstanceDepsBuilder},
+    bindings::aggregator::world::{host::LogLevel, wavs::aggregator::output::AggregatorAction},
+    worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder},
 };
-use wavs_types::{ChainConfigs, ComponentDigest, EvmChainConfig, Packet, ServiceId, WorkflowId};
+use wavs_types::{
+    AggregatorInput, ChainConfigs, ComponentDigest, EvmChainConfig, Service, ServiceId, WorkflowId,
+};
 
 #[allow(dead_code)]
 pub async fn execute_aggregator_component(
     wasm_bytes: &[u8],
-    packet: Packet,
+    input: AggregatorInput,
+    service: Service,
 ) -> Vec<AggregatorAction> {
     let mut wt_config = WTConfig::new();
     wt_config.wasm_component_model(true);
@@ -20,7 +23,7 @@ pub async fn execute_aggregator_component(
     let engine = WTEngine::new(&wt_config).unwrap();
 
     let data_dir = tempfile::tempdir().unwrap();
-    let keyvalue_ctx = KeyValueCtx::new(RedbStorage::new().unwrap(), "test".to_string());
+    let keyvalue_ctx = KeyValueCtx::new(WavsDb::new().unwrap(), "test".to_string());
 
     let mut chain_configs = ChainConfigs::default();
     chain_configs
@@ -38,9 +41,10 @@ pub async fn execute_aggregator_component(
         .unwrap();
 
     let mut instance_deps = InstanceDepsBuilder {
-        workflow_id: packet.workflow_id.clone(),
-        service: packet.service.clone(),
-        event_id: packet.event_id(),
+        workflow_id: input.trigger_action.config.workflow_id.clone(),
+        service,
+        data: InstanceData::new_aggregator(input.event_id().unwrap()),
+
         component: WasmtimeComponent::new(&engine, wasm_bytes).unwrap(),
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),
@@ -60,10 +64,10 @@ pub async fn execute_aggregator_component(
         .await
         .unwrap();
 
-    let wit_packet = packet.try_into().unwrap();
+    let wit_input = input.try_into().unwrap();
 
     let result = aggregator_world
-        .call_process_packet(instance_deps.store.as_aggregator_mut(), &wit_packet)
+        .call_process_input(instance_deps.store.as_aggregator_mut(), &wit_input)
         .await
         .unwrap();
 

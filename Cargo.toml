@@ -28,7 +28,7 @@ split-debuginfo = "unpacked"
 
 [workspace.package]
 edition = "2021"
-version = "2.0.0-rc.3"
+version = "2.0.0-rc.13"
 license = "GPL-3.0-or-later"
 authors = ["Layer Labs (Cayman)"]
 repository = "https://github.com/Lay3rLabs/WAVS"
@@ -85,9 +85,17 @@ shellexpand = "3.1.1"
 tokio = { version = "1.47.1", features = ["full"] }
 tokio-stream = { version = "0.1" }
 futures = "0.3.31"
+futures-lite = "1.11.3"
 ctrlc = "3.5.0"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 async-trait = "0.1.89"
+async-stream = "0.3.6"
+hypercore = { version = "0.14.0", default-features = false, features = [
+    "tokio",
+    "replication",
+    "sparse",
+] }
+hyperswarm = { git = "https://github.com/datrs/hyperswarm-rs.git", default-features = false, rev = "da1c2fd" }
 
 # websocket
 tokio-tungstenite = { version = "0.28.0", features = [
@@ -106,18 +114,28 @@ walkdir = "2.5.0"
 wildmatch = "2.5.0"
 
 # EVM-specific dependencies
-alloy-node-bindings = "1.0.37"
-alloy-json-abi = "1.4.0"
-alloy-primitives = { version = "1.4.0", features = ["serde"] }
-alloy-provider = { version = "1.0.37", features = ["ws", "pubsub"] }
-alloy-sol-types = "1.4.0"
-alloy-sol-macro = { version = "1.4.0", features = ["json"] }
-alloy-transport = "1.0.37"
-alloy-contract = "1.0.37"
-alloy-signer = "1.0.37"
-alloy-signer-local = { version = "1.0.37", features = ["mnemonic"] }
-alloy-network = "1.0.37"
-alloy-rpc-types-eth = "1.0.37"
+alloy-node-bindings = "=1.0.42"
+alloy-json-abi = "1.4.1"
+alloy-primitives = { version = "1.4.1", features = ["serde"] }
+alloy-provider = { version = "=1.0.42", features = ["ws", "pubsub"] }
+alloy-sol-types = "1.4.1"
+alloy-sol-macro = { version = "1.4.1", features = ["json"] }
+alloy-transport = "=1.0.42"
+alloy-contract = "=1.0.42"
+alloy-signer = "=1.0.42"
+alloy-signer-local = { version = "=1.0.42", features = ["mnemonic"] }
+alloy-network = "=1.0.42"
+alloy-rpc-types-eth = "=1.0.42"
+
+alloy-consensus-any = "=1.0.42"
+alloy-consensus = "=1.0.42"
+alloy-eips = "=1.0.42"
+alloy-network-primitives = "=1.0.42"
+alloy-serde = "=1.0.42"
+alloy-tx-macros = "=1.0.42"
+alloy-eip2930 = "=0.2.1"
+alloy-eip7702 = "=0.6.1"
+
 layer-climb = "0.8.3"
 layer-climb-address = { version = "0.8.3", features = [
     "cw-storage",
@@ -136,16 +154,18 @@ wstd = "0.5.6"
 # WASM and WIT bindings
 wasm-pkg-client = "0.12.0"
 wasm-pkg-common = "0.12.0"
-wasmtime = { version = "37.0.1", features = [
+wasmtime = { version = "38.0.3", features = [
     "cache",
     "component-model",
     "runtime",
     "std",
 ] }
-wasmtime-wasi = { version = "37.0.1", default-features = true }
-wasmtime-wasi-http = "37.0.1"
+wasmtime-wasi = { version = "38.0.3", default-features = true }
+wasmtime-wasi-http = "38.0.3"
+wasmtime-wasi-tls = "38.0.3"
 wit-bindgen = "0.46.0"
 wavs-wasi-utils = "2.0.0"
+wasip2 = "1.0.1"
 
 # benchmarking
 criterion = { version = "0.7.0", features = ["async_tokio"] }
@@ -170,9 +190,11 @@ bip39 = { version = "2.2.0", features = ["rand"] }
 sha2 = "0.10.9"
 const-hex = "1.16.0"
 ripemd = "0.1.3"
+hypercore-protocol = { version = "0.6.1", default-features = false, features = [
+    "tokio",
+] }
 
 # database
-redb = { version = "3.1.0" }
 lru = "0.16.1"
 
 # time
@@ -180,6 +202,7 @@ chrono = "0.4.42"
 cron = { version = "0.15.0", features = ["serde"] }
 uuid = { version = "1.18.1", features = ["v7", "serde"] }
 subtle = "2.6.1"
+tokio-util = { version = "0.7.17", features = ["compat"] }
 
 # utilis
 cfg-if = "1.0.3"
@@ -191,13 +214,32 @@ crossbeam = "0.8.4"
 # versioning
 semver = { version = "1.0.27", features = ["serde"] }
 
+# p2p
+# Cargo.toml
+libp2p = { version = "0.56", features = [
+    "tokio",            # tokio runtime
+    "tcp",
+    "dns",
+    "noise",
+    "yamux",
+    "identify",
+    "ping",
+    "gossipsub",
+    "request-response",
+    "kad",              # WAN discovery
+    "mdns",             # local dev discovery
+    "autonat",          # NAT detection for external address discovery
+    "macros",
+    "secp256k1",        # secp256k1 identity for P2P (derived from signing_mnemonic)
+] }
+
+
 # local
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
 wavs-engine = { path = "packages/engine" }
 wavs-types = { path = "packages/types" }
 wavs-cli = { path = "packages/cli" }
-wavs-aggregator = { path = "packages/aggregator" }
 wavs-benchmark-common = { path = "packages/wavs/benches/common" }
 example-helpers = { path = "examples/components/_helpers" }
 example-types = { path = "examples/components/_types" }

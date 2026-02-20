@@ -1,4 +1,4 @@
-use utils::storage::db::RedbStorage;
+use utils::storage::db::WavsDb;
 use wasmtime::component::HasData;
 use wasmtime_wasi::ResourceTable;
 
@@ -13,7 +13,7 @@ pub trait KeyValueCtxProvider {
 
 #[derive(Clone)]
 pub struct KeyValueCtx {
-    db: RedbStorage,
+    db: WavsDb,
     // should be a unique identifier for the keyvalue store, e.g. per-service
     // this is *not* the namespace per-bucket, each KeyValueCtx may have multiple buckets
     namespace: String,
@@ -22,7 +22,7 @@ pub struct KeyValueCtx {
 }
 
 impl KeyValueCtx {
-    pub fn new(db: RedbStorage, namespace: String) -> Self {
+    pub fn new(db: WavsDb, namespace: String) -> Self {
         KeyValueCtx {
             db,
             namespace,
@@ -80,7 +80,7 @@ impl KeyValueCtxProvider for AggregatorHostComponent {
 }
 
 pub struct KeyValueState<'a> {
-    pub db: RedbStorage,
+    pub db: WavsDb,
     pub namespace: String,
     pub resource_table: &'a mut ResourceTable,
     pub page_size: Option<usize>,
@@ -88,7 +88,7 @@ pub struct KeyValueState<'a> {
 
 impl<'a> KeyValueState<'a> {
     pub fn new(
-        db: RedbStorage,
+        db: WavsDb,
         namespace: String,
         resource_table: &'a mut ResourceTable,
         page_size: Option<usize>,

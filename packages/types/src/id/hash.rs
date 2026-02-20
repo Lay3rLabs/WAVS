@@ -3,6 +3,9 @@ use sha2::{Digest as Sha2Digest, Sha256};
 use std::str::FromStr;
 use utoipa::ToSchema;
 
+#[cfg(feature = "ts-bindings")]
+use ts_rs::TS;
+
 macro_rules! new_hash_id_type {
     ($type_name:ident, true) => {
         new_hash_id_type!(@base $type_name);
@@ -16,6 +19,8 @@ macro_rules! new_hash_id_type {
     // use "@base" as a way of marking the base implementation
     (@base $type_name:ident) => {
         /// It is a string, but hex-encoded 32-byte hash
+        #[cfg_attr(feature = "ts-bindings", derive(TS))]
+        #[cfg_attr(feature = "ts-bindings", ts(export, type = "string"))]
         #[derive(
             Clone,
             PartialEq,

@@ -1,9 +1,9 @@
-package wavs:operator@2.0.0;
+package wavs:operator@2.6.0;
 
-use wavs:types/core@2.0.0 as core-types;
-use wavs:types/service@2.0.0 as service-types;
-use wavs:types/chain@2.0.0 as chain-types;
-use wavs:types/events@2.0.0 as event-types;
+use wavs:types/core@2.6.0 as core-types;
+use wavs:types/service@2.6.0 as service-types;
+use wavs:types/chain@2.6.0 as chain-types;
+use wavs:types/events@2.6.0 as event-types;
 
 interface input {
     use service-types.{service-id, workflow-id, trigger};
@@ -22,9 +22,19 @@ interface input {
 }
 
 interface output {
+    use event-types.{event-id};
+
     record wasm-response {
+        // arbitrary payload returned from the component
+        // and passed on to be signed by the operators
         payload: list<u8>,
-        ordering: option<u64>
+        // currently unused
+        ordering: option<u64>,
+        // if not supplied, this will be `trigger-data`
+        // if supplied, make sure this is unique for every response!
+        // for example, using a "message id" from a third-party service
+        // also, it MUST be supplied if multiple responses are returned
+        event-id-salt: option<list<u8>>
     }
 }
 
@@ -38,6 +48,12 @@ world wavs-world {
 
     // for key-value store support
     include wasi:keyvalue/imports@0.2.0-draft2;
+
+    // for raw socket support
+    include wasi:sockets/imports@0.2.0;
+
+    // for tls support
+    include wasi:tls/imports@0.2.0-draft;
 
     import host: interface {
         use chain-types.{evm-chain-config, cosmos-chain-config};
@@ -58,12 +74,14 @@ world wavs-world {
         // convenience function to get the workflow without having to walk service.workflows
         get-workflow: func() -> workflow-and-workflow-id;
 
-        // convenience function to get the event-id
-        get-event-id: func() -> event-id;
+        // convenience function to get what the event id will be
+        // typically only used for debugging or testing purposes
+        get-event-id: func(salt: option<list<u8>>) -> event-id;
     }
 
     use input.{trigger-action};
     use output.{wasm-response};
 
-    export run: func(trigger-action: trigger-action) -> result<option<wasm-response>, string>;
+    // if returning multiple responses, they must all have an event-id-salt
+    export run: func(trigger-action: trigger-action) -> result<list<wasm-response>, string>;
 }

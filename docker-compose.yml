@@ -31,29 +31,15 @@ services:
     environment:
       WAVS_HOME: "/wavs/packages/wavs"
       WAVS_CLI_HOME: "/wavs/packages/cli"
-      WAVS_AGGREGATOR_HOME: "/wavs/packages/aggregator"
     command: ["wavs"]
     volumes:
       - "./:/wavs"
       - "./.docker/cli:/root/wavs/cli/"
 
-  aggregator:
-    image: "ghcr.io/lay3rlabs/wavs:local"
-    container_name: "wavs-aggregator"
-    stop_signal: SIGKILL
-    depends_on: ["wavs"]
-    env_file: "./.env"
-    ports:
-      - "8001:8001"
-    command: ["wavs-aggregator"]
-    volumes:
-      - "./packages/aggregator:/wavs"
-    network_mode: "host"
-
   deploy-eigenlayer:
     image: "ghcr.io/lay3rlabs/wavs:local"
     container_name: "wavs-deploy-eigenlayer"
-    depends_on: ["wavs", "anvil", "aggregator"]
+    depends_on: ["wavs", "anvil"]
     restart: "no"
     env_file: "./.env"
     command: ["wavs-cli", "deploy-eigen-core"]

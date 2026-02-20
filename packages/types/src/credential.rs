@@ -21,6 +21,11 @@ impl Credential {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Returns true if the credential is empty or contains only whitespace
+    pub fn is_empty(&self) -> bool {
+        self.0.trim().is_empty()
+    }
 }
 
 impl AsRef<str> for Credential {

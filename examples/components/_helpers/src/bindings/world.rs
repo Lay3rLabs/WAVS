@@ -7,7 +7,10 @@ wit_bindgen::generate!({
     path: "../../../wit-definitions/operator/wit",
     pub_export_macro: true,
     generate_all,
-    //async: true,
+    with: {
+        "wasi:io/poll@0.2.0": wasip2::io::poll
+    },
+    features: ["tls"]
 });
 
 #[macro_export]

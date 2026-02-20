@@ -13,7 +13,7 @@ use wstd::runtime::block_on;
 struct Component;
 
 impl Guest for Component {
-    fn run(trigger_action: TriggerAction) -> std::result::Result<Option<WasmResponse>, String> {
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<WasmResponse>, String> {
         if let Some(n) = host::config_var("sleep-ms") {
             let n = n
                 .parse::<u64>()
@@ -44,13 +44,16 @@ impl Guest for Component {
             }
         }
 
-        // Sanity check that we can get the event id
-        if host::get_event_id().iter().all(|x| *x == 0) {
+        // Sanity check that we can get the default event id
+        if host::get_event_id(None).iter().all(|x| *x == 0) {
             return Err("event id is all zeros".to_string());
         }
 
         let (maybe_trigger_id, data) = match trigger_action.data {
-            TriggerData::EvmContractEvent(_) | TriggerData::CosmosContractEvent(_) => {
+            TriggerData::EvmContractEvent(_)
+            | TriggerData::CosmosContractEvent(_)
+            | TriggerData::AtprotoEvent(_)
+            | TriggerData::HypercoreAppend(_) => {
                 let (trigger_id, data) =
                     decode_trigger_event(trigger_action.data).map_err(|e| e.to_string())?;
 
@@ -65,16 +68,17 @@ impl Guest for Component {
                 let env_var = input_str.split("envvar:").nth(1).unwrap();
                 if let Ok(value) = std::env::var(env_var) {
                     if let Some(trigger_id) = maybe_trigger_id {
-                        return Ok(Some(encode_trigger_output(
+                        return Ok(vec![encode_trigger_output(
                             trigger_id,
                             value,
                             host::get_service().service.manager,
-                        )));
+                        )]);
                     }
-                    return Ok(Some(WasmResponse {
+                    return Ok(vec![WasmResponse {
                         payload: value.as_bytes().to_vec(),
                         ordering: None,
-                    }));
+                        event_id_salt: None,
+                    }]);
                 } else {
                     return Err(format!("env var {env_var} not found"));
                 }
@@ -82,33 +86,87 @@ impl Guest for Component {
                 let config_var = input_str.split("configvar:").nth(1).unwrap();
                 if let Some(value) = host::config_var(config_var) {
                     if let Some(trigger_id) = maybe_trigger_id {
-                        return Ok(Some(encode_trigger_output(
+                        return Ok(vec![encode_trigger_output(
                             trigger_id,
                             value,
                             host::get_service().service.manager,
-                        )));
+                        )]);
                     }
-                    return Ok(Some(WasmResponse {
+                    return Ok(vec![WasmResponse {
                         payload: value.as_bytes().to_vec(),
                         ordering: None,
-                    }));
+                        event_id_salt: None,
+                    }]);
                 } else {
                     return Err(format!("config var {config_var} not found"));
                 }
+            } else if input_str == "custom-event-id" {
+                return Ok(vec![WasmResponse {
+                    payload: Vec::new(),
+                    ordering: None,
+                    event_id_salt: Some(
+                        host::config_var("event-id-salt")
+                            .unwrap()
+                            .as_bytes()
+                            .to_vec(),
+                    ),
+                }]);
+            } else if input_str == "multi-response" {
+                return Ok(vec![
+                    WasmResponse {
+                        payload: Vec::new(),
+                        ordering: None,
+                        event_id_salt: Some(
+                            host::config_var("event-id-salt-1")
+                                .unwrap()
+                                .as_bytes()
+                                .to_vec(),
+                        ),
+                    },
+                    WasmResponse {
+                        payload: Vec::new(),
+                        ordering: None,
+                        event_id_salt: Some(
+                            host::config_var("event-id-salt-2")
+                                .unwrap()
+                                .as_bytes()
+                                .to_vec(),
+                        ),
+                    },
+                ]);
+            } else if input_str == "multi-response-bad" {
+                return Ok(vec![
+                    WasmResponse {
+                        payload: Vec::new(),
+                        ordering: None,
+                        event_id_salt: Some(
+                            host::config_var("event-id-salt-1")
+                                .unwrap()
+                                .as_bytes()
+                                .to_vec(),
+                        ),
+                    },
+                    WasmResponse {
+                        payload: Vec::new(),
+                        ordering: None,
+                        event_id_salt: None,
+                    },
+                ]);
             }
         }
 
         if let Some(trigger_id) = maybe_trigger_id {
-            return Ok(Some(encode_trigger_output(
+            return Ok(vec![encode_trigger_output(
                 trigger_id,
                 data,
                 host::get_service().service.manager,
-            )));
+            )]);
         }
-        Ok(Some(WasmResponse {
+        Ok(vec![WasmResponse {
             payload: data,
             ordering: None,
-        }))
+            event_id_salt: None,
+        }])
     }
 }
 

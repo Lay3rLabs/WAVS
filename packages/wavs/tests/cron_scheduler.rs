@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 use chrono::{DateTime, Duration, Timelike, Utc};
+use wavs::subsystems::trigger::schedulers::interval_scheduler::IntervalScheduler;
 use wavs::subsystems::trigger::{
     error::TriggerError,
     lookup::LookupId,
@@ -233,4 +234,52 @@ fn test_cron_parsing() {
         let state = make_state(1, expr, None, None);
         assert!(state.is_err(), "Should have failed to parse: {expr}");
     }
+}
+
+#[test]
+fn test_scheduler_returns_scheduled_time_not_current_time() {
+    // Create a scheduler
+    let mut scheduler = IntervalScheduler::<Timestamp, CronIntervalState>::new();
+
+    // Create a cron state that triggers every second for testing
+    let lookup_id = 1;
+    let cron_expr = "* * * * * *"; // Every second
+    let state = make_state(lookup_id, cron_expr, None, None).unwrap();
+
+    // Set up a specific base time for testing
+    let base_time = make_timestamp(Utc::now());
+
+    // Add the state to the scheduler - this will initialize it
+    scheduler.add_trigger(state).unwrap();
+
+    // First tick to initialize all triggers (they get added to the BTreeMap)
+    scheduler.tick(base_time);
+
+    // Advance time by 2 seconds to allow a trigger to fire
+    let future_time = Timestamp::from_nanos(
+        base_time.as_nanos() + std::time::Duration::from_secs(2).as_nanos() as u64,
+    );
+
+    // Now tick at the future time - this should return triggers scheduled for the intermediate time
+    let results = scheduler.tick(future_time);
+
+    // Verify we got at least one result
+    assert!(
+        !results.is_empty(),
+        "Should have at least one trigger result"
+    );
+
+    // Find the first result and verify it contains the scheduled time, not the current time
+    let (result_lookup_id, returned_time) = results[0];
+    assert_eq!(result_lookup_id, lookup_id);
+
+    // The returned time should be the scheduled time, which should be between base_time and future_time
+    assert!(
+        returned_time > base_time,
+        "Returned time should be after base time"
+    );
+    assert!(
+        returned_time < future_time,
+        "Returned time should be before current tick time"
+    );
 }

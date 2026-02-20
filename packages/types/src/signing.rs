@@ -1,0 +1,306 @@
+cfg_if::cfg_if! {
+    if #[cfg(feature = "signer")] {
+        pub mod signer;
+        pub use signer::*;
+    }
+}
+
+pub use crate::solidity_types::Envelope;
+use crate::{
+    ServiceId, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, SignatureKind,
+    SubmitAction, TriggerAction, TriggerData, WasmResponse, WorkflowId,
+};
+use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
+use alloy_sol_types::SolValue;
+use async_trait::async_trait;
+use ripemd::Ripemd160;
+use serde::{Deserialize, Serialize};
+use sha2::Digest;
+use thiserror::Error;
+use utoipa::ToSchema;
+
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct AggregatorInput {
+    pub trigger_action: TriggerAction,
+    pub operator_response: WasmResponse,
+}
+
+impl AggregatorInput {
+    pub fn event_id(&self) -> Result<EventId, bincode::error::EncodeError> {
+        let salt = match &self.operator_response.event_id_salt {
+            Some(bytes) => EventIdSalt::WasmResponse(bytes),
+            None => EventIdSalt::Trigger(&self.trigger_action.data),
+        };
+
+        EventId::new(
+            &self.trigger_action.config.service_id,
+            &self.trigger_action.config.workflow_id,
+            salt,
+        )
+    }
+}
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+pub trait WavsSignable {
+    // just need to impl this
+    fn encode_data(&self) -> anyhow::Result<Vec<u8>>;
+
+    fn prefix_eip191_hash(&self) -> anyhow::Result<FixedBytes<32>> {
+        let envelope_bytes = self.encode_data()?;
+        Ok(eip191_hash_message(keccak256(&envelope_bytes)))
+    }
+
+    fn unprefixed_hash(&self) -> anyhow::Result<FixedBytes<32>> {
+        let envelope_bytes = self.encode_data()?;
+        Ok(keccak256(&envelope_bytes))
+    }
+}
+
+impl WavsSignable for Envelope {
+    fn encode_data(&self) -> anyhow::Result<Vec<u8>> {
+        Ok(self.abi_encode())
+    }
+}
+
+impl WavsSignable for &[SubmitAction] {
+    fn encode_data(&self) -> anyhow::Result<Vec<u8>> {
+        Ok(bincode::serde::encode_to_vec(
+            self,
+            bincode::config::standard(),
+        )?)
+    }
+}
+
+impl From<Envelope> for ServiceManagerEnvelope {
+    fn from(envelope: Envelope) -> Self {
+        ServiceManagerEnvelope {
+            eventId: envelope.eventId,
+            ordering: envelope.ordering,
+            payload: envelope.payload,
+        }
+    }
+}
+
+impl From<SignatureData> for ServiceManagerSignatureData {
+    fn from(signature_data: SignatureData) -> Self {
+        ServiceManagerSignatureData {
+            signers: signature_data.signers,
+            signatures: signature_data.signatures,
+            referenceBlock: signature_data.referenceBlock,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub struct WavsSignature {
+    pub data: Vec<u8>,
+    pub kind: SignatureKind,
+}
+
+#[derive(
+    Serialize,
+    Deserialize,
+    Clone,
+    Eq,
+    PartialEq,
+    Debug,
+    Hash,
+    bincode::Decode,
+    bincode::Encode,
+    Ord,
+    PartialOrd,
+    Default,
+)]
+#[serde(transparent)]
+pub struct EventId(#[serde(with = "const_hex")] [u8; 20]);
+
+impl EventId {
+    pub fn new(
+        service_id: &ServiceId,
+        workflow_id: &WorkflowId,
+        salt: EventIdSalt<'_>,
+    ) -> Result<Self, bincode::error::EncodeError> {
+        let bincode_config = bincode::config::standard();
+        let mut hasher = Ripemd160::new();
+        hasher.update(service_id.inner());
+        hasher.update(workflow_id.as_bytes());
+        match salt {
+            EventIdSalt::WasmResponse(bytes) => hasher.update(bytes),
+            EventIdSalt::Trigger(trigger_data) => match trigger_data {
+                // For ATProto events, we exclude sequence and timestamp as they are stream-local:
+                // - sequence: Stream-specific sequence number that varies per relay connection
+                // - timestamp: Processing timestamp when the event was received by the stream
+                //
+                // Including only the canonical event data ensures the same event produces
+                // the same EventId hash regardless of which node processes it.
+                // See: https://docs.bsky.app/docs/advanced-guides/timestamps
+                // See: https://docs.bsky.app/blog/relay-ops#relay-upgrade
+                TriggerData::AtProtoEvent {
+                    repo,
+                    collection,
+                    rkey,
+                    action,
+                    cid,
+                    record,
+                    rev,
+                    op_index,
+                    ..
+                } => {
+                    let encoded = bincode::serde::encode_to_vec(
+                        (repo, collection, rkey, action, cid, record, rev, op_index),
+                        bincode_config,
+                    )?;
+                    hasher.update(encoded);
+                }
+                _ => hasher.update(bincode::serde::encode_to_vec(trigger_data, bincode_config)?),
+            },
+        }
+        let result = hasher.finalize();
+        Ok(Self(result.into()))
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 20] {
+        &self.0
+    }
+}
+
+pub enum EventIdSalt<'a> {
+    /// Raw data provided from the component
+    WasmResponse(&'a [u8]),
+    /// Data derived from the trigger
+    Trigger(&'a TriggerData),
+}
+
+impl From<[u8; 20]> for EventId {
+    fn from(value: [u8; 20]) -> Self {
+        Self(value)
+    }
+}
+
+impl From<FixedBytes<20>> for EventId {
+    fn from(value: FixedBytes<20>) -> Self {
+        Self(value.0)
+    }
+}
+
+impl From<EventId> for FixedBytes<20> {
+    fn from(value: EventId) -> Self {
+        FixedBytes(value.0)
+    }
+}
+
+impl std::fmt::Display for EventId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", const_hex::encode(self.0))
+    }
+}
+
+impl AsRef<[u8]> for EventId {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(transparent)]
+pub struct EventOrder([u8; 12]);
+
+impl EventOrder {
+    pub fn new_u64(value: u64) -> Self {
+        let mut bytes = [0; 12];
+        bytes[0..8].copy_from_slice(&value.to_be_bytes());
+        Self(bytes)
+    }
+}
+
+impl From<FixedBytes<12>> for EventOrder {
+    fn from(value: FixedBytes<12>) -> Self {
+        Self(value.0)
+    }
+}
+
+impl From<EventOrder> for FixedBytes<12> {
+    fn from(value: EventOrder) -> Self {
+        FixedBytes(value.0)
+    }
+}
+
+impl std::fmt::Display for EventOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", const_hex::encode(self.0))
+    }
+}
+
+impl AsRef<[u8]> for EventOrder {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum SigningError {
+    #[error("Unable to recover signer address: {0:?}")]
+    RecoverSignerAddress(SignatureError),
+
+    #[error("Unable to get data hash: {0:?}")]
+    DataHash(anyhow::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AtProtoAction;
+
+    #[test]
+    fn atproto_event_id_ignores_seq_and_timestamp() {
+        let service_id = ServiceId::hash(b"service");
+        let workflow_id = WorkflowId::new("flow1").unwrap();
+
+        let base = TriggerData::AtProtoEvent {
+            sequence: 1,
+            timestamp: 1000,
+            repo: "did:example:123".to_string(),
+            collection: "app.bsky.feed.post".to_string(),
+            rkey: "abc".to_string(),
+            action: AtProtoAction::Create,
+            cid: Some("cid123".to_string()),
+            record: None,
+            rev: Some("rev1".to_string()),
+            op_index: Some(0),
+        };
+
+        let different = match &base {
+            TriggerData::AtProtoEvent {
+                repo,
+                collection,
+                rkey,
+                action,
+                cid,
+                record,
+                rev,
+                op_index,
+                ..
+            } => TriggerData::AtProtoEvent {
+                sequence: 9999,
+                timestamp: 999999,
+                repo: repo.clone(),
+                collection: collection.clone(),
+                rkey: rkey.clone(),
+                action: action.clone(),
+                cid: cid.clone(),
+                record: record.clone(),
+                rev: rev.clone(),
+                op_index: *op_index,
+            },
+            _ => unreachable!(),
+        };
+
+        let id1 = EventId::new(&service_id, &workflow_id, EventIdSalt::Trigger(&base)).unwrap();
+        let id2 =
+            EventId::new(&service_id, &workflow_id, EventIdSalt::Trigger(&different)).unwrap();
+
+        assert_eq!(id1, id2);
+    }
+}

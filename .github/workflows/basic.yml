@@ -11,11 +11,10 @@ env:
   RUST_BACKTRACE: short
   CARGO_TERM_COLOR: always
   WAVS_SUBMISSION_MNEMONIC: "test test test test test test test test test test test junk"
+  WAVS_AGGREGATOR_EVM_CREDENTIAL: "test test test test test test test test test test test junk"
   WAVS_CLI_EVM_CREDENTIAL: "test test test test test test test test test test test junk"
-  WAVS_AGGREGATOR_CREDENTIAL: "test test test test test test test test test test test junk"
   WAVS_COSMOS_SUBMISSION_MNEMONIC: "reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff"
   WAVS_CLI_COSMOS_MNEMONIC: "reward index time stem expire cheap worth fence coil option treat ensure install entry zone mule benefit success remain rebuild inherit eyebrow cluster sheriff"
-
 
 jobs:
   test-eigenlayer:
@@ -39,7 +38,7 @@ jobs:
 
       - name: Configure EigenLayer middleware
         run: |
-          sed -i 's/middleware_type = ".*"/middleware_type = "eigenlayer"/' packages/layer-tests/layer-tests.toml
+          sed -i 's/evm_middleware_type = ".*"/evm_middleware_type = "eigenlayer"/' packages/layer-tests/layer-tests.toml
 
       - name: Build tests first
         run: cargo test --workspace --no-run --locked
@@ -70,8 +69,7 @@ jobs:
 
       - name: Configure POA middleware
         run: |
-          sed -i 's/middleware_type = ".*"/middleware_type = "poa"/' packages/layer-tests/layer-tests.toml
-          sed -i 's/middleware_concurrency = .*/middleware_concurrency = true/' packages/layer-tests/layer-tests.toml
+          sed -i 's/evm_middleware_type = ".*"/evm_middleware_type = "poa"/' packages/layer-tests/layer-tests.toml
 
       - name: Build tests first
         run: cargo test --workspace --no-run --locked

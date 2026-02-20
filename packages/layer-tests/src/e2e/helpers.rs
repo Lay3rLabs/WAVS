@@ -12,8 +12,9 @@ use uuid::Uuid;
 use wavs_cli::clients::HttpClient;
 
 use wavs_types::{
-    AllowedHostPermission, ByteArray, ChainKey, Component, DevTriggerStreamSubscriptionKind,
-    Permissions, Service, ServiceManager, ServiceStatus, SignatureKind, Submit, Trigger, Workflow,
+    AllowedHostPermission, ByteArray, ChainKey, Component, DevHypercoreStreamState,
+    DevTriggerStreamSubscriptionKind, Permissions, Service, ServiceManager, ServiceStatus,
+    SignatureKind, Submit, Trigger, Workflow,
 };
 
 use crate::deployment::{ServiceDeployment, WorkflowDeployment};
@@ -109,6 +110,8 @@ fn deploy_component(
     component.permissions = Permissions {
         allowed_http_hosts: AllowedHostPermission::All,
         file_system: true,
+        raw_sockets: true,
+        dns_resolution: true,
     };
     component.config = config_vars;
     // Set env_keys to the actual prefixed env var names that will be read by the component
@@ -289,7 +292,7 @@ pub async fn create_submit_from_config(
     component_sources: Option<&ComponentSources>,
 ) -> Result<Submit> {
     match submit_config {
-        SubmitDefinition::Aggregator { url, aggregator } => match aggregator {
+        SubmitDefinition::Aggregator(aggregator) => match aggregator {
             AggregatorDefinition::ComponentBasedAggregator {
                 component: component_def,
                 ..
@@ -319,7 +322,6 @@ pub async fn create_submit_from_config(
                 let component = deploy_component(sources, component_def, config_vars, env_vars);
 
                 Ok(Submit::Aggregator {
-                    url: url.clone(),
                     component: Box::new(component),
                     signature_kind: SignatureKind::evm_default(),
                 })
@@ -408,14 +410,22 @@ pub async fn get_cosmos_code_id(
     // Get or insert the entry
     let entry = cosmos_code_map
         .entry(cosmos_contract_definition.clone())
-        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(None)))
+        .or_insert_with(|| Arc::new(tokio::sync::RwLock::new(None)))
         .clone();
 
-    // Lock the entry
-    let mut guard = entry.lock().await;
+    // try to read (non-blocking for other readers)
+    {
+        let read_guard = entry.read().await;
+        if let Some(code_id) = *read_guard {
+            return code_id;
+        }
+    }
 
-    // If already uploaded, return the result
-    if let Some(code_id) = *guard {
+    // cache miss, acquire write lock for upload
+    let mut write_guard = entry.write().await;
+
+    // check cache after acquiring write lock, if another thread already uploaded
+    if let Some(code_id) = *write_guard {
         return code_id;
     }
 
@@ -477,7 +487,7 @@ pub async fn get_cosmos_code_id(
     );
 
     // Cache result and return
-    *guard = Some(code_id);
+    *write_guard = Some(code_id);
     code_id
 }
 
@@ -658,4 +668,105 @@ pub async fn wait_for_evm_trigger_streams_to_finalize(
     })
     .await
     .unwrap();
+}
+
+pub async fn wait_for_hypercore_streams_to_finalize(
+    client: &HttpClient,
+    feed_key: &str,
+    timeout: Option<Duration>,
+) -> anyhow::Result<()> {
+    let timeout = timeout.unwrap_or(Duration::from_secs(30));
+    let start = std::time::Instant::now();
+    let mut poll_interval = Duration::from_millis(100);
+
+    tokio::time::timeout(timeout, async {
+        loop {
+            // Retry HTTP request with backoff on failure
+            match client.get_trigger_streams_info().await {
+                Ok(info) => {
+                    match info.hypercore.get(feed_key) {
+                        Some(DevHypercoreStreamState::Connected) => {
+                            tracing::info!("Hypercore stream connected for feed_key {}", feed_key);
+                            return Ok(());
+                        }
+                        Some(DevHypercoreStreamState::Connecting) => {
+                            tracing::info!("Hypercore stream connecting for feed_key {}", feed_key);
+                        }
+                        Some(DevHypercoreStreamState::Waiting) => {
+                            tracing::info!("Hypercore stream waiting for feed_key {}", feed_key);
+                        }
+                        None => {
+                            tracing::info!(
+                                "Hypercore stream not registered yet for feed_key {}",
+                                feed_key
+                            );
+                        }
+                    }
+                    // Reset poll interval on successful response
+                    poll_interval = Duration::from_millis(100);
+                }
+                Err(e) => {
+                    tracing::warn!("HTTP error getting trigger streams info: {}", e);
+                    // Exponential backoff for HTTP errors
+                    poll_interval = (poll_interval * 2).min(Duration::from_secs(1));
+                }
+            }
+
+            tokio::time::sleep(poll_interval).await;
+
+            // Log progress every 5 seconds
+            if start.elapsed().as_secs().is_multiple_of(5) {
+                tracing::info!(
+                    "Still waiting for hypercore stream (elapsed: {}s)",
+                    start.elapsed().as_secs()
+                );
+            }
+        }
+    })
+    .await
+    .map_err(|_| {
+        anyhow::anyhow!(
+            "Timed out waiting for hypercore stream to connect (feed_key: {})",
+            feed_key
+        )
+    })?
+}
+
+/// Wait for hypercore mesh to form by checking the test client's peer connection count directly.
+///
+/// This is used in multi-operator tests to ensure all operators have discovered each other
+/// via hyperswarm before proceeding with test execution.
+pub async fn wait_for_hypercore_mesh_ready(
+    hypercore_client: &std::sync::Arc<crate::e2e::handles::hypercore::HypercoreTestClient>,
+    expected_peers: usize,
+    timeout: Duration,
+) -> anyhow::Result<usize> {
+    let start = std::time::Instant::now();
+    let mut poll_interval = Duration::from_millis(100);
+
+    loop {
+        let peer_count = hypercore_client.connected_peer_count();
+
+        if peer_count >= expected_peers {
+            tracing::info!(
+                "Hypercore mesh ready: {} connected peers (expected {})",
+                peer_count,
+                expected_peers
+            );
+            return Ok(peer_count);
+        }
+
+        if start.elapsed() > timeout {
+            anyhow::bail!(
+                "Timeout waiting for hypercore mesh: {} peers connected, expected {}",
+                peer_count,
+                expected_peers
+            );
+        }
+
+        // Exponential backoff with jitter for mesh formation
+        let wait_time = poll_interval;
+        poll_interval = std::cmp::min(Duration::from_secs(2), poll_interval * 2);
+        tokio::time::sleep(wait_time).await;
+    }
 }

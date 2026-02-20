@@ -41,7 +41,7 @@ fn http_config() {
 
     let req = Request::builder()
         .method(Method::GET)
-        .uri("/config")
+        .uri("/dev/config")
         .body(Body::empty())
         .unwrap();
 
@@ -55,6 +55,32 @@ fn http_config() {
     let config: Config = app.ctx.rt.block_on(map_response(response));
 
     assert_eq!(config.port, app.inner.config.port);
+
+    // Verify credentials are redacted
+    if let Some(cred) = &config.signing_mnemonic {
+        assert_eq!(
+            cred.as_str(),
+            "redacted",
+            "signing_mnemonic should be redacted"
+        );
+    }
+    if let Some(cred) = &config.aggregator_cosmos_credential {
+        assert_eq!(
+            cred.as_str(),
+            "redacted",
+            "aggregator_cosmos_credential should be redacted"
+        );
+    }
+    if let Some(cred) = &config.aggregator_evm_credential {
+        assert_eq!(
+            cred.as_str(),
+            "redacted",
+            "aggregator_evm_credential should be redacted"
+        );
+    }
+    if let Some(cred) = &config.bearer_token {
+        assert_eq!(cred.as_str(), "redacted", "bearer_token should be redacted");
+    }
 }
 
 #[test]
@@ -116,7 +142,6 @@ fn http_save_service() {
         mock_evm_event_trigger(),
         ComponentSource::Digest(ComponentDigest::hash([1, 2, 3])),
         wavs_types::Submit::Aggregator {
-            url: "http://example.com/aggregator".to_string(),
             component: Box::new(Component::new(ComponentSource::Digest(
                 ComponentDigest::hash([1, 2, 3]),
             ))),
@@ -368,7 +393,6 @@ fn test_add_chain_prevents_duplicates() {
 
 #[test]
 fn body_size_limit() {
-    wavs::init_tracing_tests();
     let app = TestHttpApp::new();
 
     // 14MB body succeeds (under default 15MB limit)

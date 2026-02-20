@@ -13,7 +13,7 @@ use example_types::{KvStoreError, KvStoreRequest, KvStoreResponse, KvStoreResult
 struct Component;
 
 impl Guest for Component {
-    fn run(trigger_action: TriggerAction) -> Result<Option<WasmResponse>, String> {
+    fn run(trigger_action: TriggerAction) -> Result<Vec<WasmResponse>, String> {
         host::log(host::LogLevel::Info, "KV Store component triggered");
 
         let (trigger_id, req) =
@@ -66,11 +66,11 @@ impl Guest for Component {
         let resp_bytes =
             serde_json::to_vec(&resp).map_err(|e| format!("Failed to serialize response: {e}"))?;
 
-        Ok(Some(encode_trigger_output(
+        Ok(vec![encode_trigger_output(
             trigger_id,
             resp_bytes,
             host::get_service().service.manager,
-        )))
+        )])
     }
 }
 

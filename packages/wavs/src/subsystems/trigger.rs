@@ -20,7 +20,7 @@ use error::TriggerError;
 use futures::{stream::SelectAll, StreamExt};
 use iri_string::types::UriString;
 use layer_climb::prelude::*;
-use lookup::LookupMaps;
+use lookup::{LookupId, LookupMaps};
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroU64,
@@ -31,8 +31,8 @@ use tracing::instrument;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::{
     contracts::cosmwasm::service_manager::event::WavsServiceUriUpdatedEvent, AnyChainConfig,
-    ByteArray, ChainConfigs, ChainKey, EventId, IWavsServiceManager, ServiceId, Trigger,
-    TriggerAction, TriggerConfig, TriggerData,
+    ByteArray, ChainConfigs, ChainKey, DevHypercoreStreamState, IWavsServiceManager, ServiceId,
+    Trigger, TriggerAction, TriggerConfig, TriggerData,
 };
 
 #[derive(Debug)]
@@ -49,6 +49,10 @@ pub enum TriggerCommand {
         chain: ChainKey,
         addresses: Vec<alloy_primitives::Address>,
         event_hashes: Vec<alloy_primitives::B256>,
+    },
+    StartListeningAtProto,
+    StartListeningHypercore {
+        feed_key: String,
     },
     ManualTrigger(Box<TriggerAction>),
 }
@@ -101,16 +105,31 @@ impl TriggerCommand {
                     Vec::new()
                 }
             },
+            Trigger::AtProtoEvent { .. } => {
+                vec![Self::StartListeningAtProto]
+            }
+            Trigger::HypercoreAppend { feed_key } => {
+                vec![Self::StartListeningHypercore {
+                    feed_key: feed_key.clone(),
+                }]
+            }
             Trigger::Manual => Vec::new(),
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StreamStartState {
+    Waiting,
+    Connecting,
+    Connected,
 }
 
 #[derive(Clone)]
 pub struct TriggerManager {
     pub chain_configs: Arc<std::sync::RwLock<ChainConfigs>>,
     pub command_sender: tokio::sync::mpsc::UnboundedSender<TriggerCommand>,
-    trigger_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
+    subsystem_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
     command_receiver:
         Arc<std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<TriggerCommand>>>>,
     lookup_maps: Arc<LookupMaps>,
@@ -119,6 +138,8 @@ pub struct TriggerManager {
     pub disable_networking: bool,
     pub services: Services,
     pub evm_controllers: Arc<std::sync::RwLock<HashMap<ChainKey, EvmTriggerStreamsController>>>,
+    hypercore_stream_states: Arc<std::sync::RwLock<HashMap<String, StreamStartState>>>,
+    pub config: Config,
 }
 
 impl TriggerManager {
@@ -128,14 +149,14 @@ impl TriggerManager {
         config: &Config,
         metrics: TriggerMetrics,
         services: Services,
-        trigger_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
+        subsystem_to_dispatcher_tx: crossbeam::channel::Sender<DispatcherCommand>,
     ) -> Result<Self, TriggerError> {
         let (command_sender, command_receiver) = tokio::sync::mpsc::unbounded_channel();
 
         Ok(Self {
             chain_configs: config.chains.clone(),
             lookup_maps: Arc::new(LookupMaps::new(services.clone(), metrics.clone())),
-            trigger_to_dispatcher_tx,
+            subsystem_to_dispatcher_tx,
             command_sender,
             command_receiver: Arc::new(std::sync::Mutex::new(Some(command_receiver))),
             metrics,
@@ -143,10 +164,28 @@ impl TriggerManager {
             disable_networking: config.disable_trigger_networking,
             services,
             evm_controllers: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            hypercore_stream_states: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            config: config.clone(),
         })
     }
 
-    #[instrument(skip(self), fields(subsys = "TriggerManager"))]
+    pub fn hypercore_streams_info(&self) -> HashMap<String, DevHypercoreStreamState> {
+        self.hypercore_stream_states
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(feed_key, state)| {
+                let mapped = match state {
+                    StreamStartState::Waiting => DevHypercoreStreamState::Waiting,
+                    StreamStartState::Connecting => DevHypercoreStreamState::Connecting,
+                    StreamStartState::Connected => DevHypercoreStreamState::Connected,
+                };
+                (feed_key.clone(), mapped)
+            })
+            .collect()
+    }
+
+    #[instrument(skip(self, service), fields(subsys = "TriggerManager"))]
     pub fn add_service(&self, service: &wavs_types::Service) -> Result<(), TriggerError> {
         // The mechanics of adding a trigger are that we:
 
@@ -212,7 +251,8 @@ impl TriggerManager {
 
     #[instrument(skip(self, ctx), fields(subsys = "TriggerManager"))]
     pub fn start(&self, ctx: AppContext) {
-        ctx.rt.block_on(self.start_watcher()).unwrap();
+        let kill_receiver = ctx.get_kill_receiver();
+        ctx.rt.block_on(self.start_watcher(kill_receiver)).unwrap();
     }
 
     pub fn send_dispatcher_commands(
@@ -246,10 +286,11 @@ impl TriggerManager {
                         uri
                     );
                 }
+                _ => {}
             }
 
             let start = std::time::Instant::now();
-            self.trigger_to_dispatcher_tx
+            self.subsystem_to_dispatcher_tx
                 .send(command)
                 .map_err(Box::new)?;
 
@@ -267,7 +308,10 @@ impl TriggerManager {
     }
 
     #[instrument(skip(self), fields(subsys = "TriggerManager"))]
-    async fn start_watcher(&self) -> Result<(), TriggerError> {
+    async fn start_watcher(
+        &self,
+        mut kill_receiver: tokio::sync::broadcast::Receiver<()>,
+    ) -> Result<(), TriggerError> {
         let mut multiplexed_stream: MultiplexedStream = SelectAll::new();
 
         let local_command_stream = local_command_stream::start_local_command_stream(
@@ -278,12 +322,24 @@ impl TriggerManager {
 
         let mut cosmos_clients = HashMap::new();
 
-        let mut listening_chains = HashSet::new();
-        let mut has_started_cron_stream = false;
+        let mut listening_chain_states: HashMap<ChainKey, StreamStartState> = HashMap::new();
+        let mut cron_stream_state = StreamStartState::Waiting;
+        let mut atproto_stream_state = StreamStartState::Waiting;
+        let hypercore_stream_states = Arc::clone(&self.hypercore_stream_states);
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
-        while let Some(res) = multiplexed_stream.next().await {
+        loop {
+            let res = tokio::select! {
+                _ = kill_receiver.recv() => {
+                    tracing::debug!("Trigger Manager watcher received shutdown");
+                    break;
+                }
+                res = multiplexed_stream.next() => res,
+            };
+            let Some(res) = res else {
+                break;
+            };
             let res = match res {
                 Err(err) => {
                     tracing::error!("{:?}", err);
@@ -315,25 +371,40 @@ impl TriggerManager {
                                 continue;
                             }
 
-                            if has_started_cron_stream {
-                                tracing::debug!("Cron stream already started, skipping");
-                                continue;
+                            match cron_stream_state {
+                                StreamStartState::Connected => {
+                                    tracing::debug!("Cron stream already started, skipping");
+                                    continue;
+                                }
+                                StreamStartState::Connecting => {
+                                    tracing::debug!("Cron stream is already starting, skipping");
+                                    continue;
+                                }
+                                StreamStartState::Waiting => {
+                                    cron_stream_state = StreamStartState::Connecting;
+                                }
                             }
 
-                            has_started_cron_stream = true;
-
                             let cron_scheduler = self.lookup_maps.cron_scheduler.clone();
-                            match cron_stream::start_cron_stream(
+                            let cron_start_result = cron_stream::start_cron_stream(
                                 cron_scheduler,
                                 self.metrics.clone(),
                             )
-                            .await
-                            {
+                            .await;
+                            let was_connecting =
+                                matches!(cron_stream_state, StreamStartState::Connecting);
+                            match cron_start_result {
                                 Ok(cron_stream) => {
                                     multiplexed_stream.push(cron_stream);
+                                    if was_connecting {
+                                        cron_stream_state = StreamStartState::Connected;
+                                    }
                                 }
                                 Err(err) => {
                                     tracing::error!("Failed to start cron stream: {:?}", err);
+                                    if was_connecting {
+                                        cron_stream_state = StreamStartState::Waiting;
+                                    }
                                     continue;
                                 }
                             }
@@ -346,19 +417,33 @@ impl TriggerManager {
                                 );
                                 continue;
                             }
-                            if listening_chains.contains(&chain) {
-                                tracing::debug!("Already listening to chain {chain}");
-                                continue;
+                            let chain_state = listening_chain_states
+                                .entry(chain.clone())
+                                .or_insert(StreamStartState::Waiting);
+                            match chain_state {
+                                StreamStartState::Connected => {
+                                    tracing::debug!("Already listening to chain {chain}");
+                                    continue;
+                                }
+                                StreamStartState::Connecting => {
+                                    tracing::debug!("Chain {chain} is already starting");
+                                    continue;
+                                }
+                                StreamStartState::Waiting => {
+                                    *chain_state = StreamStartState::Connecting;
+                                }
                             }
-
-                            // insert right away, before we get to an await point
-                            listening_chains.insert(chain.clone());
 
                             let chain_config =
                                 match self.chain_configs.read().unwrap().get_chain(&chain) {
                                     Some(config) => config,
                                     None => {
                                         tracing::error!("No chain config found for {chain}");
+                                        if let Some(chain_state) =
+                                            listening_chain_states.get_mut(&chain)
+                                        {
+                                            *chain_state = StreamStartState::Waiting;
+                                        }
                                         continue;
                                     }
                                 };
@@ -372,8 +457,6 @@ impl TriggerManager {
                                     .await
                                     .map_err(TriggerError::Climb)?;
 
-                                    cosmos_clients.insert(chain.clone(), cosmos_client.clone());
-
                                     // Start the Cosmos event stream
                                     match cosmos_stream::start_cosmos_stream(
                                         cosmos_client.clone(),
@@ -384,12 +467,24 @@ impl TriggerManager {
                                     {
                                         Ok(cosmos_event_stream) => {
                                             multiplexed_stream.push(cosmos_event_stream);
+                                            cosmos_clients
+                                                .insert(chain.clone(), cosmos_client.clone());
+                                            if let Some(chain_state) =
+                                                listening_chain_states.get_mut(&chain)
+                                            {
+                                                *chain_state = StreamStartState::Connected;
+                                            }
                                         }
                                         Err(err) => {
                                             tracing::error!(
                                                 "Failed to start Cosmos event stream: {:?}",
                                                 err
                                             );
+                                            if let Some(chain_state) =
+                                                listening_chain_states.get_mut(&chain)
+                                            {
+                                                *chain_state = StreamStartState::Waiting;
+                                            }
                                             continue;
                                         }
                                     }
@@ -412,53 +507,68 @@ impl TriggerManager {
                                         chain_config.ws_endpoints,
                                         chain_key,
                                         chain_config.ws_priority_endpoint_index,
+                                        self.metrics.evm_stream.clone(),
                                     );
-
-                                    self.evm_controllers
-                                        .write()
-                                        .unwrap()
-                                        .insert(chain.clone(), controller);
 
                                     // Start the EVM event stream
                                     // however, the actual subscription for log filters is set via the controller
-                                    match evm_stream::start_evm_event_stream(
+                                    let evm_event_stream = match evm_stream::start_evm_event_stream(
                                         chain.clone(),
                                         log_stream,
                                         self.metrics.clone(),
                                     )
                                     .await
                                     {
-                                        Ok(evm_event_stream) => {
-                                            multiplexed_stream.push(evm_event_stream);
-                                        }
+                                        Ok(stream) => stream,
                                         Err(err) => {
                                             tracing::error!(
                                                 "Failed to start EVM event stream: {:?}",
                                                 err
                                             );
+                                            if let Some(chain_state) =
+                                                listening_chain_states.get_mut(&chain)
+                                            {
+                                                *chain_state = StreamStartState::Waiting;
+                                            }
                                             continue;
                                         }
-                                    }
+                                    };
 
                                     // Start the EVM block stream
                                     // however, the actual subscription for blocks is gated via the controller
-                                    match evm_stream::start_evm_block_stream(
+                                    let evm_block_stream = match evm_stream::start_evm_block_stream(
                                         chain.clone(),
                                         block_height_stream,
                                         self.metrics.clone(),
                                     )
                                     .await
                                     {
-                                        Ok(evm_block_stream) => {
-                                            multiplexed_stream.push(evm_block_stream);
-                                        }
+                                        Ok(stream) => stream,
                                         Err(err) => {
                                             tracing::error!(
                                                 "Failed to start EVM block stream: {:?}",
                                                 err
                                             );
+                                            if let Some(chain_state) =
+                                                listening_chain_states.get_mut(&chain)
+                                            {
+                                                *chain_state = StreamStartState::Waiting;
+                                            }
                                             continue;
                                         }
+                                    };
+
+                                    multiplexed_stream.push(evm_event_stream);
+                                    multiplexed_stream.push(evm_block_stream);
+
+                                    self.evm_controllers
+                                        .write()
+                                        .unwrap()
+                                        .insert(chain.clone(), controller);
+                                    if let Some(chain_state) =
+                                        listening_chain_states.get_mut(&chain)
+                                    {
+                                        *chain_state = StreamStartState::Connected;
                                     }
                                 }
                             }
@@ -489,6 +599,144 @@ impl TriggerManager {
                                     tracing::error!(
                                         "No EVM controller found for chain {chain}, cannot watch blocks"
                                     );
+                                    continue;
+                                }
+                            }
+                        }
+                        TriggerCommand::StartListeningAtProto => {
+                            #[cfg(feature = "dev")]
+                            if self.disable_networking {
+                                tracing::warn!(
+                                    "Networking is disabled, skipping ATProto stream start"
+                                );
+                                continue;
+                            }
+
+                            match atproto_stream_state {
+                                StreamStartState::Connected => {
+                                    tracing::debug!("ATProto stream already started, skipping");
+                                    continue;
+                                }
+                                StreamStartState::Connecting => {
+                                    tracing::debug!("ATProto stream is already starting, skipping");
+                                    continue;
+                                }
+                                StreamStartState::Waiting => {
+                                    atproto_stream_state = StreamStartState::Connecting;
+                                }
+                            }
+
+                            // Subscribe to all ATProto events - filtering will be done in the lookup system
+                            let jetstream_config = streams::atproto_jetstream::JetstreamConfig {
+                                endpoint: self.config.jetstream_endpoint.clone(),
+                                wanted_collections: vec![], // Empty means subscribe to all collections
+                                wanted_dids: None,          // Listen to all repos
+                                cursor: None,
+                                compression: false,
+                                max_message_size: self.config.jetstream_max_message_size,
+                                require_hello: false,
+                            };
+
+                            // Start the ATProto Jetstream stream
+                            let atproto_start_result =
+                                streams::atproto_jetstream::start_jetstream_stream(
+                                    jetstream_config,
+                                    self.metrics.clone(),
+                                )
+                                .await;
+                            let was_connecting =
+                                matches!(atproto_stream_state, StreamStartState::Connecting);
+                            match atproto_start_result {
+                                Ok(atproto_stream) => {
+                                    multiplexed_stream.push(atproto_stream);
+                                    tracing::info!("Started ATProto Jetstream stream");
+                                    if was_connecting {
+                                        atproto_stream_state = StreamStartState::Connected;
+                                    }
+                                }
+                                Err(err) => {
+                                    tracing::error!(
+                                        "Failed to start ATProto Jetstream stream: {:?}",
+                                        err
+                                    );
+                                    if was_connecting {
+                                        atproto_stream_state = StreamStartState::Waiting;
+                                    }
+                                    continue;
+                                }
+                            }
+                        }
+                        TriggerCommand::StartListeningHypercore { feed_key } => {
+                            #[cfg(feature = "dev")]
+                            if self.disable_networking {
+                                tracing::warn!(
+                                    "Networking is disabled, skipping hypercore stream start"
+                                );
+                                continue;
+                            }
+                            let current_state = hypercore_stream_states
+                                .read()
+                                .unwrap()
+                                .get(&feed_key)
+                                .copied()
+                                .unwrap_or(StreamStartState::Waiting);
+                            match current_state {
+                                StreamStartState::Connected => {
+                                    tracing::debug!(
+                                        "Hypercore stream already started for {}, skipping",
+                                        feed_key
+                                    );
+                                    continue;
+                                }
+                                StreamStartState::Connecting => {
+                                    tracing::debug!(
+                                        "Hypercore stream is already starting for {}, skipping",
+                                        feed_key
+                                    );
+                                    continue;
+                                }
+                                StreamStartState::Waiting => {
+                                    hypercore_stream_states
+                                        .write()
+                                        .unwrap()
+                                        .insert(feed_key.clone(), StreamStartState::Connecting);
+                                }
+                            }
+
+                            let hypercore_start_result =
+                                streams::hypercore_stream::start_hypercore_stream(
+                                    streams::hypercore_stream::HypercoreStreamConfig {
+                                        storage_dir: self
+                                            .config
+                                            .data
+                                            .join("hypercore")
+                                            .join(&feed_key),
+                                        feed_key: feed_key.clone(),
+                                        hyperswarm_bootstrap: self
+                                            .config
+                                            .hyperswarm_bootstrap
+                                            .clone(),
+                                    },
+                                    self.metrics.clone(),
+                                    kill_receiver.resubscribe(),
+                                )
+                                .await;
+                            match hypercore_start_result {
+                                Ok(hypercore_stream) => {
+                                    multiplexed_stream.push(hypercore_stream);
+
+                                    // Mark as connected once stream starts successfully
+                                    hypercore_stream_states
+                                        .write()
+                                        .unwrap()
+                                        .insert(feed_key.clone(), StreamStartState::Connected);
+                                }
+                                Err(err) => {
+                                    tracing::error!("Failed to start hypercore stream: {:?}", err);
+                                    hypercore_stream_states
+                                        .write()
+                                        .unwrap()
+                                        .insert(feed_key.clone(), StreamStartState::Waiting);
                                     continue;
                                 }
                             }
@@ -666,39 +914,160 @@ impl TriggerManager {
                 } => {
                     dispatcher_commands.extend(self.process_blocks(chain, block_height));
                 }
-                StreamTriggers::Cron {
-                    trigger_time,
-                    lookup_ids,
-                } => {
-                    for trigger_config in self.lookup_maps.get_trigger_configs(&lookup_ids) {
-                        dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
-                            data: TriggerData::Cron { trigger_time },
-                            config: trigger_config.clone(),
-                        }));
+                StreamTriggers::Cron { hits } => {
+                    // Process each cron hit (group of triggers at the same scheduled time)
+                    for hit in hits {
+                        for lookup_id in &hit.lookup_ids {
+                            if let Some(trigger_config) =
+                                self.lookup_maps.get_trigger_config(*lookup_id)
+                            {
+                                dispatcher_commands.push(DispatcherCommand::Trigger(
+                                    TriggerAction {
+                                        data: TriggerData::Cron {
+                                            trigger_time: hit.scheduled_time,
+                                        },
+                                        config: trigger_config.clone(),
+                                    },
+                                ));
+                            }
+                        }
                     }
+                }
+                StreamTriggers::AtProto { event } => {
+                    let action_enum = event.action.clone();
+
+                    // Find matching triggers using multiple lookup strategies
+                    let mut matched_lookup_ids: HashSet<LookupId> = HashSet::new();
+
+                    // Strategy 1: Exact match (collection, repo, action)
+                    {
+                        let triggers_by_atproto_lock = self
+                            .lookup_maps
+                            .triggers_by_atproto_event_exact
+                            .read()
+                            .unwrap();
+
+                        // Check exact collection/repo/action match
+                        if let Some(lookup_ids) = triggers_by_atproto_lock.get(&(
+                            event.collection.clone(),
+                            Some(event.repo.clone()),
+                            Some(action_enum.clone()),
+                        )) {
+                            matched_lookup_ids.extend(lookup_ids);
+                        }
+
+                        // Check collection/repo match (any action)
+                        if let Some(lookup_ids) = triggers_by_atproto_lock.get(&(
+                            event.collection.clone(),
+                            Some(event.repo.clone()),
+                            None,
+                        )) {
+                            matched_lookup_ids.extend(lookup_ids);
+                        }
+
+                        // Check collection/action match (any repo)
+                        if let Some(lookup_ids) = triggers_by_atproto_lock.get(&(
+                            event.collection.clone(),
+                            None,
+                            Some(action_enum.clone()),
+                        )) {
+                            matched_lookup_ids.extend(lookup_ids);
+                        }
+
+                        // Check collection match (any repo, any action)
+                        if let Some(lookup_ids) =
+                            triggers_by_atproto_lock.get(&(event.collection.clone(), None, None))
+                        {
+                            matched_lookup_ids.extend(lookup_ids);
+                        }
+                    }
+
+                    // Strategy 2: Pattern matching for collections with wildcards
+                    {
+                        let triggers_by_atproto_lock = self
+                            .lookup_maps
+                            .triggers_by_atproto_event_pattern
+                            .read()
+                            .unwrap();
+                        // This collection only holds wildcard patterns, so the slower path
+                        // doesn't need to scan the exact-match entries above.
+
+                        for ((collection_pattern, repo_did_filter, action_filter), lookup_ids) in
+                            triggers_by_atproto_lock.iter()
+                        {
+                            // Check collection pattern match (supports wildcards)
+                            if self
+                                .matches_collection_pattern(collection_pattern, &event.collection)
+                            {
+                                // Check repo filter
+                                let repo_matches = match repo_did_filter {
+                                    Some(filter_did) => filter_did == &event.repo,
+                                    None => true, // any repo
+                                };
+
+                                // Check action filter
+                                let action_matches = match action_filter {
+                                    Some(filter_action) => filter_action == &action_enum,
+                                    None => true, // any action
+                                };
+
+                                if repo_matches && action_matches {
+                                    matched_lookup_ids.extend(lookup_ids);
+                                }
+                            }
+                        }
+                    }
+
+                    // Create trigger actions for all matched lookups
+                    if !matched_lookup_ids.is_empty() {
+                        let trigger_data = TriggerData::AtProtoEvent {
+                            sequence: event.sequence,
+                            timestamp: event.timestamp,
+                            repo: event.repo.clone(),
+                            collection: event.collection.clone(),
+                            rkey: event.rkey.clone(),
+                            action: action_enum.clone(),
+                            cid: event.cid.clone(),
+                            record: event.record.clone(),
+                            rev: event.rev.clone(),
+                            op_index: event.op_index,
+                        };
+
+                        for trigger_config in
+                            self.lookup_maps.get_trigger_configs(&matched_lookup_ids)
+                        {
+                            dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
+                                data: trigger_data.clone(),
+                                config: trigger_config.clone(),
+                            }));
+                        }
+
+                        tracing::info!(
+                            "ATProto event matched {} triggers: collection={}, repo={}, action={}",
+                            matched_lookup_ids.len(),
+                            event.collection,
+                            event.repo,
+                            action_enum
+                        );
+                    }
+                }
+                StreamTriggers::Hypercore { event } => {
+                    dispatcher_commands.extend(self.handle_hypercore_event(event));
                 }
             }
 
             if !dispatcher_commands.is_empty() {
-                tracing::info!(
+                tracing::debug!(
                     "Sending {} commands to dispatcher",
                     dispatcher_commands.len()
                 );
                 for (idx, command) in dispatcher_commands.iter().enumerate() {
                     if let DispatcherCommand::Trigger(action) = command {
-                        // Log the trigger action details
-                        let service = self
-                            .services
-                            .get(&action.config.service_id)
-                            .map_err(TriggerError::Services)?;
-                        let event_id = EventId::try_from((&service, action))
-                            .map_err(TriggerError::EncodeEventId)?;
                         tracing::debug!(
                             batch = idx + 1,
                             service_id = %action.config.service_id,
                             workflow_id = %action.config.workflow_id,
                             trigger_data = ?action.data,
-                            event_id = %event_id,
                             "Trigger action (in this batch)"
                         );
                     }
@@ -728,10 +1097,15 @@ impl TriggerManager {
             }
         };
         // Get the triggers that should fire at this block height
-        let firing_lookup_ids = match self.lookup_maps.block_schedulers.get_mut(&chain) {
-            Some(mut scheduler) => scheduler.tick(block_height.into()),
-            None => Vec::new(),
-        };
+        let firing_lookup_ids: Vec<LookupId> =
+            match self.lookup_maps.block_schedulers.get_mut(&chain) {
+                Some(mut scheduler) => scheduler
+                    .tick(block_height.into())
+                    .into_iter()
+                    .map(|(id, _)| id)
+                    .collect(),
+                None => Vec::new(),
+            };
 
         // Convert lookup_ids to TriggerActions
         if !firing_lookup_ids.is_empty() {
@@ -753,6 +1127,64 @@ impl TriggerManager {
         }
     }
 
+    fn handle_hypercore_event(
+        &self,
+        event: streams::hypercore_stream::HypercoreAppendEvent,
+    ) -> Vec<DispatcherCommand> {
+        let mut matched_lookup_ids: HashSet<LookupId> = HashSet::new();
+
+        {
+            let triggers_by_hypercore_lock = self
+                .lookup_maps
+                .triggers_by_hypercore_append
+                .read()
+                .unwrap();
+
+            if let Some(lookup_ids) = triggers_by_hypercore_lock.get(&event.feed_key) {
+                matched_lookup_ids.extend(lookup_ids);
+            }
+        }
+
+        if matched_lookup_ids.is_empty() {
+            return Vec::new();
+        }
+
+        let trigger_data = TriggerData::HypercoreAppend {
+            feed_key: event.feed_key,
+            index: event.index,
+            data: event.data,
+        };
+
+        self.lookup_maps
+            .get_trigger_configs(&matched_lookup_ids)
+            .into_iter()
+            .map(|trigger_config| {
+                DispatcherCommand::Trigger(TriggerAction {
+                    data: trigger_data.clone(),
+                    config: trigger_config,
+                })
+            })
+            .collect()
+    }
+
+    /// Check if a collection pattern matches the actual collection
+    /// Supports wildcard patterns with '*' (e.g., "app.bsky.feed.*")
+    fn matches_collection_pattern(&self, pattern: &str, actual: &str) -> bool {
+        // Exact match
+        if pattern == actual {
+            return true;
+        }
+
+        // Wildcard pattern matching
+        if let Some(prefix) = pattern.strip_suffix(".*") {
+            return actual.starts_with(prefix)
+                && actual.len() > prefix.len()
+                && actual[prefix.len()..].starts_with('.');
+        }
+
+        false
+    }
+
     #[cfg(feature = "dev")]
     pub fn get_lookup_maps(&self) -> &Arc<LookupMaps> {
         &self.lookup_maps
@@ -766,7 +1198,7 @@ mod tests {
 
     use crate::{config::Config, services::Services};
     use utils::{
-        storage::db::RedbStorage, telemetry::TriggerMetrics, test_utils::address::rand_address_evm,
+        storage::db::WavsDb, telemetry::TriggerMetrics, test_utils::address::rand_address_evm,
     };
     use wavs_types::{
         Component, ComponentDigest, ComponentSource, ServiceManager, SignatureKind, Submit,
@@ -777,7 +1209,7 @@ mod tests {
     fn test_add_trigger() {
         let config = Config::default();
 
-        let db_storage = RedbStorage::new().unwrap();
+        let db_storage = WavsDb::new().unwrap();
         let services = Services::new(db_storage);
 
         let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
@@ -798,7 +1230,6 @@ mod tests {
                         [0; 32],
                     ))),
                     submit: Submit::Aggregator {
-                        url: "http://example.com".to_string(),
                         component: Box::new(Component::new(ComponentSource::Digest(
                             ComponentDigest::hash([0; 32]),
                         ))),
@@ -860,5 +1291,89 @@ mod tests {
         assert_eq!(received_count, 6, "Expected to receive 6 triggers");
 
         ctx.kill();
+    }
+
+    #[test]
+    fn test_hypercore_append_dispatch() {
+        let config = Config::default();
+
+        let db_storage = WavsDb::new().unwrap();
+        let services = Services::new(db_storage);
+
+        let metrics = TriggerMetrics::new(opentelemetry::global::meter("test"));
+        let (dispatcher_tx, _dispatcher_rx) = crossbeam::channel::unbounded::<DispatcherCommand>();
+
+        let workflow_id = WorkflowId::new("workflow-1").unwrap();
+        let feed_key = "feed-key-1".to_string();
+
+        let service = wavs_types::Service {
+            name: "hypercore-service".to_string(),
+            status: wavs_types::ServiceStatus::Active,
+            manager: ServiceManager::Evm {
+                chain: "evm:anvil".parse().unwrap(),
+                address: rand_address_evm(),
+            },
+            workflows: vec![(
+                workflow_id.clone(),
+                Workflow {
+                    trigger: Trigger::HypercoreAppend {
+                        feed_key: feed_key.clone(),
+                    },
+                    component: Component::new(ComponentSource::Digest(ComponentDigest::hash(
+                        [0; 32],
+                    ))),
+                    submit: Submit::Aggregator {
+                        component: Box::new(Component::new(ComponentSource::Digest(
+                            ComponentDigest::hash([0; 32]),
+                        ))),
+                        signature_kind: SignatureKind::evm_default(),
+                    },
+                },
+            )]
+            .into_iter()
+            .collect(),
+        };
+        services.save(&service).unwrap();
+
+        let trigger_manager =
+            TriggerManager::new(&config, metrics, services, dispatcher_tx).unwrap();
+
+        let trigger_config = TriggerConfig {
+            service_id: service.id(),
+            workflow_id: workflow_id.clone(),
+            trigger: Trigger::HypercoreAppend {
+                feed_key: feed_key.clone(),
+            },
+        };
+        trigger_manager
+            .lookup_maps
+            .add_trigger(trigger_config)
+            .unwrap();
+
+        let payload = b"hypercore-payload".to_vec();
+        let commands = trigger_manager.handle_hypercore_event(
+            streams::hypercore_stream::HypercoreAppendEvent {
+                feed_key: feed_key.clone(),
+                index: 0,
+                data: payload.clone(),
+            },
+        );
+
+        assert_eq!(commands.len(), 1);
+        match &commands[0] {
+            DispatcherCommand::Trigger(action) => match &action.data {
+                TriggerData::HypercoreAppend {
+                    feed_key: actual_feed_key,
+                    index,
+                    data,
+                } => {
+                    assert_eq!(actual_feed_key, &feed_key);
+                    assert_eq!(*index, 0);
+                    assert_eq!(data, &payload);
+                }
+                other => panic!("unexpected trigger data: {:?}", other),
+            },
+            other => panic!("unexpected dispatcher command: {:?}", other),
+        }
     }
 }

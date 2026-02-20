@@ -2,7 +2,7 @@ pub mod error;
 pub mod event;
 
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::StdResult;
+use cosmwasm_std::{StdResult, Uint256};
 use layer_climb_address::EvmAddr;
 
 use crate::contracts::cosmwasm::{
@@ -50,6 +50,11 @@ use crate::contracts::cosmwasm::{
 pub enum ServiceManagerExecuteMessages {
     /// Set the service URI for the WAVS service manager
     WavsSetServiceUri { service_uri: String },
+    /// Update quorum threshold
+    WavsSetQuorumThreshold {
+        numerator: Uint256,
+        denominator: Uint256,
+    },
 }
 
 #[cw_serde]
@@ -73,6 +78,17 @@ pub enum ServiceManagerQueryMessages {
     /// Get the latest operator address for a given signing key address
     #[returns(Option<EvmAddr>)]
     WavsLatestOperatorForSigningKey { signing_key_addr: EvmAddr },
+
+    /// Get the current quorum threshold
+    #[returns(QuorumThreshold)]
+    WavsQuorumThreshold {},
+}
+
+/// Quorum threshold configuration
+#[cw_serde]
+pub struct QuorumThreshold {
+    pub numerator: Uint256,
+    pub denominator: Uint256,
 }
 
 /// The result of validating a signed envelope

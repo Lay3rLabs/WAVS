@@ -1,384 +1,355 @@
+use std::hash::Hash;
 use std::sync::Arc;
 
-use redb::{
-    backends::InMemoryBackend, AccessGuard, Database, Key, ReadOnlyTable, ReadableDatabase,
-    TableError, TypeName, Value,
-};
-use serde::{de::Deserialize, Serialize};
-use std::any::type_name;
+use dashmap::mapref::multiple::RefMulti;
+use dashmap::DashMap;
 use tracing::instrument;
 
+use wavs_types::{QuorumQueue, QuorumQueueId, Service, ServiceId};
+
+/// Main database struct with hardcoded tables for better type safety and performance
 #[derive(Clone)]
-pub struct RedbStorage {
-    pub inner: Arc<Database>,
+pub struct WavsDb {
+    pub services: WavsDbTable<ServiceId, Service>,
+    pub services_by_hash: WavsDbTable<[u8; 32], Service>,
+    pub aggregator_services: WavsDbTable<ServiceId, ()>,
+    pub quorum_queues: WavsDbTable<QuorumQueueId, QuorumQueue>,
+    pub kv_store: WavsDbTable<String, Vec<u8>>,
+    pub kv_atomics_counter: WavsDbTable<String, i64>,
 }
 
-pub type Table<K, V> = redb::TableDefinition<'static, K, V>;
-pub type DBError = redb::Error;
-
-impl RedbStorage {
-    #[instrument(fields(subsys = "DbStorage"))]
-    #[allow(clippy::result_large_err)]
+impl WavsDb {
+    /// Create a new database with all tables initialized
+    /// Right now this is purely in-memory; later we will add file-based persistence
+    #[instrument(fields(subsys = "WavsDb"))]
     pub fn new() -> Result<Self, DBError> {
-        let inner = Arc::new(Database::builder().create_with_backend(InMemoryBackend::new())?);
-
-        Ok(RedbStorage { inner })
+        Ok(Self {
+            services: WavsDbTable::new()?,
+            services_by_hash: WavsDbTable::new()?,
+            aggregator_services: WavsDbTable::new()?,
+            quorum_queues: WavsDbTable::new()?,
+            kv_store: WavsDbTable::new()?,
+            kv_atomics_counter: WavsDbTable::new()?,
+        })
     }
 }
 
-impl RedbStorage {
-    #[instrument(skip(self, table), fields(subsys = "DbStorage"))]
-    #[allow(clippy::result_large_err)]
-    pub fn set<K: Key, V: Value + 'static>(
-        &self,
-        table: Table<K, V>,
-        key: K::SelfType<'_>,
-        value: &V::SelfType<'_>,
-    ) -> Result<(), DBError> {
-        let write_txn = self.inner.begin_write()?;
-        {
-            let mut table = write_txn.open_table(table)?;
-            table.insert(key, value)?;
-        }
-        write_txn.commit()?;
-        Ok(())
-    }
-
-    #[instrument(skip(self, table), fields(subsys = "DbStorage"))]
-    #[allow(clippy::result_large_err)]
-    pub fn get<K: Key, V: Value + 'static>(
-        &self,
-        table: Table<K, V>,
-        key: K::SelfType<'_>,
-    ) -> Result<Option<AccessGuard<'static, V>>, DBError> {
-        let read_txn = self.inner.begin_read()?;
-        match read_txn.open_table(table) {
-            Ok(table) => Ok(table.get(key)?),
-            // If we read before the first write, we get this error.
-            // Just act like get returned None (cuz key surely doesn't exist)
-            Err(TableError::TableDoesNotExist(_)) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    #[instrument(skip(self, table), fields(subsys = "DbStorage"))]
-    #[allow(clippy::result_large_err)]
-    pub fn remove<K: Key, V: Value + 'static>(
-        &self,
-        table: Table<K, V>,
-        key: K::SelfType<'_>,
-    ) -> Result<(), DBError> {
-        let write_txn = self.inner.begin_write()?;
-        {
-            let mut table = write_txn.open_table(table)?;
-            table.remove(key)?;
-        }
-        write_txn.commit()?;
-        Ok(())
-    }
-
-    // TODO: this could just be an internal helper method for get(), range(), etc.
-    #[instrument(skip(self, table, f), fields(subsys = "DbStorage"))]
-    #[allow(clippy::result_large_err)]
-    pub fn map_table_read<'a, K, V, F, R>(&self, table: Table<K, V>, f: F) -> Result<R, DBError>
-    where
-        K: Key + 'a,
-        V: Value + 'a,
-        F: FnOnce(Option<ReadOnlyTable<K, V>>) -> Result<R, DBError>,
-    {
-        let read_txn = self.inner.begin_read()?;
-        match read_txn.open_table(table) {
-            Ok(table) => f(Some(table)),
-            Err(TableError::TableDoesNotExist(_)) => f(None),
-            Err(e) => Err(e.into()),
-        }
-    }
-}
-
-/// Wrapper type to handle keys and values using bincode serialization
-#[derive(Debug, Clone)]
-pub struct JSON<T>(pub T);
-
-impl<T> Value for JSON<T>
+/// A table abstraction that hides the underlying DashMap implementation
+/// and provides a clean API for database operations.
+#[derive(Clone)]
+pub struct WavsDbTable<K, V>
 where
-    T: std::fmt::Debug + Serialize + for<'a> Deserialize<'a>,
+    K: Eq + Hash + Clone + Send + Sync + 'static,
+    V: Clone + Send + Sync + 'static,
 {
-    type SelfType<'a>
-        = T
-    where
-        Self: 'a;
+    inner: Arc<DashMap<K, V>>,
+}
 
-    type AsBytes<'a>
-        = Vec<u8>
-    where
-        Self: 'a;
-
-    fn fixed_width() -> Option<usize> {
-        None
-    }
-
-    fn from_bytes<'a>(data: &'a [u8]) -> Self::SelfType<'a>
-    where
-        Self: 'a,
-    {
-        serde_json::from_slice(data).unwrap()
-    }
-
-    fn as_bytes<'a, 'b: 'a>(value: &'a Self::SelfType<'b>) -> Self::AsBytes<'a>
-    where
-        Self: 'a,
-        Self: 'b,
-    {
-        serde_json::to_vec(value).unwrap()
-    }
-
-    fn type_name() -> TypeName {
-        TypeName::new(&format!("JSON<{}>", type_name::<T>()))
+impl<K, V> Default for WavsDbTable<K, V>
+where
+    K: Eq + Hash + Clone + Send + Sync + 'static,
+    V: Clone + Send + Sync + 'static,
+{
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(DashMap::new()),
+        }
     }
 }
+
+impl<K, V> WavsDbTable<K, V>
+where
+    K: Eq + Hash + Clone + Send + Sync + 'static,
+    V: Clone + Send + Sync + 'static,
+{
+    /// Create a new table. In the future, this will open/load from a file.
+    /// Right now this is purely in-memory; later we will add file-based persistence
+    /// and this will then need a filepath as an argument, most likely
+    pub fn new() -> Result<Self, DBError> {
+        Ok(Self {
+            inner: Arc::new(DashMap::new()),
+        })
+    }
+
+    /// Get a cloned value from the table
+    pub fn get_cloned(&self, key: &K) -> Option<V> {
+        self.inner.get(key).map(|v| v.clone())
+    }
+
+    /// Work with a reference without exposing DashMap-specific types
+    pub fn map_ref<T, F>(&self, key: &K, f: F) -> Option<T>
+    where
+        F: FnOnce(&V) -> T,
+    {
+        self.inner.get(key).map(|v| f(&v))
+    }
+
+    /// Insert a value into the table
+    pub fn insert(&self, key: K, value: V) -> Result<(), DBError> {
+        // TODO LATER: Write data to disk, e.g. in a separate thread
+        self.inner.insert(key, value);
+        Ok(())
+    }
+
+    /// Remove a value from the table
+    pub fn remove(&self, key: &K) -> Option<V> {
+        self.inner.remove(key).map(|(_, v)| v)
+    }
+
+    /// Check if a key exists in the table
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.inner.contains_key(key)
+    }
+
+    /// Clear all entries from the table
+    pub fn clear(&self) {
+        self.inner.clear();
+    }
+
+    /// Iterate over all entries in the table
+    pub fn iter(&self) -> WavsDbIter<'_, K, V> {
+        WavsDbIter {
+            inner: self.inner.iter(),
+        }
+    }
+}
+
+impl<K, V> WavsDbTable<K, V>
+where
+    K: Eq + Hash + Clone + Send + Sync + 'static,
+    V: Clone + Send + Sync + Default + 'static,
+{
+    pub fn update_or_insert_default<F>(&self, key: K, update_fn: F) -> Result<(), DBError>
+    where
+        F: FnOnce(&mut V),
+    {
+        use dashmap::mapref::entry::Entry;
+
+        match self.inner.entry(key) {
+            Entry::Occupied(mut entry) => {
+                let value = entry.get_mut();
+                update_fn(value);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(V::default());
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Iterator for WavsDbTable that hides DashMap-specific types
+pub struct WavsDbIter<'a, K, V> {
+    inner: dashmap::iter::Iter<'a, K, V>,
+}
+
+impl<'a, K, V> Iterator for WavsDbIter<'a, K, V>
+where
+    K: Eq + Hash,
+{
+    type Item = WavsDbEntry<'a, K, V>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(WavsDbEntry)
+    }
+}
+
+/// Entry for WavsDbTable that hides DashMap-specific types
+pub struct WavsDbEntry<'a, K, V>(RefMulti<'a, K, V>);
+
+impl<'a, K, V> WavsDbEntry<'a, K, V>
+where
+    K: Eq + Hash,
+{
+    pub fn pair(&self) -> (&K, &V) {
+        (self.0.key(), self.0.value())
+    }
+}
+
+pub type DBError = anyhow::Error;
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use serde::{Deserialize, Serialize};
 
-    use futures::stream::FuturesUnordered;
-    use futures::StreamExt;
-    use redb::backends::InMemoryBackend;
-    use redb::{Database, TableDefinition};
-    use std::collections::HashMap;
-    use std::sync::Arc;
-    use std::thread::{self, sleep};
-    use std::time::Duration;
-    use tempfile::TempDir;
-    use tokio::task::spawn_blocking;
-
-    use crate::storage::db::RedbStorage;
-
-    const TABLE: TableDefinition<'static, u32, u32> = TableDefinition::new("TABLE");
-
-    #[derive(Clone)]
-    struct Counter {
-        counts: Arc<std::sync::Mutex<HashMap<usize, usize>>>,
-    }
-
-    impl Counter {
-        pub fn new() -> Self {
-            Self {
-                counts: Arc::new(std::sync::Mutex::new(HashMap::new())),
-            }
-        }
-
-        pub fn increment(&self, thread_num: usize) {
-            *self.counts.lock().unwrap().entry(thread_num).or_insert(0) += 1;
-        }
-
-        // only true if all threads have reached op_count
-        // and there are thread_count threads
-        pub fn reached(&self, thread_count: usize, op_count: usize) -> bool {
-            let counts = self.counts.lock().unwrap();
-            if counts.len() < thread_count - 1 {
-                return false;
-            }
-            for count in counts.values() {
-                if *count < op_count {
-                    return false;
-                }
-            }
-            true
-        }
-    }
-
-    impl std::fmt::Debug for Counter {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let counts = &*self.counts.lock().unwrap();
-            counts.fmt(f)
-        }
+    #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+    struct TestStruct {
+        name: String,
+        value: i32,
     }
 
     #[test]
-    #[ignore]
-    fn storage_multithreaded_in_memory() {
-        storage_multithreaded_inner(StorageKind::InMemory, 20, 1000);
+    fn wavsdb_table_basic_operations() {
+        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new().unwrap();
+        let key = "test_key".to_string();
+        let value = TestStruct {
+            name: "demo".to_string(),
+            value: 99,
+        };
+
+        // Test get_cloned on empty table
+        assert!(table.get_cloned(&key).is_none());
+
+        // Test insert and get_cloned
+        table.insert(key.clone(), value.clone()).unwrap();
+        let retrieved = table.get_cloned(&key);
+        assert_eq!(retrieved, Some(value.clone()));
+
+        // Test contains_key
+        assert!(table.contains_key(&key));
+        assert!(!table.contains_key(&"nonexistent".to_string()));
+
+        // Test remove
+        let removed = table.remove(&key);
+        assert_eq!(removed, Some(value));
+        assert!(!table.contains_key(&key));
     }
 
     #[test]
-    #[ignore]
-    fn storage_multithreaded_on_disk() {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test_db.redb");
+    fn wavsdb_table_map_ref() {
+        let table: WavsDbTable<String, i32> = WavsDbTable::new().unwrap();
+        let key = "number".to_string();
+        table.insert(key.clone(), 42).unwrap();
 
-        // incresaing the number of ops *dramatically* increases test time
-        storage_multithreaded_inner(StorageKind::OnDisk(db_path), 10, 100);
+        // Test map_ref to transform value without cloning
+        let doubled = table.map_ref(&key, |v| v * 2);
+        assert_eq!(doubled, Some(84));
 
-        // just make sure we didn't drop it
-        let _temp_dir = temp_dir;
-    }
-
-    fn storage_multithreaded_inner(
-        storage_kind: StorageKind,
-        task_target: usize,
-        op_target: usize,
-    ) {
-        let storage = new_storage(storage_kind);
-
-        // stash something at the beginning so we're guaranteed to get a valid read
-        storage.set(TABLE, 1u32, &1u32).unwrap();
-
-        let counter = Counter::new();
-
-        for thread_num in 0..task_target {
-            thread::spawn({
-                let storage = storage.clone();
-                let counter = counter.clone();
-                move || loop {
-                    if thread_num % 2 == 0 {
-                        storage.set(TABLE, 1u32, &1u32).unwrap();
-                    } else {
-                        let value = storage.get(TABLE, 1).unwrap().unwrap().value();
-                        assert_eq!(value, 1u32);
-                    }
-
-                    counter.increment(thread_num);
-                    // give it a little time to let other threads run
-                    sleep(Duration::from_millis(1));
-                }
-            });
-        }
-
-        loop {
-            if counter.reached(task_target, op_target) {
-                break;
-            }
-
-            // give it a little time to let other threads run
-            sleep(Duration::from_millis(1));
-        }
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn storage_concurrent_in_memory() {
-        storage_concurrent_inner(StorageKind::InMemory, 20, 1000).await;
-    }
-
-    #[tokio::test]
-    #[ignore]
-    async fn storage_concurrent_on_disk() {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test_db.redb");
-
-        // incresaing the number of ops *dramatically* increases test time
-        storage_concurrent_inner(StorageKind::OnDisk(db_path), 10, 100).await;
-
-        // just make sure we didn't drop it
-        let _temp_dir = temp_dir;
-    }
-
-    async fn storage_concurrent_inner(
-        storage_kind: StorageKind,
-        task_target: usize,
-        op_target: usize,
-    ) {
-        let storage = new_storage(storage_kind);
-
-        // stash something at the beginning so we're guaranteed to get a valid read
-        storage.set(TABLE, 1u32, &1u32).unwrap();
-
-        let counter = Counter::new();
-
-        let mut futures = FuturesUnordered::new();
-
-        for task_num in 0..task_target {
-            for _ in 0..op_target {
-                futures.push({
-                    let storage = storage.clone();
-                    let counter = counter.clone();
-                    async move {
-                        if task_num % 2 == 0 {
-                            spawn_blocking(move || {
-                                storage.set(TABLE, 1u32, &1u32).unwrap();
-                            })
-                            .await
-                            .unwrap();
-                        } else {
-                            let value = spawn_blocking(move || {
-                                storage.get(TABLE, 1).unwrap().unwrap().value()
-                            })
-                            .await
-                            .unwrap();
-
-                            assert_eq!(value, 1u32);
-                        }
-                        counter.increment(task_num);
-                    }
-                });
-            }
-        }
-
-        while (futures.next().await).is_some() {}
-
-        if !counter.reached(task_target, op_target) {
-            panic!("did not reach expected count")
-        }
+        // Test map_ref on nonexistent key
+        let none_result = table.map_ref(&"nonexistent".to_string(), |v| v * 2);
+        assert_eq!(none_result, None);
     }
 
     #[test]
-    #[ignore]
-    fn storage_serial_in_memory() {
-        storage_serial_inner(StorageKind::InMemory, 20, 1000);
+    fn wavsdb_table_iteration() {
+        let table: WavsDbTable<String, TestStruct> = WavsDbTable::new().unwrap();
+
+        // Insert test data
+        table
+            .insert(
+                "alpha".to_string(),
+                TestStruct {
+                    name: "a".to_string(),
+                    value: 1,
+                },
+            )
+            .unwrap();
+
+        table
+            .insert(
+                "beta".to_string(),
+                TestStruct {
+                    name: "b".to_string(),
+                    value: 2,
+                },
+            )
+            .unwrap();
+
+        // Collect all entries
+        let mut collected: Vec<(String, i32)> = table
+            .iter()
+            .map(|entry| {
+                let (key, value) = entry.pair();
+                (key.clone(), value.value)
+            })
+            .collect();
+
+        // Sort for consistent ordering (iteration order is not guaranteed)
+        collected.sort();
+        assert_eq!(collected, vec![("alpha".into(), 1), ("beta".into(), 2)]);
     }
 
     #[test]
-    #[ignore]
-    fn storage_serial_on_disk() {
-        let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("test_db.redb");
+    fn wavsdb_basic_operations() {
+        let db = WavsDb::new().unwrap();
 
-        // incresaing the number of ops *dramatically* increases test time
-        storage_serial_inner(StorageKind::OnDisk(db_path), 10, 100);
+        // Test basic operations with a simple test struct instead of Service
+        use wavs_types::ServiceId;
+        let service_id = ServiceId::hash(b"test-service");
+        let service = Service {
+            name: "test-service".to_string(),
+            workflows: std::collections::BTreeMap::new(),
+            status: wavs_types::ServiceStatus::Active,
+            manager: wavs_types::ServiceManager::Evm {
+                chain: "evm:anvil".parse().unwrap(),
+                address: alloy_primitives::Address::ZERO,
+            },
+        };
 
-        // just make sure we didn't drop it
-        let _temp_dir = temp_dir;
+        assert!(db.services.get_cloned(&service_id).is_none());
+        db.services
+            .insert(service_id.clone(), service.clone())
+            .unwrap();
+
+        let retrieved = db.services.get_cloned(&service_id);
+        assert_eq!(retrieved, Some(service.clone()));
+
+        assert!(db.services.contains_key(&service_id));
+
+        let removed = db.services.remove(&service_id);
+        assert_eq!(removed, Some(service));
+        assert!(!db.services.contains_key(&service_id));
     }
 
-    fn storage_serial_inner(storage_kind: StorageKind, task_target: usize, op_target: usize) {
-        let storage = new_storage(storage_kind);
+    #[test]
+    fn wavsdb_kv_operations() {
+        let db = WavsDb::new().unwrap();
 
-        // stash something at the beginning so we're guaranteed to get a valid read
-        storage.set(TABLE, 1u32, &1u32).unwrap();
+        let key = "test_key".to_string();
+        let value = b"test_value".to_vec();
 
-        // just to make sure we're a bit closer to the other tests
-        let counter = Counter::new();
+        // Test KV operations
+        assert!(db.kv_store.get_cloned(&key).is_none());
+        db.kv_store.insert(key.clone(), value.clone()).unwrap();
 
-        for task_num in 0..task_target {
-            for _ in 0..op_target {
-                if task_num % 2 == 0 {
-                    storage.set(TABLE, 1u32, &1u32).unwrap();
-                } else {
-                    let value = storage.get(TABLE, 1).unwrap().unwrap().value();
-                    assert_eq!(value, 1u32);
-                }
-                counter.increment(task_num);
-            }
-        }
+        let retrieved = db.kv_store.get_cloned(&key);
+        assert_eq!(retrieved, Some(value.clone()));
 
-        if !counter.reached(task_target, op_target) {
-            panic!("did not reach expected count")
-        }
+        assert!(db.kv_store.contains_key(&key));
+
+        let removed = db.kv_store.remove(&key);
+        assert_eq!(removed, Some(b"test_value".to_vec()));
+        assert!(!db.kv_store.contains_key(&key));
     }
 
-    enum StorageKind {
-        InMemory,
-        OnDisk(std::path::PathBuf),
+    #[test]
+    fn wavsdb_counter_operations() {
+        let db = WavsDb::new().unwrap();
+
+        let key = "counter".to_string();
+        let value = 42i64;
+
+        // Test counter operations
+        assert!(db.kv_atomics_counter.get_cloned(&key).is_none());
+        db.kv_atomics_counter.insert(key.clone(), value).unwrap();
+
+        let retrieved = db.kv_atomics_counter.get_cloned(&key);
+        assert_eq!(retrieved, Some(value));
+
+        assert!(db.kv_atomics_counter.contains_key(&key));
+
+        let removed = db.kv_atomics_counter.remove(&key);
+        assert_eq!(removed, Some(value));
+        assert!(!db.kv_atomics_counter.contains_key(&key));
     }
 
-    fn new_storage(kind: StorageKind) -> RedbStorage {
-        RedbStorage {
-            inner: Arc::new(match kind {
-                StorageKind::InMemory => Database::builder()
-                    .create_with_backend(InMemoryBackend::new())
-                    .unwrap(),
-                StorageKind::OnDisk(path) => Database::create(path).unwrap(),
-            }),
-        }
+    #[test]
+    fn table_clear() {
+        let table: WavsDbTable<String, i32> = WavsDbTable::new().unwrap();
+
+        // Insert some data
+        table.insert("a".to_string(), 1).unwrap();
+        table.insert("b".to_string(), 2).unwrap();
+
+        assert!(table.contains_key(&"a".to_string()));
+        assert!(table.contains_key(&"b".to_string()));
+
+        // Clear the table
+        table.clear();
+
+        assert!(!table.contains_key(&"a".to_string()));
+        assert!(!table.contains_key(&"b".to_string()));
     }
 }

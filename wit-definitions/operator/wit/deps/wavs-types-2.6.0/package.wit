@@ -1,0 +1,330 @@
+package wavs:types@2.6.0;
+
+interface chain {
+  /// A string mostly following the caip-2 format of namespace:reference, e.g. "eip155:1" for Ethereum mainnet or "cosmos:cosmoshub-4" for Cosmos Hub
+  /// however, we allow up to 32 characters for the "namespace" part, and we call the "reference" part "chain-id" to confirm with popular usage
+  type chain-key = string;
+
+  type evm-tx-hash = list<u8>;
+
+  /// 32 bytes, a keccak hash of an RLP encoded signed transaction
+  type cosmos-tx-hash = string;
+
+  variant any-tx-hash {
+    evm(evm-tx-hash),
+    cosmos(cosmos-tx-hash),
+  }
+
+  record cosmos-address {
+    bech32-addr: string,
+    /// prefix is the first part of the bech32 address
+    prefix-len: u32,
+  }
+
+  record cosmos-event {
+    ty: string,
+    attributes: list<tuple<string, string>>,
+  }
+
+  record cosmos-chain-config {
+    chain-id: string,
+    rpc-endpoint: option<string>,
+    grpc-endpoint: option<string>,
+    grpc-web-endpoint: option<string>,
+    gas-price: f32,
+    gas-denom: string,
+    bech32-prefix: string,
+  }
+
+  record evm-address {
+    raw-bytes: list<u8>,
+  }
+
+  record evm-event-log-data {
+    /// the raw log topics that can be decoded into an event
+    topics: list<list<u8>>,
+    /// the raw log data that can be decoded into an event
+    data: list<u8>,
+  }
+
+  /// The overall idea is to map alloy_rpc_types_eth::Log<LogData>
+  record evm-event-log {
+    /// These two fields are essentially alloy_primitives::Log<LogData>
+    address: evm-address,
+    data: evm-event-log-data,
+    tx-hash: evm-tx-hash,
+    block-number: u64,
+    log-index: u64,
+    block-hash: list<u8>,
+    /// 256 bytes
+    block-timestamp: option<u64>,
+    tx-index: u64,
+  }
+
+  record evm-chain-config {
+    chain-id: string,
+    ws-endpoints: list<string>,
+    http-endpoint: option<string>,
+  }
+}
+
+interface core {
+  type digest = string;
+
+  record timestamp {
+    nanos: u64,
+  }
+
+  record duration {
+    secs: u64,
+  }
+
+  /// 128-bit unsigned integer represented as two 64-bit values.
+  ///
+  /// The tuple is stored in little-endian order:
+  /// - First element (index 0): Lower 64 bits (bits 0-63)
+  /// - Second element (index 1): Upper 64 bits (bits 64-127)
+  record u128 {
+    value: tuple<u64, u64>,
+  }
+
+  variant log-level {
+    error,
+    warn,
+    info,
+    debug,
+    trace,
+  }
+}
+
+interface events {
+  use chain.{chain-key, evm-address, evm-event-log, cosmos-address, cosmos-event};
+  use core.{timestamp};
+
+  type event-id = list<u8>;
+
+  record trigger-data-evm-contract-event {
+    chain: chain-key,
+    log: evm-event-log,
+  }
+
+  record trigger-data-cosmos-contract-event {
+    contract-address: cosmos-address,
+    chain: chain-key,
+    event: cosmos-event,
+    event-index: u64,
+    block-height: u64,
+  }
+
+  record trigger-data-block-interval {
+    chain: chain-key,
+    block-height: u64,
+  }
+
+  record trigger-data-cron {
+    trigger-time: timestamp,
+  }
+
+  record trigger-data-atproto-event {
+    sequence: s64,
+    timestamp: s64,
+    repo: string,
+    collection: string,
+    rkey: string,
+    action: string,
+    cid: option<string>,
+    record-data: option<string>,
+    rev: option<string>,
+    op-index: option<u32>,
+  }
+
+  record trigger-data-hypercore-append {
+    feed-key: string,
+    index: u64,
+    data: list<u8>,
+  }
+
+  /// 20-byte unique hash
+  variant trigger-data {
+    evm-contract-event(trigger-data-evm-contract-event),
+    cosmos-contract-event(trigger-data-cosmos-contract-event),
+    block-interval(trigger-data-block-interval),
+    cron(trigger-data-cron),
+    atproto-event(trigger-data-atproto-event),
+    hypercore-append(trigger-data-hypercore-append),
+    raw(list<u8>),
+  }
+}
+
+interface service {
+  use core.{digest, timestamp};
+  use chain.{chain-key, evm-address, cosmos-address};
+
+  /// Basic types
+  type service-id = string;
+
+  type workflow-id = string;
+
+  type package-ref = string;
+
+  type semver-version = string;
+
+  variant service-status {
+    active,
+    paused,
+  }
+
+  record evm-manager {
+    chain: chain-key,
+    address: evm-address,
+  }
+
+  record cosmos-manager {
+    chain: chain-key,
+    address: cosmos-address,
+  }
+
+  variant service-manager {
+    evm(evm-manager),
+    cosmos(cosmos-manager),
+  }
+
+  record component-source-download {
+    uri: string,
+    digest: digest,
+  }
+
+  record registry {
+    digest: digest,
+    domain: option<string>,
+    version: option<semver-version>,
+    pkg: package-ref,
+  }
+
+  variant component-source {
+    download(component-source-download),
+    registry(registry),
+    digest(digest),
+  }
+
+  variant allowed-host-permission {
+    all,
+    only(list<string>),
+    none,
+  }
+
+  /// Permissions types
+  record permissions {
+    allowed-http-hosts: allowed-host-permission,
+    file-system: bool,
+    raw-sockets: bool,
+    dns-resolution: bool,
+  }
+
+  /// Component types
+  record component {
+    source: component-source,
+    permissions: permissions,
+    fuel-limit: option<u64>,
+    time-limit-seconds: option<u64>,
+    config: list<tuple<string, string>>,
+    env-keys: list<string>,
+  }
+
+  record trigger-evm-contract-event {
+    address: evm-address,
+    chain: chain-key,
+    event-hash: list<u8>,
+  }
+
+  record trigger-cosmos-contract-event {
+    address: cosmos-address,
+    chain: chain-key,
+    event-type: string,
+  }
+
+  record trigger-block-interval {
+    chain: chain-key,
+    n-blocks: u32,
+    start-block: option<u64>,
+    end-block: option<u64>,
+  }
+
+  record trigger-cron {
+    schedule: string,
+    start-time: option<timestamp>,
+    end-time: option<timestamp>,
+  }
+
+  record trigger-atproto-event {
+    collection: string,
+    repo-did: option<string>,
+    action: option<string>,
+  }
+
+  record trigger-hypercore-append {
+    feed-key: string,
+  }
+
+  /// Trigger types
+  variant trigger {
+    evm-contract-event(trigger-evm-contract-event),
+    cosmos-contract-event(trigger-cosmos-contract-event),
+    block-interval(trigger-block-interval),
+    cron(trigger-cron),
+    atproto-event(trigger-atproto-event),
+    hypercore-append(trigger-hypercore-append),
+    manual,
+  }
+
+  variant signature-algorithm {
+    secp256k1,
+  }
+
+  variant signature-prefix {
+    eip191,
+  }
+
+  record signature-kind {
+    algorithm: signature-algorithm,
+    prefix: option<signature-prefix>,
+  }
+
+  record aggregator-submit {
+    component: component,
+    signature-kind: signature-kind,
+  }
+
+  /// Submit types
+  variant submit {
+    none,
+    aggregator(aggregator-submit),
+  }
+
+  /// Workflow types
+  record workflow {
+    trigger: trigger,
+    component: component,
+    submit: submit,
+  }
+
+  /// Service types
+  record service {
+    name: string,
+    workflows: list<tuple<workflow-id, workflow>>,
+    status: service-status,
+    manager: service-manager,
+  }
+
+  /// Aggregator types
+  record service-and-workflow-id {
+    service: service,
+    workflow-id: workflow-id,
+  }
+
+  record workflow-and-workflow-id {
+    workflow: workflow,
+    workflow-id: workflow-id,
+  }
+}
+

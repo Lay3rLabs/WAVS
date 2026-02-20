@@ -28,6 +28,8 @@ pub fn make_service(wasm_digest: ComponentDigest, config: BTreeMap<String, Strin
         permissions: Permissions {
             allowed_http_hosts: AllowedHostPermission::All,
             file_system: true,
+            raw_sockets: true,
+            dns_resolution: true,
         },
         fuel_limit: None,
         time_limit_seconds: None,
@@ -38,7 +40,6 @@ pub fn make_service(wasm_digest: ComponentDigest, config: BTreeMap<String, Strin
         trigger: Trigger::Manual,
         component: component.clone(),
         submit: Submit::Aggregator {
-            url: "https://api.example.com/aggregator".to_string(),
             component: Box::new(component),
             signature_kind: SignatureKind::evm_default(),
         },
