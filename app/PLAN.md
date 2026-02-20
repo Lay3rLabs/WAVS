@@ -18,9 +18,11 @@ MVP Requirements:
 - [x] Rearrange actions on service detail page (rename some)
 - [X] Bug: Some log entries are showing up twice?
 - [x] Add toasts and replace annoying modals you have to close
+- [x] Better wallet (show balances on chains?)
+- [ ] Merge logs and activity? (sort of similar?)
 - [ ] Better aesthetics
-- [ ] Better wallet (show balances on chains?)
 - [ ] Leverage touch id for key management? (need macOS code signing)
+- [ ] Figure out how to use the aggregator
 - [ ] Test submission with an actual solidity contract
 
 Post MVP:
