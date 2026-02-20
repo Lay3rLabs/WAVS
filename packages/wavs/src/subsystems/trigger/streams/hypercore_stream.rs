@@ -9,7 +9,7 @@ use futures::Stream;
 use hypercore::{replication::Event, Hypercore, HypercoreBuilder, PartialKeypair, Storage};
 use hyperswarm::{Config as SwarmConfig, Hyperswarm, TopicConfig};
 use std::net::SocketAddr;
-use std::{path::PathBuf, pin::Pin, sync::Arc};
+use std::{path::PathBuf, pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use utils::telemetry::TriggerMetrics;
 
@@ -188,6 +188,35 @@ async fn start_swarm_replication(
 
     let (replication_ready_tx, replication_ready_rx) = tokio::sync::oneshot::channel::<()>();
 
+    // The hyperswarm DHT only executes announce/lookup commands once after
+    // bootstrapping. If no peers have announced yet at that point, the lookup
+    // finds nothing and never retries. Work around this by periodically
+    // re-issuing announce+lookup via the SwarmHandle while no peers are connected.
+    let peer_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let swarm_handle = swarm.handle();
+    let relookup_shutdown = shutdown.resubscribe();
+    tokio::spawn({
+        let peer_count = Arc::clone(&peer_count);
+        let mut shutdown = relookup_shutdown;
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(5));
+            interval.tick().await; // skip immediate first tick
+            loop {
+                tokio::select! {
+                    _ = shutdown.recv() => break,
+                    _ = interval.tick() => {
+                        if peer_count.load(std::sync::atomic::Ordering::Relaxed) > 0 {
+                            continue;
+                        }
+                        // Clear then re-set to force new announce/lookup
+                        swarm_handle.configure(topic, TopicConfig::default());
+                        swarm_handle.configure(topic, TopicConfig::announce_and_lookup());
+                    }
+                }
+            }
+        }
+    });
+
     // Hyperswarm is async-std based but exposes futures-compatible streams, so it
     // can be polled directly from the tokio runtime that owns hypercore.
     tokio::spawn(async move {
@@ -214,6 +243,8 @@ async fn start_swarm_replication(
                         }
                     };
 
+                    peer_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
                     let peer_addr = stream.peer_addr();
                     tracing::info!(
                         "Hyperswarm connection established (initiator={}, peer_addr={:?})",
@@ -225,6 +256,7 @@ async fn start_swarm_replication(
                     let is_initiator = stream.is_initiator();
                     // Pass the sender only to the first peer's protocol session.
                     let ready_tx = replication_ready_tx.take();
+                    let peer_count_for_protocol = Arc::clone(&peer_count);
 
                     tokio::spawn(async move {
                         if let Err(err) = hypercore_protocol::run_protocol(
@@ -238,6 +270,7 @@ async fn start_swarm_replication(
                         {
                             tracing::warn!("Hypercore protocol swarm peer error: {err:?}");
                         }
+                        peer_count_for_protocol.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
                     });
                 }
             }
