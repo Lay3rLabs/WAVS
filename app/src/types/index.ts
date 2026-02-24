@@ -11,6 +11,9 @@ export interface Settings {
   saved_registries: SavedRegistry[];
   saved_service_managers: ServiceManager[];
   saved_services: Service[];
+  mcp_enabled: boolean;
+  mcp_auto_start: boolean;
+  mcp_token: string | null;
 }
 
 // Health types
@@ -255,6 +258,12 @@ export type IpfsProvider =
 export interface ComponentDigestResult {
   digest: string;
   resolved_version: string;
+}
+
+// MCP server types
+export interface McpStatus {
+  running: boolean;
+  pid: number | null;
 }
 
 // Activity types (unified triggers + submissions)
