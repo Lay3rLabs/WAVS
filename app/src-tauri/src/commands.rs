@@ -21,7 +21,7 @@ const KEYCHAIN_ACCOUNT: &str = "mnemonic";
 
 use wavs::health::HealthStatus;
 
-use crate::state::{MnemonicCacheState, SettingsState, WavsConfigState, WavsInstance, WavsInstanceState};
+use crate::state::{McpServerState, MnemonicCacheState, SettingsState, WavsConfigState, WavsInstance, WavsInstanceState};
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn cmd_set_wavs_home(
@@ -579,4 +579,128 @@ pub async fn cmd_publish_component(
         .map_err(|e| AppError::Service(format!("Failed to store component: {}", e)))?;
 
     Ok(digest.to_string())
+}
+
+// --- MCP Server ---
+
+#[derive(Serialize)]
+pub struct McpStatus {
+    pub running: bool,
+    pub pid: Option<u32>,
+}
+
+/// Resolve the wavs-mcp binary path.
+/// Looks alongside the current executable first (bundled app), then falls back to dev build paths.
+fn find_mcp_binary() -> Option<std::path::PathBuf> {
+    // 1. Sibling of current executable (works in bundled Tauri app)
+    if let Ok(current) = std::env::current_exe() {
+        if let Some(dir) = current.parent() {
+            let candidate = dir.join("wavs-mcp");
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    // 2. Workspace target/debug (dev mode)
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        // app/src-tauri → walk up to workspace root
+        let workspace = std::path::Path::new(&manifest_dir)
+            .parent()   // app/
+            .and_then(|p| p.parent()); // workspace root
+        if let Some(ws) = workspace {
+            for profile in &["debug", "release"] {
+                let candidate = ws.join("target").join(profile).join("wavs-mcp");
+                if candidate.exists() {
+                    return Some(candidate);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_start_mcp_server(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    mcp_state: State<'_, McpServerState>,
+) -> AppResult<()> {
+    if mcp_state.is_running() {
+        return Ok(()); // already running
+    }
+
+    let s = settings.get_cloned();
+    let wavs_url = match &s.wavs_home {
+        Some(_) => "http://localhost:8000".to_string(),
+        None => "http://localhost:8000".to_string(),
+    };
+
+    let bin = find_mcp_binary().ok_or_else(|| {
+        AppError::Service("wavs-mcp binary not found. Build it with: cargo build -p wavs-mcp".to_string())
+    })?;
+
+    let mut cmd = std::process::Command::new(&bin);
+    cmd.arg("--wavs-url").arg(&wavs_url);
+    if let Some(token) = &s.mcp_token {
+        cmd.arg("--token").arg(token);
+    }
+
+    let child = cmd
+        .spawn()
+        .map_err(|e| AppError::Service(format!("Failed to spawn wavs-mcp: {}", e)))?;
+
+    mcp_state.set(child);
+
+    // Persist mcp_enabled in settings
+    settings
+        .update(&app, |s| {
+            s.mcp_enabled = true;
+        })
+        .await?;
+
+    log::info!("MCP server started");
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_stop_mcp_server(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    mcp_state: State<'_, McpServerState>,
+) -> AppResult<()> {
+    mcp_state.stop();
+
+    settings
+        .update(&app, |s| {
+            s.mcp_enabled = false;
+        })
+        .await?;
+
+    log::info!("MCP server stopped");
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn cmd_get_mcp_status(mcp_state: State<'_, McpServerState>) -> McpStatus {
+    McpStatus {
+        running: mcp_state.is_running(),
+        pid: mcp_state.pid(),
+    }
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_save_mcp_settings(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    mcp_auto_start: bool,
+    mcp_token: Option<String>,
+) -> AppResult<()> {
+    settings
+        .update(&app, |s| {
+            s.mcp_auto_start = mcp_auto_start;
+            s.mcp_token = mcp_token.clone();
+        })
+        .await
 }

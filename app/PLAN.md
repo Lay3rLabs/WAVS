@@ -26,6 +26,7 @@ MVP Requirements:
 - [ ] Test submission with an actual solidity contract
 
 Post MVP:
+- Build an MCP
 - Start building out proof of reputation system
 - Update docs
 - WAVS plus ZK sidecar

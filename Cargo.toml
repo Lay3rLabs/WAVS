@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "packages/cli",
+    "packages/wavs-mcp",
     "packages/dev-tool",
     "packages/engine",
     "packages/gui/shared",
