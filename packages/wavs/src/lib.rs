@@ -52,6 +52,10 @@ pub fn run_server(
 
     // wait for all threads to finish
 
-    server_handle.join().unwrap();
-    dispatcher_handle.join().unwrap();
+    if let Err(e) = server_handle.join() {
+        tracing::error!("HTTP server thread panicked: {:?}", e);
+    }
+    if let Err(e) = dispatcher_handle.join() {
+        tracing::error!("Dispatcher thread panicked: {:?}", e);
+    }
 }

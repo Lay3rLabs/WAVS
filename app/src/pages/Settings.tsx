@@ -4,7 +4,8 @@ import { mainnet, sepolia, holesky } from 'viem/chains';
 import { AddressDisplay, Button, TomlEditor } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
 import { useWalletStore } from '../stores/walletStore';
-import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, saveMcpSettings } from '../tauri';
+import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, saveMcpSettings, clearPersistedServices } from '../tauri';
+import { errorMessage } from '../utils/error';
 import type { McpStatus } from '../types';
 import { getPublicClient } from '../hooks/useViemClient';
 import { getChainConfigs } from '../tauri';
@@ -64,6 +65,7 @@ export function Settings() {
 
   // MCP server state
   const [mcpStatus, setMcpStatus] = useState<McpStatus | null>(null);
+  const [mcpBinaryPath, setMcpBinaryPath] = useState<string | null>(null);
   const [mcpAutoStart, setMcpAutoStart] = useState(settings.mcp_auto_start ?? false);
   const [mcpToken, setMcpToken] = useState(settings.mcp_token ?? '');
   const [mcpLoading, setMcpLoading] = useState(false);
@@ -71,6 +73,7 @@ export function Settings() {
   const [showMnemonic, setShowMnemonic] = useState(false);
   const [exportedMnemonic, setExportedMnemonic] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showClearServicesConfirm, setShowClearServicesConfirm] = useState(false);
 
   // Per-account, per-chain balances: balances[accountIndex][chainIndex]
   const [balances, setBalances] = useState<ChainBalance[][]>([]);
@@ -174,8 +177,10 @@ export function Settings() {
     fetchBalances();
   }, [derivedAddresses]);
 
-  // Poll MCP status every 3 seconds
+  // Poll MCP status every 3 seconds; also resolve the binary path once
   useEffect(() => {
+    getMcpBinaryPath().then(setMcpBinaryPath).catch(() => {});
+
     let cancelled = false;
     const poll = async () => {
       try {
@@ -201,7 +206,7 @@ export function Settings() {
       }
       setMcpStatus(await getMcpStatus());
     } catch (e) {
-      setMcpError(String(e));
+      setMcpError(errorMessage(e));
     } finally {
       setMcpLoading(false);
     }
@@ -212,7 +217,7 @@ export function Settings() {
     try {
       await saveMcpSettings(mcpAutoStart, mcpToken.trim() || null);
     } catch (e) {
-      setMcpError(String(e));
+      setMcpError(errorMessage(e));
     }
   };
 
@@ -299,6 +304,17 @@ export function Settings() {
       setShowResetConfirm(false);
     } catch {
       setError('Failed to reset wallet. Please try again.');
+    }
+  };
+
+  const handleClearServices = async () => {
+    setError(null);
+    try {
+      await clearPersistedServices();
+      setShowClearServicesConfirm(false);
+      setChanged(true);
+    } catch {
+      setError('Failed to clear persisted services. Please try again.');
     }
   };
 
@@ -491,7 +507,7 @@ export function Settings() {
             {mcpStatus && (
               <span className={`text-xs font-mono px-2 py-0.5 rounded ${
                 mcpStatus.running
-                  ? 'bg-green-4 text-charcoal-darkest'
+                  ? 'bg-charcoal-dark text-green-4'
                   : 'bg-charcoal-dark text-tan-muted'
               }`}>
                 {mcpStatus.running ? `Running (pid ${mcpStatus.pid})` : 'Stopped'}
@@ -525,13 +541,24 @@ export function Settings() {
         {/* Bearer token */}
         <div className="flex flex-col gap-1">
           <label className="text-tan-muted text-xs">Bearer token (for write operations)</label>
-          <input
-            type="password"
-            placeholder="Optional — leave blank for read-only access"
-            value={mcpToken}
-            onChange={(e) => setMcpToken(e.target.value)}
-            className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
-          />
+          <div className="flex gap-2">
+            <input
+              type="password"
+              placeholder="Optional — leave blank for read-only access"
+              value={mcpToken}
+              onChange={(e) => setMcpToken(e.target.value)}
+              className="flex-1 px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
+            />
+            <Button
+              text="Generate"
+              variant="outline"
+              onClick={() => {
+                const bytes = new Uint8Array(24);
+                crypto.getRandomValues(bytes);
+                setMcpToken(btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, (c) => ({ '+': '-', '/': '_', '=': '' }[c] ?? c)));
+              }}
+            />
+          </div>
         </div>
 
         <Button
@@ -547,15 +574,57 @@ export function Settings() {
 `{
   "mcpServers": {
     "wavs": {
-      "command": "/path/to/wavs-mcp",
+      "command": "${mcpBinaryPath ?? '/path/to/wavs-mcp'}",
       "args": ["--wavs-url", "http://localhost:8000"${mcpToken.trim() ? `,\n               "--token", "${mcpToken.trim()}"` : ''}]
     }
   }
 }`
           }</pre>
+          {!mcpBinaryPath && (
+            <p className="text-tan-muted text-xs mt-1">
+              Binary not found. Build it with: <span className="font-mono">cargo build --release -p wavs-mcp</span>
+            </p>
+          )}
         </div>
 
         {mcpError && <p className="text-red-4 text-sm">{mcpError}</p>}
+      </div>
+
+      {/* Reset App State */}
+      <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
+        <h2 className="text-beige-light text-lg font-semibold">Reset App State</h2>
+        <p className="text-tan-muted text-sm">
+          Remove all persisted services from the app. Useful when restarting a local chain (e.g. Anvil) where previous contract addresses no longer exist.
+        </p>
+
+        {!showClearServicesConfirm && (
+          <Button
+            text="Clear Persisted Services"
+            color="red"
+            variant="outline"
+            onClick={() => setShowClearServicesConfirm(true)}
+          />
+        )}
+
+        {showClearServicesConfirm && (
+          <div className="flex flex-col gap-3 p-3 rounded bg-charcoal-darkest border border-red-2">
+            <p className="text-sm text-red-4">
+              This will clear all saved services from the app. They can be re-added from the Services page.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                text="Cancel"
+                variant="outline"
+                onClick={() => setShowClearServicesConfirm(false)}
+              />
+              <Button
+                text="Yes, Clear Services"
+                color="red"
+                onClick={handleClearServices}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Error display */}

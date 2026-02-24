@@ -590,35 +590,36 @@ pub struct McpStatus {
 }
 
 /// Resolve the wavs-mcp binary path.
-/// Looks alongside the current executable first (bundled app), then falls back to dev build paths.
+/// Looks alongside the current executable first (bundled app), then checks both
+/// debug and release profiles under the workspace target/ directory.
 fn find_mcp_binary() -> Option<std::path::PathBuf> {
-    // 1. Sibling of current executable (works in bundled Tauri app)
     if let Ok(current) = std::env::current_exe() {
         if let Some(dir) = current.parent() {
+            // 1. Sibling of current executable (bundled app)
             let candidate = dir.join("wavs-mcp");
             if candidate.exists() {
                 return Some(candidate);
             }
-        }
-    }
 
-    // 2. Workspace target/debug (dev mode)
-    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        // app/src-tauri → walk up to workspace root
-        let workspace = std::path::Path::new(&manifest_dir)
-            .parent()   // app/
-            .and_then(|p| p.parent()); // workspace root
-        if let Some(ws) = workspace {
-            for profile in &["debug", "release"] {
-                let candidate = ws.join("target").join(profile).join("wavs-mcp");
-                if candidate.exists() {
-                    return Some(candidate);
+            // 2. Both profiles under target/ — handles dev app + release mcp (or vice versa).
+            // current exe is at target/{debug,release}/<name>, so dir.parent() is target/.
+            if let Some(target) = dir.parent() {
+                for profile in &["release", "debug"] {
+                    let candidate = target.join(profile).join("wavs-mcp");
+                    if candidate.exists() {
+                        return Some(candidate);
+                    }
                 }
             }
         }
     }
 
     None
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn cmd_get_mcp_binary_path() -> Option<String> {
+    find_mcp_binary().map(|p| p.to_string_lossy().into_owned())
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -646,6 +647,12 @@ pub async fn cmd_start_mcp_server(
     if let Some(token) = &s.mcp_token {
         cmd.arg("--token").arg(token);
     }
+
+    // Pipe stdin so the MCP server doesn't immediately receive EOF (which would
+    // cause the stdio transport to exit with "expect initialize request").
+    // The Child holds the write end open; MCP clients that spawn their own
+    // instance (Claude Desktop, Cursor) will handle their own stdio connection.
+    cmd.stdin(std::process::Stdio::piped());
 
     let child = cmd
         .spawn()
@@ -703,4 +710,21 @@ pub async fn cmd_save_mcp_settings(
             s.mcp_token = mcp_token.clone();
         })
         .await
+}
+
+// --- Reset App State ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_clear_persisted_services(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+) -> AppResult<()> {
+    settings
+        .update(&app, |s| {
+            s.saved_service_managers.clear();
+            s.saved_services.clear();
+        })
+        .await?;
+    log::info!("Cleared all persisted services");
+    Ok(())
 }
