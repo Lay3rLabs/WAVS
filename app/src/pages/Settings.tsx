@@ -4,7 +4,7 @@ import { mainnet, sepolia, holesky } from 'viem/chains';
 import { AddressDisplay, Button, TomlEditor } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
 import { useWalletStore } from '../stores/walletStore';
-import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, saveMcpSettings, clearPersistedServices } from '../tauri';
+import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, getWavsUrl, saveMcpSettings, clearPersistedServices } from '../tauri';
 import { errorMessage } from '../utils/error';
 import type { McpStatus } from '../types';
 import { getPublicClient } from '../hooks/useViemClient';
@@ -66,6 +66,7 @@ export function Settings() {
   // MCP server state
   const [mcpStatus, setMcpStatus] = useState<McpStatus | null>(null);
   const [mcpBinaryPath, setMcpBinaryPath] = useState<string | null>(null);
+  const [wavsUrl, setWavsUrl] = useState('http://localhost:8000');
   const [mcpAutoStart, setMcpAutoStart] = useState(settings.mcp_auto_start ?? false);
   const [mcpToken, setMcpToken] = useState(settings.mcp_token ?? '');
   const [mcpLoading, setMcpLoading] = useState(false);
@@ -180,6 +181,7 @@ export function Settings() {
   // Poll MCP status every 3 seconds; also resolve the binary path once
   useEffect(() => {
     getMcpBinaryPath().then(setMcpBinaryPath).catch(() => {});
+    getWavsUrl().then(setWavsUrl).catch(() => {});
 
     let cancelled = false;
     const poll = async () => {
@@ -575,7 +577,7 @@ export function Settings() {
   "mcpServers": {
     "wavs": {
       "command": "${mcpBinaryPath ?? '/path/to/wavs-mcp'}",
-      "args": ["--wavs-url", "http://localhost:8000"${mcpToken.trim() ? `,\n               "--token", "${mcpToken.trim()}"` : ''}]
+      "args": ["--wavs-url", "${wavsUrl}"${mcpToken.trim() ? `,\n               "--token", "${mcpToken.trim()}"` : ''}]
     }
   }
 }`
