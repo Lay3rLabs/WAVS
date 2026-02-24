@@ -134,21 +134,25 @@ Tools are grouped into four categories.
 
 ### Dev tools — require dev endpoints enabled in `wavs.toml`
 
+> **Note:** Dev tools require `dev_endpoints_enabled = true` under `[wavs]` in `wavs.toml`. Restart the WAVS node after changing this.
+
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `wavs_upload_component` | Upload a compiled `.wasm` binary; returns its digest | `file_path` (absolute path to `.wasm`) |
 | `wavs_simulate_trigger` | Fire a trigger against a deployed service | `service_id`, `workflow_id`, `trigger_json`, `data_json`, `count` (optional) |
+| `wavs_deploy_dev_service` | Register a service directly without an on-chain contract | `service_json` (full Service definition as JSON string) |
+| `wavs_query_kv` | Read a value from a service's KV store | `service_id`, `bucket`, `key` |
 
 `wavs_simulate_trigger` parameter shapes:
 
 ```json
 // trigger_json examples
-{"raw": null}
+{"manual": null}
 {"cron": {"schedule": "* * * * *", "start_time": null, "end_time": null}}
-{"evm_contract_event": {"chain": "evm:31337", "address": "0x...", "event_signature": "..."}}
+{"evm_contract_event": {"chain": "evm:31337", "address": "0x...", "event_hash": "0x<32-byte-keccak>"}}
 
 // data_json examples
-{"Raw": {"data": [104, 101, 108, 108, 111]}}
+{"Raw": [104, 101, 108, 108, 111]}
 {"Cron": {"trigger_time": 0}}
 {"EvmContractEvent": {"log": {...}}}
 ```
@@ -231,7 +235,7 @@ You have access to the following MCP tools via the wavs server:
 
 Read (no auth): wavs_get_node_info, wavs_get_health, wavs_list_services, wavs_get_service
 Write (require token): wavs_deploy_service, wavs_pause_service, wavs_resume_service
-Dev (require dev endpoints): wavs_upload_component, wavs_simulate_trigger
+Dev (require dev endpoints): wavs_upload_component, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv
 Local: wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component
 
 When the user asks you to create a component, follow this workflow:
