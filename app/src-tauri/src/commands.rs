@@ -623,9 +623,18 @@ pub fn cmd_get_mcp_binary_path() -> Option<String> {
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub fn cmd_get_wavs_url(wavs_config: State<'_, WavsConfigState>) -> String {
+    match wavs_config.get_cloned() {
+        Some(config) => format!("http://{}:{}", config.host, config.port),
+        None => "http://localhost:8000".to_string(),
+    }
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn cmd_start_mcp_server(
     app: AppHandle,
     settings: State<'_, SettingsState>,
+    wavs_config: State<'_, WavsConfigState>,
     mcp_state: State<'_, McpServerState>,
 ) -> AppResult<()> {
     if mcp_state.is_running() {
@@ -633,8 +642,8 @@ pub async fn cmd_start_mcp_server(
     }
 
     let s = settings.get_cloned();
-    let wavs_url = match &s.wavs_home {
-        Some(_) => "http://localhost:8000".to_string(),
+    let wavs_url = match wavs_config.get_cloned() {
+        Some(config) => format!("http://{}:{}", config.host, config.port),
         None => "http://localhost:8000".to_string(),
     };
 

@@ -119,6 +119,10 @@ export async function getMcpBinaryPath(): Promise<string | null> {
   return invoke<string | null>('cmd_get_mcp_binary_path');
 }
 
+export async function getWavsUrl(): Promise<string> {
+  return invoke<string>('cmd_get_wavs_url');
+}
+
 export async function startMcpServer(): Promise<void> {
   return invoke<void>('cmd_start_mcp_server');
 }
