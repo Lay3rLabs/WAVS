@@ -22,6 +22,8 @@ These tools are exposed by the `wavs` MCP server. Call them in the order of the 
 | `wavs_upload_component` | dev | Upload compiled `.wasm`; returns digest |
 | `wavs_deploy_service` | write | Register service from ServiceManager address |
 | `wavs_simulate_trigger` | dev | Fire a test trigger against a deployed service |
+| `wavs_deploy_dev_service` | dev | Register a service directly without an on-chain contract |
+| `wavs_query_kv` | dev | Read a KV value written by a component |
 | `wavs_list_services` | read | List all registered services |
 | `wavs_get_node_info` | read | Node info: chains, aggregator, P2P |
 | `wavs_get_health` | read | Health of chain RPC endpoints |
@@ -57,6 +59,8 @@ Step 5  wavs_upload_component  {file_path: "<absolute path to .wasm>"}
 Step 6  wavs_deploy_service  {service_manager_json}
         → Register the service. WAVS reads the full service definition from the chain.
           The ServiceManager contract must already be deployed with component digest set.
+          For dev/testing without an on-chain contract, use wavs_deploy_dev_service instead
+          (requires dev_endpoints_enabled = true under [wavs] in wavs.toml).
 
 Step 7  wavs_simulate_trigger  {service_id, workflow_id, trigger_json, data_json}
         → Fire a test trigger. Check wavs_list_services / node logs for the output.
@@ -295,8 +299,8 @@ Used by `wavs_deploy_service`, `wavs_pause_service`, and `wavs_resume_service`:
 ## SimulateTrigger JSON Examples
 
 ```json
-// Raw trigger
-trigger_json: {"raw": null}
+// Manual trigger
+trigger_json: {"manual": null}
 data_json:    {"Raw": [104, 101, 108, 108, 111]}
 
 // Cron trigger
@@ -308,7 +312,7 @@ trigger_json: {
   "evm_contract_event": {
     "chain": "evm:31337",
     "address": "0xTriggerContract...",
-    "event_signature": "NewTrigger(bytes)"
+    "event_hash": "0x<32-byte-keccak-of-event-signature>"
   }
 }
 data_json: {

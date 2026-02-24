@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use reqwest::{Client, Method};
 use serde_json::Value;
-use wavs_types::{AddServiceRequest, PauseServiceRequest, ServiceManager, SimulatedTriggerRequest, UploadComponentResponse};
+use wavs_types::{AddServiceRequest, DeleteServicesRequest, PauseServiceRequest, SaveServiceResponse, ServiceManager, SimulatedTriggerRequest, UploadComponentResponse};
 
 #[derive(Clone)]
 pub struct WavsClient {
@@ -94,6 +94,17 @@ impl WavsClient {
         check_response(resp).await
     }
 
+    pub async fn delete_service(&self, service_manager: ServiceManager) -> Result<()> {
+        let body = serde_json::to_string(&DeleteServicesRequest { service_managers: vec![service_manager] })?;
+        let resp = self.request(Method::DELETE, "/services")
+            .header("Content-Type", "application/json")
+            .body(body)
+            .send()
+            .await
+            .context("DELETE /services")?;
+        check_response(resp).await
+    }
+
     pub async fn upload_component(&self, bytes: Vec<u8>) -> Result<String> {
         let resp = self.request(Method::POST, "/dev/components")
             .body(bytes)
@@ -118,6 +129,56 @@ impl WavsClient {
             .await
             .context("POST /dev/triggers")?;
         check_response(resp).await
+    }
+
+    /// Two-step dev registration: POST /dev/services → save, POST /dev/services/{hash} → register.
+    /// Returns the service hash on success.
+    pub async fn deploy_dev_service(&self, service_json: &str) -> Result<String> {
+        let resp = self.request(Method::POST, "/dev/services")
+            .header("Content-Type", "application/json")
+            .body(service_json.to_string())
+            .send()
+            .await
+            .context("POST /dev/services")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("HTTP {}: {}", status, body);
+        }
+
+        let save_resp: SaveServiceResponse = resp.json().await?;
+        let hash = save_resp.hash.to_string();
+
+        let path = format!("/dev/services/{}", hash);
+        let resp = self.request(Method::POST, &path)
+            .send()
+            .await
+            .context("POST /dev/services/{hash}")?;
+        check_response(resp).await?;
+
+        Ok(hash)
+    }
+
+    /// GET /dev/kv/{service_id}/{bucket}/{key} — returns value as UTF-8 or hex.
+    pub async fn query_kv(&self, service_id: &str, bucket: &str, key: &str) -> Result<String> {
+        let path = format!("/dev/kv/{}/{}/{}", service_id, bucket, key);
+        let resp = self.request(Method::GET, &path)
+            .send()
+            .await
+            .context("GET /dev/kv")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("HTTP {}: {}", status, body);
+        }
+
+        let bytes = resp.bytes().await?;
+        Ok(match std::str::from_utf8(&bytes) {
+            Ok(s) => s.to_string(),
+            Err(_) => const_hex::encode(&bytes),
+        })
     }
 }
 

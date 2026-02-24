@@ -10234,7 +10234,7 @@ dependencies = [
  "chrono",
  "futures",
  "paste",
- "pin-project-lite 0.2.16",
+ "pin-project-lite 0.2.17",
  "rmcp-macros",
  "schemars 0.8.22",
  "serde",
@@ -10253,7 +10253,7 @@ checksum = "a6e2b2fd7497540489fa2db285edd43b7ed14c49157157438664278da6e42a7a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.116",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -14498,10 +14498,11 @@ dependencies = [
 
 [[package]]
 name = "wavs-mcp"
-version = "2.0.0-rc.13"
+version = "2.7.0"
 dependencies = [
  "anyhow",
- "clap 4.5.59",
+ "clap 4.5.60",
+ "const-hex",
  "reqwest 0.12.28",
  "rmcp",
  "serde",
