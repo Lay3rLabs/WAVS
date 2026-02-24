@@ -127,21 +127,21 @@ impl WavsMcpServer {
     async fn tool_get_node_info(&self) -> Result<CallToolResult, McpError> {
         match self.client.get_info().await {
             Ok(v) => ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string())),
-            Err(e) => err(format!("Failed to get node info: {e}")),
+            Err(e) => err(format!("Failed to get node info: {e:#}")),
         }
     }
 
     async fn tool_get_health(&self) -> Result<CallToolResult, McpError> {
         match self.client.get_health().await {
             Ok(v) => ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string())),
-            Err(e) => err(format!("Failed to get health status: {e}")),
+            Err(e) => err(format!("Failed to get health status: {e:#}")),
         }
     }
 
     async fn tool_list_services(&self) -> Result<CallToolResult, McpError> {
         match self.client.list_services().await {
             Ok(v) => ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string())),
-            Err(e) => err(format!("Failed to list services: {e}")),
+            Err(e) => err(format!("Failed to list services: {e:#}")),
         }
     }
 
@@ -149,7 +149,7 @@ impl WavsMcpServer {
         let p: GetServiceParams = parse_args(args)?;
         match self.client.get_service(&p.chain, &p.address).await {
             Ok(v) => ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string())),
-            Err(e) => err(format!("Failed to get service: {e}")),
+            Err(e) => err(format!("Failed to get service: {e:#}")),
         }
     }
 
@@ -161,7 +161,7 @@ impl WavsMcpServer {
         };
         match self.client.deploy_service(manager).await {
             Ok(v) => ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string())),
-            Err(e) => err(format!("Failed to deploy service: {e}")),
+            Err(e) => err(format!("Failed to deploy service: {e:#}")),
         }
     }
 
@@ -173,7 +173,7 @@ impl WavsMcpServer {
         };
         match self.client.pause_service(manager).await {
             Ok(()) => ok("Service paused successfully"),
-            Err(e) => err(format!("Failed to pause service: {e}")),
+            Err(e) => err(format!("Failed to pause service: {e:#}")),
         }
     }
 
@@ -185,7 +185,7 @@ impl WavsMcpServer {
         };
         match self.client.resume_service(manager).await {
             Ok(()) => ok("Service resumed successfully"),
-            Err(e) => err(format!("Failed to resume service: {e}")),
+            Err(e) => err(format!("Failed to resume service: {e:#}")),
         }
     }
 
@@ -193,11 +193,11 @@ impl WavsMcpServer {
         let p: UploadComponentParams = parse_args(args)?;
         let bytes = match tokio::fs::read(&p.file_path).await {
             Ok(b) => b,
-            Err(e) => return err(format!("Failed to read '{}': {e}", p.file_path)),
+            Err(e) => return err(format!("Failed to read '{}': {e:#}", p.file_path)),
         };
         match self.client.upload_component(bytes).await {
             Ok(digest) => ok(format!("Component uploaded.\nDigest: {digest}")),
-            Err(e) => err(format!("Failed to upload component: {e}")),
+            Err(e) => err(format!("Failed to upload component: {e:#}")),
         }
     }
 
@@ -239,7 +239,7 @@ impl WavsMcpServer {
 
         match self.client.simulate_trigger(req).await {
             Ok(()) => ok("Trigger simulated successfully"),
-            Err(e) => err(format!("Failed to simulate trigger: {e}")),
+            Err(e) => err(format!("Failed to simulate trigger: {e:#}")),
         }
     }
 
@@ -267,7 +267,7 @@ impl WavsMcpServer {
 
         let output = match cmd.output().await {
             Ok(o) => o,
-            Err(e) => return err(format!("Failed to run `cargo component build`: {e}")),
+            Err(e) => return err(format!("Failed to run `cargo component build`: {e:#}")),
         };
 
         let result = format!(

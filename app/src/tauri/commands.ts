@@ -115,6 +115,10 @@ export async function publishComponent(filePath: string): Promise<string> {
 }
 
 // MCP server commands
+export async function getMcpBinaryPath(): Promise<string | null> {
+  return invoke<string | null>('cmd_get_mcp_binary_path');
+}
+
 export async function startMcpServer(): Promise<void> {
   return invoke<void>('cmd_start_mcp_server');
 }
@@ -135,4 +139,8 @@ export async function saveMcpSettings(
     mcp_auto_start: mcpAutoStart,
     mcp_token: mcpToken,
   });
+}
+
+export async function clearPersistedServices(): Promise<void> {
+  return invoke<void>('cmd_clear_persisted_services');
 }
