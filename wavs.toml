@@ -95,6 +95,9 @@ port = 8000
 # Generate with `openssl rand -hex 32`
 # bearer_token = "change-me"
 
+# Enable dev endpoints (/dev/components, /dev/triggers, etc.) for local testing
+dev_endpoints_enabled = true
+
 # Aggregator subsystem configuration
 # [wavs.aggregator]
 # Time-to-live for burned quorum queues in seconds (default: 172800 = 48 hours)
