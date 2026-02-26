@@ -46,23 +46,33 @@ This creates both a standard tag (`v2.7.0`) and a Go module tag (`wasi/go/v2.7.0
 
 ## Claude Code Integration
 
-WAVS ships with a `/wavs` slash command for [Claude Code](https://claude.ai/code) that gives Claude a full understanding of the WAVS component development workflow, including how to scaffold, build, upload, and deploy components using the MCP tools.
+WAVS ships with a `/wavs` skill for [Claude Code](https://claude.ai/code) that gives Claude a full understanding of the WAVS component development workflow, including how to scaffold, build, upload, and deploy components using the MCP tools.
 
 ### In-repo usage (automatic)
 
-If you're working inside this repository, the `/wavs` command is available automatically — Claude Code picks up `.claude/commands/wavs.md` from the project root. No installation needed.
+If you're working inside this repository, the `/wavs` skill is available automatically — Claude Code picks up `.claude/skills/wavs/` from the project root. No installation needed.
 
-### Global installation
+### Global installation (repo cloned)
 
-To use `/wavs` in any Claude Code session (outside this repo):
+If you have this repo cloned and want the skill available in all Claude Code sessions:
 
 ```bash
-cp .claude/commands/wavs.md ~/.claude/commands/wavs.md
+just install-claude-skill
 ```
+
+### Global installation (remote, no clone needed)
+
+To install the skill without cloning the full repo:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Lay3rLabs/wavs/main/.claude/skills/wavs/install.sh)
+```
+
+After installation, restart Claude Code to pick up the skill.
 
 ### MCP server
 
-The `/wavs` command works best paired with the `wavs-mcp` server, which exposes live WAVS node operations (scaffold, build, upload, deploy, simulate) as MCP tools. See [MCP.md](MCP.md) for setup instructions.
+The `/wavs` skill works best paired with the `wavs-mcp` server, which exposes live WAVS node operations (scaffold, build, upload, deploy, simulate) as MCP tools. See [MCP.md](MCP.md) for setup instructions.
 
 ---
 For more guides, architecture details, and examples, see the [docs folder](docs/README.md).
