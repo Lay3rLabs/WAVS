@@ -19,6 +19,8 @@ MVP Requirements:
 - [X] Bug: Some log entries are showing up twice?
 - [x] Add toasts and replace annoying modals you have to close
 - [x] Better wallet (show balances on chains?)
+- [ ] Make it easier to copy seed phrase
+- [ ] Fix auto start MCP when app starts
 - [ ] Merge logs and activity? (sort of similar?)
 - [ ] Better aesthetics
 - [ ] Leverage touch id for key management? (need macOS code signing)

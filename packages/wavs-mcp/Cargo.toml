@@ -27,3 +27,4 @@ alloy-sol-types = { workspace = true }
 alloy-sol-macro = { workspace = true }
 alloy-contract = { workspace = true }
 tempfile = { workspace = true }
+toml = { workspace = true }
