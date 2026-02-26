@@ -131,6 +131,27 @@ impl WavsClient {
         check_response(resp).await
     }
 
+    /// Save a service definition to the node's local store without registering it.
+    /// Returns the URI at which the service JSON can be fetched.
+    pub async fn save_service(&self, service_json: &str) -> Result<String> {
+        let resp = self.request(Method::POST, "/dev/services")
+            .header("Content-Type", "application/json")
+            .body(service_json.to_string())
+            .send()
+            .await
+            .context("POST /dev/services")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("HTTP {}: {}", status, body);
+        }
+
+        let save_resp: SaveServiceResponse = resp.json().await?;
+        let hash = save_resp.hash.to_string();
+        Ok(format!("{}/dev/services/{}", self.endpoint, hash))
+    }
+
     /// Two-step dev registration: POST /dev/services → save, POST /dev/services/{hash} → register.
     /// Returns the service hash on success.
     pub async fn deploy_dev_service(&self, service_json: &str) -> Result<String> {

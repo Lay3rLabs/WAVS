@@ -104,7 +104,7 @@ Edit `.vscode/mcp.json` in your workspace:
 
 ## Tool Reference
 
-Tools are grouped into four categories.
+Tools are grouped into five categories.
 
 ### Read tools — no auth required
 
@@ -130,6 +130,28 @@ Tools are grouped into four categories.
 
 // Cosmos
 {"cosmos": {"chain": "cosmos:mychain", "address": "cosmos1..."}}
+```
+
+### Chain-write tools — require `--token` + `chain_write_credential` on the node
+
+> **Note:** These tools send real on-chain transactions. They require both a valid `--token` *and* `chain_write_credential` to be set in `wavs.toml` (or via `WAVS_CHAIN_WRITE_CREDENTIAL`). The endpoint returns **403** if the credential is not configured. EVM only currently.
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `wavs_set_service_uri` | Call `setServiceURI` on the ServiceManager contract to update the on-chain service URI | `service_manager_json`, `uri` |
+| `wavs_deploy_service_manager` | Deploy a new `SimpleServiceManager` PoA contract on-chain; returns `address` and `tx_hash` | `chain` (e.g. `"evm:31337"`) |
+| `wavs_deploy_poa_service_manager` | Deploy a full `POAStakeRegistry` (upgradeable proxy) via Docker; returns proxy `address` (use as service manager). Requires Docker with `ghcr.io/lay3rlabs/poa-middleware:1.0.1`. | `chain` |
+| `wavs_register_operator` | Register the WAVS node's signing key as an operator on a `POAStakeRegistry` and set the signing key mapping. Calls `registerOperator` (owner) + `updateOperatorSigningKey` (operator). Requires `chain_write_credential` + `signing_mnemonic` configured. | `service_manager_json`, `weight` (optional, default 100) |
+
+To enable, add to `wavs.toml` under `[wavs]`:
+```toml
+# Credential (private key or mnemonic) for on-chain management transactions.
+# Env var override: WAVS_CHAIN_WRITE_CREDENTIAL
+chain_write_credential = "0x<private_key_or_mnemonic>"
+
+# Signing mnemonic for WAVS operator key derivation (used by wavs_register_operator)
+# Env var override: WAVS_SIGNING_MNEMONIC
+signing_mnemonic = "<mnemonic>"
 ```
 
 ### Dev tools — require dev endpoints enabled in `wavs.toml`
@@ -234,7 +256,8 @@ You are a WAVS (WebAssembly-based Actively Validated Services) developer assista
 You have access to the following MCP tools via the wavs server:
 
 Read (no auth): wavs_get_node_info, wavs_get_health, wavs_list_services, wavs_get_service
-Write (require token): wavs_deploy_service, wavs_pause_service, wavs_resume_service
+Write (require token): wavs_deploy_service, wavs_pause_service, wavs_resume_service, wavs_delete_service
+Chain-write (require token + chain_write_credential): wavs_set_service_uri, wavs_deploy_service_manager
 Dev (require dev endpoints): wavs_upload_component, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv
 Local: wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component
 

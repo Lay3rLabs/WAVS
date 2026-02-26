@@ -30,6 +30,8 @@ These tools are exposed by the `wavs` MCP server. Call them in the order of the 
 | `wavs_get_service` | read | Full config for one service |
 | `wavs_pause_service` | write | Pause a running service |
 | `wavs_resume_service` | write | Resume a paused service |
+| `wavs_set_service_uri` | chain-write | Call `setServiceURI` on the ServiceManager contract (requires `chain_write_credential` in `wavs.toml`) |
+| `wavs_deploy_service_manager` | chain-write | Deploy a new `SimpleServiceManager` PoA contract; returns `address` and `tx_hash` (requires `chain_write_credential` in `wavs.toml`) |
 
 ---
 

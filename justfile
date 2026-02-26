@@ -164,6 +164,7 @@ solidity-build CLEAN="":
     # wavs-types
     cp -r {{REPO_ROOT}}/out/IWavsServiceHandler.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/SimpleServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
     # layer-tests mock contracts
     cp -r {{REPO_ROOT}}/out/LogSpam.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/TestServiceContracts.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/

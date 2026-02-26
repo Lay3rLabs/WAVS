@@ -9,6 +9,7 @@ use rmcp::{
 };
 use serde::Deserialize;
 
+use crate::chain_ops;
 use crate::client::WavsClient;
 use crate::scaffold;
 
@@ -51,6 +52,14 @@ pub struct SimulateTriggerParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+pub struct SaveServiceParams {
+    /// Full Service definition as a JSON string.
+    /// Must include: name, status, manager (evm/cosmos), workflows (map of workflow_id → {trigger, component, submit}).
+    /// Requires dev endpoints enabled in wavs.toml.
+    pub service_json: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct DeployDevServiceParams {
     /// Full Service definition as a JSON string.
     /// Must include: name, status, manager (evm/cosmos), workflows (map of workflow_id → {trigger, component, submit}).
@@ -76,6 +85,41 @@ pub struct ScaffoldComponentParams {
     pub trigger_type: String,
     /// Optional description of what this component does
     pub description: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct SetServiceUriParams {
+    /// ServiceManager as a JSON object.
+    /// EVM:    `{"evm":{"chain":"evm:31337","address":"0xAbCd..."}}`
+    /// Cosmos: `{"cosmos":{"chain":"cosmos:mychain","address":"cosmos1..."}}`
+    pub service_manager_json: String,
+    /// The URI to set on-chain (e.g. the URL returned by wavs_save_service)
+    pub uri: String,
+    /// RPC endpoint URL for the chain (e.g. "http://localhost:8545")
+    pub rpc_url: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct DeployServiceManagerParams {
+    /// RPC endpoint URL for the chain (e.g. "http://localhost:8545")
+    pub rpc_url: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct DeployPoaServiceManagerParams {
+    /// RPC endpoint URL for the chain (e.g. "http://localhost:8545")
+    pub rpc_url: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct RegisterOperatorParams {
+    /// ServiceManager as a JSON object.
+    /// EVM:    `{"evm":{"chain":"evm:31337","address":"0xAbCd..."}}`
+    pub service_manager_json: String,
+    /// Weight to assign to the operator (default: 100)
+    pub weight: Option<u64>,
+    /// RPC endpoint URL for the chain (e.g. "http://localhost:8545")
+    pub rpc_url: String,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -131,13 +175,56 @@ fn tool(name: &'static str, desc: &'static str, schema: Arc<serde_json::Map<Stri
 #[derive(Clone)]
 pub struct WavsMcpServer {
     client: WavsClient,
+    chain_write_credential: Option<String>,
+    signing_mnemonic: Option<String>,
 }
 
 impl WavsMcpServer {
-    pub fn new(wavs_url: String, token: Option<String>) -> Self {
+    pub fn new(
+        wavs_url: String,
+        token: Option<String>,
+        chain_write_credential: Option<String>,
+        signing_mnemonic: Option<String>,
+    ) -> Self {
         Self {
             client: WavsClient::new(wavs_url, token),
+            chain_write_credential,
+            signing_mnemonic,
         }
+    }
+
+    fn require_chain_write_credential(&self) -> Result<wavs_types::Credential, McpError> {
+        self.chain_write_credential
+            .as_deref()
+            .ok_or_else(|| ErrorData {
+                code: ErrorCode::INVALID_PARAMS,
+                message: "--chain-write-credential (or WAVS_CHAIN_WRITE_CREDENTIAL) is required for this tool".into(),
+                data: None,
+            })
+            .and_then(|s| {
+                s.parse::<wavs_types::Credential>().map_err(|e| ErrorData {
+                    code: ErrorCode::INVALID_PARAMS,
+                    message: format!("invalid chain_write_credential: {e}").into(),
+                    data: None,
+                })
+            })
+    }
+
+    fn require_signing_mnemonic(&self) -> Result<wavs_types::Credential, McpError> {
+        self.signing_mnemonic
+            .as_deref()
+            .ok_or_else(|| ErrorData {
+                code: ErrorCode::INVALID_PARAMS,
+                message: "--signing-mnemonic (or WAVS_SIGNING_MNEMONIC) is required for this tool".into(),
+                data: None,
+            })
+            .and_then(|s| {
+                s.parse::<wavs_types::Credential>().map_err(|e| ErrorData {
+                    code: ErrorCode::INVALID_PARAMS,
+                    message: format!("invalid signing_mnemonic: {e}").into(),
+                    data: None,
+                })
+            })
     }
 
     // ── Tool implementations ───────────────────────────────────────────────
@@ -231,6 +318,14 @@ impl WavsMcpServer {
         }
     }
 
+    async fn tool_save_service(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+        let p: SaveServiceParams = parse_args(args)?;
+        match self.client.save_service(&p.service_json).await {
+            Ok(uri) => ok(format!("Service saved.\nURI: {uri}")),
+            Err(e) => err(format!("Failed to save service: {e:#}")),
+        }
+    }
+
     async fn tool_simulate_trigger(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
         use std::str::FromStr;
         use wavs_types::{ServiceId, WorkflowId};
@@ -286,6 +381,54 @@ impl WavsMcpServer {
         match self.client.query_kv(&p.service_id, &p.bucket, &p.key).await {
             Ok(v) => ok(v),
             Err(e) => err(format!("Failed to query KV: {e:#}")),
+        }
+    }
+
+    async fn tool_set_service_uri(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+        let p: SetServiceUriParams = parse_args(args)?;
+        let credential = self.require_chain_write_credential()?;
+        let manager = match serde_json::from_str(&p.service_manager_json) {
+            Ok(m) => m,
+            Err(e) => return err(format!("Invalid service_manager_json: {e}")),
+        };
+        match chain_ops::set_service_uri(&manager, &credential, &p.rpc_url, p.uri).await {
+            Ok(()) => ok("Service URI updated on-chain successfully"),
+            Err(e) => err(format!("Failed to set service URI: {e:#}")),
+        }
+    }
+
+    async fn tool_deploy_service_manager(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+        let p: DeployServiceManagerParams = parse_args(args)?;
+        let credential = self.require_chain_write_credential()?;
+        match chain_ops::deploy_service_manager(&credential, &p.rpc_url).await {
+            Ok((address, tx_hash)) => ok(format!("SimpleServiceManager deployed.\nAddress: {address}\nTx: {tx_hash}")),
+            Err(e) => err(format!("Failed to deploy service manager: {e:#}")),
+        }
+    }
+
+    async fn tool_deploy_poa_service_manager(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+        let p: DeployPoaServiceManagerParams = parse_args(args)?;
+        let credential = self.require_chain_write_credential()?;
+        match chain_ops::deploy_poa_service_manager(&credential, &p.rpc_url).await {
+            Ok(address) => ok(format!("POAStakeRegistry deployed.\nAddress (use as service manager): {address}")),
+            Err(e) => err(format!("Failed to deploy POA service manager: {e:#}")),
+        }
+    }
+
+    async fn tool_register_operator(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+        let p: RegisterOperatorParams = parse_args(args)?;
+        let owner_cred = self.require_chain_write_credential()?;
+        let signing_cred = self.require_signing_mnemonic()?;
+        let manager = match serde_json::from_str(&p.service_manager_json) {
+            Ok(m) => m,
+            Err(e) => return err(format!("Invalid service_manager_json: {e}")),
+        };
+        let weight = p.weight.unwrap_or(100);
+        match chain_ops::register_operator(&manager, &owner_cred, &signing_cred, weight, &p.rpc_url).await {
+            Ok((operator, register_tx, signing_key_tx)) => ok(format!(
+                "Operator registered.\nOperator: {operator}\nRegister tx: {register_tx}\nSigning key tx: {signing_key_tx}"
+            )),
+            Err(e) => err(format!("Failed to register operator: {e:#}")),
         }
     }
 
@@ -345,7 +488,9 @@ impl ServerHandler for WavsMcpServer {
                  \n\
                  Read tools (no auth needed): wavs_get_node_info, wavs_get_health, wavs_list_services, wavs_get_service\n\
                  Write tools (need --token): wavs_deploy_service, wavs_delete_service, wavs_pause_service, wavs_resume_service\n\
-                 Dev tools (need dev endpoints): wavs_upload_component, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv\n\
+                 Dev tools (need dev endpoints): wavs_upload_component, wavs_save_service, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv\n\
+                 Chain-write tools (need WAVS_CHAIN_WRITE_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
+                 Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator\n\
                  Local tools: wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component"
                     .to_string(),
             ),
@@ -400,12 +545,54 @@ impl ServerHandler for WavsMcpServer {
                     description: "Resume a paused service. Requires --token.".into(),
                     input_schema: schema_for_type::<ServiceManagerParams>().into(),
                 },
+                // Chain-write tools (need WAVS_CHAIN_WRITE_CREDENTIAL on MCP server)
+                Tool {
+                    name: "wavs_set_service_uri".into(),
+                    description: "Call setServiceURI on the ServiceManager contract to update the \
+                        on-chain service URI. Requires --chain-write-credential (WAVS_CHAIN_WRITE_CREDENTIAL) \
+                        to be configured on this MCP server. Provide the chain RPC URL as rpc_url. \
+                        EVM only currently.".into(),
+                    input_schema: schema_for_type::<SetServiceUriParams>().into(),
+                },
+                Tool {
+                    name: "wavs_deploy_service_manager".into(),
+                    description: "Deploy a new SimpleServiceManager PoA contract on-chain and return its address. \
+                        Requires --chain-write-credential (WAVS_CHAIN_WRITE_CREDENTIAL) on this MCP server. \
+                        Provide the chain RPC URL as rpc_url. EVM only currently.".into(),
+                    input_schema: schema_for_type::<DeployServiceManagerParams>().into(),
+                },
+                Tool {
+                    name: "wavs_deploy_poa_service_manager".into(),
+                    description: "Deploy a new POAStakeRegistry (full PoA middleware with proxy) on-chain via Docker. \
+                        Returns the proxy address to use as service manager. \
+                        Requires --chain-write-credential on this MCP server. \
+                        Docker image ghcr.io/lay3rlabs/poa-middleware:1.0.1 must be available. \
+                        Provide the chain RPC URL as rpc_url. EVM only currently.".into(),
+                    input_schema: schema_for_type::<DeployPoaServiceManagerParams>().into(),
+                },
+                Tool {
+                    name: "wavs_register_operator".into(),
+                    description: "Register the WAVS node's signing key as an operator on a POAStakeRegistry contract \
+                        and set the signing key mapping. Calls registerOperator (using WAVS_CHAIN_WRITE_CREDENTIAL as owner) \
+                        and updateOperatorSigningKey (using WAVS_SIGNING_MNEMONIC as operator). \
+                        Requires --chain-write-credential and --signing-mnemonic on this MCP server. \
+                        Provide the chain RPC URL as rpc_url. EVM only currently.".into(),
+                    input_schema: schema_for_type::<RegisterOperatorParams>().into(),
+                },
                 // Dev tools
                 Tool {
                     name: "wavs_upload_component".into(),
                     description: "Upload a compiled .wasm binary to the WAVS node. Returns the component digest. \
                         Requires dev endpoints enabled in wavs.toml.".into(),
                     input_schema: schema_for_type::<UploadComponentParams>().into(),
+                },
+                Tool {
+                    name: "wavs_save_service".into(),
+                    description: "Save a service definition to the WAVS node's local store without registering it. \
+                        Returns the URI (e.g. http://localhost:8000/dev/services/<hash>) that can be set as the \
+                        on-chain serviceURI so the service can later be registered via wavs_deploy_service. \
+                        Requires dev endpoints enabled in wavs.toml.".into(),
+                    input_schema: schema_for_type::<SaveServiceParams>().into(),
                 },
                 Tool {
                     name: "wavs_simulate_trigger".into(),
@@ -464,7 +651,12 @@ impl ServerHandler for WavsMcpServer {
             "wavs_delete_service"     => self.tool_delete_service(args).await,
             "wavs_pause_service"      => self.tool_pause_service(args).await,
             "wavs_resume_service"     => self.tool_resume_service(args).await,
-            "wavs_upload_component"      => self.tool_upload_component(args).await,
+            "wavs_set_service_uri"              => self.tool_set_service_uri(args).await,
+            "wavs_deploy_service_manager"       => self.tool_deploy_service_manager(args).await,
+            "wavs_deploy_poa_service_manager"   => self.tool_deploy_poa_service_manager(args).await,
+            "wavs_register_operator"            => self.tool_register_operator(args).await,
+            "wavs_upload_component"        => self.tool_upload_component(args).await,
+            "wavs_save_service"          => self.tool_save_service(args).await,
             "wavs_simulate_trigger"      => self.tool_simulate_trigger(args).await,
             "wavs_deploy_dev_service"    => self.tool_deploy_dev_service(args).await,
             "wavs_query_kv"              => self.tool_query_kv(args).await,

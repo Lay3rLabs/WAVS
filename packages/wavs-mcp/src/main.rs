@@ -1,3 +1,4 @@
+mod chain_ops;
 mod client;
 mod scaffold;
 mod server;
@@ -18,6 +19,17 @@ struct Args {
     /// Bearer token for write operations (deploy, pause, resume)
     #[arg(long, env = "WAVS_TOKEN")]
     token: Option<String>,
+
+    /// Credential (private key `0x…` or BIP39 mnemonic) for on-chain management transactions.
+    /// Required for: wavs_deploy_service_manager, wavs_deploy_poa_service_manager,
+    /// wavs_register_operator, wavs_set_service_uri.
+    #[arg(long, env = "WAVS_CHAIN_WRITE_CREDENTIAL")]
+    chain_write_credential: Option<String>,
+
+    /// BIP39 mnemonic for the WAVS signing key.
+    /// Required (alongside --chain-write-credential) for: wavs_register_operator.
+    #[arg(long, env = "WAVS_SIGNING_MNEMONIC")]
+    signing_mnemonic: Option<String>,
 }
 
 #[tokio::main]
@@ -31,7 +43,12 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Starting WAVS MCP server, connecting to {}", args.wavs_url);
 
-    let server = server::WavsMcpServer::new(args.wavs_url, args.token);
+    let server = server::WavsMcpServer::new(
+        args.wavs_url,
+        args.token,
+        args.chain_write_credential,
+        args.signing_mnemonic,
+    );
 
     serve_server(server, stdio())
         .await
