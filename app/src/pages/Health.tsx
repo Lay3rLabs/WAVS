@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '../components/atoms';
-import { getHealthStatus } from '../tauri';
-import type { HealthStatus, ChainHealthResult, ChainKey } from '../types';
+import { getHealthStatus, getMcpStatus } from '../tauri';
+import type { HealthStatus, ChainHealthResult, ChainKey, McpStatus } from '../types';
 import { isChainHealthy, getChainError, getErrorMessage } from '../types';
 
 const REFRESH_INTERVAL_MS = 30000;
@@ -19,6 +19,7 @@ export function Health() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [mcpStatus, setMcpStatus] = useState<McpStatus | null>(null);
 
   const fetchHealth = useCallback(async () => {
     setIsRefreshing(true);
@@ -34,6 +35,11 @@ export function Health() {
       setHealthStatus(null);
     } finally {
       setIsRefreshing(false);
+    }
+    try {
+      setMcpStatus(await getMcpStatus());
+    } catch {
+      // not fatal — leave previous status in place
     }
   }, []);
 
@@ -86,6 +92,25 @@ export function Health() {
             {error}
           </div>
         )}
+      </div>
+
+      {/* MCP Server */}
+      <div className="p-6 rounded-lg bg-charcoal-medium border border-charcoal-light">
+        <h2 className="text-xl font-semibold text-beige-light mb-4">MCP Server</h2>
+        <div className="flex items-center gap-3">
+          <div className={`w-3 h-3 rounded-full ${
+            mcpStatus === null
+              ? 'bg-yellow-500 animate-pulse'
+              : mcpStatus.running
+                ? 'bg-green-500'
+                : 'bg-charcoal-light'
+          }`} />
+          <span className="text-beige-warm">
+            {mcpStatus === null && 'Checking...'}
+            {mcpStatus !== null && mcpStatus.running && `Running (pid ${mcpStatus.pid})`}
+            {mcpStatus !== null && !mcpStatus.running && 'Not running'}
+          </span>
+        </div>
       </div>
 
       {/* Chain RPCs Summary */}
