@@ -57,64 +57,141 @@ edition.workspace = true
 crate-type = ["cdylib"]
 
 [package.metadata.component]
-package = "wavs-user:{name}"
+package = "component:{name}"
 
 [dependencies]
-example-helpers = {{ path = "../../_helpers" }}
-serde = {{ version = "1", features = ["derive"] }}
-serde_json = "1"
+example-helpers = {{ workspace = true }}
 "#
     )
 }
 
 fn generate_lib_rs(_name: &str, trigger_type: &str, description: &str) -> String {
-    let trigger_comment = match trigger_type {
-        "evm_contract_event" => {
-            "// `data` contains the ABI-encoded EVM event log bytes.\n    \
-             // Use alloy-sol-types or manual ABI decoding to parse the event."
-        }
-        "cosmos_contract_event" => {
-            "// `data` contains the serialized Cosmos contract event bytes.\n    \
-             // Deserialize using serde_json or the CosmWasm event format."
-        }
-        "block_interval" => {
-            "// `data` contains the block height that triggered this component.\n    \
-             // Decode as a u64 big-endian integer."
-        }
-        "cron" => {
-            "// `data` contains the scheduled trigger timestamp.\n    \
-             // Decode as a unix timestamp (u64 big-endian)."
-        }
-        _ => {
-            "// `data` contains the raw trigger payload bytes.\n    \
-             // The exact format depends on the trigger configuration."
-        }
-    };
-
-    format!(
-        r#"// {description}
-use example_helpers::prelude::*;
+    match trigger_type {
+        "cron" => format!(
+            r#"// {description}
+use example_helpers::bindings::world::{{
+    host,
+    wavs::operator::{{
+        input::{{TriggerAction, TriggerData}},
+        output::WasmResponse,
+    }},
+    Guest,
+}};
+use example_helpers::export_layer_trigger_world;
+use example_helpers::trigger::encode_trigger_output;
 
 struct Component;
 
 impl Guest for Component {{
-    fn run(action: TriggerAction) -> Result<Vec<WasmResponse>, String> {{
-        let (trigger_id, data) = decode_trigger_event(action.data)?;
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<WasmResponse>, String> {{
+        if let TriggerData::Cron(cron) = trigger_action.data {{
+            // cron.trigger_time.nanos is the scheduled unix timestamp in nanoseconds
+            let output = cron.trigger_time.nanos.to_be_bytes().to_vec();
+
+            Ok(vec![encode_trigger_output(
+                0,
+                output,
+                host::get_service().service.manager,
+            )])
+        }} else {{
+            Err("Expected Cron trigger data".to_string())
+        }}
+    }}
+}}
+
+export_layer_trigger_world!(Component);
+"#
+        ),
+
+        "block_interval" => format!(
+            r#"// {description}
+use example_helpers::bindings::world::{{
+    host,
+    wavs::operator::{{
+        input::{{Trigger, TriggerAction, TriggerData}},
+        output::WasmResponse,
+    }},
+    Guest,
+}};
+use example_helpers::export_layer_trigger_world;
+use example_helpers::trigger::encode_trigger_output;
+
+struct Component;
+
+impl Guest for Component {{
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<WasmResponse>, String> {{
+        match (trigger_action.config.trigger, trigger_action.data) {{
+            (Trigger::BlockInterval(_config), TriggerData::BlockInterval(data)) => {{
+                // data.block_height is the block number that fired this trigger
+                let output = data.block_height.to_be_bytes().to_vec();
+
+                Ok(vec![encode_trigger_output(
+                    0,
+                    output,
+                    host::get_service().service.manager,
+                )])
+            }}
+            _ => Err("Invalid trigger data".to_string()),
+        }}
+    }}
+}}
+
+export_layer_trigger_world!(Component);
+"#
+        ),
+
+        _ => {
+            let trigger_comment = match trigger_type {
+                "evm_contract_event" => {
+                    "// `data` contains the ABI-encoded EVM event log bytes.\n        \
+                     // Use alloy-sol-types or manual ABI decoding to parse the event."
+                }
+                "cosmos_contract_event" => {
+                    "// `data` contains the serialized Cosmos contract event bytes.\n        \
+                     // Deserialize using serde_json or the CosmWasm event format."
+                }
+                _ => {
+                    "// `data` contains the raw trigger payload bytes.\n        \
+                     // The exact format depends on the trigger configuration."
+                }
+            };
+
+            format!(
+                r#"// {description}
+use example_helpers::bindings::world::{{
+    host,
+    wavs::operator::{{
+        input::{{TriggerAction, TriggerData}},
+        output::WasmResponse,
+    }},
+    Guest,
+}};
+use example_helpers::export_layer_trigger_world;
+use example_helpers::trigger::{{decode_trigger_event, encode_trigger_output}};
+
+struct Component;
+
+impl Guest for Component {{
+    fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<WasmResponse>, String> {{
+        let (trigger_id, data) = decode_trigger_event(trigger_action.data)
+            .map_err(|e| e.to_string())?;
 
         {trigger_comment}
 
         // TODO: process `data` and compute your output
-        let output = data; // echo the raw input for now
+        let output = data;
 
         Ok(vec![encode_trigger_output(
             trigger_id,
-            &output,
-            action.config.service_id,
+            output,
+            host::get_service().service.manager,
         )])
     }}
 }}
 
 export_layer_trigger_world!(Component);
 "#
-    )
+            )
+        }
+    }
 }
