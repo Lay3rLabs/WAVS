@@ -453,5 +453,12 @@ ts-bindings:
     cargo test -p wavs-types --features ts-bindings
     cargo run --bin ts
 
+# Install the WAVS Claude Code skill globally
+install-claude-skill:
+    @mkdir -p ~/.claude/skills
+    @cp -r .claude/skills/wavs ~/.claude/skills/wavs
+    @echo "WAVS skill installed to ~/.claude/skills/wavs"
+    @echo "Restart Claude Code to pick up the skill."
+
 debug:
     cargo test --package wavs --features dev --test aggregator_tests send_to_self
