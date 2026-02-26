@@ -11,7 +11,7 @@ Deploy a new WAVS service with an on-chain ServiceManager contract.
   - **SimpleServiceManager** (lightweight PoA): `wavs:wavs_deploy_service_manager` — returns `address`
   - **POAStakeRegistry** (full middleware): `wavs:wavs_deploy_poa_service_manager` — returns proxy `address`; requires Docker
 - [ ] **Step 3 (POA only)** — `wavs:wavs_register_operator` — Register the node's signing key as an operator on the POAStakeRegistry.
-- [ ] **Step 4** — `wavs:wavs_upload_component` — Upload the compiled `.wasm`; save the returned digest (`sha256:...`).
+- [ ] **Step 4** — `wavs:wavs_upload_component` — Upload the compiled `.wasm`; save the returned digest (raw 64-char hex, no `sha256:` prefix).
 - [ ] **Step 5** — `wavs:wavs_save_service` — Save the service definition JSON; get back a URI.
 - [ ] **Step 6** — `wavs:wavs_set_service_uri` — Call `setServiceURI` on-chain with the URI from step 5.
 - [ ] **Step 7** — `wavs:wavs_deploy_service` — Register the service with the WAVS node (reads definition from chain).
@@ -34,10 +34,18 @@ Deploy a new WAVS service with an on-chain ServiceManager contract.
 
 ## wavs_register_operator Notes
 
-- Uses `chain_write_credential` as the contract owner to call `registerOperator(signingKeyAddr, weight)`
-- Uses `signing_mnemonic` at HD index 0 for the operator to call `updateOperatorSigningKey(signingKeyAddr, sig)`
-- Default weight is `100` if not specified
-- The signing key address at index 0 is derived from `signing_mnemonic` (Anvil default: `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266`)
+`wavs_register_operator` sends **two sequential on-chain transactions** from two different signers:
+
+1. `registerOperator(signingKeyAddr, weight)` — sent by `chain_write_credential` (registry owner)
+2. `updateOperatorSigningKey(signingKeyAddr, sig)` — sent by `signing_mnemonic` at HD index 0 (node operator)
+
+Both must succeed for the node to be fully registered.
+
+Default weight is `100` if not specified.
+
+**Partial-failure quirk:** If the tool returns a "nonce too low" RPC error, `registerOperator` likely succeeded but `updateOperatorSigningKey` was NOT called. Retrying will cause `registerOperator` to revert with `AlreadyRegistered` — and the function will error before reaching `updateOperatorSigningKey`. This means the signing key is never set and the node will fail to submit results on-chain (though `submit: "none"` services will still appear to work).
+
+**Workaround if this happens:** The tool must be fixed to skip past an `AlreadyRegistered` revert and still call `updateOperatorSigningKey`. Until then, if you hit this, redeploy a fresh POAStakeRegistry to get a clean slate, or call `updateOperatorSigningKey` directly on-chain.
 
 ---
 
@@ -100,6 +108,15 @@ Used by `wavs_deploy_service`, `wavs_set_service_uri`, `wavs_register_operator`,
 // Cosmos
 {"cosmos": {"chain": "cosmos:mychain", "address": "cosmos1abc..."}}
 ```
+
+---
+
+## Known Quirks
+
+| Tool | Symptom | Actual Outcome | Action |
+|------|---------|----------------|--------|
+| `wavs_register_operator` | Returns "nonce too low" | `registerOperator` tx succeeded; `updateOperatorSigningKey` was NOT called | Signing key unset — see notes above |
+| `wavs_deploy_service` | Returns EOF/empty-body error | Service was registered successfully | Verify with `wavs_list_services` |
 
 ---
 

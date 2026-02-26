@@ -202,7 +202,7 @@ To pass configuration to a component via `host::config_var("key")`, include a `c
     "default": {
       "trigger": {...},
       "component": {
-        "digest": "sha256:...",
+        "source": {"digest": "<64-char hex from wavs_upload_component>"},
         "config": {
           "api-url": "https://api.example.com",
           "threshold": "100"
