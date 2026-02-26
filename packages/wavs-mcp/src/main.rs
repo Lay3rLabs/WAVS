@@ -5,6 +5,7 @@ mod server;
 
 use clap::Parser;
 use rmcp::{serve_server, transport::io::stdio};
+use utils::config::ConfigFilePath;
 
 #[derive(Parser)]
 #[command(
@@ -23,13 +24,23 @@ struct Args {
     /// Credential (private key `0x…` or BIP39 mnemonic) for on-chain management transactions.
     /// Required for: wavs_deploy_service_manager, wavs_deploy_poa_service_manager,
     /// wavs_register_operator, wavs_set_service_uri.
+    /// Falls back to `chain_write_credential` in the [wavs] section of wavs.toml.
     #[arg(long, env = "WAVS_CHAIN_WRITE_CREDENTIAL")]
     chain_write_credential: Option<String>,
 
     /// BIP39 mnemonic for the WAVS signing key.
     /// Required (alongside --chain-write-credential) for: wavs_register_operator.
+    /// Falls back to `signing_mnemonic` in the [wavs] section of wavs.toml.
     #[arg(long, env = "WAVS_SIGNING_MNEMONIC")]
     signing_mnemonic: Option<String>,
+}
+
+/// Read a string field from the [wavs] section of wavs.toml, if it exists.
+fn read_wavs_toml_field(field: &str) -> Option<String> {
+    let path = ConfigFilePath::new("wavs.toml", None).into_path()?;
+    let content = std::fs::read_to_string(path).ok()?;
+    let doc: toml::Table = content.parse().ok()?;
+    doc.get("wavs")?.get(field)?.as_str().map(str::to_string)
 }
 
 #[tokio::main]
@@ -39,7 +50,15 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let args = Args::parse();
+    let mut args = Args::parse();
+
+    // Fall back to wavs.toml [wavs] section for credentials not set via CLI/env.
+    if args.chain_write_credential.is_none() {
+        args.chain_write_credential = read_wavs_toml_field("chain_write_credential");
+    }
+    if args.signing_mnemonic.is_none() {
+        args.signing_mnemonic = read_wavs_toml_field("signing_mnemonic");
+    }
 
     tracing::info!("Starting WAVS MCP server, connecting to {}", args.wavs_url);
 
