@@ -5,6 +5,7 @@ import { AddressDisplay, Button, TomlEditor } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
 import { useWalletStore } from '../stores/walletStore';
 import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, getWavsUrl, saveMcpSettings, clearPersistedServices } from '../tauri';
+import { usePOAStore } from '../stores/poaStore';
 import { errorMessage } from '../utils/error';
 import type { McpStatus } from '../types';
 import { getPublicClient } from '../hooks/useViemClient';
@@ -313,10 +314,10 @@ export function Settings() {
     setError(null);
     try {
       await clearPersistedServices();
+      usePOAStore.getState().clearRegistries();
       setShowClearServicesConfirm(false);
-      setChanged(true);
     } catch {
-      setError('Failed to clear persisted services. Please try again.');
+      setError('Failed to clear app state. Please try again.');
     }
   };
 
@@ -596,12 +597,12 @@ export function Settings() {
       <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
         <h2 className="text-beige-light text-lg font-semibold">Reset App State</h2>
         <p className="text-tan-muted text-sm">
-          Remove all persisted services from the app. Useful when restarting a local chain (e.g. Anvil) where previous contract addresses no longer exist.
+          Remove all registered services and saved registries from the app. Useful when restarting a local chain (e.g. Anvil) where previous contract addresses no longer exist.
         </p>
 
         {!showClearServicesConfirm && (
           <Button
-            text="Clear Persisted Services"
+            text="Clear All Services & Registries"
             color="red"
             variant="outline"
             onClick={() => setShowClearServicesConfirm(true)}
@@ -611,7 +612,7 @@ export function Settings() {
         {showClearServicesConfirm && (
           <div className="flex flex-col gap-3 p-3 rounded bg-charcoal-darkest border border-red-2">
             <p className="text-sm text-red-4">
-              This will clear all saved services from the app. They can be re-added from the Services page.
+              This will stop all running services and clear all saved registries. They can be re-added from the Services page.
             </p>
             <div className="flex gap-3">
               <Button
@@ -620,7 +621,7 @@ export function Settings() {
                 onClick={() => setShowClearServicesConfirm(false)}
               />
               <Button
-                text="Yes, Clear Services"
+                text="Yes, Clear Everything"
                 color="red"
                 onClick={handleClearServices}
               />

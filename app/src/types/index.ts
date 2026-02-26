@@ -104,6 +104,12 @@ export interface SubmissionEvent {
   trigger_data: TriggerData;
 }
 
+export type ServiceAction = 'added' | 'removed' | 'paused' | 'resumed';
+
+export interface ServiceEvent {
+  action: ServiceAction;
+}
+
 // Service types
 export type ServiceId = string;
 export type WorkflowId = string;

@@ -62,3 +62,21 @@ pub struct SubmissionEvent {
 impl TauriEventExt for SubmissionEvent {
     const NAME: &'static str = "submission";
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ServiceEvent {
+    pub action: ServiceAction,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ServiceAction {
+    Added,
+    Removed,
+    Paused,
+    Resumed,
+}
+
+impl TauriEventExt for ServiceEvent {
+    const NAME: &'static str = "service";
+}
