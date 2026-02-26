@@ -21,7 +21,7 @@ const KEYCHAIN_ACCOUNT: &str = "mnemonic";
 
 use wavs::health::HealthStatus;
 
-use crate::state::{MnemonicCacheState, SettingsState, WavsConfigState, WavsInstance, WavsInstanceState};
+use crate::state::{McpServerState, MnemonicCacheState, SettingsState, WavsConfigState, WavsInstance, WavsInstanceState};
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn cmd_set_wavs_home(
@@ -579,4 +579,183 @@ pub async fn cmd_publish_component(
         .map_err(|e| AppError::Service(format!("Failed to store component: {}", e)))?;
 
     Ok(digest.to_string())
+}
+
+// --- MCP Server ---
+
+#[derive(Serialize)]
+pub struct McpStatus {
+    pub running: bool,
+    pub pid: Option<u32>,
+}
+
+/// Resolve the wavs-mcp binary path.
+/// Looks alongside the current executable first (bundled app), then checks both
+/// debug and release profiles under the workspace target/ directory.
+fn find_mcp_binary() -> Option<std::path::PathBuf> {
+    if let Ok(current) = std::env::current_exe() {
+        if let Some(dir) = current.parent() {
+            // 1. Sibling of current executable (bundled app)
+            let candidate = dir.join("wavs-mcp");
+            if candidate.exists() {
+                return Some(candidate);
+            }
+
+            // 2. Both profiles under target/ — handles dev app + release mcp (or vice versa).
+            // current exe is at target/{debug,release}/<name>, so dir.parent() is target/.
+            if let Some(target) = dir.parent() {
+                for profile in &["release", "debug"] {
+                    let candidate = target.join(profile).join("wavs-mcp");
+                    if candidate.exists() {
+                        return Some(candidate);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn cmd_get_mcp_binary_path() -> Option<String> {
+    find_mcp_binary().map(|p| p.to_string_lossy().into_owned())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn cmd_get_wavs_url(wavs_config: State<'_, WavsConfigState>) -> String {
+    match wavs_config.get_cloned() {
+        Some(config) => format!("http://{}:{}", config.host, config.port),
+        None => "http://localhost:8000".to_string(),
+    }
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_start_mcp_server(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    wavs_config: State<'_, WavsConfigState>,
+    mcp_state: State<'_, McpServerState>,
+) -> AppResult<()> {
+    if mcp_state.is_running() {
+        return Ok(()); // already running
+    }
+
+    let s = settings.get_cloned();
+    let wavs_url = match wavs_config.get_cloned() {
+        Some(config) => format!("http://{}:{}", config.host, config.port),
+        None => "http://localhost:8000".to_string(),
+    };
+
+    let bin = find_mcp_binary().ok_or_else(|| {
+        AppError::Service("wavs-mcp binary not found. Build it with: cargo build -p wavs-mcp".to_string())
+    })?;
+
+    let mut cmd = std::process::Command::new(&bin);
+    cmd.arg("--wavs-url").arg(&wavs_url);
+    if let Some(token) = &s.mcp_token {
+        cmd.arg("--token").arg(token);
+    }
+
+    // Pipe stdin so the MCP server doesn't immediately receive EOF (which would
+    // cause the stdio transport to exit with "expect initialize request").
+    // The Child holds the write end open; MCP clients that spawn their own
+    // instance (Claude Desktop, Cursor) will handle their own stdio connection.
+    cmd.stdin(std::process::Stdio::piped());
+
+    let child = cmd
+        .spawn()
+        .map_err(|e| AppError::Service(format!("Failed to spawn wavs-mcp: {}", e)))?;
+
+    mcp_state.set(child);
+
+    // Persist mcp_enabled in settings
+    settings
+        .update(&app, |s| {
+            s.mcp_enabled = true;
+        })
+        .await?;
+
+    log::info!("MCP server started");
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_stop_mcp_server(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    mcp_state: State<'_, McpServerState>,
+) -> AppResult<()> {
+    mcp_state.stop();
+
+    settings
+        .update(&app, |s| {
+            s.mcp_enabled = false;
+        })
+        .await?;
+
+    log::info!("MCP server stopped");
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn cmd_get_mcp_status(mcp_state: State<'_, McpServerState>) -> McpStatus {
+    McpStatus {
+        running: mcp_state.is_running(),
+        pid: mcp_state.pid(),
+    }
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_save_mcp_settings(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    mcp_auto_start: bool,
+    mcp_token: Option<String>,
+) -> AppResult<()> {
+    settings
+        .update(&app, |s| {
+            s.mcp_auto_start = mcp_auto_start;
+            s.mcp_token = mcp_token.clone();
+        })
+        .await
+}
+
+// --- Reset App State ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_clear_persisted_services(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    wavs_instance: State<'_, WavsInstanceState>,
+) -> AppResult<()> {
+    // Delete all live services from the running dispatcher (if available).
+    // Errors on individual removes are logged but don't abort the reset.
+    if let Ok(dispatcher) = wavs_instance.dispatcher() {
+        match dispatcher
+            .services
+            .list(std::ops::Bound::Unbounded, std::ops::Bound::Unbounded)
+        {
+            Ok(services) => {
+                for service in services {
+                    let id = ServiceId::from(&service.manager);
+                    if let Err(e) = dispatcher.remove_service(id) {
+                        log::warn!("Failed to remove service during reset: {}", e);
+                    }
+                }
+            }
+            Err(e) => log::warn!("Failed to list services during reset: {}", e),
+        }
+    }
+
+    // Clear all persisted state from settings.
+    settings
+        .update(&app, |s| {
+            s.saved_service_managers.clear();
+            s.saved_services.clear();
+            s.saved_registries.clear();
+        })
+        .await?;
+    log::info!("Cleared all persisted services and registries");
+    Ok(())
 }

@@ -177,3 +177,41 @@ pub struct WavsInstance {
     pub meter_provider: Option<SdkMeterProvider>,
     pub handle: JoinHandle<()>,
 }
+
+#[derive(Default)]
+pub struct McpServerState {
+    inner: std::sync::Mutex<Option<std::process::Child>>,
+}
+
+impl McpServerState {
+    pub fn set(&self, child: std::process::Child) {
+        *self.inner.lock().unwrap() = Some(child);
+    }
+
+    pub fn stop(&self) {
+        if let Some(mut child) = self.inner.lock().unwrap().take() {
+            let _ = child.kill();
+        }
+    }
+
+    pub fn pid(&self) -> Option<u32> {
+        self.inner.lock().unwrap().as_ref().map(|c| c.id())
+    }
+
+    pub fn is_running(&self) -> bool {
+        let mut guard = self.inner.lock().unwrap();
+        if let Some(child) = guard.as_mut() {
+            match child.try_wait() {
+                Ok(Some(_)) => {
+                    // Process has exited — clear the handle
+                    *guard = None;
+                    false
+                }
+                Ok(None) => true,
+                Err(_) => false,
+            }
+        } else {
+            false
+        }
+    }
+}

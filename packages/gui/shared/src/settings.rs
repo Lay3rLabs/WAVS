@@ -20,4 +20,10 @@ pub struct Settings {
     pub saved_service_managers: Vec<ServiceManager>,
     #[serde(default)]
     pub saved_services: Vec<Service>,
+    #[serde(default)]
+    pub mcp_enabled: bool,
+    #[serde(default)]
+    pub mcp_auto_start: bool,
+    #[serde(default)]
+    pub mcp_token: Option<String>,
 }

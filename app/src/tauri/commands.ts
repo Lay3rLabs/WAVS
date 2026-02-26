@@ -9,6 +9,7 @@ import type {
   HealthStatus,
   IpfsProvider,
   ComponentDigestResult,
+  McpStatus,
 } from '../types';
 
 export async function setWavsHome(): Promise<string | null> {
@@ -111,4 +112,39 @@ export async function getComponentDigest(
 
 export async function publishComponent(filePath: string): Promise<string> {
   return invoke<string>('cmd_publish_component', { file_path: filePath });
+}
+
+// MCP server commands
+export async function getMcpBinaryPath(): Promise<string | null> {
+  return invoke<string | null>('cmd_get_mcp_binary_path');
+}
+
+export async function getWavsUrl(): Promise<string> {
+  return invoke<string>('cmd_get_wavs_url');
+}
+
+export async function startMcpServer(): Promise<void> {
+  return invoke<void>('cmd_start_mcp_server');
+}
+
+export async function stopMcpServer(): Promise<void> {
+  return invoke<void>('cmd_stop_mcp_server');
+}
+
+export async function getMcpStatus(): Promise<McpStatus> {
+  return invoke<McpStatus>('cmd_get_mcp_status');
+}
+
+export async function saveMcpSettings(
+  mcpAutoStart: boolean,
+  mcpToken: string | null
+): Promise<void> {
+  return invoke<void>('cmd_save_mcp_settings', {
+    mcp_auto_start: mcpAutoStart,
+    mcp_token: mcpToken,
+  });
+}
+
+export async function clearPersistedServices(): Promise<void> {
+  return invoke<void>('cmd_clear_persisted_services');
 }

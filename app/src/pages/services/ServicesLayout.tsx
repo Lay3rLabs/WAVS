@@ -4,7 +4,7 @@ import type { Address } from 'viem';
 import { Breadcrumb, Toast, type BreadcrumbItem } from '../../components/atoms';
 import { useAppStore } from '../../stores/appStore';
 import { usePOAStore, getRegistryKey, type ConnectedRegistry } from '../../stores/poaStore';
-import { getServices, getSettings } from '../../tauri';
+import { getServices, getSettings, getChainConfigs } from '../../tauri';
 import { getPublicClient, getAddress } from '../../hooks/useViemClient';
 import { connectToRegistry, fetchOperators } from '../../utils/evm';
 import type { Service } from '../../types';
@@ -27,9 +27,10 @@ export function ServicesLayout() {
   useEffect(() => {
     const init = async () => {
       try {
-        const [servicesData, settings] = await Promise.all([
+        const [servicesData, settings, chainConfigs] = await Promise.all([
           getServices(),
           getSettings(),
+          getChainConfigs(),
         ]);
 
         // Merge cached services for any address WAVS didn't load
@@ -65,6 +66,51 @@ export function ServicesLayout() {
             operators,
             isOwner: info.owner.toLowerCase() === userAddress.toLowerCase(),
           });
+        }
+        // Auto-connect each service's manager as a registry using the node's chain config
+        for (const svc of allServices) {
+          const manager = svc.manager;
+
+          let chainKey: string;
+          let chainIdStr: string;
+          let address: Address;
+          if ('evm' in manager) {
+            chainKey = manager.evm.chain;
+            chainIdStr = chainKey.split(':')[1];
+            address = manager.evm.address as Address;
+          } else {
+            continue;
+          }
+
+          const chainId = parseInt(chainIdStr);
+          if (isNaN(chainId)) continue;
+
+          const key = getRegistryKey(chainId, address);
+          if (registries.has(key)) continue;
+
+          const chainCfg = chainConfigs.evm[chainIdStr] ?? chainConfigs.dev[chainIdStr];
+          const rpcUrl = (chainCfg as { http_endpoint?: string | null } | undefined)?.http_endpoint;
+          if (!rpcUrl) continue;
+
+          try {
+            const publicClient = getPublicClient(rpcUrl, chainId);
+            const userAddress = await getAddress();
+            const [info, operators] = await Promise.all([
+              connectToRegistry(publicClient, address),
+              fetchOperators(publicClient, address),
+            ]);
+            addRegistry({
+              chainId,
+              chainKey,
+              rpcUrl,
+              address,
+              info,
+              operators,
+              isOwner: info.owner.toLowerCase() === userAddress.toLowerCase(),
+            });
+          } catch {
+            // Not a real PoA contract (dev service / invalid address) — silently skip
+          }
         }
       } catch (err) {
         console.error('Failed to load services:', err);

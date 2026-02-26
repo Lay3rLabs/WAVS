@@ -99,6 +99,7 @@ impl TauriEventEmitterExt for TauriHandle {
         event: E,
     ) -> Result<(), wavs_gui_shared::error::AppError> {
         match self {
+            #[cfg(feature = "gui")]
             TauriHandle::Real(handle) => handle.emit_ext(event),
             TauriHandle::Mock => Ok(()),
         }
