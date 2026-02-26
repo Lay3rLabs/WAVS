@@ -79,6 +79,7 @@ pub async fn cmd_start_wavs(
     wavs_config: State<'_, WavsConfigState>,
     wavs_instance: State<'_, WavsInstanceState>,
     mnemonic_cache: State<'_, MnemonicCacheState>,
+    mcp_state: State<'_, McpServerState>,
 ) -> AppResult<()> {
     let mut config = match wavs_config.get_cloned() {
         Some(cfg) => cfg,
@@ -146,7 +147,7 @@ pub async fn cmd_start_wavs(
     let meter = opentelemetry::global::meter("wavs_metrics");
     let metrics = Metrics::new(meter);
 
-    let dispatcher = Arc::new(Dispatcher::new(&config, metrics.wavs, app).unwrap());
+    let dispatcher = Arc::new(Dispatcher::new(&config, metrics.wavs, app.clone()).unwrap());
 
     // Restore saved services from settings
     let saved_settings = settings.get_cloned();
@@ -181,6 +182,34 @@ pub async fn cmd_start_wavs(
         handle,
         dispatcher,
     });
+
+    // Auto-start MCP server if configured
+    if saved_settings.mcp_auto_start && !mcp_state.is_running() {
+        if let Some(bin) = find_mcp_binary() {
+            let wavs_url = match wavs_config.get_cloned() {
+                Some(config) => format!("http://{}:{}", config.host, config.port),
+                None => "http://localhost:8000".to_string(),
+            };
+            let mut cmd = std::process::Command::new(&bin);
+            cmd.arg("--wavs-url").arg(&wavs_url);
+            if let Some(token) = &saved_settings.mcp_token {
+                cmd.arg("--token").arg(token);
+            }
+            cmd.stdin(std::process::Stdio::piped());
+            match cmd.spawn() {
+                Ok(child) => {
+                    mcp_state.set(child);
+                    settings.update(&app, |s| { s.mcp_enabled = true; }).await.ok();
+                    log::info!("MCP server auto-started");
+                }
+                Err(e) => {
+                    log::warn!("Failed to auto-start MCP server: {}", e);
+                }
+            }
+        } else {
+            log::warn!("MCP auto-start enabled but wavs-mcp binary not found");
+        }
+    }
 
     Ok(())
 }

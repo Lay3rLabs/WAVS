@@ -74,6 +74,7 @@ export function Settings() {
   const [mcpError, setMcpError] = useState<string | null>(null);
   const [showMnemonic, setShowMnemonic] = useState(false);
   const [exportedMnemonic, setExportedMnemonic] = useState<string | null>(null);
+  const [mnemonicCopied, setMnemonicCopied] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showClearServicesConfirm, setShowClearServicesConfirm] = useState(false);
 
@@ -297,6 +298,14 @@ export function Settings() {
   const handleHideMnemonic = () => {
     setShowMnemonic(false);
     setExportedMnemonic(null);
+    setMnemonicCopied(false);
+  };
+
+  const handleCopyMnemonic = async () => {
+    if (!exportedMnemonic) return;
+    await navigator.clipboard.writeText(exportedMnemonic);
+    setMnemonicCopied(true);
+    setTimeout(() => setMnemonicCopied(false), 2000);
   };
 
   const handleResetWallet = async () => {
@@ -397,7 +406,14 @@ export function Settings() {
                 ))}
               </div>
             </div>
-            <Button text="Hide" variant="outline" onClick={handleHideMnemonic} />
+            <div className="flex gap-2">
+              <Button
+                text={mnemonicCopied ? 'Copied!' : 'Copy Recovery Phrase'}
+                variant="outline"
+                onClick={handleCopyMnemonic}
+              />
+              <Button text="Hide" variant="outline" onClick={handleHideMnemonic} />
+            </div>
           </div>
         )}
 
