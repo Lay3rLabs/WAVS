@@ -203,12 +203,12 @@ Paste any of these directly into Claude Desktop (or any MCP-connected client) af
 > "Get the WIT interface so I know what APIs are available in WASM components."
 
 **Scaffold and build:**
-> "Scaffold a WASM component called `price-feed` that triggers on EVM contract events."
+> "Scaffold a WASM component called `price-feed` that processes EVM contract events."
 
-> "Build the component at `~/Dev/my-wavs-component`."
+> "Build the component at `examples/components/price-feed`."
 
 **Upload and deploy:**
-> "Upload the wasm at `./target/wasm32-wasip1/release/price_feed.wasm`."
+> "Upload the wasm at `./target/wasm32-wasip2/release/price_feed.wasm`."
 
 > "Deploy the service at address `0xABCD1234...` on chain `evm:31337`."
 
@@ -271,7 +271,9 @@ When the user asks you to create a component, follow this workflow:
 7. Call wavs_simulate_trigger to test the service.
 8. Call wavs_list_services to confirm it's running.
 
-Components are Rust libraries compiled to wasm32-wasip1. They implement the `Guest` trait,
+Components are Rust libraries compiled to wasm32-wasip2. They implement the `Guest` trait,
 decode trigger data with `decode_trigger_event`, process it, and return encoded responses
 with `encode_trigger_output`. State is stored via wasi::keyvalue; outbound HTTP uses wasi::http.
+The authoritative WIT interface definitions live in the wavs-wasi repo; use `wavs_get_wit_interface`
+to retrieve the local copy bundled with this node.
 ```
