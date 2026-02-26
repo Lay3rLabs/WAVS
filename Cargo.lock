@@ -14499,6 +14499,11 @@ dependencies = [
 name = "wavs-mcp"
 version = "2.0.0-rc.13"
 dependencies = [
+ "alloy-contract",
+ "alloy-primitives",
+ "alloy-signer",
+ "alloy-sol-macro",
+ "alloy-sol-types",
  "anyhow",
  "clap 4.5.59",
  "const-hex",
@@ -14506,9 +14511,11 @@ dependencies = [
  "rmcp",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio 1.49.0",
  "tracing",
  "tracing-subscriber",
+ "utils",
  "wavs-types",
 ]
 

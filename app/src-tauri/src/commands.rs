@@ -727,13 +727,35 @@ pub async fn cmd_save_mcp_settings(
 pub async fn cmd_clear_persisted_services(
     app: AppHandle,
     settings: State<'_, SettingsState>,
+    wavs_instance: State<'_, WavsInstanceState>,
 ) -> AppResult<()> {
+    // Delete all live services from the running dispatcher (if available).
+    // Errors on individual removes are logged but don't abort the reset.
+    if let Ok(dispatcher) = wavs_instance.dispatcher() {
+        match dispatcher
+            .services
+            .list(std::ops::Bound::Unbounded, std::ops::Bound::Unbounded)
+        {
+            Ok(services) => {
+                for service in services {
+                    let id = ServiceId::from(&service.manager);
+                    if let Err(e) = dispatcher.remove_service(id) {
+                        log::warn!("Failed to remove service during reset: {}", e);
+                    }
+                }
+            }
+            Err(e) => log::warn!("Failed to list services during reset: {}", e),
+        }
+    }
+
+    // Clear all persisted state from settings.
     settings
         .update(&app, |s| {
             s.saved_service_managers.clear();
             s.saved_services.clear();
+            s.saved_registries.clear();
         })
         .await?;
-    log::info!("Cleared all persisted services");
+    log::info!("Cleared all persisted services and registries");
     Ok(())
 }

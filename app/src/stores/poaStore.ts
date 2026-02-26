@@ -33,6 +33,7 @@ interface POAState {
   setError: (error: string | null) => void;
   setDeployProgress: (progress: string | null) => void;
   clearError: () => void;
+  clearRegistries: () => void;
   getActiveRegistry: () => ConnectedRegistry | null;
 }
 
@@ -106,6 +107,7 @@ export const usePOAStore = create<POAState>((set, get) => ({
   setError: (error) => set({ error }),
   setDeployProgress: (progress) => set({ deployProgress: progress }),
   clearError: () => set({ error: null }),
+  clearRegistries: () => set({ registries: new Map(), activeRegistryKey: null }),
 
   getActiveRegistry: () => {
     const state = get();
