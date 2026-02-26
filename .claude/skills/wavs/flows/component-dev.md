@@ -10,7 +10,7 @@ Build, test, and deploy a new WAVS WASM component from scratch.
 - [ ] **Step 2** — `wavs:wavs_scaffold_component` — Generate project skeleton (`Cargo.toml` + `src/lib.rs`).
 - [ ] **Step 3** — Implement logic in `src/lib.rs` using the patterns below.
 - [ ] **Step 4** — `wavs:wavs_build_component` — Compile; read stderr and fix errors; repeat until exit code 0.
-- [ ] **Step 5** — `wavs:wavs_upload_component` — Upload `.wasm`; save the returned digest (`sha256:...`).
+- [ ] **Step 5** — `wavs:wavs_upload_component` — Upload `.wasm`; save the returned digest (raw 64-char hex, no `sha256:` prefix).
 - [ ] **Step 6** — `wavs:wavs_deploy_dev_service` (no on-chain contract) **or** follow [`deployment.md`](deployment.md) for a real deployment.
 - [ ] **Step 7** — `wavs:wavs_simulate_trigger` — Verify output.
 

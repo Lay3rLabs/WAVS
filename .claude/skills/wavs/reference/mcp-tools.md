@@ -20,7 +20,7 @@ All tools are exposed by the `wavs` MCP server. Prefix with `wavs:` when calling
 | `wavs_deploy_service_manager` | — | ✓ | — | EVM only; deploys `SimpleServiceManager.sol`; returns `address` |
 | `wavs_deploy_poa_service_manager` | — | ✓ | — | EVM only; deploys `POAStakeRegistry` proxy via Docker; returns proxy `address` |
 | `wavs_register_operator` | — | ✓ + mnemonic | — | EVM only; registers node's signing key on POAStakeRegistry |
-| `wavs_upload_component` | — | — | ✓ | Uploads `.wasm` binary; returns `"Digest: sha256:..."` |
+| `wavs_upload_component` | — | — | ✓ | Uploads `.wasm` binary; returns raw 64-char hex digest (no `sha256:` prefix) |
 | `wavs_save_service` | — | — | ✓ | Saves service def to node store; returns URI |
 | `wavs_simulate_trigger` | — | — | ✓ | Fires a test trigger against a deployed service |
 | `wavs_deploy_dev_service` | — | — | ✓ | Registers service directly without on-chain contract |
