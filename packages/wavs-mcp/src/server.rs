@@ -116,7 +116,9 @@ pub struct RegisterOperatorParams {
     /// ServiceManager as a JSON object.
     /// EVM:    `{"evm":{"chain":"evm:31337","address":"0xAbCd..."}}`
     pub service_manager_json: String,
-    /// Weight to assign to the operator (default: 100)
+    /// Weight to assign to the operator (default: 100).
+    /// Represents relative stake weight — higher weight = more influence in multi-operator consensus.
+    /// For single-operator setups, any positive value works; 100 is conventional.
     pub weight: Option<u64>,
     /// RPC endpoint URL for the chain (e.g. "http://localhost:8545")
     pub rpc_url: String,
@@ -198,7 +200,9 @@ impl WavsMcpServer {
             .as_deref()
             .ok_or_else(|| ErrorData {
                 code: ErrorCode::INVALID_PARAMS,
-                message: "--chain-write-credential (or WAVS_CHAIN_WRITE_CREDENTIAL) is required for this tool".into(),
+                message: "--chain-write-credential is not configured on this MCP server. \
+                    Set WAVS_CHAIN_WRITE_CREDENTIAL env var, add chain_write_credential to wavs.toml [wavs] section, \
+                    or restart with --chain-write-credential.".into(),
                 data: None,
             })
             .and_then(|s| {
@@ -215,7 +219,10 @@ impl WavsMcpServer {
             .as_deref()
             .ok_or_else(|| ErrorData {
                 code: ErrorCode::INVALID_PARAMS,
-                message: "--signing-mnemonic (or WAVS_SIGNING_MNEMONIC) is required for this tool".into(),
+                message: "--signing-mnemonic is not configured on this MCP server. \
+                    Set WAVS_SIGNING_MNEMONIC env var, add signing_mnemonic to wavs.toml [wavs] section, \
+                    or restart with --signing-mnemonic. \
+                    This must be the same mnemonic that the WAVS node uses as its operator signing key.".into(),
                 data: None,
             })
             .and_then(|s| {
@@ -432,6 +439,14 @@ impl WavsMcpServer {
         }
     }
 
+    async fn tool_get_signing_address(&self) -> Result<CallToolResult, McpError> {
+        let credential = self.require_signing_mnemonic()?;
+        match chain_ops::get_signing_address(&credential) {
+            Ok(addr) => ok(format!("Signing address (HD index 0): {addr}")),
+            Err(e) => err(format!("Failed to derive signing address: {e:#}")),
+        }
+    }
+
     async fn tool_get_wit_interface(&self) -> Result<CallToolResult, McpError> {
         ok(scaffold::get_wit_interface())
     }
@@ -490,7 +505,7 @@ impl ServerHandler for WavsMcpServer {
                  Write tools (need --token): wavs_deploy_service, wavs_delete_service, wavs_pause_service, wavs_resume_service\n\
                  Dev tools (need dev endpoints): wavs_upload_component, wavs_save_service, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv\n\
                  Chain-write tools (need WAVS_CHAIN_WRITE_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
-                 Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator\n\
+                 Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator, wavs_get_signing_address\n\
                  Local tools: wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component"
                     .to_string(),
             ),
@@ -567,17 +582,30 @@ impl ServerHandler for WavsMcpServer {
                         Returns the proxy address to use as service manager. \
                         Requires --chain-write-credential on this MCP server. \
                         Docker image ghcr.io/lay3rlabs/poa-middleware:1.0.1 must be available. \
-                        Provide the chain RPC URL as rpc_url. EVM only currently.".into(),
+                        Provide the chain RPC URL as rpc_url. EVM only currently. \
+                        After deploying, call wavs_register_operator with the returned address to register the \
+                        WAVS node's signing key as an operator before the service can process triggers.".into(),
                     input_schema: schema_for_type::<DeployPoaServiceManagerParams>().into(),
                 },
                 Tool {
                     name: "wavs_register_operator".into(),
-                    description: "Register the WAVS node's signing key as an operator on a POAStakeRegistry contract \
-                        and set the signing key mapping. Calls registerOperator (using WAVS_CHAIN_WRITE_CREDENTIAL as owner) \
-                        and updateOperatorSigningKey (using WAVS_SIGNING_MNEMONIC as operator). \
+                    description: "Step 2 of PoA setup (call after wavs_deploy_poa_service_manager). \
+                        Registers the WAVS node's signing key as an operator on a POAStakeRegistry contract \
+                        and sets the signing key mapping. \
+                        Calls registerOperator (using WAVS_CHAIN_WRITE_CREDENTIAL as owner) and \
+                        updateOperatorSigningKey (using WAVS_SIGNING_MNEMONIC as operator). \
+                        weight is a relative stake weight (default: 100; any positive value works for single-operator setups). \
                         Requires --chain-write-credential and --signing-mnemonic on this MCP server. \
                         Provide the chain RPC URL as rpc_url. EVM only currently.".into(),
                     input_schema: schema_for_type::<RegisterOperatorParams>().into(),
+                },
+                Tool {
+                    name: "wavs_get_signing_address".into(),
+                    description: "Get the EVM address of the WAVS node's signing key, derived from the configured \
+                        signing mnemonic (HD index 0). \
+                        Useful for verifying operator registration. \
+                        Requires --signing-mnemonic (WAVS_SIGNING_MNEMONIC) to be configured on this MCP server.".into(),
+                    input_schema: no_params(),
                 },
                 // Dev tools
                 Tool {
@@ -655,6 +683,7 @@ impl ServerHandler for WavsMcpServer {
             "wavs_deploy_service_manager"       => self.tool_deploy_service_manager(args).await,
             "wavs_deploy_poa_service_manager"   => self.tool_deploy_poa_service_manager(args).await,
             "wavs_register_operator"            => self.tool_register_operator(args).await,
+            "wavs_get_signing_address"          => self.tool_get_signing_address().await,
             "wavs_upload_component"        => self.tool_upload_component(args).await,
             "wavs_save_service"          => self.tool_save_service(args).await,
             "wavs_simulate_trigger"      => self.tool_simulate_trigger(args).await,

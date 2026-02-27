@@ -22,10 +22,12 @@ MVP Requirements:
 - [x] Make it easier to copy seed phrase
 - [x] Figure out how to use the aggregator
 - [x] Fix auto start MCP when app starts
+- [ ] Select file
+- [ ] LLM Config (makes those LLMs available to WASM components)
 - [ ] Better aesthetics
 - [ ] Merge logs and activity? (sort of similar?)
 - [ ] Test submission with an actual solidity contract
-- [ ] Test 
+- [ ] Test DevEx in new repo (component development, deploying contracts, etc.)
 
 Post MVP:
 - Build an MCP

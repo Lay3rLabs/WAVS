@@ -35,12 +35,22 @@ struct Args {
     signing_mnemonic: Option<String>,
 }
 
-/// Read a string field from the [wavs] section of wavs.toml, if it exists.
+/// Read a string field from the [wavs] section of wavs.toml.
+/// Searches all candidate paths in order until the field is found.
+/// This way a local wavs.toml that lacks a field gracefully falls through to
+/// the global ~/.wavs/wavs.toml (written by setup_claude_mcp.py).
 fn read_wavs_toml_field(field: &str) -> Option<String> {
-    let path = ConfigFilePath::new("wavs.toml", None).into_path()?;
-    let content = std::fs::read_to_string(path).ok()?;
-    let doc: toml::Table = content.parse().ok()?;
-    doc.get("wavs")?.get(field)?.as_str().map(str::to_string)
+    for path in ConfigFilePath::new("wavs.toml", None).into_possible() {
+        if !path.exists() {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else { continue };
+        let Ok(doc) = content.parse::<toml::Table>() else { continue };
+        if let Some(value) = doc.get("wavs").and_then(|v| v.get(field)).and_then(|v| v.as_str()) {
+            return Some(value.to_string());
+        }
+    }
+    None
 }
 
 #[tokio::main]

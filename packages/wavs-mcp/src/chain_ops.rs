@@ -176,6 +176,13 @@ pub async fn deploy_poa_service_manager(
     Ok(deploy.addresses.poa_stake_registry)
 }
 
+/// Derive the EVM address for the WAVS signing key (HD index 0).
+/// Does not require network access.
+pub fn get_signing_address(credential: &Credential) -> Result<String> {
+    let signer = make_signer(credential, Some(0))?;
+    Ok(format!("{}", signer.address()))
+}
+
 /// Register the signing key as an operator on a POAStakeRegistry contract.
 /// `owner_credential` calls `registerOperator`; `signing_mnemonic` calls `updateOperatorSigningKey`.
 /// Returns `(operator_address, register_tx, signing_key_tx)`.

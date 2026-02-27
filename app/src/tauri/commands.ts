@@ -148,3 +148,7 @@ export async function saveMcpSettings(
 export async function clearPersistedServices(): Promise<void> {
   return invoke<void>('cmd_clear_persisted_services');
 }
+
+export async function registerClaudeMcp(projectPath: string): Promise<string> {
+  return invoke<string>('cmd_register_claude_mcp', { project_path: projectPath });
+}

@@ -147,7 +147,10 @@ pub async fn cmd_start_wavs(
     let meter = opentelemetry::global::meter("wavs_metrics");
     let metrics = Metrics::new(meter);
 
-    let dispatcher = Arc::new(Dispatcher::new(&config, metrics.wavs, app.clone()).unwrap());
+    let dispatcher = Arc::new(
+        Dispatcher::new(&config, metrics.wavs, app.clone())
+            .map_err(|e| AppError::WavsConfig(e.to_string()))?,
+    );
 
     // Restore saved services from settings
     let saved_settings = settings.get_cloned();
@@ -748,6 +751,171 @@ pub async fn cmd_save_mcp_settings(
             s.mcp_token = mcp_token.clone();
         })
         .await
+}
+
+// --- Register with Claude Code ---
+
+/// Write wavs-mcp entry for `project_path` into ~/.claude.json.
+fn register_claude_mcp_json(
+    project_path: &str,
+    binary: &std::path::Path,
+    wavs_url: &str,
+    token: Option<&str>,
+) -> anyhow::Result<()> {
+    let home = std::env::var("HOME").map_err(|_| anyhow::anyhow!("HOME env var not set"))?;
+    let claude_json = std::path::Path::new(&home).join(".claude.json");
+
+    let mut config: serde_json::Value = if claude_json.exists() {
+        let content = std::fs::read_to_string(&claude_json)?;
+        serde_json::from_str(&content).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    let mut args = vec![
+        serde_json::Value::String("--wavs-url".to_string()),
+        serde_json::Value::String(wavs_url.to_string()),
+    ];
+    if let Some(t) = token {
+        args.push(serde_json::Value::String("--token".to_string()));
+        args.push(serde_json::Value::String(t.to_string()));
+    }
+
+    // Upsert nested structure
+    let obj = config
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("~/.claude.json is not a JSON object"))?;
+    obj.entry("projects").or_insert(serde_json::json!({}));
+    config["projects"]
+        .as_object_mut()
+        .unwrap()
+        .entry(project_path)
+        .or_insert(serde_json::json!({}));
+    config["projects"][project_path]
+        .as_object_mut()
+        .unwrap()
+        .entry("mcpServers")
+        .or_insert(serde_json::json!({}));
+
+    config["projects"][project_path]["mcpServers"]["wavs"] = serde_json::json!({
+        "command": binary.to_string_lossy(),
+        "args": args,
+    });
+
+    // Write atomically via a temp file in the same directory
+    let parent = claude_json.parent().unwrap();
+    std::fs::create_dir_all(parent)?;
+    let tmp_path = parent.join(format!(".claude.json.tmp.{}", std::process::id()));
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&tmp_path)?;
+        let json_str = serde_json::to_string_pretty(&config)?;
+        f.write_all(json_str.as_bytes())?;
+        f.write_all(b"\n")?;
+    }
+    std::fs::rename(&tmp_path, &claude_json)?;
+
+    Ok(())
+}
+
+/// Copy chain_write_credential and signing_mnemonic from the WAVS home wavs.toml
+/// into ~/.wavs/wavs.toml so chain-write tools work from any project.
+fn write_global_wavs_credentials(wavs_home: &std::path::Path) -> anyhow::Result<()> {
+    let source_toml = wavs_home.join("wavs.toml");
+    if !source_toml.exists() {
+        return Ok(());
+    }
+
+    let content = std::fs::read_to_string(&source_toml)?;
+    let table: toml::Table = content
+        .parse()
+        .map_err(|e| anyhow::anyhow!("Failed to parse wavs.toml: {}", e))?;
+
+    let wavs_section = match table.get("wavs").and_then(|v| v.as_table()) {
+        Some(t) => t,
+        None => return Ok(()),
+    };
+
+    let cred = wavs_section
+        .get("chain_write_credential")
+        .and_then(|v| v.as_str());
+    let mnem = wavs_section
+        .get("signing_mnemonic")
+        .and_then(|v| v.as_str());
+
+    if cred.is_none() && mnem.is_none() {
+        return Ok(());
+    }
+
+    let home = std::env::var("HOME").map_err(|_| anyhow::anyhow!("HOME env var not set"))?;
+    let global_wavs_dir = std::path::Path::new(&home).join(".wavs");
+    std::fs::create_dir_all(&global_wavs_dir)?;
+    let global_toml_path = global_wavs_dir.join("wavs.toml");
+
+    let existing_content = if global_toml_path.exists() {
+        std::fs::read_to_string(&global_toml_path)?
+    } else {
+        String::new()
+    };
+
+    let mut global: toml::Table = existing_content.parse().unwrap_or_default();
+
+    let wavs_table = global
+        .entry("wavs")
+        .or_insert(toml::Value::Table(toml::Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| anyhow::anyhow!("[wavs] key in global toml is not a table"))?;
+
+    if let Some(c) = cred {
+        wavs_table.insert(
+            "chain_write_credential".to_string(),
+            toml::Value::String(c.to_string()),
+        );
+    }
+    if let Some(m) = mnem {
+        wavs_table.insert(
+            "signing_mnemonic".to_string(),
+            toml::Value::String(m.to_string()),
+        );
+    }
+
+    // Write atomically
+    let tmp_path = global_wavs_dir.join(format!("wavs.toml.tmp.{}", std::process::id()));
+    std::fs::write(&tmp_path, toml::to_string_pretty(&global)?)?;
+    std::fs::rename(&tmp_path, &global_toml_path)?;
+
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_register_claude_mcp(
+    project_path: String,
+    wavs_config: State<'_, WavsConfigState>,
+    settings: State<'_, SettingsState>,
+) -> AppResult<String> {
+    let binary = find_mcp_binary().ok_or_else(|| {
+        AppError::Service(
+            "wavs-mcp binary not found. Build it with: cargo build -p wavs-mcp".to_string(),
+        )
+    })?;
+
+    let wavs_url = match wavs_config.get_cloned() {
+        Some(c) => format!("http://{}:{}", c.host, c.port),
+        None => "http://localhost:8000".to_string(),
+    };
+
+    let s = settings.get_cloned();
+    let token = s.mcp_token.as_deref();
+
+    register_claude_mcp_json(&project_path, &binary, &wavs_url, token)
+        .map_err(|e| AppError::Io(e.to_string()))?;
+
+    if let Some(wavs_home) = s.wavs_home {
+        write_global_wavs_credentials(&wavs_home)
+            .map_err(|e| AppError::Io(e.to_string()))?;
+    }
+
+    Ok(project_path)
 }
 
 // --- Reset App State ---
