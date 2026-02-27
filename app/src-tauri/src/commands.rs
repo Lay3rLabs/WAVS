@@ -198,6 +198,17 @@ pub async fn cmd_start_wavs(
             if let Some(token) = &saved_settings.mcp_token {
                 cmd.arg("--token").arg(token);
             }
+            // Inject chain credentials as env vars so wavs-mcp doesn't need to read
+            // wavs.toml from the project directory (which may be a git repo).
+            if let Some(wavs_home) = &saved_settings.wavs_home {
+                let (cred, mnem) = read_wavs_home_credentials(wavs_home);
+                if let Some(c) = cred {
+                    cmd.env("WAVS_MCP_CHAIN_CREDENTIAL", c);
+                }
+                if let Some(m) = mnem {
+                    cmd.env("WAVS_SIGNING_MNEMONIC", m);
+                }
+            }
             cmd.stdin(std::process::Stdio::piped());
             match cmd.spawn() {
                 Ok(child) => {
@@ -756,6 +767,8 @@ pub async fn cmd_save_mcp_settings(
 // --- Register with Claude Code ---
 
 /// Write wavs-mcp entry for `project_path` into ~/.claude.json.
+/// Only writes command + args — credentials are stored in ~/.wavs/wavs.toml instead
+/// so they work with all MCP clients, not just Claude Code.
 fn register_claude_mcp_json(
     project_path: &str,
     binary: &std::path::Path,
@@ -781,6 +794,11 @@ fn register_claude_mcp_json(
         args.push(serde_json::Value::String(t.to_string()));
     }
 
+    let entry = serde_json::json!({
+        "command": binary.to_string_lossy(),
+        "args": args,
+    });
+
     // Upsert nested structure
     let obj = config
         .as_object_mut()
@@ -797,10 +815,7 @@ fn register_claude_mcp_json(
         .entry("mcpServers")
         .or_insert(serde_json::json!({}));
 
-    config["projects"][project_path]["mcpServers"]["wavs"] = serde_json::json!({
-        "command": binary.to_string_lossy(),
-        "args": args,
-    });
+    config["projects"][project_path]["mcpServers"]["wavs"] = entry;
 
     // Write atomically via a temp file in the same directory
     let parent = claude_json.parent().unwrap();
@@ -818,71 +833,93 @@ fn register_claude_mcp_json(
     Ok(())
 }
 
-/// Copy chain_write_credential and signing_mnemonic from the WAVS home wavs.toml
-/// into ~/.wavs/wavs.toml so chain-write tools work from any project.
-fn write_global_wavs_credentials(wavs_home: &std::path::Path) -> anyhow::Result<()> {
-    let source_toml = wavs_home.join("wavs.toml");
-    if !source_toml.exists() {
-        return Ok(());
+/// Read mcp_chain_credential and signing_mnemonic from a WAVS home wavs.toml.
+/// Checks both the new `mcp_chain_credential` key and the legacy `chain_write_credential`
+/// key so that projects that haven't yet been migrated still work.
+fn read_wavs_home_credentials(wavs_home: &std::path::Path) -> (Option<String>, Option<String>) {
+    let toml_path = wavs_home.join("wavs.toml");
+    if !toml_path.exists() {
+        return (None, None);
     }
-
-    let content = std::fs::read_to_string(&source_toml)?;
-    let table: toml::Table = content
-        .parse()
-        .map_err(|e| anyhow::anyhow!("Failed to parse wavs.toml: {}", e))?;
-
+    let content = match std::fs::read_to_string(&toml_path) {
+        Ok(c) => c,
+        Err(_) => return (None, None),
+    };
+    let table: toml::Table = match content.parse() {
+        Ok(t) => t,
+        Err(_) => return (None, None),
+    };
     let wavs_section = match table.get("wavs").and_then(|v| v.as_table()) {
         Some(t) => t,
-        None => return Ok(()),
+        None => return (None, None),
     };
-
+    // Prefer new key, fall back to legacy key for migration compatibility
     let cred = wavs_section
-        .get("chain_write_credential")
-        .and_then(|v| v.as_str());
+        .get("mcp_chain_credential")
+        .or_else(|| wavs_section.get("chain_write_credential"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let mnem = wavs_section
         .get("signing_mnemonic")
-        .and_then(|v| v.as_str());
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    (cred, mnem)
+}
 
-    if cred.is_none() && mnem.is_none() {
+/// Write mcp_chain_credential and/or signing_mnemonic to ~/.wavs/wavs.toml.
+/// Creates the directory and file if they don't exist. Upserts values in the
+/// [wavs] section, preserving all other keys and sections.
+fn write_global_wavs_credentials(
+    mcp_chain_credential: Option<&str>,
+    signing_mnemonic: Option<&str>,
+) -> anyhow::Result<()> {
+    if mcp_chain_credential.is_none() && signing_mnemonic.is_none() {
         return Ok(());
     }
-
     let home = std::env::var("HOME").map_err(|_| anyhow::anyhow!("HOME env var not set"))?;
-    let global_wavs_dir = std::path::Path::new(&home).join(".wavs");
-    std::fs::create_dir_all(&global_wavs_dir)?;
-    let global_toml_path = global_wavs_dir.join("wavs.toml");
+    let wavs_dir = std::path::Path::new(&home).join(".wavs");
+    std::fs::create_dir_all(&wavs_dir)?;
 
-    let existing_content = if global_toml_path.exists() {
-        std::fs::read_to_string(&global_toml_path)?
+    let toml_path = wavs_dir.join("wavs.toml");
+    let mut table: toml::Table = if toml_path.exists() {
+        let content = std::fs::read_to_string(&toml_path)?;
+        content.parse().unwrap_or_default()
     } else {
-        String::new()
+        toml::Table::new()
     };
 
-    let mut global: toml::Table = existing_content.parse().unwrap_or_default();
-
-    let wavs_table = global
-        .entry("wavs")
-        .or_insert(toml::Value::Table(toml::Table::new()))
-        .as_table_mut()
-        .ok_or_else(|| anyhow::anyhow!("[wavs] key in global toml is not a table"))?;
-
-    if let Some(c) = cred {
-        wavs_table.insert(
-            "chain_write_credential".to_string(),
-            toml::Value::String(c.to_string()),
-        );
+    {
+        let wavs_section = table
+            .entry("wavs")
+            .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+        let wavs_table = wavs_section
+            .as_table_mut()
+            .ok_or_else(|| anyhow::anyhow!("[wavs] is not a table in ~/.wavs/wavs.toml"))?;
+        if let Some(cred) = mcp_chain_credential {
+            wavs_table.insert(
+                "mcp_chain_credential".to_string(),
+                toml::Value::String(cred.to_string()),
+            );
+        }
+        if let Some(mnem) = signing_mnemonic {
+            wavs_table.insert(
+                "signing_mnemonic".to_string(),
+                toml::Value::String(mnem.to_string()),
+            );
+        }
     }
-    if let Some(m) = mnem {
-        wavs_table.insert(
-            "signing_mnemonic".to_string(),
-            toml::Value::String(m.to_string()),
-        );
-    }
 
-    // Write atomically
-    let tmp_path = global_wavs_dir.join(format!("wavs.toml.tmp.{}", std::process::id()));
-    std::fs::write(&tmp_path, toml::to_string_pretty(&global)?)?;
-    std::fs::rename(&tmp_path, &global_toml_path)?;
+    let content = toml::to_string(&toml::Value::Table(table))
+        .map_err(|e| anyhow::anyhow!("Failed to serialize TOML: {}", e))?;
+
+    // Write atomically via a temp file
+    let tmp_path = wavs_dir.join(format!(".wavs.toml.tmp.{}", std::process::id()));
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&tmp_path)?;
+        f.write_all(content.as_bytes())?;
+    }
+    std::fs::rename(&tmp_path, &toml_path)?;
 
     Ok(())
 }
@@ -907,13 +944,20 @@ pub async fn cmd_register_claude_mcp(
     let s = settings.get_cloned();
     let token = s.mcp_token.as_deref();
 
+    // Read credentials from the project wavs.toml
+    let (cred, mnem) = s
+        .wavs_home
+        .as_deref()
+        .map(read_wavs_home_credentials)
+        .unwrap_or((None, None));
+
+    // Write ~/.claude.json (command + args only, no credentials)
     register_claude_mcp_json(&project_path, &binary, &wavs_url, token)
         .map_err(|e| AppError::Io(e.to_string()))?;
 
-    if let Some(wavs_home) = s.wavs_home {
-        write_global_wavs_credentials(&wavs_home)
-            .map_err(|e| AppError::Io(e.to_string()))?;
-    }
+    // Write credentials to ~/.wavs/wavs.toml (universal, all MCP clients)
+    write_global_wavs_credentials(cred.as_deref(), mnem.as_deref())
+        .map_err(|e| AppError::Io(e.to_string()))?;
 
     Ok(project_path)
 }

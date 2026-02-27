@@ -4,8 +4,9 @@ Register wavs-mcp with Claude Code for a given project directory.
 
 Reads the running wavs-mcp process args (URL + token), finds the binary,
 then upserts projects.<abs-path>.mcpServers.wavs in ~/.claude.json.
-Also writes chain credentials to ~/.wavs/wavs.toml so chain-write tools
-work from any project without a local wavs.toml.
+Chain credentials (mcp_chain_credential, signing_mnemonic) are written to
+~/.wavs/wavs.toml — a user-level file outside any git repo, readable by
+all MCP clients (Claude Code, Cursor, VS Code, etc.).
 
 Usage:
     python3 ~/.claude/skills/wavs/setup_claude_mcp.py [/path/to/project]
@@ -57,11 +58,13 @@ def find_binary() -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# 2. Parse the running wavs-mcp process for --wavs-url and --token
+# 2. Parse the running wavs-mcp process for --wavs-url and --token only
 # ---------------------------------------------------------------------------
 
 def parse_running_process() -> tuple[str | None, str | None]:
-    """Return (wavs_url, token) from the running wavs-mcp process, or (None, None)."""
+    """Return (wavs_url, token) from the running wavs-mcp process, or (None, None).
+    Only reads --wavs-url and --token — non-sensitive connection parameters.
+    """
     try:
         result = subprocess.run(
             ["ps", "aux"],
@@ -82,50 +85,23 @@ def parse_running_process() -> tuple[str | None, str | None]:
 
 
 # ---------------------------------------------------------------------------
-# 3. Chain credentials: read from running process or wavs.toml
+# 3. Chain credentials: read from ~/.wavs/wavs.toml (user-home only)
 # ---------------------------------------------------------------------------
 
-def read_credentials_from_running() -> tuple[str | None, str | None]:
+def read_credentials_from_global_toml() -> tuple[str | None, str | None]:
     """
-    Parse --chain-write-credential and --signing-mnemonic from ps aux output.
-    Returns (chain_write_credential, signing_mnemonic).
+    Read mcp_chain_credential and signing_mnemonic from ~/.wavs/wavs.toml.
+    Only reads from the user-home global credential store, never from
+    project-local files (which may be inside a git repository).
+    Returns (mcp_chain_credential, signing_mnemonic).
     """
-    try:
-        result = subprocess.run(
-            ["ps", "aux"],
-            capture_output=True, text=True, timeout=5
-        )
-        for line in result.stdout.splitlines():
-            if "wavs-mcp" not in line or "grep" in line:
-                continue
-            cred_m = re.search(r"--chain-write-credential\s+(\S+)", line)
-            # signing-mnemonic may be a multi-word phrase in quotes; grab to next flag or end
-            mnem_m = re.search(r'--signing-mnemonic\s+"([^"]+)"', line)
-            if not mnem_m:
-                mnem_m = re.search(r"--signing-mnemonic\s+'([^']+)'", line)
-            if not mnem_m:
-                mnem_m = re.search(r"--signing-mnemonic\s+(\S+)", line)
-            cred = cred_m.group(1) if cred_m else None
-            mnem = mnem_m.group(1) if mnem_m else None
-            if cred or mnem:
-                return cred, mnem
-    except Exception:
-        pass
-    return None, None
-
-
-def read_credentials_from_toml(path: Path) -> tuple[str | None, str | None]:
-    """
-    Read chain_write_credential and signing_mnemonic from [wavs] section
-    of a wavs.toml file. Returns (chain_write_credential, signing_mnemonic).
-    """
-    if not path.exists():
+    toml_path = Path.home() / ".wavs" / "wavs.toml"
+    if not toml_path.exists():
         return None, None
     try:
-        content = path.read_text()
+        content = toml_path.read_text()
 
         def extract(key: str) -> str | None:
-            # Match key = "value" or key = 'value' or key = value
             m = re.search(rf'^{re.escape(key)}\s*=\s*"([^"]*)"', content, re.MULTILINE)
             if m:
                 return m.group(1)
@@ -137,65 +113,12 @@ def read_credentials_from_toml(path: Path) -> tuple[str | None, str | None]:
                 return m.group(1).strip("\"'")
             return None
 
-        return extract("chain_write_credential"), extract("signing_mnemonic")
+        # Prefer new key name, fall back to legacy key for migration
+        cred = extract("mcp_chain_credential") or extract("chain_write_credential")
+        mnem = extract("signing_mnemonic")
+        return cred, mnem
     except Exception:
         return None, None
-
-
-def write_wavs_toml(cred: str | None, mnem: str | None) -> None:
-    """
-    Upsert chain_write_credential and signing_mnemonic in ~/.wavs/wavs.toml.
-    Creates the file and directory if needed. No-ops if both values are None.
-    """
-    if not cred and not mnem:
-        return
-
-    wavs_dir = Path.home() / ".wavs"
-    wavs_dir.mkdir(exist_ok=True)
-    toml_path = wavs_dir / "wavs.toml"
-
-    content = toml_path.read_text() if toml_path.exists() else ""
-
-    def upsert_key(text: str, key: str, value: str) -> str:
-        # If key already exists anywhere, update it in place
-        pattern = rf'^({re.escape(key)}\s*=\s*).*$'
-        new_text, n = re.subn(pattern, f'{key} = "{value}"', text, flags=re.MULTILINE)
-        if n > 0:
-            return new_text
-        # Append inside existing [wavs] section, or create section
-        if "[wavs]" in text:
-            idx = text.index("[wavs]") + len("[wavs]")
-            # Find the start of the next section header
-            next_section = re.search(r'^\[(?!wavs\b)', text[idx:], re.MULTILINE)
-            if next_section:
-                insert_at = idx + next_section.start()
-                return text[:insert_at] + f'{key} = "{value}"\n' + text[insert_at:]
-            else:
-                return text.rstrip() + f'\n{key} = "{value}"\n'
-        else:
-            return text.rstrip() + f'\n\n[wavs]\n{key} = "{value}"\n'
-
-    if cred:
-        content = upsert_key(content, "chain_write_credential", cred)
-    if mnem:
-        content = upsert_key(content, "signing_mnemonic", mnem)
-
-    # Write atomically
-    tmp = tempfile.NamedTemporaryFile(
-        mode="w",
-        dir=wavs_dir,
-        delete=False,
-        suffix=".tmp",
-    )
-    try:
-        tmp.write(content)
-        tmp.close()
-        os.replace(tmp.name, toml_path)
-    except Exception:
-        os.unlink(tmp.name)
-        raise
-
-    print(f"Credentials written to {toml_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -227,10 +150,86 @@ def prompt_optional(label: str, default: str | None, secret: bool = False) -> st
 
 
 # ---------------------------------------------------------------------------
-# 5. Atomically update ~/.claude.json
+# 5. Write credentials to ~/.wavs/wavs.toml
 # ---------------------------------------------------------------------------
 
-def update_claude_json(project_path: str, command: str, args: list[str]) -> None:
+def _upsert_toml_key(content: str, section: str, key: str, value: str) -> str:
+    """Insert or update `key = "value"` in [section] of TOML content.
+
+    If the section doesn't exist, appends it. If the key doesn't exist in
+    the section, appends it. If it exists, replaces the value in-place.
+    """
+    new_assignment = f'{key} = "{value}"'
+    lines = content.splitlines(keepends=True)
+
+    in_target_section = False
+    section_found = False
+    key_found = False
+    insert_before_idx = None  # Insert key before this line if not found in section
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        # Detect section headers (not array-of-tables [[...]])
+        if stripped.startswith("[") and not stripped.startswith("[["):
+            current_section = stripped[1:stripped.index("]")].strip()
+            if current_section == section:
+                in_target_section = True
+                section_found = True
+            elif in_target_section:
+                # We've left the target section
+                in_target_section = False
+                insert_before_idx = i
+                break
+
+        if in_target_section and not stripped.startswith("["):
+            if re.match(rf"^{re.escape(key)}\s*=", stripped):
+                lines[i] = new_assignment + "\n"
+                key_found = True
+                break
+
+    if key_found:
+        return "".join(lines)
+
+    if section_found:
+        # Section exists but key was not found
+        if insert_before_idx is not None:
+            # Insert before the next section header
+            lines.insert(insert_before_idx, new_assignment + "\n")
+        else:
+            # Section extends to EOF; append to end of file
+            sep = "" if content.endswith("\n") else "\n"
+            return "".join(lines) + sep + new_assignment + "\n"
+        return "".join(lines)
+    else:
+        # Section doesn't exist at all; append it
+        sep = "" if not content or content.endswith("\n") else "\n"
+        return "".join(lines) + sep + f"[{section}]\n{new_assignment}\n"
+
+
+def write_credentials_to_wavs_toml(
+    cred: str | None,
+    mnem: str | None,
+) -> None:
+    """Write mcp_chain_credential and signing_mnemonic to ~/.wavs/wavs.toml."""
+    toml_path = Path.home() / ".wavs" / "wavs.toml"
+    toml_path.parent.mkdir(parents=True, exist_ok=True)
+    content = toml_path.read_text() if toml_path.exists() else ""
+    if cred:
+        content = _upsert_toml_key(content, "wavs", "mcp_chain_credential", cred)
+    if mnem:
+        content = _upsert_toml_key(content, "wavs", "signing_mnemonic", mnem)
+    toml_path.write_text(content)
+
+
+# ---------------------------------------------------------------------------
+# 6. Atomically update ~/.claude.json
+# ---------------------------------------------------------------------------
+
+def update_claude_json(
+    project_path: str,
+    command: str,
+    args: list[str],
+) -> None:
     claude_json = Path.home() / ".claude.json"
 
     if claude_json.exists():
@@ -246,10 +245,12 @@ def update_claude_json(project_path: str, command: str, args: list[str]) -> None
     config["projects"].setdefault(project_path, {})
     config["projects"][project_path].setdefault("mcpServers", {})
 
-    config["projects"][project_path]["mcpServers"]["wavs"] = {
+    entry: dict = {
         "command": command,
         "args": args,
     }
+
+    config["projects"][project_path]["mcpServers"]["wavs"] = entry
 
     tmp = tempfile.NamedTemporaryFile(
         mode="w",
@@ -289,7 +290,7 @@ def main() -> None:
         sys.exit(1)
     print(f"Binary       : {binary}")
 
-    # Get URL + token from running process
+    # Get URL + token from running process (non-sensitive connection params only)
     url, token = parse_running_process()
     if url:
         print(f"Detected URL : {url}")
@@ -304,7 +305,18 @@ def main() -> None:
 
     args = ["--wavs-url", url, "--token", token]
 
-    # Update ~/.claude.json
+    # --- Credentials: read from ~/.wavs/wavs.toml, prompt if missing ---
+    print("\nLooking for chain credentials in ~/.wavs/wavs.toml ...")
+
+    cred, mnem = read_credentials_from_global_toml()
+    if cred or mnem:
+        print("  Credentials found.")
+    else:
+        print("  Not found — enter them now or press Enter to skip.")
+        cred = prompt_optional("  mcp_chain_credential (private key for gas)", None, secret=True)
+        mnem = prompt_optional("  signing_mnemonic (node signing key)", None, secret=True)
+
+    # Update ~/.claude.json (command + args only, no credentials)
     update_claude_json(project_path, binary, args)
 
     print("\nDone! Written to ~/.claude.json:")
@@ -318,26 +330,11 @@ def main() -> None:
         }
     }, indent=2))
 
-    # --- Credentials for ~/.wavs/wavs.toml ---
-    print("\nLooking for chain credentials for ~/.wavs/wavs.toml ...")
-
-    # 1. Try running process args
-    cred, mnem = read_credentials_from_running()
-
-    # 2. Try ./wavs.toml in CWD
-    if not cred and not mnem:
-        local_toml = Path.cwd() / "wavs.toml"
-        cred, mnem = read_credentials_from_toml(local_toml)
-        if (cred or mnem) and local_toml.exists():
-            print(f"  Credentials found in {local_toml}")
-
-    # 3. Interactive prompt
-    if not cred and not mnem:
-        print("  Not found automatically — enter them now or press Enter to skip.")
-        cred = prompt_optional("  chain_write_credential (private key for gas)", None, secret=True)
-        mnem = prompt_optional("  signing_mnemonic (node signing key)", None, secret=True)
-
-    write_wavs_toml(cred, mnem)
+    # Write credentials to ~/.wavs/wavs.toml (universal — all MCP clients read this)
+    if cred or mnem:
+        write_credentials_to_wavs_toml(cred, mnem)
+        print("\nCredentials written to ~/.wavs/wavs.toml")
+        print("wavs-mcp reads them automatically from all MCP clients (Claude Code, Cursor, VS Code, etc.).")
 
     print("\nRestart Claude Code (or reload MCP servers) to pick up the change.")
 

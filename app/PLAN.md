@@ -22,16 +22,20 @@ MVP Requirements:
 - [x] Make it easier to copy seed phrase
 - [x] Figure out how to use the aggregator
 - [x] Fix auto start MCP when app starts
-- [ ] Select file
-- [ ] LLM Config (makes those LLMs available to WASM components)
+- [x] Build an MCP
+- [ ] Select file / folder UX
+- [x] Security (make sure it works with environment variable, update MCP.md to recommend putting in .env, make sure .env.example is up to date)
+- [x] Rename chain_write_credential to wavs_mcp_signer_mnemonic
+- [-] Test submission with an actual solidity contract
+- [-] Test DevEx in new repo (component development, deploying contracts, etc.)
 - [ ] Better aesthetics
-- [ ] Merge logs and activity? (sort of similar?)
-- [ ] Test submission with an actual solidity contract
-- [ ] Test DevEx in new repo (component development, deploying contracts, etc.)
+- [ ] App restart is broken in dev mode
 
 Post MVP:
-- Build an MCP
-- Start building out proof of reputation system
-- Update docs
+- LLM Config (makes those LLMs available to WASM components)
+- P2P Page
+- WAVS Service Registry
+- WAVS Trust Graph (Start building out proof of reputation system)
 - WAVS plus ZK sidecar
 - Commonware
+- Maybe consider making the MCP a WAVS Component?

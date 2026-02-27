@@ -178,7 +178,7 @@ fn tool(name: &'static str, desc: &'static str, schema: Arc<serde_json::Map<Stri
 #[derive(Clone)]
 pub struct WavsMcpServer {
     client: WavsClient,
-    chain_write_credential: Option<String>,
+    mcp_chain_credential: Option<String>,
     signing_mnemonic: Option<String>,
 }
 
@@ -186,30 +186,30 @@ impl WavsMcpServer {
     pub fn new(
         wavs_url: String,
         token: Option<String>,
-        chain_write_credential: Option<String>,
+        mcp_chain_credential: Option<String>,
         signing_mnemonic: Option<String>,
     ) -> Self {
         Self {
             client: WavsClient::new(wavs_url, token),
-            chain_write_credential,
+            mcp_chain_credential,
             signing_mnemonic,
         }
     }
 
-    fn require_chain_write_credential(&self) -> Result<wavs_types::Credential, McpError> {
-        self.chain_write_credential
+    fn require_mcp_chain_credential(&self) -> Result<wavs_types::Credential, McpError> {
+        self.mcp_chain_credential
             .as_deref()
             .ok_or_else(|| ErrorData {
                 code: ErrorCode::INVALID_PARAMS,
-                message: "--chain-write-credential is not configured on this MCP server. \
-                    Set WAVS_CHAIN_WRITE_CREDENTIAL env var, add chain_write_credential to wavs.toml [wavs] section, \
-                    or restart with --chain-write-credential.".into(),
+                message: "--mcp-chain-credential is not configured on this MCP server. \
+                    Set WAVS_MCP_CHAIN_CREDENTIAL env var in the MCP client config, \
+                    or restart with --mcp-chain-credential.".into(),
                 data: None,
             })
             .and_then(|s| {
                 s.parse::<wavs_types::Credential>().map_err(|e| ErrorData {
                     code: ErrorCode::INVALID_PARAMS,
-                    message: format!("invalid chain_write_credential: {e}").into(),
+                    message: format!("invalid mcp_chain_credential: {e}").into(),
                     data: None,
                 })
             })
@@ -395,7 +395,7 @@ impl WavsMcpServer {
 
     async fn tool_set_service_uri(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
         let p: SetServiceUriParams = parse_args(args)?;
-        let credential = self.require_chain_write_credential()?;
+        let credential = self.require_mcp_chain_credential()?;
         let manager = match serde_json::from_str(&p.service_manager_json) {
             Ok(m) => m,
             Err(e) => return err(format!("Invalid service_manager_json: {e}")),
@@ -408,7 +408,7 @@ impl WavsMcpServer {
 
     async fn tool_deploy_service_manager(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
         let p: DeployServiceManagerParams = parse_args(args)?;
-        let credential = self.require_chain_write_credential()?;
+        let credential = self.require_mcp_chain_credential()?;
         match chain_ops::deploy_service_manager(&credential, &p.rpc_url).await {
             Ok((address, tx_hash)) => ok(format!("SimpleServiceManager deployed.\nAddress: {address}\nTx: {tx_hash}")),
             Err(e) => err(format!("Failed to deploy service manager: {e:#}")),
@@ -417,7 +417,7 @@ impl WavsMcpServer {
 
     async fn tool_deploy_poa_service_manager(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
         let p: DeployPoaServiceManagerParams = parse_args(args)?;
-        let credential = self.require_chain_write_credential()?;
+        let credential = self.require_mcp_chain_credential()?;
         match chain_ops::deploy_poa_service_manager(&credential, &p.rpc_url).await {
             Ok(address) => ok(format!("POAStakeRegistry deployed.\nAddress (use as service manager): {address}")),
             Err(e) => err(format!("Failed to deploy POA service manager: {e:#}")),
@@ -426,7 +426,7 @@ impl WavsMcpServer {
 
     async fn tool_register_operator(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
         let p: RegisterOperatorParams = parse_args(args)?;
-        let owner_cred = self.require_chain_write_credential()?;
+        let owner_cred = self.require_mcp_chain_credential()?;
         let signing_cred = self.require_signing_mnemonic()?;
         let manager = match serde_json::from_str(&p.service_manager_json) {
             Ok(m) => m,
@@ -668,7 +668,7 @@ impl ServerHandler for WavsMcpServer {
                  Read tools (no auth needed): wavs_get_node_info, wavs_get_health, wavs_list_services, wavs_get_service\n\
                  Write tools (need --token): wavs_deploy_service, wavs_delete_service, wavs_pause_service, wavs_resume_service\n\
                  Dev tools (need dev endpoints): wavs_upload_component, wavs_save_service, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv\n\
-                 Chain-write tools (need WAVS_CHAIN_WRITE_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
+                 Chain-write tools (need WAVS_MCP_CHAIN_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
                  Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator, wavs_get_signing_address\n\
                  Local tools: wavs_get_service_schema, wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component"
                     .to_string(),
@@ -724,11 +724,11 @@ impl ServerHandler for WavsMcpServer {
                     description: "Resume a paused service. Requires --token.".into(),
                     input_schema: schema_for_type::<ServiceManagerParams>().into(),
                 },
-                // Chain-write tools (need WAVS_CHAIN_WRITE_CREDENTIAL on MCP server)
+                // Chain-write tools (need WAVS_MCP_CHAIN_CREDENTIAL on MCP server)
                 Tool {
                     name: "wavs_set_service_uri".into(),
                     description: "Call setServiceURI on the ServiceManager contract to update the \
-                        on-chain service URI. Requires --chain-write-credential (WAVS_CHAIN_WRITE_CREDENTIAL) \
+                        on-chain service URI. Requires --mcp-chain-credential (WAVS_MCP_CHAIN_CREDENTIAL) \
                         to be configured on this MCP server. Provide the chain RPC URL as rpc_url. \
                         EVM only currently.".into(),
                     input_schema: schema_for_type::<SetServiceUriParams>().into(),
@@ -736,7 +736,7 @@ impl ServerHandler for WavsMcpServer {
                 Tool {
                     name: "wavs_deploy_service_manager".into(),
                     description: "Deploy a new SimpleServiceManager PoA contract on-chain and return its address. \
-                        Requires --chain-write-credential (WAVS_CHAIN_WRITE_CREDENTIAL) on this MCP server. \
+                        Requires --mcp-chain-credential (WAVS_MCP_CHAIN_CREDENTIAL) on this MCP server. \
                         Provide the chain RPC URL as rpc_url. EVM only currently.".into(),
                     input_schema: schema_for_type::<DeployServiceManagerParams>().into(),
                 },
@@ -744,7 +744,7 @@ impl ServerHandler for WavsMcpServer {
                     name: "wavs_deploy_poa_service_manager".into(),
                     description: "Deploy a new POAStakeRegistry (full PoA middleware with proxy) on-chain via Docker. \
                         Returns the proxy address to use as service manager. \
-                        Requires --chain-write-credential on this MCP server. \
+                        Requires --mcp-chain-credential on this MCP server. \
                         Docker image ghcr.io/lay3rlabs/poa-middleware:1.0.1 must be available. \
                         Provide the chain RPC URL as rpc_url. EVM only currently. \
                         After deploying, call wavs_register_operator with the returned address to register the \
@@ -756,10 +756,10 @@ impl ServerHandler for WavsMcpServer {
                     description: "Step 2 of PoA setup (call after wavs_deploy_poa_service_manager). \
                         Registers the WAVS node's signing key as an operator on a POAStakeRegistry contract \
                         and sets the signing key mapping. \
-                        Calls registerOperator (using WAVS_CHAIN_WRITE_CREDENTIAL as owner) and \
+                        Calls registerOperator (using WAVS_MCP_CHAIN_CREDENTIAL as owner) and \
                         updateOperatorSigningKey (using WAVS_SIGNING_MNEMONIC as operator). \
                         weight is a relative stake weight (default: 100; any positive value works for single-operator setups). \
-                        Requires --chain-write-credential and --signing-mnemonic on this MCP server. \
+                        Requires --mcp-chain-credential and --signing-mnemonic on this MCP server. \
                         Provide the chain RPC URL as rpc_url. EVM only currently.".into(),
                     input_schema: schema_for_type::<RegisterOperatorParams>().into(),
                 },
