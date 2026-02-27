@@ -65,10 +65,8 @@ fn read_credential_toml_field(field: &str) -> Option<String> {
         let Ok(content) = std::fs::read_to_string(&path) else { continue };
         let Ok(doc) = content.parse::<toml::Table>() else { continue };
         if let Some(value) = doc.get("wavs").and_then(|v| v.get(field)).and_then(|v| v.as_str()) {
-            tracing::warn!(
-                "Loaded '{}' from wavs.toml at '{}'. \
-                 For better security, set WAVS_MCP_CHAIN_CREDENTIAL or WAVS_SIGNING_MNEMONIC \
-                 as env vars in your MCP client config instead.",
+            tracing::info!(
+                "Loaded '{}' from {}.",
                 field,
                 path.display()
             );
