@@ -4,7 +4,7 @@ import { mainnet, sepolia, holesky } from 'viem/chains';
 import { AddressDisplay, Button, TomlEditor } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
 import { useWalletStore } from '../stores/walletStore';
-import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, getWavsUrl, saveMcpSettings, clearPersistedServices } from '../tauri';
+import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, getWavsUrl, saveMcpSettings, clearPersistedServices, registerClaudeMcp } from '../tauri';
 import { usePOAStore } from '../stores/poaStore';
 import { errorMessage } from '../utils/error';
 import type { McpStatus } from '../types';
@@ -72,6 +72,10 @@ export function Settings() {
   const [mcpToken, setMcpToken] = useState(settings.mcp_token ?? '');
   const [mcpLoading, setMcpLoading] = useState(false);
   const [mcpError, setMcpError] = useState<string | null>(null);
+  const [claudeProjectPath, setClaudeProjectPath] = useState('');
+  const [claudeRegisterResult, setClaudeRegisterResult] = useState<string | null>(null);
+  const [claudeRegisterLoading, setClaudeRegisterLoading] = useState(false);
+  const [claudeRegisterError, setClaudeRegisterError] = useState<string | null>(null);
   const [showMnemonic, setShowMnemonic] = useState(false);
   const [exportedMnemonic, setExportedMnemonic] = useState<string | null>(null);
   const [mnemonicCopied, setMnemonicCopied] = useState(false);
@@ -222,6 +226,20 @@ export function Settings() {
       await saveMcpSettings(mcpAutoStart, mcpToken.trim() || null);
     } catch (e) {
       setMcpError(errorMessage(e));
+    }
+  };
+
+  const handleRegisterClaude = async () => {
+    setClaudeRegisterLoading(true);
+    setClaudeRegisterError(null);
+    setClaudeRegisterResult(null);
+    try {
+      const result = await registerClaudeMcp(claudeProjectPath.trim());
+      setClaudeRegisterResult(result);
+    } catch (e) {
+      setClaudeRegisterError(errorMessage(e));
+    } finally {
+      setClaudeRegisterLoading(false);
     }
   };
 
@@ -603,6 +621,37 @@ export function Settings() {
             <p className="text-tan-muted text-xs mt-1">
               Binary not found. Build it with: <span className="font-mono">cargo build --release -p wavs-mcp</span>
             </p>
+          )}
+        </div>
+
+        {/* Register with Claude Code */}
+        <div className="flex flex-col gap-2">
+          <label className="text-tan-muted text-xs font-medium">Register with Claude Code</label>
+          <p className="text-tan-muted text-xs">
+            Add wavs-mcp to a Claude Code project so MCP tools are available there.
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={claudeProjectPath}
+              onChange={(e) => setClaudeProjectPath(e.target.value)}
+              placeholder="/path/to/your-project"
+              className="flex-1 px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
+            />
+            <Button
+              text={claudeRegisterLoading ? '...' : 'Register'}
+              variant="outline"
+              onClick={handleRegisterClaude}
+              disabled={claudeRegisterLoading || !mcpStatus?.running || !claudeProjectPath.trim()}
+            />
+          </div>
+          {claudeRegisterResult && (
+            <p className="text-green-4 text-xs">
+              Registered for {claudeRegisterResult}. Restart Claude Code to pick up the change.
+            </p>
+          )}
+          {claudeRegisterError && (
+            <p className="text-red-4 text-xs">{claudeRegisterError}</p>
           )}
         </div>
 
