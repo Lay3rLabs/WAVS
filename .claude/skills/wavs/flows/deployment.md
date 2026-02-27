@@ -126,3 +126,112 @@ wavs:wavs_deploy_dev_service  {service_json}
 ```
 
 Requires `dev_endpoints_enabled = true` in `wavs.toml`. The service is registered directly from the JSON without an on-chain ServiceManager.
+
+---
+
+## Complete Example (PoA + manual trigger)
+
+This walkthrough uses `echo_data.wasm` on a local Anvil chain (`evm:31337`). All values shown are real.
+
+### Step 1 — Health check
+```
+wavs_get_health()
+→ {"evm:31337": "ok"}
+```
+
+### Step 2 — Deploy POAStakeRegistry
+```
+wavs_deploy_poa_service_manager(rpc_url="http://localhost:8545")
+→ POAStakeRegistry deployed.
+  Address (use as service manager): 0x8a791620dd6260079bf849dc5567adc3f2fdc318
+```
+
+### Step 3 — Register operator
+```
+wavs_register_operator(
+  service_manager_json={"evm":{"chain":"evm:31337","address":"0x8a791620dd6260079bf849dc5567adc3f2fdc318"}},
+  rpc_url="http://localhost:8545"
+)
+→ Operator registered.
+  Operator: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+  Register tx: 0xabc123...
+  Signing key tx: 0xdef456...
+```
+
+### Step 4 — Build and upload component
+```
+wavs_build_component(dir="/path/to/my-component")
+→ Exit code: 0
+  ...
+  Output WASM files:
+    /path/to/my-component/target/wasm32-wasip1/release/my_component.wasm
+
+wavs_upload_component(file_path="/path/to/my-component/target/wasm32-wasip1/release/my_component.wasm")
+→ Component uploaded.
+  Digest: f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420
+```
+
+Note: `examples/build/components/echo_data.wasm` is a pre-built component you can use directly.
+
+### Step 5 — Save service definition
+
+```
+wavs_save_service(service_json='{
+  "name": "echo-manual",
+  "status": "active",
+  "manager": {
+    "evm": {"chain": "evm:31337", "address": "0x8a791620dd6260079bf849dc5567adc3f2fdc318"}
+  },
+  "workflows": {
+    "default": {
+      "trigger": "manual",
+      "component": {
+        "source": {"digest": "f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420"},
+        "permissions": {"file_system": false, "allowed_http_hosts": "none", "raw_sockets": false, "dns_resolution": false},
+        "fuel_limit": null,
+        "time_limit_seconds": null,
+        "config": {},
+        "env_keys": []
+      },
+      "submit": "none"
+    }
+  }
+}')
+→ Service saved.
+  URI: http://127.0.0.1:8041/dev/services/a3f5f24b9e12...
+```
+
+### Step 6 — Set URI on-chain
+```
+wavs_set_service_uri(
+  service_manager_json={"evm":{"chain":"evm:31337","address":"0x8a791620dd6260079bf849dc5567adc3f2fdc318"}},
+  uri="http://127.0.0.1:8041/dev/services/a3f5f24b9e12...",
+  rpc_url="http://localhost:8545"
+)
+→ Service URI updated on-chain successfully
+```
+
+### Step 7 — Register with WAVS node
+```
+wavs_deploy_service(
+  service_manager_json={"evm":{"chain":"evm:31337","address":"0x8a791620dd6260079bf849dc5567adc3f2fdc318"}}
+)
+→ Service registered successfully.
+```
+
+### Step 8 — Smoke test
+```
+wavs_simulate_trigger(
+  service_id="b3f4249f...",   ← from wavs_list_services
+  workflow_id="default",
+  trigger_json={"manual": null},
+  data_json={"Raw": [72, 101, 108, 108, 111]}   ← "Hello" as bytes
+)
+→ Trigger simulated successfully
+```
+
+### Step 9 — Confirm active
+```
+wavs_list_services()
+→ {"service_ids": ["b3f4249f..."], "services": {...}}
+```
