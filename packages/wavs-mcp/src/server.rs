@@ -43,7 +43,8 @@ pub struct SimulateTriggerParams {
     pub service_id: String,
     /// Workflow ID — lowercase alphanumeric, 3–36 chars (e.g. "default")
     pub workflow_id: String,
-    /// Trigger definition as JSON, e.g. `{"cron":{"schedule":"* * * * *","start_time":null,"end_time":null}}`
+    /// Trigger definition as JSON, e.g. `{"cron":{"schedule":"* * * * * * *","start_time":null,"end_time":null}}`
+    /// Note: cron schedule uses 7-field format: `sec min hour dom month dow year`
     pub trigger_json: String,
     /// TriggerData as JSON, e.g. `{"Cron":{"trigger_time":0}}`
     pub data_json: String,
@@ -272,6 +273,7 @@ impl WavsMcpServer {
             Err(e) => return err(format!("Invalid service_manager_json: {e}")),
         };
         match self.client.deploy_service(manager).await {
+            Ok(v) if v.is_null() => ok("Service registered successfully."),
             Ok(v) => ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string())),
             Err(e) => err(format!("Failed to deploy service: {e:#}")),
         }
