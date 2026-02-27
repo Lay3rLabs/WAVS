@@ -210,23 +210,34 @@ pub async fn register_operator(
 
     let registry_as_owner =
         IPOAStakeRegistryInstance::new(contract_address, owner_client.provider.clone());
-    let register_tx = match registry_as_owner
-        .registerOperator(signing_key_addr, U256::from(weight))
-        .send()
-        .await
-    {
-        Ok(pending) => {
-            let receipt = pending.get_receipt().await?;
-            format!("{}", receipt.transaction_hash)
-        }
-        Err(e) => {
-            let msg = e.to_string();
-            if msg.contains("AlreadyRegistered") || msg.contains("0x42ee68b5") {
-                "skipped (operator already registered, proceeding to set signing key)".to_string()
-            } else {
-                return Err(e.into());
+    let register_tx = 'retry: {
+        let mut last_err = None;
+        for attempt in 0..3u32 {
+            match registry_as_owner
+                .registerOperator(signing_key_addr, U256::from(weight))
+                .send()
+                .await
+            {
+                Ok(pending) => {
+                    let receipt = pending.get_receipt().await?;
+                    break 'retry format!("{}", receipt.transaction_hash);
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    if msg.contains("AlreadyRegistered") || msg.contains("0x42ee68b5") {
+                        break 'retry "skipped (operator already registered, proceeding to set signing key)".to_string();
+                    }
+                    if (msg.contains("nonce") || msg.contains("replacement transaction")) && attempt < 2 {
+                        tracing::warn!("registerOperator attempt {} failed ({}), retrying…", attempt + 1, msg);
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        last_err = Some(e);
+                        continue;
+                    }
+                    return Err(e.into());
+                }
             }
         }
+        return Err(last_err.unwrap().into());
     };
 
     let encoded: Vec<u8> = (signing_key_addr,).abi_encode();

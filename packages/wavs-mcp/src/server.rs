@@ -616,23 +616,23 @@ Example: f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420
       "permissions": {"file_system": false, "allowed_http_hosts": "none", "raw_sockets": false, "dns_resolution": false},
       "fuel_limit": null,
       "time_limit_seconds": null,
-      "config": {},
+      "config": {
+        "chain": "evm:31337",
+        "service_handler": "0xReceiverContract"
+      },
       "env_keys": []
     },
-    "quorum_percent": 100,
-    "allowed_operators": null,
-    "contract": {
-      "evm": {
-        "chain": "evm:31337",
-        "address": "0xReceiverContract",
-        "method": "addPayload(bytes)"
-      }
+    "signature_kind": {
+      "algorithm": "secp256k1",
+      "prefix": "eip191"
     }
   }
 }
 ```
 IMPORTANT: when using aggregator submit, you must upload simple-aggregator.wasm as a SECOND component
 and use its digest in the submit.aggregator.component.source.digest field above.
+The receiver contract address goes in component.config["service_handler"] and the chain key in component.config["chain"].
+There is NO top-level "contract", "quorum_percent", or "allowed_operators" field — those do not exist.
 
 ---
 
@@ -704,7 +704,10 @@ impl ServerHandler for WavsMcpServer {
                 // Write tools
                 Tool {
                     name: "wavs_deploy_service".into(),
-                    description: "Register a service by its ServiceManager. Pass service_manager_json as: \
+                    description: "Production workflow: registers a service whose URI is already set on-chain \
+                        (call wavs_save_service + wavs_set_service_uri first). \
+                        For dev/testing without an on-chain contract, use wavs_deploy_dev_service instead. \
+                        Pass service_manager_json as: \
                         {\"evm\":{\"chain\":\"evm:31337\",\"address\":\"0x...\"}} or \
                         {\"cosmos\":{\"chain\":\"cosmos:mychain\",\"address\":\"cosmos1...\"}}. Requires --token.".into(),
                     input_schema: schema_for_type::<ServiceManagerParams>().into(),
@@ -798,7 +801,9 @@ impl ServerHandler for WavsMcpServer {
                     description: "Register a service directly without an on-chain contract (dev/testing only). \
                         Pass the full Service JSON. Handles the two-step save+register flow internally. \
                         Requires dev endpoints enabled in wavs.toml and --token. \
-                        Call wavs_get_service_schema first to see a minimal valid example.".into(),
+                        Call wavs_get_service_schema first to see a minimal valid example. \
+                        Use this for local dev. For production with a real ServiceManager contract, \
+                        use wavs_save_service → wavs_set_service_uri → wavs_deploy_service instead.".into(),
                     input_schema: schema_for_type::<DeployDevServiceParams>().into(),
                 },
                 Tool {
