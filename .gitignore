@@ -16,7 +16,6 @@ deployments
 artifacts
 sdk/*.wasm
 wit-definitions/**/*.wasm
-wit-definitions/*/wit/deps
 temp_clone/
 **/.claude/settings.local.json
 packages/types/bindings
