@@ -95,11 +95,12 @@ port = 8041
 # Generate with `openssl rand -hex 32`
 # bearer_token = "change-me"
 
-# Credential (private key or mnemonic) for on-chain management transactions.
-# Required by the /services/set-uri endpoint (and wavs_set_service_uri MCP tool).
-# Env var override: WAVS_CHAIN_WRITE_CREDENTIAL
+# Credential (private key or mnemonic) for on-chain management transactions via MCP.
+# Required by the wavs_set_service_uri, wavs_deploy_service_manager, etc. MCP tools.
+# Env var override: WAVS_MCP_CHAIN_CREDENTIAL
+# NOTE: Do not commit this file if it contains real credentials.
 # Using the first Anvil test account (safe for local development only)
-chain_write_credential = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+mcp_chain_credential = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
 # Signing mnemonic for WAVS operator key derivation (used by register_operator endpoint)
 # Env var override: WAVS_SIGNING_MNEMONIC

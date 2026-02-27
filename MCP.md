@@ -4,6 +4,38 @@
 
 ---
 
+## Security — Credential Storage
+
+`mcp_chain_credential` (and `signing_mnemonic`) grant the ability to send on-chain transactions.
+**Do not store them in a project-local `wavs.toml`** — that file may be inside a git repository
+and risks accidental commit.
+
+Recommended storage (in priority order):
+
+1. **`~/.wavs/wavs.toml`** — user-level file outside any git repo. Set automatically by the WAVS
+   app "Register with Claude" button and `just setup-claude-mcp`. Works with all MCP clients:
+   ```toml
+   [wavs]
+   mcp_chain_credential = "0x..."
+   signing_mnemonic = "word1 word2 ... word12"
+   ```
+
+2. **Env vars in MCP client config** — set in the `"env"` block for Claude Code, Cursor, VS Code.
+   Use when you need per-project overrides or want to avoid even `~/.wavs/wavs.toml`:
+   ```json
+   "env": {
+     "WAVS_MCP_CHAIN_CREDENTIAL": "your-key-or-mnemonic",
+     "WAVS_SIGNING_MNEMONIC": "your mnemonic words"
+   }
+   ```
+
+3. **CLI arg** — `--mcp-chain-credential`. Avoid (visible in `ps aux`).
+
+`wavs.toml` in a project directory **will not** be read for credentials — `wavs-mcp` intentionally
+skips project-local paths. Non-credential config (ports, chain endpoints, dev flags) is safe there.
+
+---
+
 ## Quick Start
 
 ### 1. Build the binary
@@ -40,15 +72,13 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "wavs": {
       "command": "/path/to/WAVS/target/release/wavs-mcp",
-      "args": [],
-      "env": {
-        "WAVS_URL": "http://localhost:8000",
-        "WAVS_TOKEN": "your-token-here"
-      }
+      "args": ["--wavs-url", "http://localhost:8000", "--token", "your-token-here"]
     }
   }
 }
 ```
+
+Credentials (`mcp_chain_credential`, `signing_mnemonic`) are read automatically from `~/.wavs/wavs.toml`.
 
 ### Claude Desktop (Linux)
 
@@ -63,10 +93,7 @@ Edit `.cursor/mcp.json` in your project root (or `~/.cursor/mcp.json` globally):
   "mcpServers": {
     "wavs": {
       "command": "/path/to/WAVS/target/release/wavs-mcp",
-      "args": ["--wavs-url", "http://localhost:8000"],
-      "env": {
-        "WAVS_TOKEN": "your-token-here"
-      }
+      "args": ["--wavs-url", "http://localhost:8000", "--token", "your-token-here"]
     }
   }
 }
@@ -82,11 +109,7 @@ Edit `.vscode/mcp.json` in your workspace:
     "wavs": {
       "type": "stdio",
       "command": "/path/to/WAVS/target/release/wavs-mcp",
-      "args": [],
-      "env": {
-        "WAVS_URL": "http://localhost:8000",
-        "WAVS_TOKEN": "your-token-here"
-      }
+      "args": ["--wavs-url", "http://localhost:8000", "--token", "your-token-here"]
     }
   }
 }
@@ -132,26 +155,31 @@ Tools are grouped into five categories.
 {"cosmos": {"chain": "cosmos:mychain", "address": "cosmos1..."}}
 ```
 
-### Chain-write tools — require `--token` + `chain_write_credential` on the node
+### Chain-write tools — require `WAVS_MCP_CHAIN_CREDENTIAL`
 
-> **Note:** These tools send real on-chain transactions. They require both a valid `--token` *and* `chain_write_credential` to be set in `wavs.toml` (or via `WAVS_CHAIN_WRITE_CREDENTIAL`). The endpoint returns **403** if the credential is not configured. EVM only currently.
+> **Note:** These tools send real on-chain transactions. They require `WAVS_MCP_CHAIN_CREDENTIAL`
+> to be set in the MCP client's `"env"` block (or via `--mcp-chain-credential` arg).
+> EVM only currently.
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `wavs_set_service_uri` | Call `setServiceURI` on the ServiceManager contract to update the on-chain service URI | `service_manager_json`, `uri` |
-| `wavs_deploy_service_manager` | Deploy a new `SimpleServiceManager` PoA contract on-chain; returns `address` and `tx_hash` | `chain` (e.g. `"evm:31337"`) |
-| `wavs_deploy_poa_service_manager` | Deploy a full `POAStakeRegistry` (upgradeable proxy) via Docker; returns proxy `address` (use as service manager). Requires Docker with `ghcr.io/lay3rlabs/poa-middleware:1.0.1`. | `chain` |
-| `wavs_register_operator` | Register the WAVS node's signing key as an operator on a `POAStakeRegistry` and set the signing key mapping. Calls `registerOperator` (owner) + `updateOperatorSigningKey` (operator). Requires `chain_write_credential` + `signing_mnemonic` configured. | `service_manager_json`, `weight` (optional, default 100) |
+| `wavs_set_service_uri` | Call `setServiceURI` on the ServiceManager contract to update the on-chain service URI | `service_manager_json`, `uri`, `rpc_url` |
+| `wavs_deploy_service_manager` | Deploy a new `SimpleServiceManager` PoA contract on-chain; returns `address` and `tx_hash` | `rpc_url` |
+| `wavs_deploy_poa_service_manager` | Deploy a full `POAStakeRegistry` (upgradeable proxy) via Docker; returns proxy `address` (use as service manager). Requires Docker with `ghcr.io/lay3rlabs/poa-middleware:1.0.1`. | `rpc_url` |
+| `wavs_register_operator` | Register the WAVS node's signing key as an operator on a `POAStakeRegistry` and set the signing key mapping. Calls `registerOperator` (owner) + `updateOperatorSigningKey` (operator). Requires `WAVS_MCP_CHAIN_CREDENTIAL` + `WAVS_SIGNING_MNEMONIC`. | `service_manager_json`, `rpc_url`, `weight` (optional, default 100) |
 
-To enable, add to `wavs.toml` under `[wavs]`:
+To enable, set in `~/.wavs/wavs.toml` under `[wavs]` (recommended — works with all MCP clients):
 ```toml
-# Credential (private key or mnemonic) for on-chain management transactions.
-# Env var override: WAVS_CHAIN_WRITE_CREDENTIAL
-chain_write_credential = "0x<private_key_or_mnemonic>"
-
-# Signing mnemonic for WAVS operator key derivation (used by wavs_register_operator)
-# Env var override: WAVS_SIGNING_MNEMONIC
+mcp_chain_credential = "0x<private_key_or_mnemonic>"
 signing_mnemonic = "<mnemonic>"
+```
+
+Or set env vars in your MCP client's `"env"` block (per-client override):
+```json
+"env": {
+  "WAVS_MCP_CHAIN_CREDENTIAL": "0x<private_key_or_mnemonic>",
+  "WAVS_SIGNING_MNEMONIC": "<mnemonic words>"
+}
 ```
 
 ### Dev tools — require dev endpoints enabled in `wavs.toml`
@@ -257,7 +285,7 @@ You have access to the following MCP tools via the wavs server:
 
 Read (no auth): wavs_get_node_info, wavs_get_health, wavs_list_services, wavs_get_service
 Write (require token): wavs_deploy_service, wavs_pause_service, wavs_resume_service, wavs_delete_service
-Chain-write (require token + chain_write_credential): wavs_set_service_uri, wavs_deploy_service_manager
+Chain-write (require WAVS_MCP_CHAIN_CREDENTIAL): wavs_set_service_uri, wavs_deploy_service_manager
 Dev (require dev endpoints): wavs_upload_component, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv
 Local: wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component
 

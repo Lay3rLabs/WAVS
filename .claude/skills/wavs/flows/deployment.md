@@ -28,7 +28,7 @@ Deploy a new WAVS service with an on-chain ServiceManager contract.
 | Operator registration | Not required | Required (`wavs_register_operator`) |
 | Docker required | No | Yes (`ghcr.io/lay3rlabs/poa-middleware:1.0.1`) |
 | Use case | Quick dev/testing | Production with operator weighting |
-| `chain_write_credential` | Required | Required |
+| `mcp_chain_credential` | Required | Required |
 
 ---
 
@@ -36,7 +36,7 @@ Deploy a new WAVS service with an on-chain ServiceManager contract.
 
 `wavs_register_operator` sends **two sequential on-chain transactions** from two different signers:
 
-1. `registerOperator(signingKeyAddr, weight)` — sent by `chain_write_credential` (registry owner)
+1. `registerOperator(signingKeyAddr, weight)` — sent by `mcp_chain_credential` (registry owner)
 2. `updateOperatorSigningKey(signingKeyAddr, sig)` — sent by `signing_mnemonic` at HD index 0 (node operator)
 
 Both must succeed for the node to be fully registered.

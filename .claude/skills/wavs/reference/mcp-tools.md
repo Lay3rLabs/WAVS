@@ -31,7 +31,7 @@ All tools are exposed by the `wavs` MCP server. Prefix with `wavs:` when calling
 
 **Legend:**
 - Token: MCP server must be started with `--token <value>`; pass token in requests
-- Chain Cred: `chain_write_credential` must be set in `wavs.toml` (or `WAVS_CHAIN_WRITE_CREDENTIAL` env var)
+- Chain Cred: `WAVS_MCP_CHAIN_CREDENTIAL` env var must be set in the MCP client's `"env"` block (or `~/.wavs/wavs.toml` as fallback)
 - Dev Endpoints: `dev_endpoints_enabled = true` must be set under `[wavs]` in `wavs.toml`
 
 ---
@@ -129,5 +129,5 @@ ps aux | grep wavs-mcp
 Environment variables:
 - `WAVS_URL` — WAVS node URL
 - `WAVS_TOKEN` — auth token
-- `WAVS_CHAIN_WRITE_CREDENTIAL` — credential for on-chain ops (falls back to `chain_write_credential` in `wavs.toml [wavs]`)
-- `WAVS_SIGNING_MNEMONIC` — signing mnemonic (falls back to `signing_mnemonic` in `wavs.toml [wavs]`)
+- `WAVS_MCP_CHAIN_CREDENTIAL` — credential for on-chain ops (falls back to `mcp_chain_credential` in `~/.wavs/wavs.toml`)
+- `WAVS_SIGNING_MNEMONIC` — signing mnemonic (falls back to `signing_mnemonic` in `~/.wavs/wavs.toml`)

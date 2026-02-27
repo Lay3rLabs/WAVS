@@ -69,7 +69,7 @@ When in doubt, start with **component-dev** — it ends with a deployment step.
 | **Read** | `get_node_info`, `get_health`, `list_services`, `get_service` | None |
 | **Write** | `deploy_service`, `delete_service`, `pause_service`, `resume_service` | `--token` |
 | **Dev** | `upload_component`, `save_service`, `simulate_trigger`, `deploy_dev_service`, `query_kv` | Dev endpoints enabled |
-| **Chain-write** | `set_service_uri`, `deploy_service_manager`, `deploy_poa_service_manager`, `register_operator` | `--token` + `chain_write_credential` |
+| **Chain-write** | `set_service_uri`, `deploy_service_manager`, `deploy_poa_service_manager`, `register_operator` | `WAVS_MCP_CHAIN_CREDENTIAL` env var |
 | **Local** | `get_wit_interface`, `scaffold_component`, `build_component` | None |
 
 Full tool reference: [`reference/mcp-tools.md`](reference/mcp-tools.md)
@@ -78,12 +78,19 @@ Full tool reference: [`reference/mcp-tools.md`](reference/mcp-tools.md)
 
 ## Key Configuration
 
-`wavs.toml` must have these set for on-chain operations:
+For on-chain operations, credentials are read from `~/.wavs/wavs.toml` (the WAVS home config):
 
 ```toml
-chain_write_credential = "0x<private-key>"   # Pays gas; deploys contracts; owns PoA registry
-signing_mnemonic = "word1 word2 ... word12"  # Node's signing key (HD index 0 used by default)
-dev_endpoints_enabled = true                 # Required for upload, save, simulate, deploy_dev
+[wavs]
+mcp_chain_credential = "0x<private-key>"
+signing_mnemonic = "word1 word2 ... word12"
+```
+
+The WAVS app "Register with Claude" button and `just setup-claude-mcp` write this file automatically.
+
+Dev endpoints must be enabled in `wavs.toml` under `[wavs]`:
+```toml
+dev_endpoints_enabled = true   # Required for upload, save, simulate, deploy_dev
 ```
 
 ---
