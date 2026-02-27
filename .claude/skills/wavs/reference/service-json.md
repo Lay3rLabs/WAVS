@@ -168,21 +168,21 @@ Use `{"aggregator": {...}}` when you need the component's output **submitted on-
       },
       "fuel_limit": null,
       "time_limit_seconds": null,
-      "config": {},
+      "config": {
+        "chain": "evm:31337",
+        "service_handler": "0xReceiverContractAddress"
+      },
       "env_keys": []
     },
-    "quorum_percent": 100,
-    "allowed_operators": null,
-    "contract": {
-      "evm": {
-        "chain": "evm:31337",
-        "address": "0xReceiverContractAddress",
-        "method": "addPayload(bytes)"
-      }
+    "signature_kind": {
+      "algorithm": "secp256k1",
+      "prefix": "eip191"
     }
   }
 }
 ```
+
+The receiver contract address goes in `component.config["service_handler"]` and the chain key in `component.config["chain"]`. There is **no** top-level `contract`, `quorum_percent`, or `allowed_operators` field in the aggregator submit type.
 
 ### Critical: upload simple-aggregator.wasm as a second component
 

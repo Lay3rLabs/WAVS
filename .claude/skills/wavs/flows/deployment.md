@@ -6,6 +6,13 @@ Deploy a new WAVS service with an on-chain ServiceManager contract.
 
 ## Checklist
 
+- [ ] **Step 0** — Check existing state (always do this first):
+  - Call `wavs:wavs_list_services` and `wavs:wavs_get_node_info` before anything else.
+  - | What you find | What to do |
+    |---------------|-----------|
+    | No services registered | Continue with Step 1 below |
+    | Service already exists for this contract | Go to [update-service.md](update-service.md) instead |
+    | Service exists but is paused | Resume it, or go to update-service.md to update it |
 - [ ] **Step 1** — `wavs:wavs_get_health` — Confirm all chain RPC endpoints are healthy before spending gas.
 - [ ] **Step 2** — Deploy a ServiceManager contract (pass `rpc_url`, e.g. `"http://localhost:8545"`):
   - **SimpleServiceManager** (lightweight PoA): `wavs:wavs_deploy_service_manager` — returns `address`
@@ -15,6 +22,7 @@ Deploy a new WAVS service with an on-chain ServiceManager contract.
 - [ ] **Step 5** — `wavs:wavs_save_service` — Save the service definition JSON; get back a URI.
 - [ ] **Step 6** — `wavs:wavs_set_service_uri` — Call `setServiceURI` on-chain with the URI from step 5.
 - [ ] **Step 7** — `wavs:wavs_deploy_service` — Register the service with the WAVS node (reads definition from chain).
+  - **Verify the node picked up the service:** Call `wavs:wavs_get_service(chain, address)` and confirm `status: active`. Note: `wavs_deploy_service` returning success only means the node fetched and stored the config from the on-chain URI. Confirm active status with `wavs_get_service`.
 - [ ] **Step 8** — `wavs:wavs_simulate_trigger` — Smoke test.
 - [ ] **Step 9** — `wavs:wavs_list_services` — Confirm the service appears with `status: active`.
 
@@ -106,6 +114,16 @@ Used by `wavs_deploy_service`, `wavs_set_service_uri`, `wavs_register_operator`,
 // Cosmos
 {"cosmos": {"chain": "cosmos:mychain", "address": "cosmos1abc..."}}
 ```
+
+---
+
+## Flow Notes
+
+**Why 3 steps for production?** `wavs_save_service` (store config on node) →
+`wavs_set_service_uri` (write URI on-chain) → `wavs_deploy_service` (node fetches config
+from chain URI and activates). These are separate because the URI can also be set by other
+tooling (e.g. `just deploy-service`). For dev/testing, `wavs_deploy_dev_service` does all
+three in one call.
 
 ---
 

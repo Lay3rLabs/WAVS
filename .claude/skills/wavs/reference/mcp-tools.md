@@ -81,6 +81,10 @@ service_json: full service definition JSON string
 ```
 See [`service-json.md`](service-json.md) for the full schema.
 
+**`wavs_deploy_dev_service` vs `wavs_deploy_service`:**
+- `wavs_deploy_dev_service`: Dev/testing only. Takes full Service JSON, no on-chain contract needed. Handles save+register in one call.
+- `wavs_deploy_service`: Production. Requires an on-chain ServiceManager whose URI is already set (via `wavs_set_service_uri`). Takes only the contract address.
+
 ### wavs_simulate_trigger
 ```
 service_id:   64-char hex string (from wavs_list_services)
