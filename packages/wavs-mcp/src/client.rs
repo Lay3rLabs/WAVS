@@ -115,7 +115,7 @@ impl WavsClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
+            return Err(dev_err(status, &body));
         }
 
         let response: UploadComponentResponse = resp.json().await?;
@@ -128,7 +128,12 @@ impl WavsClient {
             .send()
             .await
             .context("POST /dev/triggers")?;
-        check_response(resp).await
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(dev_err(status, &body));
+        }
+        Ok(())
     }
 
     /// Save a service definition to the node's local store without registering it.
@@ -144,7 +149,7 @@ impl WavsClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
+            return Err(dev_err(status, &body));
         }
 
         let save_resp: SaveServiceResponse = resp.json().await?;
@@ -165,7 +170,7 @@ impl WavsClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
+            return Err(dev_err(status, &body));
         }
 
         let save_resp: SaveServiceResponse = resp.json().await?;
@@ -176,7 +181,11 @@ impl WavsClient {
             .send()
             .await
             .context("POST /dev/services/{hash}")?;
-        check_response(resp).await?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(dev_err(status, &body));
+        }
 
         Ok(hash)
     }
@@ -192,7 +201,7 @@ impl WavsClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!("HTTP {}: {}", status, body);
+            return Err(dev_err(status, &body));
         }
 
         let bytes = resp.bytes().await?;
@@ -203,13 +212,29 @@ impl WavsClient {
     }
 }
 
+fn dev_err(status: reqwest::StatusCode, body: &str) -> anyhow::Error {
+    if status.as_u16() == 404 {
+        anyhow::anyhow!(
+            "HTTP 404: {}. Dev endpoints may be disabled — set dev_endpoints_enabled = true \
+             in wavs.toml [wavs] section.",
+            body
+        )
+    } else {
+        anyhow::anyhow!("HTTP {}: {}", status, body)
+    }
+}
+
 async fn parse_json_response(resp: reqwest::Response) -> Result<Value> {
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         anyhow::bail!("HTTP {}: {}", status, body);
     }
-    resp.json().await.map_err(Into::into)
+    let bytes = resp.bytes().await?;
+    if bytes.is_empty() {
+        return Ok(Value::Null);
+    }
+    serde_json::from_slice(&bytes).map_err(Into::into)
 }
 
 async fn check_response(resp: reqwest::Response) -> Result<()> {

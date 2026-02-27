@@ -91,13 +91,13 @@ Multiple workflows in one service:
 ```json
 {
   "cron": {
-    "schedule": "* * * * *",
+    "schedule": "* * * * * * *",
     "start_time": null,
     "end_time": null
   }
 }
 ```
-`schedule` is a standard cron expression. `start_time` and `end_time` are optional unix timestamps.
+`schedule` is a 7-field cron expression: `sec min hour dom month dow year` (e.g. `* * * * * * *` = every second). `start_time` and `end_time` are optional unix timestamps.
 
 ### Block Interval
 ```json
@@ -154,7 +154,7 @@ data_json:    {"Raw": [104, 101, 108, 108, 111]}
 
 ### Cron Trigger
 ```json
-trigger_json: {"cron": {"schedule": "* * * * *", "start_time": null, "end_time": null}}
+trigger_json: {"cron": {"schedule": "* * * * * * *", "start_time": null, "end_time": null}}
 data_json:    {"Cron": {"trigger_time": 1700000000}}
 ```
 

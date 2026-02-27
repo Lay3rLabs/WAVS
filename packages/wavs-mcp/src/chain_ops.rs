@@ -210,13 +210,24 @@ pub async fn register_operator(
 
     let registry_as_owner =
         IPOAStakeRegistryInstance::new(contract_address, owner_client.provider.clone());
-    let register_receipt = registry_as_owner
+    let register_tx = match registry_as_owner
         .registerOperator(signing_key_addr, U256::from(weight))
         .send()
-        .await?
-        .get_receipt()
-        .await?;
-    let register_tx = format!("{}", register_receipt.transaction_hash);
+        .await
+    {
+        Ok(pending) => {
+            let receipt = pending.get_receipt().await?;
+            format!("{}", receipt.transaction_hash)
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("AlreadyRegistered") || msg.contains("0x42ee68b5") {
+                "skipped (operator already registered, proceeding to set signing key)".to_string()
+            } else {
+                return Err(e.into());
+            }
+        }
+    };
 
     let encoded: Vec<u8> = (signing_key_addr,).abi_encode();
     let message_hash = keccak256(&encoded);

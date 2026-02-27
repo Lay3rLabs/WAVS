@@ -43,9 +43,7 @@ Both must succeed for the node to be fully registered.
 
 Default weight is `100` if not specified.
 
-**Partial-failure quirk:** If the tool returns a "nonce too low" RPC error, `registerOperator` likely succeeded but `updateOperatorSigningKey` was NOT called. Retrying will cause `registerOperator` to revert with `AlreadyRegistered` — and the function will error before reaching `updateOperatorSigningKey`. This means the signing key is never set and the node will fail to submit results on-chain (though `submit: "none"` services will still appear to work).
-
-**Workaround if this happens:** The tool must be fixed to skip past an `AlreadyRegistered` revert and still call `updateOperatorSigningKey`. Until then, if you hit this, redeploy a fresh POAStakeRegistry to get a clean slate, or call `updateOperatorSigningKey` directly on-chain.
+**Idempotent:** If `registerOperator` reverts with `AlreadyRegistered` (e.g. after a previous partial failure), the tool skips that step and still proceeds to call `updateOperatorSigningKey`. This means it's safe to retry — the signing key will always be set even if registration already happened.
 
 ---
 
@@ -67,7 +65,7 @@ Pass to `wavs_save_service` or `wavs_deploy_dev_service`:
     "default": {
       "trigger": {
         "cron": {
-          "schedule": "* * * * *",
+          "schedule": "* * * * * * *",
           "start_time": null,
           "end_time": null
         }
@@ -115,8 +113,7 @@ Used by `wavs_deploy_service`, `wavs_set_service_uri`, `wavs_register_operator`,
 
 | Tool | Symptom | Actual Outcome | Action |
 |------|---------|----------------|--------|
-| `wavs_register_operator` | Returns "nonce too low" | `registerOperator` tx succeeded; `updateOperatorSigningKey` was NOT called | Signing key unset — see notes above |
-| `wavs_deploy_service` | Returns EOF/empty-body error | Service was registered successfully | Verify with `wavs_list_services` |
+| `wavs_deploy_service` | Returns empty body | Service was registered successfully | Response is now shown as "Service registered successfully." |
 
 ---
 
