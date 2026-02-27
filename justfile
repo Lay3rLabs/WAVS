@@ -234,29 +234,111 @@ start-anvil:
 cli-exec COMPONENT INPUT:
     @cd packages/cli && cargo run exec --component {{COMPONENT}} --input '{{INPUT}}'
 
-# downloads the latest WIT file from the wavs-wasi repo
-download-wit branch="main":
-    # Create a temporary directory
-    rm -rf temp_clone
-    mkdir temp_clone
+# remove fetched WIT dependency directories
+wit-deps-clean:
+    rm -rf wit-definitions/operator/wit/deps
+    rm -rf wit-definitions/aggregator/wit/deps
+    rm -rf wit-definitions/types/wit/deps
 
-    # Clone the specific branch into the temp directory
-    git -C temp_clone clone --depth=1 --branch {{branch}} --single-branch https://github.com/Lay3rLabs/wavs-wasi.git
-
-    # Clear existing content and create wit directory
-    rm -rf wit-definitions
-    mkdir -p wit-definitions
-
-    # Copy it over
-    cp -r temp_clone/wavs-wasi/wit-definitions/* wit-definitions/
-
-    # Fetch deps
+# fetch WIT dependencies for each wit-definitions subdirectory
+wit-deps-fetch:
+    cd wit-definitions/types && wkg wit fetch
     cd wit-definitions/operator && wkg wit fetch
     cd wit-definitions/aggregator && wkg wit fetch
-    cd wit-definitions/types && wkg wit fetch
 
-    # Clean up
-    rm -rf temp_clone
+# remove built WIT .wasm artifacts
+wit-clean:
+    rm -f wit-definitions/wasi-tls/*.wasm
+    rm -f wit-definitions/types/wavs:types@*.wasm
+    rm -f wit-definitions/operator/wavs:operator@*.wasm
+    rm -f wit-definitions/aggregator/wavs:aggregator@*.wasm
+
+# build WIT packages via wkg wit build
+wit-build config="":
+    just _inner-wit-build "{{ if config != '' { ' --config ' + '../../' + config } else { '' } }}"
+
+# publish WIT packages to registry
+wit-publish config="":
+    just _inner-wit-publish "{{ if config != '' { ' --config ' + '../../' + config } else { '' } }}"
+
+_inner-wit-build config-arg:
+    just wit-clean
+    cd wit-definitions/wasi-tls && wkg wit build{{config-arg}}
+    cd wit-definitions/types && wkg wit build{{config-arg}}
+    cd wit-definitions/operator && wkg wit build{{config-arg}}
+    cd wit-definitions/aggregator && wkg wit build{{config-arg}}
+
+_inner-wit-publish config-arg:
+    cd wit-definitions/types && wkg publish wavs:types@*.wasm{{config-arg}}
+    cd wit-definitions/operator && wkg publish wavs:operator@*.wasm{{config-arg}}
+    cd wit-definitions/aggregator && wkg publish wavs:aggregator@*.wasm{{config-arg}}
+
+# update version in root Cargo.toml and all WIT files (eg. just set-version v2.7.0)
+set-version version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Ensure version doesn't start with 'v' for file updates
+    VERSION="{{version}}"
+    if [[ "$VERSION" == v* ]]; then
+        VERSION="${VERSION#v}"
+    fi
+
+    echo "Setting version to: ${VERSION}"
+
+    if command -v gsed >/dev/null 2>&1; then
+        SED_CMD="gsed -i"
+    else
+        SED_CMD="sed -i"
+    fi
+
+    # root Cargo.toml workspace version
+    $SED_CMD 's/^version = ".*"/version = "'"${VERSION}"'"/' Cargo.toml
+
+    # all WIT packages
+    find wit-definitions -name "*.wit" -type f | while read -r file; do
+        $SED_CMD 's/^package wavs:\([^@]*\)@.*/package wavs:\1@'"${VERSION}"';/' "$file"
+        $SED_CMD 's|use wavs:\([^/]*/[^@]*\)@[^[:space:]]*|use wavs:\1@'"${VERSION}"'|g' "$file"
+    done
+
+    echo "Version updated to ${VERSION} in all files"
+
+# create and push git tags (eg. just push-tag v2.7.0)
+push-tag version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Ensure version starts with 'v'
+    if [[ "{{version}}" != v* ]]; then
+        TAG="v{{version}}"
+    else
+        TAG="{{version}}"
+    fi
+
+    GO_TAG="wasi/go/${TAG}"
+
+    echo "Creating tags: ${TAG} and ${GO_TAG}"
+
+    # check if main tag already exists
+    if git rev-parse "${TAG}" >/dev/null 2>&1; then
+        echo "Error: Tag ${TAG} already exists"
+        exit 1
+    fi
+
+    # check if go tag already exists
+    if git rev-parse "${GO_TAG}" >/dev/null 2>&1; then
+        echo "Error: Tag ${GO_TAG} already exists"
+        exit 1
+    fi
+
+    git tag "${TAG}" -m "Release ${TAG}"
+    git tag "${GO_TAG}" -m "Go module release ${TAG}"
+
+    echo "Pushing tags to origin..."
+    git push origin "${TAG}"
+    git push origin "${GO_TAG}"
+
+    echo "Successfully created and pushed tags: ${TAG} and ${GO_TAG}"
 
 # downloads the latest solidity repo
 download-solidity branch="dev":

@@ -33,6 +33,22 @@ jobs:
         with:
           cache-on-failure: true
 
+      - name: Install just
+        uses: extractions/setup-just@v3
+
+      - name: Install wkg
+        run: cargo install wkg
+
+      - name: Configure wasm-pkg registry
+        run: |
+          mkdir -p ~/.config/wasm-pkg
+          cat > ~/.config/wasm-pkg/config.toml << 'EOF'
+          default_registry = "wa.dev"
+          EOF
+
+      - name: Fetch WIT dependencies
+        run: just wit-deps-fetch
+
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
@@ -63,6 +79,22 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+
+      - name: Install just
+        uses: extractions/setup-just@v3
+
+      - name: Install wkg
+        run: cargo install wkg
+
+      - name: Configure wasm-pkg registry
+        run: |
+          mkdir -p ~/.config/wasm-pkg
+          cat > ~/.config/wasm-pkg/config.toml << 'EOF'
+          default_registry = "wa.dev"
+          EOF
+
+      - name: Fetch WIT dependencies
+        run: just wit-deps-fetch
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -109,6 +141,22 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+
+      - name: Install just
+        uses: extractions/setup-just@v3
+
+      - name: Install wkg
+        run: cargo install wkg
+
+      - name: Configure wasm-pkg registry
+        run: |
+          mkdir -p ~/.config/wasm-pkg
+          cat > ~/.config/wasm-pkg/config.toml << 'EOF'
+          default_registry = "wa.dev"
+          EOF
+
+      - name: Fetch WIT dependencies
+        run: just wit-deps-fetch
 
       - name: Check formatting
         run: cargo fmt --all -- --check

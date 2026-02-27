@@ -1,5 +1,66 @@
 # WAVS Components
 
+## WIT Definitions, Go Bindings, and wasi-utils
+
+### WIT Definitions
+
+The `wit-definitions/` directory contains the [WebAssembly Interface Type](https://component-model.bytecodealliance.org/design/wit.html) definitions that describe the component interfaces:
+
+- **`types/`** — shared types used across operator and aggregator interfaces (core types, chain configs, events, services)
+- **`operator/`** — the operator component world (trigger processing)
+- **`aggregator/`** — the aggregator component world (quorum handling and on-chain submission)
+- **`wasi-tls/`** — custom WASI TLS extension interface
+
+WIT dependencies are managed with [`wkg`](https://github.com/bytecodealliance/wasm-pkg-tools). Use `just wit-deps-fetch` to fetch dependencies and `just wit-build` to build WIT packages.
+
+### Go Bindings
+
+The `wasi/go/` directory contains auto-generated Go bindings from the WIT definitions. These provide Go-language access to the WAVS WASI interfaces (types, operator trigger world, and standard WASI APIs for HTTP, sockets, clocks, filesystem, etc.).
+
+Module path: `github.com/Lay3rLabs/wavs/wasi/go`
+
+### wasi-utils Crate
+
+The `packages/wasi-utils/` directory contains the `wavs-wasi-utils` Rust crate, which provides utility functions for building WASI components:
+
+- HTTP client utilities for making outbound requests from components
+- EVM provider and event helpers for interacting with Ethereum chains
+- Numeric conversion utilities
+
+Published to [crates.io](https://crates.io/crates/wavs-wasi-utils) as `wavs-wasi-utils`.
+
+### Using WIT Definitions in Your Own Project
+
+Third-party component projects need a local copy of the WIT definitions to compile against. The general approach is:
+
+1. **Clone the `wit-definitions/` directory** from this repo into your project
+2. **Fetch WIT dependencies** with `wkg wit fetch`
+
+Here is a minimal shell script example:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+BRANCH="${1:-main}"
+WIT_DIR="./wit-definitions"
+
+# Clean and clone
+rm -rf "$WIT_DIR" .temp-clone
+mkdir -p .temp-clone
+git -C .temp-clone clone --depth=1 --branch "$BRANCH" --single-branch https://github.com/Lay3rLabs/WAVS.git
+cp -R .temp-clone/WAVS/wit-definitions "$WIT_DIR"
+rm -rf .temp-clone
+
+# Fetch dependencies
+cd "$WIT_DIR/operator" && wkg wit fetch && cd -
+cd "$WIT_DIR/aggregator" && wkg wit fetch && cd -
+```
+
+Your Rust component crate then references the local WIT directory via `wit-bindgen` as usual.
+
+---
+
 WAVS has two distinct component types that serve different roles in the execution pipeline. Both are compiled to WebAssembly using the [Component Model](https://component-model.bytecodealliance.org/) spec and run inside a Wasmtime WASI sandbox.
 
 ---
