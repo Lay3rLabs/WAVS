@@ -39,6 +39,13 @@ jobs:
       - name: Install wkg
         run: cargo install wkg
 
+      - name: Configure wasm-pkg registry
+        run: |
+          mkdir -p ~/.config/wasm-pkg
+          cat > ~/.config/wasm-pkg/config.toml << 'EOF'
+          default_registry = "wa.dev"
+          EOF
+
       - name: Fetch WIT dependencies
         run: just wit-deps-fetch
 
@@ -78,6 +85,13 @@ jobs:
 
       - name: Install wkg
         run: cargo install wkg
+
+      - name: Configure wasm-pkg registry
+        run: |
+          mkdir -p ~/.config/wasm-pkg
+          cat > ~/.config/wasm-pkg/config.toml << 'EOF'
+          default_registry = "wa.dev"
+          EOF
 
       - name: Fetch WIT dependencies
         run: just wit-deps-fetch
@@ -133,6 +147,13 @@ jobs:
 
       - name: Install wkg
         run: cargo install wkg
+
+      - name: Configure wasm-pkg registry
+        run: |
+          mkdir -p ~/.config/wasm-pkg
+          cat > ~/.config/wasm-pkg/config.toml << 'EOF'
+          default_registry = "wa.dev"
+          EOF
 
       - name: Fetch WIT dependencies
         run: just wit-deps-fetch
