@@ -141,6 +141,71 @@ Unit variant — use the bare string `"manual"` in the service definition `trigg
 
 ---
 
+## Aggregator Submit Pattern
+
+Use `"submit": "none"` to discard component output (suitable for dev/testing or side-effect-only components).
+
+Use `{"aggregator": {...}}` when you need the component's output **submitted on-chain** to a receiver contract after consensus.
+
+### When you need aggregator submit
+
+- The component produces a result that must be written back to a smart contract
+- Multiple operators run the component and results are aggregated before submission
+- The receiver contract has a method like `addPayload(bytes)` that accepts the aggregated output
+
+### Full aggregator submit field
+
+```json
+"submit": {
+  "aggregator": {
+    "component": {
+      "source": {"digest": "<digest of simple-aggregator.wasm>"},
+      "permissions": {
+        "file_system": false,
+        "allowed_http_hosts": "none",
+        "raw_sockets": false,
+        "dns_resolution": false
+      },
+      "fuel_limit": null,
+      "time_limit_seconds": null,
+      "config": {},
+      "env_keys": []
+    },
+    "quorum_percent": 100,
+    "allowed_operators": null,
+    "contract": {
+      "evm": {
+        "chain": "evm:31337",
+        "address": "0xReceiverContractAddress",
+        "method": "addPayload(bytes)"
+      }
+    }
+  }
+}
+```
+
+### Critical: upload simple-aggregator.wasm as a second component
+
+When using aggregator submit, you must call `wavs_upload_component` **twice** — once for your main component, once for `simple-aggregator.wasm`:
+
+```
+wavs_upload_component(file_path="examples/build/components/simple-aggregator.wasm")
+→ Digest: <aggregator-digest>
+```
+
+Use `<aggregator-digest>` in `submit.aggregator.component.source.digest`.
+
+### Pipeline
+
+```
+[Trigger fires]
+    → [Your component runs, produces output bytes]
+        → [simple-aggregator.wasm collects results from operators]
+            → [Quorum reached → calls contract.method on-chain]
+```
+
+---
+
 ## SimulateTrigger Examples
 
 `wavs_simulate_trigger` requires: `service_id`, `workflow_id`, `trigger_json`, `data_json`

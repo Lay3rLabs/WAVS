@@ -476,14 +476,176 @@ impl WavsMcpServer {
             Err(e) => return err(format!("Failed to run `cargo component build`: {e:#}")),
         };
 
-        let result = format!(
+        let mut result = format!(
             "Exit code: {}\n\nstdout:\n{}\n\nstderr:\n{}",
             output.status.code().unwrap_or(-1),
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
         );
 
-        if output.status.success() { ok(result) } else { err(result) }
+        if output.status.success() {
+            // Scan for output .wasm files so callers can pass the path directly to wavs_upload_component.
+            let wasm_dir = std::path::Path::new(&p.dir)
+                .join("target/wasm32-wasip1/release");
+            if let Ok(entries) = std::fs::read_dir(&wasm_dir) {
+                let mut wasm_files: Vec<String> = entries
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.path())
+                    .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("wasm"))
+                    .filter_map(|p| p.to_str().map(|s| s.to_owned()))
+                    .collect();
+                wasm_files.sort();
+                if !wasm_files.is_empty() {
+                    result.push_str("\n\nOutput WASM files:");
+                    for f in &wasm_files {
+                        result.push_str(&format!("\n  {f}"));
+                    }
+                }
+            }
+            ok(result)
+        } else {
+            err(result)
+        }
+    }
+
+    fn tool_get_service_schema(&self) -> Result<CallToolResult, McpError> {
+        ok(r#"## Service JSON Schema
+
+Use this as a reference when calling wavs_save_service or wavs_deploy_dev_service.
+
+### Digest format
+Raw 64-character hex string returned by wavs_upload_component. NO "sha256:" prefix.
+Example: f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420
+
+---
+
+### Manual trigger (fires only via wavs_simulate_trigger)
+```json
+{
+  "name": "my-service",
+  "status": "active",
+  "manager": {"evm": {"chain": "evm:31337", "address": "0xServiceManagerAddress"}},
+  "workflows": {
+    "default": {
+      "trigger": "manual",
+      "component": {
+        "source": {"digest": "<64-char hex from wavs_upload_component>"},
+        "permissions": {"file_system": false, "allowed_http_hosts": "none", "raw_sockets": false, "dns_resolution": false},
+        "fuel_limit": null,
+        "time_limit_seconds": null,
+        "config": {},
+        "env_keys": []
+      },
+      "submit": "none"
+    }
+  }
+}
+```
+
+### Cron trigger (7-field: sec min hour dom month dow year)
+```json
+{
+  "name": "my-cron-service",
+  "status": "active",
+  "manager": {"evm": {"chain": "evm:31337", "address": "0xServiceManagerAddress"}},
+  "workflows": {
+    "default": {
+      "trigger": {"cron": {"schedule": "0 * * * * * *", "start_time": null, "end_time": null}},
+      "component": {
+        "source": {"digest": "<64-char hex>"},
+        "permissions": {"file_system": false, "allowed_http_hosts": "none", "raw_sockets": false, "dns_resolution": false},
+        "fuel_limit": null,
+        "time_limit_seconds": null,
+        "config": {},
+        "env_keys": []
+      },
+      "submit": "none"
+    }
+  }
+}
+```
+
+### Block interval trigger
+```json
+{
+  "trigger": {"block_interval": {"chain": "evm:31337", "interval": 10}}
+}
+```
+
+### EVM contract event trigger
+```json
+{
+  "trigger": {
+    "evm_contract_event": {
+      "chain": "evm:31337",
+      "address": "0xTriggerContractAddress",
+      "event_hash": "0x<32-byte-keccak-of-event-signature>"
+    }
+  }
+}
+```
+
+### Cosmos contract event trigger
+```json
+{
+  "trigger": {
+    "cosmos_contract_event": {
+      "chain": "cosmos:mychain",
+      "address": "cosmos1contract...",
+      "event_type": "wasm-my-event"
+    }
+  }
+}
+```
+
+---
+
+### Submit options
+
+**Discard output (most common for dev/testing):**
+```json
+"submit": "none"
+```
+
+**Submit on-chain via aggregator (requires simple-aggregator component):**
+```json
+"submit": {
+  "aggregator": {
+    "component": {
+      "source": {"digest": "<digest of simple-aggregator.wasm>"},
+      "permissions": {"file_system": false, "allowed_http_hosts": "none", "raw_sockets": false, "dns_resolution": false},
+      "fuel_limit": null,
+      "time_limit_seconds": null,
+      "config": {},
+      "env_keys": []
+    },
+    "quorum_percent": 100,
+    "allowed_operators": null,
+    "contract": {
+      "evm": {
+        "chain": "evm:31337",
+        "address": "0xReceiverContract",
+        "method": "addPayload(bytes)"
+      }
+    }
+  }
+}
+```
+IMPORTANT: when using aggregator submit, you must upload simple-aggregator.wasm as a SECOND component
+and use its digest in the submit.aggregator.component.source.digest field above.
+
+---
+
+### SimulateTrigger data_json formats
+
+Manual:        {"Raw": [104, 101, 108, 108, 111]}  (byte array)
+Cron:          {"Cron": {"trigger_time": 1700000000}}
+Block:         {"BlockInterval": {"block_height": 42}}
+EVM event:     {"EvmContractEvent": {"log": {"address": "0x...", "data": "0x...", "topics": ["0x..."]}}}
+Cosmos event:  {"CosmosContractEvent": {"event": {"ty": "wasm-my-event", "attributes": []}}}
+
+Note: trigger_json for simulate uses {"manual": null}, not the bare string "manual".
+"#)
     }
 }
 
@@ -508,7 +670,7 @@ impl ServerHandler for WavsMcpServer {
                  Dev tools (need dev endpoints): wavs_upload_component, wavs_save_service, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv\n\
                  Chain-write tools (need WAVS_CHAIN_WRITE_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
                  Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator, wavs_get_signing_address\n\
-                 Local tools: wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component"
+                 Local tools: wavs_get_service_schema, wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component"
                     .to_string(),
             ),
             ..Default::default()
@@ -621,7 +783,8 @@ impl ServerHandler for WavsMcpServer {
                     description: "Save a service definition to the WAVS node's local store without registering it. \
                         Returns the URI (e.g. http://localhost:8000/dev/services/<hash>) that can be set as the \
                         on-chain serviceURI so the service can later be registered via wavs_deploy_service. \
-                        Requires dev endpoints enabled in wavs.toml.".into(),
+                        Requires dev endpoints enabled in wavs.toml. \
+                        Call wavs_get_service_schema first to see a minimal valid example.".into(),
                     input_schema: schema_for_type::<SaveServiceParams>().into(),
                 },
                 Tool {
@@ -634,7 +797,8 @@ impl ServerHandler for WavsMcpServer {
                     name: "wavs_deploy_dev_service".into(),
                     description: "Register a service directly without an on-chain contract (dev/testing only). \
                         Pass the full Service JSON. Handles the two-step save+register flow internally. \
-                        Requires dev endpoints enabled in wavs.toml and --token.".into(),
+                        Requires dev endpoints enabled in wavs.toml and --token. \
+                        Call wavs_get_service_schema first to see a minimal valid example.".into(),
                     input_schema: schema_for_type::<DeployDevServiceParams>().into(),
                 },
                 Tool {
@@ -645,6 +809,12 @@ impl ServerHandler for WavsMcpServer {
                     input_schema: schema_for_type::<QueryKvParams>().into(),
                 },
                 // Local tools
+                tool("wavs_get_service_schema",
+                     "Return minimal valid Service JSON examples for every trigger type \
+                      (manual, cron, block_interval, evm_contract_event, cosmos_contract_event), \
+                      submit options (none vs aggregator), and data_json formats for wavs_simulate_trigger. \
+                      Call this before wavs_save_service or wavs_deploy_dev_service to avoid schema errors.",
+                     empty.clone()),
                 tool("wavs_get_wit_interface",
                      "Return the full WIT interface definitions for WAVS WASM components \
                       (HTTP, KV, sockets, TLS, host functions, etc.)",
@@ -691,6 +861,7 @@ impl ServerHandler for WavsMcpServer {
             "wavs_simulate_trigger"      => self.tool_simulate_trigger(args).await,
             "wavs_deploy_dev_service"    => self.tool_deploy_dev_service(args).await,
             "wavs_query_kv"              => self.tool_query_kv(args).await,
+            "wavs_get_service_schema"    => self.tool_get_service_schema(),
             "wavs_get_wit_interface"     => self.tool_get_wit_interface().await,
             "wavs_scaffold_component" => self.tool_scaffold_component(args).await,
             "wavs_build_component"    => self.tool_build_component(args).await,
