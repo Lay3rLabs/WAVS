@@ -24,4 +24,24 @@ An Actively Validated Service (AVS) is a decentralized service that is validated
 WebAssembly (WASM) enables fast, secure, and portable execution of code across platforms. WAVS leverages WASM to run your services efficiently and safely.
 
 ---
+
+## Release Workflow
+
+This project uses [just](https://github.com/casey/just) for managing releases. Here's the typical workflow:
+
+1. **Make your changes** — develop features, fix bugs, update WIT definitions, etc.
+2. **Set the version** — update version numbers across `Cargo.toml` and all WIT package definitions:
+   ```bash
+   just set-version v2.7.0
+   ```
+3. **Create PR and merge** — get your changes reviewed and merged to main
+4. **Push tags** — after merge, create and push git tags:
+   ```bash
+   just push-tag v2.7.0
+   ```
+
+This creates both a standard tag (`v2.7.0`) and a Go module tag (`wasi/go/v2.7.0`). The standard tag triggers CI to publish the `wavs-types` and `wavs-wasi-utils` crates to crates.io, WASM components to wa.dev, and TypeScript bindings to NPM.
+
+---
+
 For more guides, architecture details, and examples, see the [docs folder](docs/README.md).
