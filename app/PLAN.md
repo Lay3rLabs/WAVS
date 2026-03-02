@@ -23,7 +23,6 @@ MVP Requirements:
 - [x] Figure out how to use the aggregator
 - [x] Fix auto start MCP when app starts
 - [x] Build an MCP
-- [ ] Select file / folder UX
 - [x] Security (make sure it works with environment variable, update MCP.md to recommend putting in .env, make sure .env.example is up to date)
 - [x] Rename chain_write_credential to wavs_mcp_signer_mnemonic
 - [x] Test submission with an actual solidity contract
@@ -31,6 +30,7 @@ MVP Requirements:
 - [x] Submissions not showing up
 - [x] Services not loading on app restart
 - [x] Better aesthetics
+- [ ] Select file / folder UX
 
 Post MVP:
 - Stats (CPU, Memory, etc.)
