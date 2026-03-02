@@ -4,7 +4,7 @@ import { mainnet, sepolia, holesky } from 'viem/chains';
 import { AddressDisplay, Button, TomlEditor } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
 import { useWalletStore } from '../stores/walletStore';
-import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, getWavsUrl, saveMcpSettings, clearPersistedServices, registerClaudeMcp } from '../tauri';
+import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, getWavsUrl, saveMcpSettings, clearPersistedServices, registerClaudeMcp, saveEnvVars } from '../tauri';
 import { usePOAStore } from '../stores/poaStore';
 import { errorMessage } from '../utils/error';
 import type { McpStatus } from '../types';
@@ -92,6 +92,15 @@ export function Settings() {
   const [tomlError, setTomlError] = useState<string | null>(null);
   const [tomlSaveSuccess, setTomlSaveSuccess] = useState(false);
   const hasUnsavedChanges = tomlContent !== savedContent;
+
+  // Environment variables state
+  const [envVars, setEnvVars] = useState<Record<string, string>>({});
+  const [newEnvKey, setNewEnvKey] = useState('');
+  const [newEnvValue, setNewEnvValue] = useState('');
+  const [visibleEnvKeys, setVisibleEnvKeys] = useState<Set<string>>(new Set());
+  const [envSaving, setEnvSaving] = useState(false);
+  const [envSaveSuccess, setEnvSaveSuccess] = useState(false);
+  const [envError, setEnvError] = useState<string | null>(null);
 
   useEffect(() => {
     if (hasMnemonic) {
@@ -263,6 +272,11 @@ export function Settings() {
     loadToml();
   }, [loadToml]);
 
+  // Sync env vars from settings store on load
+  useEffect(() => {
+    setEnvVars(settings.env_vars ?? {});
+  }, [settings.env_vars]);
+
   const handleSaveToml = async () => {
     setTomlError(null);
     setTomlSaveSuccess(false);
@@ -278,6 +292,56 @@ export function Settings() {
 
   const handleReloadToml = async () => {
     await loadToml();
+  };
+
+  const handleAddEnvVar = () => {
+    let key = newEnvKey.trim();
+    if (!key) return;
+    if (!key.startsWith('WAVS_ENV_')) {
+      key = `WAVS_ENV_${key}`;
+    }
+    setEnvVars((prev) => ({ ...prev, [key]: newEnvValue }));
+    setNewEnvKey('');
+    setNewEnvValue('');
+  };
+
+  const handleRemoveEnvVar = (key: string) => {
+    setEnvVars((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setVisibleEnvKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  };
+
+  const handleToggleEnvVisibility = (key: string) => {
+    setVisibleEnvKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const handleSaveEnvVars = async () => {
+    setEnvSaving(true);
+    setEnvError(null);
+    setEnvSaveSuccess(false);
+    try {
+      await saveEnvVars(envVars);
+      setEnvSaveSuccess(true);
+    } catch (e) {
+      setEnvError(errorMessage(e));
+    } finally {
+      setEnvSaving(false);
+    }
   };
 
   const handleBrowse = async () => {
@@ -535,6 +599,84 @@ export function Settings() {
           )}
         </div>
       )}
+
+      {/* Environment Variables */}
+      <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
+        <h2 className="text-beige-light text-lg font-semibold">Environment Variables</h2>
+        <p className="text-tan-muted text-xs">
+          <span className="font-mono">WAVS_ENV_*</span> variables are passed to workflow components that declare them in their <span className="font-mono">env_keys</span> list.
+        </p>
+
+        {/* Existing vars */}
+        {Object.keys(envVars).length > 0 && (
+          <div className="flex flex-col gap-2">
+            {Object.entries(envVars).map(([key, value]) => (
+              <div key={key} className="flex items-center gap-2">
+                <span className="text-beige-warm font-mono text-xs w-48 shrink-0 truncate" title={key}>{key}</span>
+                <input
+                  type={visibleEnvKeys.has(key) ? 'text' : 'password'}
+                  readOnly
+                  value={value}
+                  className="flex-1 px-3 py-1.5 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-xs outline-none"
+                />
+                <Button
+                  text={visibleEnvKeys.has(key) ? 'Hide' : 'Show'}
+                  variant="outline"
+                  onClick={() => handleToggleEnvVisibility(key)}
+                />
+                <Button
+                  text="Remove"
+                  color="red"
+                  variant="outline"
+                  onClick={() => handleRemoveEnvVar(key)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add new var */}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Key (WAVS_ENV_ prefix added if missing)"
+            value={newEnvKey}
+            onChange={(e) => setNewEnvKey(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAddEnvVar(); }}
+            className="flex-1 px-3 py-1.5 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-xs outline-none"
+          />
+          <input
+            type="text"
+            placeholder="Value"
+            value={newEnvValue}
+            onChange={(e) => setNewEnvValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAddEnvVar(); }}
+            className="flex-1 px-3 py-1.5 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-xs outline-none"
+          />
+          <Button
+            text="Add"
+            variant="outline"
+            onClick={handleAddEnvVar}
+            disabled={!newEnvKey.trim()}
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            {envSaveSuccess && (
+              <p className="text-green-4 text-sm">Environment variables saved.</p>
+            )}
+            {envError && (
+              <p className="text-red-4 text-sm">{envError}</p>
+            )}
+          </div>
+          <Button
+            text={envSaving ? 'Saving...' : 'Save'}
+            onClick={handleSaveEnvVars}
+            disabled={envSaving}
+          />
+        </div>
+      </div>
 
       {/* MCP Server */}
       <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">

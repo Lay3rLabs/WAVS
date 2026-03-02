@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -26,4 +27,6 @@ pub struct Settings {
     pub mcp_auto_start: bool,
     #[serde(default)]
     pub mcp_token: Option<String>,
+    #[serde(default)]
+    pub env_vars: HashMap<String, String>,
 }

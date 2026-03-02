@@ -14,6 +14,7 @@ export interface Settings {
   mcp_enabled: boolean;
   mcp_auto_start: boolean;
   mcp_token: string | null;
+  env_vars: Record<string, string>;
 }
 
 // Health types

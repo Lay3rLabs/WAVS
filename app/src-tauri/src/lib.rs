@@ -8,7 +8,7 @@ use crate::commands::{
     cmd_get_component_digest, cmd_get_health_status, cmd_get_mcp_binary_path, cmd_get_mcp_status,
     cmd_get_mnemonic, cmd_get_services, cmd_get_settings, cmd_has_mnemonic, cmd_pause_service,
     cmd_publish_component, cmd_read_wavs_toml, cmd_register_claude_mcp, cmd_remove_service,
-    cmd_restart, cmd_resume_service, cmd_get_wavs_url, cmd_save_mcp_settings,
+    cmd_restart, cmd_resume_service, cmd_get_wavs_url, cmd_save_env_vars, cmd_save_mcp_settings,
     cmd_save_poa_registries, cmd_set_wavs_home, cmd_start_mcp_server, cmd_start_wavs,
     cmd_stop_mcp_server, cmd_store_mnemonic, cmd_upload_to_ipfs, cmd_write_wavs_toml,
 };
@@ -114,6 +114,7 @@ pub fn run() {
             cmd_save_mcp_settings,
             cmd_clear_persisted_services,
             cmd_get_wavs_url,
+            cmd_save_env_vars,
             cmd_register_claude_mcp
         ])
         .run(tauri::generate_context!())

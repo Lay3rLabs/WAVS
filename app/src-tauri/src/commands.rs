@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -91,6 +92,11 @@ pub async fn cmd_start_wavs(
     // Set the signing mnemonic from the OS keychain
     if let Some(credential) = get_mnemonic_cached(&mnemonic_cache) {
         config.signing_mnemonic = Some(credential);
+    }
+
+    // Inject WAVS_ENV_* variables from settings into the process environment
+    for (key, value) in &settings.get_cloned().env_vars {
+        std::env::set_var(key, value);
     }
 
     let ctx = AppContext::new_with_runtime(AnyRuntime::TokioHandle(
@@ -757,6 +763,25 @@ pub async fn cmd_save_mcp_settings(
         .update(&app, |s| {
             s.mcp_auto_start = mcp_auto_start;
             s.mcp_token = mcp_token.clone();
+        })
+        .await
+}
+
+// --- Environment Variables ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_save_env_vars(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    env_vars: HashMap<String, String>,
+) -> AppResult<()> {
+    // Apply to process environment immediately so running WAVS picks them up
+    for (key, value) in &env_vars {
+        std::env::set_var(key, value);
+    }
+    settings
+        .update(&app, |s| {
+            s.env_vars = env_vars.clone();
         })
         .await
 }

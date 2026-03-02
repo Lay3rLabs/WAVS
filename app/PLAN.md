@@ -30,6 +30,7 @@ MVP Requirements:
 - [x] Submissions not showing up
 - [x] Services not loading on app restart
 - [x] Better aesthetics
+- [ ] App branding
 - [ ] Select file / folder UX
 
 Post MVP:
