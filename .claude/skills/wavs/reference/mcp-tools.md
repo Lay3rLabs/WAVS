@@ -19,7 +19,10 @@ All tools are exposed by the `wavs` MCP server. Prefix with `wavs:` when calling
 | `wavs_set_service_uri` | — | ✓ | — | EVM only; calls `setServiceURI` on ServiceManager contract |
 | `wavs_deploy_service_manager` | — | ✓ | — | EVM only; deploys `SimpleServiceManager.sol`; returns `address` |
 | `wavs_deploy_poa_service_manager` | — | ✓ | — | EVM only; deploys `POAStakeRegistry` proxy via Docker; returns proxy `address` |
-| `wavs_register_operator` | — | ✓ + mnemonic | — | EVM only; registers node's signing key on POAStakeRegistry |
+| `wavs_register_operator` | — | ✓ + mnemonic | — | EVM only; registers node's signing key on POAStakeRegistry; call AFTER `wavs_deploy_service` |
+| `wavs_deploy_and_register` | ✓ | ✓ + mnemonic | — | POA convenience: `wavs_deploy_service` + `wavs_register_operator` in one call |
+| `wavs_get_service_signer` | ✓ | — | — | Returns HD index + EVM address the node uses to sign envelopes for a service |
+| `wavs_get_signing_address` | — | — (mnemonic only) | — | Derives EVM address at any HD index from signing mnemonic (no network, default HD 0) |
 | `wavs_upload_component` | — | — | ✓ | Uploads `.wasm` binary; returns raw 64-char hex digest (no `sha256:` prefix) |
 | `wavs_save_service` | — | — | ✓ | Saves service def to node store; returns URI |
 | `wavs_simulate_trigger` | — | — | ✓ | Fires a test trigger against a deployed service |
@@ -63,11 +66,34 @@ rpc_url: RPC endpoint for the chain (e.g. "http://localhost:8545")
 Returns: contract address (use as `address` in service_manager_json)
 
 ### wavs_register_operator
+**Call AFTER `wavs_deploy_service`** — queries the node for the service-specific signing key (HD index N) and registers it on-chain.
 ```
 service_manager_json: {"evm": {"chain": "evm:31337", "address": "0x..."}}
 weight:               optional uint64 (default: 100)
 rpc_url:              RPC endpoint for the chain (e.g. "http://localhost:8545")
 ```
+
+### wavs_deploy_and_register
+POA convenience tool: equivalent to `wavs_deploy_service` + `wavs_register_operator`. The service URI must already be set on-chain.
+```
+service_manager_json: {"evm": {"chain": "evm:31337", "address": "0x..."}}
+weight:               optional uint64 (default: 100)
+rpc_url:              RPC endpoint for the chain (e.g. "http://localhost:8545")
+```
+
+### wavs_get_service_signer
+Returns the HD index and EVM address the WAVS node uses to sign envelopes for a specific service. Essential for diagnosing POAStakeRegistry `InvalidSignature` errors.
+```
+service_manager_json: {"evm": {"chain": "evm:31337", "address": "0x..."}}
+```
+Returns: `HD index: N, EVM address: 0x...`
+
+### wavs_get_signing_address
+Derives the EVM address at a given HD index of the signing mnemonic without any network call. Useful for verifying which address will be registered.
+```
+hd_index: optional uint32 (default: 0)
+```
+Returns: `Signing address (HD index N): 0x...`
 
 ### wavs_upload_component
 ```

@@ -133,6 +133,24 @@ pub struct BuildComponentParams {
     pub release: Option<bool>,
 }
 
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct GetSigningAddressParams {
+    /// HD derivation index to use (default: 0). Use the hd_index reported by
+    /// wavs_get_service_signer to check a service-specific signing key.
+    pub hd_index: Option<u32>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct DeployAndRegisterParams {
+    /// ServiceManager as a JSON object.
+    /// EVM: `{"evm":{"chain":"evm:31337","address":"0xAbCd..."}}`
+    pub service_manager_json: String,
+    /// Weight to assign to the operator (default: 100).
+    pub weight: Option<u64>,
+    /// RPC endpoint URL for the chain (e.g. "http://localhost:8545")
+    pub rpc_url: String,
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 type McpError = ErrorData;
@@ -428,24 +446,102 @@ impl WavsMcpServer {
         let p: RegisterOperatorParams = parse_args(args)?;
         let owner_cred = self.require_mcp_chain_credential()?;
         let signing_cred = self.require_signing_mnemonic()?;
-        let manager = match serde_json::from_str(&p.service_manager_json) {
+        let manager: wavs_types::ServiceManager = match serde_json::from_str(&p.service_manager_json) {
             Ok(m) => m,
             Err(e) => return err(format!("Invalid service_manager_json: {e}")),
         };
         let weight = p.weight.unwrap_or(100);
-        match chain_ops::register_operator(&manager, &owner_cred, &signing_cred, weight, &p.rpc_url).await {
-            Ok((operator, register_tx, signing_key_tx)) => ok(format!(
-                "Operator registered.\nOperator: {operator}\nRegister tx: {register_tx}\nSigning key tx: {signing_key_tx}"
+
+        // Query the WAVS node for the HD index assigned to this service. The node assigns a unique
+        // HD-derived signing key per service (starting at index 1), so we must register the correct
+        // address on-chain. This requires the service to be deployed to the node first.
+        let signing_key_hd_index = match self.client.get_service_signer(manager.clone()).await {
+            Ok(wavs_types::SignerResponse::Secp256k1 { hd_index, evm_address }) => {
+                tracing::info!(
+                    "Service signing key: HD index {hd_index} → {evm_address}"
+                );
+                hd_index
+            }
+            Err(e) => {
+                return err(format!(
+                    "Failed to query service signing key from WAVS node: {e:#}\n\n\
+                     wavs_register_operator must be called AFTER wavs_deploy_service (or \
+                     wavs_deploy_dev_service) so the node has assigned a signing key to the \
+                     service. Deploy the service first, then call wavs_register_operator."
+                ));
+            }
+        };
+
+        match chain_ops::register_operator(&manager, &owner_cred, &signing_cred, weight, signing_key_hd_index, &p.rpc_url).await {
+            Ok((signing_key, register_tx, signing_key_tx)) => ok(format!(
+                "Operator registered.\nSigning key (HD index {signing_key_hd_index}): {signing_key}\nRegister tx: {register_tx}\nSigning key tx: {signing_key_tx}"
             )),
             Err(e) => err(format!("Failed to register operator: {e:#}")),
         }
     }
 
-    async fn tool_get_signing_address(&self) -> Result<CallToolResult, McpError> {
+    async fn tool_get_signing_address(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+        let p: GetSigningAddressParams = parse_args(args)?;
         let credential = self.require_signing_mnemonic()?;
-        match chain_ops::get_signing_address(&credential) {
-            Ok(addr) => ok(format!("Signing address (HD index 0): {addr}")),
+        let hd_index = p.hd_index.unwrap_or(0);
+        match chain_ops::get_signing_address(&credential, Some(hd_index)) {
+            Ok(addr) => ok(format!("Signing address (HD index {hd_index}): {addr}")),
             Err(e) => err(format!("Failed to derive signing address: {e:#}")),
+        }
+    }
+
+    async fn tool_get_service_signer(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+        let p: ServiceManagerParams = parse_args(args)?;
+        let manager = match serde_json::from_str(&p.service_manager_json) {
+            Ok(m) => m,
+            Err(e) => return err(format!("Invalid service_manager_json: {e}")),
+        };
+        match self.client.get_service_signer(manager).await {
+            Ok(wavs_types::SignerResponse::Secp256k1 { hd_index, evm_address }) => ok(format!(
+                "Service signing key:\n  HD index:    {hd_index}\n  EVM address: {evm_address}"
+            )),
+            Err(e) => err(format!("Failed to get service signer: {e:#}")),
+        }
+    }
+
+    async fn tool_deploy_and_register(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+        let p: DeployAndRegisterParams = parse_args(args)?;
+        let owner_cred = self.require_mcp_chain_credential()?;
+        let signing_cred = self.require_signing_mnemonic()?;
+        let manager: wavs_types::ServiceManager = match serde_json::from_str(&p.service_manager_json) {
+            Ok(m) => m,
+            Err(e) => return err(format!("Invalid service_manager_json: {e}")),
+        };
+
+        // Step 1: register the service with the WAVS node so it gets an HD index assigned.
+        match self.client.deploy_service(manager.clone()).await {
+            Ok(v) if v.is_null() => {}
+            Ok(v) => tracing::info!("deploy_service response: {v}"),
+            Err(e) => return err(format!("wavs_deploy_service failed: {e:#}")),
+        }
+
+        // Step 2: query the node for the service-specific signing key.
+        let hd_index = match self.client.get_service_signer(manager.clone()).await {
+            Ok(wavs_types::SignerResponse::Secp256k1 { hd_index, .. }) => hd_index,
+            Err(e) => return err(format!(
+                "Service deployed but could not query signing key: {e:#}\n\
+                 Run wavs_register_operator separately once the node is ready."
+            )),
+        };
+
+        // Step 3: register the operator on-chain with the correct signing key.
+        let weight = p.weight.unwrap_or(100);
+        match chain_ops::register_operator(&manager, &owner_cred, &signing_cred, weight, hd_index, &p.rpc_url).await {
+            Ok((signing_key, register_tx, signing_key_tx)) => ok(format!(
+                "Service deployed and operator registered.\n\
+                 Signing key (HD index {hd_index}): {signing_key}\n\
+                 Register tx:    {register_tx}\n\
+                 Signing key tx: {signing_key_tx}"
+            )),
+            Err(e) => err(format!(
+                "Service deployed (HD index {hd_index}) but operator registration failed: {e:#}\n\
+                 Run wavs_register_operator separately to retry the on-chain step."
+            )),
         }
     }
 
@@ -669,7 +765,8 @@ impl ServerHandler for WavsMcpServer {
                  Write tools (need --token): wavs_deploy_service, wavs_delete_service, wavs_pause_service, wavs_resume_service\n\
                  Dev tools (need dev endpoints): wavs_upload_component, wavs_save_service, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv\n\
                  Chain-write tools (need WAVS_MCP_CHAIN_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
-                 Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator, wavs_get_signing_address\n\
+                 Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator, wavs_deploy_and_register, wavs_get_signing_address\n\
+                 Node-read tools (need --token): wavs_get_service_signer\n\
                  Local tools: wavs_get_service_schema, wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component"
                     .to_string(),
             ),
@@ -750,15 +847,16 @@ impl ServerHandler for WavsMcpServer {
                         Requires --mcp-chain-credential on this MCP server. \
                         Docker image ghcr.io/lay3rlabs/poa-middleware:1.0.1 must be available. \
                         Provide the chain RPC URL as rpc_url. EVM only currently. \
-                        After deploying, call wavs_register_operator with the returned address to register the \
-                        WAVS node's signing key as an operator before the service can process triggers.".into(),
+                        After deploying, upload+save+deploy the service first, then call wavs_register_operator \
+                        so the node has assigned a signing key that can be registered on-chain.".into(),
                     input_schema: schema_for_type::<DeployPoaServiceManagerParams>().into(),
                 },
                 Tool {
                     name: "wavs_register_operator".into(),
-                    description: "Step 2 of PoA setup (call after wavs_deploy_poa_service_manager). \
-                        Registers the WAVS node's signing key as an operator on a POAStakeRegistry contract \
-                        and sets the signing key mapping. \
+                    description: "PoA setup: registers the WAVS node's signing key as an operator on a POAStakeRegistry \
+                        contract and sets the signing key mapping. IMPORTANT: call this AFTER wavs_deploy_service (or \
+                        wavs_deploy_dev_service) — it queries the WAVS node for the service-specific HD-derived signing \
+                        key (the key the node actually uses to sign envelopes) and registers that address on-chain. \
                         Calls registerOperator (using WAVS_MCP_CHAIN_CREDENTIAL as owner) and \
                         updateOperatorSigningKey (using WAVS_SIGNING_MNEMONIC as operator). \
                         weight is a relative stake weight (default: 100; any positive value works for single-operator setups). \
@@ -767,12 +865,29 @@ impl ServerHandler for WavsMcpServer {
                     input_schema: schema_for_type::<RegisterOperatorParams>().into(),
                 },
                 Tool {
+                    name: "wavs_deploy_and_register".into(),
+                    description: "POA convenience: atomically deploys a service to the WAVS node AND registers the \
+                        operator on the POAStakeRegistry in one call. Equivalent to wavs_deploy_service followed by \
+                        wavs_register_operator. The service must already be saved and its URI set on-chain \
+                        (run wavs_set_service_uri first). Requires --token, --mcp-chain-credential, and \
+                        --signing-mnemonic. EVM only.".into(),
+                    input_schema: schema_for_type::<DeployAndRegisterParams>().into(),
+                },
+                Tool {
+                    name: "wavs_get_service_signer".into(),
+                    description: "Query the WAVS node for the HD-derived signing key assigned to a specific service. \
+                        Returns the HD index and EVM address the node uses to sign envelopes for that service. \
+                        Useful for diagnosing POAStakeRegistry InvalidSignature errors and verifying \
+                        wavs_register_operator registered the correct key. Requires --token.".into(),
+                    input_schema: schema_for_type::<ServiceManagerParams>().into(),
+                },
+                Tool {
                     name: "wavs_get_signing_address".into(),
-                    description: "Get the EVM address of the WAVS node's signing key, derived from the configured \
-                        signing mnemonic (HD index 0). \
-                        Useful for verifying operator registration. \
+                    description: "Derive the EVM address for any HD index of the WAVS signing mnemonic without \
+                        network access. Defaults to HD index 0 (the operator identity). Pass hd_index to check \
+                        a service-specific key (use the index from wavs_get_service_signer). \
                         Requires --signing-mnemonic (WAVS_SIGNING_MNEMONIC) to be configured on this MCP server.".into(),
-                    input_schema: no_params(),
+                    input_schema: schema_for_type::<GetSigningAddressParams>().into(),
                 },
                 // Dev tools
                 Tool {
@@ -860,7 +975,9 @@ impl ServerHandler for WavsMcpServer {
             "wavs_deploy_service_manager"       => self.tool_deploy_service_manager(args).await,
             "wavs_deploy_poa_service_manager"   => self.tool_deploy_poa_service_manager(args).await,
             "wavs_register_operator"            => self.tool_register_operator(args).await,
-            "wavs_get_signing_address"          => self.tool_get_signing_address().await,
+            "wavs_deploy_and_register"          => self.tool_deploy_and_register(args).await,
+            "wavs_get_service_signer"           => self.tool_get_service_signer(args).await,
+            "wavs_get_signing_address"          => self.tool_get_signing_address(args).await,
             "wavs_upload_component"        => self.tool_upload_component(args).await,
             "wavs_save_service"          => self.tool_save_service(args).await,
             "wavs_simulate_trigger"      => self.tool_simulate_trigger(args).await,

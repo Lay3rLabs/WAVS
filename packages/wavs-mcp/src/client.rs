@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use reqwest::{Client, Method};
 use serde_json::Value;
-use wavs_types::{AddServiceRequest, DeleteServicesRequest, PauseServiceRequest, SaveServiceResponse, ServiceManager, SimulatedTriggerRequest, UploadComponentResponse};
+use wavs_types::{AddServiceRequest, DeleteServicesRequest, GetSignerRequest, PauseServiceRequest, SaveServiceResponse, ServiceManager, SignerResponse, SimulatedTriggerRequest, UploadComponentResponse};
 
 #[derive(Clone)]
 pub struct WavsClient {
@@ -188,6 +188,23 @@ impl WavsClient {
         }
 
         Ok(hash)
+    }
+
+    /// POST /services/signer — returns the signing key info for a service.
+    pub async fn get_service_signer(&self, service_manager: ServiceManager) -> Result<SignerResponse> {
+        let body = serde_json::to_string(&GetSignerRequest { service_manager })?;
+        let resp = self.request(Method::POST, "/services/signer")
+            .header("Content-Type", "application/json")
+            .body(body)
+            .send()
+            .await
+            .context("POST /services/signer")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            anyhow::bail!("HTTP {}: {}", status, body);
+        }
+        resp.json().await.context("parse SignerResponse")
     }
 
     /// GET /dev/kv/{service_id}/{bucket}/{key} — returns value as UTF-8 or hex.

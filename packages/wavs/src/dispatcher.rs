@@ -478,7 +478,27 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             // Process results sequentially (DB writes and manager registration are not async-safe to parallelize)
             let mut restored = Vec::new();
             for (entry, result) in fetched {
-                let service = result?;
+                let service = match result {
+                    Ok(s) => s,
+                    Err(e) => {
+                        // If a registered service can't be fetched (e.g. chain was reset and
+                        // the contract no longer exists or has no URI), remove the stale registry
+                        // entry so the node can start clean and the address can be re-registered.
+                        tracing::warn!(
+                            "Failed to restore service for {:?}: {e:#}. Removing stale registry entry.",
+                            entry.service_manager
+                        );
+                        if let Err(rem_err) =
+                            self.service_registry.remove(&entry.service_manager)
+                        {
+                            tracing::error!(
+                                "Failed to remove stale registry entry for {:?}: {rem_err}",
+                                entry.service_manager
+                            );
+                        }
+                        continue;
+                    }
+                };
 
                 // Store the service in DB
                 self.services.save(&service)?;
@@ -709,7 +729,23 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     pub fn remove_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
         // Remove from persistent registry first so an IO failure doesn't leave
         // the service already gone from memory but still on disk.
-        if let Some(sm) = self.services.get(&id).ok().map(|s| s.manager.clone()) {
+        // Fall back to a registry scan when the service is not in the runtime store —
+        // this handles cases where a startup-restore failed (e.g. chain was reset) but
+        // the registry entry was not cleaned up, leaving the manager address blocked.
+        let sm = self
+            .services
+            .get(&id)
+            .ok()
+            .map(|s| s.manager.clone())
+            .or_else(|| {
+                self.service_registry
+                    .entries()
+                    .into_iter()
+                    .find(|e| ServiceId::from(&e.service_manager) == id)
+                    .map(|e| e.service_manager)
+            });
+
+        if let Some(sm) = sm {
             self.service_registry.remove(&sm)?;
         }
 
