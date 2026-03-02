@@ -286,12 +286,20 @@ impl WavsMcpServer {
 
     async fn tool_deploy_service(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
         let p: ServiceManagerParams = parse_args(args)?;
-        let manager = match serde_json::from_str(&p.service_manager_json) {
+        let manager: wavs_types::ServiceManager = match serde_json::from_str(&p.service_manager_json) {
             Ok(m) => m,
             Err(e) => return err(format!("Invalid service_manager_json: {e}")),
         };
-        match self.client.deploy_service(manager).await {
-            Ok(v) if v.is_null() => ok("Service registered successfully."),
+        match self.client.deploy_service(manager.clone()).await {
+            Ok(v) if v.is_null() => {
+                let signer_info = match self.client.get_service_signer(manager).await {
+                    Ok(wavs_types::SignerResponse::Secp256k1 { hd_index, evm_address }) => {
+                        format!("\nSigning key: HD index {hd_index} ({evm_address})\nCall wavs_register_operator next if using PoA.")
+                    }
+                    Err(_) => String::new(),
+                };
+                ok(format!("Service registered successfully.{signer_info}"))
+            }
             Ok(v) => ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string())),
             Err(e) => err(format!("Failed to deploy service: {e:#}")),
         }
@@ -397,8 +405,24 @@ impl WavsMcpServer {
 
     async fn tool_deploy_dev_service(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
         let p: DeployDevServiceParams = parse_args(args)?;
+        let manager: Option<wavs_types::ServiceManager> =
+            serde_json::from_str::<serde_json::Value>(&p.service_json)
+                .ok()
+                .and_then(|v| serde_json::from_value(v.get("manager")?.clone()).ok());
         match self.client.deploy_dev_service(&p.service_json).await {
-            Ok(hash) => ok(format!("Service registered.\nHash: {hash}")),
+            Ok(hash) => {
+                let signer_info = if let Some(mgr) = manager {
+                    match self.client.get_service_signer(mgr).await {
+                        Ok(wavs_types::SignerResponse::Secp256k1 { hd_index, evm_address }) => {
+                            format!("\nSigning key: HD index {hd_index} ({evm_address})")
+                        }
+                        Err(_) => String::new(),
+                    }
+                } else {
+                    String::new()
+                };
+                ok(format!("Service registered.\nHash: {hash}{signer_info}"))
+            }
             Err(e) => err(format!("Failed to deploy dev service: {e:#}")),
         }
     }
@@ -737,8 +761,8 @@ There is NO top-level "contract", "quorum_percent", or "allowed_operators" field
 Manual:        {"Raw": [104, 101, 108, 108, 111]}  (byte array)
 Cron:          {"Cron": {"trigger_time": 1700000000}}
 Block:         {"BlockInterval": {"block_height": 42}}
-EVM event:     {"EvmContractEvent": {"log": {"address": "0x...", "data": "0x...", "topics": ["0x..."]}}}
-Cosmos event:  {"CosmosContractEvent": {"event": {"ty": "wasm-my-event", "attributes": []}}}
+EVM event:     {"EvmContractEvent": {"chain": "evm:31337", "contract_address": "0x<contract>", "log_data": {"topics": ["0x<event-sig-hash>"], "data": "0x"}, "tx_hash": "0x<tx-hash>", "block_number": 12, "log_index": 0, "block_hash": "0x<block-hash>", "block_timestamp": null, "tx_index": 0}}
+Cosmos event:  {"CosmosContractEvent": {"contract_address": "cosmos1...", "chain": "cosmos:mychain", "event": {"ty": "wasm-my-event", "attributes": []}, "block_height": 100, "event_index": 0}}
 
 Note: trigger_json for simulate uses {"manual": null}, not the bare string "manual".
 "#)
