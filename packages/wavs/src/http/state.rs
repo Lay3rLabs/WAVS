@@ -38,9 +38,40 @@ impl HttpState {
             })?;
         }
 
+        let db_storage = dispatcher.db_storage.clone();
+
+        // Load previously saved service definitions from disk so GET /dev/services/{hash} works after restart
+        let services_dir = config.data.join("dev_services");
+        if services_dir.exists() {
+            match std::fs::read_dir(&services_dir) {
+                Ok(entries) => {
+                    for entry in entries.flatten() {
+                        if entry.path().extension().and_then(|e| e.to_str()) != Some("json") {
+                            continue;
+                        }
+                        let Ok(bytes) = std::fs::read(entry.path()) else {
+                            continue;
+                        };
+                        let Ok(service) = serde_json::from_slice::<Service>(&bytes) else {
+                            continue;
+                        };
+                        let Ok(hash) = service.hash() else { continue };
+                        let key: [u8; 32] = match hash.as_ref().try_into() {
+                            Ok(k) => k,
+                            Err(_) => continue,
+                        };
+                        if let Err(e) = db_storage.services_by_hash.insert(key, service) {
+                            tracing::warn!("Failed to load service from disk: {:?}", e);
+                        }
+                    }
+                }
+                Err(e) => tracing::warn!("Failed to read dev_services directory: {:?}", e),
+            }
+        }
+
         Ok(Self {
             config,
-            db_storage: dispatcher.db_storage.clone(),
+            db_storage,
             dispatcher,
             is_mock_chain_client,
             http_client: reqwest::Client::new(),
@@ -84,6 +115,13 @@ impl HttpState {
         self.db_storage
             .services_by_hash
             .insert(key, service.clone())?;
+        // Persist to disk so service definitions survive node restarts
+        let services_dir = self.config.data.join("dev_services");
+        std::fs::create_dir_all(&services_dir)?;
+        std::fs::write(
+            services_dir.join(format!("{service_hash}.json")),
+            serde_json::to_vec(service)?,
+        )?;
         Ok(service_hash)
     }
 }
