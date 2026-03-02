@@ -176,21 +176,45 @@ pub async fn deploy_poa_service_manager(
     Ok(deploy.addresses.poa_stake_registry)
 }
 
-/// Derive the EVM address for the WAVS signing key (HD index 0).
+/// Derive the EVM address for the WAVS signing key at the given HD index (default: 0).
 /// Does not require network access.
-pub fn get_signing_address(credential: &Credential) -> Result<String> {
-    let signer = make_signer(credential, Some(0))?;
+pub fn get_signing_address(credential: &Credential, hd_index: Option<u32>) -> Result<String> {
+    let signer = make_signer(credential, Some(hd_index.unwrap_or(0)))?;
     Ok(format!("{}", signer.address()))
 }
 
+/// Decode a known 4-byte ABI revert selector into a human-readable error name.
+pub fn decode_revert_selector(err_str: &str) -> Option<&'static str> {
+    // Extract 0x-prefixed 4-byte selector from the error string.
+    let selector = err_str
+        .split("0x")
+        .find_map(|chunk| {
+            let hex = chunk.trim_end_matches(|c: char| !c.is_ascii_hexdigit());
+            if hex.len() >= 8 { Some(&hex[..8]) } else { None }
+        })?;
+    match selector {
+        "8baa579f" => Some("InvalidSignature()"),
+        "42ee68b5" => Some("AlreadyRegistered()"),
+        "3dda1739" => Some("SignerNotRegistered()"),
+        "9996b315" => Some("OperatorNotRegistered()"),
+        _ => None,
+    }
+}
+
 /// Register the signing key as an operator on a POAStakeRegistry contract.
-/// `owner_credential` calls `registerOperator`; `signing_mnemonic` calls `updateOperatorSigningKey`.
+///
+/// `owner_credential` calls `registerOperator` using HD index 0 of `signing_mnemonic` as the
+/// operator identity. `signing_key_hd_index` selects which HD-derived key becomes the *signing
+/// key* (the key WAVS actually uses when submitting envelopes for the service). Pass the HD index
+/// returned by `POST /services/signer` so the on-chain registry matches what the node signs with.
+///
 /// Returns `(operator_address, register_tx, signing_key_tx)`.
 pub async fn register_operator(
     service_manager: &ServiceManager,
     owner_credential: &Credential,
     signing_mnemonic: &Credential,
     weight: u64,
+    signing_key_hd_index: u32,
     rpc_url: &str,
 ) -> Result<(String, String, String)> {
     let endpoint = parse_endpoint(rpc_url)?;
@@ -203,10 +227,18 @@ pub async fn register_operator(
     let owner_config = EvmSigningClientConfig::new(endpoint.clone(), owner_credential.clone());
     let owner_client = EvmSigningClient::new(owner_config).await?;
 
-    let signing_config =
-        EvmSigningClientConfig::new(endpoint, signing_mnemonic.clone()).with_hd_index(0);
-    let signing_client = EvmSigningClient::new(signing_config).await?;
-    let signing_key_addr: Address = signing_client.address();
+    // HD index 0 is the stable operator identity — the on-chain address that owns the operator
+    // registration and is allowed to call updateOperatorSigningKey.
+    let operator_config =
+        EvmSigningClientConfig::new(endpoint.clone(), signing_mnemonic.clone()).with_hd_index(0);
+    let operator_client = EvmSigningClient::new(operator_config).await?;
+    let operator_addr: Address = operator_client.address();
+
+    // The actual signing key is the service-specific HD index that WAVS uses to sign envelopes.
+    let signing_key_config =
+        EvmSigningClientConfig::new(endpoint, signing_mnemonic.clone()).with_hd_index(signing_key_hd_index);
+    let signing_key_client = EvmSigningClient::new(signing_key_config).await?;
+    let signing_key_addr: Address = signing_key_client.address();
 
     let registry_as_owner =
         IPOAStakeRegistryInstance::new(contract_address, owner_client.provider.clone());
@@ -214,7 +246,7 @@ pub async fn register_operator(
         let mut last_err = None;
         for attempt in 0..3u32 {
             match registry_as_owner
-                .registerOperator(signing_key_addr, U256::from(weight))
+                .registerOperator(operator_addr, U256::from(weight))
                 .send()
                 .await
             {
@@ -233,28 +265,40 @@ pub async fn register_operator(
                         last_err = Some(e);
                         continue;
                     }
-                    return Err(e.into());
+                    let hint = decode_revert_selector(&msg)
+                        .map(|name| format!(" ({name})"))
+                        .unwrap_or_default();
+                    return Err(anyhow::anyhow!("registerOperator reverted{hint}: {msg}"));
                 }
             }
         }
         return Err(last_err.unwrap().into());
     };
 
+    // The signature is produced by the *signing key* (HD index N) proving it owns its private key.
     let encoded: Vec<u8> = (signing_key_addr,).abi_encode();
     let message_hash = keccak256(&encoded);
-    let sig = signing_client
+    let sig = signing_key_client
         .signer
         .sign_hash(&message_hash)
         .await
         .context("sign message hash")?;
     let sig_bytes = Bytes::copy_from_slice(sig.as_bytes().as_ref());
 
+    // updateOperatorSigningKey is called by the operator (HD index 0) to register the new key.
     let registry_as_operator =
-        IPOAStakeRegistryInstance::new(contract_address, signing_client.provider.clone());
+        IPOAStakeRegistryInstance::new(contract_address, operator_client.provider.clone());
     let signing_key_receipt = registry_as_operator
         .updateOperatorSigningKey(signing_key_addr, sig_bytes)
         .send()
-        .await?
+        .await
+        .map_err(|e| {
+            let msg = e.to_string();
+            let hint = decode_revert_selector(&msg)
+                .map(|name| format!(" ({name}): signing key HD index {signing_key_hd_index} / address {signing_key_addr}"))
+                .unwrap_or_default();
+            anyhow::anyhow!("updateOperatorSigningKey reverted{hint}: {msg}")
+        })?
         .get_receipt()
         .await?;
     let signing_key_tx = format!("{}", signing_key_receipt.transaction_hash);
