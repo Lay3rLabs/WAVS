@@ -30,8 +30,7 @@ MVP Requirements:
 - [x] Test DevEx in new repo (component development, deploying contracts, etc.)
 - [x] Submissions not showing up
 - [x] Services not loading on app restart
-- [-] Better aesthetics
-- [ ] App restart is broken in dev mode
+- [x] Better aesthetics
 
 Post MVP:
 - Stats (CPU, Memory, etc.)
@@ -45,3 +44,7 @@ Post MVP:
 - WAVS plus ZK sidecar
 - Commonware
 - Maybe consider making the MCP a WAVS Component?
+
+Minor bugs:
+- [ ] Services restart even if they were paused on app restart
+- [ ] App restart is broken in dev mode
