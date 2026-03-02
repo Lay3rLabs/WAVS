@@ -275,8 +275,10 @@ pub async fn register_operator(
         return Err(last_err.unwrap().into());
     };
 
-    // The signature is produced by the *signing key* (HD index N) proving it owns its private key.
-    let encoded: Vec<u8> = (signing_key_addr,).abi_encode();
+    // The signature proves that the new signing key's holder consents to being registered.
+    // The contract computes: messageHash = keccak256(abi.encode(operator)) where operator = msg.sender
+    // (the HD index 0 caller), then validates that newSigningKey signed this hash.
+    let encoded: Vec<u8> = (operator_addr,).abi_encode();
     let message_hash = keccak256(&encoded);
     let sig = signing_key_client
         .signer
@@ -294,10 +296,14 @@ pub async fn register_operator(
         .await
         .map_err(|e| {
             let msg = e.to_string();
-            let hint = decode_revert_selector(&msg)
-                .map(|name| format!(" ({name}): signing key HD index {signing_key_hd_index} / address {signing_key_addr}"))
+            let selector_hint = decode_revert_selector(&msg)
+                .map(|name| format!(" ({name})"))
                 .unwrap_or_default();
-            anyhow::anyhow!("updateOperatorSigningKey reverted{hint}: {msg}")
+            anyhow::anyhow!(
+                "updateOperatorSigningKey reverted{selector_hint} \
+                 [signing key HD index {signing_key_hd_index} / address {signing_key_addr}, \
+                 operator {operator_addr}]: {msg}"
+            )
         })?
         .get_receipt()
         .await?;
