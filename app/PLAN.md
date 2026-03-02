@@ -26,8 +26,10 @@ MVP Requirements:
 - [ ] Select file / folder UX
 - [x] Security (make sure it works with environment variable, update MCP.md to recommend putting in .env, make sure .env.example is up to date)
 - [x] Rename chain_write_credential to wavs_mcp_signer_mnemonic
-- [-] Test submission with an actual solidity contract
-- [-] Test DevEx in new repo (component development, deploying contracts, etc.)
+- [x] Test submission with an actual solidity contract
+- [x] Test DevEx in new repo (component development, deploying contracts, etc.)
+- [-] Submissions not showing up
+- [ ] Services not loading on app restart
 - [ ] Better aesthetics
 - [ ] App restart is broken in dev mode
 
