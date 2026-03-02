@@ -198,7 +198,7 @@ export function TriggerEditor({ trigger, onChange, chains }: TriggerEditorProps)
             <span className="text-xs text-tan-muted">Keccak256 hash will be computed automatically</span>
           </div>
           <button type="button" onClick={buildEvmTrigger} className="self-start px-4 py-1.5 rounded bg-purple-1 text-cream-light text-sm hover:bg-purple-2 cursor-pointer transition-colors">
-            Apply
+            Save Trigger
           </button>
         </div>
       )}
@@ -224,7 +224,7 @@ export function TriggerEditor({ trigger, onChange, chains }: TriggerEditorProps)
             </div>
           </div>
           <button type="button" onClick={buildBlockIntervalTrigger} className="self-start px-4 py-1.5 rounded bg-purple-1 text-cream-light text-sm hover:bg-purple-2 cursor-pointer transition-colors">
-            Apply
+            Save Trigger
           </button>
         </div>
       )}
@@ -247,7 +247,7 @@ export function TriggerEditor({ trigger, onChange, chains }: TriggerEditorProps)
             </div>
           </div>
           <button type="button" onClick={buildCronTrigger} className="self-start px-4 py-1.5 rounded bg-purple-1 text-cream-light text-sm hover:bg-purple-2 cursor-pointer transition-colors">
-            Apply
+            Save Trigger
           </button>
         </div>
       )}
@@ -267,7 +267,7 @@ export function TriggerEditor({ trigger, onChange, chains }: TriggerEditorProps)
             <TextInput placeholder="e.g. wasm-execute" value={cosmosEventType} onChange={setCosmosEventType} />
           </div>
           <button type="button" onClick={buildCosmosTrigger} className="self-start px-4 py-1.5 rounded bg-purple-1 text-cream-light text-sm hover:bg-purple-2 cursor-pointer transition-colors">
-            Apply
+            Save Trigger
           </button>
         </div>
       )}
@@ -287,7 +287,7 @@ export function TriggerEditor({ trigger, onChange, chains }: TriggerEditorProps)
             <Dropdown options={ATPROTO_ACTIONS} value={atAction} onChange={setAtAction} placeholder="Select action..." size="sm" />
           </div>
           <button type="button" onClick={buildAtProtoTrigger} className="self-start px-4 py-1.5 rounded bg-purple-1 text-cream-light text-sm hover:bg-purple-2 cursor-pointer transition-colors">
-            Apply
+            Save Trigger
           </button>
         </div>
       )}
@@ -299,7 +299,7 @@ export function TriggerEditor({ trigger, onChange, chains }: TriggerEditorProps)
             <TextInput placeholder="Hypercore feed key" value={hcFeedKey} onChange={setHcFeedKey} />
           </div>
           <button type="button" onClick={buildHypercoreTrigger} className="self-start px-4 py-1.5 rounded bg-purple-1 text-cream-light text-sm hover:bg-purple-2 cursor-pointer transition-colors">
-            Apply
+            Save Trigger
           </button>
         </div>
       )}

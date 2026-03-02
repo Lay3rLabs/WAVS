@@ -157,7 +157,7 @@ function buildBreadcrumbs(
   }
 
   if (pathname === '/services/new') {
-    crumbs.push({ label: 'New Service' });
+    crumbs.push({ label: 'New' });
     return crumbs;
   }
 

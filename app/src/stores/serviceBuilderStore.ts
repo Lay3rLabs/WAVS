@@ -10,7 +10,7 @@ import type {
   ServiceManager,
 } from '../types';
 
-export type BuilderStep = 'contract' | 'basics' | 'workflows' | 'review' | 'deploy';
+export type BuilderStep = 'contract' | 'service' | 'review' | 'deploy';
 
 export interface WorkflowDraft {
   id: string;
@@ -50,7 +50,7 @@ export interface SubmitDraft {
 
 function createDefaultComponent(): ComponentDraft {
   return {
-    sourceType: 'digest',
+    sourceType: 'registry',
     domain: '',
     package: '',
     version: '',
@@ -343,7 +343,7 @@ export const useServiceBuilderStore = create<ServiceBuilderState>((set, get) => 
     }));
 
     set({
-      step: 'basics',
+      step: 'service',
       name: service.name,
       selectedRegistryKey: registryKey,
       manualChain: '',

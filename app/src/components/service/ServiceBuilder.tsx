@@ -1,15 +1,13 @@
 import { Button } from '../atoms';
 import { useServiceBuilderStore, type BuilderStep } from '../../stores/serviceBuilderStore';
 import { ContractStep } from './ContractStep';
-import { ServiceBasics } from './ServiceBasics';
 import { WorkflowEditor } from './WorkflowEditor';
 import { ServiceReview } from './ServiceReview';
 import { ServiceDeploy } from './ServiceDeploy';
 
 const STEPS: { key: BuilderStep; label: string }[] = [
   { key: 'contract', label: 'Contract' },
-  { key: 'basics', label: 'Basics' },
-  { key: 'workflows', label: 'Workflows' },
+  { key: 'service', label: 'Service' },
   { key: 'review', label: 'Review' },
   { key: 'deploy', label: 'Deploy' },
 ];
@@ -36,10 +34,10 @@ export function ServiceBuilder({ onClose, onDeployComplete }: ServiceBuilderProp
     switch (step) {
       case 'contract':
         return selectedRegistryKey !== null || (manualChain.trim().length > 0 && manualAddress.trim().length > 0);
-      case 'basics':
-        return name.trim().length > 0;
-      case 'workflows':
-        return workflows.length > 0 && workflows.every((w) => w.trigger !== null);
+      case 'service':
+        return name.trim().length > 0
+          && workflows.length > 0
+          && workflows.every((w) => w.trigger !== null);
       case 'review':
         return true;
       default:
@@ -91,8 +89,7 @@ export function ServiceBuilder({ onClose, onDeployComplete }: ServiceBuilderProp
       {/* Step Content */}
       <div className="min-h-[300px]">
         {step === 'contract' && <ContractStep />}
-        {step === 'basics' && <ServiceBasics />}
-        {step === 'workflows' && <WorkflowEditor />}
+        {step === 'service' && <WorkflowEditor />}
         {step === 'review' && <ServiceReview />}
         {step === 'deploy' && <ServiceDeploy onDeployComplete={onDeployComplete} />}
       </div>

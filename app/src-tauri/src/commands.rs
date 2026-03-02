@@ -152,23 +152,20 @@ pub async fn cmd_start_wavs(
             .map_err(|e| AppError::WavsConfig(e.to_string()))?,
     );
 
-    // Restore saved services from settings
+    // Restore saved services from the settings cache using the correct HD index from the
+    // registry. We do NOT attempt a chain fetch here because the HTTP server hasn't started
+    // yet (connection refused). Services without a local cache entry will be restored by
+    // dispatcher.start() via service_registry.json once the HTTP server is bound.
     let saved_settings = settings.get_cloned();
     let saved_managers = saved_settings.saved_service_managers.clone();
     let saved_services = saved_settings.saved_services.clone();
+    let hd_map = dispatcher.registry_hd_index_map();
     for manager in &saved_managers {
-        match dispatcher.add_service(manager.clone()).await {
-            Ok(_) => {}
-            Err(e) => {
-                log::warn!("Failed to restore saved service from chain: {}", e);
-                // Fall back to the cached service definition to keep the service
-                // registered in the dispatcher (so pause/resume work correctly).
-                if let Some(cached) = saved_services.iter().find(|s| &s.manager == manager) {
-                    match dispatcher.add_service_direct(cached.clone(), None).await {
-                        Ok(_) => log::info!("Restored service from local cache: {:?}", manager),
-                        Err(e2) => log::warn!("Failed to restore service from cache: {}", e2),
-                    }
-                }
+        if let Some(cached) = saved_services.iter().find(|s| &s.manager == manager) {
+            let hd_index = hd_map.get(manager).copied();
+            match dispatcher.add_service_direct(cached.clone(), hd_index).await {
+                Ok(_) => log::info!("Restored service from local cache: {:?}", manager),
+                Err(e) => log::warn!("Failed to restore service from local cache: {}", e),
             }
         }
     }

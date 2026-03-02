@@ -28,8 +28,6 @@ export function SubmitEditor({ submit, onChange }: SubmitEditorProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h4 className="text-beige-light text-sm font-semibold">Submit</h4>
-
       <div className="flex flex-col gap-2">
         <label className="text-beige-warm text-sm">Submit Type</label>
         <Dropdown
@@ -55,7 +53,6 @@ export function SubmitEditor({ submit, onChange }: SubmitEditorProps) {
           <ComponentEditor
             component={submit.component}
             onChange={(component) => update({ component })}
-            label="Aggregator Component"
           />
         </div>
       )}

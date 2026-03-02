@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button, Expander } from '../atoms';
+import { Button, Expander, TextInput } from '../atoms';
 import { TriggerEditor } from './TriggerEditor';
 import { ComponentEditor } from './ComponentEditor';
 import { SubmitEditor } from './SubmitEditor';
@@ -12,6 +12,8 @@ export function WorkflowEditor() {
   const addWorkflow = useServiceBuilderStore((s) => s.addWorkflow);
   const removeWorkflow = useServiceBuilderStore((s) => s.removeWorkflow);
   const updateWorkflow = useServiceBuilderStore((s) => s.updateWorkflow);
+  const name = useServiceBuilderStore((s) => s.name);
+  const setName = useServiceBuilderStore((s) => s.setName);
 
   const [chains, setChains] = useState<ChainKey[]>([]);
 
@@ -28,6 +30,15 @@ export function WorkflowEditor() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Service Name */}
+      <div className="flex flex-col gap-2">
+        <label className="text-beige-warm text-sm font-medium">Service Name</label>
+        <TextInput placeholder="e.g. my-wavs-service" value={name} onChange={setName} />
+      </div>
+
+      <div className="border-t border-charcoal-light" />
+
+      {/* Workflows */}
       <div className="flex items-center justify-between">
         <h3 className="text-beige-light text-lg font-semibold">Workflows</h3>
         <Button text="Add Workflow" color="purple" size="sm" onClick={addWorkflow} />
@@ -68,27 +79,36 @@ function WorkflowItem({ workflow, index, chains, onUpdate, onRemove, canRemove }
 
   return (
     <Expander label={`Workflow ${index + 1} - Trigger: ${triggerLabel}`} defaultExpanded={index === 0}>
-      <div className="flex flex-col gap-6 p-2">
-        {/* Trigger */}
-        <TriggerEditor
-          trigger={workflow.trigger}
-          onChange={(trigger) => onUpdate({ trigger })}
-          chains={chains}
-        />
+      <div className="flex flex-col gap-5 p-2">
+        <section className="flex flex-col gap-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-tan-muted">Trigger</p>
+          <TriggerEditor
+            trigger={workflow.trigger}
+            onChange={(trigger) => onUpdate({ trigger })}
+            chains={chains}
+          />
+        </section>
 
-        {/* Component */}
-        <ComponentEditor
-          component={workflow.component}
-          onChange={(component) => onUpdate({ component })}
-        />
+        <div className="border-t border-charcoal-light" />
 
-        {/* Submit */}
-        <SubmitEditor
-          submit={workflow.submit}
-          onChange={(submit) => onUpdate({ submit })}
-        />
+        <section className="flex flex-col gap-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-tan-muted">Component</p>
+          <ComponentEditor
+            component={workflow.component}
+            onChange={(component) => onUpdate({ component })}
+          />
+        </section>
 
-        {/* Remove */}
+        <div className="border-t border-charcoal-light" />
+
+        <section className="flex flex-col gap-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-tan-muted">Submit</p>
+          <SubmitEditor
+            submit={workflow.submit}
+            onChange={(submit) => onUpdate({ submit })}
+          />
+        </section>
+
         {canRemove && (
           <div className="pt-2 border-t border-charcoal-light">
             <Button text="Remove Workflow" color="red" size="sm" variant="outline" onClick={onRemove} />

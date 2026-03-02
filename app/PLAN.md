@@ -28,12 +28,16 @@ MVP Requirements:
 - [x] Rename chain_write_credential to wavs_mcp_signer_mnemonic
 - [x] Test submission with an actual solidity contract
 - [x] Test DevEx in new repo (component development, deploying contracts, etc.)
-- [-] Submissions not showing up
-- [-] Services not loading on app restart
-- [ ] Better aesthetics
+- [x] Submissions not showing up
+- [x] Services not loading on app restart
+- [-] Better aesthetics
 - [ ] App restart is broken in dev mode
 
 Post MVP:
+- Stats (CPU, Memory, etc.)
+- Environment variables
+- Visualize Component KV store, config, environment variables
+- Merge Trigger / Submissions into just "events" (which have triggers and sometimes submissions)
 - LLM Config (makes those LLMs available to WASM components)
 - P2P Page
 - WAVS Service Registry
