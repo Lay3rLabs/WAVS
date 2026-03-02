@@ -50,7 +50,7 @@ export function ModalContainer() {
       />
 
       {/* Modal content */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4/5 max-w-2xl max-h-[80vh] overflow-auto bg-charcoal-dark border border-charcoal-light rounded-lg">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4/5 max-w-2xl max-h-[80vh] overflow-auto bg-charcoal-dark border border-charcoal-light rounded-[15px]">
         {/* Close button */}
         <div className="absolute top-2 right-2">
           <CloseX onClick={close} size="lg" />

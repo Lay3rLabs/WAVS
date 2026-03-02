@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Toast, TextInput, Dropdown, Tabs, type DropdownOption } from '../../components/atoms';
-import { ServiceBasics } from '../../components/service/ServiceBasics';
 import { WorkflowEditor } from '../../components/service/WorkflowEditor';
 import { useAppStore } from '../../stores/appStore';
 import { usePOAStore } from '../../stores/poaStore';
@@ -230,7 +229,6 @@ export function ServiceEditorPage() {
       {/* Tab Content */}
       {editorTab === 'visual' ? (
         <div className="flex flex-col gap-6">
-          <ServiceBasics />
           <WorkflowEditor />
         </div>
       ) : (

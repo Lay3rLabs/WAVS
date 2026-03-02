@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -16,9 +16,9 @@ html, body, #root {
 }
 
 body {
-  font-family: 'Noto Sans', sans-serif;
-  background-color: #151413;
-  color: #E8DDD0;
+  font-family: 'Montserrat', sans-serif;
+  background-color: #1E1E1E;
+  color: #CEC3B7;
   overflow: hidden;
 }
 
@@ -29,15 +29,15 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1E1C1B;
+  background: #222020;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #37332E;
+  background: #383232;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a453e;
+  background: #443939;
 }

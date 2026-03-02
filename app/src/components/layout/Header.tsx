@@ -69,7 +69,7 @@ export function Header() {
         <img
           src="/wavs.png"
           alt="WAVS"
-          className="h-8"
+          className="h-8 drop-shadow-[0_0_8px_rgba(231,212,198,0.3)]"
         />
         {isSettingsComplete && <HealthIndicator />}
       </div>

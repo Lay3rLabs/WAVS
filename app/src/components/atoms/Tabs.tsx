@@ -22,7 +22,7 @@ export function Tabs({ tabs, activeTab, onChange }: TabsProps) {
               onClick={() => onChange(tab.key)}
               className={`pb-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
                 isActive
-                  ? 'border-purple-1 text-beige-light'
+                  ? 'border-purple-2 text-beige-light'
                   : 'border-transparent text-tan-muted hover:text-beige-warm'
               }`}
             >

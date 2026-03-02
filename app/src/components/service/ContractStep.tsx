@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Button, TextInput } from '../atoms';
+import { Button } from '../atoms';
 import { RegistrySelector } from '../poa';
 import { useServiceBuilderStore } from '../../stores/serviceBuilderStore';
 import { usePOAStore } from '../../stores/poaStore';
@@ -7,14 +6,8 @@ import { usePOAStore } from '../../stores/poaStore';
 export function ContractStep() {
   const selectedRegistryKey = useServiceBuilderStore((s) => s.selectedRegistryKey);
   const setSelectedRegistry = useServiceBuilderStore((s) => s.setSelectedRegistry);
-  const manualChain = useServiceBuilderStore((s) => s.manualChain);
-  const setManualChain = useServiceBuilderStore((s) => s.setManualChain);
-  const manualAddress = useServiceBuilderStore((s) => s.manualAddress);
-  const setManualAddress = useServiceBuilderStore((s) => s.setManualAddress);
 
   const registries = usePOAStore((s) => s.registries);
-
-  const [showManual, setShowManual] = useState(false);
 
   const selectedRegistry = selectedRegistryKey ? registries.get(selectedRegistryKey) ?? null : null;
 
@@ -28,11 +21,6 @@ export function ContractStep() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h3 className="text-beige-light text-lg font-semibold">Service Contract</h3>
-      <p className="text-tan-muted text-sm">
-        Select an existing contract, deploy a new one, or connect to one on-chain.
-      </p>
-
       {/* If a registry is already selected, show summary */}
       {selectedRegistry ? (
         <div className="p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
@@ -63,41 +51,7 @@ export function ContractStep() {
           </div>
         </div>
       ) : (
-        <>
-          {/* Registry selector for deploy/connect */}
-          <RegistrySelector onRegistryAdded={handleRegistryAdded} />
-
-          {/* Manual entry fallback */}
-          <div className="border-t border-charcoal-light pt-4">
-            <button
-              type="button"
-              onClick={() => setShowManual(!showManual)}
-              className="text-sm text-tan-muted hover:text-beige-warm transition-colors"
-            >
-              {showManual ? '- Hide' : '+'} Manual Entry (advanced)
-            </button>
-            {showManual && (
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-2">
-                  <label className="text-beige-warm text-sm">Chain Key</label>
-                  <TextInput
-                    placeholder="e.g. evm:31337"
-                    value={manualChain}
-                    onChange={setManualChain}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-beige-warm text-sm">Address</label>
-                  <TextInput
-                    placeholder="0x..."
-                    value={manualAddress}
-                    onChange={setManualAddress}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </>
+        <RegistrySelector onRegistryAdded={handleRegistryAdded} />
       )}
     </div>
   );

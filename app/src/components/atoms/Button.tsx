@@ -20,9 +20,9 @@ interface ButtonProps {
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'px-5 py-1.5 text-sm',
-  lg: 'px-7 py-2.5 text-base',
-  xlg: 'px-8 py-3 text-lg',
+  sm: 'px-6 py-2 text-sm',
+  lg: 'px-8 py-2.5 text-base',
+  xlg: 'px-10 py-3 text-lg',
 };
 
 const solidColorClasses: Record<ButtonColor, { normal: string; hover: string; selected: string }> = {
@@ -83,7 +83,7 @@ export function Button({
       disabled={disabled}
       onClick={onClick}
       className={clsx(
-        'inline-flex items-center justify-center gap-2 rounded font-medium transition-colors select-none',
+        'inline-flex items-center justify-center gap-2 rounded-button font-medium transition-colors select-none',
         sizeClasses[size],
         disabled
           ? 'bg-charcoal-medium text-tan-muted cursor-not-allowed opacity-60'

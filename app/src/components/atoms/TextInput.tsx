@@ -51,7 +51,7 @@ export function TextInput({
         autoCorrect="off"
         className={clsx(
           'px-7 py-2.5 rounded border border-charcoal-light bg-charcoal-dark text-beige-warm',
-          'outline-none transition-colors focus:border-tan-muted',
+          'outline-none transition-colors focus:border-purple-2',
           'placeholder:text-tan-muted',
           disabled && 'opacity-60 cursor-not-allowed',
           readOnly && 'cursor-default',

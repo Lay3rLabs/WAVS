@@ -24,18 +24,22 @@ const HTTP_HOST_OPTIONS: DropdownOption<HttpHostMode>[] = [
 interface ComponentEditorProps {
   component: ComponentDraft;
   onChange: (component: ComponentDraft) => void;
-  label?: string;
 }
 
-export function ComponentEditor({ component, onChange, label = 'Component' }: ComponentEditorProps) {
+export function ComponentEditor({ component, onChange }: ComponentEditorProps) {
   const [lookingUpDigest, setLookingUpDigest] = useState(false);
   const [newConfigKey, setNewConfigKey] = useState('');
   const [newConfigValue, setNewConfigValue] = useState('');
   const [newEnvKey, setNewEnvKey] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const update = (updates: Partial<ComponentDraft>) => {
     onChange({ ...component, ...updates });
   };
+
+  const hasAdvanced =
+    component.fuelLimit !== '' ||
+    component.timeLimitSeconds !== '';
 
   const handleLookupDigest = async () => {
     if (!component.package) {
@@ -116,8 +120,6 @@ export function ComponentEditor({ component, onChange, label = 'Component' }: Co
 
   return (
     <div className="flex flex-col gap-4">
-      <h4 className="text-beige-light text-sm font-semibold">{label}</h4>
-
       {/* Source Type */}
       <div className="flex flex-col gap-2">
         <label className="text-beige-warm text-sm">Source Type</label>
@@ -217,18 +219,6 @@ export function ComponentEditor({ component, onChange, label = 'Component' }: Co
         </label>
       </div>
 
-      {/* Limits */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-2">
-          <label className="text-beige-warm text-sm">Fuel Limit (optional)</label>
-          <TextInput kind="number" placeholder="e.g. 1000000" value={component.fuelLimit} onChange={(v) => update({ fuelLimit: v })} />
-        </div>
-        <div className="flex flex-col gap-2">
-          <label className="text-beige-warm text-sm">Time Limit Seconds (optional)</label>
-          <TextInput kind="number" placeholder="e.g. 30" value={component.timeLimitSeconds} onChange={(v) => update({ timeLimitSeconds: v })} />
-        </div>
-      </div>
-
       {/* Config */}
       <div className="flex flex-col gap-2">
         <h5 className="text-beige-warm text-sm font-medium">Config (key-value pairs)</h5>
@@ -261,6 +251,31 @@ export function ComponentEditor({ component, onChange, label = 'Component' }: Co
           <button type="button" onClick={addEnvKey} className="text-sm text-purple-2 hover:text-purple-3 cursor-pointer">Add</button>
         </div>
       </div>
+
+      {/* Advanced toggle — Fuel Limit & Time Limit only */}
+      <button
+        type="button"
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        className="self-start text-sm text-tan-muted hover:text-beige-warm transition-colors cursor-pointer"
+      >
+        {showAdvanced ? '− Advanced' : '+ Advanced'}
+        {!showAdvanced && hasAdvanced && (
+          <span className="ml-1 text-purple-3">(configured)</span>
+        )}
+      </button>
+
+      {showAdvanced && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-2">
+            <label className="text-beige-warm text-sm">Fuel Limit (optional)</label>
+            <TextInput kind="number" placeholder="e.g. 1000000" value={component.fuelLimit} onChange={(v) => update({ fuelLimit: v })} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-beige-warm text-sm">Time Limit Seconds (optional)</label>
+            <TextInput kind="number" placeholder="e.g. 30" value={component.timeLimitSeconds} onChange={(v) => update({ timeLimitSeconds: v })} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
