@@ -297,6 +297,7 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
                         item={item}
                         expanded={expandedIds.has(item.id)}
                         onToggleExpand={() => toggleExpanded(item.id)}
+                        compact={!!serviceId}
                       />
                     </div>
                   </div>
