@@ -48,6 +48,7 @@ pub fn start(
     dispatcher: Arc<Dispatcher<FileStorage>>,
     metrics: HttpMetrics,
     health_status: SharedHealthStatus,
+    ready_tx: std::sync::mpsc::SyncSender<()>,
 ) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
     ctx.rt.clone().block_on(async move {
@@ -60,6 +61,9 @@ pub fn start(
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
         let actual_port = listener.local_addr()?.port();
         tracing::info!("HTTP server bound to port {}", actual_port);
+
+        // Signal that the TCP port is bound; the dispatcher restore loop may now proceed.
+        let _ = ready_tx.send(());
 
         axum::serve(listener, router)
             .with_graceful_shutdown(async move {
