@@ -497,18 +497,30 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                 let service = match result {
                     Ok(s) => s,
                     Err(e) => {
-                        // If a registered service can't be fetched (e.g. chain was reset and
-                        // the contract no longer exists or has no URI), remove the stale registry
-                        // entry so the node can start clean and the address can be re-registered.
-                        tracing::warn!(
-                            "Failed to restore service for {:?}: {e:#}. Removing stale registry entry.",
-                            entry.service_manager
+                        // Only remove the registry entry when the on-chain contract is genuinely
+                        // absent or has an invalid URI. Transient errors (connection refused,
+                        // HTTP 5xx, timeout) are NOT evidence of staleness — keep the entry so
+                        // the next startup can retry.
+                        let is_genuine_stale = matches!(
+                            &e,
+                            DispatcherError::AlloyContract(_) | DispatcherError::URICreation(_)
                         );
-                        if let Err(rem_err) =
-                            self.service_registry.remove(&entry.service_manager)
-                        {
-                            tracing::error!(
-                                "Failed to remove stale registry entry for {:?}: {rem_err}",
+                        if is_genuine_stale {
+                            tracing::warn!(
+                                "Failed to restore service for {:?}: {e:#}. Removing stale registry entry.",
+                                entry.service_manager
+                            );
+                            if let Err(rem_err) =
+                                self.service_registry.remove(&entry.service_manager)
+                            {
+                                tracing::error!(
+                                    "Failed to remove stale registry entry for {:?}: {rem_err}",
+                                    entry.service_manager
+                                );
+                            }
+                        } else {
+                            tracing::warn!(
+                                "Failed to restore service for {:?}: {e:#}. Keeping registry entry for next startup.",
                                 entry.service_manager
                             );
                         }
@@ -516,7 +528,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                     }
                 };
 
-                // Store the service in DB
+                // Check if Path A (cmd_start_wavs) already loaded this service from the
+                // settings cache before the HTTP server was up. If so, refresh the stored
+                // definition with the authoritative on-chain version but skip manager
+                // registration to avoid double-registration errors.
+                let already_in_memory = self.services.exists(&service.id()).unwrap_or(false);
+
+                // Always refresh the stored definition with the authoritative on-chain version
                 self.services.save(&service)?;
 
                 // Store components
@@ -524,21 +542,28 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                     .store_components_for_service(&service)
                     .await?;
 
-                // Add to managers with explicit HD index from registry
-                add_service_to_managers(
-                    &service,
-                    &self.trigger_manager,
-                    &self.submission_manager,
-                    &self.dispatcher_to_aggregator_tx,
-                    Some(entry.hd_index),
-                )?;
+                if !already_in_memory {
+                    // Add to managers with explicit HD index from registry
+                    add_service_to_managers(
+                        &service,
+                        &self.trigger_manager,
+                        &self.submission_manager,
+                        &self.dispatcher_to_aggregator_tx,
+                        Some(entry.hd_index),
+                    )?;
 
-                tracing::info!(
-                    "Restored service {} [{:?}] with HD index {}",
-                    service.name,
-                    service.manager,
-                    entry.hd_index
-                );
+                    tracing::info!(
+                        "Restored service {} [{:?}] with HD index {}",
+                        service.name,
+                        service.manager,
+                        entry.hd_index
+                    );
+                } else {
+                    tracing::debug!(
+                        "Service {} already loaded from settings cache; skipping manager setup",
+                        service.name
+                    );
+                }
                 restored.push(service);
             }
             Ok::<_, DispatcherError>(restored)
@@ -812,6 +837,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         service_id: ServiceId,
     ) -> Result<SignerResponse, DispatcherError> {
         Ok(self.submission_manager.get_service_signer(service_id)?)
+    }
+
+    /// Returns a map from ServiceManager → HD index for all persisted registry entries.
+    /// Used by `cmd_start_wavs` to restore services with the correct signing key.
+    pub fn registry_hd_index_map(&self) -> std::collections::BTreeMap<ServiceManager, u32> {
+        self.service_registry
+            .entries()
+            .into_iter()
+            .map(|e| (e.service_manager, e.hd_index))
+            .collect()
     }
 
     #[instrument(skip(self), fields(subsys = "Dispatcher"))]

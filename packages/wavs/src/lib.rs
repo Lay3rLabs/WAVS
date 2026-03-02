@@ -37,16 +37,24 @@ pub fn run_server(
         }
     });
 
+    // Channel used to delay the dispatcher restore loop until the HTTP server is bound.
+    // This prevents "connection refused" errors when restoring dev-service URIs on restart.
+    let (http_ready_tx, http_ready_rx) = std::sync::mpsc::sync_channel::<()>(1);
+
     // start the http server in its own thread
     let server_handle = std::thread::spawn({
         let dispatcher = dispatcher.clone();
         let ctx = ctx.clone();
         move || {
-            http::server::start(ctx, config, dispatcher, metrics, health_status).unwrap();
+            http::server::start(ctx, config, dispatcher, metrics, health_status, http_ready_tx)
+                .unwrap();
         }
     });
 
     let dispatcher_handle = std::thread::spawn(move || {
+        // Wait until the HTTP server has bound its port before running the restore loop,
+        // so that fetches of local dev-service URIs don't get "connection refused".
+        let _ = http_ready_rx.recv();
         dispatcher.start(ctx).unwrap();
     });
 
