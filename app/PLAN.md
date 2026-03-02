@@ -29,7 +29,7 @@ MVP Requirements:
 - [x] Test submission with an actual solidity contract
 - [x] Test DevEx in new repo (component development, deploying contracts, etc.)
 - [-] Submissions not showing up
-- [ ] Services not loading on app restart
+- [-] Services not loading on app restart
 - [ ] Better aesthetics
 - [ ] App restart is broken in dev mode
 
