@@ -24,10 +24,10 @@ use wildmatch::WildMatch;
 use super::{
     handlers::{
         debug::handle_debug_trigger,
+        fs::{handle_fs, handle_fs_root},
         handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_health,
         handle_info, handle_list_services, handle_not_found, handle_p2p_status,
         handle_upload_component,
-        fs::{handle_fs, handle_fs_root},
         kv::{handle_get_kv, handle_list_kv},
         openapi::ApiDoc,
         service::{

@@ -22,7 +22,10 @@ const KEYCHAIN_ACCOUNT: &str = "mnemonic";
 
 use wavs::health::HealthStatus;
 
-use crate::state::{McpServerState, MnemonicCacheState, SettingsState, WavsConfigState, WavsInstance, WavsInstanceState};
+use crate::state::{
+    McpServerState, MnemonicCacheState, SettingsState, WavsConfigState, WavsInstance,
+    WavsInstanceState,
+};
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn cmd_set_wavs_home(
@@ -181,7 +184,10 @@ pub async fn cmd_start_wavs(
     for manager in &saved_managers {
         if let Some(cached) = saved_services.iter().find(|s| &s.manager == manager) {
             let hd_index = hd_map.get(manager).copied();
-            match dispatcher.add_service_direct(cached.clone(), hd_index).await {
+            match dispatcher
+                .add_service_direct(cached.clone(), hd_index)
+                .await
+            {
                 Ok(_) => log::info!("Restored service from local cache: {:?}", manager),
                 Err(e) => log::warn!("Failed to restore service from local cache: {}", e),
             }
@@ -228,7 +234,12 @@ pub async fn cmd_start_wavs(
             match cmd.spawn() {
                 Ok(child) => {
                     mcp_state.set(child);
-                    settings.update(&app, |s| { s.mcp_enabled = true; }).await.ok();
+                    settings
+                        .update(&app, |s| {
+                            s.mcp_enabled = true;
+                        })
+                        .await
+                        .ok();
                     log::info!("MCP server auto-started");
                 }
                 Err(e) => {
@@ -400,9 +411,7 @@ pub fn cmd_delete_mnemonic(cache: State<'_, MnemonicCacheState>) -> AppResult<()
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn cmd_read_wavs_toml(
-    settings: State<'_, SettingsState>,
-) -> AppResult<String> {
+pub async fn cmd_read_wavs_toml(settings: State<'_, SettingsState>) -> AppResult<String> {
     let wavs_home = settings
         .get_cloned()
         .wavs_home
@@ -493,8 +502,8 @@ pub async fn cmd_upload_to_ipfs(content: String, provider: IpfsProvider) -> AppR
     match provider {
         IpfsProvider::Local { api_url } => {
             let url = format!("{}/api/v0/add?pin=true", api_url.trim_end_matches('/'));
-            let part = reqwest::multipart::Part::bytes(content.into_bytes())
-                .file_name("service.json");
+            let part =
+                reqwest::multipart::Part::bytes(content.into_bytes()).file_name("service.json");
             let form = reqwest::multipart::Form::new().part("file", part);
 
             let response = client
@@ -528,14 +537,13 @@ pub async fn cmd_upload_to_ipfs(content: String, provider: IpfsProvider) -> AppR
             Ok(resp.hash)
         }
         IpfsProvider::Pinata { api_key } => {
-            let part = reqwest::multipart::Part::bytes(content.into_bytes())
-                .file_name(format!(
-                    "service-{}.json",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis()
-                ));
+            let part = reqwest::multipart::Part::bytes(content.into_bytes()).file_name(format!(
+                "service-{}.json",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis()
+            ));
             let form = reqwest::multipart::Form::new()
                 .part("file", part)
                 .text("network", "public");
@@ -567,10 +575,9 @@ pub async fn cmd_upload_to_ipfs(content: String, provider: IpfsProvider) -> AppR
                 data: PinataData,
             }
 
-            let resp: PinataResponse = response
-                .json()
-                .await
-                .map_err(|e| AppError::Service(format!("Failed to parse Pinata response: {}", e)))?;
+            let resp: PinataResponse = response.json().await.map_err(|e| {
+                AppError::Service(format!("Failed to parse Pinata response: {}", e))
+            })?;
 
             Ok(resp.data.cid)
         }
@@ -595,9 +602,9 @@ pub async fn cmd_get_component_digest(
     let wkg_client = WkgClient::new(default_domain)
         .map_err(|e| AppError::Service(format!("Failed to create Wkg client: {}", e)))?;
 
-    let package_ref: wasm_pkg_client::PackageRef = package
-        .parse()
-        .map_err(|e| AppError::Service(format!("Invalid package reference '{}': {}", package, e)))?;
+    let package_ref: wasm_pkg_client::PackageRef = package.parse().map_err(|e| {
+        AppError::Service(format!("Invalid package reference '{}': {}", package, e))
+    })?;
 
     let parsed_version = match &version {
         Some(v) => {
@@ -706,7 +713,9 @@ pub async fn cmd_start_mcp_server(
     };
 
     let bin = find_mcp_binary().ok_or_else(|| {
-        AppError::Service("wavs-mcp binary not found. Build it with: cargo build -p wavs-mcp".to_string())
+        AppError::Service(
+            "wavs-mcp binary not found. Build it with: cargo build -p wavs-mcp".to_string(),
+        )
     })?;
 
     let mut cmd = std::process::Command::new(&bin);
@@ -1021,7 +1030,10 @@ pub async fn cmd_list_kv_entries(
         Some(cfg) => cfg,
         None => return Err(AppError::WavsConfig("WAVS config not loaded".to_string())),
     };
-    let url = format!("http://{}:{}/dev/kv/{}", config.host, config.port, service_id);
+    let url = format!(
+        "http://{}:{}/dev/kv/{}",
+        config.host, config.port, service_id
+    );
     let client = reqwest::Client::new();
     let response = client
         .get(&url)
@@ -1052,7 +1064,10 @@ pub async fn cmd_list_fs_entries(
         None => return Err(AppError::WavsConfig("WAVS config not loaded".to_string())),
     };
     let url = if path.is_empty() {
-        format!("http://{}:{}/dev/fs/{}", config.host, config.port, service_id)
+        format!(
+            "http://{}:{}/dev/fs/{}",
+            config.host, config.port, service_id
+        )
     } else {
         format!(
             "http://{}:{}/dev/fs/{}/{}",

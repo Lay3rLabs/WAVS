@@ -1,7 +1,11 @@
 use anyhow::{Context, Result};
 use reqwest::{Client, Method};
 use serde_json::Value;
-use wavs_types::{AddServiceRequest, DeleteServicesRequest, GetSignerRequest, PauseServiceRequest, SaveServiceResponse, ServiceManager, SignerResponse, SimulatedTriggerRequest, UploadComponentResponse};
+use wavs_types::{
+    AddServiceRequest, DeleteServicesRequest, GetSignerRequest, PauseServiceRequest,
+    SaveServiceResponse, ServiceManager, SignerResponse, SimulatedTriggerRequest,
+    UploadComponentResponse,
+};
 
 #[derive(Clone)]
 pub struct WavsClient {
@@ -29,7 +33,8 @@ impl WavsClient {
     }
 
     pub async fn get_info(&self) -> Result<Value> {
-        let resp = self.request(Method::GET, "/info")
+        let resp = self
+            .request(Method::GET, "/info")
             .send()
             .await
             .context("GET /info")?;
@@ -37,7 +42,8 @@ impl WavsClient {
     }
 
     pub async fn get_health(&self) -> Result<Value> {
-        let resp = self.request(Method::GET, "/health")
+        let resp = self
+            .request(Method::GET, "/health")
             .send()
             .await
             .context("GET /health")?;
@@ -45,7 +51,8 @@ impl WavsClient {
     }
 
     pub async fn list_services(&self) -> Result<Value> {
-        let resp = self.request(Method::GET, "/services")
+        let resp = self
+            .request(Method::GET, "/services")
             .send()
             .await
             .context("GET /services")?;
@@ -54,7 +61,8 @@ impl WavsClient {
 
     pub async fn get_service(&self, chain: &str, address: &str) -> Result<Value> {
         let path = format!("/services/{}/{}", chain, address);
-        let resp = self.request(Method::GET, &path)
+        let resp = self
+            .request(Method::GET, &path)
             .send()
             .await
             .context("GET /services/{chain}/{address}")?;
@@ -63,7 +71,8 @@ impl WavsClient {
 
     pub async fn deploy_service(&self, service_manager: ServiceManager) -> Result<Value> {
         let body = serde_json::to_string(&AddServiceRequest { service_manager })?;
-        let resp = self.request(Method::POST, "/services")
+        let resp = self
+            .request(Method::POST, "/services")
             .header("Content-Type", "application/json")
             .body(body)
             .send()
@@ -74,7 +83,8 @@ impl WavsClient {
 
     pub async fn pause_service(&self, service_manager: ServiceManager) -> Result<()> {
         let body = serde_json::to_string(&PauseServiceRequest { service_manager })?;
-        let resp = self.request(Method::POST, "/services/pause")
+        let resp = self
+            .request(Method::POST, "/services/pause")
             .header("Content-Type", "application/json")
             .body(body)
             .send()
@@ -85,7 +95,8 @@ impl WavsClient {
 
     pub async fn resume_service(&self, service_manager: ServiceManager) -> Result<()> {
         let body = serde_json::to_string(&PauseServiceRequest { service_manager })?;
-        let resp = self.request(Method::POST, "/services/resume")
+        let resp = self
+            .request(Method::POST, "/services/resume")
             .header("Content-Type", "application/json")
             .body(body)
             .send()
@@ -95,8 +106,11 @@ impl WavsClient {
     }
 
     pub async fn delete_service(&self, service_manager: ServiceManager) -> Result<()> {
-        let body = serde_json::to_string(&DeleteServicesRequest { service_managers: vec![service_manager] })?;
-        let resp = self.request(Method::DELETE, "/services")
+        let body = serde_json::to_string(&DeleteServicesRequest {
+            service_managers: vec![service_manager],
+        })?;
+        let resp = self
+            .request(Method::DELETE, "/services")
             .header("Content-Type", "application/json")
             .body(body)
             .send()
@@ -106,7 +120,8 @@ impl WavsClient {
     }
 
     pub async fn upload_component(&self, bytes: Vec<u8>) -> Result<String> {
-        let resp = self.request(Method::POST, "/dev/components")
+        let resp = self
+            .request(Method::POST, "/dev/components")
             .body(bytes)
             .send()
             .await
@@ -123,7 +138,8 @@ impl WavsClient {
     }
 
     pub async fn simulate_trigger(&self, req: SimulatedTriggerRequest) -> Result<()> {
-        let resp = self.request(Method::POST, "/dev/triggers")
+        let resp = self
+            .request(Method::POST, "/dev/triggers")
             .json(&req)
             .send()
             .await
@@ -139,7 +155,8 @@ impl WavsClient {
     /// Save a service definition to the node's local store without registering it.
     /// Returns the URI at which the service JSON can be fetched.
     pub async fn save_service(&self, service_json: &str) -> Result<String> {
-        let resp = self.request(Method::POST, "/dev/services")
+        let resp = self
+            .request(Method::POST, "/dev/services")
             .header("Content-Type", "application/json")
             .body(service_json.to_string())
             .send()
@@ -160,7 +177,8 @@ impl WavsClient {
     /// Two-step dev registration: POST /dev/services → save, POST /dev/services/{hash} → register.
     /// Returns the service hash on success.
     pub async fn deploy_dev_service(&self, service_json: &str) -> Result<String> {
-        let resp = self.request(Method::POST, "/dev/services")
+        let resp = self
+            .request(Method::POST, "/dev/services")
             .header("Content-Type", "application/json")
             .body(service_json.to_string())
             .send()
@@ -177,7 +195,8 @@ impl WavsClient {
         let hash = save_resp.hash.to_string();
 
         let path = format!("/dev/services/{}", hash);
-        let resp = self.request(Method::POST, &path)
+        let resp = self
+            .request(Method::POST, &path)
             .send()
             .await
             .context("POST /dev/services/{hash}")?;
@@ -191,9 +210,13 @@ impl WavsClient {
     }
 
     /// POST /services/signer — returns the signing key info for a service.
-    pub async fn get_service_signer(&self, service_manager: ServiceManager) -> Result<SignerResponse> {
+    pub async fn get_service_signer(
+        &self,
+        service_manager: ServiceManager,
+    ) -> Result<SignerResponse> {
         let body = serde_json::to_string(&GetSignerRequest { service_manager })?;
-        let resp = self.request(Method::POST, "/services/signer")
+        let resp = self
+            .request(Method::POST, "/services/signer")
             .header("Content-Type", "application/json")
             .body(body)
             .send()
@@ -210,7 +233,8 @@ impl WavsClient {
     /// GET /dev/kv/{service_id}/{bucket}/{key} — returns value as UTF-8 or hex.
     pub async fn query_kv(&self, service_id: &str, bucket: &str, key: &str) -> Result<String> {
         let path = format!("/dev/kv/{}/{}/{}", service_id, bucket, key);
-        let resp = self.request(Method::GET, &path)
+        let resp = self
+            .request(Method::GET, &path)
             .send()
             .await
             .context("GET /dev/kv")?;

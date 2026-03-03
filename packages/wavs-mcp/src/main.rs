@@ -43,7 +43,9 @@ struct Args {
 /// commit of secrets. Only user-home and system paths are considered safe.
 fn read_credential_toml_field(field: &str) -> Option<String> {
     let cwd = std::env::current_dir().ok();
-    let wavs_home_env = std::env::var("WAVS_HOME").ok().map(std::path::PathBuf::from);
+    let wavs_home_env = std::env::var("WAVS_HOME")
+        .ok()
+        .map(std::path::PathBuf::from);
 
     for path in ConfigFilePath::new("wavs.toml", None).into_possible() {
         // Skip CWD-relative paths (project-local files)
@@ -62,14 +64,18 @@ fn read_credential_toml_field(field: &str) -> Option<String> {
         if !path.exists() {
             continue;
         }
-        let Ok(content) = std::fs::read_to_string(&path) else { continue };
-        let Ok(doc) = content.parse::<toml::Table>() else { continue };
-        if let Some(value) = doc.get("wavs").and_then(|v| v.get(field)).and_then(|v| v.as_str()) {
-            tracing::info!(
-                "Loaded '{}' from {}.",
-                field,
-                path.display()
-            );
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(doc) = content.parse::<toml::Table>() else {
+            continue;
+        };
+        if let Some(value) = doc
+            .get("wavs")
+            .and_then(|v| v.get(field))
+            .and_then(|v| v.as_str())
+        {
+            tracing::info!("Loaded '{}' from {}.", field, path.display());
             return Some(value.to_string());
         }
     }

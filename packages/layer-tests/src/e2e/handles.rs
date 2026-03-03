@@ -142,7 +142,9 @@ impl AppHandles {
         metrics: &Metrics,
         operator_index: usize,
     ) -> std::thread::JoinHandle<()> {
-        let dispatcher = Arc::new(Dispatcher::new(wavs_config, metrics.wavs.clone(), TauriHandle::Mock).unwrap());
+        let dispatcher = Arc::new(
+            Dispatcher::new(wavs_config, metrics.wavs.clone(), TauriHandle::Mock).unwrap(),
+        );
 
         std::thread::spawn({
             let dispatcher = dispatcher.clone();

@@ -46,8 +46,15 @@ pub fn run_server(
         let dispatcher = dispatcher.clone();
         let ctx = ctx.clone();
         move || {
-            http::server::start(ctx, config, dispatcher, metrics, health_status, http_ready_tx)
-                .unwrap();
+            http::server::start(
+                ctx,
+                config,
+                dispatcher,
+                metrics,
+                health_status,
+                http_ready_tx,
+            )
+            .unwrap();
         }
     });
 

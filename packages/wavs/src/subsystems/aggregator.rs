@@ -637,10 +637,7 @@ impl Aggregator {
                     .subsystem_to_dispatcher_tx
                     .send(DispatcherCommand::SubmissionConfirmed(submission.clone()))
                 {
-                    tracing::error!(
-                        "Error sending SubmissionConfirmed to dispatcher: {:?}",
-                        e
-                    );
+                    tracing::error!("Error sending SubmissionConfirmed to dispatcher: {:?}", e);
                 }
             }
 

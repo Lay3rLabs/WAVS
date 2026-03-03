@@ -7,7 +7,9 @@ use serde::Deserialize;
 use std::{process::Stdio, time::Duration};
 use tempfile::TempDir;
 use tokio::{fs, process::Command};
-use utils::evm_client::{signing::make_signer, EvmEndpoint, EvmSigningClient, EvmSigningClientConfig};
+use utils::evm_client::{
+    signing::make_signer, EvmEndpoint, EvmSigningClient, EvmSigningClientConfig,
+};
 use wavs_types::{Credential, ServiceManager};
 
 sol! {
@@ -74,10 +76,7 @@ pub async fn deploy_service_manager(
 
 /// Deploy the full POA middleware (POAStakeRegistry + proxy) via Docker.
 /// Returns the proxy address.
-pub async fn deploy_poa_service_manager(
-    credential: &Credential,
-    rpc_url: &str,
-) -> Result<String> {
+pub async fn deploy_poa_service_manager(credential: &Credential, rpc_url: &str) -> Result<String> {
     let signer = make_signer(credential, None)?;
     let pk_bytes = signer.credential().to_bytes();
     let pk_hex = const_hex::encode(pk_bytes);
@@ -118,46 +117,43 @@ pub async fn deploy_poa_service_manager(
         .trim()
         .to_string();
 
-    let result = tokio::time::timeout(
-        Duration::from_secs(DEPLOY_TIMEOUT_SECS),
-        async {
-            let res = Command::new("docker")
-                .args([
-                    "exec",
-                    "-e",
-                    &format!("FUNDED_KEY={pk_hex}"),
-                    "-e",
-                    &format!("RPC_URL={rpc_url}"),
-                    "-e",
-                    "DEPLOY_ENV=LOCAL",
-                    &container_id,
-                    "/wavs/scripts/cli.sh",
-                    "deploy",
-                ])
-                .stdout(Stdio::null())
-                .stderr(Stdio::inherit())
-                .spawn()
-                .context("spawn deploy script")?
-                .wait()
-                .await
-                .context("deploy script")?;
+    let result = tokio::time::timeout(Duration::from_secs(DEPLOY_TIMEOUT_SECS), async {
+        let res = Command::new("docker")
+            .args([
+                "exec",
+                "-e",
+                &format!("FUNDED_KEY={pk_hex}"),
+                "-e",
+                &format!("RPC_URL={rpc_url}"),
+                "-e",
+                "DEPLOY_ENV=LOCAL",
+                &container_id,
+                "/wavs/scripts/cli.sh",
+                "deploy",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .context("spawn deploy script")?
+            .wait()
+            .await
+            .context("deploy script")?;
 
-            if !res.success() {
-                anyhow::bail!("POA middleware deploy script exited with error");
-            }
+        if !res.success() {
+            anyhow::bail!("POA middleware deploy script exited with error");
+        }
 
-            let deploy_json_path = nodes_dir.path().join(POA_DEPLOY_FILE);
-            loop {
-                if deploy_json_path.exists() {
-                    let content = fs::read_to_string(&deploy_json_path)
-                        .await
-                        .context("read deploy JSON")?;
-                    return Ok::<String, anyhow::Error>(content);
-                }
-                tokio::time::sleep(Duration::from_millis(POLL_INTERVAL_MS)).await;
+        let deploy_json_path = nodes_dir.path().join(POA_DEPLOY_FILE);
+        loop {
+            if deploy_json_path.exists() {
+                let content = fs::read_to_string(&deploy_json_path)
+                    .await
+                    .context("read deploy JSON")?;
+                return Ok::<String, anyhow::Error>(content);
             }
-        },
-    )
+            tokio::time::sleep(Duration::from_millis(POLL_INTERVAL_MS)).await;
+        }
+    })
     .await;
 
     let _ = Command::new("docker")
@@ -186,12 +182,14 @@ pub fn get_signing_address(credential: &Credential, hd_index: Option<u32>) -> Re
 /// Decode a known 4-byte ABI revert selector into a human-readable error name.
 pub fn decode_revert_selector(err_str: &str) -> Option<&'static str> {
     // Extract 0x-prefixed 4-byte selector from the error string.
-    let selector = err_str
-        .split("0x")
-        .find_map(|chunk| {
-            let hex = chunk.trim_end_matches(|c: char| !c.is_ascii_hexdigit());
-            if hex.len() >= 8 { Some(&hex[..8]) } else { None }
-        })?;
+    let selector = err_str.split("0x").find_map(|chunk| {
+        let hex = chunk.trim_end_matches(|c: char| !c.is_ascii_hexdigit());
+        if hex.len() >= 8 {
+            Some(&hex[..8])
+        } else {
+            None
+        }
+    })?;
     match selector {
         "8baa579f" => Some("InvalidSignature()"),
         "42ee68b5" => Some("AlreadyRegistered()"),
@@ -235,8 +233,8 @@ pub async fn register_operator(
     let operator_addr: Address = operator_client.address();
 
     // The actual signing key is the service-specific HD index that WAVS uses to sign envelopes.
-    let signing_key_config =
-        EvmSigningClientConfig::new(endpoint, signing_mnemonic.clone()).with_hd_index(signing_key_hd_index);
+    let signing_key_config = EvmSigningClientConfig::new(endpoint, signing_mnemonic.clone())
+        .with_hd_index(signing_key_hd_index);
     let signing_key_client = EvmSigningClient::new(signing_key_config).await?;
     let signing_key_addr: Address = signing_key_client.address();
 
@@ -259,8 +257,14 @@ pub async fn register_operator(
                     if msg.contains("AlreadyRegistered") || msg.contains("0x42ee68b5") {
                         break 'retry "skipped (operator already registered, proceeding to set signing key)".to_string();
                     }
-                    if (msg.contains("nonce") || msg.contains("replacement transaction")) && attempt < 2 {
-                        tracing::warn!("registerOperator attempt {} failed ({}), retrying…", attempt + 1, msg);
+                    if (msg.contains("nonce") || msg.contains("replacement transaction"))
+                        && attempt < 2
+                    {
+                        tracing::warn!(
+                            "registerOperator attempt {} failed ({}), retrying…",
+                            attempt + 1,
+                            msg
+                        );
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                         last_err = Some(e);
                         continue;

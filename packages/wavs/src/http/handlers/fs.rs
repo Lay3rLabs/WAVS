@@ -26,11 +26,7 @@ fn safe_join(base: &FsPath, rel: &str) -> Option<PathBuf> {
     canonical.starts_with(base).then_some(canonical)
 }
 
-async fn handle_fs_inner(
-    state: &HttpState,
-    service_id: &str,
-    rel_path: &str,
-) -> impl IntoResponse {
+async fn handle_fs_inner(state: &HttpState, service_id: &str, rel_path: &str) -> impl IntoResponse {
     let base = state.config.data.join("fs").join(service_id);
 
     // Ensure the base exists (canonicalize requires the path to exist)
@@ -59,11 +55,7 @@ async fn handle_fs_inner(
                 .map(|entry| {
                     let meta = entry.metadata().ok();
                     let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
-                    let size = if is_dir {
-                        None
-                    } else {
-                        meta.map(|m| m.len())
-                    };
+                    let size = if is_dir { None } else { meta.map(|m| m.len()) };
                     FsEntry {
                         name: entry.file_name().to_string_lossy().into_owned(),
                         is_dir,
@@ -72,7 +64,10 @@ async fn handle_fs_inner(
                 })
                 .collect(),
             Err(_) => {
-                return (StatusCode::INTERNAL_SERVER_ERROR, "failed to read directory")
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to read directory",
+                )
                     .into_response()
             }
         };
