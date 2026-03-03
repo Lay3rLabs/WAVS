@@ -168,9 +168,6 @@ jobs:
       - uses: ./.github/actions/setup
 >>>>>>> ed21f542 (ci)
 
-      - name: Build frontend for linting
-        run: just gui-build-frontend
-
       - name: Check formatting
         run: cargo fmt --all -- --check
 

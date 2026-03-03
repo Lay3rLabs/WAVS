@@ -35,4 +35,4 @@ runs:
 
     - name: Create placeholder dist folder for macro expansion
       shell: bash
-      run: mkdir -p packages/gui/frontend/dist
+      run: mkdir -p app/dist

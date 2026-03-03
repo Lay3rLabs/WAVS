@@ -31,22 +31,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          registry-url: "https://registry.npmjs.org"
 
-      - name: Update npm to latest
-        run: npm install -g npm@latest
-
-      - name: Install Trunk
-        uses: jetli/trunk-action@v0.5.0
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
         with:
-          version: "latest"
+          run_install: false
+
+      - name: Install frontend dependencies
+        run: cd app && pnpm install
 
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          projectPath: "./packages/gui"
-          tagName: wavs-gui-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
+          projectPath: "./app"
+          tagName: wavs-app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
           releaseName: "WAVS v__VERSION__"
           releaseBody: "See the assets to download this version and install."
           releaseDraft: true
