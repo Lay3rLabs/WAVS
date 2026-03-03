@@ -76,9 +76,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
-      - name: Build frontend for linting
-        run: just gui-build-frontend
-
       - name: Check formatting
         run: cargo fmt --all -- --check
 
