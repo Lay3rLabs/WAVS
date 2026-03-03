@@ -20,3 +20,6 @@ temp_clone/
 **/.claude/settings.local.json
 packages/types/bindings
 dist
+
+# python
+__pycache__

@@ -33,7 +33,11 @@ MVP Requirements:
 - [x] Environment variables
 - [x] Visualize Component KV store, config, environment variables
 - [x] App branding
-- [ ] Select file / folder UX
+- [x] Select file / folder UX
+- [ ] Get MCP working with claude desktop
+
+Clean up:
+- wavs.toml has unnessecary things in it, maybe those should be there and documented but commented out?
 
 Post MVP:
 - Stats (CPU, Memory, etc.)
