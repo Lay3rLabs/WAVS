@@ -10,7 +10,7 @@ use crate::commands::{
     cmd_list_kv_entries, cmd_pause_service, cmd_publish_component, cmd_read_fs_file,
     cmd_read_wavs_toml, cmd_register_claude_mcp, cmd_remove_service, cmd_restart, cmd_resume_service,
     cmd_get_wavs_url, cmd_save_env_vars, cmd_save_mcp_settings, cmd_save_poa_registries,
-    cmd_set_wavs_home, cmd_start_mcp_server, cmd_start_wavs, cmd_stop_mcp_server,
+    cmd_pick_folder, cmd_set_wavs_home, cmd_start_mcp_server, cmd_start_wavs, cmd_stop_mcp_server,
     cmd_store_mnemonic, cmd_upload_to_ipfs, cmd_write_wavs_toml,
 };
 use crate::state::{McpServerState, MnemonicCacheState, SettingsState, WavsConfigState, WavsInstanceState};
@@ -88,6 +88,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             cmd_set_wavs_home,
+            cmd_pick_folder,
             cmd_get_settings,
             cmd_save_poa_registries,
             cmd_restart,

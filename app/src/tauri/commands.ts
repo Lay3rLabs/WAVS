@@ -23,6 +23,14 @@ export async function setWavsHome(): Promise<string | null> {
   return null;
 }
 
+export async function pickFolder(): Promise<string | null> {
+  const resp = await invoke<DirectoryChooserResponse>('cmd_pick_folder');
+  if ('selected' in resp) {
+    return resp.selected;
+  }
+  return null;
+}
+
 export async function getSettings(): Promise<Settings> {
   return invoke<Settings>('cmd_get_settings');
 }

@@ -31,12 +31,12 @@ MVP Requirements:
 - [x] Services not loading on app restart
 - [x] Better aesthetics
 - [x] Environment variables
-- [ ] App branding
+- [x] Visualize Component KV store, config, environment variables
+- [x] App branding
 - [ ] Select file / folder UX
 
 Post MVP:
 - Stats (CPU, Memory, etc.)
-- Visualize Component KV store, config, environment variables
 - Merge Trigger / Submissions into just "events" (which have triggers and sometimes submissions)
 - LLM Config (makes those LLMs available to WASM components)?
 - P2P Page
