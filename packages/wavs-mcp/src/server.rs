@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use rmcp::{
-    ServerHandler,
     handler::server::tool::schema_for_type,
     model::*,
     schemars,
     service::{RequestContext, RoleServer},
+    ServerHandler,
 };
 use serde::Deserialize;
 
@@ -183,7 +183,11 @@ fn no_params() -> Arc<serde_json::Map<String, serde_json::Value>> {
     )
 }
 
-fn tool(name: &'static str, desc: &'static str, schema: Arc<serde_json::Map<String, serde_json::Value>>) -> Tool {
+fn tool(
+    name: &'static str,
+    desc: &'static str,
+    schema: Arc<serde_json::Map<String, serde_json::Value>>,
+) -> Tool {
     Tool {
         name: name.into(),
         description: desc.into(),
@@ -221,7 +225,8 @@ impl WavsMcpServer {
                 code: ErrorCode::INVALID_PARAMS,
                 message: "--mcp-chain-credential is not configured on this MCP server. \
                     Set WAVS_MCP_CHAIN_CREDENTIAL env var in the MCP client config, \
-                    or restart with --mcp-chain-credential.".into(),
+                    or restart with --mcp-chain-credential."
+                    .into(),
                 data: None,
             })
             .and_then(|s| {
@@ -276,7 +281,10 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_get_service(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_get_service(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: GetServiceParams = parse_args(args)?;
         match self.client.get_service(&p.chain, &p.address).await {
             Ok(v) => ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string())),
@@ -284,16 +292,23 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_deploy_service(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_deploy_service(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: ServiceManagerParams = parse_args(args)?;
-        let manager: wavs_types::ServiceManager = match serde_json::from_str(&p.service_manager_json) {
-            Ok(m) => m,
-            Err(e) => return err(format!("Invalid service_manager_json: {e}")),
-        };
+        let manager: wavs_types::ServiceManager =
+            match serde_json::from_str(&p.service_manager_json) {
+                Ok(m) => m,
+                Err(e) => return err(format!("Invalid service_manager_json: {e}")),
+            };
         match self.client.deploy_service(manager.clone()).await {
             Ok(v) if v.is_null() => {
                 let signer_info = match self.client.get_service_signer(manager).await {
-                    Ok(wavs_types::SignerResponse::Secp256k1 { hd_index, evm_address }) => {
+                    Ok(wavs_types::SignerResponse::Secp256k1 {
+                        hd_index,
+                        evm_address,
+                    }) => {
                         format!("\nSigning key: HD index {hd_index} ({evm_address})\nCall wavs_register_operator next if using PoA.")
                     }
                     Err(_) => String::new(),
@@ -305,7 +320,10 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_pause_service(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_pause_service(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: ServiceManagerParams = parse_args(args)?;
         let manager = match serde_json::from_str(&p.service_manager_json) {
             Ok(m) => m,
@@ -317,7 +335,10 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_resume_service(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_resume_service(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: ServiceManagerParams = parse_args(args)?;
         let manager = match serde_json::from_str(&p.service_manager_json) {
             Ok(m) => m,
@@ -329,7 +350,10 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_delete_service(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_delete_service(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: ServiceManagerParams = parse_args(args)?;
         let manager = match serde_json::from_str(&p.service_manager_json) {
             Ok(m) => m,
@@ -341,7 +365,10 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_upload_component(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_upload_component(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: UploadComponentParams = parse_args(args)?;
         let bytes = match tokio::fs::read(&p.file_path).await {
             Ok(b) => b,
@@ -353,7 +380,10 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_save_service(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_save_service(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: SaveServiceParams = parse_args(args)?;
         match self.client.save_service(&p.service_json).await {
             Ok(uri) => ok(format!("Service saved.\nURI: {uri}")),
@@ -361,7 +391,10 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_simulate_trigger(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_simulate_trigger(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         use std::str::FromStr;
         use wavs_types::{ServiceId, WorkflowId};
 
@@ -403,7 +436,10 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_deploy_dev_service(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_deploy_dev_service(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: DeployDevServiceParams = parse_args(args)?;
         let manager: Option<wavs_types::ServiceManager> =
             serde_json::from_str::<serde_json::Value>(&p.service_json)
@@ -413,7 +449,10 @@ impl WavsMcpServer {
             Ok(hash) => {
                 let signer_info = if let Some(mgr) = manager {
                     match self.client.get_service_signer(mgr).await {
-                        Ok(wavs_types::SignerResponse::Secp256k1 { hd_index, evm_address }) => {
+                        Ok(wavs_types::SignerResponse::Secp256k1 {
+                            hd_index,
+                            evm_address,
+                        }) => {
                             format!("\nSigning key: HD index {hd_index} ({evm_address})")
                         }
                         Err(_) => String::new(),
@@ -427,7 +466,10 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_query_kv(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_query_kv(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: QueryKvParams = parse_args(args)?;
         match self.client.query_kv(&p.service_id, &p.bucket, &p.key).await {
             Ok(v) => ok(v),
@@ -435,7 +477,10 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_set_service_uri(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_set_service_uri(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: SetServiceUriParams = parse_args(args)?;
         let credential = self.require_mcp_chain_credential()?;
         let manager = match serde_json::from_str(&p.service_manager_json) {
@@ -448,42 +493,57 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_deploy_service_manager(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_deploy_service_manager(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: DeployServiceManagerParams = parse_args(args)?;
         let credential = self.require_mcp_chain_credential()?;
         match chain_ops::deploy_service_manager(&credential, &p.rpc_url).await {
-            Ok((address, tx_hash)) => ok(format!("SimpleServiceManager deployed.\nAddress: {address}\nTx: {tx_hash}")),
+            Ok((address, tx_hash)) => ok(format!(
+                "SimpleServiceManager deployed.\nAddress: {address}\nTx: {tx_hash}"
+            )),
             Err(e) => err(format!("Failed to deploy service manager: {e:#}")),
         }
     }
 
-    async fn tool_deploy_poa_service_manager(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_deploy_poa_service_manager(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: DeployPoaServiceManagerParams = parse_args(args)?;
         let credential = self.require_mcp_chain_credential()?;
         match chain_ops::deploy_poa_service_manager(&credential, &p.rpc_url).await {
-            Ok(address) => ok(format!("POAStakeRegistry deployed.\nAddress (use as service manager): {address}")),
+            Ok(address) => ok(format!(
+                "POAStakeRegistry deployed.\nAddress (use as service manager): {address}"
+            )),
             Err(e) => err(format!("Failed to deploy POA service manager: {e:#}")),
         }
     }
 
-    async fn tool_register_operator(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_register_operator(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: RegisterOperatorParams = parse_args(args)?;
         let owner_cred = self.require_mcp_chain_credential()?;
         let signing_cred = self.require_signing_mnemonic()?;
-        let manager: wavs_types::ServiceManager = match serde_json::from_str(&p.service_manager_json) {
-            Ok(m) => m,
-            Err(e) => return err(format!("Invalid service_manager_json: {e}")),
-        };
+        let manager: wavs_types::ServiceManager =
+            match serde_json::from_str(&p.service_manager_json) {
+                Ok(m) => m,
+                Err(e) => return err(format!("Invalid service_manager_json: {e}")),
+            };
         let weight = p.weight.unwrap_or(100);
 
         // Query the WAVS node for the HD index assigned to this service. The node assigns a unique
         // HD-derived signing key per service (starting at index 1), so we must register the correct
         // address on-chain. This requires the service to be deployed to the node first.
         let signing_key_hd_index = match self.client.get_service_signer(manager.clone()).await {
-            Ok(wavs_types::SignerResponse::Secp256k1 { hd_index, evm_address }) => {
-                tracing::info!(
-                    "Service signing key: HD index {hd_index} → {evm_address}"
-                );
+            Ok(wavs_types::SignerResponse::Secp256k1 {
+                hd_index,
+                evm_address,
+            }) => {
+                tracing::info!("Service signing key: HD index {hd_index} → {evm_address}");
                 hd_index
             }
             Err(e) => {
@@ -504,7 +564,10 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_get_signing_address(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_get_signing_address(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: GetSigningAddressParams = parse_args(args)?;
         let credential = self.require_signing_mnemonic()?;
         let hd_index = p.hd_index.unwrap_or(0);
@@ -514,28 +577,38 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_get_service_signer(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_get_service_signer(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: ServiceManagerParams = parse_args(args)?;
         let manager = match serde_json::from_str(&p.service_manager_json) {
             Ok(m) => m,
             Err(e) => return err(format!("Invalid service_manager_json: {e}")),
         };
         match self.client.get_service_signer(manager).await {
-            Ok(wavs_types::SignerResponse::Secp256k1 { hd_index, evm_address }) => ok(format!(
+            Ok(wavs_types::SignerResponse::Secp256k1 {
+                hd_index,
+                evm_address,
+            }) => ok(format!(
                 "Service signing key:\n  HD index:    {hd_index}\n  EVM address: {evm_address}"
             )),
             Err(e) => err(format!("Failed to get service signer: {e:#}")),
         }
     }
 
-    async fn tool_deploy_and_register(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_deploy_and_register(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: DeployAndRegisterParams = parse_args(args)?;
         let owner_cred = self.require_mcp_chain_credential()?;
         let signing_cred = self.require_signing_mnemonic()?;
-        let manager: wavs_types::ServiceManager = match serde_json::from_str(&p.service_manager_json) {
-            Ok(m) => m,
-            Err(e) => return err(format!("Invalid service_manager_json: {e}")),
-        };
+        let manager: wavs_types::ServiceManager =
+            match serde_json::from_str(&p.service_manager_json) {
+                Ok(m) => m,
+                Err(e) => return err(format!("Invalid service_manager_json: {e}")),
+            };
 
         // Step 1: register the service with the WAVS node so it gets an HD index assigned.
         match self.client.deploy_service(manager.clone()).await {
@@ -547,15 +620,26 @@ impl WavsMcpServer {
         // Step 2: query the node for the service-specific signing key.
         let hd_index = match self.client.get_service_signer(manager.clone()).await {
             Ok(wavs_types::SignerResponse::Secp256k1 { hd_index, .. }) => hd_index,
-            Err(e) => return err(format!(
-                "Service deployed but could not query signing key: {e:#}\n\
+            Err(e) => {
+                return err(format!(
+                    "Service deployed but could not query signing key: {e:#}\n\
                  Run wavs_register_operator separately once the node is ready."
-            )),
+                ))
+            }
         };
 
         // Step 3: register the operator on-chain with the correct signing key.
         let weight = p.weight.unwrap_or(100);
-        match chain_ops::register_operator(&manager, &owner_cred, &signing_cred, weight, hd_index, &p.rpc_url).await {
+        match chain_ops::register_operator(
+            &manager,
+            &owner_cred,
+            &signing_cred,
+            weight,
+            hd_index,
+            &p.rpc_url,
+        )
+        .await
+        {
             Ok((signing_key, register_tx, signing_key_tx)) => ok(format!(
                 "Service deployed and operator registered.\n\
                  Signing key (HD index {hd_index}): {signing_key}\n\
@@ -573,12 +657,22 @@ impl WavsMcpServer {
         ok(scaffold::get_wit_interface())
     }
 
-    async fn tool_scaffold_component(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_scaffold_component(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: ScaffoldComponentParams = parse_args(args)?;
-        ok(scaffold::scaffold_component(&p.name, &p.trigger_type, p.description.as_deref()))
+        ok(scaffold::scaffold_component(
+            &p.name,
+            &p.trigger_type,
+            p.description.as_deref(),
+        ))
     }
 
-    async fn tool_build_component(&self, args: Option<serde_json::Map<String, serde_json::Value>>) -> Result<CallToolResult, McpError> {
+    async fn tool_build_component(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
         let p: BuildComponentParams = parse_args(args)?;
         let release = p.release.unwrap_or(true);
 
@@ -605,8 +699,7 @@ impl WavsMcpServer {
 
         if output.status.success() {
             // Scan for output .wasm files so callers can pass the path directly to wavs_upload_component.
-            let wasm_dir = std::path::Path::new(&p.dir)
-                .join("target/wasm32-wasip1/release");
+            let wasm_dir = std::path::Path::new(&p.dir).join("target/wasm32-wasip1/release");
             if let Ok(entries) = std::fs::read_dir(&wasm_dir) {
                 let mut wasm_files: Vec<String> = entries
                     .filter_map(|e| e.ok())
@@ -987,30 +1080,30 @@ impl ServerHandler for WavsMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let args = req.arguments;
         match req.name.as_ref() {
-            "wavs_get_node_info"      => self.tool_get_node_info().await,
-            "wavs_get_health"         => self.tool_get_health().await,
-            "wavs_list_services"      => self.tool_list_services().await,
-            "wavs_get_service"        => self.tool_get_service(args).await,
-            "wavs_deploy_service"     => self.tool_deploy_service(args).await,
-            "wavs_delete_service"     => self.tool_delete_service(args).await,
-            "wavs_pause_service"      => self.tool_pause_service(args).await,
-            "wavs_resume_service"     => self.tool_resume_service(args).await,
-            "wavs_set_service_uri"              => self.tool_set_service_uri(args).await,
-            "wavs_deploy_service_manager"       => self.tool_deploy_service_manager(args).await,
-            "wavs_deploy_poa_service_manager"   => self.tool_deploy_poa_service_manager(args).await,
-            "wavs_register_operator"            => self.tool_register_operator(args).await,
-            "wavs_deploy_and_register"          => self.tool_deploy_and_register(args).await,
-            "wavs_get_service_signer"           => self.tool_get_service_signer(args).await,
-            "wavs_get_signing_address"          => self.tool_get_signing_address(args).await,
-            "wavs_upload_component"        => self.tool_upload_component(args).await,
-            "wavs_save_service"          => self.tool_save_service(args).await,
-            "wavs_simulate_trigger"      => self.tool_simulate_trigger(args).await,
-            "wavs_deploy_dev_service"    => self.tool_deploy_dev_service(args).await,
-            "wavs_query_kv"              => self.tool_query_kv(args).await,
-            "wavs_get_service_schema"    => self.tool_get_service_schema(),
-            "wavs_get_wit_interface"     => self.tool_get_wit_interface().await,
+            "wavs_get_node_info" => self.tool_get_node_info().await,
+            "wavs_get_health" => self.tool_get_health().await,
+            "wavs_list_services" => self.tool_list_services().await,
+            "wavs_get_service" => self.tool_get_service(args).await,
+            "wavs_deploy_service" => self.tool_deploy_service(args).await,
+            "wavs_delete_service" => self.tool_delete_service(args).await,
+            "wavs_pause_service" => self.tool_pause_service(args).await,
+            "wavs_resume_service" => self.tool_resume_service(args).await,
+            "wavs_set_service_uri" => self.tool_set_service_uri(args).await,
+            "wavs_deploy_service_manager" => self.tool_deploy_service_manager(args).await,
+            "wavs_deploy_poa_service_manager" => self.tool_deploy_poa_service_manager(args).await,
+            "wavs_register_operator" => self.tool_register_operator(args).await,
+            "wavs_deploy_and_register" => self.tool_deploy_and_register(args).await,
+            "wavs_get_service_signer" => self.tool_get_service_signer(args).await,
+            "wavs_get_signing_address" => self.tool_get_signing_address(args).await,
+            "wavs_upload_component" => self.tool_upload_component(args).await,
+            "wavs_save_service" => self.tool_save_service(args).await,
+            "wavs_simulate_trigger" => self.tool_simulate_trigger(args).await,
+            "wavs_deploy_dev_service" => self.tool_deploy_dev_service(args).await,
+            "wavs_query_kv" => self.tool_query_kv(args).await,
+            "wavs_get_service_schema" => self.tool_get_service_schema(),
+            "wavs_get_wit_interface" => self.tool_get_wit_interface().await,
             "wavs_scaffold_component" => self.tool_scaffold_component(args).await,
-            "wavs_build_component"    => self.tool_build_component(args).await,
+            "wavs_build_component" => self.tool_build_component(args).await,
             name => Err(ErrorData {
                 code: ErrorCode::METHOD_NOT_FOUND,
                 message: format!("Unknown tool: {name}").into(),

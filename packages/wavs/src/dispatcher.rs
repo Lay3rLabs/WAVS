@@ -439,14 +439,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             }
                         }
                         DispatcherCommand::SubmissionConfirmed(submission) => {
-                            if let Err(err) = _self
-                                .tauri_handle
-                                .emit_ext(wavs_gui_shared::event::SubmissionEvent {
+                            if let Err(err) = _self.tauri_handle.emit_ext(
+                                wavs_gui_shared::event::SubmissionEvent {
                                     service_id: submission.service_id().clone(),
                                     workflow_id: submission.workflow_id().clone(),
                                     trigger_data: submission.trigger_action.data.clone(),
-                                })
-                            {
+                                },
+                            ) {
                                 tracing::error!(
                                     "Error emitting submission event to GUI: {:?}",
                                     err
