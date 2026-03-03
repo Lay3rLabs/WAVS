@@ -27,7 +27,8 @@ use super::{
         handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_health,
         handle_info, handle_list_services, handle_not_found, handle_p2p_status,
         handle_upload_component,
-        kv::handle_get_kv,
+        fs::{handle_fs, handle_fs_root},
+        kv::{handle_get_kv, handle_list_kv},
         openapi::ApiDoc,
         service::{
             get::handle_get_service,
@@ -124,7 +125,10 @@ pub async fn make_router(
             )
             .route("/dev/config", get(handle_config))
             .route("/dev/trigger-streams", get(handle_dev_trigger_streams_info))
-            .route("/dev/kv/{service_id}/{bucket}/{key}", get(handle_get_kv));
+            .route("/dev/kv/{service_id}/{bucket}/{key}", get(handle_get_kv))
+            .route("/dev/kv/{service_id}", get(handle_list_kv))
+            .route("/dev/fs/{service_id}", get(handle_fs_root))
+            .route("/dev/fs/{service_id}/{*path}", get(handle_fs));
 
         protected = protected
             .route("/dev/triggers", post(handle_debug_trigger))

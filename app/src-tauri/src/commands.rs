@@ -984,6 +984,131 @@ pub async fn cmd_register_claude_mcp(
     Ok(project_path)
 }
 
+// --- Storage (KV + Filesystem) ---
+
+#[derive(Serialize, Deserialize)]
+pub struct KvEntry {
+    pub bucket: String,
+    pub key: String,
+    pub value_b64: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct FsEntry {
+    pub name: String,
+    pub is_dir: bool,
+    pub size: Option<u64>,
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_list_kv_entries(
+    wavs_config: State<'_, WavsConfigState>,
+    service_id: String,
+) -> AppResult<Vec<KvEntry>> {
+    let config = match wavs_config.get_cloned() {
+        Some(cfg) => cfg,
+        None => return Err(AppError::WavsConfig("WAVS config not loaded".to_string())),
+    };
+    let url = format!("http://{}:{}/dev/kv/{}", config.host, config.port, service_id);
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| AppError::Service(format!("Failed to fetch KV entries: {}", e)))?;
+    if !response.status().is_success() {
+        return Err(AppError::Service(format!(
+            "KV list returned error: {}",
+            response.status()
+        )));
+    }
+    response
+        .json::<Vec<KvEntry>>()
+        .await
+        .map_err(|e| AppError::Service(format!("Failed to parse KV entries: {}", e)))
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_list_fs_entries(
+    wavs_config: State<'_, WavsConfigState>,
+    service_id: String,
+    path: String,
+) -> AppResult<Vec<FsEntry>> {
+    let config = match wavs_config.get_cloned() {
+        Some(cfg) => cfg,
+        None => return Err(AppError::WavsConfig("WAVS config not loaded".to_string())),
+    };
+    let url = if path.is_empty() {
+        format!("http://{}:{}/dev/fs/{}", config.host, config.port, service_id)
+    } else {
+        format!(
+            "http://{}:{}/dev/fs/{}/{}",
+            config.host,
+            config.port,
+            service_id,
+            path.trim_start_matches('/')
+        )
+    };
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| AppError::Service(format!("Failed to fetch FS entries: {}", e)))?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(vec![]);
+    }
+    if !response.status().is_success() {
+        return Err(AppError::Service(format!(
+            "FS list returned error: {}",
+            response.status()
+        )));
+    }
+    response
+        .json::<Vec<FsEntry>>()
+        .await
+        .map_err(|e| AppError::Service(format!("Failed to parse FS entries: {}", e)))
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_read_fs_file(
+    wavs_config: State<'_, WavsConfigState>,
+    service_id: String,
+    path: String,
+) -> AppResult<Vec<u8>> {
+    let config = match wavs_config.get_cloned() {
+        Some(cfg) => cfg,
+        None => return Err(AppError::WavsConfig("WAVS config not loaded".to_string())),
+    };
+    let url = format!(
+        "http://{}:{}/dev/fs/{}/{}",
+        config.host,
+        config.port,
+        service_id,
+        path.trim_start_matches('/')
+    );
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await
+        .map_err(|e| AppError::Service(format!("Failed to fetch file: {}", e)))?;
+    if !response.status().is_success() {
+        return Err(AppError::Service(format!(
+            "File read returned error: {}",
+            response.status()
+        )));
+    }
+    response
+        .bytes()
+        .await
+        .map(|b| b.to_vec())
+        .map_err(|e| AppError::Service(format!("Failed to read file bytes: {}", e)))
+}
+
 // --- Reset App State ---
 
 #[tauri::command(rename_all = "snake_case")]

@@ -273,6 +273,19 @@ export interface McpStatus {
   pid: number | null;
 }
 
+// Storage types (KV store and filesystem)
+export interface KvEntry {
+  bucket: string;
+  key: string;
+  value_b64: string;
+}
+
+export interface FsEntry {
+  name: string;
+  is_dir: boolean;
+  size: number | null;
+}
+
 // Activity types (unified triggers + submissions)
 export type ActivityKind = 'trigger' | 'submission';
 

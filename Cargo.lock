@@ -14318,6 +14318,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-tracing-opentelemetry",
+ "base64 0.22.1",
  "bimap",
  "bincode",
  "chrono",
