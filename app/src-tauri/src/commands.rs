@@ -372,7 +372,7 @@ pub fn cmd_has_mnemonic(cache: State<'_, MnemonicCacheState>) -> bool {
 #[tauri::command(rename_all = "snake_case")]
 pub fn cmd_store_mnemonic(cache: State<'_, MnemonicCacheState>, mnemonic: String) -> AppResult<()> {
     // Validate mnemonic format (basic check for word count)
-    let word_count = mnemonic.trim().split_whitespace().count();
+    let word_count = mnemonic.split_whitespace().count();
     if word_count != 12 && word_count != 24 {
         return Err(AppError::Keychain(
             "Invalid mnemonic: must be 12 or 24 words".to_string(),
