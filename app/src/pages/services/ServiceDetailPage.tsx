@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AddressDisplay, Button, Modal, Toast, Tabs } from '../../components/atoms';
 import { OperatorList } from '../../components/poa';
@@ -12,11 +12,14 @@ import {
   removeService as removeServiceCmd,
   pauseService as pauseServiceCmd,
   resumeService as resumeServiceCmd,
+  listKvEntries,
+  listFsEntries,
+  readFsFile,
 } from '../../tauri';
 import { getPublicClient, getAddress } from '../../hooks/useViemClient';
 import { connectToRegistry, fetchOperators } from '../../utils/evm';
 import { getServiceAddress, getServiceChain, getErrorMessage, buildServiceMap } from '../../types';
-import type { Service } from '../../types';
+import type { Service, KvEntry, FsEntry } from '../../types';
 import type { Address } from 'viem';
 import { getRegistryKeyFromParams } from './ServicesLayout';
 
@@ -24,12 +27,282 @@ const REGISTRY_TABS = [
   { key: 'workflows', label: 'Workflows' },
   { key: 'activity', label: 'Activity' },
   { key: 'operators', label: 'Operators' },
+  { key: 'storage', label: 'Storage' },
 ];
 
 const SERVICE_TABS = [
   { key: 'workflows', label: 'Workflows' },
   { key: 'activity', label: 'Activity' },
+  { key: 'storage', label: 'Storage' },
 ];
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function decodeBase64Value(b64: string): string {
+  try {
+    const binary = atob(b64);
+    // Check if valid UTF-8 text
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return decoded;
+  } catch {
+    // Fall back to hex
+    const binary = atob(b64);
+    return Array.from(binary)
+      .map((c) => c.charCodeAt(0).toString(16).padStart(2, '0'))
+      .join('');
+  }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function FileContentModal({ content }: { content: number[] }) {
+  const bytes = new Uint8Array(content);
+  let display: string;
+  let isText = false;
+  try {
+    display = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    isText = true;
+    // Try pretty-printing as JSON
+    try {
+      display = JSON.stringify(JSON.parse(display), null, 2);
+    } catch {
+      // leave as plain text
+    }
+  } catch {
+    display = Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join(' ');
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-tan-muted text-xs">{isText ? 'Text / JSON' : 'Binary (hex)'}</p>
+      <pre className="text-beige-light text-xs bg-charcoal-dark p-3 rounded overflow-auto max-h-96 whitespace-pre-wrap break-all">
+        {display}
+      </pre>
+    </div>
+  );
+}
+
+// ── KV Browser ────────────────────────────────────────────────────────────────
+
+function KvBrowser({ serviceId }: { serviceId: string }) {
+  const [entries, setEntries] = useState<KvEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await listKvEntries(serviceId);
+      setEntries(data);
+    } catch (err) {
+      Toast.error(`KV fetch failed: ${getErrorMessage(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [serviceId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const toggleExpand = (i: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      return next;
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-beige-light font-medium">KV Store</h3>
+        <Button text={loading ? 'Loading…' : 'Refresh'} size="sm" disabled={loading} onClick={load} />
+      </div>
+      {entries.length === 0 ? (
+        <p className="text-tan-muted italic text-sm">No KV entries found for this service.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-tan-muted text-xs border-b border-charcoal-light">
+                <th className="text-left py-1.5 pr-4 font-medium">Bucket</th>
+                <th className="text-left py-1.5 pr-4 font-medium">Key</th>
+                <th className="text-left py-1.5 font-medium">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry, i) => {
+                const decoded = decodeBase64Value(entry.value_b64);
+                const truncated = decoded.length > 100;
+                const isExpanded = expanded.has(i);
+                return (
+                  <tr key={i} className="border-b border-charcoal-light/40">
+                    <td className="py-1.5 pr-4 text-beige-warm font-mono">{entry.bucket}</td>
+                    <td className="py-1.5 pr-4 text-beige-warm font-mono">{entry.key}</td>
+                    <td className="py-1.5 text-tan-muted font-mono text-xs">
+                      <span className="break-all">
+                        {truncated && !isExpanded ? decoded.slice(0, 100) + '…' : decoded}
+                      </span>
+                      {truncated && (
+                        <button
+                          className="ml-1 text-purple-1 hover:underline text-xs"
+                          onClick={() => toggleExpand(i)}
+                        >
+                          {isExpanded ? 'collapse' : 'expand'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Filesystem Browser ────────────────────────────────────────────────────────
+
+function FsBrowser({ serviceId }: { serviceId: string }) {
+  const [breadcrumbs, setBreadcrumbs] = useState<string[]>([]);
+  const [entries, setEntries] = useState<FsEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fileLoading, setFileLoading] = useState<string | null>(null);
+
+  const currentPath = breadcrumbs.join('/');
+
+  const loadDir = useCallback(async (path: string) => {
+    setLoading(true);
+    try {
+      const data = await listFsEntries(serviceId, path);
+      setEntries(data);
+    } catch (err) {
+      Toast.error(`Filesystem fetch failed: ${getErrorMessage(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [serviceId]);
+
+  useEffect(() => { loadDir(currentPath); }, [loadDir, currentPath]);
+
+  const navigate = (name: string) => {
+    setBreadcrumbs((prev) => [...prev, name]);
+  };
+
+  const navigateTo = (index: number) => {
+    setBreadcrumbs((prev) => prev.slice(0, index + 1));
+  };
+
+  const goRoot = () => setBreadcrumbs([]);
+
+  const handleView = async (entry: FsEntry) => {
+    const filePath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+    setFileLoading(entry.name);
+    try {
+      const data = await readFsFile(serviceId, filePath);
+      Modal.open(<FileContentModal content={data} />);
+    } catch (err) {
+      Toast.error(`Failed to read file: ${getErrorMessage(err)}`);
+    } finally {
+      setFileLoading(null);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-beige-light font-medium">Filesystem</h3>
+        <Button text={loading ? 'Loading…' : 'Refresh'} size="sm" disabled={loading} onClick={() => loadDir(currentPath)} />
+      </div>
+
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-1 text-sm flex-wrap">
+        <button
+          className="px-1.5 py-0.5 rounded bg-charcoal-light text-beige-warm text-xs hover:bg-charcoal-medium"
+          onClick={goRoot}
+        >
+          /
+        </button>
+        {breadcrumbs.map((crumb, i) => (
+          <span key={i} className="flex items-center gap-1">
+            <span className="text-tan-muted">/</span>
+            <button
+              className="px-1.5 py-0.5 rounded bg-charcoal-light text-beige-warm text-xs hover:bg-charcoal-medium"
+              onClick={() => navigateTo(i)}
+            >
+              {crumb}
+            </button>
+          </span>
+        ))}
+      </div>
+
+      {entries.length === 0 && !loading ? (
+        <p className="text-tan-muted italic text-sm">Directory is empty or not found.</p>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {entries
+            .slice()
+            .sort((a, b) => (a.is_dir === b.is_dir ? a.name.localeCompare(b.name) : a.is_dir ? -1 : 1))
+            .map((entry) => (
+              <div
+                key={entry.name}
+                className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-charcoal-light/40 text-sm"
+              >
+                <button
+                  className={`flex items-center gap-2 flex-1 text-left ${entry.is_dir ? 'cursor-pointer' : 'cursor-default'}`}
+                  onClick={() => entry.is_dir && navigate(entry.name)}
+                >
+                  <span className="text-base">{entry.is_dir ? '📁' : '📄'}</span>
+                  <span className="text-beige-warm font-mono">{entry.name}</span>
+                  {entry.is_dir && <span className="text-tan-muted text-xs">/</span>}
+                </button>
+                <div className="flex items-center gap-3 ml-2">
+                  {!entry.is_dir && entry.size != null && (
+                    <span className="text-tan-muted text-xs">{formatFileSize(entry.size)}</span>
+                  )}
+                  {!entry.is_dir && (
+                    <Button
+                      text={fileLoading === entry.name ? '…' : 'View'}
+                      size="sm"
+                      disabled={fileLoading === entry.name}
+                      onClick={() => handleView(entry)}
+                    />
+                  )}
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Storage Tab ───────────────────────────────────────────────────────────────
+
+function StorageTab({ service, serviceId }: { service: Service; serviceId: string }) {
+  const hasFs = Object.values(service.workflows).some(
+    (wf) => wf.component.permissions.file_system
+  );
+
+  return (
+    <div className="flex flex-col gap-6">
+      <KvBrowser serviceId={serviceId} />
+      {hasFs && (
+        <>
+          <div className="border-t border-charcoal-light" />
+          <FsBrowser serviceId={serviceId} />
+        </>
+      )}
+    </div>
+  );
+}
 
 function ConfirmModal({
   title,
@@ -194,7 +467,9 @@ export function ServiceDetailPage() {
   };
 
   const isPaused = service?.status === 'paused';
-  const tabs = registry ? REGISTRY_TABS : SERVICE_TABS;
+  const baseTabs = registry ? REGISTRY_TABS : SERVICE_TABS;
+  // Only show Storage tab when there is an active service
+  const tabs = service ? baseTabs : baseTabs.filter((t) => t.key !== 'storage');
 
   return (
     <div className="flex flex-col gap-6">
@@ -327,6 +602,12 @@ export function ServiceDetailPage() {
         )}
         {activeTab === 'operators' && registry && (
           <OperatorList registryKey={registryKey} />
+        )}
+        {activeTab === 'storage' && service && serviceHashId && (
+          <StorageTab service={service} serviceId={serviceHashId} />
+        )}
+        {activeTab === 'storage' && !service && (
+          <p className="text-tan-muted italic">Register a service to browse its storage.</p>
         )}
       </div>
     </div>

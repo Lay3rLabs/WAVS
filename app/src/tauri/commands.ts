@@ -10,6 +10,8 @@ import type {
   IpfsProvider,
   ComponentDigestResult,
   McpStatus,
+  KvEntry,
+  FsEntry,
 } from '../types';
 
 export async function setWavsHome(): Promise<string | null> {
@@ -155,4 +157,17 @@ export async function saveEnvVars(envVars: Record<string, string>): Promise<void
 
 export async function registerClaudeMcp(projectPath: string): Promise<string> {
   return invoke<string>('cmd_register_claude_mcp', { project_path: projectPath });
+}
+
+// Storage commands (KV store + filesystem)
+export async function listKvEntries(serviceId: string): Promise<KvEntry[]> {
+  return invoke<KvEntry[]>('cmd_list_kv_entries', { service_id: serviceId });
+}
+
+export async function listFsEntries(serviceId: string, path: string): Promise<FsEntry[]> {
+  return invoke<FsEntry[]>('cmd_list_fs_entries', { service_id: serviceId, path });
+}
+
+export async function readFsFile(serviceId: string, path: string): Promise<number[]> {
+  return invoke<number[]>('cmd_read_fs_file', { service_id: serviceId, path });
 }
