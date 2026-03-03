@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatEther, type Address } from 'viem';
 import { mainnet, sepolia, holesky } from 'viem/chains';
 import { AddressDisplay, Button, TomlEditor } from '../components/atoms';
@@ -10,6 +10,31 @@ import { errorMessage } from '../utils/error';
 import type { McpStatus } from '../types';
 import { getPublicClient } from '../hooks/useViemClient';
 import { getChainConfigs } from '../tauri';
+
+const ENV_VAR_SUGGESTIONS = [
+  // Open-source / local AI
+  { label: 'HuggingFace', key: 'WAVS_ENV_HUGGINGFACE_API_KEY'  },
+  { label: 'Ollama URL',  key: 'WAVS_ENV_OLLAMA_BASE_URL'      },
+  { label: 'LM Studio',   key: 'WAVS_ENV_LM_STUDIO_BASE_URL'   },
+  { label: 'Together AI', key: 'WAVS_ENV_TOGETHER_API_KEY'     },
+  { label: 'Groq',        key: 'WAVS_ENV_GROQ_API_KEY'         },
+  { label: 'Mistral',     key: 'WAVS_ENV_MISTRAL_API_KEY'      },
+  { label: 'Replicate',   key: 'WAVS_ENV_REPLICATE_API_TOKEN'  },
+  // Closed-source AI
+  { label: 'OpenAI',      key: 'WAVS_ENV_OPENAI_API_KEY'       },
+  { label: 'Anthropic',   key: 'WAVS_ENV_ANTHROPIC_API_KEY'    },
+  // Decentralized storage
+  { label: 'Pinata',      key: 'WAVS_ENV_PINATA_JWT'           },
+  { label: 'Web3.Storage', key: 'WAVS_ENV_WEB3_STORAGE_TOKEN' },
+  // Blockchain / data
+  { label: 'Etherscan',   key: 'WAVS_ENV_ETHERSCAN_API_KEY'    },
+  { label: 'Alchemy',     key: 'WAVS_ENV_ALCHEMY_API_KEY'      },
+  { label: 'Infura',      key: 'WAVS_ENV_INFURA_API_KEY'       },
+  { label: 'The Graph',   key: 'WAVS_ENV_THEGRAPH_API_KEY'     },
+  { label: 'CoinGecko',   key: 'WAVS_ENV_COINGECKO_API_KEY'    },
+  // General
+  { label: 'GitHub',      key: 'WAVS_ENV_GITHUB_TOKEN'         },
+];
 
 const KNOWN_CHAIN_NAMES: Record<number, string> = {
   [mainnet.id]: mainnet.name,
@@ -101,6 +126,32 @@ export function Settings() {
   const [envSaving, setEnvSaving] = useState(false);
   const [envSaveSuccess, setEnvSaveSuccess] = useState(false);
   const [envError, setEnvError] = useState<string | null>(null);
+  const newEnvValueRef = useRef<HTMLInputElement>(null);
+
+  // Collect all env_keys from registered services, not yet set in envVars
+  const neededByServices = useMemo(() => {
+    const keys = new Set<string>();
+    for (const service of settings.saved_services ?? []) {
+      for (const workflow of Object.values(service.workflows)) {
+        for (const k of workflow.component.env_keys ?? []) keys.add(k);
+        if (typeof workflow.submit === 'object' && 'aggregator' in workflow.submit) {
+          for (const k of workflow.submit.aggregator.component.env_keys ?? []) keys.add(k);
+        }
+      }
+    }
+    return [...keys].filter((k) => !(k in envVars));
+  }, [settings.saved_services, envVars]);
+
+  // Static suggestions not yet set
+  const staticSuggestions = useMemo(
+    () => ENV_VAR_SUGGESTIONS.filter((s) => !(s.key in envVars)),
+    [envVars]
+  );
+
+  const handleSuggestionClick = (key: string) => {
+    setNewEnvKey(key);
+    newEnvValueRef.current?.focus();
+  };
 
   useEffect(() => {
     if (hasMnemonic) {
@@ -607,6 +658,42 @@ export function Settings() {
           <span className="font-mono">WAVS_ENV_*</span> variables are passed to workflow components that declare them in their <span className="font-mono">env_keys</span> list.
         </p>
 
+        {/* Required by services */}
+        {neededByServices.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-tan-muted text-xs font-medium">Required by your services</span>
+            <div className="flex flex-wrap gap-1.5">
+              {neededByServices.map((key) => (
+                <button
+                  key={key}
+                  className="px-2 py-0.5 rounded text-xs font-mono bg-charcoal-dark border border-charcoal-light text-tan-muted hover:text-beige-warm hover:border-tan-muted transition-colors"
+                  title={key}
+                  onClick={() => handleSuggestionClick(key)}
+                >
+                  {key}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Common integrations */}
+        {staticSuggestions.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-tan-muted text-xs">Suggestions:</span>
+            {staticSuggestions.map((s) => (
+              <button
+                key={s.key}
+                className="px-2 py-0.5 rounded text-xs font-mono bg-charcoal-dark border border-charcoal-light text-tan-muted hover:text-beige-warm hover:border-tan-muted transition-colors"
+                title={s.key}
+                onClick={() => handleSuggestionClick(s.key)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Existing vars */}
         {Object.keys(envVars).length > 0 && (
           <div className="flex flex-col gap-2">
@@ -646,6 +733,7 @@ export function Settings() {
             className="flex-1 px-3 py-1.5 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-xs outline-none"
           />
           <input
+            ref={newEnvValueRef}
             type="text"
             placeholder="Value"
             value={newEnvValue}
