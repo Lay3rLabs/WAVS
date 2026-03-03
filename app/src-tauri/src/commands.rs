@@ -51,6 +51,18 @@ pub async fn cmd_set_wavs_home(
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_pick_folder(app: AppHandle) -> AppResult<DirectoryChooserResponse> {
+    let directory = app.dialog().file().blocking_pick_folder();
+    match directory {
+        Some(dir) => {
+            let path = dir.into_path().map_err(|e| AppError::Io(e.to_string()))?;
+            Ok(DirectoryChooserResponse::Selected(path))
+        }
+        None => Ok(DirectoryChooserResponse::None),
+    }
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub async fn cmd_get_settings(settings: State<'_, SettingsState>) -> AppResult<Settings> {
     Ok(settings.get_cloned())
 }

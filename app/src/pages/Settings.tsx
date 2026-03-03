@@ -4,7 +4,7 @@ import { mainnet, sepolia, holesky } from 'viem/chains';
 import { AddressDisplay, Button, TomlEditor } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
 import { useWalletStore } from '../stores/walletStore';
-import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, getWavsUrl, saveMcpSettings, clearPersistedServices, registerClaudeMcp, saveEnvVars } from '../tauri';
+import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, getWavsUrl, saveMcpSettings, clearPersistedServices, registerClaudeMcp, saveEnvVars, pickFolder } from '../tauri';
 import { usePOAStore } from '../stores/poaStore';
 import { errorMessage } from '../utils/error';
 import type { McpStatus } from '../types';
@@ -867,6 +867,14 @@ export function Settings() {
               onChange={(e) => setClaudeProjectPath(e.target.value)}
               placeholder="/path/to/your-project"
               className="flex-1 px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
+            />
+            <Button
+              text="Browse..."
+              variant="outline"
+              onClick={async () => {
+                const path = await pickFolder();
+                if (path) setClaudeProjectPath(path);
+              }}
             />
             <Button
               text={claudeRegisterLoading ? '...' : 'Register'}
