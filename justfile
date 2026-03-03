@@ -69,27 +69,7 @@ _install-native HOME DATA:
     @echo "export WAVS_CLI_DATA=\"{{DATA}}/wavs-cli\""
     @echo "export WAVS_DOTENV=\"{{HOME}}/.env\""
 
-wasi-build COMPONENT="*":
-    just wasi-build-native '{{COMPONENT}}'
-
-wasi-build-native COMPONENT="*":
-    @if [ "{{COMPONENT}}" = "*" ]; then \
-        rm -f ./target/wasm32-wasip1/release/*.wasm; \
-    fi
-
-    @for C in examples/components/{{COMPONENT}}/Cargo.toml; do \
-        if [ "{{COMPONENT}}" != "_helpers" ] && [ "{{COMPONENT}}" != "_types" ]; then \
-            echo "Building WASI component in $(dirname $C)"; \
-            ( cd $(dirname $C) && cargo component build --release && cargo fmt); \
-        fi; \
-    done
-
-    rm -rf {{WASI_OUT_DIR}}
-    mkdir -p {{WASI_OUT_DIR}}
-    @cp ./target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
-    @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt
-
-wasi-build-docker COMPONENT="*" TAG="latest":
+wasi-build COMPONENT="*" TAG="latest":
     #!/usr/bin/env bash
     set -euo pipefail
 
