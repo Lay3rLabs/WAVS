@@ -17,12 +17,12 @@ pub struct FsEntry {
 }
 
 /// Prevent path traversal by ensuring the resolved path stays within base.
-fn safe_join(base: &FsPath, rel: &str) -> Option<PathBuf> {
+async fn safe_join(base: &FsPath, rel: &str) -> Option<PathBuf> {
     if rel.is_empty() {
         return Some(base.to_path_buf());
     }
     let joined = base.join(rel);
-    let canonical = std::fs::canonicalize(&joined).ok()?;
+    let canonical = tokio::fs::canonicalize(&joined).await.ok()?;
     canonical.starts_with(base).then_some(canonical)
 }
 
@@ -30,39 +30,28 @@ async fn handle_fs_inner(state: &HttpState, service_id: &str, rel_path: &str) ->
     let base = state.config.data.join("fs").join(service_id);
 
     // Ensure the base exists (canonicalize requires the path to exist)
-    if !base.exists() {
+    if tokio::fs::metadata(&base).await.is_err() {
         return (StatusCode::NOT_FOUND, "service storage directory not found").into_response();
     }
 
-    let canonical_base = match std::fs::canonicalize(&base) {
+    let canonical_base = match tokio::fs::canonicalize(&base).await {
         Ok(p) => p,
         Err(_) => return (StatusCode::NOT_FOUND, "storage directory inaccessible").into_response(),
     };
 
-    let target = match safe_join(&canonical_base, rel_path) {
+    let target = match safe_join(&canonical_base, rel_path).await {
         Some(p) => p,
         None => return (StatusCode::BAD_REQUEST, "path traversal detected").into_response(),
     };
 
-    if !target.exists() {
-        return StatusCode::NOT_FOUND.into_response();
-    }
+    let meta = match tokio::fs::metadata(&target).await {
+        Ok(m) => m,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
 
-    if target.is_dir() {
-        let entries: Vec<FsEntry> = match std::fs::read_dir(&target) {
-            Ok(rd) => rd
-                .flatten()
-                .map(|entry| {
-                    let meta = entry.metadata().ok();
-                    let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
-                    let size = if is_dir { None } else { meta.map(|m| m.len()) };
-                    FsEntry {
-                        name: entry.file_name().to_string_lossy().into_owned(),
-                        is_dir,
-                        size,
-                    }
-                })
-                .collect(),
+    if meta.is_dir() {
+        let mut read_dir = match tokio::fs::read_dir(&target).await {
+            Ok(rd) => rd,
             Err(_) => {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -71,10 +60,21 @@ async fn handle_fs_inner(state: &HttpState, service_id: &str, rel_path: &str) ->
                     .into_response()
             }
         };
+        let mut entries = Vec::new();
+        while let Ok(Some(entry)) = read_dir.next_entry().await {
+            let meta = entry.metadata().await.ok();
+            let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
+            let size = if is_dir { None } else { meta.map(|m| m.len()) };
+            entries.push(FsEntry {
+                name: entry.file_name().to_string_lossy().into_owned(),
+                is_dir,
+                size,
+            });
+        }
         Json(entries).into_response()
     } else {
-        // Stream file bytes
-        let bytes = match std::fs::read(&target) {
+        // Read file bytes into memory and return them
+        let bytes = match tokio::fs::read(&target).await {
             Ok(b) => b,
             Err(_) => {
                 return (StatusCode::INTERNAL_SERVER_ERROR, "failed to read file").into_response()
