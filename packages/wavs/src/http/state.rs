@@ -115,13 +115,13 @@ impl HttpState {
         self.db_storage
             .services_by_hash
             .insert(key, service.clone())?;
-        // Persist to disk so service definitions survive node restarts
+        // Persist to disk so service definitions survive node restarts (atomic write)
         let services_dir = self.config.data.join("dev_services");
         std::fs::create_dir_all(&services_dir)?;
-        std::fs::write(
-            services_dir.join(format!("{service_hash}.json")),
-            serde_json::to_vec(service)?,
-        )?;
+        let dest = services_dir.join(format!("{service_hash}.json"));
+        let tmp = tempfile::NamedTempFile::new_in(&services_dir)?;
+        std::fs::write(tmp.path(), serde_json::to_vec(service)?)?;
+        tmp.persist(dest)?;
         Ok(service_hash)
     }
 }

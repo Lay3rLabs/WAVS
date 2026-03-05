@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use wavs_types::ServiceManager;
+use wavs_types::{ServiceManager, ServiceStatus};
 
 const REGISTRY_FILENAME: &str = "service_registry.json";
 const REGISTRY_VERSION: u32 = 1;
@@ -20,6 +20,14 @@ struct RegistryFile {
 pub struct RegistryEntry {
     pub service_manager: ServiceManager,
     pub hd_index: u32,
+    /// Persisted service status. Defaults to Active for backward compatibility
+    /// with registry files that predate this field.
+    #[serde(default = "default_status")]
+    pub status: ServiceStatus,
+}
+
+fn default_status() -> ServiceStatus {
+    ServiceStatus::Active
 }
 
 #[derive(Debug)]
@@ -104,11 +112,25 @@ impl ServiceRegistry {
         state.entries.push(RegistryEntry {
             service_manager: sm,
             hd_index,
+            status: ServiceStatus::Active,
         });
         state.next_hd_index = next;
 
         self.write_locked(&state)?;
         Ok(hd_index)
+    }
+
+    pub fn set_status(
+        &self,
+        sm: &ServiceManager,
+        status: ServiceStatus,
+    ) -> Result<(), RegistryError> {
+        let mut state = self.state.write().unwrap();
+        if let Some(entry) = state.entries.iter_mut().find(|e| &e.service_manager == sm) {
+            entry.status = status;
+            self.write_locked(&state)?;
+        }
+        Ok(())
     }
 
     pub fn remove(&self, sm: &ServiceManager) -> Result<(), RegistryError> {
