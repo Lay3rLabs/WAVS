@@ -61,6 +61,9 @@ pub enum RegistryError {
 
     #[error("unsupported registry version {found}, expected {REGISTRY_VERSION}")]
     UnsupportedVersion { found: u32 },
+
+    #[error("Service manager not found in registry")]
+    NotFound,
 }
 
 impl ServiceRegistry {
@@ -126,10 +129,13 @@ impl ServiceRegistry {
         status: ServiceStatus,
     ) -> Result<(), RegistryError> {
         let mut state = self.state.write().unwrap();
-        if let Some(entry) = state.entries.iter_mut().find(|e| &e.service_manager == sm) {
-            entry.status = status;
-            self.write_locked(&state)?;
-        }
+        let entry = state
+            .entries
+            .iter_mut()
+            .find(|e| &e.service_manager == sm)
+            .ok_or(RegistryError::NotFound)?;
+        entry.status = status;
+        self.write_locked(&state)?;
         Ok(())
     }
 
@@ -285,5 +291,53 @@ mod tests {
 
         let err = ServiceRegistry::load(dir.path()).unwrap_err();
         assert!(matches!(err, RegistryError::Json(_)));
+    }
+
+    #[test]
+    fn set_status_persists_across_reload() {
+        let dir = TempDir::new().unwrap();
+        let sm = test_sm("0x0000000000000000000000000000000000000001");
+
+        let reg = ServiceRegistry::load(dir.path()).unwrap();
+        reg.append(sm.clone()).unwrap();
+        assert_eq!(reg.entries()[0].status, ServiceStatus::Active);
+
+        reg.set_status(&sm, ServiceStatus::Paused).unwrap();
+        assert_eq!(reg.entries()[0].status, ServiceStatus::Paused);
+
+        // Reload from disk and verify status persisted
+        let reg = ServiceRegistry::load(dir.path()).unwrap();
+        assert_eq!(reg.entries()[0].status, ServiceStatus::Paused);
+
+        // Resume and verify
+        reg.set_status(&sm, ServiceStatus::Active).unwrap();
+        let reg = ServiceRegistry::load(dir.path()).unwrap();
+        assert_eq!(reg.entries()[0].status, ServiceStatus::Active);
+    }
+
+    #[test]
+    fn set_status_on_missing_service_errors() {
+        let dir = TempDir::new().unwrap();
+        let sm = test_sm("0x0000000000000000000000000000000000000001");
+
+        let reg = ServiceRegistry::load(dir.path()).unwrap();
+        let err = reg.set_status(&sm, ServiceStatus::Paused).unwrap_err();
+        assert!(matches!(err, RegistryError::NotFound));
+    }
+
+    #[test]
+    fn legacy_registry_without_status_defaults_to_active() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join(REGISTRY_FILENAME);
+        // Simulate a registry file from before the status field existed
+        std::fs::write(
+            &path,
+            r#"{"version":1,"next_hd_index":2,"services":[{"service_manager":{"evm":{"chain":"evm:local","address":"0x0000000000000000000000000000000000000001"}},"hd_index":1}]}"#,
+        )
+        .unwrap();
+
+        let reg = ServiceRegistry::load(dir.path()).unwrap();
+        assert_eq!(reg.entries().len(), 1);
+        assert_eq!(reg.entries()[0].status, ServiceStatus::Active);
     }
 }
