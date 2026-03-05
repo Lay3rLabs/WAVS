@@ -41,9 +41,9 @@ use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessage
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, ServiceManager,
-    Submission, Submit, WorkflowIdError,
+    Submission, Submit, TriggerData, WorkflowIdError,
 };
-use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction};
+use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction, WorkflowId};
 
 use crate::config::Config;
 use crate::service_registry::{RegistryError, ServiceRegistry};
@@ -96,11 +96,11 @@ pub enum TauriHandle {
 impl TauriEventEmitterExt for TauriHandle {
     fn emit_ext<E: wavs_gui_shared::event::TauriEventExt>(
         &self,
-        event: E,
+        _event: E,
     ) -> Result<(), wavs_gui_shared::error::AppError> {
         match self {
             #[cfg(feature = "gui")]
-            TauriHandle::Real(handle) => handle.emit_ext(event),
+            TauriHandle::Real(handle) => handle.emit_ext(_event),
             TauriHandle::Mock => Ok(()),
         }
     }
@@ -128,7 +128,11 @@ pub enum DispatcherCommand {
         service: Service,
         kind: AggregatorExecuteKind,
     },
-    SubmissionConfirmed(Submission),
+    SubmissionConfirmed {
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
+        trigger_data: TriggerData,
+    },
 }
 
 impl Dispatcher<FileStorage> {
@@ -318,6 +322,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                 }
                             };
 
+                            // Skip paused services early to avoid unnecessary work and
+                            // misleading GUI events.
+                            if !_self.services.is_active(&action.config.service_id) {
+                                tracing::debug!(
+                                    service_id = %action.config.service_id,
+                                    "Skipping trigger for paused service",
+                                );
+                                continue;
+                            }
+
                             tracing::debug!(
                                 service_id = %action.config.service_id,
                                 workflow_id = %action.config.workflow_id,
@@ -438,12 +452,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                 );
                             }
                         }
-                        DispatcherCommand::SubmissionConfirmed(submission) => {
+                        DispatcherCommand::SubmissionConfirmed {
+                            service_id,
+                            workflow_id,
+                            trigger_data,
+                        } => {
                             if let Err(err) = _self.tauri_handle.emit_ext(
                                 wavs_gui_shared::event::SubmissionEvent {
-                                    service_id: submission.service_id().clone(),
-                                    workflow_id: submission.workflow_id().clone(),
-                                    trigger_data: submission.trigger_action.data.clone(),
+                                    service_id,
+                                    workflow_id,
+                                    trigger_data,
                                 },
                             ) {
                                 tracing::error!(
@@ -493,7 +511,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             // Process results sequentially (DB writes and manager registration are not async-safe to parallelize)
             let mut restored = Vec::new();
             for (entry, result) in fetched {
-                let service = match result {
+                let mut service = match result {
                     Ok(s) => s,
                     Err(e) => {
                         // Only remove the registry entry when the on-chain contract is genuinely
@@ -526,6 +544,9 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                         continue;
                     }
                 };
+
+                // Apply persisted status from the registry (e.g. paused services stay paused)
+                service.status = entry.status;
 
                 // Check if Path A (cmd_start_wavs) already loaded this service from the
                 // settings cache before the HTTP server was up. If so, refresh the stored
@@ -754,6 +775,8 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         let mut service = self.services.get(&id)?;
         service.status = wavs_types::ServiceStatus::Paused;
         self.services.save(&service)?;
+        self.service_registry
+            .set_status(&service.manager, wavs_types::ServiceStatus::Paused)?;
         Ok(())
     }
 
@@ -762,6 +785,8 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         let mut service = self.services.get(&id)?;
         service.status = wavs_types::ServiceStatus::Active;
         self.services.save(&service)?;
+        self.service_registry
+            .set_status(&service.manager, wavs_types::ServiceStatus::Active)?;
         Ok(())
     }
 

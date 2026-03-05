@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use wavs_types::ServiceManager;
+use wavs_types::{ServiceManager, ServiceStatus};
 
 const REGISTRY_FILENAME: &str = "service_registry.json";
 const REGISTRY_VERSION: u32 = 1;
@@ -20,6 +20,14 @@ struct RegistryFile {
 pub struct RegistryEntry {
     pub service_manager: ServiceManager,
     pub hd_index: u32,
+    /// Persisted service status. Defaults to Active for backward compatibility
+    /// with registry files that predate this field.
+    #[serde(default = "default_status")]
+    pub status: ServiceStatus,
+}
+
+fn default_status() -> ServiceStatus {
+    ServiceStatus::Active
 }
 
 #[derive(Debug)]
@@ -53,6 +61,9 @@ pub enum RegistryError {
 
     #[error("unsupported registry version {found}, expected {REGISTRY_VERSION}")]
     UnsupportedVersion { found: u32 },
+
+    #[error("Service manager not found in registry")]
+    NotFound,
 }
 
 impl ServiceRegistry {
@@ -104,11 +115,28 @@ impl ServiceRegistry {
         state.entries.push(RegistryEntry {
             service_manager: sm,
             hd_index,
+            status: ServiceStatus::Active,
         });
         state.next_hd_index = next;
 
         self.write_locked(&state)?;
         Ok(hd_index)
+    }
+
+    pub fn set_status(
+        &self,
+        sm: &ServiceManager,
+        status: ServiceStatus,
+    ) -> Result<(), RegistryError> {
+        let mut state = self.state.write().unwrap();
+        let entry = state
+            .entries
+            .iter_mut()
+            .find(|e| &e.service_manager == sm)
+            .ok_or(RegistryError::NotFound)?;
+        entry.status = status;
+        self.write_locked(&state)?;
+        Ok(())
     }
 
     pub fn remove(&self, sm: &ServiceManager) -> Result<(), RegistryError> {
@@ -263,5 +291,53 @@ mod tests {
 
         let err = ServiceRegistry::load(dir.path()).unwrap_err();
         assert!(matches!(err, RegistryError::Json(_)));
+    }
+
+    #[test]
+    fn set_status_persists_across_reload() {
+        let dir = TempDir::new().unwrap();
+        let sm = test_sm("0x0000000000000000000000000000000000000001");
+
+        let reg = ServiceRegistry::load(dir.path()).unwrap();
+        reg.append(sm.clone()).unwrap();
+        assert_eq!(reg.entries()[0].status, ServiceStatus::Active);
+
+        reg.set_status(&sm, ServiceStatus::Paused).unwrap();
+        assert_eq!(reg.entries()[0].status, ServiceStatus::Paused);
+
+        // Reload from disk and verify status persisted
+        let reg = ServiceRegistry::load(dir.path()).unwrap();
+        assert_eq!(reg.entries()[0].status, ServiceStatus::Paused);
+
+        // Resume and verify
+        reg.set_status(&sm, ServiceStatus::Active).unwrap();
+        let reg = ServiceRegistry::load(dir.path()).unwrap();
+        assert_eq!(reg.entries()[0].status, ServiceStatus::Active);
+    }
+
+    #[test]
+    fn set_status_on_missing_service_errors() {
+        let dir = TempDir::new().unwrap();
+        let sm = test_sm("0x0000000000000000000000000000000000000001");
+
+        let reg = ServiceRegistry::load(dir.path()).unwrap();
+        let err = reg.set_status(&sm, ServiceStatus::Paused).unwrap_err();
+        assert!(matches!(err, RegistryError::NotFound));
+    }
+
+    #[test]
+    fn legacy_registry_without_status_defaults_to_active() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join(REGISTRY_FILENAME);
+        // Simulate a registry file from before the status field existed
+        std::fs::write(
+            &path,
+            r#"{"version":1,"next_hd_index":2,"services":[{"service_manager":{"evm":{"chain":"evm:local","address":"0x0000000000000000000000000000000000000001"}},"hd_index":1}]}"#,
+        )
+        .unwrap();
+
+        let reg = ServiceRegistry::load(dir.path()).unwrap();
+        assert_eq!(reg.entries().len(), 1);
+        assert_eq!(reg.entries()[0].status, ServiceStatus::Active);
     }
 }
