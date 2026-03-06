@@ -8,10 +8,18 @@ Exposes WAVS operations to AI assistants (Claude, Cursor, VS Code Copilot, etc.)
 
 ## Installation
 
-### npm (recommended for most users)
+### One-command setup (recommended)
 
 ```bash
-npm install -g @lay3rlabs/wavs-mcp
+npx @wavs/mcp@latest
+```
+
+Interactive wizard: installs the binary, prompts for URL + token + credentials, writes `~/.claude.json` and `~/.wavs/wavs.toml`, and installs Claude Code skill files.
+
+### Global install
+
+```bash
+npm install -g @wavs/mcp
 ```
 
 The postinstall script downloads the correct pre-built binary for your platform.
@@ -82,8 +90,8 @@ wavs-mcp --mcp-chain-credential 0x... --signing-mnemonic "word1 ..."
 ### Claude Code
 
 ```bash
-# Automatic (reads running process, prompts for anything missing)
-python3 ~/.claude/skills/wavs/setup_claude_mcp.py /path/to/your-project
+# One-command setup (recommended)
+npx @wavs/mcp@latest
 
 # From the WAVS repo
 just setup-claude-mcp /path/to/your-project
