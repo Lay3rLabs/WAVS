@@ -21,7 +21,7 @@ function banner() {
   console.log('');
   console.log('  WAVS MCP Setup Wizard');
   console.log('  ─────────────────────');
-  console.log('  Sets up wavs-mcp for Claude Code');
+  console.log('  Sets up wavs-mcp for Claude Code and/or Claude Desktop');
   console.log('');
 }
 
@@ -71,6 +71,18 @@ function detectRunningProcess() {
     }
   } catch {}
   return { url: null, token: null };
+}
+
+/** Return the Claude Desktop config file path for the current platform. */
+function desktopConfigPath() {
+  switch (process.platform) {
+    case 'darwin':
+      return path.join(os.homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+    case 'win32':
+      return path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
+    default:
+      return path.join(os.homedir(), '.config', 'Claude', 'claude_desktop_config.json');
+  }
 }
 
 /** Upsert key = "value" in [section] of TOML text. */
@@ -176,6 +188,23 @@ function writeClaudeJson(projectPath, command, args, global_) {
   renameSync(tmp, claudeJson);
 }
 
+/** Atomically write the Claude Desktop config with the MCP server entry. */
+function writeDesktopConfig(command, args) {
+  const configPath = desktopConfigPath();
+  mkdirSync(path.dirname(configPath), { recursive: true });
+  let config = {};
+  if (existsSync(configPath)) {
+    try { config = JSON.parse(readFileSync(configPath, 'utf8')); } catch {}
+  }
+
+  config.mcpServers = config.mcpServers || {};
+  config.mcpServers.wavs = { command, args };
+
+  const tmp = configPath + '.tmp';
+  writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n');
+  renameSync(tmp, configPath);
+}
+
 /** Copy bundled skill/ directory to ~/.claude/skills/wavs/. */
 function installSkillFiles() {
   const skillSrc = path.join(__dirname, '..', 'skill');
@@ -239,24 +268,37 @@ export default async function main() {
     console.log(`  Binary: ${binary}`);
     console.log('');
 
-    // 2. Scope
-    console.log('  Scope:');
-    console.log('    1) Global (all Claude Code sessions)');
-    console.log('    2) Current project only');
-    const scopeAns = await rl.question('  Choose [1]: ');
-    const global_ = (scopeAns.trim() || '1') !== '2';
-    const projectPath = process.cwd();
-    console.log(`  Scope: ${global_ ? 'global' : `project (${projectPath})`}`);
+    // 2. Client selection
+    console.log('  Configure for:');
+    console.log('    1) Claude Code');
+    console.log('    2) Claude Desktop');
+    console.log('    3) Both (recommended)');
+    const clientAns = (await rl.question('  Choose [3]: ')).trim() || '3';
+    const forCode    = clientAns === '1' || clientAns === '3';
+    const forDesktop = clientAns === '2' || clientAns === '3';
     console.log('');
 
-    // 3. Detect running process
+    // 3. Scope (Claude Code only)
+    let global_ = true;
+    const projectPath = process.cwd();
+    if (forCode) {
+      console.log('  Claude Code scope:');
+      console.log('    1) Global (all sessions)');
+      console.log('    2) Current project only');
+      const scopeAns = await rl.question('  Choose [1]: ');
+      global_ = (scopeAns.trim() || '1') !== '2';
+      console.log(`  Scope: ${global_ ? 'global' : `project (${projectPath})`}`);
+      console.log('');
+    }
+
+    // 4. Detect running process
     const { url: detectedUrl, token: detectedToken } = detectRunningProcess();
     if (detectedUrl) console.log(`  Detected running wavs-mcp at ${detectedUrl}`);
 
-    // 4. URL
+    // 5. URL
     const url = await ask('wavs-mcp URL', detectedUrl || 'http://localhost:8000');
 
-    // 5. Token
+    // 6. Token
     let token = detectedToken;
     if (!token) {
       token = await ask('Token (--token)', null, true);
@@ -265,7 +307,7 @@ export default async function main() {
     }
     console.log('');
 
-    // 6. Credentials
+    // 7. Credentials
     console.log('  Checking ~/.wavs/wavs.toml for chain credentials ...');
     const { cred: existingCred, mnem: existingMnem } = readWavsToml();
     let cred = existingCred;
@@ -289,25 +331,33 @@ export default async function main() {
     }
     console.log('');
 
-    // 7. Write ~/.wavs/wavs.toml
+    // 8. Write ~/.wavs/wavs.toml
     if (cred || mnem) {
       writeWavsToml(cred || null, mnem || null);
       console.log('  Credentials written to ~/.wavs/wavs.toml');
     }
 
-    // 8. Install skill files
-    const skInstalled = installSkillFiles();
-    if (skInstalled) console.log('  Skill files installed to ~/.claude/skills/wavs/');
+    const mcpArgs = ['--wavs-url', url, '--token', token];
 
-    // 9. Write ~/.claude.json
-    const args = ['--wavs-url', url, '--token', token];
-    writeClaudeJson(projectPath, binary, args, global_);
-    console.log('  MCP server entry written to ~/.claude.json');
+    // 9. Claude Code
+    if (forCode) {
+      const skInstalled = installSkillFiles();
+      if (skInstalled) console.log('  Skill files installed to ~/.claude/skills/wavs/');
+      writeClaudeJson(projectPath, binary, mcpArgs, global_);
+      console.log('  Claude Code: MCP server written to ~/.claude.json');
+    }
 
-    // 10. Summary
+    // 10. Claude Desktop
+    if (forDesktop) {
+      writeDesktopConfig(binary, mcpArgs);
+      console.log(`  Claude Desktop: MCP server written to ${desktopConfigPath()}`);
+    }
+
+    // 11. Summary
     console.log('');
     console.log('  Done!');
-    console.log('  Restart Claude Code to pick up changes.');
+    if (forCode)    console.log('  Restart Claude Code to pick up changes.');
+    if (forDesktop) console.log('  Restart Claude Desktop to pick up changes.');
     console.log('');
   } finally {
     rl.close();
