@@ -76,7 +76,7 @@ jobs:
   # Publish the npm package once all binaries are uploaded
   # -------------------------------------------------------------------------
   publish-npm:
-    name: Publish @lay3rlabs/wavs-mcp to npm
+    name: Publish @wavs/mcp to npm
     needs: build
     runs-on: ubuntu-latest
 
@@ -98,10 +98,10 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://registry.npmjs.org/@lay3rlabs/wavs-mcp/$VERSION")
+            "https://registry.npmjs.org/@wavs/mcp/$VERSION")
           if [ "$HTTP_STATUS" = "200" ]; then
             echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Package @lay3rlabs/wavs-mcp@$VERSION already exists on npm"
+            echo "Package @wavs/mcp@$VERSION already exists on npm"
           else
             echo "exists=false" >> $GITHUB_OUTPUT
           fi

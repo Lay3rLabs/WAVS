@@ -18,12 +18,12 @@ WAVS runs off-chain computation as sandboxed WebAssembly (WASI) components trigg
 
 The `wavs:` MCP tools below require `wavs-mcp` to be running and registered with Claude Code.
 
-**Register with Claude Code (works from any project, no WAVS repo needed)**
+**One-command setup (recommended)**
 ```bash
-python3 ~/.claude/skills/wavs/setup_claude_mcp.py [/path/to/project]
+npx @wavs/mcp@latest
 ```
-This also writes `~/.wavs/wavs.toml` with your chain credentials so chain-write
-tools work from any project directory.
+Interactive wizard: installs the binary, prompts for URL + token + credentials,
+writes `~/.claude.json` and `~/.wavs/wavs.toml`, installs skill files.
 
 **Using the WAVS desktop app**
 The app auto-starts `wavs-mcp`. Use the "Register with Claude Code" button in
@@ -42,8 +42,8 @@ just start-wavs-dev
 # 2. Run wavs-mcp (in a separate terminal)
 ./target/release/wavs-mcp --wavs-url http://localhost:8000 --token <token>
 
-# 3. Register with Claude Code for your project
-python3 ~/.claude/skills/wavs/setup_claude_mcp.py /path/to/your-project
+# 3. Register with Claude Code
+npx @wavs/mcp@latest
 ```
 
 > **Local tools** (`scaffold_component`, `build_component`, `get_wit_interface`) work without MCP — useful for component development without a running node.

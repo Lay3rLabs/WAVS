@@ -440,10 +440,9 @@ install-claude-skill:
     @echo "WAVS skill installed to ~/.claude/skills/wavs"
     @echo "Restart Claude Code to pick up the skill."
 
-# Register wavs-mcp with Claude Code for a project (default: current dir)
-# Usage: just setup-claude-mcp [/path/to/project]
-setup-claude-mcp project=`pwd`:
-    @python3 .claude/skills/wavs/setup_claude_mcp.py "{{project}}"
+# Register wavs-mcp with Claude Code (interactive wizard)
+setup-claude-mcp:
+    @node packages/wavs-mcp/bin/setup.mjs
 
 debug:
     cargo test --package wavs --features dev --test aggregator_tests send_to_self
