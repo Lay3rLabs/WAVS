@@ -49,7 +49,6 @@ pub async fn try_execute_component<D: DeserializeOwned>(
     let mut wt_config = WTConfig::new();
 
     wt_config.wasm_component_model(true);
-    wt_config.async_support(true);
     wt_config.consume_fuel(true);
 
     let engine = WTEngine::new(&wt_config).unwrap();

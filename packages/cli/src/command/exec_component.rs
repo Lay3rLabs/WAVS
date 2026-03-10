@@ -109,10 +109,10 @@ impl ExecComponent {
 
         let mut wt_config = WTConfig::new();
         wt_config.wasm_component_model(true);
-        wt_config.async_support(true);
         wt_config.consume_fuel(true);
 
         let engine = WTEngine::new(&wt_config)
+            .map_err(anyhow::Error::from)
             .context("Failed to create Wasmtime engine with the specified configuration")?;
 
         // Automatically pick up all env vars with the WAVS_ENV_PREFIX

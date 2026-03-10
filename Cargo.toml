@@ -139,13 +139,17 @@ alloy-eip2930 = "=0.2.1"
 alloy-eip7702 = "=0.6.1"
 alloy-json-rpc = "=1.6.3"
 
-layer-climb = "0.8.3"
-layer-climb-address = { version = "0.8.3", features = [
+layer-climb = "0.9.0"
+layer-climb-address = { version = "0.9.0", features = [
     "cw-storage",
     "openapi",
 ] }
-layer-climb-config = "0.8.3"
-layer-climb-cli = "0.8.3"
+layer-climb-config = "0.9.0"
+layer-climb-cli = "0.9.0"
+
+
+# Cosmos-specific dependencies
+
 
 # Cosmos-specific dependencies
 cosmwasm-schema = "3.0.2"
@@ -156,16 +160,16 @@ cw2 = "3.0.0"
 # WASM and WIT bindings
 wasm-pkg-client = "0.12.0"
 wasm-pkg-common = "0.12.0"
-wasmtime = { version = "38.0.3", features = [
+wasmtime = { version = "42.0.1", features = [
     "cache",
     "component-model",
     "runtime",
     "std",
 ] }
-wasmtime-wasi = { version = "38.0.3", default-features = true }
-wasmtime-wasi-http = "38.0.3"
-wasmtime-wasi-tls = "38.0.3"
-wit-bindgen = "0.46.0"
+wasmtime-wasi = { version = "42.0.1", default-features = true }
+wasmtime-wasi-http = "42.0.1"
+wasmtime-wasi-tls = "42.0.1"
+wit-bindgen = "0.53.1"
 wavs-wasi-utils = { path = "packages/wasi-utils" }
 wasip2 = "1.0.1"
 wstd = "0.6.5"

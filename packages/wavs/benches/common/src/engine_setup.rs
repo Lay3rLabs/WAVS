@@ -29,7 +29,6 @@ impl EngineSetup {
         // Create wasmtime engine
         let mut wt_config = wasmtime::Config::new();
         wt_config.wasm_component_model(true);
-        wt_config.async_support(true);
         wt_config.consume_fuel(true);
         wt_config.epoch_interruption(true);
         let engine = WTEngine::new(&wt_config).unwrap();
