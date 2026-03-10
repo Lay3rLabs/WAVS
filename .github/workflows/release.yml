@@ -27,6 +27,27 @@ jobs:
       - name: Checkout the repo
         uses: actions/checkout@v4
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Install wkg
+        run: cargo install wkg
+
+      - name: Configure wasm-pkg registry
+        run: |
+          mkdir -p ~/.config/wasm-pkg
+          cat > ~/.config/wasm-pkg/config.toml << 'EOF'
+          default_registry = "wa.dev"
+          EOF
+
+      - name: Fetch WIT dependencies
+        run: |
+          cd wit-definitions/types && wkg wit fetch
+          cd ../../wit-definitions/operator && wkg wit fetch
+          cd ../../wit-definitions/aggregator && wkg wit fetch
+
       - name: Set IMAGE_TAG
         shell: bash
         run: |
@@ -67,6 +88,27 @@ jobs:
     steps:
       - name: Checkout the repo
         uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Install wkg
+        run: cargo install wkg
+
+      - name: Configure wasm-pkg registry
+        run: |
+          mkdir -p ~/.config/wasm-pkg
+          cat > ~/.config/wasm-pkg/config.toml << 'EOF'
+          default_registry = "wa.dev"
+          EOF
+
+      - name: Fetch WIT dependencies
+        run: |
+          cd wit-definitions/types && wkg wit fetch
+          cd ../../wit-definitions/operator && wkg wit fetch
+          cd ../../wit-definitions/aggregator && wkg wit fetch
 
       - name: Set IMAGE_TAG
         shell: bash
