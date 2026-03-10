@@ -166,8 +166,8 @@ jobs:
       - name: Install wkg
         run: cargo install wkg
 
-      - name: Build WASI components with wasi-builder image
-        run: just wasi-build-native
+      - name: Build WASI components
+        run: just wasi-build
 
       - name: Check if checksums.txt changed
         run: git diff --exit-code -- checksums.txt

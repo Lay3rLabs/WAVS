@@ -28,7 +28,6 @@ async fn do_it(kind: impl ToString) {
 
     wt_config.wasm_component_model(true);
     wt_config.epoch_interruption(true);
-    wt_config.async_support(true);
     wt_config.consume_fuel(true);
 
     let engine = WTEngine::new(&wt_config).unwrap();

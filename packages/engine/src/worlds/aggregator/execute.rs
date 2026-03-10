@@ -31,13 +31,13 @@ pub async fn execute_input(
                 deps.linker.as_aggregator_ref(),
             )
             .await
-            .map_err(EngineError::Instantiate)?
+            .map_err(|e| EngineError::Instantiate(e.into()))?
             .call_process_input(deps.store.as_aggregator_mut(), &wit_input)
             .await
             .map_err(|e| match e.downcast_ref::<Trap>() {
                 Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
                 Some(t) if *t == Trap::Interrupt => EngineError::OutOfTime(service_id, workflow_id),
-                _ => EngineError::ComponentError(e),
+                _ => EngineError::ComponentError(e.into()),
             })?
             .map_err(|error| {
                 EngineError::ExecResult(format!("Process packet execution failed: {}", error))
@@ -66,13 +66,13 @@ pub async fn execute_timer_callback(
                 deps.linker.as_aggregator_ref(),
             )
             .await
-            .map_err(EngineError::Instantiate)?
+            .map_err(|e| EngineError::Instantiate(e.into()))?
             .call_handle_timer_callback(deps.store.as_aggregator_mut(), &wit_input)
             .await
             .map_err(|e| match e.downcast_ref::<Trap>() {
                 Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
                 Some(t) if *t == Trap::Interrupt => EngineError::OutOfTime(service_id, workflow_id),
-                _ => EngineError::ComponentError(e),
+                _ => EngineError::ComponentError(e.into()),
             })?
             .map_err(|error| {
                 EngineError::ExecResult(format!("Timer callback execution failed: {}", error))
@@ -103,13 +103,13 @@ pub async fn execute_submit_callback(
                 deps.linker.as_aggregator_ref(),
             )
             .await
-            .map_err(EngineError::Instantiate)?
+            .map_err(|e| EngineError::Instantiate(e.into()))?
             .call_handle_submit_callback(deps.store.as_aggregator_mut(), &wit_input, wit_tx_result)
             .await
             .map_err(|e| match e.downcast_ref::<Trap>() {
                 Some(t) if *t == Trap::OutOfFuel => EngineError::OutOfFuel(service_id, workflow_id),
                 Some(t) if *t == Trap::Interrupt => EngineError::OutOfTime(service_id, workflow_id),
-                _ => EngineError::ComponentError(e),
+                _ => EngineError::ComponentError(e.into()),
             })?
             .map_err(|error| {
                 EngineError::ExecResult(format!("Submit callback execution failed: {}", error))
