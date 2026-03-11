@@ -329,6 +329,7 @@ pub async fn cmd_pause_service(
     wavs_instance
         .dispatcher()?
         .pause_service(service_id)
+        .await
         .map_err(|e| AppError::Service(format!("Failed to pause service: {}", e)))?;
     Ok(())
 }
@@ -342,6 +343,7 @@ pub async fn cmd_resume_service(
     wavs_instance
         .dispatcher()?
         .resume_service(service_id)
+        .await
         .map_err(|e| AppError::Service(format!("Failed to resume service: {}", e)))?;
     Ok(())
 }
