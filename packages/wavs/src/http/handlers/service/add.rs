@@ -1,22 +1,29 @@
 use axum::{extract::State, response::IntoResponse, Json};
 use reqwest::StatusCode;
+use serde::Serialize;
+use utoipa::ToSchema;
 
 use crate::http::{
     error::HttpResult, handlers::service::get::get_service_inner_hash, state::HttpState,
 };
-use wavs_types::{AddServiceRequest, ServiceManager};
+use wavs_types::{AddServiceRequest, ServiceId, ServiceManager};
+
+#[derive(Serialize, ToSchema)]
+struct AddServiceResponse {
+    service_id: ServiceId,
+}
 
 #[utoipa::path(
     post,
     path = "/services",
     request_body = AddServiceRequest,
     responses(
-        (status = 204, description = "Service successfully added"),
+        (status = 200, description = "Service successfully added", body = AddServiceResponse),
         (status = 400, description = "Invalid service configuration"),
         (status = 409, description = "Service already exists"),
         (status = 500, description = "Internal server error")
     ),
-    description = "Registers a new service with WAVS"
+    description = "Registers a new service with WAVS. Returns the service_id for use with /dev/logs and other service endpoints."
 )]
 #[axum::debug_handler]
 pub async fn handle_add_service(
@@ -24,17 +31,20 @@ pub async fn handle_add_service(
     Json(req): Json<AddServiceRequest>,
 ) -> impl IntoResponse {
     match add_service_inner(state, req.service_manager).await {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(service_id) => (StatusCode::OK, Json(AddServiceResponse { service_id })).into_response(),
         Err(e) => e.into_response(),
     }
 }
 
-async fn add_service_inner(state: HttpState, service_manager: ServiceManager) -> HttpResult<()> {
-    state.dispatcher.add_service(service_manager).await?;
+async fn add_service_inner(
+    state: HttpState,
+    service_manager: ServiceManager,
+) -> HttpResult<ServiceId> {
+    let service = state.dispatcher.add_service(service_manager).await?;
 
     state.metrics.increment_registered_services();
 
-    Ok(())
+    Ok(service.id())
 }
 
 #[utoipa::path(
