@@ -108,11 +108,11 @@ impl EngineSetup {
 
     /// Create a new InstanceDeps for execution
     pub fn create_instance_deps(&self, trigger_action: &TriggerAction) -> InstanceDeps {
-        let log = HostComponentLogger::OperatorHostComponentLogger(
+        let log = HostComponentLogger::OperatorHostComponentLogger(Arc::new(
             |_service_id, _workflow_id, _digest, _level, _message| {
                 // No-op logger for benchmarks
             },
-        );
+        ));
 
         let builder = InstanceDepsBuilder {
             component: self.component.clone(),

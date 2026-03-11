@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use utils::storage::db::WavsDb;
 use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, Engine as WTEngine};
 use wavs_engine::{
@@ -49,7 +51,7 @@ pub async fn execute_aggregator_component(
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),
         chain_configs: &chain_configs,
-        log: HostComponentLogger::AggregatorHostComponentLogger(log_aggregator),
+        log: HostComponentLogger::AggregatorHostComponentLogger(Arc::new(log_aggregator)),
         keyvalue_ctx,
     }
     .build()

@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    sync::Arc,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -208,7 +209,7 @@ impl ExecComponent {
             engine: &engine,
             data_dir: tempfile::tempdir()?.keep(),
             chain_configs: &cli_config.chains.read().unwrap(),
-            log: HostComponentLogger::OperatorHostComponentLogger(log_wasi),
+            log: HostComponentLogger::OperatorHostComponentLogger(Arc::new(log_wasi)),
             keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
                 WavsDb::new().unwrap(),
                 "exec_component".to_string(),

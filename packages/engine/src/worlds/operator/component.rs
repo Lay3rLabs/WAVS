@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wasmtime_wasi_tls::WasiTlsCtx;
@@ -6,9 +8,11 @@ use wavs_types::{ChainConfigs, ComponentDigest, Service, ServiceId, TriggerData,
 use crate::backend::wasi_keyvalue::context::KeyValueCtx;
 use crate::bindings::operator::world::host::LogLevel;
 
-// This is defined separately because LogLevel comes from bindings
+// This is defined separately because LogLevel comes from bindings.
+// Using Arc<dyn Fn> instead of a bare fn pointer allows callers to capture
+// context (e.g. a ComponentLogBuffer) in the logger callback.
 pub type OperatorHostComponentLogger =
-    fn(&ServiceId, &WorkflowId, &ComponentDigest, LogLevel, String);
+    Arc<dyn Fn(&ServiceId, &WorkflowId, &ComponentDigest, LogLevel, String) + Send + Sync>;
 
 // TODO: revisit this an understand it.
 // Copied blindly from old code

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wasmtime_wasi_tls::WasiTlsCtx;
@@ -7,8 +9,10 @@ use crate::{
     backend::wasi_keyvalue::context::KeyValueCtx, bindings::aggregator::world::host::LogLevel,
 };
 
+// Using Arc<dyn Fn> instead of a bare fn pointer allows callers to capture
+// context (e.g. a ComponentLogBuffer) in the logger callback.
 pub type AggregatorHostComponentLogger =
-    fn(&ServiceId, &WorkflowId, &ComponentDigest, LogLevel, String);
+    Arc<dyn Fn(&ServiceId, &WorkflowId, &ComponentDigest, LogLevel, String) + Send + Sync>;
 
 pub struct AggregatorHostComponent {
     pub service: Service,

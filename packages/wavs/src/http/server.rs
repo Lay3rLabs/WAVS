@@ -29,6 +29,7 @@ use super::{
         handle_info, handle_list_services, handle_not_found, handle_p2p_status,
         handle_upload_component,
         kv::{handle_get_kv, handle_list_kv},
+        logs::{handle_get_logs, handle_get_logs_by_event},
         openapi::ApiDoc,
         service::{
             get::handle_get_service,
@@ -128,7 +129,12 @@ pub async fn make_router(
             .route("/dev/kv/{service_id}/{bucket}/{key}", get(handle_get_kv))
             .route("/dev/kv/{service_id}", get(handle_list_kv))
             .route("/dev/fs/{service_id}", get(handle_fs_root))
-            .route("/dev/fs/{service_id}/{*path}", get(handle_fs));
+            .route("/dev/fs/{service_id}/{*path}", get(handle_fs))
+            .route("/dev/logs/{service_id}", get(handle_get_logs))
+            .route(
+                "/dev/logs/{service_id}/events/{event_id}",
+                get(handle_get_logs_by_event),
+            );
 
         protected = protected
             .route("/dev/triggers", post(handle_debug_trigger))

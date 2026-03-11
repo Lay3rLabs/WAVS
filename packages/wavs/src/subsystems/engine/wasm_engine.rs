@@ -3,6 +3,9 @@ use std::time::Instant;
 use std::{path::Path, sync::RwLock};
 use tracing::{event, instrument, span};
 use utils::storage::db::WavsDb;
+use utils::storage::log_buffer::{
+    make_aggregator_log_entry, make_operator_log_entry, ComponentLogLevel,
+};
 use utils::telemetry::EngineMetrics;
 use wavs_engine::bindings::aggregator::world::wavs::types::chain::AnyTxHash;
 use wavs_engine::{
@@ -135,6 +138,24 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
 
+        let log_buffer = self.engine.db.component_logs.clone();
+        let op_logger = Arc::new(
+            move |svc_id: &ServiceId,
+                  wf_id: &WorkflowId,
+                  dgst: &ComponentDigest,
+                  level: wavs_engine::bindings::operator::world::host::LogLevel,
+                  message: String| {
+                let cl = map_operator_log_level(level);
+                // Push to in-process log buffer (queryable via GET /dev/logs/{service_id})
+                log_buffer.push(
+                    svc_id.clone(),
+                    make_operator_log_entry(svc_id, wf_id, dgst, cl.clone(), message.clone()),
+                );
+                // Also emit tracing event (existing behaviour)
+                log_to_tracing_operator(svc_id, wf_id, dgst, cl, &message);
+            },
+        );
+
         let mut instance_deps = InstanceDepsBuilder {
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
             service,
@@ -149,7 +170,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 .app_data_dir
                 .join(trigger_action.config.service_id.to_string()),
             chain_configs: &chain_configs,
-            log: HostComponentLogger::OperatorHostComponentLogger(log_operator),
+            log: HostComponentLogger::OperatorHostComponentLogger(op_logger),
         }
         .build()?;
 
@@ -427,6 +448,32 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
 
         let component = self.engine.load_component(&digest).await?;
 
+        let log_buffer = self.engine.db.component_logs.clone();
+        let event_id_for_log = event_id.clone();
+        let agg_logger = Arc::new(
+            move |svc_id: &ServiceId,
+                  wf_id: &WorkflowId,
+                  dgst: &ComponentDigest,
+                  level: wavs_engine::bindings::aggregator::world::host::LogLevel,
+                  message: String| {
+                let cl = map_aggregator_log_level(level);
+                // Push to in-process log buffer (queryable via GET /dev/logs/{service_id}/events/{event_id})
+                log_buffer.push(
+                    svc_id.clone(),
+                    make_aggregator_log_entry(
+                        svc_id,
+                        wf_id,
+                        dgst,
+                        &event_id_for_log,
+                        cl.clone(),
+                        message.clone(),
+                    ),
+                );
+                // Also emit tracing event (existing behaviour)
+                log_to_tracing_aggregator(svc_id, wf_id, dgst, cl, &message);
+            },
+        );
+
         let instance_deps = InstanceDepsBuilder {
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
             workflow_id: trigger_action.config.workflow_id.clone(),
@@ -438,7 +485,7 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 .app_data_dir
                 .join(trigger_action.config.service_id.to_string()),
             chain_configs: &chain_configs,
-            log: HostComponentLogger::AggregatorHostComponentLogger(log_aggregator),
+            log: HostComponentLogger::AggregatorHostComponentLogger(agg_logger),
             service,
         }
         .build()?;
@@ -482,71 +529,79 @@ struct AggregatorDeps {
     input: AggregatorInput,
 }
 
-fn log_operator(
-    service_id: &ServiceId,
-    workflow_id: &WorkflowId,
-    digest: &ComponentDigest,
+/// Map the operator WIT `LogLevel` to our canonical `ComponentLogLevel`.
+fn map_operator_log_level(
     level: wavs_engine::bindings::operator::world::host::LogLevel,
-    message: String,
-) {
-    let span = span!(
-        tracing::Level::INFO,
-        "component_log",
-        service_id = %service_id,
-        workflow_id = %workflow_id,
-        digest = %digest
-    );
-
+) -> ComponentLogLevel {
+    use wavs_engine::bindings::operator::world::host::LogLevel;
     match level {
-        wavs_engine::bindings::operator::world::host::LogLevel::Error => {
-            event!(parent: &span, tracing::Level::ERROR, "{}", message)
-        }
-        wavs_engine::bindings::operator::world::host::LogLevel::Warn => {
-            event!(parent: &span, tracing::Level::WARN, "{}", message)
-        }
-        wavs_engine::bindings::operator::world::host::LogLevel::Info => {
-            event!(parent: &span, tracing::Level::INFO, "{}", message)
-        }
-        wavs_engine::bindings::operator::world::host::LogLevel::Debug => {
-            event!(parent: &span, tracing::Level::DEBUG, "{}", message)
-        }
-        wavs_engine::bindings::operator::world::host::LogLevel::Trace => {
-            event!(parent: &span, tracing::Level::TRACE, "{}", message)
-        }
+        LogLevel::Error => ComponentLogLevel::Error,
+        LogLevel::Warn => ComponentLogLevel::Warn,
+        LogLevel::Info => ComponentLogLevel::Info,
+        LogLevel::Debug => ComponentLogLevel::Debug,
+        LogLevel::Trace => ComponentLogLevel::Trace,
     }
 }
 
-fn log_aggregator(
+/// Map the aggregator WIT `LogLevel` to our canonical `ComponentLogLevel`.
+fn map_aggregator_log_level(
+    level: wavs_engine::bindings::aggregator::world::host::LogLevel,
+) -> ComponentLogLevel {
+    use wavs_engine::bindings::aggregator::world::host::LogLevel;
+    match level {
+        LogLevel::Error => ComponentLogLevel::Error,
+        LogLevel::Warn => ComponentLogLevel::Warn,
+        LogLevel::Info => ComponentLogLevel::Info,
+        LogLevel::Debug => ComponentLogLevel::Debug,
+        LogLevel::Trace => ComponentLogLevel::Trace,
+    }
+}
+
+/// Emit a structured tracing event for an operator component log message.
+fn log_to_tracing_operator(
     service_id: &ServiceId,
     workflow_id: &WorkflowId,
     digest: &ComponentDigest,
-    level: wavs_engine::bindings::aggregator::world::host::LogLevel,
-    message: String,
+    level: ComponentLogLevel,
+    message: &str,
 ) {
-    let span = span!(
+    let sp = span!(
         tracing::Level::INFO,
         "component_log",
         service_id = %service_id,
         workflow_id = %workflow_id,
         digest = %digest
     );
-
     match level {
-        wavs_engine::bindings::aggregator::world::host::LogLevel::Error => {
-            event!(parent: &span, tracing::Level::ERROR, "{}", message)
-        }
-        wavs_engine::bindings::aggregator::world::host::LogLevel::Warn => {
-            event!(parent: &span, tracing::Level::WARN, "{}", message)
-        }
-        wavs_engine::bindings::aggregator::world::host::LogLevel::Info => {
-            event!(parent: &span, tracing::Level::INFO, "{}", message)
-        }
-        wavs_engine::bindings::aggregator::world::host::LogLevel::Debug => {
-            event!(parent: &span, tracing::Level::DEBUG, "{}", message)
-        }
-        wavs_engine::bindings::aggregator::world::host::LogLevel::Trace => {
-            event!(parent: &span, tracing::Level::TRACE, "{}", message)
-        }
+        ComponentLogLevel::Error => event!(parent: &sp, tracing::Level::ERROR, "{}", message),
+        ComponentLogLevel::Warn => event!(parent: &sp, tracing::Level::WARN, "{}", message),
+        ComponentLogLevel::Info => event!(parent: &sp, tracing::Level::INFO, "{}", message),
+        ComponentLogLevel::Debug => event!(parent: &sp, tracing::Level::DEBUG, "{}", message),
+        ComponentLogLevel::Trace => event!(parent: &sp, tracing::Level::TRACE, "{}", message),
+    }
+}
+
+/// Emit a structured tracing event for an aggregator component log message.
+fn log_to_tracing_aggregator(
+    service_id: &ServiceId,
+    workflow_id: &WorkflowId,
+    digest: &ComponentDigest,
+    level: ComponentLogLevel,
+    message: &str,
+) {
+    let sp = span!(
+        tracing::Level::INFO,
+        "component_log",
+        service_id = %service_id,
+        workflow_id = %workflow_id,
+        digest = %digest
+    );
+    match level {
+        ComponentLogLevel::Error => event!(parent: &sp, tracing::Level::ERROR, "{}", message),
+        ComponentLogLevel::Warn => event!(parent: &sp, tracing::Level::WARN, "{}", message),
+        ComponentLogLevel::Info => event!(parent: &sp, tracing::Level::INFO, "{}", message),
+        ComponentLogLevel::Debug => event!(parent: &sp, tracing::Level::DEBUG, "{}", message),
+        ComponentLogLevel::Trace => event!(parent: &sp, tracing::Level::TRACE, "{}", message),
     }
 }
 

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use std::time::Instant;
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_engine::worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder};
@@ -130,7 +131,7 @@ impl ExecAggregator {
             engine: &engine,
             data_dir: tempfile::tempdir()?.keep(),
             chain_configs: &cli_config.chains.read().unwrap(),
-            log: HostComponentLogger::AggregatorHostComponentLogger(
+            log: HostComponentLogger::AggregatorHostComponentLogger(Arc::new(
                 |_service_id, _workflow_id, _digest, level, message| {
                     match level {
                 wavs_engine::bindings::aggregator::world::wavs::types::core::LogLevel::Error => {
@@ -150,7 +151,7 @@ impl ExecAggregator {
                 }
             }
                 },
-            ),
+            )),
             keyvalue_ctx: wavs_engine::backend::wasi_keyvalue::context::KeyValueCtx::new(
                 utils::storage::db::WavsDb::new()?,
                 service.id().to_string(),

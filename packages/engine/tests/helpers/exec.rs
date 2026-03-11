@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use alloy_sol_types::SolValue;
 use serde::{de::DeserializeOwned, Serialize};
@@ -96,7 +97,7 @@ pub async fn try_execute_component_raw(
         engine: &engine,
         data_dir: data_dir.path().to_path_buf(),
         chain_configs: &Default::default(),
-        log: HostComponentLogger::OperatorHostComponentLogger(log_wasi),
+        log: HostComponentLogger::OperatorHostComponentLogger(Arc::new(log_wasi)),
         keyvalue_ctx,
     }
     .build()

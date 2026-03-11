@@ -7,6 +7,8 @@ use tracing::instrument;
 
 use wavs_types::{QuorumQueue, QuorumQueueId, Service, ServiceId};
 
+use super::log_buffer::ComponentLogBuffer;
+
 /// Main database struct with hardcoded tables for better type safety and performance
 #[derive(Clone)]
 pub struct WavsDb {
@@ -16,6 +18,9 @@ pub struct WavsDb {
     pub quorum_queues: WavsDbTable<QuorumQueueId, QuorumQueue>,
     pub kv_store: WavsDbTable<String, Vec<u8>>,
     pub kv_atomics_counter: WavsDbTable<String, i64>,
+    /// Bounded in-memory ring buffer of component log entries.
+    /// All clones of `WavsDb` share the same underlying buffer (Arc-backed).
+    pub component_logs: ComponentLogBuffer,
 }
 
 impl WavsDb {
@@ -30,6 +35,7 @@ impl WavsDb {
             quorum_queues: WavsDbTable::new()?,
             kv_store: WavsDbTable::new()?,
             kv_atomics_counter: WavsDbTable::new()?,
+            component_logs: ComponentLogBuffer::default(),
         })
     }
 }
