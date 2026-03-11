@@ -36,6 +36,17 @@ function LogsIcon() {
   );
 }
 
+// Components — cube / box outline
+function ComponentsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+      <path d="M8 1 L14 4.5 L14 11.5 L8 15 L2 11.5 L2 4.5 Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <line x1="8" y1="1" x2="8" y2="15" stroke="currentColor" strokeWidth="1.4" />
+      <line x1="2" y1="4.5" x2="14" y2="4.5" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
 // Settings — horizontal sliders with knobs
 function SettingsIcon() {
   return (
@@ -51,10 +62,11 @@ function SettingsIcon() {
 }
 
 const navItems: { path: string; label: string; icon: ReactNode }[] = [
-  { path: '/services', label: 'Services', icon: <ServicesIcon /> },
-  { path: '/activity', label: 'Activity', icon: <ActivityIcon /> },
-  { path: '/logs',     label: 'Logs',     icon: <LogsIcon /> },
-  { path: '/settings', label: 'Settings', icon: <SettingsIcon /> },
+  { path: '/services',    label: 'Services',    icon: <ServicesIcon /> },
+  { path: '/components',  label: 'Components',  icon: <ComponentsIcon /> },
+  { path: '/activity',    label: 'Activity',    icon: <ActivityIcon /> },
+  { path: '/logs',        label: 'Logs',        icon: <LogsIcon /> },
+  { path: '/settings',    label: 'Settings',    icon: <SettingsIcon /> },
 ];
 
 export function Header() {

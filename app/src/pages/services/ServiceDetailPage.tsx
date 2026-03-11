@@ -19,12 +19,13 @@ import {
 import { getPublicClient, getAddress } from '../../hooks/useViemClient';
 import { connectToRegistry, fetchOperators } from '../../utils/evm';
 import { getServiceAddress, getServiceChain, getErrorMessage, buildServiceMap } from '../../types';
-import type { Service, KvEntry, FsEntry } from '../../types';
+import type { Service, KvEntry, FsEntry, Workflow, AllowedHostPermission } from '../../types';
 import type { Address } from 'viem';
 import { getRegistryKeyFromParams } from './ServicesLayout';
 
 const REGISTRY_TABS = [
   { key: 'workflows', label: 'Workflows' },
+  { key: 'components', label: 'Components' },
   { key: 'activity', label: 'Activity' },
   { key: 'operators', label: 'Operators' },
   { key: 'storage', label: 'Storage' },
@@ -32,6 +33,7 @@ const REGISTRY_TABS = [
 
 const SERVICE_TABS = [
   { key: 'workflows', label: 'Workflows' },
+  { key: 'components', label: 'Components' },
   { key: 'activity', label: 'Activity' },
   { key: 'storage', label: 'Storage' },
 ];
@@ -280,6 +282,141 @@ function FsBrowser({ serviceId }: { serviceId: string }) {
             ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Components Tab ────────────────────────────────────────────────────────────
+
+function formatHosts(hosts: AllowedHostPermission): string {
+  if (hosts === 'all') return 'all';
+  if (hosts === 'none') return 'none';
+  return hosts.only.join(', ');
+}
+
+function PermRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-tan-muted">{label}:</span>
+      <span className="text-beige-warm">{value}</span>
+    </div>
+  );
+}
+
+function ComponentsTab({ workflows }: { workflows: Record<string, Workflow> }) {
+  const entries = Object.entries(workflows);
+
+  if (entries.length === 0) {
+    return <p className="text-tan-muted italic">No components defined.</p>;
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {entries.map(([workflowId, workflow]) => {
+        const { component } = workflow;
+        const { source } = component;
+
+        let sourceType: string;
+        let digest: string;
+        if ('download' in source) {
+          sourceType = 'Download';
+          digest = source.download.digest;
+        } else if ('registry' in source) {
+          sourceType = 'Registry';
+          digest = source.registry.digest;
+        } else {
+          sourceType = 'Digest';
+          digest = source.digest;
+        }
+
+        const configKeys = Object.keys(component.config);
+
+        return (
+          <div key={workflowId} className="p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
+            <div className="flex items-center gap-2 mb-3">
+              <h4 className="text-beige-light font-medium">Workflow: {workflowId}</h4>
+              <span className="px-1.5 py-0.5 text-xs font-medium bg-charcoal-light text-beige-warm rounded">{sourceType}</span>
+            </div>
+
+            <div className="flex flex-col gap-2 text-sm">
+              <div className="flex items-baseline gap-2">
+                <span className="text-tan-muted min-w-24">Digest:</span>
+                <AddressDisplay address={digest} />
+              </div>
+
+              {'registry' in source && (
+                <>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-tan-muted min-w-24">Package:</span>
+                    <span className="text-beige-warm font-mono">
+                      {source.registry.package}{source.registry.version ? `@${source.registry.version}` : ''}
+                    </span>
+                  </div>
+                  {source.registry.domain && (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-tan-muted min-w-24">Domain:</span>
+                      <span className="text-beige-warm">{source.registry.domain}</span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {'download' in source && (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-tan-muted min-w-24">URI:</span>
+                  <AddressDisplay address={source.download.uri} />
+                </div>
+              )}
+
+              <div className="border-t border-charcoal-light pt-2 mt-1">
+                <p className="text-tan-muted text-xs font-medium mb-2">Permissions</p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                  <PermRow label="HTTP Hosts" value={formatHosts(component.permissions.allowed_http_hosts)} />
+                  <PermRow label="File System" value={component.permissions.file_system ? 'yes' : 'no'} />
+                  <PermRow label="Raw Sockets" value={component.permissions.raw_sockets ? 'yes' : 'no'} />
+                  <PermRow label="DNS Resolution" value={component.permissions.dns_resolution ? 'yes' : 'no'} />
+                </div>
+              </div>
+
+              {(component.fuel_limit != null || component.time_limit_seconds != null) && (
+                <div className="border-t border-charcoal-light pt-2 mt-1">
+                  <p className="text-tan-muted text-xs font-medium mb-2">Resource Limits</p>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    {component.fuel_limit != null && (
+                      <PermRow label="Fuel" value={component.fuel_limit.toLocaleString()} />
+                    )}
+                    {component.time_limit_seconds != null && (
+                      <PermRow label="Time" value={`${component.time_limit_seconds}s`} />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {configKeys.length > 0 && (
+                <div className="border-t border-charcoal-light pt-2 mt-1">
+                  <p className="text-tan-muted text-xs font-medium mb-2">Config</p>
+                  <div className="flex flex-wrap gap-1">
+                    {configKeys.map((k) => (
+                      <span key={k} className="px-1.5 py-0.5 text-xs bg-charcoal-light text-beige-warm rounded font-mono">{k}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {component.env_keys.length > 0 && (
+                <div className="border-t border-charcoal-light pt-2 mt-1">
+                  <p className="text-tan-muted text-xs font-medium mb-2">Env Keys</p>
+                  <div className="flex flex-wrap gap-1">
+                    {component.env_keys.map((k) => (
+                      <span key={k} className="px-1.5 py-0.5 text-xs bg-charcoal-light text-beige-warm rounded font-mono">{k}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -589,6 +726,13 @@ export function ServiceDetailPage() {
             <WorkflowViewer workflows={service.workflows} />
           ) : (
             <p className="text-tan-muted italic">Register a service to see its workflows.</p>
+          )
+        )}
+        {activeTab === 'components' && (
+          service ? (
+            <ComponentsTab workflows={service.workflows} />
+          ) : (
+            <p className="text-tan-muted italic">Register a service to see its components.</p>
           )
         )}
         {activeTab === 'activity' && service && serviceHashId && (

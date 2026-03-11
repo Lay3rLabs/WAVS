@@ -9,6 +9,7 @@ import {
   NotFound,
   WalletSetup,
   Health,
+  ComponentsPage,
 } from './pages';
 import {
   ServicesLayout,
@@ -39,6 +40,7 @@ function MainAppContent() {
             <Route path=":chainId/:address" element={<ServiceDetailPage />} />
             <Route path=":chainId/:address/edit" element={<ServiceEditorPage />} />
           </Route>
+          <Route path="/components" element={<ComponentsPage />} />
           <Route path="/activity" element={<Activity />} />
           <Route path="/triggers" element={<Navigate to="/activity" replace />} />
           <Route path="/submissions" element={<Navigate to="/activity" replace />} />
