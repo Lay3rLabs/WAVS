@@ -30,7 +30,7 @@ async fn fetch_response(uri: &UriStr, ipfs_gateway: &str) -> Result<reqwest::Res
         }
     };
 
-    tracing::info!("fetching service from {}", fetch_url);
+    tracing::debug!("fetching service from {}", fetch_url);
 
     // Fetch the data
     let response = client

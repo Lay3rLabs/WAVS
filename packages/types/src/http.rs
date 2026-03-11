@@ -41,7 +41,7 @@ pub struct DeleteServicesRequest {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
-pub struct PauseServiceRequest {
+pub struct ManageServiceRequest {
     pub service_manager: ServiceManager,
 }
 

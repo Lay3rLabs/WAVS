@@ -106,7 +106,7 @@ impl HttpState {
             ))
         }
     }
-    pub fn save_service_by_hash(&self, service: &Service) -> anyhow::Result<ServiceDigest> {
+    pub async fn save_service_by_hash(&self, service: &Service) -> anyhow::Result<ServiceDigest> {
         let service_hash = service.hash()?;
         let key: [u8; 32] = service_hash
             .as_ref()
@@ -117,11 +117,16 @@ impl HttpState {
             .insert(key, service.clone())?;
         // Persist to disk so service definitions survive node restarts (atomic write)
         let services_dir = self.config.data.join("dev_services");
-        std::fs::create_dir_all(&services_dir)?;
+        tokio::fs::create_dir_all(&services_dir).await?;
         let dest = services_dir.join(format!("{service_hash}.json"));
-        let tmp = tempfile::NamedTempFile::new_in(&services_dir)?;
-        std::fs::write(tmp.path(), serde_json::to_vec(service)?)?;
-        tmp.persist(dest)?;
+        let json = serde_json::to_vec(service)?;
+        tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+            let tmp = tempfile::NamedTempFile::new_in(&services_dir)?;
+            std::fs::write(tmp.path(), &json)?;
+            tmp.persist(dest)?;
+            Ok(())
+        })
+        .await??;
         Ok(service_hash)
     }
 }
