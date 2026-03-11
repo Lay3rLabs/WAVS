@@ -6,6 +6,7 @@ use axum::{
     Json,
 };
 use std::path::{Path as FsPath, PathBuf};
+use wavs_types::ServiceId;
 
 use crate::http::state::HttpState;
 
@@ -26,8 +27,8 @@ async fn safe_join(base: &FsPath, rel: &str) -> Option<PathBuf> {
     canonical.starts_with(base).then_some(canonical)
 }
 
-async fn handle_fs_inner(state: &HttpState, service_id: &str, rel_path: &str) -> impl IntoResponse {
-    let base = state.config.data.join("fs").join(service_id);
+async fn handle_fs_inner(state: &HttpState, service_id: &ServiceId, rel_path: &str) -> impl IntoResponse {
+    let base = state.config.data.join("fs").join(service_id.to_string());
 
     // Ensure the base exists (canonicalize requires the path to exist)
     if tokio::fs::metadata(&base).await.is_err() {
@@ -94,7 +95,10 @@ pub async fn handle_fs_root(
     State(state): State<HttpState>,
     Path(service_id): Path<String>,
 ) -> impl IntoResponse {
-    handle_fs_inner(&state, &service_id, "").await
+    let Ok(service_id) = service_id.parse::<ServiceId>() else {
+        return (StatusCode::BAD_REQUEST, "invalid service id").into_response();
+    };
+    handle_fs_inner(&state, &service_id, "").await.into_response()
 }
 
 /// List directory or serve file for a service's storage (with sub-path)
@@ -102,5 +106,8 @@ pub async fn handle_fs(
     State(state): State<HttpState>,
     Path((service_id, rel_path)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    handle_fs_inner(&state, &service_id, &rel_path).await
+    let Ok(service_id) = service_id.parse::<ServiceId>() else {
+        return (StatusCode::BAD_REQUEST, "invalid service id").into_response();
+    };
+    handle_fs_inner(&state, &service_id, &rel_path).await.into_response()
 }

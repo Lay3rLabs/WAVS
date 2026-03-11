@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use reqwest::{Client, Method};
 use serde_json::Value;
 use wavs_types::{
-    AddServiceRequest, DeleteServicesRequest, GetSignerRequest, PauseServiceRequest,
+    AddServiceRequest, DeleteServicesRequest, GetSignerRequest, ManageServiceRequest,
     SaveServiceResponse, ServiceManager, SignerResponse, SimulatedTriggerRequest,
     UploadComponentResponse,
 };
@@ -82,7 +82,7 @@ impl WavsClient {
     }
 
     pub async fn pause_service(&self, service_manager: ServiceManager) -> Result<()> {
-        let body = serde_json::to_string(&PauseServiceRequest { service_manager })?;
+        let body = serde_json::to_string(&ManageServiceRequest { service_manager })?;
         let resp = self
             .request(Method::POST, "/services/pause")
             .header("Content-Type", "application/json")
@@ -94,7 +94,7 @@ impl WavsClient {
     }
 
     pub async fn resume_service(&self, service_manager: ServiceManager) -> Result<()> {
-        let body = serde_json::to_string(&PauseServiceRequest { service_manager })?;
+        let body = serde_json::to_string(&ManageServiceRequest { service_manager })?;
         let resp = self
             .request(Method::POST, "/services/resume")
             .header("Content-Type", "application/json")

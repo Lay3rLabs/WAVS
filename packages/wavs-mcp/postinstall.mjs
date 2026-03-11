@@ -99,7 +99,6 @@ async function downloadBinary() {
       new Extract({
         cwd: binDir,
         filter: (p) => path.basename(p) === 'wavs-mcp' || path.basename(p) === 'wavs-mcp.exe',
-        strip: 1,
       })
     );
   } else {

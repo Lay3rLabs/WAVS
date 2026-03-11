@@ -1,12 +1,12 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 
 use crate::http::{error::HttpResult, state::HttpState};
-use wavs_types::{PauseServiceRequest, ServiceId};
+use wavs_types::{ManageServiceRequest, ServiceId};
 
 #[utoipa::path(
     post,
     path = "/services/pause",
-    request_body = PauseServiceRequest,
+    request_body = ManageServiceRequest,
     responses(
         (status = 204, description = "Service successfully paused"),
         (status = 404, description = "Service not found"),
@@ -17,7 +17,7 @@ use wavs_types::{PauseServiceRequest, ServiceId};
 #[axum::debug_handler]
 pub async fn handle_pause_service(
     State(state): State<HttpState>,
-    Json(req): Json<PauseServiceRequest>,
+    Json(req): Json<ManageServiceRequest>,
 ) -> impl IntoResponse {
     match pause_service_inner(state, req).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
@@ -25,7 +25,7 @@ pub async fn handle_pause_service(
     }
 }
 
-async fn pause_service_inner(state: HttpState, req: PauseServiceRequest) -> HttpResult<()> {
+async fn pause_service_inner(state: HttpState, req: ManageServiceRequest) -> HttpResult<()> {
     let id = ServiceId::from(&req.service_manager);
     state.dispatcher.pause_service(id)?;
     Ok(())
@@ -34,7 +34,7 @@ async fn pause_service_inner(state: HttpState, req: PauseServiceRequest) -> Http
 #[utoipa::path(
     post,
     path = "/services/resume",
-    request_body = PauseServiceRequest,
+    request_body = ManageServiceRequest,
     responses(
         (status = 204, description = "Service successfully resumed"),
         (status = 404, description = "Service not found"),
@@ -45,7 +45,7 @@ async fn pause_service_inner(state: HttpState, req: PauseServiceRequest) -> Http
 #[axum::debug_handler]
 pub async fn handle_resume_service(
     State(state): State<HttpState>,
-    Json(req): Json<PauseServiceRequest>,
+    Json(req): Json<ManageServiceRequest>,
 ) -> impl IntoResponse {
     match resume_service_inner(state, req).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
@@ -53,7 +53,7 @@ pub async fn handle_resume_service(
     }
 }
 
-async fn resume_service_inner(state: HttpState, req: PauseServiceRequest) -> HttpResult<()> {
+async fn resume_service_inner(state: HttpState, req: ManageServiceRequest) -> HttpResult<()> {
     let id = ServiceId::from(&req.service_manager);
     state.dispatcher.resume_service(id)?;
     Ok(())
