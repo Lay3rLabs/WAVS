@@ -1,5 +1,5 @@
 import { AddressDisplay } from '../atoms';
-import type { Workflow, WorkflowId, Trigger, Component, Submit, ComponentSource, AllowedHostPermission } from '../../types';
+import type { Workflow, WorkflowId, Trigger, Component, Submit, AllowedHostPermission } from '../../types';
 import { getTriggerLabel } from '../../types';
 
 interface WorkflowViewerProps {
@@ -29,7 +29,9 @@ function WorkflowCard({ workflowId, workflow }: { workflowId: string; workflow: 
 
       <div className="flex flex-col gap-4">
         <TriggerSection trigger={workflow.trigger} />
+        <div className="border-t border-charcoal-light" />
         <ComponentSection component={workflow.component} />
+        <div className="border-t border-charcoal-light" />
         <SubmitSection submit={workflow.submit} />
       </div>
     </div>
@@ -85,13 +87,48 @@ function TriggerSection({ trigger }: { trigger: Trigger }) {
 }
 
 function ComponentSection({ component }: { component: Component }) {
+  const source = component.source;
+  let sourceType: string;
+  let digest: string;
+  if ('download' in source) {
+    sourceType = 'Download';
+    digest = source.download.digest;
+  } else if ('registry' in source) {
+    sourceType = 'Registry';
+    digest = source.registry.digest;
+  } else {
+    sourceType = 'Digest';
+    digest = source.digest;
+  }
+
   return (
     <div>
       <h5 className="text-beige-warm text-sm font-medium mb-2">Component</h5>
       <div className="pl-3 flex flex-col gap-1 text-sm">
-        <InfoRow label="Source" value={formatSource(component.source)} />
+        <div className="flex items-center gap-2">
+          <span className="text-tan-muted">Type:</span>
+          <span className="px-1.5 py-0.5 text-xs font-medium bg-charcoal-light text-beige-warm rounded">{sourceType}</span>
+        </div>
+        {'registry' in source && (
+          <>
+            <InfoRow label="Package" value={`${source.registry.package}${source.registry.version ? `@${source.registry.version}` : ''}`} />
+            {source.registry.domain && <InfoRow label="Domain" value={source.registry.domain} />}
+          </>
+        )}
+        {'download' in source && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-tan-muted">URI:</span>
+            <AddressDisplay address={source.download.uri} />
+          </div>
+        )}
+        <div className="flex items-baseline gap-2">
+          <span className="text-tan-muted">Digest:</span>
+          <AddressDisplay address={digest} />
+        </div>
         <InfoRow label="HTTP Hosts" value={formatHosts(component.permissions.allowed_http_hosts)} />
         <InfoRow label="File System" value={component.permissions.file_system ? 'yes' : 'no'} />
+        <InfoRow label="Raw Sockets" value={component.permissions.raw_sockets ? 'yes' : 'no'} />
+        <InfoRow label="DNS Resolution" value={component.permissions.dns_resolution ? 'yes' : 'no'} />
         {component.fuel_limit != null && (
           <InfoRow label="Fuel Limit" value={component.fuel_limit.toLocaleString()} />
         )}
@@ -141,19 +178,6 @@ function truncate(s: string, len = 20): string {
   return `${s.slice(0, 10)}...${s.slice(-8)}`;
 }
 
-function formatSource(source: ComponentSource): string {
-  if ('digest' in source && typeof source.digest === 'string') {
-    return `digest (${truncate(source.digest)})`;
-  }
-  if ('registry' in source) {
-    const r = source.registry;
-    return `registry (${r.package}${r.version ? `@${r.version}` : ''})`;
-  }
-  if ('download' in source) {
-    return `download (${truncate(source.download.uri)})`;
-  }
-  return 'unknown';
-}
 
 function formatHosts(hosts: AllowedHostPermission): string {
   if (hosts === 'all') return 'all';
