@@ -511,7 +511,7 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             // Process results sequentially (DB writes and manager registration are not async-safe to parallelize)
             let mut restored = Vec::new();
             for (entry, result) in fetched {
-                let mut service = match result {
+                let service = match result {
                     Ok(s) => s,
                     Err(e) => {
                         // Only remove the registry entry when the on-chain contract is genuinely
@@ -544,9 +544,6 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                         continue;
                     }
                 };
-
-                // Apply persisted status from the registry (e.g. paused services stay paused)
-                service.status = entry.status;
 
                 // Check if Path A (cmd_start_wavs) already loaded this service from the
                 // settings cache before the HTTP server was up. If so, refresh the stored
@@ -771,23 +768,17 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     #[instrument(skip(self), fields(subsys = "Dispatcher"))]
-    pub fn pause_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
+    pub async fn pause_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
         let mut service = self.services.get(&id)?;
         service.status = wavs_types::ServiceStatus::Paused;
-        self.services.save(&service)?;
-        self.service_registry
-            .set_status(&service.manager, wavs_types::ServiceStatus::Paused)?;
-        Ok(())
+        self.change_service_inner(id, service).await
     }
 
     #[instrument(skip(self), fields(subsys = "Dispatcher"))]
-    pub fn resume_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
+    pub async fn resume_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
         let mut service = self.services.get(&id)?;
         service.status = wavs_types::ServiceStatus::Active;
-        self.services.save(&service)?;
-        self.service_registry
-            .set_status(&service.manager, wavs_types::ServiceStatus::Active)?;
-        Ok(())
+        self.change_service_inner(id, service).await
     }
 
     #[instrument(skip(self), fields(subsys = "Dispatcher"))]

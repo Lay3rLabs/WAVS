@@ -27,7 +27,7 @@ pub async fn handle_pause_service(
 
 async fn pause_service_inner(state: HttpState, req: ManageServiceRequest) -> HttpResult<()> {
     let id = ServiceId::from(&req.service_manager);
-    state.dispatcher.pause_service(id)?;
+    state.dispatcher.pause_service(id).await?;
     Ok(())
 }
 
@@ -55,6 +55,6 @@ pub async fn handle_resume_service(
 
 async fn resume_service_inner(state: HttpState, req: ManageServiceRequest) -> HttpResult<()> {
     let id = ServiceId::from(&req.service_manager);
-    state.dispatcher.resume_service(id)?;
+    state.dispatcher.resume_service(id).await?;
     Ok(())
 }
