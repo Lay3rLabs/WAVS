@@ -67,16 +67,17 @@ pub async fn handle_get_logs(
     Path(service_id_str): Path<String>,
     Query(params): Query<LogsQuery>,
 ) -> impl IntoResponse {
-    let service_id = match ServiceId::from_str(&service_id_str) {
-        Ok(id) => id,
-        Err(_) => {
-            return (
+    let service_id =
+        match ServiceId::from_str(&service_id_str) {
+            Ok(id) => id,
+            Err(_) => return (
                 StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": "invalid service_id: expected 32-byte hex string"})),
+                Json(
+                    serde_json::json!({"error": "invalid service_id: expected 32-byte hex string"}),
+                ),
             )
-                .into_response()
-        }
-    };
+                .into_response(),
+        };
 
     let limit = params.limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT);
 
@@ -121,16 +122,17 @@ pub async fn handle_get_logs_by_event(
     State(state): State<HttpState>,
     Path((service_id_str, event_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let service_id = match ServiceId::from_str(&service_id_str) {
-        Ok(id) => id,
-        Err(_) => {
-            return (
+    let service_id =
+        match ServiceId::from_str(&service_id_str) {
+            Ok(id) => id,
+            Err(_) => return (
                 StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": "invalid service_id: expected 32-byte hex string"})),
+                Json(
+                    serde_json::json!({"error": "invalid service_id: expected 32-byte hex string"}),
+                ),
             )
-                .into_response()
-        }
-    };
+                .into_response(),
+        };
 
     let entries = state
         .db_storage
