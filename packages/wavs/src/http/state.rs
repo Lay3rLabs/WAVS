@@ -7,7 +7,9 @@ use utils::{
 };
 use wavs_types::{Service, ServiceDigest, ServiceId};
 
-use crate::{config::Config, dispatcher::Dispatcher, health::SharedHealthStatus};
+use crate::{
+    config::Config, dispatcher::Dispatcher, health::SharedHealthStatus, log_buffer::LogBuffer,
+};
 
 #[derive(Clone)]
 pub struct HttpState {
@@ -18,6 +20,7 @@ pub struct HttpState {
     pub db_storage: WavsDb,
     pub metrics: HttpMetrics,
     pub health_status: SharedHealthStatus,
+    pub log_buffer: LogBuffer,
 }
 
 impl HttpState {
@@ -27,6 +30,7 @@ impl HttpState {
         is_mock_chain_client: bool,
         metrics: HttpMetrics,
         health_status: SharedHealthStatus,
+        log_buffer: LogBuffer,
     ) -> anyhow::Result<Self> {
         if !config.data.exists() {
             std::fs::create_dir_all(&config.data).map_err(|err| {
@@ -77,6 +81,7 @@ impl HttpState {
             http_client: reqwest::Client::new(),
             metrics,
             health_status,
+            log_buffer,
         })
     }
 

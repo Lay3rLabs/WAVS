@@ -230,6 +230,37 @@ impl WavsClient {
         resp.json().await.context("parse SignerResponse")
     }
 
+    /// GET /dev/logs — poll structured log entries from the in-memory ring buffer.
+    pub async fn query_logs(
+        &self,
+        since_id: u64,
+        limit: Option<usize>,
+        level: Option<&str>,
+        target: Option<&str>,
+    ) -> Result<Value> {
+        let mut path = format!("/dev/logs?since_id={}", since_id);
+        if let Some(l) = limit {
+            path.push_str(&format!("&limit={}", l));
+        }
+        if let Some(lv) = level {
+            path.push_str(&format!("&level={}", lv));
+        }
+        if let Some(t) = target {
+            path.push_str(&format!("&target={}", t));
+        }
+        let resp = self
+            .request(Method::GET, &path)
+            .send()
+            .await
+            .context("GET /dev/logs")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(dev_err(status, &body));
+        }
+        resp.json().await.context("parse logs response")
+    }
+
     /// GET /dev/kv/{service_id}/{bucket}/{key} — returns value as UTF-8 or hex.
     pub async fn query_kv(&self, service_id: &str, bucket: &str, key: &str) -> Result<String> {
         let path = format!("/dev/kv/{}/{}/{}", service_id, bucket, key);

@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc, thread::JoinHandle};
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use tauri::{AppHandle, Manager};
 use utils::{config::ConfigBuilder, storage::fs::FileStorage};
-use wavs::dispatcher::Dispatcher;
+use wavs::{dispatcher::Dispatcher, log_buffer::LogBuffer};
 use wavs_gui_shared::{
     error::{AppError, AppResult},
     event::{SettingsEvent, TauriEventEmitterExt},
@@ -176,6 +176,10 @@ pub struct WavsInstance {
     pub ctx: utils::context::AppContext,
     pub meter_provider: Option<SdkMeterProvider>,
     pub handle: JoinHandle<()>,
+}
+
+pub struct LogBufferState {
+    pub inner: LogBuffer,
 }
 
 #[derive(Default)]

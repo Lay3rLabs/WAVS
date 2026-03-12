@@ -392,6 +392,81 @@ fn test_add_chain_prevents_duplicates() {
 }
 
 #[test]
+fn http_logs_polling() {
+    use wavs::http::handlers::logs::LogsResponse;
+    use wavs::log_buffer::LogEntry;
+
+    let app = TestHttpApp::new();
+
+    // Push entries directly into the buffer (simulates InMemoryLogLayer capturing events)
+    for i in 0..5u64 {
+        app.log_buffer.push(LogEntry {
+            id: app.log_buffer.alloc_id(),
+            timestamp_ms: 1_000 + i,
+            level: if i % 2 == 0 {
+                "INFO".to_string()
+            } else {
+                "WARN".to_string()
+            },
+            target: "wavs::test".to_string(),
+            fields: format!("message=\"entry {i}\""),
+        });
+    }
+
+    // Fetch all logs
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/dev/logs")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert!(response.status().is_success());
+    let resp: LogsResponse = app.ctx.rt.block_on(map_response(response));
+    assert_eq!(resp.entries.len(), 5);
+    assert_eq!(resp.next_id, 5);
+
+    // Fetch only WARN entries
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/dev/logs?level=warn")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert!(response.status().is_success());
+    let resp: LogsResponse = app.ctx.rt.block_on(map_response(response));
+    // entries 1, 3 are WARN
+    assert_eq!(resp.entries.len(), 2);
+    assert!(resp.entries.iter().all(|e| e.level == "WARN"));
+
+    // Incremental poll: fetch only entries with id >= 3
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/dev/logs?since_id=3")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert!(response.status().is_success());
+    let resp: LogsResponse = app.ctx.rt.block_on(map_response(response));
+    assert_eq!(resp.entries.len(), 2); // entries 3 and 4
+    assert_eq!(resp.entries[0].id, 3);
+}
+
+#[test]
 fn body_size_limit() {
     let app = TestHttpApp::new();
 

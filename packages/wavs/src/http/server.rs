@@ -4,8 +4,10 @@ use crate::{
     health::SharedHealthStatus,
     http::handlers::{
         debug::handle_dev_trigger_streams_info,
+        logs::{handle_logs, handle_logs_stream},
         service::{add::handle_add_service_direct, get::handle_get_service_by_hash},
     },
+    log_buffer::LogBuffer,
     AppContext,
 };
 use axum::{
@@ -49,6 +51,7 @@ pub fn start(
     dispatcher: Arc<Dispatcher<FileStorage>>,
     metrics: HttpMetrics,
     health_status: SharedHealthStatus,
+    log_buffer: LogBuffer,
     ready_tx: std::sync::mpsc::SyncSender<()>,
 ) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
@@ -57,7 +60,15 @@ pub fn start(
 
         let mut shutdown_signal = ctx.get_kill_receiver();
 
-        let router = make_router(config, dispatcher, false, metrics, health_status).await?;
+        let router = make_router(
+            config,
+            dispatcher,
+            false,
+            metrics,
+            health_status,
+            log_buffer,
+        )
+        .await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
         let actual_port = listener.local_addr()?.port();
@@ -87,6 +98,7 @@ pub async fn make_router(
     is_mock_chain_client: bool,
     metrics: HttpMetrics,
     health_status: SharedHealthStatus,
+    log_buffer: LogBuffer,
 ) -> anyhow::Result<axum::Router> {
     let state = HttpState::new(
         config.clone(),
@@ -94,6 +106,7 @@ pub async fn make_router(
         is_mock_chain_client,
         metrics,
         health_status,
+        log_buffer,
     )
     .await?;
 
@@ -128,7 +141,9 @@ pub async fn make_router(
             .route("/dev/kv/{service_id}/{bucket}/{key}", get(handle_get_kv))
             .route("/dev/kv/{service_id}", get(handle_list_kv))
             .route("/dev/fs/{service_id}", get(handle_fs_root))
-            .route("/dev/fs/{service_id}/{*path}", get(handle_fs));
+            .route("/dev/fs/{service_id}/{*path}", get(handle_fs))
+            .route("/dev/logs", get(handle_logs))
+            .route("/dev/logs/stream", get(handle_logs_stream));
 
         protected = protected
             .route("/dev/triggers", post(handle_debug_trigger))

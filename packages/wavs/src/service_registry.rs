@@ -53,7 +53,6 @@ pub enum RegistryError {
 
     #[error("unsupported registry version {found}, expected {REGISTRY_VERSION}")]
     UnsupportedVersion { found: u32 },
-
 }
 
 impl ServiceRegistry {
@@ -265,5 +264,4 @@ mod tests {
         let err = ServiceRegistry::load(dir.path()).unwrap_err();
         assert!(matches!(err, RegistryError::Json(_)));
     }
-
 }

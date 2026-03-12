@@ -27,7 +27,11 @@ async fn safe_join(base: &FsPath, rel: &str) -> Option<PathBuf> {
     canonical.starts_with(base).then_some(canonical)
 }
 
-async fn handle_fs_inner(state: &HttpState, service_id: &ServiceId, rel_path: &str) -> impl IntoResponse {
+async fn handle_fs_inner(
+    state: &HttpState,
+    service_id: &ServiceId,
+    rel_path: &str,
+) -> impl IntoResponse {
     let base = state.config.data.join("fs").join(service_id.to_string());
 
     // Ensure the base exists (canonicalize requires the path to exist)
@@ -98,7 +102,9 @@ pub async fn handle_fs_root(
     let Ok(service_id) = service_id.parse::<ServiceId>() else {
         return (StatusCode::BAD_REQUEST, "invalid service id").into_response();
     };
-    handle_fs_inner(&state, &service_id, "").await.into_response()
+    handle_fs_inner(&state, &service_id, "")
+        .await
+        .into_response()
 }
 
 /// List directory or serve file for a service's storage (with sub-path)
@@ -109,5 +115,7 @@ pub async fn handle_fs(
     let Ok(service_id) = service_id.parse::<ServiceId>() else {
         return (StatusCode::BAD_REQUEST, "invalid service id").into_response();
     };
-    handle_fs_inner(&state, &service_id, &rel_path).await.into_response()
+    handle_fs_inner(&state, &service_id, &rel_path)
+        .await
+        .into_response()
 }
