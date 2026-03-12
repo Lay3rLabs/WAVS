@@ -14,9 +14,11 @@ use crate::commands::{
     cmd_stop_mcp_server, cmd_store_mnemonic, cmd_upload_to_ipfs, cmd_write_wavs_toml,
 };
 use crate::state::{
-    McpServerState, MnemonicCacheState, SettingsState, WavsConfigState, WavsInstanceState,
+    LogBufferState, McpServerState, MnemonicCacheState, SettingsState, WavsConfigState,
+    WavsInstanceState,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use wavs::log_buffer::{InMemoryLogLayer, LogBufferInner};
 
 mod commands;
 mod logger;
@@ -30,12 +32,14 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Set up tracing subscriber to capture and forward to frontend
-
+            // Set up tracing subscriber to capture and forward to frontend, and into the
+            // in-memory log buffer so agents can query structured logs via GET /dev/logs.
+            let log_buffer = LogBufferInner::new();
             let tauri_log_layer = logger::TauriLogLayer::new(app.handle().clone());
 
             tracing_subscriber::registry()
                 .with(tauri_log_layer)
+                .with(InMemoryLogLayer::new(log_buffer.clone()))
                 .with(tracing_subscriber::filter::LevelFilter::INFO)
                 .init();
 
@@ -62,6 +66,7 @@ pub fn run() {
             app.manage(WavsInstanceState::default());
             app.manage(MnemonicCacheState::default());
             app.manage(McpServerState::default());
+            app.manage(LogBufferState { inner: log_buffer });
 
             // Get primary monitor to calculate window size
             let monitors = app.primary_monitor()?;

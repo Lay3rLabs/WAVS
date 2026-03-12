@@ -79,6 +79,38 @@ pub struct QueryKvParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+pub struct QueryLogsParams {
+    /// Return only entries with id >= since_id. Pass the `next_id` from the previous response
+    /// to page forward. Defaults to 0 (return from the oldest buffered entry).
+    pub since_id: Option<u64>,
+    /// Maximum number of entries to return (default: 100, max: 1000).
+    pub limit: Option<usize>,
+    /// Minimum log level filter: trace | debug | info | warn | error.
+    /// Returns entries at this level and above (e.g. "info" includes warn + error).
+    pub level: Option<String>,
+    /// Filter by target prefix, e.g. "wavs" or "wavs::subsystems::engine".
+    /// Component logs appear under "wavs::subsystems::engine::wasm_engine".
+    pub target: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct QueryComponentLogsParams {
+    /// Return only entries with id >= since_id. Pass the `next_id` from the previous response
+    /// to page forward. Defaults to 0 (return from the oldest buffered entry).
+    pub since_id: Option<u64>,
+    /// Maximum number of entries to return (default: 100, max: 1000).
+    pub limit: Option<usize>,
+    /// Minimum log level filter: trace | debug | info | warn | error.
+    pub level: Option<String>,
+    /// Filter to logs from a specific service (64-char hex service ID).
+    pub service_id: Option<String>,
+    /// Filter to logs from a specific workflow ID, e.g. "default".
+    pub workflow_id: Option<String>,
+    /// Filter to logs from a specific component digest (sha256 hex string).
+    pub digest: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct ScaffoldComponentParams {
     /// Component name, lowercase with hyphens, e.g. "price-feed"
     pub name: String,
@@ -474,6 +506,72 @@ impl WavsMcpServer {
         match self.client.query_kv(&p.service_id, &p.bucket, &p.key).await {
             Ok(v) => ok(v),
             Err(e) => err(format!("Failed to query KV: {e:#}")),
+        }
+    }
+
+    async fn tool_query_logs(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
+        let p: QueryLogsParams = parse_args(args)?;
+        match self
+            .client
+            .query_logs(
+                p.since_id.unwrap_or(0),
+                p.limit,
+                p.level.as_deref(),
+                p.target.as_deref(),
+            )
+            .await
+        {
+            Ok(v) => ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string())),
+            Err(e) => err(format!("Failed to query logs: {e:#}")),
+        }
+    }
+
+    async fn tool_query_component_logs(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
+        let p: QueryComponentLogsParams = parse_args(args)?;
+        match self
+            .client
+            .query_logs(
+                p.since_id.unwrap_or(0),
+                p.limit,
+                p.level.as_deref(),
+                Some("wavs::subsystems::engine::wasm_engine"),
+            )
+            .await
+        {
+            Ok(v) => {
+                let entries = v["entries"].as_array().cloned().unwrap_or_default();
+                let filtered: Vec<_> = entries
+                    .into_iter()
+                    .filter(|e| {
+                        let fields = e["fields"].as_str().unwrap_or("");
+                        if let Some(sid) = &p.service_id {
+                            if !fields.contains(&format!("service_id=\"{sid}\"")) {
+                                return false;
+                            }
+                        }
+                        if let Some(wid) = &p.workflow_id {
+                            if !fields.contains(&format!("workflow_id=\"{wid}\"")) {
+                                return false;
+                            }
+                        }
+                        if let Some(d) = &p.digest {
+                            if !fields.contains(&format!("digest=\"{d}\"")) {
+                                return false;
+                            }
+                        }
+                        true
+                    })
+                    .collect();
+                let result = serde_json::json!({ "entries": filtered, "next_id": v["next_id"] });
+                ok(serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string()))
+            }
+            Err(e) => err(format!("Failed to query component logs: {e:#}")),
         }
     }
 
@@ -1045,6 +1143,25 @@ impl ServerHandler for WavsMcpServer {
                         Requires dev endpoints enabled in wavs.toml.".into(),
                     input_schema: schema_for_type::<QueryKvParams>().into(),
                 },
+                Tool {
+                    name: "wavs_query_logs".into(),
+                    description: "Query structured log entries from the WAVS node's in-memory ring buffer \
+                        (last 10,000 entries). Returns a JSON object with `entries` and `next_id`. \
+                        Pass the returned `next_id` as `since_id` on subsequent calls to receive only new entries. \
+                        For WASM component execution logs use `wavs_query_component_logs` instead. \
+                        Requires dev endpoints enabled in wavs.toml.".into(),
+                    input_schema: schema_for_type::<QueryLogsParams>().into(),
+                },
+                Tool {
+                    name: "wavs_query_component_logs".into(),
+                    description: "Query logs emitted by WASM components during operator/aggregator execution. \
+                        Filters automatically to component logs and supports narrowing by `service_id`, \
+                        `workflow_id`, and `digest`. Each entry's `fields` contains the component message \
+                        plus those identifiers. Returns a JSON object with `entries` and `next_id`; \
+                        pass `next_id` as `since_id` to page forward. \
+                        Requires dev endpoints enabled in wavs.toml.".into(),
+                    input_schema: schema_for_type::<QueryComponentLogsParams>().into(),
+                },
                 // Local tools
                 tool("wavs_get_service_schema",
                      "Return minimal valid Service JSON examples for every trigger type \
@@ -1100,6 +1217,8 @@ impl ServerHandler for WavsMcpServer {
             "wavs_simulate_trigger" => self.tool_simulate_trigger(args).await,
             "wavs_deploy_dev_service" => self.tool_deploy_dev_service(args).await,
             "wavs_query_kv" => self.tool_query_kv(args).await,
+            "wavs_query_logs" => self.tool_query_logs(args).await,
+            "wavs_query_component_logs" => self.tool_query_component_logs(args).await,
             "wavs_get_service_schema" => self.tool_get_service_schema(),
             "wavs_get_wit_interface" => self.tool_get_wit_interface().await,
             "wavs_scaffold_component" => self.tool_scaffold_component(args).await,

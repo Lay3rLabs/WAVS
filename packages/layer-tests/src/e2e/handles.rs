@@ -159,7 +159,14 @@ impl AppHandles {
                     config.port
                 );
                 let health_status = wavs::health::SharedHealthStatus::new();
-                wavs::run_server(ctx, config, dispatcher, http_metrics, health_status);
+                wavs::run_server(
+                    ctx,
+                    config,
+                    dispatcher,
+                    http_metrics,
+                    health_status,
+                    wavs::log_buffer::LogBufferInner::new(),
+                );
             }
         })
     }

@@ -170,6 +170,7 @@ impl DevTriggersRuntime {
                             "wavs-benchmark",
                         )),
                         health_status,
+                        wavs::log_buffer::LogBufferInner::new(),
                     )
                     .await
                     .unwrap();

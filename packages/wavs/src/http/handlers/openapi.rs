@@ -13,7 +13,9 @@ use utoipa::OpenApi;
         add::handle_add_service,
         delete::handle_delete_service,
         info::handle_info,
-        upload::handle_upload_component
+        upload::handle_upload_component,
+        logs::handle_logs,
+        logs::handle_logs_stream
     ),
     info(
         title = "WAVS API",

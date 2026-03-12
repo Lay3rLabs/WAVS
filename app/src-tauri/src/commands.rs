@@ -23,8 +23,8 @@ const KEYCHAIN_ACCOUNT: &str = "mnemonic";
 use wavs::health::HealthStatus;
 
 use crate::state::{
-    McpServerState, MnemonicCacheState, SettingsState, WavsConfigState, WavsInstance,
-    WavsInstanceState,
+    LogBufferState, McpServerState, MnemonicCacheState, SettingsState, WavsConfigState,
+    WavsInstance, WavsInstanceState,
 };
 
 #[tauri::command(rename_all = "snake_case")]
@@ -96,6 +96,7 @@ pub async fn cmd_start_wavs(
     wavs_instance: State<'_, WavsInstanceState>,
     mnemonic_cache: State<'_, MnemonicCacheState>,
     mcp_state: State<'_, McpServerState>,
+    log_buffer_state: State<'_, LogBufferState>,
 ) -> AppResult<()> {
     let mut config = match wavs_config.get_cloned() {
         Some(cfg) => cfg,
@@ -194,10 +195,20 @@ pub async fn cmd_start_wavs(
         }
     }
 
+    let log_buffer = log_buffer_state.inner.clone();
     let handle = std::thread::spawn({
         let ctx = ctx.clone();
         let dispatcher = dispatcher.clone();
-        move || wavs::run_server(ctx, config, dispatcher, metrics.http, health_status)
+        move || {
+            wavs::run_server(
+                ctx,
+                config,
+                dispatcher,
+                metrics.http,
+                health_status,
+                log_buffer,
+            )
+        }
     });
 
     wavs_instance.set(WavsInstance {

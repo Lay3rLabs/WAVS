@@ -5,6 +5,7 @@ pub mod fs;
 mod health;
 mod info;
 pub mod kv;
+pub mod logs;
 mod not_found;
 pub(crate) mod openapi;
 mod p2p;
