@@ -72,13 +72,14 @@ impl LogBufferInner {
         min_level: Option<&str>,
         target: Option<&str>,
     ) -> Vec<LogEntry> {
+        let min_level_val = min_level.map(level_value);
         let entries = self.entries.read().unwrap();
         entries
             .iter()
             .filter(|e| e.id >= since_id)
             .filter(|e| {
-                min_level
-                    .map(|l| level_value(&e.level) >= level_value(l))
+                min_level_val
+                    .map(|min| level_value(&e.level) >= min)
                     .unwrap_or(true)
             })
             .filter(|e| target.map(|t| e.target.starts_with(t)).unwrap_or(true))
@@ -101,13 +102,18 @@ impl LogBufferInner {
 
 /// Returns a numeric severity value: higher = more severe.
 pub fn level_value(level: &str) -> u8 {
-    match level.to_lowercase().as_str() {
-        "error" => 4,
-        "warn" => 3,
-        "info" => 2,
-        "debug" => 1,
-        "trace" => 0,
-        _ => 2,
+    if level.eq_ignore_ascii_case("error") {
+        4
+    } else if level.eq_ignore_ascii_case("warn") {
+        3
+    } else if level.eq_ignore_ascii_case("info") {
+        2
+    } else if level.eq_ignore_ascii_case("debug") {
+        1
+    } else if level.eq_ignore_ascii_case("trace") {
+        0
+    } else {
+        2
     }
 }
 
