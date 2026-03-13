@@ -55,9 +55,6 @@ cron = { workspace = true }
 bincode = { workspace = true }
 axum-tracing-opentelemetry = { workspace = true }
 opentelemetry = { workspace = true }
-opentelemetry-jaeger-propagator = { workspace = true }
-opentelemetry-otlp = { workspace = true }
-opentelemetry_sdk = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
