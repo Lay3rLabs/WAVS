@@ -19,7 +19,10 @@ use utoipa::OpenApi;
     ),
     info(
         title = "WAVS API",
-        description = "API documentation for the WAVS service"
+        description = "API documentation for the WAVS service.\n\n\
+            **Note:** paths under `/dev/` (including `/dev/logs` and `/dev/logs/stream`) \
+            are only registered when `dev_endpoints_enabled = true` in wavs.toml; \
+            they will return 404 in production configurations."
     )
 )]
 pub struct ApiDoc;

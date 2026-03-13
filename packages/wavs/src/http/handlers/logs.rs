@@ -77,7 +77,7 @@ pub async fn handle_logs(
     if let Err((status, msg)) = validate_level(params.level.as_deref()) {
         return (status, msg).into_response();
     }
-    let limit = params.limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT);
+    let limit = params.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
     let entries = state.log_buffer.since(
         params.since_id,
         limit,
