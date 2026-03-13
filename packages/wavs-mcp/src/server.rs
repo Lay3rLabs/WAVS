@@ -551,17 +551,23 @@ impl WavsMcpServer {
                     .filter(|e| {
                         let fields = e["fields"].as_str().unwrap_or("");
                         if let Some(sid) = &p.service_id {
-                            if !fields.contains(&format!("service_id=\"{sid}\"")) {
+                            if !fields.contains(&format!("service_id=\"{sid}\""))
+                                && !fields.contains(&format!("service_id={sid}"))
+                            {
                                 return false;
                             }
                         }
                         if let Some(wid) = &p.workflow_id {
-                            if !fields.contains(&format!("workflow_id=\"{wid}\"")) {
+                            if !fields.contains(&format!("workflow_id=\"{wid}\""))
+                                && !fields.contains(&format!("workflow_id={wid}"))
+                            {
                                 return false;
                             }
                         }
                         if let Some(d) = &p.digest {
-                            if !fields.contains(&format!("digest=\"{d}\"")) {
+                            if !fields.contains(&format!("digest=\"{d}\""))
+                                && !fields.contains(&format!("digest={d}"))
+                            {
                                 return false;
                             }
                         }
@@ -1145,8 +1151,8 @@ impl ServerHandler for WavsMcpServer {
                 },
                 Tool {
                     name: "wavs_query_logs".into(),
-                    description: "Query structured log entries from the WAVS node's in-memory ring buffer \
-                        (last 10,000 entries). Returns a JSON object with `entries` and `next_id`. \
+                    description: "Query structured log entries from the WAVS node's in-memory ring buffer. \
+                        Returns a JSON object with `entries` and `next_id`. \
                         Pass the returned `next_id` as `since_id` on subsequent calls to receive only new entries. \
                         For WASM component execution logs use `wavs_query_component_logs` instead. \
                         Requires dev endpoints enabled in wavs.toml.".into(),

@@ -238,18 +238,19 @@ impl WavsClient {
         level: Option<&str>,
         target: Option<&str>,
     ) -> Result<Value> {
-        let mut path = format!("/dev/logs?since_id={}", since_id);
+        let mut params: Vec<(&str, String)> = vec![("since_id", since_id.to_string())];
         if let Some(l) = limit {
-            path.push_str(&format!("&limit={}", l));
+            params.push(("limit", l.to_string()));
         }
         if let Some(lv) = level {
-            path.push_str(&format!("&level={}", lv));
+            params.push(("level", lv.to_string()));
         }
         if let Some(t) = target {
-            path.push_str(&format!("&target={}", t));
+            params.push(("target", t.to_string()));
         }
         let resp = self
-            .request(Method::GET, &path)
+            .request(Method::GET, "/dev/logs")
+            .query(&params)
             .send()
             .await
             .context("GET /dev/logs")?;

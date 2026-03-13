@@ -14,7 +14,7 @@ use tracing_subscriber::{layer::Context, Layer};
 use utoipa::ToSchema;
 
 pub const DEFAULT_BROADCAST_CAPACITY: usize = 256;
-pub const DEFAULT_LOG_BUFFER_CAPCITY: usize = 10_000;
+pub const DEFAULT_LOG_BUFFER_CAPACITY: usize = 10_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct LogEntry {
@@ -36,10 +36,12 @@ pub type LogBuffer = Arc<LogBufferInner>;
 
 impl LogBufferInner {
     pub fn new() -> LogBuffer {
-        Self::with_capacity(DEFAULT_LOG_BUFFER_CAPCITY, DEFAULT_BROADCAST_CAPACITY)
+        Self::with_capacity(DEFAULT_LOG_BUFFER_CAPACITY, DEFAULT_BROADCAST_CAPACITY)
     }
 
     pub fn with_capacity(capacity: usize, broadcast_capacity: usize) -> LogBuffer {
+        let capacity = capacity.max(1);
+        let broadcast_capacity = broadcast_capacity.max(1);
         let (tx, _) = broadcast::channel(broadcast_capacity);
         Arc::new(Self {
             entries: RwLock::new(VecDeque::with_capacity(capacity.min(1024))),

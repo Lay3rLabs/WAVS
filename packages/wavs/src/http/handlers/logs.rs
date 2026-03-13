@@ -2,6 +2,7 @@ use std::convert::Infallible;
 
 use axum::{
     extract::{Query, State},
+    http::StatusCode,
     response::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse, Json,
@@ -19,6 +20,23 @@ use crate::{
 const DEFAULT_LIMIT: usize = 100;
 const MAX_LIMIT: usize = 1000;
 const SSE_REPLAY_COUNT: usize = 50;
+const VALID_LEVELS: &[&str] = &["trace", "debug", "info", "warn", "error"];
+
+fn validate_level(level: Option<&str>) -> Result<(), (StatusCode, String)> {
+    if let Some(l) = level {
+        if !VALID_LEVELS.contains(&l.to_lowercase().as_str()) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "invalid level {:?}; must be one of: {}",
+                    l,
+                    VALID_LEVELS.join(", ")
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
 
 #[derive(Deserialize)]
 pub struct LogsQuery {
@@ -47,6 +65,7 @@ pub struct LogsResponse {
     ),
     responses(
         (status = 200, description = "Structured log entries from the in-memory ring buffer", body = LogsResponse),
+        (status = 400, description = "Invalid query parameter"),
     ),
     description = "Poll structured log entries. Pass the returned `next_id` as `since_id` on subsequent calls to receive only new entries."
 )]
@@ -55,6 +74,9 @@ pub async fn handle_logs(
     State(state): State<HttpState>,
     Query(params): Query<LogsQuery>,
 ) -> impl IntoResponse {
+    if let Err((status, msg)) = validate_level(params.level.as_deref()) {
+        return (status, msg).into_response();
+    }
     let limit = params.limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT);
     let entries = state.log_buffer.since(
         params.since_id,
@@ -81,6 +103,7 @@ pub struct LogsStreamQuery {
     ),
     responses(
         (status = 200, description = "Server-Sent Events stream of log entries (JSON per event)"),
+        (status = 400, description = "Invalid query parameter"),
     ),
     description = "Subscribe to a real-time SSE stream of structured log entries. Replays the last 50 buffered entries on connect, then streams live."
 )]
@@ -88,13 +111,20 @@ pub struct LogsStreamQuery {
 pub async fn handle_logs_stream(
     State(state): State<HttpState>,
     Query(params): Query<LogsStreamQuery>,
-) -> impl IntoResponse {
+) -> axum::response::Response {
+    if let Err((status, msg)) = validate_level(params.level.as_deref()) {
+        return (status, msg).into_response();
+    }
+
     let level = params.level.clone();
     let target = params.target.clone();
 
-    // Subscribe before reading buffered entries to avoid missing events in the window between
+    // Subscribe before reading buffered entries so no live events are missed.
+    // Track the max replayed id to deduplicate any events that arrive in the
+    // window between subscribe() and last_n() and are delivered by both paths.
     let mut rx = state.log_buffer.subscribe();
     let replay = state.log_buffer.last_n(SSE_REPLAY_COUNT);
+    let max_replayed_id = replay.last().map(|e| e.id);
 
     let stream = async_stream::stream! {
         // Replay recent buffered entries
@@ -106,10 +136,13 @@ pub async fn handle_logs_stream(
             }
         }
 
-        // Stream live entries
+        // Stream live entries, skipping any already covered by the replay
         loop {
             match rx.recv().await {
                 Ok(entry) => {
+                    if max_replayed_id.is_some_and(|max| entry.id <= max) {
+                        continue;
+                    }
                     if matches_filters(&entry, level.as_deref(), target.as_deref()) {
                         if let Ok(data) = serde_json::to_string(&entry) {
                             yield Ok(Event::default().data(data));
@@ -124,7 +157,9 @@ pub async fn handle_logs_stream(
         }
     };
 
-    Sse::new(stream).keep_alive(KeepAlive::default())
+    Sse::new(stream)
+        .keep_alive(KeepAlive::default())
+        .into_response()
 }
 
 fn matches_filters(entry: &LogEntry, min_level: Option<&str>, target: Option<&str>) -> bool {
