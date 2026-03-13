@@ -36,10 +36,9 @@ fn main() {
         LogBufferInner::with_capacity(config.log_buffer_capacity, config.log_broadcast_capacity);
     let tracer_provider = if let Some(collector) = config.jaeger.as_ref() {
         global::set_text_map_propagator(opentelemetry_jaeger_propagator::Propagator::new());
-        let endpoint = format!("{collector}/v1/traces");
         let exporter = SpanExporter::builder()
             .with_tonic()
-            .with_endpoint(endpoint)
+            .with_endpoint(collector.as_str())
             .build()
             .expect("Failed to build OTLP exporter");
         let batch_processor = trace::BatchSpanProcessor::builder(exporter).build();

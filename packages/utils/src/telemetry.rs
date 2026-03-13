@@ -22,10 +22,9 @@ pub fn setup_tracing(
     filters: tracing_subscriber::EnvFilter,
 ) -> SdkTracerProvider {
     global::set_text_map_propagator(opentelemetry_jaeger_propagator::Propagator::new());
-    let endpoint = format!("{collector}/v1/traces");
     let exporter = SpanExporter::builder()
         .with_tonic()
-        .with_endpoint(endpoint)
+        .with_endpoint(collector)
         .build()
         .expect("Failed to build OTLP exporter");
 

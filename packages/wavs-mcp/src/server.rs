@@ -546,28 +546,34 @@ impl WavsMcpServer {
         {
             Ok(v) => {
                 let entries = v["entries"].as_array().cloned().unwrap_or_default();
+                // Match a structured field by key at a boundary (start of the
+                // fields string or immediately after the ", " separator) to
+                // avoid false positives when the message value itself contains
+                // text that looks like a key=value pair.
+                let has_field = |fields: &str, key: &str, val: &str| -> bool {
+                    let unquoted = format!("{key}={val}");
+                    let quoted = format!("{key}=\"{val}\"");
+                    fields.starts_with(&unquoted)
+                        || fields.starts_with(&quoted)
+                        || fields.contains(&format!(", {unquoted}"))
+                        || fields.contains(&format!(", {quoted}"))
+                };
                 let filtered: Vec<_> = entries
                     .into_iter()
                     .filter(|e| {
                         let fields = e["fields"].as_str().unwrap_or("");
                         if let Some(sid) = &p.service_id {
-                            if !fields.contains(&format!("service_id=\"{sid}\""))
-                                && !fields.contains(&format!("service_id={sid}"))
-                            {
+                            if !has_field(fields, "service_id", sid) {
                                 return false;
                             }
                         }
                         if let Some(wid) = &p.workflow_id {
-                            if !fields.contains(&format!("workflow_id=\"{wid}\""))
-                                && !fields.contains(&format!("workflow_id={wid}"))
-                            {
+                            if !has_field(fields, "workflow_id", wid) {
                                 return false;
                             }
                         }
                         if let Some(d) = &p.digest {
-                            if !fields.contains(&format!("digest=\"{d}\""))
-                                && !fields.contains(&format!("digest={d}"))
-                            {
+                            if !has_field(fields, "digest", d) {
                                 return false;
                             }
                         }
