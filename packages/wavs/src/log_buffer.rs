@@ -51,9 +51,13 @@ impl LogBufferInner {
         })
     }
 
-    pub fn push(&self, entry: LogEntry) {
-        let _ = self.tx.send(entry.clone()); // broadcast; ignore if no receivers
+    /// Push an entry into the buffer. The `id` field of the entry is
+    /// overwritten with a monotonically increasing value assigned under the
+    /// write lock, guaranteeing that entries are always stored in id order.
+    pub fn push(&self, mut entry: LogEntry) {
         let mut entries = self.entries.write().unwrap();
+        entry.id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let _ = self.tx.send(entry.clone()); // broadcast with correct id
         if entries.len() >= self.capacity {
             entries.pop_front();
         }
@@ -153,7 +157,7 @@ impl<S: Subscriber> Layer<S> for InMemoryLogLayer {
             .as_millis() as u64;
 
         let entry = LogEntry {
-            id: self.buffer.alloc_id(),
+            id: 0, // assigned by push() under the write lock
             timestamp_ms,
             level: meta.level().to_string(),
             target: meta.target().to_string(),

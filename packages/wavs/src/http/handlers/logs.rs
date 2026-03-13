@@ -1,4 +1,4 @@
-use std::convert::Infallible;
+use std::{collections::HashSet, convert::Infallible};
 
 use axum::{
     extract::{Query, State},
@@ -84,7 +84,12 @@ pub async fn handle_logs(
         params.level.as_deref(),
         params.target.as_deref(),
     );
-    let next_id = entries.last().map(|e| e.id + 1).unwrap_or(params.since_id);
+    let next_id = entries
+        .iter()
+        .map(|e| e.id)
+        .max()
+        .map(|id| id + 1)
+        .unwrap_or(params.since_id);
     Json(LogsResponse { entries, next_id }).into_response()
 }
 
@@ -120,11 +125,13 @@ pub async fn handle_logs_stream(
     let target = params.target.clone();
 
     // Subscribe before reading buffered entries so no live events are missed.
-    // Track the max replayed id to deduplicate any events that arrive in the
-    // window between subscribe() and last_n() and are delivered by both paths.
+    // Track the exact set of replayed IDs so that only those specific entries
+    // are deduplicated from the live stream; a max-id cutoff would incorrectly
+    // drop live entries that arrived between subscribe() and last_n() but were
+    // not captured in the replay snapshot.
     let mut rx = state.log_buffer.subscribe();
     let replay = state.log_buffer.last_n(SSE_REPLAY_COUNT);
-    let max_replayed_id = replay.last().map(|e| e.id);
+    let replayed_ids: HashSet<u64> = replay.iter().map(|e| e.id).collect();
 
     let stream = async_stream::stream! {
         // Replay recent buffered entries
@@ -140,7 +147,7 @@ pub async fn handle_logs_stream(
         loop {
             match rx.recv().await {
                 Ok(entry) => {
-                    if max_replayed_id.is_some_and(|max| entry.id <= max) {
+                    if replayed_ids.contains(&entry.id) {
                         continue;
                     }
                     if matches_filters(&entry, level.as_deref(), target.as_deref()) {
