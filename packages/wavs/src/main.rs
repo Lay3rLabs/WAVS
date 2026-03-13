@@ -2,16 +2,11 @@ use std::sync::Arc;
 
 use clap::Parser;
 use opentelemetry::{global, trace::TracerProvider as _};
-use opentelemetry_otlp::{SpanExporter, WithExportConfig};
-use opentelemetry_sdk::{
-    resource::Resource,
-    trace::{self, Sampler, SdkTracerProvider},
-};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
-    telemetry::{setup_metrics, Metrics},
+    telemetry::{build_tracer_provider, setup_metrics, Metrics},
 };
 use wavs::{
     args::CliArgs,
@@ -34,19 +29,14 @@ fn main() {
     let filters = config.tracing_env_filter().unwrap();
     let log_buffer =
         LogBufferInner::with_capacity(config.log_buffer_capacity, config.log_broadcast_capacity);
+    // Only install the InMemoryLogLayer when dev endpoints are enabled;
+    // the layer clones and broadcasts every event, so skip the overhead in
+    // production configurations where /dev/logs is not registered.
+    let log_layer = config
+        .dev_endpoints_enabled
+        .then(|| InMemoryLogLayer::new(log_buffer.clone()));
     let tracer_provider = if let Some(collector) = config.jaeger.as_ref() {
-        global::set_text_map_propagator(opentelemetry_jaeger_propagator::Propagator::new());
-        let exporter = SpanExporter::builder()
-            .with_tonic()
-            .with_endpoint(collector.as_str())
-            .build()
-            .expect("Failed to build OTLP exporter");
-        let batch_processor = trace::BatchSpanProcessor::builder(exporter).build();
-        let provider = SdkTracerProvider::builder()
-            .with_span_processor(batch_processor)
-            .with_sampler(Sampler::AlwaysOn)
-            .with_resource(Resource::builder().with_service_name("wavs").build())
-            .build();
+        let provider = build_tracer_provider(collector.as_str(), "wavs");
         global::set_tracer_provider(provider.clone());
         let tracer = provider.tracer("wavs-tracer");
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
@@ -57,7 +47,7 @@ fn main() {
                     .compact(),
             )
             .with(telemetry)
-            .with(InMemoryLogLayer::new(log_buffer.clone()))
+            .with(log_layer)
             .with(filters)
             .try_init()
             .unwrap();
@@ -71,7 +61,7 @@ fn main() {
                     .with_target(false)
                     .compact(),
             )
-            .with(InMemoryLogLayer::new(log_buffer.clone()))
+            .with(log_layer)
             .with(filters)
             .try_init()
             .unwrap();
