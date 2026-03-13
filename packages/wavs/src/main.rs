@@ -51,7 +51,6 @@ fn main() {
         let tracer = provider.tracer("wavs-tracer");
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
         tracing_subscriber::registry()
-            .with(filters)
             .with(
                 tracing_subscriber::fmt::layer()
                     .with_line_number(true)
@@ -59,6 +58,7 @@ fn main() {
             )
             .with(telemetry)
             .with(InMemoryLogLayer::new(log_buffer.clone()))
+            .with(filters)
             .try_init()
             .unwrap();
         tracing::info!("Jaeger tracing enabled");
@@ -71,8 +71,8 @@ fn main() {
                     .with_target(false)
                     .compact(),
             )
-            .with(filters)
             .with(InMemoryLogLayer::new(log_buffer.clone()))
+            .with(filters)
             .try_init()
             .unwrap();
         None
