@@ -498,7 +498,7 @@ fn http_logs_zero_limit_clamped() {
     let app = TestHttpApp::new();
 
     app.log_buffer.push(LogEntry {
-        id: app.log_buffer.alloc_id(),
+        id: 0, // assigned by push()
         timestamp_ms: 1000,
         level: "INFO".to_string(),
         target: "wavs::test".to_string(),

@@ -84,12 +84,14 @@ pub async fn handle_logs(
         params.level.as_deref(),
         params.target.as_deref(),
     );
+    // If no entries match the filter, advance to the buffer watermark so
+    // polling clients don't get stuck re-scanning the same window.
     let next_id = entries
         .iter()
         .map(|e| e.id)
         .max()
         .map(|id| id + 1)
-        .unwrap_or(params.since_id);
+        .unwrap_or_else(|| state.log_buffer.watermark());
     Json(LogsResponse { entries, next_id }).into_response()
 }
 

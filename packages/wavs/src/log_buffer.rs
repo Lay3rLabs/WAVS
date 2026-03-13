@@ -54,14 +54,23 @@ impl LogBufferInner {
     /// Push an entry into the buffer. The `id` field of the entry is
     /// overwritten with a monotonically increasing value assigned under the
     /// write lock, guaranteeing that entries are always stored in id order.
-    pub fn push(&self, mut entry: LogEntry) {
+    /// Returns the id that was assigned to the entry.
+    pub fn push(&self, mut entry: LogEntry) -> u64 {
         let mut entries = self.entries.write().unwrap();
         entry.id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = entry.id;
         let _ = self.tx.send(entry.clone()); // broadcast with correct id
         if entries.len() >= self.capacity {
             entries.pop_front();
         }
         entries.push_back(entry);
+        id
+    }
+
+    /// Returns the id that will be assigned to the next pushed entry.
+    /// Useful as a cursor baseline when no entries match a filter.
+    pub fn watermark(&self) -> u64 {
+        self.next_id.load(Ordering::Relaxed)
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<LogEntry> {
@@ -97,10 +106,6 @@ impl LogBufferInner {
         let entries = self.entries.read().unwrap();
         let skip = entries.len().saturating_sub(n);
         entries.iter().skip(skip).cloned().collect()
-    }
-
-    pub fn alloc_id(&self) -> u64 {
-        self.next_id.fetch_add(1, Ordering::Relaxed)
     }
 }
 
