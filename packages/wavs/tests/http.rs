@@ -401,7 +401,7 @@ fn http_logs_polling() {
     // Push entries directly into the buffer (simulates InMemoryLogLayer capturing events)
     for i in 0..5u64 {
         app.log_buffer.push(LogEntry {
-            id: app.log_buffer.alloc_id(),
+            id: 0, // assigned by push()
             timestamp_ms: 1_000 + i,
             level: if i % 2 == 0 {
                 "INFO".to_string()
@@ -566,7 +566,7 @@ fn http_logs_sse_replay_ordering() {
     // Push 4 entries before connecting: alternating INFO/WARN
     for i in 0..4u64 {
         app.log_buffer.push(LogEntry {
-            id: app.log_buffer.alloc_id(),
+            id: 0, // assigned by push()
             timestamp_ms: 1000 + i,
             level: if i % 2 == 0 {
                 "INFO".to_string()
