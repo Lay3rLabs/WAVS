@@ -216,7 +216,7 @@ impl Default for Config {
             hyperswarm_bootstrap: None,
             max_wasm_payload_size: WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
             max_wasm_salt_size: WasmResponse::DEFAULT_MAX_SALT_SIZE,
-            log_buffer_capacity: crate::log_buffer::DEFAULT_LOG_BUFFER_CAPCITY,
+            log_buffer_capacity: crate::log_buffer::DEFAULT_LOG_BUFFER_CAPACITY,
             log_broadcast_capacity: crate::log_buffer::DEFAULT_BROADCAST_CAPACITY,
         }
     }
