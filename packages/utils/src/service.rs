@@ -30,6 +30,8 @@ async fn fetch_response(uri: &UriStr, ipfs_gateway: &str) -> Result<reqwest::Res
         }
     };
 
+    tracing::debug!("fetching service from {}", fetch_url);
+
     // Fetch the data
     let response = client
         .get(&fetch_url)
@@ -39,6 +41,23 @@ async fn fetch_response(uri: &UriStr, ipfs_gateway: &str) -> Result<reqwest::Res
 
     // Check if the request was successful
     if !response.status().is_success() {
+        // For IPFS URIs: try the local IPFS daemon gateway as a fallback.
+        // Content pinned locally may not have propagated to the configured public gateway yet.
+        const LOCAL_IPFS_GATEWAY: &str = "http://127.0.0.1:8080/ipfs/";
+        if uri.scheme_str() == "ipfs" && ipfs_gateway != LOCAL_IPFS_GATEWAY {
+            if let Ok(local_url) = ipfs_to_gateway_url(uri, LOCAL_IPFS_GATEWAY) {
+                tracing::info!(
+                    "Primary IPFS gateway returned {}, trying local gateway: {}",
+                    response.status(),
+                    local_url
+                );
+                if let Ok(local_resp) = client.get(&local_url).send().await {
+                    if local_resp.status().is_success() {
+                        return Ok(local_resp);
+                    }
+                }
+            }
+        }
         return Err(anyhow!(
             "Failed to fetch data, status code: {}",
             response.status()

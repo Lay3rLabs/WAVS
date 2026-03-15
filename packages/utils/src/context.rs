@@ -1,15 +1,41 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
-use tokio::runtime::Runtime;
+use tokio::runtime::{Handle, Runtime};
 use tracing::instrument;
 
 #[derive(Clone)]
 pub struct AppContext {
-    pub rt: Arc<Runtime>,
+    pub rt: AnyRuntime,
     killed: Arc<AtomicBool>,
     kill_sender: tokio::sync::broadcast::Sender<()>,
     // just to make sure we don't send in the case of "no receivers" accidentally
     _kill_receiver: Arc<tokio::sync::broadcast::Receiver<()>>,
+}
+
+#[derive(Clone)]
+pub enum AnyRuntime {
+    Tokio(Arc<Runtime>),
+    TokioHandle(Handle),
+}
+
+impl AnyRuntime {
+    pub fn block_on<F: std::future::Future>(&self, fut: F) -> F::Output {
+        match self {
+            AnyRuntime::Tokio(rt) => rt.block_on(fut),
+            AnyRuntime::TokioHandle(handle) => handle.block_on(fut),
+        }
+    }
+
+    pub fn spawn<F>(&self, fut: F) -> tokio::task::JoinHandle<F::Output>
+    where
+        F: std::future::Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        match self {
+            AnyRuntime::Tokio(rt) => rt.spawn(fut),
+            AnyRuntime::TokioHandle(handle) => handle.spawn(fut),
+        }
+    }
 }
 
 impl Default for AppContext {
@@ -20,13 +46,14 @@ impl Default for AppContext {
 
 impl AppContext {
     pub fn new() -> Self {
-        let rt = Arc::new(
+        Self::new_with_runtime(AnyRuntime::Tokio(Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .unwrap(),
-        );
-
+        )))
+    }
+    pub fn new_with_runtime(rt: AnyRuntime) -> Self {
         let (kill_sender, kill_receiver) = tokio::sync::broadcast::channel(1);
 
         Self {

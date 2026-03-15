@@ -4,8 +4,10 @@ use crate::{
     health::SharedHealthStatus,
     http::handlers::{
         debug::handle_dev_trigger_streams_info,
+        logs::{handle_logs, handle_logs_stream},
         service::{add::handle_add_service_direct, get::handle_get_service_by_hash},
     },
+    log_buffer::LogBuffer,
     AppContext,
 };
 use axum::{
@@ -24,13 +26,17 @@ use wildmatch::WildMatch;
 use super::{
     handlers::{
         debug::handle_debug_trigger,
+        fs::{handle_fs, handle_fs_root},
         handle_add_chain, handle_add_service, handle_config, handle_delete_service, handle_health,
         handle_info, handle_list_services, handle_not_found, handle_p2p_status,
         handle_upload_component,
-        kv::handle_get_kv,
+        kv::{handle_get_kv, handle_list_kv},
         openapi::ApiDoc,
         service::{
-            get::handle_get_service, key::handle_get_service_signer, save::handle_save_service,
+            get::handle_get_service,
+            key::handle_get_service_signer,
+            pause::{handle_pause_service, handle_resume_service},
+            save::handle_save_service,
         },
     },
     state::HttpState,
@@ -45,6 +51,8 @@ pub fn start(
     dispatcher: Arc<Dispatcher<FileStorage>>,
     metrics: HttpMetrics,
     health_status: SharedHealthStatus,
+    log_buffer: LogBuffer,
+    ready_tx: std::sync::mpsc::SyncSender<()>,
 ) -> anyhow::Result<()> {
     // The server runs within the tokio runtime
     ctx.rt.clone().block_on(async move {
@@ -52,11 +60,22 @@ pub fn start(
 
         let mut shutdown_signal = ctx.get_kill_receiver();
 
-        let router = make_router(config, dispatcher, false, metrics, health_status).await?;
+        let router = make_router(
+            config,
+            dispatcher,
+            false,
+            metrics,
+            health_status,
+            log_buffer,
+        )
+        .await?;
 
         let listener = tokio::net::TcpListener::bind(&format!("{}:{}", host, port)).await?;
         let actual_port = listener.local_addr()?.port();
         tracing::info!("HTTP server bound to port {}", actual_port);
+
+        // Signal that the TCP port is bound; the dispatcher restore loop may now proceed.
+        let _ = ready_tx.send(());
 
         axum::serve(listener, router)
             .with_graceful_shutdown(async move {
@@ -79,6 +98,7 @@ pub async fn make_router(
     is_mock_chain_client: bool,
     metrics: HttpMetrics,
     health_status: SharedHealthStatus,
+    log_buffer: LogBuffer,
 ) -> anyhow::Result<axum::Router> {
     let state = HttpState::new(
         config.clone(),
@@ -86,6 +106,7 @@ pub async fn make_router(
         is_mock_chain_client,
         metrics,
         health_status,
+        log_buffer,
     )
     .await?;
 
@@ -103,6 +124,8 @@ pub async fn make_router(
     // protected routes (POST/DELETE)
     let mut protected = axum::Router::new()
         .route("/services/signer", post(handle_get_service_signer))
+        .route("/services/pause", post(handle_pause_service))
+        .route("/services/resume", post(handle_resume_service))
         .route("/services", post(handle_add_service))
         .route("/services", delete(handle_delete_service));
 
@@ -115,7 +138,12 @@ pub async fn make_router(
             )
             .route("/dev/config", get(handle_config))
             .route("/dev/trigger-streams", get(handle_dev_trigger_streams_info))
-            .route("/dev/kv/{service_id}/{bucket}/{key}", get(handle_get_kv));
+            .route("/dev/kv/{service_id}/{bucket}/{key}", get(handle_get_kv))
+            .route("/dev/kv/{service_id}", get(handle_list_kv))
+            .route("/dev/fs/{service_id}", get(handle_fs_root))
+            .route("/dev/fs/{service_id}/{*path}", get(handle_fs))
+            .route("/dev/logs", get(handle_logs))
+            .route("/dev/logs/stream", get(handle_logs_stream));
 
         protected = protected
             .route("/dev/triggers", post(handle_debug_trigger))

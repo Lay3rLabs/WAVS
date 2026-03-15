@@ -15,7 +15,7 @@ FROM base AS cacher
 WORKDIR /myapp
 RUN cargo install cargo-chef
 COPY --from=planner /myapp/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json -p wavs -p wavs-cli
 
 # This build step should just compile the local code and be faster
 FROM base AS builder
@@ -23,7 +23,7 @@ WORKDIR /myapp
 COPY . .
 # Copy over the cached dependencies
 COPY --from=cacher /myapp/target target
-RUN cargo build --release
+RUN cargo build --release -p wavs -p wavs-cli
 
 ### PRODUCTION
 
