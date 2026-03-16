@@ -6,7 +6,7 @@ JSON formats for `wavs_save_service`, `wavs_deploy_dev_service`, and `wavs_simul
 
 ## ServiceManager JSON
 
-Used by: `wavs_deploy_service`, `wavs_delete_service`, `wavs_pause_service`, `wavs_resume_service`, `wavs_set_service_uri`, `wavs_register_operator`
+Used by: `wavs_deploy_service`, `wavs_delete_service`, `wavs_set_service_uri`, `wavs_register_operator`
 
 ```json
 // EVM

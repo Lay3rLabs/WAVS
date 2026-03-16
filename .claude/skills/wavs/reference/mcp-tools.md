@@ -14,8 +14,6 @@ All tools are exposed by the `wavs` MCP server. Prefix with `wavs:` when calling
 | `wavs_get_service` | — | — | — | Requires `chain` (e.g. `"evm:31337"`) + `address` params |
 | `wavs_deploy_service` | ✓ | — | — | Reads service def from chain via ServiceManager |
 | `wavs_delete_service` | ✓ | — | — | Permanently removes service from WAVS node |
-| `wavs_pause_service` | ✓ | — | — | Halts trigger execution; service stays registered |
-| `wavs_resume_service` | ✓ | — | — | Re-enables a paused service |
 | `wavs_set_service_uri` | — | ✓ | — | EVM only; calls `setServiceURI` on ServiceManager contract |
 | `wavs_deploy_service_manager` | — | ✓ | — | EVM only; deploys `SimpleServiceManager.sol`; returns `address` |
 | `wavs_deploy_poa_service_manager` | — | ✓ | — | EVM only; deploys `POAStakeRegistry` proxy via Docker; returns proxy `address` |
@@ -47,7 +45,7 @@ chain:   "evm:31337" or "cosmos:mychain"
 address: "0xServiceManagerAddress..."
 ```
 
-### wavs_deploy_service / wavs_delete_service / wavs_pause_service / wavs_resume_service
+### wavs_deploy_service / wavs_delete_service
 ```
 service_manager_json: see reference/service-json.md
 ```

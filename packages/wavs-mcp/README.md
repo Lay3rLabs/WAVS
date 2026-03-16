@@ -156,7 +156,7 @@ Edit `.vscode/mcp.json`:
 | Category | Tools | Auth |
 |----------|-------|------|
 | **Read** | `wavs_get_node_info`, `wavs_get_health`, `wavs_list_services`, `wavs_get_service` | None |
-| **Write** | `wavs_deploy_service`, `wavs_delete_service`, `wavs_pause_service`, `wavs_resume_service` | `--token` |
+| **Write** | `wavs_deploy_service`, `wavs_delete_service` | `--token` |
 | **Dev** | `wavs_upload_component`, `wavs_save_service`, `wavs_simulate_trigger`, `wavs_deploy_dev_service`, `wavs_query_kv` | Dev endpoints enabled |
 | **Chain-write** | `wavs_deploy_service_manager`, `wavs_deploy_poa_service_manager`, `wavs_register_operator`, `wavs_set_service_uri` | `mcp_chain_credential` |
 | **Local** | `wavs_get_wit_interface`, `wavs_scaffold_component`, `wavs_build_component`, `wavs_get_service_schema` | None |
