@@ -41,11 +41,6 @@ pub struct DeleteServicesRequest {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
-pub struct ManageServiceRequest {
-    pub service_manager: ServiceManager,
-}
-
-#[derive(Serialize, Deserialize, ToSchema)]
 pub struct ListServicesResponse {
     pub services: Vec<Service>,
     pub service_ids: Vec<ServiceId>,

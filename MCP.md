@@ -143,8 +143,6 @@ Tools are grouped into five categories.
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `wavs_deploy_service` | Register a service from its ServiceManager | `service_manager_json` (see format below) |
-| `wavs_pause_service` | Pause a running service | `service_manager_json` |
-| `wavs_resume_service` | Resume a paused service | `service_manager_json` |
 
 `service_manager_json` shapes:
 ```json
@@ -244,9 +242,7 @@ Paste any of these directly into Claude Desktop (or any MCP-connected client) af
 > "Simulate a raw trigger with data bytes `[104, 101, 108, 108, 111]` against service `abc123...` workflow `default`."
 
 **Lifecycle:**
-> "Pause the service at `0xABCD...` on `evm:31337`."
-
-> "Resume the paused service at `0xABCD...` on `evm:31337`."
+> "Pause the service at `0xABCD...` on `evm:31337` by updating its status to paused and setting the new URI on-chain."
 
 ---
 
@@ -284,7 +280,7 @@ You are a WAVS (WebAssembly-based Actively Validated Services) developer assista
 You have access to the following MCP tools via the wavs server:
 
 Read (no auth): wavs_get_node_info, wavs_get_health, wavs_list_services, wavs_get_service
-Write (require token): wavs_deploy_service, wavs_pause_service, wavs_resume_service, wavs_delete_service
+Write (require token): wavs_deploy_service, wavs_delete_service
 Chain-write (require WAVS_MCP_CHAIN_CREDENTIAL): wavs_set_service_uri, wavs_deploy_service_manager
 Dev (require dev endpoints): wavs_upload_component, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv
 Local: wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component

@@ -10,12 +10,11 @@ import { usePOAStore, persistRegistries } from '../../stores/poaStore';
 import {
   getServices,
   removeService as removeServiceCmd,
-  pauseService as pauseServiceCmd,
-  resumeService as resumeServiceCmd,
   listKvEntries,
   listFsEntries,
   readFsFile,
 } from '../../tauri';
+import { ServiceUpdateModal } from '../../components/service';
 import { getPublicClient, getAddress } from '../../hooks/useViemClient';
 import { connectToRegistry, fetchOperators } from '../../utils/evm';
 import { getServiceAddress, getServiceChain, getErrorMessage, buildServiceMap } from '../../types';
@@ -492,7 +491,6 @@ export function ServiceDetailPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('workflows');
   const [refreshing, setRefreshing] = useState(false);
-  const [pauseLoading, setPauseLoading] = useState(false);
 
   const services = useAppStore((state) => state.services);
   const setServices = useAppStore((state) => state.setServices);
@@ -586,21 +584,21 @@ export function ServiceDetailPage() {
     );
   };
 
-  const handlePauseResume = async () => {
-    if (!service) return;
-    setPauseLoading(true);
-    try {
-      if (service.status === 'active') {
-        await pauseServiceCmd(service.manager);
-      } else {
-        await resumeServiceCmd(service.manager);
-      }
-      await refreshServices();
-    } catch (err) {
-      Toast.error(`Failed to ${service.status === 'active' ? 'pause' : 'resume'} service: ${getErrorMessage(err)}`);
-    } finally {
-      setPauseLoading(false);
-    }
+  const handlePauseResume = () => {
+    if (!service || !registry) return;
+    const newStatus = service.status === 'active' ? 'paused' : 'active';
+    const updatedService = { ...service, status: newStatus as Service['status'] };
+    const action = newStatus === 'paused' ? 'Pause service' : 'Resume service';
+
+    Modal.open(
+      <ServiceUpdateModal
+        updatedService={updatedService}
+        description={action}
+        rpcUrl={registry.rpcUrl}
+        chainId={registry.chainId}
+        contractAddress={contractAddress}
+      />,
+    );
   };
 
   const isPaused = service?.status === 'paused';
@@ -688,10 +686,9 @@ export function ServiceDetailPage() {
               <>
                 <Button text="Edit" size="sm" color="purple" onClick={() => navigate(`/services/${chainId}/${address}/edit`)} />
                 <Button
-                  text={pauseLoading ? '...' : isPaused ? 'Resume' : 'Pause'}
+                  text={isPaused ? 'Resume' : 'Pause'}
                   size="sm"
                   variant="outline"
-                  disabled={pauseLoading}
                   onClick={handlePauseResume}
                 />
               </>

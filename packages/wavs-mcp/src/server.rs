@@ -352,36 +352,6 @@ impl WavsMcpServer {
         }
     }
 
-    async fn tool_pause_service(
-        &self,
-        args: Option<serde_json::Map<String, serde_json::Value>>,
-    ) -> Result<CallToolResult, McpError> {
-        let p: ServiceManagerParams = parse_args(args)?;
-        let manager = match serde_json::from_str(&p.service_manager_json) {
-            Ok(m) => m,
-            Err(e) => return err(format!("Invalid service_manager_json: {e}")),
-        };
-        match self.client.pause_service(manager).await {
-            Ok(()) => ok("Service paused successfully"),
-            Err(e) => err(format!("Failed to pause service: {e:#}")),
-        }
-    }
-
-    async fn tool_resume_service(
-        &self,
-        args: Option<serde_json::Map<String, serde_json::Value>>,
-    ) -> Result<CallToolResult, McpError> {
-        let p: ServiceManagerParams = parse_args(args)?;
-        let manager = match serde_json::from_str(&p.service_manager_json) {
-            Ok(m) => m,
-            Err(e) => return err(format!("Invalid service_manager_json: {e}")),
-        };
-        match self.client.resume_service(manager).await {
-            Ok(()) => ok("Service resumed successfully"),
-            Err(e) => err(format!("Failed to resume service: {e:#}")),
-        }
-    }
-
     async fn tool_delete_service(
         &self,
         args: Option<serde_json::Map<String, serde_json::Value>>,
@@ -989,7 +959,7 @@ impl ServerHandler for WavsMcpServer {
                 "MCP server for the WAVS (WebAssembly-based Actively Validated Services) platform.\n\
                  \n\
                  Read tools (no auth needed): wavs_get_node_info, wavs_get_health, wavs_list_services, wavs_get_service\n\
-                 Write tools (need --token): wavs_deploy_service, wavs_delete_service, wavs_pause_service, wavs_resume_service\n\
+                 Write tools (need --token): wavs_deploy_service, wavs_delete_service\n\
                  Dev tools (need dev endpoints): wavs_upload_component, wavs_save_service, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv\n\
                  Chain-write tools (need WAVS_MCP_CHAIN_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
                  Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator, wavs_deploy_and_register, wavs_get_signing_address\n\
@@ -1039,16 +1009,6 @@ impl ServerHandler for WavsMcpServer {
                 Tool {
                     name: "wavs_delete_service".into(),
                     description: "Delete a registered service. Requires --token.".into(),
-                    input_schema: schema_for_type::<ServiceManagerParams>().into(),
-                },
-                Tool {
-                    name: "wavs_pause_service".into(),
-                    description: "Pause a registered service. Requires --token.".into(),
-                    input_schema: schema_for_type::<ServiceManagerParams>().into(),
-                },
-                Tool {
-                    name: "wavs_resume_service".into(),
-                    description: "Resume a paused service. Requires --token.".into(),
                     input_schema: schema_for_type::<ServiceManagerParams>().into(),
                 },
                 // Chain-write tools (need WAVS_MCP_CHAIN_CREDENTIAL on MCP server)
@@ -1215,8 +1175,6 @@ impl ServerHandler for WavsMcpServer {
             "wavs_get_service" => self.tool_get_service(args).await,
             "wavs_deploy_service" => self.tool_deploy_service(args).await,
             "wavs_delete_service" => self.tool_delete_service(args).await,
-            "wavs_pause_service" => self.tool_pause_service(args).await,
-            "wavs_resume_service" => self.tool_resume_service(args).await,
             "wavs_set_service_uri" => self.tool_set_service_uri(args).await,
             "wavs_deploy_service_manager" => self.tool_deploy_service_manager(args).await,
             "wavs_deploy_poa_service_manager" => self.tool_deploy_poa_service_manager(args).await,

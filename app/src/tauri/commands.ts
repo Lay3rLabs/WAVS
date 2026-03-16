@@ -63,12 +63,8 @@ export async function removeService(manager: ServiceManager): Promise<void> {
   return invoke<void>('cmd_remove_service', { manager });
 }
 
-export async function pauseService(manager: ServiceManager): Promise<void> {
-  return invoke<void>('cmd_pause_service', { manager });
-}
-
-export async function resumeService(manager: ServiceManager): Promise<void> {
-  return invoke<void>('cmd_resume_service', { manager });
+export async function saveServiceToNode(serviceJson: string): Promise<string> {
+  return invoke<string>('cmd_save_service_to_node', { service_json: serviceJson });
 }
 
 // Keychain commands

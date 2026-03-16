@@ -4,7 +4,7 @@ description: >
   Develops, deploys, and manages WAVS (WebAssembly-based Actively Validated Services)
   components and services using the wavs MCP server. Use when the user wants to build a
   WASM component, deploy a new service, update an existing service, or manage service
-  lifecycle (pause/resume). Triggers on: wavs, wasm component, AVS, service manager,
+  lifecycle. Triggers on: wavs, wasm component, AVS, service manager,
   deploy service, scaffold component.
 ---
 
@@ -67,7 +67,7 @@ When in doubt, start with **component-dev** — it ends with a deployment step.
 | Category | Tools | Auth Required |
 |----------|-------|---------------|
 | **Read** | `get_node_info`, `get_health`, `list_services`, `get_service` | None |
-| **Write** | `deploy_service`, `delete_service`, `pause_service`, `resume_service` | `--token` |
+| **Write** | `deploy_service`, `delete_service` | `--token` |
 | **Dev** | `upload_component`, `save_service`, `simulate_trigger`, `deploy_dev_service`, `query_kv` | Dev endpoints enabled |
 | **Chain-write** | `set_service_uri`, `deploy_service_manager`, `deploy_poa_service_manager`, `register_operator` | `WAVS_MCP_CHAIN_CREDENTIAL` env var |
 | **Local** | `get_wit_interface`, `scaffold_component`, `build_component` | None |

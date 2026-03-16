@@ -332,31 +332,39 @@ pub async fn cmd_remove_service(
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn cmd_pause_service(
-    wavs_instance: State<'_, WavsInstanceState>,
-    manager: ServiceManager,
-) -> AppResult<()> {
-    let service_id = ServiceId::from(&manager);
-    wavs_instance
-        .dispatcher()?
-        .pause_service(service_id)
-        .await
-        .map_err(|e| AppError::Service(format!("Failed to pause service: {}", e)))?;
-    Ok(())
-}
+pub async fn cmd_save_service_to_node(
+    wavs_config: State<'_, WavsConfigState>,
+    service_json: String,
+) -> AppResult<String> {
+    let wavs_url = match wavs_config.get_cloned() {
+        Some(config) => format!("http://{}:{}", config.host, config.port),
+        None => "http://localhost:8000".to_string(),
+    };
 
-#[tauri::command(rename_all = "snake_case")]
-pub async fn cmd_resume_service(
-    wavs_instance: State<'_, WavsInstanceState>,
-    manager: ServiceManager,
-) -> AppResult<()> {
-    let service_id = ServiceId::from(&manager);
-    wavs_instance
-        .dispatcher()?
-        .resume_service(service_id)
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{}/dev/services", wavs_url))
+        .header("Content-Type", "application/json")
+        .body(service_json)
+        .send()
         .await
-        .map_err(|e| AppError::Service(format!("Failed to resume service: {}", e)))?;
-    Ok(())
+        .map_err(|e| AppError::Service(format!("Failed to save service to node: {}", e)))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::Service(format!(
+            "Node returned {}: {}",
+            status, body
+        )));
+    }
+
+    let save_resp: wavs_types::SaveServiceResponse = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Service(format!("Failed to parse save response: {}", e)))?;
+
+    Ok(format!("{}/dev/services/{}", wavs_url, save_resp.hash))
 }
 
 /// Load mnemonic from OS keyring and populate the cache.
