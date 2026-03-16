@@ -35,10 +35,10 @@ MVP Requirements:
 - [x] App branding
 - [x] Select file / folder UX
 - [ ] Get MCP working with claude desktop
-- [ ] Inmprove skills and MCP installation DX. gsd shows how to install things globally
+- [ ] Improve skills and MCP installation DX. gsd shows how to install things globally.
 
 Clean up:
-- wavs.toml has unnessecary things in it, maybe those should be there and documented but commented out?
+- wavs.toml has unnecessary things in it, maybe those should be there and documented but commented out?
 
 Post MVP:
 - Stats (CPU, Memory, etc.)
