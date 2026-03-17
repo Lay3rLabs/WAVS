@@ -50,8 +50,8 @@
 ### Integration
 
 - [x] **INT-01**: P2pHandle API (publish, subscribe, unsubscribe, get_status) preserved — Aggregator sees no changes
-- [ ] **INT-02**: All existing e2e tests pass (`just test-wavs-e2e`)
-- [ ] **INT-03**: libp2p dependency removed from Cargo.toml
+- [x] **INT-02**: All existing e2e tests pass (`just test-wavs-e2e`)
+- [x] **INT-03**: libp2p dependency removed from Cargo.toml
 
 ### Documentation
 
@@ -113,8 +113,8 @@
 | CFG-03 | Phase 3 | Complete |
 | OBS-01 | Phase 3 | Complete |
 | OBS-02 | Phase 3 | Complete |
-| INT-02 | Phase 4 | Pending |
-| INT-03 | Phase 4 | Pending |
+| INT-02 | Phase 4 | Complete |
+| INT-03 | Phase 4 | Complete |
 | DOC-01 | Phase 4 | Pending |
 | DOC-02 | Phase 4 | Pending |
 | DOC-03 | Phase 4 | Pending |

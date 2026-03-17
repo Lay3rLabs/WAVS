@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-03-17T18:53:49.001Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-03-17T19:53:10.731Z"
 last_activity: 2026-03-17 — Connected peer tracking via broadcast ack and inbound message tracking, OBS-01 verified
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 11
+  completed_plans: 10
   percent: 100
 ---
 
@@ -53,6 +53,7 @@ Progress: [##########] 100%
 
 *Updated after each plan completion*
 | Phase 03 P03 | 5 | 2 tasks | 2 files |
+| Phase 04-validation-and-cleanup P01 | 10 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,8 @@ Recent decisions affecting current work:
 - Keep HashMap import in http.rs -- used by DevTriggerStreamsInfo, not just P2pStatus
 - [Phase 03]: Arc<RwLock<Vec<String>>> for connected_peers_tracker -- simple shared state sufficient for bridge loop scope
 - [Phase 03]: Broadcast ack replaces full tracker (not merge) -- latest broadcast recipients are the current connected set
+- [Phase 04-validation-and-cleanup]: TestP2pMode enum renamed Local/Remote to match P2pConfig variants exactly -- consistent naming across test harness and production code
+- [Phase 04-validation-and-cleanup]: libp2p workspace dep removed entirely from Cargo.toml and packages/wavs/Cargo.toml -- zero source references confirmed, clean removal with no functionality lost
 
 ### Pending Todos
 
@@ -105,6 +108,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T18:48:16.929Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-03-17T19:53:10.729Z
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None

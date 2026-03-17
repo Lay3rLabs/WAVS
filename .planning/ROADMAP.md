@@ -94,4 +94,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Secure Peer Connectivity | 3/3 | Complete | 2026-03-17 |
 | 2. Broadcast and Routing | 1/2 | In Progress | - |
 | 3. Config and Observability | 0/4 | Not started | - |
-| 4. Validation and Cleanup | 0/2 | Not started | - |
+| 4. Validation and Cleanup | 1/2 | In Progress|  |
