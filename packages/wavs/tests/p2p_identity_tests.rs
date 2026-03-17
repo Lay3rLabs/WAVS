@@ -67,6 +67,8 @@ fn test_p2p_config_local_deserialization() {
         listen_port: 9000,
         peer_addresses: vec!["aabb@127.0.0.1:9001".to_string()],
         authorized_peers: vec!["aabbccdd".to_string()],
+        max_message_size: None,
+        deque_size: None,
     };
     assert_eq!(config.listen_port(), Some(9000));
     assert_eq!(config.authorized_peers().len(), 1);
@@ -79,6 +81,8 @@ fn test_p2p_config_remote_deserialization() {
         listen_port: 9000,
         bootstrappers: vec!["aabb@bootstrap.example.com:9000".to_string()],
         authorized_peers: vec!["aabbccdd".to_string(), "eeff0011".to_string()],
+        max_message_size: None,
+        deque_size: None,
     };
     assert_eq!(config.listen_port(), Some(9000));
     assert_eq!(config.authorized_peers().len(), 2);

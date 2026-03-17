@@ -39,13 +39,13 @@
 ### Config
 
 - [x] **CFG-01**: New P2P config format in wavs.toml (Disabled / Local / Remote) tailored to commonware
-- [ ] **CFG-02**: Configurable listen port, bootstrappers, timeouts, deque sizes
+- [x] **CFG-02**: Configurable listen port, bootstrappers, timeouts, deque sizes
 - [x] **CFG-03**: Local dev preset with localhost peer addresses for multi-operator testing
 
 ### Observability
 
-- [ ] **OBS-01**: `/p2p/status` endpoint returns peer ID, listen addresses, connected peers, subscribed services
-- [ ] **OBS-02**: Status uses socket addresses (not multiaddr) and Ed25519 public keys
+- [x] **OBS-01**: `/p2p/status` endpoint returns peer ID, listen addresses, connected peers, subscribed services
+- [x] **OBS-02**: Status uses socket addresses (not multiaddr) and Ed25519 public keys
 
 ### Integration
 
@@ -109,10 +109,10 @@
 | CATCH-02 | Phase 2 | Complete |
 | INT-01 | Phase 2 | Complete |
 | CFG-01 | Phase 3 | Complete |
-| CFG-02 | Phase 3 | Pending |
+| CFG-02 | Phase 3 | Complete |
 | CFG-03 | Phase 3 | Complete |
-| OBS-01 | Phase 3 | Pending |
-| OBS-02 | Phase 3 | Pending |
+| OBS-01 | Phase 3 | Complete |
+| OBS-02 | Phase 3 | Complete |
 | INT-02 | Phase 4 | Pending |
 | INT-03 | Phase 4 | Pending |
 | DOC-01 | Phase 4 | Pending |

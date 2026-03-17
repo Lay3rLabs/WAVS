@@ -55,6 +55,8 @@ async fn test_lookup_mode_two_nodes_connect() {
         listen_port: port_a,
         peer_addresses: vec![format!("{}@127.0.0.1:{}", pubkey_b_hex, port_b)],
         authorized_peers: vec![pubkey_b_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     // Node B config: knows about node A
@@ -62,6 +64,8 @@ async fn test_lookup_mode_two_nodes_connect() {
         listen_port: port_b,
         peer_addresses: vec![format!("{}@127.0.0.1:{}", pubkey_a_hex, port_a)],
         authorized_peers: vec![pubkey_a_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     // Create dummy aggregator channels (not used in Phase 1 tests)
@@ -126,6 +130,8 @@ async fn test_unauthorized_peer_rejected() {
         listen_port: port_a,
         peer_addresses: vec![],
         authorized_peers: vec![], // Only self is authorized (implicit)
+        max_message_size: None,
+        deque_size: None,
     };
 
     // Node C config: tries to connect to node A
@@ -133,6 +139,8 @@ async fn test_unauthorized_peer_rejected() {
         listen_port: port_c,
         peer_addresses: vec![format!("{}@127.0.0.1:{}", pubkey_a_hex, port_a)],
         authorized_peers: vec![pubkey_a_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx_a, _) = crossbeam::channel::unbounded::<AggregatorCommand>();
@@ -192,6 +200,8 @@ async fn test_discovery_mode_two_nodes() {
         listen_port: port_a,
         bootstrappers: vec![], // This node IS the bootstrapper
         authorized_peers: vec![pubkey_b_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     // Node B uses node A as bootstrapper
@@ -199,6 +209,8 @@ async fn test_discovery_mode_two_nodes() {
         listen_port: port_b,
         bootstrappers: vec![format!("{}@127.0.0.1:{}", pubkey_a_hex, port_a)],
         authorized_peers: vec![pubkey_a_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx_a, _) = crossbeam::channel::unbounded::<AggregatorCommand>();
@@ -267,12 +279,16 @@ async fn test_block_peer() {
         listen_port: port_a,
         peer_addresses: vec![format!("{}@127.0.0.1:{}", pubkey_b_hex, port_b)],
         authorized_peers: vec![pubkey_b_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let config_b = P2pConfig::Local {
         listen_port: port_b,
         peer_addresses: vec![format!("{}@127.0.0.1:{}", pubkey_a_hex, port_a)],
         authorized_peers: vec![pubkey_a_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx_a, _) = crossbeam::channel::unbounded::<AggregatorCommand>();
@@ -341,6 +357,8 @@ async fn test_auto_reconnect() {
         listen_port: port_b,
         bootstrappers: vec![format!("{}@127.0.0.1:{}", pubkey_a_hex, port_a)],
         authorized_peers: vec![pubkey_a_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx_b, _) = crossbeam::channel::unbounded::<AggregatorCommand>();
@@ -371,6 +389,8 @@ async fn test_auto_reconnect() {
         listen_port: port_a,
         bootstrappers: vec![], // Node A IS the bootstrapper
         authorized_peers: vec![pubkey_b_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx_a, _) = crossbeam::channel::unbounded::<AggregatorCommand>();
