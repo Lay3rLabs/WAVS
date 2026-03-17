@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-03-17T15:35:00.000Z"
-last_activity: 2026-03-17 — Plan 01-02 complete
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-03-17T15:47:36.000Z"
+last_activity: 2026-03-17 — Phase 1 complete (all 3 plans)
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 16
+  completed_plans: 3
+  percent: 25
 ---
 
 # Project State
@@ -25,29 +25,29 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 
 ## Current Position
 
-Phase: 1 of 4 (Secure Peer Connectivity)
-Plan: 2 of 3 in current phase
+Phase: 1 of 4 (Secure Peer Connectivity) -- COMPLETE
+Plan: 3 of 3 in current phase (all plans complete)
 Status: Executing
-Last activity: 2026-03-17 — Plan 01-02 complete (Commonware runtime scaffold + lookup networking)
+Last activity: 2026-03-17 — Phase 1 complete (Discovery mode, BlockPeer, auto-reconnect)
 
-Progress: [##........] 16%
+Progress: [###.......] 25%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 12.5 min
-- Total execution time: 0.4 hours
+- Total plans completed: 3
+- Average duration: 10.7 min
+- Total execution time: 0.5 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 2 | 25 min | 12.5 min |
+| 01 | 3 | 32 min | 10.7 min |
 
 **Recent Trend:**
-- Last 5 plans: 13m, 12m
-- Trend: stable
+- Last 5 plans: 13m, 12m, 7m
+- Trend: accelerating
 
 *Updated after each plan completion*
 
@@ -67,6 +67,9 @@ Recent decisions affecting current work:
 - Config::local() defaults provide sufficient rate limiting (SEC-02) — no explicit builder calls needed
 - Map::from_iter_dedup() for Oracle peer map — handles duplicate keys gracefully
 - context.stop(0, None) for clean commonware runtime shutdown on bridge loop exit
+- Config::local() for discovery in tests — allow_private_ips=true needed for localhost
+- Set::from_iter_dedup for discovery Oracle peer set — handles duplicate keys gracefully
+- BlockPeer in both lookup and discovery bridge loops — consistent API regardless of mode
 
 ### Pending Todos
 
@@ -80,6 +83,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T15:35:00.000Z
-Stopped at: Completed 01-02-PLAN.md
-Resume file: .planning/phases/01-secure-peer-connectivity/01-03-PLAN.md
+Last session: 2026-03-17T15:47:36.000Z
+Stopped at: Completed 01-03-PLAN.md (Phase 1 complete)
+Resume file: Phase 2 (next phase)
