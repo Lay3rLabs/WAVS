@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-03-17T18:22:42.886Z"
-last_activity: 2026-03-17 — Rewrote wavs.toml P2P section with commonware terminology and local dev preset
+stopped_at: Completed 03-00-PLAN.md
+last_updated: "2026-03-17T18:32:33Z"
+last_activity: 2026-03-17 — Wave 0 test stubs for P2pConfig serde/defaults, P2pStatus format, and connected peers status
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 9
-  completed_plans: 6
-  percent: 67
+  completed_plans: 7
+  percent: 78
 ---
 
 # Project State
@@ -26,18 +26,18 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 3 of 4 (Config and Observability)
-Plan: 2 of 4 in current phase
+Plan: 3 of 4 in current phase
 Status: In Progress
-Last activity: 2026-03-17 — Rewrote wavs.toml P2P section with commonware terminology and local dev preset
+Last activity: 2026-03-17 — Wave 0 test stubs for P2pConfig serde/defaults, P2pStatus format, and connected peers status
 
-Progress: [#######...] 67%
+Progress: [########..] 78%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 12.5 min
-- Total execution time: 1.25 hours
+- Total plans completed: 7
+- Average duration: 12.4 min
+- Total execution time: 1.45 hours
 
 **By Phase:**
 
@@ -45,11 +45,11 @@ Progress: [#######...] 67%
 |-------|-------|-------|----------|
 | 01 | 3 | 32 min | 10.7 min |
 | 02 | 2 | 39 min | 19.5 min |
-| 03 | 1 | 1 min | 1 min |
+| 03 | 2 | 14 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 12m, 7m, 22m, 17m, 1m
-- Trend: stable (Plan 03-02 was documentation-only)
+- Last 5 plans: 7m, 22m, 17m, 1m, 13m
+- Trend: stable
 
 *Updated after each plan completion*
 
@@ -84,6 +84,8 @@ Recent decisions affecting current work:
 - CATCH-01 scoped as push-based recovery via Engine cache re-broadcast on reconnection
 - Reordered P2P options in wavs.toml to lead with Disabled (default) for clarity
 - Used ASCII dashes instead of em-dashes in wavs.toml option labels for portable editing
+- Used JSON roundtrip for P2pConfig serde testing (TOML cannot serialize externally-tagged enums)
+- Used TOML deserialization from handwritten strings for config-realistic tests (matches figment usage)
 
 ### Pending Todos
 
@@ -97,6 +99,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T18:22:42.884Z
-Stopped at: Completed 03-02-PLAN.md
-Resume file: None
+Last session: 2026-03-17T18:32:33Z
+Stopped at: Completed 03-00-PLAN.md
+Resume file: Continue with 03-01-PLAN.md or 03-03-PLAN.md (Wave 1)
