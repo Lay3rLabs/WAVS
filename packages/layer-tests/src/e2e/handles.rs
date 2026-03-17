@@ -234,33 +234,14 @@ impl AppHandles {
             let mut config = wavs_config.clone();
             if let P2pConfig::Remote {
                 listen_port,
-                bootstrap_nodes: _,
-                max_retry_duration_secs,
-                retry_interval_ms,
-                submission_ttl_secs,
-                max_catchup_submissions,
-                cleanup_interval_secs,
-                kademlia_discovery_interval_secs,
-                max_pending_publishes,
-                max_stored_submissions_per_service,
-                catchup_request_timeout_secs,
-                max_concurrent_catchup_requests_per_service,
+                bootstrappers: _,
+                authorized_peers,
             } = &config.p2p
             {
                 config.p2p = P2pConfig::Remote {
                     listen_port: *listen_port,
-                    bootstrap_nodes: vec![bootstrap_addr.clone()],
-                    max_retry_duration_secs: *max_retry_duration_secs,
-                    retry_interval_ms: *retry_interval_ms,
-                    submission_ttl_secs: *submission_ttl_secs,
-                    max_catchup_submissions: *max_catchup_submissions,
-                    cleanup_interval_secs: *cleanup_interval_secs,
-                    kademlia_discovery_interval_secs: *kademlia_discovery_interval_secs,
-                    max_pending_publishes: *max_pending_publishes,
-                    max_stored_submissions_per_service: *max_stored_submissions_per_service,
-                    catchup_request_timeout_secs: *catchup_request_timeout_secs,
-                    max_concurrent_catchup_requests_per_service:
-                        *max_concurrent_catchup_requests_per_service,
+                    bootstrappers: vec![bootstrap_addr.clone()],
+                    authorized_peers: authorized_peers.clone(),
                 };
             }
 
