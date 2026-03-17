@@ -66,6 +66,12 @@ slotmap = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 rand = { workspace = true }
+bip39 = { workspace = true }
+rand_chacha = "0.3"
+commonware-p2p = "2026.3.0"
+commonware-cryptography = "2026.3.0"
+commonware-math = "2026.3.0"
+commonware-runtime = "2026.3.0"
 libp2p = { workspace = true }
 hypercore = { workspace = true }
 hypercore-protocol = { workspace = true }
@@ -80,6 +86,7 @@ wavs-benchmark-common = { workspace = true }
 utils = { workspace = true, features = ["test-utils"] }
 example-types = { workspace = true }
 alloy-node-bindings = { workspace = true }
+commonware-cryptography = "2026.3.0"
 
 
 [[bench]]
