@@ -3,24 +3,39 @@
 //! This module provides peer-to-peer networking for multi-operator WAVS deployments,
 //! enabling operators to share submissions and reach quorum consensus.
 //!
-//! # Migration Status
+//! # Architecture
 //!
-//! This module is being migrated from libp2p to commonware-p2p. The Ed25519 identity
-//! derivation, commonware runtime scaffold, lookup mode (known addresses for local dev),
-//! and discovery mode (bootstrapper-based for production) are implemented.
-//! Broadcast, message routing, and the full P2pHandle API will be implemented in Phase 2.
+//! Uses commonware-p2p for authenticated peer networking with two modes:
+//! - **Lookup mode** (`P2pConfig::Local`): Known peer addresses for local dev/testing
+//! - **Discovery mode** (`P2pConfig::Remote`): Bootstrapper-based peer discovery for production
+//!
+//! ## Broadcast Architecture (Two-Channel)
+//!
+//! Each network mode registers **two P2P channels**:
+//! - **Channel 0**: Consumed by the broadcast Engine for message caching and catch-up
+//! - **Channel 1**: Read by an inbound bridge task for real-time forwarding to the Aggregator
+//!
+//! On outbound publish: messages are broadcast via both the Engine (channel 0) and the direct
+//! sender (channel 1, encoded to bytes via `Encode::encode()`).
+//!
+//! On inbound receive: channel 1 messages arrive via a Tokio mpsc bridge (commonware Receiver
+//! bridged to Tokio), are deduplicated by SHA-256 digest, filtered by ServiceRouter, and
+//! forwarded to the Aggregator as `AggregatorCommand::Receive`.
 
 use std::collections::{HashSet, VecDeque};
 
-use commonware_codec::{EncodeSize, Error as CodecError, RangeCfg, Read as CodecRead, ReadRangeExt, Write as CodecWrite};
-use commonware_cryptography::{sha256, Digestible, Hasher, Sha256};
+use commonware_broadcast::buffered::{Config as BroadcastConfig, Engine};
+use commonware_broadcast::Broadcaster;
+use commonware_codec::{Decode, Encode, EncodeSize, Error as CodecError, RangeCfg, Read as CodecRead, ReadRangeExt, Write as CodecWrite};
+use commonware_cryptography::{ed25519, sha256, Digestible, Hasher, Sha256};
+use commonware_p2p::Recipients;
 use commonware_runtime::{Buf, BufMut};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use utils::context::AppContext;
 use wavs_types::{P2pStatus, ServiceId, Submission};
 
-use super::{error::AggregatorError, AggregatorCommand};
+use super::{error::AggregatorError, peer::Peer, AggregatorCommand};
 
 // ============================================================================
 // P2P Configuration
@@ -260,7 +275,7 @@ impl RetryQueue {
 // Network Management (Commonware Runtime + Lookup Mode)
 // ============================================================================
 
-use commonware_cryptography::{ed25519, Signer};
+use commonware_cryptography::Signer;
 use commonware_p2p::authenticated::{discovery, lookup};
 use commonware_p2p::{Address, AddressableManager, Blocker, Ingress, Manager};
 use commonware_runtime::Quota;
@@ -334,6 +349,7 @@ fn spawn_commonware_runtime(
     private_key: ed25519::PrivateKey,
     p2p_config: P2pConfig,
     command_rx: mpsc::UnboundedReceiver<P2pCommand>,
+    aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
 ) -> Result<std::thread::JoinHandle<()>, AggregatorError> {
     let handle = std::thread::Builder::new()
         .name("wavs-p2p-commonware".into())
@@ -359,6 +375,7 @@ fn spawn_commonware_runtime(
                             peer_addresses,
                             authorized_peers,
                             command_rx,
+                            aggregator_tx,
                         )
                         .await;
                     }
@@ -374,6 +391,7 @@ fn spawn_commonware_runtime(
                             bootstrappers,
                             authorized_peers,
                             command_rx,
+                            aggregator_tx,
                         )
                         .await;
                     }
@@ -392,9 +410,11 @@ fn spawn_commonware_runtime(
 /// This function:
 /// 1. Creates a lookup::Network with the node's Ed25519 identity
 /// 2. Configures the Oracle with authorized peers + own pubkey
-/// 3. Registers a single broadcast channel (for Phase 2)
-/// 4. Starts the network
-/// 5. Runs a bridge loop handling P2pCommands from the WAVS main runtime
+/// 3. Registers two broadcast channels (Engine + direct forwarding)
+/// 4. Creates the broadcast Engine for message caching and catch-up
+/// 5. Spawns an inbound bridge task (commonware Receiver -> tokio mpsc)
+/// 6. Starts the network and Engine
+/// 7. Runs a bridge loop handling P2pCommands and inbound messages
 ///
 /// SEC-02: Rate limiting is active via lookup::Config::local() which sets:
 /// - allowed_connection_rate_per_peer: Quota::per_second(1)
@@ -414,6 +434,7 @@ async fn run_lookup_network(
     peer_addresses: &[String],
     authorized_peer_hexes: &[String],
     mut command_rx: mpsc::UnboundedReceiver<P2pCommand>,
+    aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
 ) {
     let listen_addr = std::net::SocketAddr::from(([0, 0, 0, 0], listen_port));
 
@@ -490,61 +511,211 @@ async fn run_lookup_network(
         peer_addresses.len()
     );
 
-    // Register a single broadcast channel (channel 0) for Phase 2 use.
-    // Must be registered before network.start().
-    let (_sender, _receiver) = network.register(
+    // Register TWO channels before network.start():
+    // Channel 0: for broadcast Engine (caching + catch-up via push-based re-broadcast)
+    let (engine_sender, engine_receiver) = network.register(
         0u64,
         Quota::per_second(NZU32!(100)),
         1024, // backlog
     );
 
+    // Channel 1: for direct message forwarding to Aggregator
+    let (mut direct_sender, direct_receiver) = network.register(
+        1u64,
+        Quota::per_second(NZU32!(100)),
+        1024, // backlog
+    );
+
+    // Create the broadcast Engine for message caching and catch-up.
+    // CATCH-01: The Engine caches broadcast messages in per-peer deques (bounded by deque_size).
+    // When a peer reconnects, the Engine's internal relay delivers cached messages from
+    // connected peers' deques to the newly connected peer. This is push-based -- the Engine
+    // automatically re-broadcasts cached content when peers reconnect. No application-level
+    // pull mechanism (mailbox.subscribe(digest)) is needed for catch-up.
+    // CATCH-02: deque_size bounds per-peer message storage. When full, oldest messages
+    // are evicted. This prevents unbounded memory growth.
+    let broadcast_config = BroadcastConfig {
+        public_key: own_pubkey.clone(),
+        mailbox_size: 256,
+        deque_size: 128,  // CATCH-02: bounded message storage per peer
+        priority: false,
+        codec_config: (RangeCfg::new(0..=65536), ()), // P2pMessage::Cfg = (RangeCfg<usize>, ())
+        peer_provider: oracle.clone(),
+    };
+    let (engine, mailbox) = Engine::<_, _, P2pMessage, _>::new(
+        context.with_label("p2p_broadcast"),
+        broadcast_config,
+    );
+
     // Start the network (consumes self, returns a handle)
     let _net_handle = network.start();
+
+    // Start the broadcast Engine (consumes engine_sender/receiver for channel 0)
+    let _engine_handle = engine.start((engine_sender, engine_receiver));
+
+    // Bridge commonware Receiver (channel 1) -> Tokio mpsc channel.
+    // The direct_receiver runs in the commonware runtime and may not be directly
+    // compatible with tokio::select!. This dedicated bridge task reads from the
+    // commonware Receiver and forwards to a Tokio mpsc channel.
+    let (inbound_tx, mut inbound_rx) =
+        tokio::sync::mpsc::channel::<(ed25519::PublicKey, commonware_runtime::IoBuf)>(256);
+    {
+        let inbound_tx = inbound_tx.clone();
+        let mut direct_receiver = direct_receiver;
+        context.clone().spawn(move |_ctx| async move {
+            use commonware_p2p::Receiver as P2pReceiver;
+            loop {
+                match direct_receiver.recv().await {
+                    Ok((peer_pubkey, raw_bytes)) => {
+                        if inbound_tx.send((peer_pubkey, raw_bytes)).await.is_err() {
+                            break; // Bridge loop shut down
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Direct receiver error: {:?}", e);
+                        break;
+                    }
+                }
+            }
+        });
+    }
 
     tracing::info!(
         "P2P network started (peer_id: {})",
         const_hex::encode(own_pubkey.as_ref())
     );
 
-    // Bridge loop: handle P2pCommands from WAVS main runtime.
-    // Phase 1 only handles GetStatus; Publish/Subscribe/Unsubscribe are Phase 2.
+    // Bridge loop state
+    let mut service_router = ServiceRouter::new();
+    let mut retry_queue = RetryQueue::new();
+    // BCAST-02: Application-level deduplication by message digest.
+    // The Engine deduplicates on channel 0 internally, but channel 1
+    // (direct) has no built-in dedup. This set ensures exactly-once
+    // delivery to the Aggregator regardless of channel.
+    let mut seen_digests: HashSet<sha256::Digest> = HashSet::new();
+    const MAX_SEEN_DIGESTS: usize = 1024;
+
+    // Bridge loop: handle P2pCommands and inbound messages from peers.
     loop {
-        match command_rx.recv().await {
-            Some(P2pCommand::GetStatus { response_tx }) => {
-                let status = P2pStatus {
-                    enabled: true,
-                    local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
-                    listen_addresses: vec![listen_addr.to_string()],
-                    external_addresses: vec![],
-                    connected_peers: 0, // Phase 2 fills this from network state
-                    peer_ids: vec![],   // Phase 2 fills this
-                    subscribed_topics: vec![], // Phase 2 fills this
-                    topic_peer_counts: Default::default(), // Phase 2 fills this
-                };
-                let _ = response_tx.send(status);
-            }
-            Some(P2pCommand::BlockPeer { pubkey_hex }) => {
-                match parse_authorized_peers(&[pubkey_hex.clone()]) {
-                    Ok(keys) if !keys.is_empty() => {
-                        oracle.block(keys[0].clone()).await;
-                        tracing::info!("Blocked peer: {}", pubkey_hex);
+        tokio::select! {
+            cmd = command_rx.recv() => {
+                match cmd {
+                    Some(cmd) => {
+                        tracing::debug!("P2pCommand received (handler pending)");
+                        // TODO: Task 2 implements all handlers
+                        handle_p2p_command_stub(cmd, &own_pubkey, listen_addr, &mut service_router, &mut oracle).await;
                     }
-                    _ => {
-                        tracing::error!("Failed to parse pubkey for blocking: {}", pubkey_hex);
+                    None => {
+                        tracing::info!("P2P command channel closed, shutting down");
+                        context.stop(0, None).await.ok();
+                        break;
                     }
                 }
             }
-            Some(_) => {
-                // Publish, Subscribe, Unsubscribe handled in Phase 2
-                tracing::debug!("P2pCommand not yet implemented in Phase 1");
+            msg = inbound_rx.recv() => {
+                match msg {
+                    Some((peer_pubkey, raw_bytes)) => {
+                        // Decode P2pMessage from raw bytes
+                        let p2p_msg: P2pMessage = match P2pMessage::decode_cfg(
+                            raw_bytes, &(RangeCfg::new(0..=65536), ())
+                        ) {
+                            Ok(m) => m,
+                            Err(e) => {
+                                tracing::warn!("Failed to decode P2P message: {:?}", e);
+                                continue;
+                            }
+                        };
+
+                        // BCAST-02: Deduplication by digest.
+                        // Compute digest and skip if already seen.
+                        let digest = p2p_msg.digest();
+                        if seen_digests.contains(&digest) {
+                            tracing::trace!("Duplicate message filtered by digest");
+                            continue;
+                        }
+                        // Bound the set: if at capacity, clear to prevent unbounded growth.
+                        if seen_digests.len() >= MAX_SEEN_DIGESTS {
+                            seen_digests.clear();
+                            tracing::debug!("Cleared seen_digests set (reached {} capacity)", MAX_SEEN_DIGESTS);
+                        }
+                        seen_digests.insert(digest);
+
+                        // Service filtering (BCAST-05)
+                        if !service_router.should_accept(&p2p_msg) {
+                            tracing::trace!("Filtered message for unsubscribed service");
+                            continue;
+                        }
+
+                        // Deserialize and forward to Aggregator
+                        match p2p_msg.to_submission() {
+                            Ok((_service_id, submission)) => {
+                                let peer_id = const_hex::encode(peer_pubkey.as_ref());
+                                if let Err(e) = aggregator_tx.send(AggregatorCommand::Receive {
+                                    submission,
+                                    peer: Peer::Other(peer_id),
+                                }) {
+                                    tracing::error!("Failed to forward to aggregator: {:?}", e);
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to deserialize submission: {:?}", e);
+                            }
+                        }
+                    }
+                    None => {
+                        tracing::error!("Inbound bridge channel closed");
+                        break;
+                    }
+                }
             }
-            None => {
-                // Channel closed -- shutdown
-                tracing::info!("P2P command channel closed, shutting down network");
-                // Signal the commonware runtime to stop
-                context.stop(0, None).await.ok();
-                break;
+        }
+    }
+}
+
+/// Temporary stub for P2pCommand handling in bridge loops until Task 2 fills in all handlers.
+/// Handles GetStatus and BlockPeer (carried over from Phase 1). Other commands log a placeholder.
+async fn handle_p2p_command_stub(
+    cmd: P2pCommand,
+    own_pubkey: &ed25519::PublicKey,
+    listen_addr: std::net::SocketAddr,
+    service_router: &mut ServiceRouter,
+    oracle: &mut impl commonware_p2p::Blocker<PublicKey = ed25519::PublicKey>,
+) {
+    match cmd {
+        P2pCommand::GetStatus { response_tx } => {
+            let status = P2pStatus {
+                enabled: true,
+                local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
+                listen_addresses: vec![listen_addr.to_string()],
+                external_addresses: vec![],
+                connected_peers: 0, // Phase 3 fills from network state
+                peer_ids: vec![],
+                subscribed_topics: service_router.subscribed_topics(),
+                topic_peer_counts: Default::default(),
+            };
+            let _ = response_tx.send(status);
+        }
+        P2pCommand::BlockPeer { pubkey_hex } => {
+            match parse_authorized_peers(&[pubkey_hex.clone()]) {
+                Ok(keys) if !keys.is_empty() => {
+                    oracle.block(keys[0].clone()).await;
+                    tracing::info!("Blocked peer: {}", pubkey_hex);
+                }
+                _ => {
+                    tracing::error!("Failed to parse pubkey for blocking: {}", pubkey_hex);
+                }
             }
+        }
+        P2pCommand::Subscribe { service_id } => {
+            service_router.subscribe(&service_id);
+            tracing::info!("Subscribed to service: {}", service_id);
+        }
+        P2pCommand::Unsubscribe { service_id } => {
+            service_router.unsubscribe(&service_id);
+            tracing::info!("Unsubscribed from service: {}", service_id);
+        }
+        _ => {
+            tracing::debug!("P2pCommand handler pending (Task 2)");
         }
     }
 }
@@ -554,9 +725,11 @@ async fn run_lookup_network(
 /// This function:
 /// 1. Creates a discovery::Network with the node's Ed25519 identity
 /// 2. Configures the Oracle with authorized peers as a Set<PublicKey>
-/// 3. Registers a single broadcast channel (for Phase 2)
-/// 4. Starts the network
-/// 5. Runs a bridge loop handling P2pCommands from the WAVS main runtime
+/// 3. Registers two broadcast channels (Engine + direct forwarding)
+/// 4. Creates the broadcast Engine for message caching and catch-up
+/// 5. Spawns an inbound bridge task (commonware Receiver -> tokio mpsc)
+/// 6. Starts the network and Engine
+/// 7. Runs a bridge loop handling P2pCommands and inbound messages
 ///
 /// Discovery mode uses bootstrapper nodes for peer discovery (production).
 /// Addresses are discovered dynamically through bootstrappers (no upfront addresses needed).
@@ -576,6 +749,7 @@ async fn run_discovery_network(
     bootstrapper_strs: &[String],
     authorized_peer_hexes: &[String],
     mut command_rx: mpsc::UnboundedReceiver<P2pCommand>,
+    aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
 ) {
     let listen_addr = std::net::SocketAddr::from(([0, 0, 0, 0], listen_port));
     let own_pubkey = private_key.public_key();
@@ -644,60 +818,151 @@ async fn run_discovery_network(
         authorized_peer_hexes.len()
     );
 
-    // Register a single broadcast channel (channel 0) for Phase 2 use.
-    // Must be registered before network.start().
-    let (_sender, _receiver) = network.register(
+    // Register TWO channels before network.start():
+    // Channel 0: for broadcast Engine (caching + catch-up via push-based re-broadcast)
+    let (engine_sender, engine_receiver) = network.register(
         0u64,
         Quota::per_second(NZU32!(100)),
         1024, // backlog
     );
 
+    // Channel 1: for direct message forwarding to Aggregator
+    let (mut direct_sender, direct_receiver) = network.register(
+        1u64,
+        Quota::per_second(NZU32!(100)),
+        1024, // backlog
+    );
+
+    // Create the broadcast Engine for message caching and catch-up.
+    // CATCH-01: Engine caches messages per-peer. When a peer reconnects,
+    // cached messages are delivered via the Engine's internal relay (push-based).
+    // No application-level pull mechanism needed.
+    // CATCH-02: deque_size bounds per-peer message storage.
+    let broadcast_config = BroadcastConfig {
+        public_key: own_pubkey.clone(),
+        mailbox_size: 256,
+        deque_size: 128,  // CATCH-02: bounded message storage per peer
+        priority: false,
+        codec_config: (RangeCfg::new(0..=65536), ()), // P2pMessage::Cfg = (RangeCfg<usize>, ())
+        peer_provider: oracle.clone(),
+    };
+    let (engine, mailbox) = Engine::<_, _, P2pMessage, _>::new(
+        context.with_label("p2p_discovery_broadcast"),
+        broadcast_config,
+    );
+
     // Start the network (consumes self, returns a handle)
     let _net_handle = network.start();
+
+    // Start the broadcast Engine (consumes engine_sender/receiver for channel 0)
+    let _engine_handle = engine.start((engine_sender, engine_receiver));
+
+    // Bridge commonware Receiver (channel 1) -> Tokio mpsc channel.
+    let (inbound_tx, mut inbound_rx) =
+        tokio::sync::mpsc::channel::<(ed25519::PublicKey, commonware_runtime::IoBuf)>(256);
+    {
+        let inbound_tx = inbound_tx.clone();
+        let mut direct_receiver = direct_receiver;
+        context.clone().spawn(move |_ctx| async move {
+            use commonware_p2p::Receiver as P2pReceiver;
+            loop {
+                match direct_receiver.recv().await {
+                    Ok((peer_pubkey, raw_bytes)) => {
+                        if inbound_tx.send((peer_pubkey, raw_bytes)).await.is_err() {
+                            break; // Bridge loop shut down
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Discovery direct receiver error: {:?}", e);
+                        break;
+                    }
+                }
+            }
+        });
+    }
 
     tracing::info!(
         "P2P discovery network started (peer_id: {})",
         const_hex::encode(own_pubkey.as_ref())
     );
 
-    // Bridge loop: handle P2pCommands from WAVS main runtime.
-    // Same pattern as lookup mode.
+    // Bridge loop state
+    let mut service_router = ServiceRouter::new();
+    let mut retry_queue = RetryQueue::new();
+    // BCAST-02: Application-level deduplication by message digest.
+    let mut seen_digests: HashSet<sha256::Digest> = HashSet::new();
+    const MAX_SEEN_DIGESTS: usize = 1024;
+
+    // Bridge loop: handle P2pCommands and inbound messages from peers.
     loop {
-        match command_rx.recv().await {
-            Some(P2pCommand::GetStatus { response_tx }) => {
-                let status = P2pStatus {
-                    enabled: true,
-                    local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
-                    listen_addresses: vec![listen_addr.to_string()],
-                    external_addresses: vec![],
-                    connected_peers: 0, // Phase 2 fills this from network state
-                    peer_ids: vec![],   // Phase 2 fills this
-                    subscribed_topics: vec![], // Phase 2 fills this
-                    topic_peer_counts: Default::default(), // Phase 2 fills this
-                };
-                let _ = response_tx.send(status);
-            }
-            Some(P2pCommand::BlockPeer { pubkey_hex }) => {
-                match parse_authorized_peers(&[pubkey_hex.clone()]) {
-                    Ok(keys) if !keys.is_empty() => {
-                        oracle.block(keys[0].clone()).await;
-                        tracing::info!("Blocked peer: {}", pubkey_hex);
+        tokio::select! {
+            cmd = command_rx.recv() => {
+                match cmd {
+                    Some(cmd) => {
+                        tracing::debug!("P2pCommand received (handler pending)");
+                        // TODO: Task 2 implements all handlers
+                        handle_p2p_command_stub(cmd, &own_pubkey, listen_addr, &mut service_router, &mut oracle).await;
                     }
-                    _ => {
-                        tracing::error!("Failed to parse pubkey for blocking: {}", pubkey_hex);
+                    None => {
+                        tracing::info!("P2P command channel closed, shutting down discovery network");
+                        context.stop(0, None).await.ok();
+                        break;
                     }
                 }
             }
-            Some(_) => {
-                // Publish, Subscribe, Unsubscribe handled in Phase 2
-                tracing::debug!("P2pCommand not yet implemented in Phase 1");
-            }
-            None => {
-                // Channel closed -- shutdown
-                tracing::info!("P2P command channel closed, shutting down discovery network");
-                // Signal the commonware runtime to stop
-                context.stop(0, None).await.ok();
-                break;
+            msg = inbound_rx.recv() => {
+                match msg {
+                    Some((peer_pubkey, raw_bytes)) => {
+                        // Decode P2pMessage from raw bytes
+                        let p2p_msg: P2pMessage = match P2pMessage::decode_cfg(
+                            raw_bytes, &(RangeCfg::new(0..=65536), ())
+                        ) {
+                            Ok(m) => m,
+                            Err(e) => {
+                                tracing::warn!("Failed to decode P2P message: {:?}", e);
+                                continue;
+                            }
+                        };
+
+                        // BCAST-02: Deduplication by digest.
+                        let digest = p2p_msg.digest();
+                        if seen_digests.contains(&digest) {
+                            tracing::trace!("Duplicate message filtered by digest");
+                            continue;
+                        }
+                        if seen_digests.len() >= MAX_SEEN_DIGESTS {
+                            seen_digests.clear();
+                            tracing::debug!("Cleared seen_digests set (reached {} capacity)", MAX_SEEN_DIGESTS);
+                        }
+                        seen_digests.insert(digest);
+
+                        // Service filtering (BCAST-05)
+                        if !service_router.should_accept(&p2p_msg) {
+                            tracing::trace!("Filtered message for unsubscribed service");
+                            continue;
+                        }
+
+                        // Deserialize and forward to Aggregator
+                        match p2p_msg.to_submission() {
+                            Ok((_service_id, submission)) => {
+                                let peer_id = const_hex::encode(peer_pubkey.as_ref());
+                                if let Err(e) = aggregator_tx.send(AggregatorCommand::Receive {
+                                    submission,
+                                    peer: Peer::Other(peer_id),
+                                }) {
+                                    tracing::error!("Failed to forward to aggregator: {:?}", e);
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to deserialize submission: {:?}", e);
+                            }
+                        }
+                    }
+                    None => {
+                        tracing::error!("Discovery inbound bridge channel closed");
+                        break;
+                    }
+                }
             }
         }
     }
@@ -744,7 +1009,7 @@ impl P2pHandle {
         _ctx: AppContext,
         p2p_config: P2pConfig,
         signing_mnemonic: Option<&str>,
-        _aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
+        aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
     ) -> Result<Option<Self>, AggregatorError> {
         if matches!(p2p_config, P2pConfig::Disabled) {
             tracing::info!("P2P networking is disabled");
@@ -759,9 +1024,10 @@ impl P2pHandle {
         let (command_tx, command_rx) = mpsc::unbounded_channel();
 
         // Spawn commonware runtime on dedicated OS thread
-        let _thread_handle = spawn_commonware_runtime(private_key, p2p_config, command_rx)?;
+        let _thread_handle =
+            spawn_commonware_runtime(private_key, p2p_config, command_rx, aggregator_tx)?;
 
-        // TODO: Store thread_handle for clean shutdown in Phase 2
+        // TODO: Store thread_handle for clean shutdown in Phase 3
 
         Ok(Some(P2pHandle { command_tx }))
     }
