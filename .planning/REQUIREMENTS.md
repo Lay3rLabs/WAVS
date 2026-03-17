@@ -55,9 +55,9 @@
 
 ### Documentation
 
-- [ ] **DOC-01**: `docs/P2P.md` updated with commonware setup, config examples, multi-node instructions
-- [ ] **DOC-02**: Blog post in `docs/blog/` announcing commonware integration (announcement style)
-- [ ] **DOC-03**: Operator migration guide documenting identity change, config format change, coordinated upgrade requirement
+- [x] **DOC-01**: `docs/P2P.md` updated with commonware setup, config examples, multi-node instructions
+- [x] **DOC-02**: Blog post in `docs/blog/` announcing commonware integration (announcement style)
+- [x] **DOC-03**: Operator migration guide documenting identity change, config format change, coordinated upgrade requirement
 
 ## v2 Requirements
 
@@ -115,9 +115,9 @@
 | OBS-02 | Phase 3 | Complete |
 | INT-02 | Phase 4 | Complete |
 | INT-03 | Phase 4 | Complete |
-| DOC-01 | Phase 4 | Pending |
-| DOC-02 | Phase 4 | Pending |
-| DOC-03 | Phase 4 | Pending |
+| DOC-01 | Phase 4 | Complete |
+| DOC-02 | Phase 4 | Complete |
+| DOC-03 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 27 total
