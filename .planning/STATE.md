@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-03-17T18:38:23Z"
-last_activity: 2026-03-17 — P2pStatus struct cleanup, P2pConfig tuning fields, all consumer updates
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-03-17T18:48:16.930Z"
+last_activity: 2026-03-17 — Connected peer tracking via broadcast ack and inbound message tracking, OBS-01 verified
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 9
-  completed_plans: 8
-  percent: 89
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -28,16 +28,16 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 Phase: 3 of 4 (Config and Observability)
 Plan: 4 of 4 in current phase
 Status: In Progress
-Last activity: 2026-03-17 — P2pStatus struct cleanup, P2pConfig tuning fields, all consumer updates
+Last activity: 2026-03-17 — Connected peer tracking via broadcast ack and inbound message tracking, OBS-01 verified
 
-Progress: [#########.] 89%
+Progress: [##########] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 13.1 min
-- Total execution time: 1.77 hours
+- Total plans completed: 9
+- Average duration: 12.2 min
+- Total execution time: 1.85 hours
 
 **By Phase:**
 
@@ -45,13 +45,14 @@ Progress: [#########.] 89%
 |-------|-------|-------|----------|
 | 01 | 3 | 32 min | 10.7 min |
 | 02 | 2 | 39 min | 19.5 min |
-| 03 | 3 | 33 min | 11 min |
+| 03 | 4 | 38 min | 9.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 22m, 17m, 1m, 13m, 19m
+- Last 5 plans: 17m, 1m, 13m, 19m, 5m
 - Trend: stable
 
 *Updated after each plan completion*
+| Phase 03 P03 | 5 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,8 @@ Recent decisions affecting current work:
 - Option<T> with serde(default) for backward-compatible P2pConfig extension (max_message_size, deque_size)
 - Pass tuning values as function parameters to run_lookup/discovery_network rather than full P2pConfig
 - Keep HashMap import in http.rs -- used by DevTriggerStreamsInfo, not just P2pStatus
+- [Phase 03]: Arc<RwLock<Vec<String>>> for connected_peers_tracker -- simple shared state sufficient for bridge loop scope
+- [Phase 03]: Broadcast ack replaces full tracker (not merge) -- latest broadcast recipients are the current connected set
 
 ### Pending Todos
 
@@ -102,6 +105,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T18:38:23Z
-Stopped at: Completed 03-01-PLAN.md
-Resume file: Continue with 03-03-PLAN.md (Wave 1 remaining plan)
+Last session: 2026-03-17T18:48:16.929Z
+Stopped at: Completed 03-03-PLAN.md
+Resume file: None
