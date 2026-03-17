@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-03-17T17:44:14.717Z"
-last_activity: 2026-03-17 — Broadcast Engine integration with two-channel architecture, all P2pCommand handlers, 7 integration tests
+status: executing
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-03-17T18:22:42.886Z"
+last_activity: 2026-03-17 — Rewrote wavs.toml P2P section with commonware terminology and local dev preset
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
-  percent: 63
+  total_plans: 9
+  completed_plans: 6
+  percent: 67
 ---
 
 # Project State
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably using commonware instead of libp2p
-**Current focus:** Phase 2: Broadcast and Routing
+**Current focus:** Phase 3: Config and Observability
 
 ## Current Position
 
-Phase: 2 of 4 (Broadcast and Routing)
-Plan: 2 of 2 in current phase (COMPLETE)
-Status: Phase Complete
-Last activity: 2026-03-17 — Broadcast Engine integration with two-channel architecture, all P2pCommand handlers, 7 integration tests
+Phase: 3 of 4 (Config and Observability)
+Plan: 2 of 4 in current phase
+Status: In Progress
+Last activity: 2026-03-17 — Rewrote wavs.toml P2P section with commonware terminology and local dev preset
 
-Progress: [######....] 63%
+Progress: [#######...] 67%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 14.2 min
-- Total execution time: 1.2 hours
+- Total plans completed: 6
+- Average duration: 12.5 min
+- Total execution time: 1.25 hours
 
 **By Phase:**
 
@@ -45,10 +45,11 @@ Progress: [######....] 63%
 |-------|-------|-------|----------|
 | 01 | 3 | 32 min | 10.7 min |
 | 02 | 2 | 39 min | 19.5 min |
+| 03 | 1 | 1 min | 1 min |
 
 **Recent Trend:**
-- Last 5 plans: 13m, 12m, 7m, 22m, 17m
-- Trend: stable (Phase 2 plans are larger scope)
+- Last 5 plans: 12m, 7m, 22m, 17m, 1m
+- Trend: stable (Plan 03-02 was documentation-only)
 
 *Updated after each plan completion*
 
@@ -81,6 +82,8 @@ Recent decisions affecting current work:
 - Encode::encode() returns Bytes (Into<IoBufs>) for direct_sender.send()
 - Inline P2pCommand handlers in bridge loop (not separate function) for access to mailbox/direct_sender/retry_queue
 - CATCH-01 scoped as push-based recovery via Engine cache re-broadcast on reconnection
+- Reordered P2P options in wavs.toml to lead with Disabled (default) for clarity
+- Used ASCII dashes instead of em-dashes in wavs.toml option labels for portable editing
 
 ### Pending Todos
 
@@ -94,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T17:38:53Z
-Stopped at: Completed 02-02-PLAN.md
-Resume file: Phase 3 plans (consensus and verification)
+Last session: 2026-03-17T18:22:42.884Z
+Stopped at: Completed 03-02-PLAN.md
+Resume file: None

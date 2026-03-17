@@ -38,9 +38,9 @@
 
 ### Config
 
-- [ ] **CFG-01**: New P2P config format in wavs.toml (Disabled / Local / Remote) tailored to commonware
+- [x] **CFG-01**: New P2P config format in wavs.toml (Disabled / Local / Remote) tailored to commonware
 - [ ] **CFG-02**: Configurable listen port, bootstrappers, timeouts, deque sizes
-- [ ] **CFG-03**: Local dev preset with localhost peer addresses for multi-operator testing
+- [x] **CFG-03**: Local dev preset with localhost peer addresses for multi-operator testing
 
 ### Observability
 
@@ -108,9 +108,9 @@
 | CATCH-01 | Phase 2 | Complete |
 | CATCH-02 | Phase 2 | Complete |
 | INT-01 | Phase 2 | Complete |
-| CFG-01 | Phase 3 | Pending |
+| CFG-01 | Phase 3 | Complete |
 | CFG-02 | Phase 3 | Pending |
-| CFG-03 | Phase 3 | Pending |
+| CFG-03 | Phase 3 | Complete |
 | OBS-01 | Phase 3 | Pending |
 | OBS-02 | Phase 3 | Pending |
 | INT-02 | Phase 4 | Pending |
