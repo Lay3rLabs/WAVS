@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-17T19:53:10.731Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-17T20:02:21.811Z"
 last_activity: 2026-03-17 — Connected peer tracking via broadcast ack and inbound message tracking, OBS-01 verified
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 11
-  completed_plans: 10
+  completed_plans: 11
   percent: 100
 ---
 
@@ -54,6 +54,7 @@ Progress: [##########] 100%
 *Updated after each plan completion*
 | Phase 03 P03 | 5 | 2 tasks | 2 files |
 | Phase 04-validation-and-cleanup P01 | 10 | 2 tasks | 6 files |
+| Phase 04-validation-and-cleanup P02 | 4 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,9 @@ Recent decisions affecting current work:
 - [Phase 03]: Broadcast ack replaces full tracker (not merge) -- latest broadcast recipients are the current connected set
 - [Phase 04-validation-and-cleanup]: TestP2pMode enum renamed Local/Remote to match P2pConfig variants exactly -- consistent naming across test harness and production code
 - [Phase 04-validation-and-cleanup]: libp2p workspace dep removed entirely from Cargo.toml and packages/wavs/Cargo.toml -- zero source references confirmed, clean removal with no functionality lost
+- [Phase 04-validation-and-cleanup]: P2P.md fully rewritten for commonware (not patched) — old libp2p content removed entirely, new content covers Ed25519 identity, lookup/discovery modes, Broadcast Engine, ServiceRouter
+- [Phase 04-validation-and-cleanup]: Blog post scoped to announcement style only — step-by-step migration instructions belong in OPERATOR_MIGRATION.md
+- [Phase 04-validation-and-cleanup]: OPERATOR_MIGRATION.md documents all four breaking changes explicitly: identity (secp256k1->Ed25519), address format (multiaddr->socket), config format change, discovery mechanism change
 
 ### Pending Todos
 
@@ -108,6 +112,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T19:53:10.729Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-03-17T20:02:21.809Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
