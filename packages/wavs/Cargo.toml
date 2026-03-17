@@ -85,6 +85,7 @@ base64 = { workspace = true }
 tauri = {workspace = true, optional = true}
 
 [dev-dependencies]
+toml = { workspace = true }
 criterion = { workspace = true }
 wavs-benchmark-common = { workspace = true }
 utils = { workspace = true, features = ["test-utils"] }

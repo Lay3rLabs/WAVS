@@ -4,6 +4,11 @@ pub mod peer;
 mod queue;
 mod submit;
 
+#[cfg(test)]
+mod p2p_config_tests;
+#[cfg(test)]
+mod p2p_status_tests;
+
 use std::{
     collections::HashMap,
     sync::{

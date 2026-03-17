@@ -312,9 +312,9 @@ async fn test_p2p_handle_api_preserved() {
         "Peer ID should match"
     );
     assert_eq!(
-        status.subscribed_topics.len(),
+        status.subscribed_services.len(),
         1,
-        "Should have 1 subscribed topic"
+        "Should have 1 subscribed service"
     );
 
     // unsubscribe() should not error
@@ -325,9 +325,9 @@ async fn test_p2p_handle_api_preserved() {
     // get_status() should reflect unsubscription
     let status = handle.get_status().await.expect("get_status after unsub");
     assert_eq!(
-        status.subscribed_topics.len(),
+        status.subscribed_services.len(),
         0,
-        "Should have 0 subscribed topics after unsubscribe"
+        "Should have 0 subscribed services after unsubscribe"
     );
 
     // publish() should not panic (message goes to retry queue since no peers)
