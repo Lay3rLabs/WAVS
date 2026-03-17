@@ -28,7 +28,7 @@ use commonware_broadcast::buffered::{Config as BroadcastConfig, Engine};
 use commonware_broadcast::Broadcaster;
 use commonware_codec::{Decode, Encode, EncodeSize, Error as CodecError, RangeCfg, Read as CodecRead, ReadRangeExt, Write as CodecWrite};
 use commonware_cryptography::{ed25519, sha256, Digestible, Hasher, Sha256};
-use commonware_p2p::Recipients;
+use commonware_p2p::{Recipients, Sender as P2pSender};
 use commonware_runtime::{Buf, BufMut};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -600,10 +600,81 @@ async fn run_lookup_network(
         tokio::select! {
             cmd = command_rx.recv() => {
                 match cmd {
-                    Some(cmd) => {
-                        tracing::debug!("P2pCommand received (handler pending)");
-                        // TODO: Task 2 implements all handlers
-                        handle_p2p_command_stub(cmd, &own_pubkey, listen_addr, &mut service_router, &mut oracle).await;
+                    Some(P2pCommand::Publish { service_id, submission }) => {
+                        match P2pMessage::from_submission(&service_id, &*submission) {
+                            Ok(msg) => {
+                                // Broadcast via Engine channel (for caching + catch-up / CATCH-01)
+                                let ack_rx = mailbox.broadcast(Recipients::All, msg.clone()).await;
+
+                                // CRITICAL: Encode P2pMessage to bytes before sending on direct channel.
+                                // direct_sender.send() requires impl Into<IoBufs>, not P2pMessage.
+                                // Encode::encode() is auto-derived from Write + EncodeSize on P2pMessage.
+                                let encoded_bytes = Encode::encode(&msg);
+                                if let Err(e) = direct_sender.send(Recipients::All, encoded_bytes, false).await {
+                                    tracing::warn!("Direct channel send failed: {:?}", e);
+                                }
+
+                                // Check Engine broadcast acknowledgment
+                                match ack_rx.await {
+                                    Ok(recipients) if recipients.is_empty() => {
+                                        retry_queue.push(msg);
+                                        tracing::warn!("No peers received broadcast, queued for retry");
+                                    }
+                                    Ok(recipients) => {
+                                        tracing::debug!("Broadcast delivered to {} peers", recipients.len());
+                                        // Flush retry queue since peers are available
+                                        if !retry_queue.is_empty() {
+                                            let queued = retry_queue.drain_all();
+                                            for queued_msg in queued {
+                                                let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                                let queued_bytes = Encode::encode(&queued_msg);
+                                                if let Err(e) = direct_sender.send(Recipients::All, queued_bytes, false).await {
+                                                    tracing::warn!("Direct channel retry send failed: {:?}", e);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Err(_) => {
+                                        tracing::error!("Broadcast engine shut down");
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to create P2pMessage: {:?}", e);
+                            }
+                        }
+                    }
+                    Some(P2pCommand::Subscribe { service_id }) => {
+                        service_router.subscribe(&service_id);
+                        tracing::info!("Subscribed to service: {}", service_id);
+                    }
+                    Some(P2pCommand::Unsubscribe { service_id }) => {
+                        service_router.unsubscribe(&service_id);
+                        tracing::info!("Unsubscribed from service: {}", service_id);
+                    }
+                    Some(P2pCommand::GetStatus { response_tx }) => {
+                        let status = P2pStatus {
+                            enabled: true,
+                            local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
+                            listen_addresses: vec![listen_addr.to_string()],
+                            external_addresses: vec![],
+                            connected_peers: 0, // Phase 3 fills from network state
+                            peer_ids: vec![],
+                            subscribed_topics: service_router.subscribed_topics(),
+                            topic_peer_counts: Default::default(),
+                        };
+                        let _ = response_tx.send(status);
+                    }
+                    Some(P2pCommand::BlockPeer { pubkey_hex }) => {
+                        match parse_authorized_peers(&[pubkey_hex.clone()]) {
+                            Ok(keys) if !keys.is_empty() => {
+                                oracle.block(keys[0].clone()).await;
+                                tracing::info!("Blocked peer: {}", pubkey_hex);
+                            }
+                            _ => {
+                                tracing::error!("Failed to parse pubkey for blocking: {}", pubkey_hex);
+                            }
+                        }
                     }
                     None => {
                         tracing::info!("P2P command channel closed, shutting down");
@@ -672,53 +743,6 @@ async fn run_lookup_network(
     }
 }
 
-/// Temporary stub for P2pCommand handling in bridge loops until Task 2 fills in all handlers.
-/// Handles GetStatus and BlockPeer (carried over from Phase 1). Other commands log a placeholder.
-async fn handle_p2p_command_stub(
-    cmd: P2pCommand,
-    own_pubkey: &ed25519::PublicKey,
-    listen_addr: std::net::SocketAddr,
-    service_router: &mut ServiceRouter,
-    oracle: &mut impl commonware_p2p::Blocker<PublicKey = ed25519::PublicKey>,
-) {
-    match cmd {
-        P2pCommand::GetStatus { response_tx } => {
-            let status = P2pStatus {
-                enabled: true,
-                local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
-                listen_addresses: vec![listen_addr.to_string()],
-                external_addresses: vec![],
-                connected_peers: 0, // Phase 3 fills from network state
-                peer_ids: vec![],
-                subscribed_topics: service_router.subscribed_topics(),
-                topic_peer_counts: Default::default(),
-            };
-            let _ = response_tx.send(status);
-        }
-        P2pCommand::BlockPeer { pubkey_hex } => {
-            match parse_authorized_peers(&[pubkey_hex.clone()]) {
-                Ok(keys) if !keys.is_empty() => {
-                    oracle.block(keys[0].clone()).await;
-                    tracing::info!("Blocked peer: {}", pubkey_hex);
-                }
-                _ => {
-                    tracing::error!("Failed to parse pubkey for blocking: {}", pubkey_hex);
-                }
-            }
-        }
-        P2pCommand::Subscribe { service_id } => {
-            service_router.subscribe(&service_id);
-            tracing::info!("Subscribed to service: {}", service_id);
-        }
-        P2pCommand::Unsubscribe { service_id } => {
-            service_router.unsubscribe(&service_id);
-            tracing::info!("Unsubscribed from service: {}", service_id);
-        }
-        _ => {
-            tracing::debug!("P2pCommand handler pending (Task 2)");
-        }
-    }
-}
 
 /// Run a discovery-mode P2P network inside the commonware runtime.
 ///
@@ -898,10 +922,73 @@ async fn run_discovery_network(
         tokio::select! {
             cmd = command_rx.recv() => {
                 match cmd {
-                    Some(cmd) => {
-                        tracing::debug!("P2pCommand received (handler pending)");
-                        // TODO: Task 2 implements all handlers
-                        handle_p2p_command_stub(cmd, &own_pubkey, listen_addr, &mut service_router, &mut oracle).await;
+                    Some(P2pCommand::Publish { service_id, submission }) => {
+                        match P2pMessage::from_submission(&service_id, &*submission) {
+                            Ok(msg) => {
+                                let ack_rx = mailbox.broadcast(Recipients::All, msg.clone()).await;
+                                let encoded_bytes = Encode::encode(&msg);
+                                if let Err(e) = direct_sender.send(Recipients::All, encoded_bytes, false).await {
+                                    tracing::warn!("Discovery direct channel send failed: {:?}", e);
+                                }
+                                match ack_rx.await {
+                                    Ok(recipients) if recipients.is_empty() => {
+                                        retry_queue.push(msg);
+                                        tracing::warn!("No peers received broadcast, queued for retry");
+                                    }
+                                    Ok(recipients) => {
+                                        tracing::debug!("Broadcast delivered to {} peers", recipients.len());
+                                        if !retry_queue.is_empty() {
+                                            let queued = retry_queue.drain_all();
+                                            for queued_msg in queued {
+                                                let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                                let queued_bytes = Encode::encode(&queued_msg);
+                                                if let Err(e) = direct_sender.send(Recipients::All, queued_bytes, false).await {
+                                                    tracing::warn!("Discovery direct channel retry send failed: {:?}", e);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Err(_) => {
+                                        tracing::error!("Broadcast engine shut down");
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to create P2pMessage: {:?}", e);
+                            }
+                        }
+                    }
+                    Some(P2pCommand::Subscribe { service_id }) => {
+                        service_router.subscribe(&service_id);
+                        tracing::info!("Subscribed to service: {}", service_id);
+                    }
+                    Some(P2pCommand::Unsubscribe { service_id }) => {
+                        service_router.unsubscribe(&service_id);
+                        tracing::info!("Unsubscribed from service: {}", service_id);
+                    }
+                    Some(P2pCommand::GetStatus { response_tx }) => {
+                        let status = P2pStatus {
+                            enabled: true,
+                            local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
+                            listen_addresses: vec![listen_addr.to_string()],
+                            external_addresses: vec![],
+                            connected_peers: 0, // Phase 3 fills from network state
+                            peer_ids: vec![],
+                            subscribed_topics: service_router.subscribed_topics(),
+                            topic_peer_counts: Default::default(),
+                        };
+                        let _ = response_tx.send(status);
+                    }
+                    Some(P2pCommand::BlockPeer { pubkey_hex }) => {
+                        match parse_authorized_peers(&[pubkey_hex.clone()]) {
+                            Ok(keys) if !keys.is_empty() => {
+                                oracle.block(keys[0].clone()).await;
+                                tracing::info!("Blocked peer: {}", pubkey_hex);
+                            }
+                            _ => {
+                                tracing::error!("Failed to parse pubkey for blocking: {}", pubkey_hex);
+                            }
+                        }
                     }
                     None => {
                         tracing::info!("P2P command channel closed, shutting down discovery network");
