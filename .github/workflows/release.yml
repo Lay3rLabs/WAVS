@@ -24,8 +24,8 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -86,8 +86,8 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -149,8 +149,8 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Set IMAGE_TAG
         shell: bash

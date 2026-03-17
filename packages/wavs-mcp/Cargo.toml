@@ -1,0 +1,30 @@
+[package]
+name = "wavs-mcp"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "wavs-mcp"
+path = "src/main.rs"
+
+[dependencies]
+rmcp = { version = "0.1", features = ["server", "transport-io"] }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+wavs-types = { workspace = true }
+anyhow = { workspace = true }
+const-hex = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+utils = { path = "../utils" }
+alloy-primitives = { workspace = true }
+alloy-signer = { workspace = true }
+alloy-sol-types = { workspace = true }
+alloy-sol-macro = { workspace = true }
+alloy-contract = { workspace = true }
+tempfile = { workspace = true }
+toml = { workspace = true }

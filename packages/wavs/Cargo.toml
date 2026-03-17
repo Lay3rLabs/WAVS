@@ -12,10 +12,12 @@ publish = false
 [features]
 test-utils = []
 dev = []
+gui = ["dep:tauri", "wavs-gui-shared/backend"]
 
 [dependencies]
 wavs-types = { workspace = true, features = ["full"] }
 wavs-engine = { workspace = true }
+wavs-gui-shared= { workspace = true}
 utils = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
@@ -53,6 +55,7 @@ cron = { workspace = true }
 bincode = { workspace = true }
 axum-tracing-opentelemetry = { workspace = true }
 opentelemetry = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 bimap = { workspace = true }
@@ -68,6 +71,8 @@ hypercore = { workspace = true }
 hypercore-protocol = { workspace = true }
 hyperswarm = { workspace = true }
 tokio-util = { workspace = true }
+base64 = { workspace = true }
+tauri = {workspace = true, optional = true}
 
 [dev-dependencies]
 criterion = { workspace = true }

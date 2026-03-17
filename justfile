@@ -11,6 +11,22 @@ COSMWASM_OPTIMIZER_VERSION := env_var_or_default("COSMWASM_OPTIMIZER_VERSION", "
 help:
   just --list
 
+# WAVS Desktop App (React/TypeScript frontend)
+app-dev:
+    cd app && pnpm tauri dev
+
+app-dev-frontend:
+    cd app && pnpm dev
+
+app-build-release:
+    cd app && pnpm tauri build
+
+app-build-debug:
+    cd app && pnpm tauri build --debug
+
+app-build-frontend:
+    cd app && pnpm build
+
 # builds wavs
 docker-build TAG="local":
     {{SUDO}} docker build . -t ghcr.io/lay3rlabs/wavs:{{TAG}}
@@ -128,6 +144,7 @@ solidity-build CLEAN="":
     # wavs-types
     cp -r {{REPO_ROOT}}/out/IWavsServiceHandler.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/SimpleServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
     # layer-tests mock contracts
     cp -r {{REPO_ROOT}}/out/LogSpam.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/TestServiceContracts.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
@@ -415,6 +432,17 @@ ts-bindings:
     rm -rf packages/types/bindings
     cargo test -p wavs-types --features ts-bindings
     cargo run --bin ts
+
+# Install the WAVS Claude Code skill globally
+install-claude-skill:
+    @mkdir -p ~/.claude/skills
+    @cp -r .claude/skills/wavs ~/.claude/skills/wavs
+    @echo "WAVS skill installed to ~/.claude/skills/wavs"
+    @echo "Restart Claude Code to pick up the skill."
+
+# Register wavs-mcp with Claude Code (interactive wizard)
+setup-claude-mcp:
+    @node packages/wavs-mcp/bin/setup.mjs
 
 debug:
     cargo test --package wavs --features dev --test aggregator_tests send_to_self

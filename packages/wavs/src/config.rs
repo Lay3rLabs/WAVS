@@ -145,6 +145,12 @@ pub struct Config {
 
     /// Maximum WASM response event_id_salt size in bytes (default: 1MB)
     pub max_wasm_salt_size: usize,
+
+    /// In-memory log ring buffer capacity: maximum number of log entries retained (default: 10,000)
+    pub log_buffer_capacity: usize,
+
+    /// Log broadcast channel capacity for SSE streaming (default: 256)
+    pub log_broadcast_capacity: usize,
 }
 
 impl Config {
@@ -210,6 +216,8 @@ impl Default for Config {
             hyperswarm_bootstrap: None,
             max_wasm_payload_size: WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
             max_wasm_salt_size: WasmResponse::DEFAULT_MAX_SALT_SIZE,
+            log_buffer_capacity: crate::log_buffer::DEFAULT_LOG_BUFFER_CAPACITY,
+            log_broadcast_capacity: crate::log_buffer::DEFAULT_BROADCAST_CAPACITY,
         }
     }
 }
