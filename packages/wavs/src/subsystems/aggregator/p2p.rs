@@ -23,6 +23,7 @@
 //! forwarded to the Aggregator as `AggregatorCommand::Receive`.
 
 use std::collections::{HashSet, VecDeque};
+use std::sync::{Arc, RwLock};
 
 use commonware_broadcast::buffered::{Config as BroadcastConfig, Engine};
 use commonware_broadcast::Broadcaster;
@@ -643,6 +644,11 @@ async fn run_lookup_network(
     let mut seen_digests: HashSet<sha256::Digest> = HashSet::new();
     const MAX_SEEN_DIGESTS: usize = 1024;
 
+    // Connected peer tracking for OBS-01.
+    // Updated from broadcast acknowledgment results and inbound message senders.
+    // Starts at empty (truthful -- no peers confirmed until message exchange).
+    let connected_peers_tracker: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
+
     // Bridge loop: handle P2pCommands and inbound messages from peers.
     loop {
         tokio::select! {
@@ -669,6 +675,13 @@ async fn run_lookup_network(
                                         tracing::warn!("No peers received broadcast, queued for retry");
                                     }
                                     Ok(recipients) => {
+                                        // Update connected peer tracking from broadcast results (OBS-01)
+                                        let peer_hexes: Vec<String> = recipients
+                                            .iter()
+                                            .map(|pk| const_hex::encode(pk.as_ref()))
+                                            .collect();
+                                        *connected_peers_tracker.write().unwrap() = peer_hexes;
+
                                         tracing::debug!("Broadcast delivered to {} peers", recipients.len());
                                         // Flush retry queue since peers are available
                                         if !retry_queue.is_empty() {
@@ -701,12 +714,13 @@ async fn run_lookup_network(
                         tracing::info!("Unsubscribed from service: {}", service_id);
                     }
                     Some(P2pCommand::GetStatus { response_tx }) => {
+                        let peers = connected_peers_tracker.read().unwrap().clone();
                         let status = P2pStatus {
                             enabled: true,
                             local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
                             listen_addresses: vec![listen_addr.to_string()],
-                            connected_peers: 0, // Plan 03-03 fills from peer tracking
-                            peer_ids: vec![],   // Plan 03-03 fills from peer tracking
+                            connected_peers: peers.len(),
+                            peer_ids: peers,
                             subscribed_services: service_router.subscribed_services(),
                         };
                         let _ = response_tx.send(status);
@@ -732,6 +746,15 @@ async fn run_lookup_network(
             msg = inbound_rx.recv() => {
                 match msg {
                     Some((peer_pubkey, raw_bytes)) => {
+                        // Track inbound peer as connected (OBS-01)
+                        {
+                            let sender_hex = const_hex::encode(peer_pubkey.as_ref());
+                            let mut peers = connected_peers_tracker.write().unwrap();
+                            if !peers.contains(&sender_hex) {
+                                peers.push(sender_hex);
+                            }
+                        }
+
                         // Decode P2pMessage from raw bytes
                         let p2p_msg: P2pMessage = match P2pMessage::decode_cfg(
                             raw_bytes, &(RangeCfg::new(0..=(max_message_size as usize)), ())
@@ -965,6 +988,11 @@ async fn run_discovery_network(
     let mut seen_digests: HashSet<sha256::Digest> = HashSet::new();
     const MAX_SEEN_DIGESTS: usize = 1024;
 
+    // Connected peer tracking for OBS-01.
+    // Updated from broadcast acknowledgment results and inbound message senders.
+    // Starts at empty (truthful -- no peers confirmed until message exchange).
+    let connected_peers_tracker: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
+
     // Bridge loop: handle P2pCommands and inbound messages from peers.
     loop {
         tokio::select! {
@@ -984,6 +1012,13 @@ async fn run_discovery_network(
                                         tracing::warn!("No peers received broadcast, queued for retry");
                                     }
                                     Ok(recipients) => {
+                                        // Update connected peer tracking from broadcast results (OBS-01)
+                                        let peer_hexes: Vec<String> = recipients
+                                            .iter()
+                                            .map(|pk| const_hex::encode(pk.as_ref()))
+                                            .collect();
+                                        *connected_peers_tracker.write().unwrap() = peer_hexes;
+
                                         tracing::debug!("Broadcast delivered to {} peers", recipients.len());
                                         if !retry_queue.is_empty() {
                                             let queued = retry_queue.drain_all();
@@ -1015,12 +1050,13 @@ async fn run_discovery_network(
                         tracing::info!("Unsubscribed from service: {}", service_id);
                     }
                     Some(P2pCommand::GetStatus { response_tx }) => {
+                        let peers = connected_peers_tracker.read().unwrap().clone();
                         let status = P2pStatus {
                             enabled: true,
                             local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
                             listen_addresses: vec![listen_addr.to_string()],
-                            connected_peers: 0, // Plan 03-03 fills from peer tracking
-                            peer_ids: vec![],   // Plan 03-03 fills from peer tracking
+                            connected_peers: peers.len(),
+                            peer_ids: peers,
                             subscribed_services: service_router.subscribed_services(),
                         };
                         let _ = response_tx.send(status);
@@ -1046,6 +1082,15 @@ async fn run_discovery_network(
             msg = inbound_rx.recv() => {
                 match msg {
                     Some((peer_pubkey, raw_bytes)) => {
+                        // Track inbound peer as connected (OBS-01)
+                        {
+                            let sender_hex = const_hex::encode(peer_pubkey.as_ref());
+                            let mut peers = connected_peers_tracker.write().unwrap();
+                            if !peers.contains(&sender_hex) {
+                                peers.push(sender_hex);
+                            }
+                        }
+
                         // Decode P2pMessage from raw bytes
                         let p2p_msg: P2pMessage = match P2pMessage::decode_cfg(
                             raw_bytes, &(RangeCfg::new(0..=(max_message_size as usize)), ())
