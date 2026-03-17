@@ -251,7 +251,7 @@ impl From<TestConfig> for Configs {
             // Enable P2P for multi-operator tests
             if num_operators > 1 {
                 match test_config.p2p {
-                    TestP2pMode::Kademlia => {
+                    TestP2pMode::Remote => {
                         // Remote mode: discovery with bootstrapper nodes
                         // Operator 0 is the bootstrap server (empty bootstrappers)
                         // Operators 1+ will have bootstrappers set at runtime after operator 0 starts
@@ -259,14 +259,18 @@ impl From<TestConfig> for Configs {
                             listen_port: DEFAULT_P2P_BASE_PORT + operator_index as u16,
                             bootstrappers: vec![], // Set at runtime for operators 1+
                             authorized_peers: vec![],
+                            max_message_size: None,
+                            deque_size: None,
                         };
                     }
-                    TestP2pMode::Mdns => {
+                    TestP2pMode::Local => {
                         // Local mode: lookup with known peer addresses
                         wavs_config.p2p = P2pConfig::Local {
                             listen_port: DEFAULT_P2P_BASE_PORT + operator_index as u16,
                             peer_addresses: vec![],
                             authorized_peers: vec![],
+                            max_message_size: None,
+                            deque_size: None,
                         };
                     }
                 }

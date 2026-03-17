@@ -99,7 +99,7 @@ impl AppHandles {
 
         // Check if we're using Remote P2P mode (Kademlia)
 
-        if configs.p2p == TestP2pMode::Kademlia && configs.num_operators() > 1 {
+        if configs.p2p == TestP2pMode::Remote && configs.num_operators() > 1 {
             // Remote mode: start operator 0 first, get bootstrap address, then start others
             wavs_handles = Self::start_wavs_remote_mode(ctx, configs, &metrics)
                 .expect("Failed to start operators in remote mode");
@@ -230,14 +230,16 @@ impl AppHandles {
             let mut config = wavs_config.clone();
             if let P2pConfig::Remote {
                 listen_port,
-                bootstrappers: _,
                 authorized_peers,
+                ..
             } = &config.p2p
             {
                 config.p2p = P2pConfig::Remote {
                     listen_port: *listen_port,
                     bootstrappers: vec![bootstrap_addr.clone()],
                     authorized_peers: authorized_peers.clone(),
+                    max_message_size: None,
+                    deque_size: None,
                 };
             }
 
