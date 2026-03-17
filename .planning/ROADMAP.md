@@ -60,10 +60,12 @@ Plans:
   1. A node started with `wavs.toml` containing the new P2P config (Disabled / Local / Remote) initializes the correct commonware mode
   2. The Local dev preset allows multi-operator testing on localhost with minimal config (just peer addresses and ports)
   3. `/p2p/status` returns peer ID (Ed25519 public key), listen addresses (socket format), connected peers, and subscribed services
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: TBD
+- [ ] 03-01-PLAN.md — P2pStatus struct cleanup, P2pConfig optional tuning fields, and consumer updates
+- [ ] 03-02-PLAN.md — wavs.toml P2P comment rewrite with commonware terminology and local dev preset
+- [ ] 03-03-PLAN.md — Connected peer tracking in bridge loops and status integration test
 
 ### Phase 4: Validation and Cleanup
 **Goal**: The migration is complete — all e2e tests pass with the commonware backend, libp2p is fully removed, and operators have documentation for the upgrade
@@ -90,5 +92,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 |-------|----------------|--------|-----------|
 | 1. Secure Peer Connectivity | 3/3 | Complete | 2026-03-17 |
 | 2. Broadcast and Routing | 1/2 | In Progress | - |
-| 3. Config and Observability | 0/1 | Not started | - |
+| 3. Config and Observability | 0/3 | Not started | - |
 | 4. Validation and Cleanup | 0/2 | Not started | - |
