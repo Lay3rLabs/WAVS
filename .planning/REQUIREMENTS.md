@@ -93,37 +93,37 @@
 |-------------|-------|--------|
 | IDEN-01 | Phase 1 | Pending |
 | IDEN-02 | Phase 1 | Pending |
-| NET-01 | Phase 2 | Pending |
-| NET-02 | Phase 2 | Pending |
-| NET-03 | Phase 2 | Pending |
-| NET-04 | Phase 2 | Pending |
-| BCAST-01 | Phase 3 | Pending |
-| BCAST-02 | Phase 3 | Pending |
-| BCAST-03 | Phase 3 | Pending |
-| BCAST-04 | Phase 3 | Pending |
-| BCAST-05 | Phase 3 | Pending |
-| CATCH-01 | Phase 3 | Pending |
-| CATCH-02 | Phase 3 | Pending |
-| SEC-01 | Phase 2 | Pending |
-| SEC-02 | Phase 2 | Pending |
-| SEC-03 | Phase 2 | Pending |
-| CFG-01 | Phase 4 | Pending |
-| CFG-02 | Phase 4 | Pending |
-| CFG-03 | Phase 4 | Pending |
-| OBS-01 | Phase 4 | Pending |
-| OBS-02 | Phase 4 | Pending |
-| INT-01 | Phase 4 | Pending |
-| INT-02 | Phase 5 | Pending |
-| INT-03 | Phase 5 | Pending |
-| DOC-01 | Phase 5 | Pending |
-| DOC-02 | Phase 5 | Pending |
-| DOC-03 | Phase 5 | Pending |
+| NET-01 | Phase 1 | Pending |
+| NET-02 | Phase 1 | Pending |
+| NET-03 | Phase 1 | Pending |
+| NET-04 | Phase 1 | Pending |
+| SEC-01 | Phase 1 | Pending |
+| SEC-02 | Phase 1 | Pending |
+| SEC-03 | Phase 1 | Pending |
+| BCAST-01 | Phase 2 | Pending |
+| BCAST-02 | Phase 2 | Pending |
+| BCAST-03 | Phase 2 | Pending |
+| BCAST-04 | Phase 2 | Pending |
+| BCAST-05 | Phase 2 | Pending |
+| CATCH-01 | Phase 2 | Pending |
+| CATCH-02 | Phase 2 | Pending |
+| INT-01 | Phase 2 | Pending |
+| CFG-01 | Phase 3 | Pending |
+| CFG-02 | Phase 3 | Pending |
+| CFG-03 | Phase 3 | Pending |
+| OBS-01 | Phase 3 | Pending |
+| OBS-02 | Phase 3 | Pending |
+| INT-02 | Phase 4 | Pending |
+| INT-03 | Phase 4 | Pending |
+| DOC-01 | Phase 4 | Pending |
+| DOC-02 | Phase 4 | Pending |
+| DOC-03 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 27 total
 - Mapped to phases: 27
-- Unmapped: 0 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after initial definition*
+*Last updated: 2026-03-17 after roadmap creation (consolidated from 5 phases to 4)*
