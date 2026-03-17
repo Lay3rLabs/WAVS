@@ -39,12 +39,11 @@ created: 2026-03-17
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | Status |
 |---------|------|------|-------------|-----------|-------------------|--------|
 | 1-01-01 | 01 | 1 | IDEN-01, IDEN-02 | integration | `cargo test -p wavs --test p2p_identity_tests -- --nocapture` | pending |
-| 1-01-02 | 01 | 1 | SEC-02 | compile | `cargo check -p wavs` (P2pConfig rewrite) | pending |
+| 1-01-02 | 01 | 1 | (config rewrite) | compile | `cargo check -p wavs` (P2pConfig rewrite) | pending |
 | 1-02-01 | 02 | 2 | NET-02, NET-03, SEC-02 | compile | `cargo check -p wavs` (runtime scaffold + lookup + rate limiting) | pending |
 | 1-02-02 | 02 | 2 | NET-02, SEC-01 | integration | `cargo test -p wavs --features dev --test p2p_connectivity_tests -- --nocapture` | pending |
-| 1-03-01 | 03 | 3 | NET-01, NET-04 | compile | `cargo check -p wavs` (discovery mode + BlockPeer) | pending |
-| 1-03-02 | 03 | 3 | SEC-03 | compile | `cargo check -p wavs` (BlockPeer command + block_peer method) | pending |
-| 1-03-03 | 03 | 3 | NET-01, SEC-03 | integration | `cargo test -p wavs --features dev --test p2p_connectivity_tests -- --nocapture` | pending |
+| 1-03-01 | 03 | 3 | NET-01, NET-04, SEC-03 | compile | `cargo check -p wavs` (BlockPeer + discovery mode) | pending |
+| 1-03-02 | 03 | 3 | NET-01, SEC-03, NET-04 | integration | `cargo test -p wavs --features dev --test p2p_connectivity_tests -- --nocapture` | pending |
 
 *Status: pending / green / red / flaky*
 
@@ -56,7 +55,7 @@ Plans use inline TDD (tests created within the same task as implementation, `tdd
 
 1. Plan 01-01 Task 1 creates `packages/wavs/tests/p2p_identity_tests.rs` as part of TDD RED->GREEN cycle
 2. Plan 01-02 Task 2 creates `packages/wavs/tests/p2p_connectivity_tests.rs` as part of TDD
-3. Plan 01-03 Task 3 adds tests to `p2p_connectivity_tests.rs`
+3. Plan 01-03 Task 2 adds tests to `p2p_connectivity_tests.rs`
 
 No separate Wave 0 stub-creation step is needed. Each test file is created by the first task that needs it, and all subsequent tasks that modify the same file add to it.
 
@@ -72,7 +71,7 @@ No separate Wave 0 stub-creation step is needed. Each test file is created by th
 |-----------|------------|-------|
 | `packages/wavs/tests/p2p_identity_tests.rs` | Plan 01-01 Task 1 | `test_deterministic_derivation`, `test_consistent_across_restarts`, `test_different_mnemonics_produce_different_keys`, `test_invalid_mnemonic_returns_error`, `test_p2p_config_default_is_disabled` |
 | `packages/wavs/tests/p2p_connectivity_tests.rs` | Plan 01-02 Task 2 | `test_lookup_mode_two_nodes_connect`, `test_unauthorized_peer_rejected` |
-| `packages/wavs/tests/p2p_connectivity_tests.rs` | Plan 01-03 Task 3 (adds to) | `test_discovery_mode_two_nodes`, `test_block_peer` |
+| `packages/wavs/tests/p2p_connectivity_tests.rs` | Plan 01-03 Task 2 (adds to) | `test_discovery_mode_two_nodes`, `test_block_peer`, `test_auto_reconnect` |
 
 ---
 
@@ -92,5 +91,6 @@ No separate Wave 0 stub-creation step is needed. Each test file is created by th
 - [x] No watch-mode flags
 - [x] Feedback latency < 30s
 - [x] `nyquist_compliant: true` set in frontmatter
+- [x] NET-04 (auto-reconnect) has automated test: `test_auto_reconnect` in Plan 01-03 Task 2
 
 **Approval:** approved
