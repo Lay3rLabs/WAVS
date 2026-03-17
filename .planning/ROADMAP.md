@@ -29,12 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Two WAVS nodes started with lookup mode (known addresses) connect to each other on localhost
   4. A node whose peer ID is not in the Oracle's authorized set is rejected at the connection level
   5. Commonware's Runner runs on a dedicated OS thread without panicking inside WAVS's existing Tokio runtime
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
-- [ ] 01-03: TBD
+- [ ] 01-01-PLAN.md — Dependencies, Ed25519 identity derivation, and P2pConfig rewrite
+- [ ] 01-02-PLAN.md — Commonware runtime scaffold, lookup-mode networking, and Oracle authorization
+- [ ] 01-03-PLAN.md — Discovery-mode networking, block-peer API, and integration tests
 
 ### Phase 2: Broadcast and Routing
 **Goal**: Operators can broadcast signed submissions, receive messages filtered by subscribed services, and catch up on missed messages after reconnection — all behind the existing P2pHandle API
