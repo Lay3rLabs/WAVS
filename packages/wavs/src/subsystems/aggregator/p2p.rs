@@ -684,3 +684,90 @@ pub fn pubkey_from_mnemonic(mnemonic: &str) -> Result<String, AggregatorError> {
     let private_key = ed25519_signer_from_mnemonic(mnemonic)?;
     Ok(const_hex::encode(private_key.public_key().as_ref()))
 }
+
+// ============================================================================
+// Tests: P2P Broadcast Types (Wave 0 stubs)
+// ============================================================================
+
+#[cfg(test)]
+mod p2p_broadcast_tests {
+    use super::*;
+
+    // ---- P2pMessage tests ----
+
+    #[test]
+    fn test_p2p_message_from_submission() {
+        // P2pMessage::from_submission() creates message with correct service_id_bytes and payload
+        todo!("Implement after P2pMessage struct exists")
+    }
+
+    #[test]
+    fn test_p2p_message_codec_roundtrip() {
+        // P2pMessage round-trip encode/decode via Write then Read produces identical fields
+        todo!("Implement after P2pMessage Codec traits exist")
+    }
+
+    #[test]
+    fn test_p2p_message_digest_determinism() {
+        // Two identical P2pMessages produce the same digest; different messages produce different digests (BCAST-02)
+        todo!("Implement after P2pMessage Digestible trait exists")
+    }
+
+    #[test]
+    fn test_p2p_message_to_submission_roundtrip() {
+        // P2pMessage::to_submission() deserializes back to original (ServiceId, Submission) pair
+        todo!("Implement after P2pMessage conversion methods exist")
+    }
+
+    // ---- ServiceRouter tests ----
+
+    #[test]
+    fn test_service_router_empty_rejects_all() {
+        // ServiceRouter::new() creates empty router, should_accept returns false for any message
+        todo!("Implement after ServiceRouter struct exists")
+    }
+
+    #[test]
+    fn test_service_router_subscribe_accept() {
+        // After subscribe(service_id_a), should_accept returns true for matching, false for non-matching
+        todo!("Implement after ServiceRouter struct exists")
+    }
+
+    #[test]
+    fn test_service_router_unsubscribe() {
+        // After unsubscribe(service_id_a), should_accept returns false again
+        todo!("Implement after ServiceRouter struct exists")
+    }
+
+    #[test]
+    fn test_service_router_subscribed_topics() {
+        // subscribed_topics() returns hex-encoded list of subscribed service IDs
+        todo!("Implement after ServiceRouter struct exists")
+    }
+
+    // ---- RetryQueue tests ----
+
+    #[test]
+    fn test_retry_queue_empty() {
+        // RetryQueue::new() creates empty queue, is_empty() returns true
+        todo!("Implement after RetryQueue struct exists")
+    }
+
+    #[test]
+    fn test_retry_queue_push_drain_fifo() {
+        // push() adds messages, drain_all() returns them in FIFO order
+        todo!("Implement after RetryQueue struct exists")
+    }
+
+    #[test]
+    fn test_retry_queue_overflow_drops_oldest() {
+        // When queue is full (64 items), push() drops oldest message
+        todo!("Implement after RetryQueue struct exists")
+    }
+
+    #[test]
+    fn test_retry_queue_drain_empty() {
+        // drain_all() on empty queue returns empty Vec
+        todo!("Implement after RetryQueue struct exists")
+    }
+}
