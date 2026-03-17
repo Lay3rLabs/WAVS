@@ -72,6 +72,9 @@ commonware-p2p = "2026.3.0"
 commonware-cryptography = "2026.3.0"
 commonware-math = "2026.3.0"
 commonware-runtime = "2026.3.0"
+commonware-utils = "2026.3.0"
+commonware-codec = "2026.3.0"
+rand_core = "0.6"
 libp2p = { workspace = true }
 hypercore = { workspace = true }
 hypercore-protocol = { workspace = true }
