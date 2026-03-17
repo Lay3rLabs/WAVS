@@ -56,3 +56,37 @@ fn test_p2p_config_default_is_disabled() {
     let config: P2pConfig = Default::default();
     assert_eq!(config, P2pConfig::Disabled);
 }
+
+// ============================================================================
+// P2pConfig deserialization tests (Task 2)
+// ============================================================================
+
+#[test]
+fn test_p2p_config_local_deserialization() {
+    let config = P2pConfig::Local {
+        listen_port: 9000,
+        peer_addresses: vec!["aabb@127.0.0.1:9001".to_string()],
+        authorized_peers: vec!["aabbccdd".to_string()],
+    };
+    assert_eq!(config.listen_port(), Some(9000));
+    assert_eq!(config.authorized_peers().len(), 1);
+    assert_eq!(config.authorized_peers()[0], "aabbccdd");
+}
+
+#[test]
+fn test_p2p_config_remote_deserialization() {
+    let config = P2pConfig::Remote {
+        listen_port: 9000,
+        bootstrappers: vec!["aabb@bootstrap.example.com:9000".to_string()],
+        authorized_peers: vec!["aabbccdd".to_string(), "eeff0011".to_string()],
+    };
+    assert_eq!(config.listen_port(), Some(9000));
+    assert_eq!(config.authorized_peers().len(), 2);
+}
+
+#[test]
+fn test_p2p_config_disabled_has_no_port() {
+    let config = P2pConfig::Disabled;
+    assert_eq!(config.listen_port(), None);
+    assert_eq!(config.authorized_peers().len(), 0);
+}
