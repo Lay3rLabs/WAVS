@@ -62,6 +62,12 @@ pub enum P2pConfig {
         /// The local node's own pubkey is implicitly trusted.
         #[serde(default)]
         authorized_peers: Vec<String>,
+        /// Max message size in bytes (default: 65536 = 64KB)
+        #[serde(default)]
+        max_message_size: Option<u32>,
+        /// Broadcast Engine deque size per peer for catch-up (default: 128)
+        #[serde(default)]
+        deque_size: Option<usize>,
     },
     /// Remote / production -- discovery mode with bootstrapper nodes.
     Remote {
@@ -74,6 +80,12 @@ pub enum P2pConfig {
         /// The local node's own pubkey is implicitly trusted.
         #[serde(default)]
         authorized_peers: Vec<String>,
+        /// Max message size in bytes (default: 65536 = 64KB)
+        #[serde(default)]
+        max_message_size: Option<u32>,
+        /// Broadcast Engine deque size per peer for catch-up (default: 128)
+        #[serde(default)]
+        deque_size: Option<usize>,
     },
 }
 
@@ -97,6 +109,28 @@ impl P2pConfig {
                 authorized_peers, ..
             } => authorized_peers,
             P2pConfig::Disabled => &[],
+        }
+    }
+
+    /// Returns the configured max_message_size, or the default (65536 = 64KB).
+    pub fn max_message_size(&self) -> u32 {
+        match self {
+            P2pConfig::Local {
+                max_message_size, ..
+            } => max_message_size.unwrap_or(65536),
+            P2pConfig::Remote {
+                max_message_size, ..
+            } => max_message_size.unwrap_or(65536),
+            P2pConfig::Disabled => 65536,
+        }
+    }
+
+    /// Returns the configured deque_size for the broadcast Engine, or the default (128).
+    pub fn deque_size(&self) -> usize {
+        match self {
+            P2pConfig::Local { deque_size, .. } => deque_size.unwrap_or(128),
+            P2pConfig::Remote { deque_size, .. } => deque_size.unwrap_or(128),
+            P2pConfig::Disabled => 128,
         }
     }
 }
@@ -225,7 +259,7 @@ impl ServiceRouter {
     }
 
     /// Return hex-encoded list of subscribed service IDs for status reporting.
-    pub fn subscribed_topics(&self) -> Vec<String> {
+    pub fn subscribed_services(&self) -> Vec<String> {
         self.subscribed_services
             .iter()
             .map(|s| const_hex::encode(s))
@@ -367,7 +401,11 @@ fn spawn_commonware_runtime(
                         listen_port,
                         ref peer_addresses,
                         ref authorized_peers,
+                        max_message_size,
+                        deque_size,
                     } => {
+                        let max_msg_size = max_message_size.unwrap_or(65536);
+                        let deq_size = deque_size.unwrap_or(128);
                         run_lookup_network(
                             context,
                             &private_key,
@@ -376,6 +414,8 @@ fn spawn_commonware_runtime(
                             authorized_peers,
                             command_rx,
                             aggregator_tx,
+                            max_msg_size,
+                            deq_size,
                         )
                         .await;
                     }
@@ -383,7 +423,11 @@ fn spawn_commonware_runtime(
                         listen_port,
                         ref bootstrappers,
                         ref authorized_peers,
+                        max_message_size,
+                        deque_size,
                     } => {
+                        let max_msg_size = max_message_size.unwrap_or(65536);
+                        let deq_size = deque_size.unwrap_or(128);
                         run_discovery_network(
                             context,
                             &private_key,
@@ -392,6 +436,8 @@ fn spawn_commonware_runtime(
                             authorized_peers,
                             command_rx,
                             aggregator_tx,
+                            max_msg_size,
+                            deq_size,
                         )
                         .await;
                     }
@@ -435,6 +481,8 @@ async fn run_lookup_network(
     authorized_peer_hexes: &[String],
     mut command_rx: mpsc::UnboundedReceiver<P2pCommand>,
     aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
+    max_message_size: u32,
+    deque_size_param: usize,
 ) {
     let listen_addr = std::net::SocketAddr::from(([0, 0, 0, 0], listen_port));
 
@@ -445,7 +493,7 @@ async fn run_lookup_network(
         private_key.clone(),
         b"wavs-p2p", // namespace for replay protection
         listen_addr,
-        65536, // max_message_size (64KB)
+        max_message_size, // configurable max_message_size (default: 64KB)
     );
 
     tracing::debug!(
@@ -537,9 +585,9 @@ async fn run_lookup_network(
     let broadcast_config = BroadcastConfig {
         public_key: own_pubkey.clone(),
         mailbox_size: 256,
-        deque_size: 128,  // CATCH-02: bounded message storage per peer
+        deque_size: deque_size_param,  // CATCH-02: bounded message storage per peer (configurable)
         priority: false,
-        codec_config: (RangeCfg::new(0..=65536), ()), // P2pMessage::Cfg = (RangeCfg<usize>, ())
+        codec_config: (RangeCfg::new(0..=(max_message_size as usize)), ()), // P2pMessage::Cfg = (RangeCfg<usize>, ())
         peer_provider: oracle.clone(),
     };
     let (engine, mailbox) = Engine::<_, _, P2pMessage, _>::new(
@@ -657,11 +705,9 @@ async fn run_lookup_network(
                             enabled: true,
                             local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
                             listen_addresses: vec![listen_addr.to_string()],
-                            external_addresses: vec![],
-                            connected_peers: 0, // Phase 3 fills from network state
-                            peer_ids: vec![],
-                            subscribed_topics: service_router.subscribed_topics(),
-                            topic_peer_counts: Default::default(),
+                            connected_peers: 0, // Plan 03-03 fills from peer tracking
+                            peer_ids: vec![],   // Plan 03-03 fills from peer tracking
+                            subscribed_services: service_router.subscribed_services(),
                         };
                         let _ = response_tx.send(status);
                     }
@@ -688,7 +734,7 @@ async fn run_lookup_network(
                     Some((peer_pubkey, raw_bytes)) => {
                         // Decode P2pMessage from raw bytes
                         let p2p_msg: P2pMessage = match P2pMessage::decode_cfg(
-                            raw_bytes, &(RangeCfg::new(0..=65536), ())
+                            raw_bytes, &(RangeCfg::new(0..=(max_message_size as usize)), ())
                         ) {
                             Ok(m) => m,
                             Err(e) => {
@@ -774,6 +820,8 @@ async fn run_discovery_network(
     authorized_peer_hexes: &[String],
     mut command_rx: mpsc::UnboundedReceiver<P2pCommand>,
     aggregator_tx: crossbeam::channel::Sender<AggregatorCommand>,
+    max_message_size: u32,
+    deque_size_param: usize,
 ) {
     let listen_addr = std::net::SocketAddr::from(([0, 0, 0, 0], listen_port));
     let own_pubkey = private_key.public_key();
@@ -804,7 +852,7 @@ async fn run_discovery_network(
         listen_addr,
         listen_addr, // dialable_addr -- same as listen for now
         bootstrappers,
-        65536, // max_message_size (64KB)
+        max_message_size, // configurable max_message_size (default: 64KB)
     );
 
     let (mut network, mut oracle) =
@@ -865,9 +913,9 @@ async fn run_discovery_network(
     let broadcast_config = BroadcastConfig {
         public_key: own_pubkey.clone(),
         mailbox_size: 256,
-        deque_size: 128,  // CATCH-02: bounded message storage per peer
+        deque_size: deque_size_param,  // CATCH-02: bounded message storage per peer (configurable)
         priority: false,
-        codec_config: (RangeCfg::new(0..=65536), ()), // P2pMessage::Cfg = (RangeCfg<usize>, ())
+        codec_config: (RangeCfg::new(0..=(max_message_size as usize)), ()), // P2pMessage::Cfg = (RangeCfg<usize>, ())
         peer_provider: oracle.clone(),
     };
     let (engine, mailbox) = Engine::<_, _, P2pMessage, _>::new(
@@ -971,11 +1019,9 @@ async fn run_discovery_network(
                             enabled: true,
                             local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
                             listen_addresses: vec![listen_addr.to_string()],
-                            external_addresses: vec![],
-                            connected_peers: 0, // Phase 3 fills from network state
-                            peer_ids: vec![],
-                            subscribed_topics: service_router.subscribed_topics(),
-                            topic_peer_counts: Default::default(),
+                            connected_peers: 0, // Plan 03-03 fills from peer tracking
+                            peer_ids: vec![],   // Plan 03-03 fills from peer tracking
+                            subscribed_services: service_router.subscribed_services(),
                         };
                         let _ = response_tx.send(status);
                     }
@@ -1002,7 +1048,7 @@ async fn run_discovery_network(
                     Some((peer_pubkey, raw_bytes)) => {
                         // Decode P2pMessage from raw bytes
                         let p2p_msg: P2pMessage = match P2pMessage::decode_cfg(
-                            raw_bytes, &(RangeCfg::new(0..=65536), ())
+                            raw_bytes, &(RangeCfg::new(0..=(max_message_size as usize)), ())
                         ) {
                             Ok(m) => m,
                             Err(e) => {
@@ -1415,15 +1461,15 @@ mod p2p_broadcast_tests {
     }
 
     #[test]
-    fn test_service_router_subscribed_topics() {
-        // subscribed_topics() returns hex-encoded list of subscribed service IDs
+    fn test_service_router_subscribed_services() {
+        // subscribed_services() returns hex-encoded list of subscribed service IDs
         let service_id_a = ServiceId::hash(b"test-service-a");
 
         let mut router = ServiceRouter::new();
-        assert!(router.subscribed_topics().is_empty());
+        assert!(router.subscribed_services().is_empty());
 
         router.subscribe(&service_id_a);
-        let topics = router.subscribed_topics();
+        let topics = router.subscribed_services();
         assert_eq!(topics.len(), 1);
         assert_eq!(topics[0], const_hex::encode(service_id_a.inner()));
     }
