@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-03-17T15:19:00.000Z"
-last_activity: 2026-03-17 — Plan 01-01 complete
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-03-17T15:35:00.000Z"
+last_activity: 2026-03-17 — Plan 01-02 complete
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
-  percent: 8
+  completed_plans: 2
+  percent: 16
 ---
 
 # Project State
@@ -26,28 +26,28 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 1 of 4 (Secure Peer Connectivity)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: Executing
-Last activity: 2026-03-17 — Plan 01-01 complete (Ed25519 identity + P2pConfig)
+Last activity: 2026-03-17 — Plan 01-02 complete (Commonware runtime scaffold + lookup networking)
 
-Progress: [#.........] 8%
+Progress: [##........] 16%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 13 min
-- Total execution time: 0.2 hours
+- Total plans completed: 2
+- Average duration: 12.5 min
+- Total execution time: 0.4 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 1 | 13 min | 13 min |
+| 01 | 2 | 25 min | 12.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 13m
-- Trend: first plan
+- Last 5 plans: 13m, 12m
+- Trend: stable
 
 *Updated after each plan completion*
 
@@ -64,6 +64,9 @@ Recent decisions affecting current work:
 - Clean break on P2P config format — simpler than compatibility layer for a networking rewrite
 - rand_chacha 0.3 (not 0.9) to match commonware-cryptography's rand_core 0.6 — version mismatch causes trait incompatibility
 - commonware-math added as direct dependency for Random trait needed by PrivateKey::random()
+- Config::local() defaults provide sufficient rate limiting (SEC-02) — no explicit builder calls needed
+- Map::from_iter_dedup() for Oracle peer map — handles duplicate keys gracefully
+- context.stop(0, None) for clean commonware runtime shutdown on bridge loop exit
 
 ### Pending Todos
 
@@ -71,12 +74,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Runtime integration (Runner on dedicated thread) is unproven in WAVS context — validate early in Phase 1
+- ~~Runtime integration (Runner on dedicated thread) is unproven in WAVS context~~ RESOLVED in Plan 01-02: spawn_commonware_runtime() works without nesting panics
 - Catch-up guarantee equivalence (buffered Engine is peer-scoped, current protocol is service-scoped) — validate in Phase 2
 - Commonware is ALPHA software — pin exact versions, keep types inside p2p module boundary
 
 ## Session Continuity
 
-Last session: 2026-03-17T15:19:00.000Z
-Stopped at: Completed 01-01-PLAN.md
-Resume file: .planning/phases/01-secure-peer-connectivity/01-02-PLAN.md
+Last session: 2026-03-17T15:35:00.000Z
+Stopped at: Completed 01-02-PLAN.md
+Resume file: .planning/phases/01-secure-peer-connectivity/01-03-PLAN.md
