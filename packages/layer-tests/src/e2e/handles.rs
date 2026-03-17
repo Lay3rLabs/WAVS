@@ -200,12 +200,8 @@ impl AppHandles {
             loop {
                 match client.get_p2p_status().await {
                     Ok(status) => {
-                        // Prefer external_addresses, fall back to listen_addresses
-                        let addr = status
-                            .external_addresses
-                            .first()
-                            .or(status.listen_addresses.first())
-                            .cloned();
+                        // Use listen_addresses (socket format, e.g. "0.0.0.0:9000")
+                        let addr = status.listen_addresses.first().cloned();
 
                         if let Some(addr) = addr {
                             tracing::info!("Got bootstrap address from operator 0: {}", addr);
