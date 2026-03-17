@@ -2561,6 +2561,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "commonware-broadcast"
+version = "2026.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b67e4fed57f8d77c8d92b7bdd7512aee03d9d27ce4c0d3d8f93dd50358e9efc"
+dependencies = [
+ "commonware-codec",
+ "commonware-cryptography",
+ "commonware-macros",
+ "commonware-p2p",
+ "commonware-runtime",
+ "commonware-utils",
+ "prometheus-client 0.24.0",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
 name = "commonware-codec"
 version = "2026.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14841,6 +14858,7 @@ dependencies = [
  "bip39",
  "chrono",
  "clap 4.6.0",
+ "commonware-broadcast",
  "commonware-codec",
  "commonware-cryptography",
  "commonware-math",
