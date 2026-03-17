@@ -79,7 +79,7 @@ just dev-tool send-triggers --count 1000
 
 The main WAVS node is a Tokio-based async server centered around a **dispatcher** (`packages/wavs/src/dispatcher.rs`) that orchestrates four subsystems via Crossbeam channels:
 
-1. **Trigger Manager** (`subsystems/trigger/`) — Monitors EVM and Cosmos blockchain events; routes events to registered services via cron, timer, or on-chain triggers. Uses libp2p for P2P trigger distribution.
+1. **Trigger Manager** (`subsystems/trigger/`) — Monitors EVM and Cosmos blockchain events; routes events to registered services via cron, timer, or on-chain triggers. Uses commonware-p2p for P2P message broadcast between operators.
 
 2. **Engine** (`subsystems/engine/`) — Executes WASM components in isolated Wasmtime WASI runtimes. Each AVS service runs as a sandboxed component with restricted system access.
 
@@ -134,5 +134,5 @@ Detailed docs live in `docs/`:
 - `LOCAL_DEV.md` — Development workflow and telemetry
 - `API.md` — HTTP API reference
 - `ASYNC_NOTES.md` — Async design patterns used throughout
-- `P2P.md` — libp2p/Hyperswarm networking
+- `P2P.md` — commonware P2P networking
 - `WIT_AUTHORING_NOTES.md` — Writing WIT component interfaces
