@@ -20,10 +20,10 @@
 ### Broadcast
 
 - [ ] **BCAST-01**: Operator can broadcast signed submission to all connected peers
-- [ ] **BCAST-02**: Messages are deduplicated by cryptographic digest
-- [ ] **BCAST-03**: Submission type implements commonware Codec and Digestible traits
-- [ ] **BCAST-04**: Failed publishes (no peers) are retried with bounded queue
-- [ ] **BCAST-05**: Per-service message isolation via application-level service_id filtering on single channel
+- [x] **BCAST-02**: Messages are deduplicated by cryptographic digest
+- [x] **BCAST-03**: Submission type implements commonware Codec and Digestible traits
+- [x] **BCAST-04**: Failed publishes (no peers) are retried with bounded queue
+- [x] **BCAST-05**: Per-service message isolation via application-level service_id filtering on single channel
 
 ### Catch-Up
 
@@ -101,10 +101,10 @@
 | SEC-02 | Phase 1 | Complete |
 | SEC-03 | Phase 1 | Complete |
 | BCAST-01 | Phase 2 | Pending |
-| BCAST-02 | Phase 2 | Pending |
-| BCAST-03 | Phase 2 | Pending |
-| BCAST-04 | Phase 2 | Pending |
-| BCAST-05 | Phase 2 | Pending |
+| BCAST-02 | Phase 2 | Complete |
+| BCAST-03 | Phase 2 | Complete |
+| BCAST-04 | Phase 2 | Complete |
+| BCAST-05 | Phase 2 | Complete |
 | CATCH-01 | Phase 2 | Pending |
 | CATCH-02 | Phase 2 | Pending |
 | INT-01 | Phase 2 | Pending |

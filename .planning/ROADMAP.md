@@ -49,7 +49,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — P2pMessage type (Codec+Digestible), ServiceRouter, and RetryQueue
+- [x] 02-01-PLAN.md — P2pMessage type (Codec+Digestible), ServiceRouter, and RetryQueue
 - [ ] 02-02-PLAN.md — Broadcast Engine integration into bridge loops, P2pHandle wiring, and integration tests
 
 ### Phase 3: Config and Observability
@@ -89,6 +89,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Secure Peer Connectivity | 3/3 | Complete | 2026-03-17 |
-| 2. Broadcast and Routing | 0/2 | Planned | - |
+| 2. Broadcast and Routing | 1/2 | In Progress | - |
 | 3. Config and Observability | 0/1 | Not started | - |
 | 4. Validation and Cleanup | 0/2 | Not started | - |

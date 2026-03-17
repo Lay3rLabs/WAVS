@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-03-PLAN.md (Phase 1 complete)
-last_updated: "2026-03-17T15:50:37.697Z"
-last_activity: 2026-03-17 — Phase 1 complete (Discovery mode, BlockPeer, auto-reconnect)
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-17T17:17:04Z"
+last_activity: 2026-03-17 — P2pMessage, ServiceRouter, RetryQueue implemented with 12 passing tests
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 25
+  total_plans: 4
+  completed_plans: 4
+  percent: 50
 ---
 
 # Project State
@@ -21,33 +21,34 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably using commonware instead of libp2p
-**Current focus:** Phase 1: Secure Peer Connectivity
+**Current focus:** Phase 2: Broadcast and Routing
 
 ## Current Position
 
-Phase: 1 of 4 (Secure Peer Connectivity) -- COMPLETE
-Plan: 3 of 3 in current phase (all plans complete)
+Phase: 2 of 4 (Broadcast and Routing)
+Plan: 1 of 2 in current phase
 Status: Executing
-Last activity: 2026-03-17 — Phase 1 complete (Discovery mode, BlockPeer, auto-reconnect)
+Last activity: 2026-03-17 — P2pMessage, ServiceRouter, RetryQueue implemented with 12 passing tests
 
-Progress: [###.......] 25%
+Progress: [#####.....] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 10.7 min
-- Total execution time: 0.5 hours
+- Total plans completed: 4
+- Average duration: 13.5 min
+- Total execution time: 0.9 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 3 | 32 min | 10.7 min |
+| 02 | 1 | 22 min | 22 min |
 
 **Recent Trend:**
-- Last 5 plans: 13m, 12m, 7m
-- Trend: accelerating
+- Last 5 plans: 13m, 12m, 7m, 22m
+- Trend: stable (Phase 2 plan is larger scope)
 
 *Updated after each plan completion*
 
@@ -70,6 +71,11 @@ Recent decisions affecting current work:
 - Config::local() for discovery in tests — allow_private_ips=true needed for localhost
 - Set::from_iter_dedup for discovery Oracle peer set — handles duplicate keys gracefully
 - BlockPeer in both lookup and discovery bridge loops — consistent API regardless of mode
+- P2pMessage uses [u8; 32] for service_id_bytes — zero-cost comparison with ServiceId::inner()
+- P2pMessage::Read Cfg is (RangeCfg<usize>, ()) — enables ReadRangeExt ergonomic API
+- ServiceRouter uses HashSet<[u8; 32]> for O(1) lookup on raw service ID bytes
+- RetryQueue bounded at 64 items with oldest-drop eviction (BCAST-04)
+- Digestible impl concatenates service_id_bytes + payload before SHA-256 hashing for deterministic dedup digest
 
 ### Pending Todos
 
@@ -83,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T15:47:36.000Z
-Stopped at: Completed 01-03-PLAN.md (Phase 1 complete)
-Resume file: Phase 2 (next phase)
+Last session: 2026-03-17T17:17:04Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: 02-02-PLAN.md (broadcast Engine integration)
