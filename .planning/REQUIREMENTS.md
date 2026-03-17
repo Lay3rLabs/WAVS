@@ -19,7 +19,7 @@
 
 ### Broadcast
 
-- [ ] **BCAST-01**: Operator can broadcast signed submission to all connected peers
+- [x] **BCAST-01**: Operator can broadcast signed submission to all connected peers
 - [x] **BCAST-02**: Messages are deduplicated by cryptographic digest
 - [x] **BCAST-03**: Submission type implements commonware Codec and Digestible traits
 - [x] **BCAST-04**: Failed publishes (no peers) are retried with bounded queue
@@ -27,8 +27,8 @@
 
 ### Catch-Up
 
-- [ ] **CATCH-01**: Reconnecting peer retrieves missed submissions via buffered Engine digest-based caching
-- [ ] **CATCH-02**: Message storage is bounded per peer (configurable deque_size)
+- [x] **CATCH-01**: Reconnecting peer retrieves missed submissions via buffered Engine digest-based caching
+- [x] **CATCH-02**: Message storage is bounded per peer (configurable deque_size)
 
 ### Security
 
@@ -49,7 +49,7 @@
 
 ### Integration
 
-- [ ] **INT-01**: P2pHandle API (publish, subscribe, unsubscribe, get_status) preserved — Aggregator sees no changes
+- [x] **INT-01**: P2pHandle API (publish, subscribe, unsubscribe, get_status) preserved — Aggregator sees no changes
 - [ ] **INT-02**: All existing e2e tests pass (`just test-wavs-e2e`)
 - [ ] **INT-03**: libp2p dependency removed from Cargo.toml
 
@@ -100,14 +100,14 @@
 | SEC-01 | Phase 1 | Complete |
 | SEC-02 | Phase 1 | Complete |
 | SEC-03 | Phase 1 | Complete |
-| BCAST-01 | Phase 2 | Pending |
+| BCAST-01 | Phase 2 | Complete |
 | BCAST-02 | Phase 2 | Complete |
 | BCAST-03 | Phase 2 | Complete |
 | BCAST-04 | Phase 2 | Complete |
 | BCAST-05 | Phase 2 | Complete |
-| CATCH-01 | Phase 2 | Pending |
-| CATCH-02 | Phase 2 | Pending |
-| INT-01 | Phase 2 | Pending |
+| CATCH-01 | Phase 2 | Complete |
+| CATCH-02 | Phase 2 | Complete |
+| INT-01 | Phase 2 | Complete |
 | CFG-01 | Phase 3 | Pending |
 | CFG-02 | Phase 3 | Pending |
 | CFG-03 | Phase 3 | Pending |
