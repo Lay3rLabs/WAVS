@@ -76,7 +76,6 @@ commonware-utils = "2026.3.0"
 commonware-codec = "2026.3.0"
 commonware-broadcast = "2026.3.0"
 rand_core = "0.6"
-libp2p = { workspace = true }
 hypercore = { workspace = true }
 hypercore-protocol = { workspace = true }
 hyperswarm = { workspace = true }

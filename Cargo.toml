@@ -233,24 +233,6 @@ crossbeam = "0.8.4"
 # versioning
 semver = { version = "1.0.27", features = ["serde"] }
 
-# p2p
-# Cargo.toml
-libp2p = { version = "0.56", features = [
-    "tokio",            # tokio runtime
-    "tcp",
-    "dns",
-    "noise",
-    "yamux",
-    "identify",
-    "ping",
-    "gossipsub",
-    "request-response",
-    "kad",              # WAN discovery
-    "mdns",             # local dev discovery
-    "autonat",          # NAT detection for external address discovery
-    "macros",
-    "secp256k1",        # secp256k1 identity for P2P (derived from signing_mnemonic)
-] }
 
 # Tauri - backend
 tauri = { version = "2.10.2", features = ["protocol-asset"] }
