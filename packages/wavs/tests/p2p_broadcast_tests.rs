@@ -628,16 +628,83 @@ async fn test_cache_bounded_deque_size() {
 // OBS-01: GetStatus returns real connected peer data after broadcast exchange
 // ============================================================================
 
-/// OBS-01: Verify GetStatus returns real connected peer data after broadcast exchange.
-/// STUB -- will be replaced by Plan 03-03 with full peer tracking assertions.
+/// OBS-01: Verify GetStatus returns real connected peer data after broadcast exchange
 #[tokio::test(flavor = "multi_thread")]
 async fn test_status_connected_peers_after_broadcast() {
-    // Wave 0 stub: verify the test infrastructure works.
-    // Plan 03-03 will replace this with full peer tracking verification.
-    let (handle_a, _handle_b, _agg_rx_a, _agg_rx_b) = setup_two_nodes(20).await;
+    let (handle_a, handle_b, _agg_rx_a, agg_rx_b) = setup_two_nodes(20).await;
 
-    // Basic sanity: GetStatus works before any broadcast
-    let status = handle_a.get_status().await.expect("get_status should work");
-    assert!(status.enabled, "P2P should be enabled");
-    assert!(status.local_peer_id.is_some(), "Should have a local peer ID");
+    // Wait for nodes to connect
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    let service_id = ServiceId::hash(b"status-test-service");
+
+    // Subscribe node B so it accepts the message
+    handle_b.subscribe(&service_id).expect("subscribe B");
+
+    // Before any broadcast, status may show 0 connected peers (truthful)
+    // (This is expected -- peer tracking updates after message exchange)
+
+    // Node A broadcasts a submission
+    let submission = mock_submission(&service_id);
+    handle_a.publish(&submission).expect("publish from A");
+
+    // Wait for delivery and peer tracking update
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    // Verify message was delivered to B
+    let received = agg_rx_b.try_recv();
+    assert!(received.is_ok(), "Node B should have received the broadcast");
+
+    // Check status on node A -- should show connected peers from broadcast ack
+    let status_a = handle_a.get_status().await.expect("get_status A");
+    assert!(
+        status_a.connected_peers >= 1,
+        "Node A should report >= 1 connected peer after broadcast, got {}",
+        status_a.connected_peers
+    );
+    assert!(
+        !status_a.peer_ids.is_empty(),
+        "Node A should have peer IDs after broadcast"
+    );
+
+    // Verify peer_ids contain hex-encoded Ed25519 public keys (64 hex chars)
+    for peer_id in &status_a.peer_ids {
+        assert_eq!(
+            peer_id.len(),
+            64,
+            "Peer ID should be 64 hex chars (32-byte Ed25519 pubkey), got {}",
+            peer_id.len()
+        );
+        assert!(
+            peer_id.chars().all(|c| c.is_ascii_hexdigit()),
+            "Peer ID should be hex-encoded: {}",
+            peer_id
+        );
+    }
+
+    // Check that node B's pubkey appears in node A's peer list
+    let pubkey_b_hex = pubkey_from_mnemonic(MNEMONIC_B).unwrap();
+    assert!(
+        status_a.peer_ids.contains(&pubkey_b_hex),
+        "Node A's peer_ids should contain node B's pubkey {}, got {:?}",
+        pubkey_b_hex,
+        status_a.peer_ids
+    );
+
+    // Check status on node B -- should show connected peers from inbound message
+    let status_b = handle_b.get_status().await.expect("get_status B");
+    assert!(
+        status_b.connected_peers >= 1,
+        "Node B should report >= 1 connected peer after receiving, got {}",
+        status_b.connected_peers
+    );
+
+    // Verify node A's pubkey appears in node B's peer list
+    let pubkey_a_hex = pubkey_from_mnemonic(MNEMONIC_A).unwrap();
+    assert!(
+        status_b.peer_ids.contains(&pubkey_a_hex),
+        "Node B's peer_ids should contain node A's pubkey {}, got {:?}",
+        pubkey_a_hex,
+        status_b.peer_ids
+    );
 }
