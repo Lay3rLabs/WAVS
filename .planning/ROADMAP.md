@@ -78,11 +78,11 @@ Plans:
   3. `docs/P2P.md` documents commonware setup, config examples, and multi-node instructions for operators
   4. A blog post in `docs/blog/` announces the commonware integration (announcement style, not tutorial)
   5. An operator migration guide documents the identity change, config format change, and coordinated upgrade requirement
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md — E2E test harness fixes (TestP2pMode rename, P2pConfig fields) and libp2p dependency removal
+- [ ] 04-02-PLAN.md — Documentation rewrite (P2P.md, ARCHITECTURE.md, CLAUDE.md), blog post, and operator migration guide
 
 ## Progress
 
