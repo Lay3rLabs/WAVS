@@ -7,8 +7,8 @@
 
 ### Identity
 
-- [ ] **IDEN-01**: P2P identity derived deterministically from `WAVS_SIGNING_MNEMONIC` as Ed25519 keypair via ChaCha20Rng
-- [ ] **IDEN-02**: Peer ID is consistent across node restarts with same mnemonic
+- [x] **IDEN-01**: P2P identity derived deterministically from `WAVS_SIGNING_MNEMONIC` as Ed25519 keypair via ChaCha20Rng
+- [x] **IDEN-02**: Peer ID is consistent across node restarts with same mnemonic
 
 ### Networking
 
@@ -91,8 +91,8 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IDEN-01 | Phase 1 | Pending |
-| IDEN-02 | Phase 1 | Pending |
+| IDEN-01 | Phase 1 | Complete |
+| IDEN-02 | Phase 1 | Complete |
 | NET-01 | Phase 1 | Pending |
 | NET-02 | Phase 1 | Pending |
 | NET-03 | Phase 1 | Pending |
