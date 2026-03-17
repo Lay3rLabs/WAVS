@@ -200,12 +200,20 @@ impl AppHandles {
             loop {
                 match client.get_p2p_status().await {
                     Ok(status) => {
-                        // Use listen_addresses (socket format, e.g. "0.0.0.0:9000")
-                        let addr = status.listen_addresses.first().cloned();
-
-                        if let Some(addr) = addr {
-                            tracing::info!("Got bootstrap address from operator 0: {}", addr);
-                            return Ok(addr);
+                        // Combine peer_id + listen address into bootstrapper format:
+                        // "<hex_ed25519_pubkey>@<host>:<port>"
+                        if let (Some(peer_id), Some(socket_addr)) =
+                            (status.local_peer_id, status.listen_addresses.first())
+                        {
+                            // Replace 0.0.0.0 wildcard with 127.0.0.1 for local testing
+                            let port = socket_addr.split(':').last().unwrap_or("9000");
+                            let bootstrap_addr =
+                                format!("{}@127.0.0.1:{}", peer_id, port);
+                            tracing::info!(
+                                "Got bootstrap address from operator 0: {}",
+                                bootstrap_addr
+                            );
+                            return Ok(bootstrap_addr);
                         }
                     }
                     Err(e) => {
