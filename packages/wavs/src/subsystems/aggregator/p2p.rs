@@ -6,8 +6,8 @@
 //! # Migration Status
 //!
 //! This module is being migrated from libp2p to commonware-p2p. The Ed25519 identity
-//! derivation and commonware runtime scaffold are implemented. The networking layer uses
-//! lookup mode (known addresses) for local dev; discovery mode will be added in Plan 03.
+//! derivation, commonware runtime scaffold, lookup mode (known addresses for local dev),
+//! and discovery mode (bootstrapper-based for production) are implemented.
 //! Broadcast, message routing, and the full P2pHandle API will be implemented in Phase 2.
 
 use serde::{Deserialize, Serialize};
@@ -86,8 +86,8 @@ impl P2pConfig {
 // ============================================================================
 
 use commonware_cryptography::{ed25519, Signer};
-use commonware_p2p::authenticated::lookup;
-use commonware_p2p::{Address, AddressableManager};
+use commonware_p2p::authenticated::{discovery, lookup};
+use commonware_p2p::{Address, AddressableManager, Blocker, Ingress, Manager};
 use commonware_runtime::Quota;
 use commonware_utils::NZU32;
 
@@ -128,6 +128,17 @@ fn parse_authorized_peers(
                 .map_err(|e| AggregatorError::P2p(format!("Invalid Ed25519 pubkey '{}': {}", hex, e)))
         })
         .collect()
+}
+
+/// Parse a bootstrapper address string of format "<hex_pubkey>@<host>:<port>"
+/// into a Bootstrapper tuple (PublicKey, Ingress).
+///
+/// Bootstrappers in discovery mode need their public key and a dialable address.
+fn parse_bootstrapper(
+    addr: &str,
+) -> Result<(ed25519::PublicKey, Ingress), AggregatorError> {
+    let (pubkey, socket_addr) = parse_peer_address(addr)?;
+    Ok((pubkey, Ingress::from(socket_addr)))
 }
 
 /// Construct an Ed25519 PublicKey from raw bytes using commonware's codec.
@@ -176,9 +187,20 @@ fn spawn_commonware_runtime(
                         )
                         .await;
                     }
-                    P2pConfig::Remote { .. } => {
-                        // Discovery mode -- implemented in Plan 03
-                        tracing::warn!("Discovery mode not yet implemented");
+                    P2pConfig::Remote {
+                        listen_port,
+                        ref bootstrappers,
+                        ref authorized_peers,
+                    } => {
+                        run_discovery_network(
+                            context,
+                            &private_key,
+                            listen_port,
+                            bootstrappers,
+                            authorized_peers,
+                            command_rx,
+                        )
+                        .await;
                     }
                     P2pConfig::Disabled => {
                         // Should not reach here; handled before spawn
@@ -326,13 +348,178 @@ async fn run_lookup_network(
                 };
                 let _ = response_tx.send(status);
             }
+            Some(P2pCommand::BlockPeer { pubkey_hex }) => {
+                match parse_authorized_peers(&[pubkey_hex.clone()]) {
+                    Ok(keys) if !keys.is_empty() => {
+                        oracle.block(keys[0].clone()).await;
+                        tracing::info!("Blocked peer: {}", pubkey_hex);
+                    }
+                    _ => {
+                        tracing::error!("Failed to parse pubkey for blocking: {}", pubkey_hex);
+                    }
+                }
+            }
             Some(_) => {
                 // Publish, Subscribe, Unsubscribe handled in Phase 2
-                tracing::debug!("P2pCommand not yet implemented in Phase 1 Plan 02");
+                tracing::debug!("P2pCommand not yet implemented in Phase 1");
             }
             None => {
                 // Channel closed -- shutdown
                 tracing::info!("P2P command channel closed, shutting down network");
+                // Signal the commonware runtime to stop
+                context.stop(0, None).await.ok();
+                break;
+            }
+        }
+    }
+}
+
+/// Run a discovery-mode P2P network inside the commonware runtime.
+///
+/// This function:
+/// 1. Creates a discovery::Network with the node's Ed25519 identity
+/// 2. Configures the Oracle with authorized peers as a Set<PublicKey>
+/// 3. Registers a single broadcast channel (for Phase 2)
+/// 4. Starts the network
+/// 5. Runs a bridge loop handling P2pCommands from the WAVS main runtime
+///
+/// Discovery mode uses bootstrapper nodes for peer discovery (production).
+/// Addresses are discovered dynamically through bootstrappers (no upfront addresses needed).
+///
+/// NET-01: Discovery-based peer discovery with bootstrappers
+/// NET-04: Automatic reconnection (built-in to discovery::Network via dial_frequency)
+async fn run_discovery_network(
+    context: impl commonware_runtime::Spawner
+        + commonware_runtime::Clock
+        + commonware_runtime::Network
+        + commonware_runtime::Metrics
+        + commonware_runtime::BufferPooler
+        + commonware_runtime::Resolver
+        + rand_core::CryptoRngCore,
+    private_key: &ed25519::PrivateKey,
+    listen_port: u16,
+    bootstrapper_strs: &[String],
+    authorized_peer_hexes: &[String],
+    mut command_rx: mpsc::UnboundedReceiver<P2pCommand>,
+) {
+    let listen_addr = std::net::SocketAddr::from(([0, 0, 0, 0], listen_port));
+    let own_pubkey = private_key.public_key();
+
+    // Parse bootstrappers
+    let mut bootstrappers = Vec::new();
+    for bs_str in bootstrapper_strs {
+        match parse_bootstrapper(bs_str) {
+            Ok(bootstrapper) => bootstrappers.push(bootstrapper),
+            Err(e) => {
+                tracing::error!("Skipping invalid bootstrapper '{}': {}", bs_str, e);
+            }
+        }
+    }
+
+    if bootstrappers.is_empty() {
+        tracing::warn!(
+            "No valid bootstrappers configured -- this node will act as a bootstrapper itself"
+        );
+    }
+
+    // Create discovery network config using Config::local() for allow_private_ips=true
+    // (needed for localhost testing). Production deployments should use Config::recommended().
+    // Use the node's listen_addr as its dialable address (assumes public IP or port-forwarded).
+    let config = discovery::Config::local(
+        private_key.clone(),
+        b"wavs-p2p", // namespace for replay protection
+        listen_addr,
+        listen_addr, // dialable_addr -- same as listen for now
+        bootstrappers,
+        65536, // max_message_size (64KB)
+    );
+
+    let (mut network, mut oracle) =
+        discovery::Network::new(context.with_label("p2p_discovery"), config);
+
+    // Build Oracle peer set: Set<PublicKey> (commonware_utils::ordered::Set)
+    // Discovery Oracle takes Set (not Map like lookup) -- addresses are discovered dynamically.
+    let mut peer_keys: Vec<ed25519::PublicKey> = Vec::new();
+
+    // Include own pubkey (implicitly trusted per user decision)
+    peer_keys.push(own_pubkey.clone());
+
+    // Add authorized peers
+    match parse_authorized_peers(authorized_peer_hexes) {
+        Ok(keys) => {
+            for key in keys {
+                peer_keys.push(key);
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to parse authorized peers: {}", e);
+        }
+    }
+
+    // Build ordered Set from peer keys (dedup handles any duplicates)
+    let peer_set = commonware_utils::ordered::Set::from_iter_dedup(peer_keys);
+
+    // Register peer set with Oracle at index 0
+    oracle.track(0, peer_set).await;
+
+    tracing::info!(
+        "P2P discovery network: listening on {}, {} bootstrappers, {} authorized peers",
+        listen_addr,
+        bootstrapper_strs.len(),
+        authorized_peer_hexes.len()
+    );
+
+    // Register a single broadcast channel (channel 0) for Phase 2 use.
+    // Must be registered before network.start().
+    let (_sender, _receiver) = network.register(
+        0u64,
+        Quota::per_second(NZU32!(100)),
+        1024, // backlog
+    );
+
+    // Start the network (consumes self, returns a handle)
+    let _net_handle = network.start();
+
+    tracing::info!(
+        "P2P discovery network started (peer_id: {})",
+        const_hex::encode(own_pubkey.as_ref())
+    );
+
+    // Bridge loop: handle P2pCommands from WAVS main runtime.
+    // Same pattern as lookup mode.
+    loop {
+        match command_rx.recv().await {
+            Some(P2pCommand::GetStatus { response_tx }) => {
+                let status = P2pStatus {
+                    enabled: true,
+                    local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
+                    listen_addresses: vec![listen_addr.to_string()],
+                    external_addresses: vec![],
+                    connected_peers: 0, // Phase 2 fills this from network state
+                    peer_ids: vec![],   // Phase 2 fills this
+                    subscribed_topics: vec![], // Phase 2 fills this
+                    topic_peer_counts: Default::default(), // Phase 2 fills this
+                };
+                let _ = response_tx.send(status);
+            }
+            Some(P2pCommand::BlockPeer { pubkey_hex }) => {
+                match parse_authorized_peers(&[pubkey_hex.clone()]) {
+                    Ok(keys) if !keys.is_empty() => {
+                        oracle.block(keys[0].clone()).await;
+                        tracing::info!("Blocked peer: {}", pubkey_hex);
+                    }
+                    _ => {
+                        tracing::error!("Failed to parse pubkey for blocking: {}", pubkey_hex);
+                    }
+                }
+            }
+            Some(_) => {
+                // Publish, Subscribe, Unsubscribe handled in Phase 2
+                tracing::debug!("P2pCommand not yet implemented in Phase 1");
+            }
+            None => {
+                // Channel closed -- shutdown
+                tracing::info!("P2P command channel closed, shutting down discovery network");
                 // Signal the commonware runtime to stop
                 context.stop(0, None).await.ok();
                 break;
@@ -360,6 +547,9 @@ enum P2pCommand {
     GetStatus {
         response_tx: tokio::sync::oneshot::Sender<P2pStatus>,
     },
+    /// Block a peer by their Ed25519 public key (hex-encoded).
+    /// The peer will be disconnected and prevented from reconnecting.
+    BlockPeer { pubkey_hex: String },
 }
 
 /// Handle to the P2P network that can be cloned and shared
@@ -430,6 +620,16 @@ impl P2pHandle {
             .map_err(|e| {
                 AggregatorError::P2p(format!("Failed to send unsubscribe command: {}", e))
             })
+    }
+
+    /// Block a misbehaving peer by their Ed25519 public key (hex-encoded).
+    /// The peer will be disconnected and prevented from reconnecting.
+    pub fn block_peer(&self, pubkey_hex: &str) -> Result<(), AggregatorError> {
+        self.command_tx
+            .send(P2pCommand::BlockPeer {
+                pubkey_hex: pubkey_hex.to_string(),
+            })
+            .map_err(|e| AggregatorError::P2p(format!("Failed to send block_peer command: {}", e)))
     }
 
     /// Get the current P2P network status
