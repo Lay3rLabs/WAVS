@@ -2,8 +2,8 @@
 phase: 2
 slug: broadcast-and-routing
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-17
 ---
 
@@ -38,26 +38,23 @@ created: 2026-03-17
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 2-01-01 | 01 | 1 | BCAST-01 | unit | `cargo test -p wavs -- p2p::broadcast` | ❌ W0 | ⬜ pending |
-| 2-01-02 | 01 | 1 | BCAST-02 | unit | `cargo test -p wavs -- p2p::service_router` | ❌ W0 | ⬜ pending |
-| 2-01-03 | 01 | 1 | BCAST-03 | unit | `cargo test -p wavs -- p2p::codec` | ❌ W0 | ⬜ pending |
-| 2-02-01 | 02 | 2 | BCAST-04 | unit | `cargo test -p wavs -- p2p::retry_queue` | ❌ W0 | ⬜ pending |
-| 2-02-02 | 02 | 2 | BCAST-05 | unit | `cargo test -p wavs -- p2p::handle` | ❌ W0 | ⬜ pending |
-| 2-03-01 | 03 | 2 | CATCH-01 | unit | `cargo test -p wavs -- p2p::catch_up` | ❌ W0 | ⬜ pending |
-| 2-03-02 | 03 | 2 | CATCH-02 | unit | `cargo test -p wavs -- p2p::buffered_engine` | ❌ W0 | ⬜ pending |
-| 2-03-03 | 03 | 3 | INT-01 | integration | `cargo test -p layer-tests` | ✅ | ⬜ pending |
+| 2-01-00 | 01 | 0 | ALL | stub | `cargo test -p wavs -- p2p_broadcast_tests` (expect FAIL) | Created by Task 0 | ⬜ pending |
+| 2-01-01 | 01 | 1 | BCAST-02, BCAST-03 | unit | `cargo test -p wavs -- p2p_broadcast_tests::test_p2p_message` | Wave 0 stub | ⬜ pending |
+| 2-01-02 | 01 | 1 | BCAST-04, BCAST-05 | unit | `cargo test -p wavs -- p2p_broadcast_tests` (service_router + retry_queue) | Wave 0 stub | ⬜ pending |
+| 2-02-01 | 02 | 2 | BCAST-01, CATCH-02 | compile | `cargo check -p wavs` | N/A | ⬜ pending |
+| 2-02-02 | 02 | 2 | BCAST-01, BCAST-04 | compile+unit | `cargo check -p wavs && cargo test -p wavs -- p2p_broadcast_tests` | Wave 0 stub | ⬜ pending |
+| 2-02-03 | 02 | 2 | ALL | integration | `cargo test -p wavs --test p2p_broadcast_tests` | Created by Task 3 | ⬜ pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ⬜ pending / ✅ green / ❌ red / ⚠️ flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `packages/wavs/src/subsystems/trigger/p2p/broadcast_tests.rs` — stubs for BCAST-01, BCAST-02
-- [ ] `packages/wavs/src/subsystems/trigger/p2p/service_router_tests.rs` — stubs for BCAST-02
-- [ ] `packages/wavs/src/subsystems/trigger/p2p/codec_tests.rs` — stubs for BCAST-03
-- [ ] `packages/wavs/src/subsystems/trigger/p2p/retry_queue_tests.rs` — stubs for BCAST-04
-- [ ] `packages/wavs/src/subsystems/trigger/p2p/catch_up_tests.rs` — stubs for CATCH-01, CATCH-02
+- [x] Plan 02-01 Task 0 creates `#[cfg(test)] mod p2p_broadcast_tests` in p2p.rs with 12 failing test stubs
+- [x] Stubs cover: P2pMessage codec/digest (BCAST-02, BCAST-03), ServiceRouter (BCAST-05), RetryQueue (BCAST-04)
+- [x] `commonware-broadcast` dependency added in Task 0 so stubs can reference traits
+- [ ] Plan 02-02 Task 3 creates `packages/wavs/tests/p2p_broadcast_tests.rs` covering BCAST-01, BCAST-02, BCAST-04, BCAST-05, CATCH-01, CATCH-02, INT-01
 
 ---
 
@@ -66,17 +63,17 @@ created: 2026-03-17
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
 | Broadcast delivery to all connected peers under network partition | BCAST-01 | Requires multi-process E2E setup with network manipulation | Start 3 WAVS nodes, partition one, broadcast, verify delivery count |
-| Catch-up after real network reconnect | CATCH-01 | Requires actual disconnect/reconnect of libp2p swarm | Start 2 nodes, disconnect, broadcast 5 msgs, reconnect, verify retrieval |
+| Catch-up after real network reconnect | CATCH-01 | Requires actual disconnect/reconnect timing | Start 2 nodes, disconnect, broadcast 5 msgs, reconnect, verify retrieval |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** pending execution
