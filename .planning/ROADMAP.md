@@ -34,7 +34,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Dependencies, Ed25519 identity derivation, and P2pConfig rewrite
 - [x] 01-02-PLAN.md — Commonware runtime scaffold, lookup-mode networking, and Oracle authorization
-- [ ] 01-03-PLAN.md — Discovery-mode networking, block-peer API, and integration tests
+- [x] 01-03-PLAN.md — Discovery-mode networking, block-peer API, and integration tests
 
 ### Phase 2: Broadcast and Routing
 **Goal**: Operators can broadcast signed submissions, receive messages filtered by subscribed services, and catch up on missed messages after reconnection — all behind the existing P2pHandle API
@@ -46,12 +46,11 @@ Plans:
   3. An operator that disconnects and reconnects retrieves missed submissions via the buffered Engine's digest-based caching
   4. The P2pHandle API (publish, subscribe, unsubscribe, get_status) works identically from the Aggregator's perspective — no changes to AggregatorCommand handling
   5. Failed publishes (no connected peers) are retried from a bounded queue when peers reconnect
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
-- [ ] 02-03: TBD
+- [ ] 02-01-PLAN.md — P2pMessage type (Codec+Digestible), ServiceRouter, and RetryQueue
+- [ ] 02-02-PLAN.md — Broadcast Engine integration into bridge loops, P2pHandle wiring, and integration tests
 
 ### Phase 3: Config and Observability
 **Goal**: Operators can configure their WAVS node's P2P layer via the new commonware-tailored config format and monitor peer state through the updated status endpoint
@@ -89,7 +88,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Secure Peer Connectivity | 0/3 | Not started | - |
-| 2. Broadcast and Routing | 0/3 | Not started | - |
+| 1. Secure Peer Connectivity | 3/3 | Complete | 2026-03-17 |
+| 2. Broadcast and Routing | 0/2 | Planned | - |
 | 3. Config and Observability | 0/1 | Not started | - |
 | 4. Validation and Cleanup | 0/2 | Not started | - |
