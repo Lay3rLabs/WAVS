@@ -48,7 +48,7 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 - Trigger subsystem changes — trigger distribution is unaffected
 - Engine subsystem changes — WASM execution is unaffected
 - SubmissionManager changes — signing logic stays the same (ECDSA for on-chain, Ed25519 only for P2P identity)
-- Hyperswarm/Hypercore removal — separate concern, not part of this migration
+- Hyperswarm/Hypercore — separate concern, not part of this migration
 
 ## Context
 
