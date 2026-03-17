@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-17T17:17:04Z"
-last_activity: 2026-03-17 — P2pMessage, ServiceRouter, RetryQueue implemented with 12 passing tests
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-17T17:38:53Z"
+last_activity: 2026-03-17 — Broadcast Engine integration, all P2pCommand handlers, 7 integration tests
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 4
-  percent: 50
+  completed_plans: 5
+  percent: 63
 ---
 
 # Project State
@@ -26,29 +26,29 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 ## Current Position
 
 Phase: 2 of 4 (Broadcast and Routing)
-Plan: 1 of 2 in current phase
-Status: Executing
-Last activity: 2026-03-17 — P2pMessage, ServiceRouter, RetryQueue implemented with 12 passing tests
+Plan: 2 of 2 in current phase (COMPLETE)
+Status: Phase Complete
+Last activity: 2026-03-17 — Broadcast Engine integration with two-channel architecture, all P2pCommand handlers, 7 integration tests
 
-Progress: [#####.....] 50%
+Progress: [######....] 63%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 13.5 min
-- Total execution time: 0.9 hours
+- Total plans completed: 5
+- Average duration: 14.2 min
+- Total execution time: 1.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 3 | 32 min | 10.7 min |
-| 02 | 1 | 22 min | 22 min |
+| 02 | 2 | 39 min | 19.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 13m, 12m, 7m, 22m
-- Trend: stable (Phase 2 plan is larger scope)
+- Last 5 plans: 13m, 12m, 7m, 22m, 17m
+- Trend: stable (Phase 2 plans are larger scope)
 
 *Updated after each plan completion*
 
@@ -76,6 +76,11 @@ Recent decisions affecting current work:
 - ServiceRouter uses HashSet<[u8; 32]> for O(1) lookup on raw service ID bytes
 - RetryQueue bounded at 64 items with oldest-drop eviction (BCAST-04)
 - Digestible impl concatenates service_id_bytes + payload before SHA-256 hashing for deterministic dedup digest
+- Two-channel broadcast: channel 0 for Engine caching, channel 1 for direct forwarding to Aggregator
+- Tokio mpsc bridge task for commonware Receiver -> tokio::select! compatibility
+- Encode::encode() returns Bytes (Into<IoBufs>) for direct_sender.send()
+- Inline P2pCommand handlers in bridge loop (not separate function) for access to mailbox/direct_sender/retry_queue
+- CATCH-01 scoped as push-based recovery via Engine cache re-broadcast on reconnection
 
 ### Pending Todos
 
@@ -84,11 +89,11 @@ None yet.
 ### Blockers/Concerns
 
 - ~~Runtime integration (Runner on dedicated thread) is unproven in WAVS context~~ RESOLVED in Plan 01-02: spawn_commonware_runtime() works without nesting panics
-- Catch-up guarantee equivalence (buffered Engine is peer-scoped, current protocol is service-scoped) — validate in Phase 2
+- ~~Catch-up guarantee equivalence (buffered Engine is peer-scoped, current protocol is service-scoped)~~ VALIDATED in Plan 02-02: push-based recovery via Engine cache confirmed working in test_catchup_after_reconnect
 - Commonware is ALPHA software — pin exact versions, keep types inside p2p module boundary
 
 ## Session Continuity
 
-Last session: 2026-03-17T17:17:04Z
-Stopped at: Completed 02-01-PLAN.md
-Resume file: 02-02-PLAN.md (broadcast Engine integration)
+Last session: 2026-03-17T17:38:53Z
+Stopped at: Completed 02-02-PLAN.md
+Resume file: Phase 3 plans (consensus and verification)
