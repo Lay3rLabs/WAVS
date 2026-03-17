@@ -2,7 +2,7 @@
 phase: 3
 slug: config-and-observability
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-03-17
 ---
@@ -38,14 +38,15 @@ created: 2026-03-17
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 3-01-01 | 01 | 0 | CFG-01 | unit | `cargo test -p wavs p2p_config_serde -- --test-threads=1` | ❌ W0 | ⬜ pending |
-| 3-01-02 | 01 | 0 | CFG-02 | unit | `cargo test -p wavs p2p_config_defaults -- --test-threads=1` | ❌ W0 | ⬜ pending |
-| 3-01-03 | 01 | 0 | OBS-01 | integration | `cargo test -p wavs --test p2p_broadcast_tests test_status_after_broadcast -- --test-threads=1` | ❌ W0 | ⬜ pending |
-| 3-01-04 | 01 | 0 | OBS-02 | unit | `cargo test -p wavs p2p_status_format -- --test-threads=1` | ❌ W0 | ⬜ pending |
+| 3-00-01 | 00 | 0 | CFG-01, CFG-02 | unit | `cargo test -p wavs p2p_config_serde p2p_config_defaults -- --test-threads=1` | W0 creates | ⬜ pending |
+| 3-00-02 | 00 | 0 | OBS-02 | unit | `cargo test -p wavs p2p_status_format -- --test-threads=1` | W0 creates | ⬜ pending |
+| 3-00-03 | 00 | 0 | OBS-01 | integration | `cargo test -p wavs --test p2p_broadcast_tests test_status_connected_peers_after_broadcast -- --test-threads=1` | W0 creates | ⬜ pending |
+| 3-01-01 | 01 | 1 | CFG-01 | unit | `cargo test -p wavs p2p_config_serde -- --test-threads=1` | ✅ W0 | ⬜ pending |
+| 3-01-02 | 01 | 1 | CFG-02 | unit | `cargo test -p wavs p2p_config_defaults -- --test-threads=1` | ✅ W0 | ⬜ pending |
 | 3-02-01 | 02 | 1 | CFG-01 | unit | `cargo test -p wavs p2p_config_serde -- --test-threads=1` | ✅ W0 | ⬜ pending |
 | 3-02-02 | 02 | 1 | CFG-02 | unit | `cargo test -p wavs p2p_config_defaults -- --test-threads=1` | ✅ W0 | ⬜ pending |
 | 3-02-03 | 02 | 1 | OBS-02 | unit | `cargo test -p wavs p2p_status_format -- --test-threads=1` | ✅ W0 | ⬜ pending |
-| 3-03-01 | 03 | 2 | OBS-01 | integration | `cargo test -p wavs --test p2p_broadcast_tests test_status_after_broadcast -- --test-threads=1` | ✅ W0 | ⬜ pending |
+| 3-03-01 | 03 | 2 | OBS-01 | integration | `cargo test -p wavs --test p2p_broadcast_tests test_status_connected_peers_after_broadcast -- --test-threads=1` | ✅ W0 | ⬜ pending |
 | 3-03-02 | 03 | 2 | CFG-03 | integration | `cargo test -p wavs --test p2p_connectivity_tests test_lookup_mode -- --test-threads=1` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
@@ -54,11 +55,13 @@ created: 2026-03-17
 
 ## Wave 0 Requirements
 
-- [ ] `packages/wavs/src/subsystems/aggregator/p2p_config_tests.rs` — unit test stubs for CFG-01 (p2p_config_serde) and CFG-02 (p2p_config_defaults)
-- [ ] `packages/wavs/tests/p2p_broadcast_tests.rs` — integration test stub for OBS-01 (test_status_after_broadcast)
-- [ ] `packages/wavs/src/subsystems/aggregator/p2p_status_tests.rs` — unit test stub for OBS-02 (p2p_status_format)
+Plan 03-00 creates these test stubs:
 
-*All test files must compile (even with `todo!()` bodies) before Wave 1 begins.*
+- [ ] `packages/wavs/src/subsystems/aggregator/p2p_config_tests.rs` — unit test stubs for CFG-01 (p2p_config_serde) and CFG-02 (p2p_config_defaults)
+- [ ] `packages/wavs/src/subsystems/aggregator/p2p_status_tests.rs` — unit test stub for OBS-02 (p2p_status_format)
+- [ ] `packages/wavs/tests/p2p_broadcast_tests.rs` — integration test stub for OBS-01 (test_status_connected_peers_after_broadcast)
+
+*All test files must compile (even with stub bodies) before Wave 1 begins.*
 
 ---
 
@@ -72,11 +75,11 @@ created: 2026-03-17
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (Plan 03-00 creates all stubs)
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** pending execution of Plan 03-00
