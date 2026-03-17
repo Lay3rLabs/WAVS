@@ -13,8 +13,8 @@
 ### Networking
 
 - [ ] **NET-01**: Operators discover peers via commonware-p2p discovery mode with bootstrappers (production)
-- [ ] **NET-02**: Operators connect to peers via commonware-p2p lookup mode with known addresses (local dev)
-- [ ] **NET-03**: Peer connections are encrypted and authenticated by Ed25519 identity
+- [x] **NET-02**: Operators connect to peers via commonware-p2p lookup mode with known addresses (local dev)
+- [x] **NET-03**: Peer connections are encrypted and authenticated by Ed25519 identity
 - [ ] **NET-04**: Node reconnects to bootstrappers automatically when peers are lost
 
 ### Broadcast
@@ -32,9 +32,9 @@
 
 ### Security
 
-- [ ] **SEC-01**: Oracle-based peer set management authorizes only known operators
-- [ ] **SEC-02**: Built-in per-peer and per-subnet rate limiting active on all connections
-- [ ] **SEC-03**: Misbehaving peers can be blocked by cryptographic identity
+- [x] **SEC-01**: Oracle-based peer set management authorizes only known operators
+- [x] **SEC-02**: Built-in per-peer and per-subnet rate limiting active on all connections
+- [x] **SEC-03**: Misbehaving peers can be blocked by cryptographic identity
 
 ### Config
 
@@ -94,12 +94,12 @@
 | IDEN-01 | Phase 1 | Complete |
 | IDEN-02 | Phase 1 | Complete |
 | NET-01 | Phase 1 | Pending |
-| NET-02 | Phase 1 | Pending |
-| NET-03 | Phase 1 | Pending |
+| NET-02 | Phase 1 | Complete |
+| NET-03 | Phase 1 | Complete |
 | NET-04 | Phase 1 | Pending |
-| SEC-01 | Phase 1 | Pending |
-| SEC-02 | Phase 1 | Pending |
-| SEC-03 | Phase 1 | Pending |
+| SEC-01 | Phase 1 | Complete |
+| SEC-02 | Phase 1 | Complete |
+| SEC-03 | Phase 1 | Complete |
 | BCAST-01 | Phase 2 | Pending |
 | BCAST-02 | Phase 2 | Pending |
 | BCAST-03 | Phase 2 | Pending |

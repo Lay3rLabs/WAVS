@@ -32,8 +32,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Dependencies, Ed25519 identity derivation, and P2pConfig rewrite
-- [ ] 01-02-PLAN.md — Commonware runtime scaffold, lookup-mode networking, and Oracle authorization
+- [x] 01-01-PLAN.md — Dependencies, Ed25519 identity derivation, and P2pConfig rewrite
+- [x] 01-02-PLAN.md — Commonware runtime scaffold, lookup-mode networking, and Oracle authorization
 - [ ] 01-03-PLAN.md — Discovery-mode networking, block-peer API, and integration tests
 
 ### Phase 2: Broadcast and Routing
