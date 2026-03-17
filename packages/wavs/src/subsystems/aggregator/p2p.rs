@@ -20,43 +20,60 @@ use super::{error::AggregatorError, AggregatorCommand};
 // P2P Configuration
 // ============================================================================
 
+/// P2P networking configuration.
+///
+/// - `Disabled`: No P2P networking (single-operator setups).
+/// - `Local`: Lookup mode with known peer addresses (local dev / testing).
+/// - `Remote`: Discovery mode with bootstrapper nodes (production).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum P2pConfig {
-    /// Disabled - no P2P networking (for single-operator setups)
     #[default]
     Disabled,
-    /// Local development - use mDNS for peer discovery with test-friendly defaults
+    /// Local development -- lookup mode with known peer addresses.
     Local {
-        /// Port to listen on for P2P connections (0 for random)
+        /// Port to listen on for P2P connections.
         listen_port: u16,
-        max_retry_duration_secs: Option<u64>,
-        retry_interval_ms: Option<u64>,
-        submission_ttl_secs: Option<u64>,
-        max_catchup_submissions: Option<usize>,
-        cleanup_interval_secs: Option<u64>,
-        max_pending_publishes: Option<usize>,
-        max_stored_submissions_per_service: Option<usize>,
-        catchup_request_timeout_secs: Option<u64>,
-        max_concurrent_catchup_requests_per_service: Option<usize>,
+        /// Known peer addresses for lookup mode: ["<hex_pubkey>@<host>:<port>", ...]
+        #[serde(default)]
+        peer_addresses: Vec<String>,
+        /// Authorized peer Ed25519 public keys (hex-encoded).
+        /// The local node's own pubkey is implicitly trusted.
+        #[serde(default)]
+        authorized_peers: Vec<String>,
     },
-    /// Remote/production - use Kademlia DHT for peer discovery with bootstrap nodes
+    /// Remote / production -- discovery mode with bootstrapper nodes.
     Remote {
-        /// Port to listen on for P2P connections
+        /// Port to listen on for P2P connections.
         listen_port: u16,
-        /// Bootstrap node addresses (multiaddr format). Empty = this node is a bootstrap server.
-        bootstrap_nodes: Vec<String>,
-        max_retry_duration_secs: Option<u64>,
-        retry_interval_ms: Option<u64>,
-        submission_ttl_secs: Option<u64>,
-        max_catchup_submissions: Option<usize>,
-        cleanup_interval_secs: Option<u64>,
-        kademlia_discovery_interval_secs: Option<u64>,
-        max_pending_publishes: Option<usize>,
-        max_stored_submissions_per_service: Option<usize>,
-        catchup_request_timeout_secs: Option<u64>,
-        max_concurrent_catchup_requests_per_service: Option<usize>,
+        /// Bootstrapper addresses: ["<hex_pubkey>@<host>:<port>", ...]
+        #[serde(default)]
+        bootstrappers: Vec<String>,
+        /// Authorized peer Ed25519 public keys (hex-encoded).
+        /// The local node's own pubkey is implicitly trusted.
+        #[serde(default)]
+        authorized_peers: Vec<String>,
     },
+}
+
+impl P2pConfig {
+    /// Returns the listen port, or None if disabled.
+    pub fn listen_port(&self) -> Option<u16> {
+        match self {
+            P2pConfig::Local { listen_port, .. } => Some(*listen_port),
+            P2pConfig::Remote { listen_port, .. } => Some(*listen_port),
+            P2pConfig::Disabled => None,
+        }
+    }
+
+    /// Returns the authorized peer hex pubkeys.
+    pub fn authorized_peers(&self) -> &[String] {
+        match self {
+            P2pConfig::Local { authorized_peers, .. } => authorized_peers,
+            P2pConfig::Remote { authorized_peers, .. } => authorized_peers,
+            P2pConfig::Disabled => &[],
+        }
+    }
 }
 
 // ============================================================================

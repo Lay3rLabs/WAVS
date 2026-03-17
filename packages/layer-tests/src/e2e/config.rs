@@ -252,37 +252,21 @@ impl From<TestConfig> for Configs {
             if num_operators > 1 {
                 match test_config.p2p {
                     TestP2pMode::Kademlia => {
-                        // Remote mode: Kademlia DHT discovery
-                        // Operator 0 is the bootstrap server (empty bootstrap_nodes)
-                        // Operators 1+ will have bootstrap_nodes set at runtime after operator 0 starts
+                        // Remote mode: discovery with bootstrapper nodes
+                        // Operator 0 is the bootstrap server (empty bootstrappers)
+                        // Operators 1+ will have bootstrappers set at runtime after operator 0 starts
                         wavs_config.p2p = P2pConfig::Remote {
                             listen_port: DEFAULT_P2P_BASE_PORT + operator_index as u16,
-                            bootstrap_nodes: vec![], // Set at runtime for operators 1+
-                            max_retry_duration_secs: None,
-                            retry_interval_ms: None,
-                            submission_ttl_secs: None,
-                            max_catchup_submissions: None,
-                            cleanup_interval_secs: None,
-                            kademlia_discovery_interval_secs: Some(2),
-                            catchup_request_timeout_secs: None,
-                            max_concurrent_catchup_requests_per_service: None,
-                            max_pending_publishes: None,
-                            max_stored_submissions_per_service: None,
+                            bootstrappers: vec![], // Set at runtime for operators 1+
+                            authorized_peers: vec![],
                         };
                     }
                     TestP2pMode::Mdns => {
-                        // Local mode: mDNS discovery
+                        // Local mode: lookup with known peer addresses
                         wavs_config.p2p = P2pConfig::Local {
                             listen_port: DEFAULT_P2P_BASE_PORT + operator_index as u16,
-                            max_retry_duration_secs: None,
-                            retry_interval_ms: None,
-                            submission_ttl_secs: None,
-                            max_catchup_submissions: None,
-                            cleanup_interval_secs: None,
-                            catchup_request_timeout_secs: None,
-                            max_concurrent_catchup_requests_per_service: None,
-                            max_pending_publishes: None,
-                            max_stored_submissions_per_service: None,
+                            peer_addresses: vec![],
+                            authorized_peers: vec![],
                         };
                     }
                 }
