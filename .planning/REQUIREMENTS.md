@@ -12,10 +12,10 @@
 
 ### Networking
 
-- [ ] **NET-01**: Operators discover peers via commonware-p2p discovery mode with bootstrappers (production)
+- [x] **NET-01**: Operators discover peers via commonware-p2p discovery mode with bootstrappers (production)
 - [x] **NET-02**: Operators connect to peers via commonware-p2p lookup mode with known addresses (local dev)
 - [x] **NET-03**: Peer connections are encrypted and authenticated by Ed25519 identity
-- [ ] **NET-04**: Node reconnects to bootstrappers automatically when peers are lost
+- [x] **NET-04**: Node reconnects to bootstrappers automatically when peers are lost
 
 ### Broadcast
 
@@ -93,10 +93,10 @@
 |-------------|-------|--------|
 | IDEN-01 | Phase 1 | Complete |
 | IDEN-02 | Phase 1 | Complete |
-| NET-01 | Phase 1 | Pending |
+| NET-01 | Phase 1 | Complete |
 | NET-02 | Phase 1 | Complete |
 | NET-03 | Phase 1 | Complete |
-| NET-04 | Phase 1 | Pending |
+| NET-04 | Phase 1 | Complete |
 | SEC-01 | Phase 1 | Complete |
 | SEC-02 | Phase 1 | Complete |
 | SEC-03 | Phase 1 | Complete |
