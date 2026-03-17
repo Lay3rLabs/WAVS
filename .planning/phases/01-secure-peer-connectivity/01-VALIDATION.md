@@ -1,9 +1,9 @@
 ---
 phase: 1
 slug: secure-peer-connectivity
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: approved
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-17
 ---
 
@@ -36,28 +36,43 @@ created: 2026-03-17
 
 ## Per-Task Verification Map
 
-| Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 1-01-01 | 01 | 1 | IDEN-01 | unit | `cargo test -p wavs test_ed25519_derivation` | ❌ W0 | ⬜ pending |
-| 1-01-02 | 01 | 1 | IDEN-02 | unit | `cargo test -p wavs test_peer_id_deterministic` | ❌ W0 | ⬜ pending |
-| 1-02-01 | 02 | 1 | NET-01, NET-04 | unit | `cargo test -p wavs test_runner_dedicated_thread` | ❌ W0 | ⬜ pending |
-| 1-02-02 | 02 | 2 | NET-02 | integration | `cargo test -p wavs test_discovery_mode` | ❌ W0 | ⬜ pending |
-| 1-02-03 | 02 | 2 | NET-03 | integration | `cargo test -p wavs test_lookup_mode` | ❌ W0 | ⬜ pending |
-| 1-03-01 | 03 | 2 | SEC-01, SEC-02 | integration | `cargo test -p wavs test_oracle_authorization` | ❌ W0 | ⬜ pending |
-| 1-03-02 | 03 | 2 | SEC-03 | integration | `cargo test -p wavs test_unauthorized_peer_rejected` | ❌ W0 | ⬜ pending |
+| Task ID | Plan | Wave | Requirement | Test Type | Automated Command | Status |
+|---------|------|------|-------------|-----------|-------------------|--------|
+| 1-01-01 | 01 | 1 | IDEN-01, IDEN-02 | integration | `cargo test -p wavs --test p2p_identity_tests -- --nocapture` | pending |
+| 1-01-02 | 01 | 1 | SEC-02 | compile | `cargo check -p wavs` (P2pConfig rewrite) | pending |
+| 1-02-01 | 02 | 2 | NET-02, NET-03, SEC-02 | compile | `cargo check -p wavs` (runtime scaffold + lookup + rate limiting) | pending |
+| 1-02-02 | 02 | 2 | NET-02, SEC-01 | integration | `cargo test -p wavs --features dev --test p2p_connectivity_tests -- --nocapture` | pending |
+| 1-03-01 | 03 | 3 | NET-01, NET-04 | compile | `cargo check -p wavs` (discovery mode + BlockPeer) | pending |
+| 1-03-02 | 03 | 3 | SEC-03 | compile | `cargo check -p wavs` (BlockPeer command + block_peer method) | pending |
+| 1-03-03 | 03 | 3 | NET-01, SEC-03 | integration | `cargo test -p wavs --features dev --test p2p_connectivity_tests -- --nocapture` | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `packages/wavs/src/p2p/mod.rs` — p2p module stubs (empty impl for identity, network, oracle)
-- [ ] `packages/wavs/tests/p2p_identity.rs` — unit test stubs for IDEN-01, IDEN-02
-- [ ] `packages/wavs/tests/p2p_network.rs` — integration test stubs for NET-01 through NET-04
-- [ ] `packages/wavs/tests/p2p_security.rs` — integration test stubs for SEC-01 through SEC-03
+Plans use inline TDD (tests created within the same task as implementation, `tdd="true"` on task elements). This satisfies the Nyquist sampling contract because:
 
-*Wave 0 establishes the test scaffolding so each implementation task has a failing test to make green.*
+1. Plan 01-01 Task 1 creates `packages/wavs/tests/p2p_identity_tests.rs` as part of TDD RED->GREEN cycle
+2. Plan 01-02 Task 2 creates `packages/wavs/tests/p2p_connectivity_tests.rs` as part of TDD
+3. Plan 01-03 Task 3 adds tests to `p2p_connectivity_tests.rs`
+
+No separate Wave 0 stub-creation step is needed. Each test file is created by the first task that needs it, and all subsequent tasks that modify the same file add to it.
+
+- [x] Test files created inline by TDD tasks (no separate Wave 0 stubs needed)
+- [x] `packages/wavs/tests/p2p_identity_tests.rs` — created by Plan 01-01 Task 1
+- [x] `packages/wavs/tests/p2p_connectivity_tests.rs` — created by Plan 01-02 Task 2
+
+---
+
+## Test File Map
+
+| Test File | Created By | Tests |
+|-----------|------------|-------|
+| `packages/wavs/tests/p2p_identity_tests.rs` | Plan 01-01 Task 1 | `test_deterministic_derivation`, `test_consistent_across_restarts`, `test_different_mnemonics_produce_different_keys`, `test_invalid_mnemonic_returns_error`, `test_p2p_config_default_is_disabled` |
+| `packages/wavs/tests/p2p_connectivity_tests.rs` | Plan 01-02 Task 2 | `test_lookup_mode_two_nodes_connect`, `test_unauthorized_peer_rejected` |
+| `packages/wavs/tests/p2p_connectivity_tests.rs` | Plan 01-03 Task 3 (adds to) | `test_discovery_mode_two_nodes`, `test_block_peer` |
 
 ---
 
@@ -65,18 +80,17 @@ created: 2026-03-17
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| Two live WAVS nodes discover each other | NET-02 | Requires two running processes with real network | Start two WAVS nodes with bootstrapper config; observe connection logs |
-| Unauthorized peer connection rejected at network level | SEC-01 | Requires two processes with mismatched Oracle sets | Start two nodes; exclude peer B from node A's Oracle; verify B cannot connect |
+| Two live WAVS nodes discover each other | NET-02 | Full stack (Dispatcher + Aggregator) multi-process test is Phase 4 | Start two WAVS nodes with bootstrapper config; observe connection logs |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify commands
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Inline TDD satisfies Wave 0 sampling contract (test files created by first task using them)
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved
