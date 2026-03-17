@@ -103,12 +103,16 @@ async fn setup_two_nodes(
         listen_port: port_a,
         peer_addresses: vec![format!("{}@127.0.0.1:{}", pubkey_b_hex, port_b)],
         authorized_peers: vec![pubkey_b_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let config_b = P2pConfig::Local {
         listen_port: port_b,
         peer_addresses: vec![format!("{}@127.0.0.1:{}", pubkey_a_hex, port_a)],
         authorized_peers: vec![pubkey_a_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx_a, agg_rx_a) = crossbeam::channel::unbounded::<AggregatorCommand>();
@@ -285,6 +289,8 @@ async fn test_p2p_handle_api_preserved() {
         listen_port: port,
         peer_addresses: vec![],
         authorized_peers: vec![],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx, _agg_rx) = crossbeam::channel::unbounded::<AggregatorCommand>();
@@ -364,6 +370,8 @@ async fn test_retry_queue_on_no_peers() {
         listen_port: port,
         peer_addresses: vec![], // No peers configured
         authorized_peers: vec![],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx, _agg_rx) = crossbeam::channel::unbounded::<AggregatorCommand>();
@@ -463,6 +471,8 @@ async fn test_catchup_after_reconnect() {
         listen_port: port_a,
         peer_addresses: vec![format!("{}@127.0.0.1:{}", pubkey_b_hex, port_b)],
         authorized_peers: vec![pubkey_b_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx_a, _agg_rx_a) = crossbeam::channel::unbounded::<AggregatorCommand>();
@@ -482,6 +492,8 @@ async fn test_catchup_after_reconnect() {
         listen_port: port_b,
         peer_addresses: vec![format!("{}@127.0.0.1:{}", pubkey_a_hex, port_a)],
         authorized_peers: vec![pubkey_a_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx_b1, _agg_rx_b1) = crossbeam::channel::unbounded::<AggregatorCommand>();
@@ -515,6 +527,8 @@ async fn test_catchup_after_reconnect() {
         listen_port: port_b,
         peer_addresses: vec![format!("{}@127.0.0.1:{}", pubkey_a_hex, port_a)],
         authorized_peers: vec![pubkey_a_hex.clone()],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx_b2, agg_rx_b2) = crossbeam::channel::unbounded::<AggregatorCommand>();
@@ -574,6 +588,8 @@ async fn test_cache_bounded_deque_size() {
         listen_port: port,
         peer_addresses: vec![],
         authorized_peers: vec![],
+        max_message_size: None,
+        deque_size: None,
     };
 
     let (agg_tx, _agg_rx) = crossbeam::channel::unbounded::<AggregatorCommand>();
@@ -606,4 +622,22 @@ async fn test_cache_bounded_deque_size() {
         status.enabled,
         "Node should be alive after publishing 200 messages with bounded deque"
     );
+}
+
+// ============================================================================
+// OBS-01: GetStatus returns real connected peer data after broadcast exchange
+// ============================================================================
+
+/// OBS-01: Verify GetStatus returns real connected peer data after broadcast exchange.
+/// STUB -- will be replaced by Plan 03-03 with full peer tracking assertions.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_status_connected_peers_after_broadcast() {
+    // Wave 0 stub: verify the test infrastructure works.
+    // Plan 03-03 will replace this with full peer tracking verification.
+    let (handle_a, _handle_b, _agg_rx_a, _agg_rx_b) = setup_two_nodes(20).await;
+
+    // Basic sanity: GetStatus works before any broadcast
+    let status = handle_a.get_status().await.expect("get_status should work");
+    assert!(status.enabled, "P2P should be enabled");
+    assert!(status.local_peer_id.is_some(), "Should have a local peer ID");
 }
