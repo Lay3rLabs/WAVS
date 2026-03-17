@@ -10,6 +10,11 @@
 //! and discovery mode (bootstrapper-based for production) are implemented.
 //! Broadcast, message routing, and the full P2pHandle API will be implemented in Phase 2.
 
+use std::collections::{HashSet, VecDeque};
+
+use commonware_codec::{EncodeSize, Error as CodecError, RangeCfg, Read as CodecRead, ReadRangeExt, Write as CodecWrite};
+use commonware_cryptography::{sha256, Digestible, Hasher, Sha256};
+use commonware_runtime::{Buf, BufMut};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use utils::context::AppContext;
@@ -78,6 +83,176 @@ impl P2pConfig {
             } => authorized_peers,
             P2pConfig::Disabled => &[],
         }
+    }
+}
+
+// ============================================================================
+// P2P Message Envelope (Codec + Digestible)
+// ============================================================================
+
+/// P2P message envelope for broadcast.
+/// Wraps a ServiceId (32 bytes) and serialized Submission for transmission
+/// over commonware-broadcast. The Digestible impl produces a SHA-256 digest
+/// used by the broadcast Engine for deduplication (BCAST-02).
+#[derive(Clone, Debug)]
+pub struct P2pMessage {
+    /// Service ID bytes (raw 32-byte hash from ServiceId::inner())
+    pub service_id_bytes: [u8; 32],
+    /// JSON-serialized Submission payload
+    pub payload: Vec<u8>,
+}
+
+impl P2pMessage {
+    /// Create a P2pMessage from a ServiceId and Submission.
+    ///
+    /// The Submission is JSON-serialized into the payload field.
+    pub fn from_submission(
+        service_id: &ServiceId,
+        submission: &Submission,
+    ) -> Result<Self, AggregatorError> {
+        let payload = serde_json::to_vec(submission)
+            .map_err(|e| AggregatorError::P2p(format!("Failed to serialize submission: {}", e)))?;
+        Ok(Self {
+            service_id_bytes: service_id.inner(),
+            payload,
+        })
+    }
+
+    /// Deserialize this P2pMessage back into a (ServiceId, Submission) pair.
+    pub fn to_submission(&self) -> Result<(ServiceId, Submission), AggregatorError> {
+        let service_id = ServiceId::from(self.service_id_bytes);
+        let submission: Submission = serde_json::from_slice(&self.payload).map_err(|e| {
+            AggregatorError::P2p(format!("Failed to deserialize submission: {}", e))
+        })?;
+        Ok((service_id, submission))
+    }
+}
+
+impl Digestible for P2pMessage {
+    type Digest = sha256::Digest;
+
+    fn digest(&self) -> sha256::Digest {
+        let mut data = Vec::with_capacity(32 + self.payload.len());
+        data.extend_from_slice(&self.service_id_bytes);
+        data.extend_from_slice(&self.payload);
+        Sha256::hash(&data)
+    }
+}
+
+impl CodecWrite for P2pMessage {
+    fn write(&self, buf: &mut impl BufMut) {
+        // Write service_id_bytes as fixed 32 bytes (no length prefix)
+        buf.put_slice(&self.service_id_bytes);
+        // Write payload as Vec<u8> (length-prefixed via commonware codec)
+        self.payload.write(buf);
+    }
+}
+
+impl EncodeSize for P2pMessage {
+    fn encode_size(&self) -> usize {
+        // Fixed 32 bytes for service_id + Vec<u8> encode size for payload
+        32 + self.payload.encode_size()
+    }
+}
+
+impl CodecRead for P2pMessage {
+    /// Cfg is `(RangeCfg<usize>, ())` to match Vec<u8>'s Cfg pattern and allow
+    /// use of ReadRangeExt::read_range for ergonomic deserialization.
+    type Cfg = (RangeCfg<usize>, ());
+
+    fn read_cfg(buf: &mut impl Buf, (range, _): &Self::Cfg) -> Result<Self, CodecError> {
+        // Read fixed 32 bytes for service_id_bytes
+        if buf.remaining() < 32 {
+            return Err(CodecError::EndOfBuffer);
+        }
+        let mut service_id_bytes = [0u8; 32];
+        buf.copy_to_slice(&mut service_id_bytes);
+        // Read payload as Vec<u8> using range config for length validation
+        let payload = <Vec<u8>>::read_range(buf, range.clone())?;
+        Ok(Self {
+            service_id_bytes,
+            payload,
+        })
+    }
+}
+
+// ============================================================================
+// Service Routing (Application-Level Filtering)
+// ============================================================================
+
+/// Application-level message filter for per-service isolation (BCAST-05).
+///
+/// All messages arrive on a single broadcast channel. The ServiceRouter
+/// determines which messages to forward to the Aggregator based on
+/// which services this node is subscribed to.
+pub(crate) struct ServiceRouter {
+    subscribed_services: HashSet<[u8; 32]>,
+}
+
+impl ServiceRouter {
+    pub fn new() -> Self {
+        Self {
+            subscribed_services: HashSet::new(),
+        }
+    }
+
+    pub fn subscribe(&mut self, service_id: &ServiceId) {
+        self.subscribed_services.insert(service_id.inner());
+    }
+
+    pub fn unsubscribe(&mut self, service_id: &ServiceId) {
+        self.subscribed_services.remove(&service_id.inner());
+    }
+
+    /// Check whether an inbound P2pMessage is for a subscribed service.
+    pub fn should_accept(&self, msg: &P2pMessage) -> bool {
+        self.subscribed_services.contains(&msg.service_id_bytes)
+    }
+
+    /// Return hex-encoded list of subscribed service IDs for status reporting.
+    pub fn subscribed_topics(&self) -> Vec<String> {
+        self.subscribed_services
+            .iter()
+            .map(|s| const_hex::encode(s))
+            .collect()
+    }
+}
+
+// ============================================================================
+// Retry Queue for Failed Publishes
+// ============================================================================
+
+const MAX_RETRY_QUEUE_SIZE: usize = 64;
+
+/// Bounded queue for messages that failed to broadcast (no connected peers).
+/// Messages are retried when the next successful broadcast proves peers are available (BCAST-04).
+pub(crate) struct RetryQueue {
+    queue: VecDeque<P2pMessage>,
+}
+
+impl RetryQueue {
+    pub fn new() -> Self {
+        Self {
+            queue: VecDeque::with_capacity(MAX_RETRY_QUEUE_SIZE),
+        }
+    }
+
+    /// Add a message to the retry queue. If full, drops the oldest message.
+    pub fn push(&mut self, msg: P2pMessage) {
+        if self.queue.len() >= MAX_RETRY_QUEUE_SIZE {
+            self.queue.pop_front();
+            tracing::warn!("Retry queue full, dropping oldest message");
+        }
+        self.queue.push_back(msg);
+    }
+
+    /// Drain all queued messages for retry. Returns them in FIFO order.
+    pub fn drain_all(&mut self) -> Vec<P2pMessage> {
+        self.queue.drain(..).collect()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
     }
 }
 
@@ -692,31 +867,133 @@ pub fn pubkey_from_mnemonic(mnemonic: &str) -> Result<String, AggregatorError> {
 #[cfg(test)]
 mod p2p_broadcast_tests {
     use super::*;
+    use commonware_codec::{Encode, ReadRangeExt};
+    use commonware_cryptography::Digestible;
+    use wavs_types::{
+        Envelope, EventId, SignatureKind, Trigger, TriggerAction, TriggerConfig, WasmResponse,
+        WavsSignature, WorkflowId,
+    };
+
+    /// Create a minimal mock Submission for testing.
+    fn mock_submission(service_id: &ServiceId) -> Submission {
+        let trigger_action = TriggerAction {
+            config: TriggerConfig {
+                service_id: service_id.clone(),
+                workflow_id: WorkflowId::new("test-workflow").unwrap(),
+                trigger: Trigger::Manual,
+            },
+            data: wavs_types::TriggerData::default(),
+        };
+        let operator_response = WasmResponse {
+            payload: b"test-payload".to_vec(),
+            event_id_salt: None,
+            ordering: None,
+        };
+        let event_id = EventId::from([1u8; 20]);
+        let envelope = Envelope {
+            payload: alloy_primitives::Bytes::from_static(&[1, 2, 3]),
+            eventId: alloy_primitives::FixedBytes([1; 20]),
+            ordering: alloy_primitives::FixedBytes([0; 12]),
+        };
+        let envelope_signature = WavsSignature {
+            data: vec![0u8; 65],
+            kind: SignatureKind::evm_default(),
+        };
+        Submission {
+            trigger_action,
+            operator_response,
+            event_id,
+            envelope,
+            envelope_signature,
+        }
+    }
 
     // ---- P2pMessage tests ----
 
     #[test]
     fn test_p2p_message_from_submission() {
         // P2pMessage::from_submission() creates message with correct service_id_bytes and payload
-        todo!("Implement after P2pMessage struct exists")
+        let service_id = ServiceId::hash(b"test-service-a");
+        let submission = mock_submission(&service_id);
+
+        let msg = P2pMessage::from_submission(&service_id, &submission).unwrap();
+
+        // service_id_bytes should match the ServiceId's inner bytes
+        assert_eq!(msg.service_id_bytes, service_id.inner());
+
+        // payload should be valid JSON that deserializes back to Submission
+        let deserialized: Submission = serde_json::from_slice(&msg.payload).unwrap();
+        assert_eq!(
+            deserialized.service_id(),
+            submission.service_id(),
+            "Deserialized submission should have the same service_id"
+        );
     }
 
     #[test]
     fn test_p2p_message_codec_roundtrip() {
         // P2pMessage round-trip encode/decode via Write then Read produces identical fields
-        todo!("Implement after P2pMessage Codec traits exist")
+        let msg = P2pMessage {
+            service_id_bytes: [42u8; 32],
+            payload: b"hello broadcast world".to_vec(),
+        };
+
+        // Encode using the Encode trait (Write + EncodeSize)
+        let encoded = msg.encode();
+
+        // Decode using Read with a permissive range config
+        let decoded =
+            P2pMessage::read_range(&mut encoded.as_ref(), 0..=65536).unwrap();
+
+        assert_eq!(msg.service_id_bytes, decoded.service_id_bytes);
+        assert_eq!(msg.payload, decoded.payload);
     }
 
     #[test]
     fn test_p2p_message_digest_determinism() {
-        // Two identical P2pMessages produce the same digest; different messages produce different digests (BCAST-02)
-        todo!("Implement after P2pMessage Digestible trait exists")
+        // Two identical P2pMessages produce the same digest;
+        // different messages produce different digests (BCAST-02)
+        let msg_a = P2pMessage {
+            service_id_bytes: [1u8; 32],
+            payload: b"same-payload".to_vec(),
+        };
+        let msg_b = P2pMessage {
+            service_id_bytes: [1u8; 32],
+            payload: b"same-payload".to_vec(),
+        };
+        let msg_c = P2pMessage {
+            service_id_bytes: [2u8; 32],
+            payload: b"different-payload".to_vec(),
+        };
+
+        let digest_a = msg_a.digest();
+        let digest_b = msg_b.digest();
+        let digest_c = msg_c.digest();
+
+        // Identical messages produce the same digest
+        assert_eq!(digest_a, digest_b, "Identical messages must produce same digest");
+        // Different messages produce different digests
+        assert_ne!(digest_a, digest_c, "Different messages must produce different digests");
     }
 
     #[test]
     fn test_p2p_message_to_submission_roundtrip() {
         // P2pMessage::to_submission() deserializes back to original (ServiceId, Submission) pair
-        todo!("Implement after P2pMessage conversion methods exist")
+        let service_id = ServiceId::hash(b"roundtrip-service");
+        let original_submission = mock_submission(&service_id);
+
+        let msg = P2pMessage::from_submission(&service_id, &original_submission).unwrap();
+        let (recovered_id, recovered_submission) = msg.to_submission().unwrap();
+
+        assert_eq!(recovered_id.inner(), service_id.inner());
+        assert_eq!(
+            recovered_submission.service_id().inner(),
+            original_submission.service_id().inner()
+        );
+        assert_eq!(
+            recovered_submission.operator_response.payload,
+            original_submission.operator_response.payload
+        );
     }
 
     // ---- ServiceRouter tests ----
@@ -724,25 +1001,78 @@ mod p2p_broadcast_tests {
     #[test]
     fn test_service_router_empty_rejects_all() {
         // ServiceRouter::new() creates empty router, should_accept returns false for any message
-        todo!("Implement after ServiceRouter struct exists")
+        let router = ServiceRouter::new();
+        let msg = P2pMessage {
+            service_id_bytes: [1u8; 32],
+            payload: vec![],
+        };
+        assert!(
+            !router.should_accept(&msg),
+            "Empty router should reject all messages"
+        );
     }
 
     #[test]
     fn test_service_router_subscribe_accept() {
         // After subscribe(service_id_a), should_accept returns true for matching, false for non-matching
-        todo!("Implement after ServiceRouter struct exists")
+        let service_id_a = ServiceId::hash(b"test-service-a");
+        let service_id_b = ServiceId::hash(b"test-service-b");
+
+        let mut router = ServiceRouter::new();
+        router.subscribe(&service_id_a);
+
+        let msg_a = P2pMessage {
+            service_id_bytes: service_id_a.inner(),
+            payload: vec![],
+        };
+        let msg_b = P2pMessage {
+            service_id_bytes: service_id_b.inner(),
+            payload: vec![],
+        };
+
+        assert!(
+            router.should_accept(&msg_a),
+            "Should accept messages for subscribed service"
+        );
+        assert!(
+            !router.should_accept(&msg_b),
+            "Should reject messages for unsubscribed service"
+        );
     }
 
     #[test]
     fn test_service_router_unsubscribe() {
         // After unsubscribe(service_id_a), should_accept returns false again
-        todo!("Implement after ServiceRouter struct exists")
+        let service_id_a = ServiceId::hash(b"test-service-a");
+
+        let mut router = ServiceRouter::new();
+        router.subscribe(&service_id_a);
+
+        let msg_a = P2pMessage {
+            service_id_bytes: service_id_a.inner(),
+            payload: vec![],
+        };
+
+        assert!(router.should_accept(&msg_a), "Should accept after subscribe");
+        router.unsubscribe(&service_id_a);
+        assert!(
+            !router.should_accept(&msg_a),
+            "Should reject after unsubscribe"
+        );
     }
 
     #[test]
     fn test_service_router_subscribed_topics() {
         // subscribed_topics() returns hex-encoded list of subscribed service IDs
-        todo!("Implement after ServiceRouter struct exists")
+        let service_id_a = ServiceId::hash(b"test-service-a");
+
+        let mut router = ServiceRouter::new();
+        assert!(router.subscribed_topics().is_empty());
+
+        router.subscribe(&service_id_a);
+        let topics = router.subscribed_topics();
+        assert_eq!(topics.len(), 1);
+        assert_eq!(topics[0], const_hex::encode(service_id_a.inner()));
     }
 
     // ---- RetryQueue tests ----
@@ -750,24 +1080,75 @@ mod p2p_broadcast_tests {
     #[test]
     fn test_retry_queue_empty() {
         // RetryQueue::new() creates empty queue, is_empty() returns true
-        todo!("Implement after RetryQueue struct exists")
+        let queue = RetryQueue::new();
+        assert!(queue.is_empty());
     }
 
     #[test]
     fn test_retry_queue_push_drain_fifo() {
         // push() adds messages, drain_all() returns them in FIFO order
-        todo!("Implement after RetryQueue struct exists")
+        let mut queue = RetryQueue::new();
+
+        let msg_a = P2pMessage {
+            service_id_bytes: [1u8; 32],
+            payload: b"first".to_vec(),
+        };
+        let msg_b = P2pMessage {
+            service_id_bytes: [2u8; 32],
+            payload: b"second".to_vec(),
+        };
+
+        queue.push(msg_a);
+        queue.push(msg_b);
+        assert!(!queue.is_empty());
+
+        let drained = queue.drain_all();
+        assert_eq!(drained.len(), 2);
+        assert_eq!(drained[0].payload, b"first");
+        assert_eq!(drained[1].payload, b"second");
+        assert!(queue.is_empty());
     }
 
     #[test]
     fn test_retry_queue_overflow_drops_oldest() {
         // When queue is full (64 items), push() drops oldest message
-        todo!("Implement after RetryQueue struct exists")
+        let mut queue = RetryQueue::new();
+
+        // Fill to capacity (64)
+        for i in 0u8..64 {
+            queue.push(P2pMessage {
+                service_id_bytes: [i; 32],
+                payload: vec![i],
+            });
+        }
+        assert_eq!(queue.drain_all().len(), 64);
+
+        // Refill and then overflow
+        for i in 0u8..64 {
+            queue.push(P2pMessage {
+                service_id_bytes: [i; 32],
+                payload: vec![i],
+            });
+        }
+        // Push one more -- oldest (i=0) should be dropped
+        queue.push(P2pMessage {
+            service_id_bytes: [99u8; 32],
+            payload: vec![99],
+        });
+
+        let drained = queue.drain_all();
+        assert_eq!(drained.len(), 64, "Queue should still hold 64 items");
+        // First item should be i=1 (i=0 was dropped)
+        assert_eq!(drained[0].payload, vec![1]);
+        // Last item should be the overflow item
+        assert_eq!(drained[63].payload, vec![99]);
     }
 
     #[test]
     fn test_retry_queue_drain_empty() {
         // drain_all() on empty queue returns empty Vec
-        todo!("Implement after RetryQueue struct exists")
+        let mut queue = RetryQueue::new();
+        let drained = queue.drain_all();
+        assert!(drained.is_empty());
     }
 }
