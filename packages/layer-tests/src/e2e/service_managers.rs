@@ -11,7 +11,7 @@ use utils::test_utils::{
 };
 use wavs_cli::command::deploy_service::DeployService;
 use wavs_types::{
-    ChainKey, ChainKeyNamespace, Service, ServiceManager, ServiceStatus, SignerResponse,
+    ChainKey, ChainKeyNamespace, Service, ServiceManager, ServiceStatus, SignerResponse, Trigger,
 };
 
 use crate::{
@@ -494,7 +494,10 @@ impl ServiceManagers {
                     }
                 }
 
-                // doesn't hurt to wait again for rpcs at least in case trigger contract changed
+                // Wait specifically for each EVM trigger contract address to be in the
+                // subscription, not just any subscription. Using None would return prematurely
+                // if the service manager address is already subscribed, before the trigger
+                // contract address is added.
                 if let AnyServiceManagerInstance::Evm { .. } = service_manager_instance {
                     for (idx, http_client) in http_clients.iter().enumerate() {
                         tracing::info!(
@@ -502,7 +505,25 @@ impl ServiceManagers {
                             idx,
                             service.name
                         );
-                        wait_for_evm_trigger_streams_to_finalize(http_client, None).await;
+                        let mut found_evm_trigger = false;
+                        for workflow in service.workflows.values() {
+                            if let Trigger::EvmContractEvent { chain, address, .. } =
+                                &workflow.trigger
+                            {
+                                wait_for_evm_trigger_streams_to_finalize(
+                                    http_client,
+                                    Some(ServiceManager::Evm {
+                                        chain: chain.clone(),
+                                        address: *address,
+                                    }),
+                                )
+                                .await;
+                                found_evm_trigger = true;
+                            }
+                        }
+                        if !found_evm_trigger {
+                            wait_for_evm_trigger_streams_to_finalize(http_client, None).await;
+                        }
                     }
                 }
             });
