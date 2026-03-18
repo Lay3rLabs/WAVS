@@ -1,12 +1,22 @@
-# WAVS Commonware P2P Migration
+# WAVS
 
 ## What This Is
 
-A completed refactor of the WAVS aggregator P2P networking layer, replacing libp2p with commonware primitives (`commonware-p2p`, `commonware-broadcast`, `commonware-cryptography`). The migration ships Ed25519 peer identity, bootstrapper-based discovery, broadcast with catch-up, per-service message filtering, a new config format, observability endpoint, and complete operator documentation including a blog post and migration guide.
+WAVS (WebAssembly-based Actively Validated Services) is a platform for running decentralized off-chain computation anchored to blockchains. Operators run sandboxed WASM components, reach multi-operator consensus via P2P (commonware), and submit verified results on-chain. Services declare their own trigger, signature scheme, and submission target.
 
 ## Core Value
 
-Multi-operator signature aggregation over P2P must work reliably — operators broadcast signed submissions, reach quorum, and submit on-chain — using commonware instead of libp2p.
+Multi-operator signature aggregation over P2P must work reliably — operators broadcast signed submissions, reach quorum, and submit on-chain.
+
+## Current Milestone: v1.1 BLS Signatures
+
+**Goal:** Add BLS12-381 as a per-service signature scheme alongside secp256k1 — operators sign submissions with BLS keys, the aggregator combines signatures off-chain into a single aggregate, and submissions are verified by the poa-middleware BLS service manager contracts.
+
+**Target features:**
+- BLS12-381 signing in the submission pipeline (blst crate, hash-to-curve consistent with contracts)
+- Off-chain BLS aggregation in the aggregator (G2 sig + G1 pubkey accumulation → single aggregate)
+- poa-middleware BLS contract ABI integration and on-chain verification
+- Per-service algorithm config: secp256k1 and bls12381 coexist, existing services unchanged
 
 ## Requirements
 
@@ -39,31 +49,42 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 
 ### Active
 
-(none — start `/gsd:new-milestone` for next milestone requirements)
+- [ ] `SignatureAlgorithm::Bls12381` variant in Rust types and WIT interface — v1.1
+- [ ] BLS submission type: G2 aggregate sig + sorted G1 signer pubkeys + reference block — v1.1
+- [ ] poa-middleware BLS contract ABIs imported into `packages/types` — v1.1
+- [ ] BLS private key derived deterministically from signing mnemonic per service (blst crate) — v1.1
+- [ ] BLS public key (G1, 128 bytes) derivable from private key for operator registration — v1.1
+- [ ] Operator signs envelope with BLS key → G2 signature via hash-to-curve (consistent with HashToCurve.sol) — v1.1
+- [ ] BLS signature + G1 pubkey propagated in Submission over P2P — v1.1
+- [ ] Secp256k1 signing path unchanged for secp256k1 services — v1.1
+- [ ] Aggregator accumulates BLS sigs and pubkeys until quorum, aggregates G2 + G1, captures referenceBlock — v1.1
+- [ ] Aggregated SignatureData submitted to BLS service manager contract — v1.1
+- [ ] E2E test: BLS service on local anvil with poa-middleware BLS contracts, multi-operator quorum — v1.1
+- [ ] Existing secp256k1 e2e tests unchanged and passing — v1.1
 
 ### Out of Scope
 
-- Consensus protocol changes — aggregator quorum logic and on-chain submission remain unchanged
-- EVM/Cosmos submission refactor — only the P2P networking layer changes
-- Desktop app (Tauri) changes — backend P2P is transparent to the frontend
-- Trigger subsystem changes — trigger distribution is unaffected
-- Engine subsystem changes — WASM execution is unaffected
-- SubmissionManager changes — signing logic stays the same (ECDSA for on-chain, Ed25519 only for P2P identity)
-- Hyperswarm/Hypercore — separate concern, not part of this migration
+- MCP tooling updates for BLS operator registration — manual registration for now, defer to v1.2
+- Tauri desktop app changes — backend signature scheme transparent to frontend
+- Threshold/DKG signatures (commonware threshold-simplex) — foundational BLS first, threshold later
+- Cosmos submission with BLS — EVM only for this milestone
+- Trigger and engine subsystem changes — unaffected by signature scheme
 
 ## Context
 
-Shipped v1.0 with ~1,100 lines of Rust (p2p.rs reduced from 1,839 to ~1,100 lines with full commonware backend).
-Tech stack: commonware-p2p 2026.3.0, commonware-broadcast, commonware-cryptography, commonware-runtime, commonware-math.
-libp2p 0.56 fully removed from workspace.
+v1.0 shipped: commonware-p2p backend, Ed25519 P2P identity, libp2p fully removed.
+v1.1 target: BLS12-381 submission signatures, off-chain aggregation, poa-middleware integration.
+Tech stack additions: `blst` 0.3.16 (already transitive dep via commonware-cryptography), poa-middleware BLS contracts at `contracts/poa-middleware/`.
+EIP-2537 precompiles (Pectra) used by BLS contracts for on-chain pairing verification.
 
 ## Constraints
 
-- **Compatibility**: On-chain contracts expect ECDSA signatures — Ed25519 is only for P2P identity, not on-chain signing
-- **Runtime**: Must integrate with existing Tokio 1.47 async runtime — commonware-runtime runs on dedicated OS thread
-- **Config**: Clean break on P2P config format, but `wavs.toml` structure for non-P2P sections stays the same
-- **Testing**: E2e tests in `packages/layer-tests/` must pass — they test the full operator flow including P2P aggregation
-- **Existing API**: `P2pHandle` interface and `AggregatorCommand` enum preserved — no changes outside the aggregator
+- **Coexistence**: secp256k1 and bls12381 must work as per-service options — no breaking changes to existing services
+- **Runtime**: blst signing is sync/CPU-bound — must not block Tokio async runtime (run on blocking thread pool)
+- **Hash-to-curve**: WAVS hash-to-curve implementation must match `HashToCurve.sol` (RFC 9380, DST `BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_`) for on-chain verification
+- **Pubkey sort**: aggregator must sort signerPubkeys by keccak256(pubkey) ascending — contract enforces this
+- **Reference block**: referenceBlock must be < current block at submission time, >= block when operators registered keys
+- **Testing**: E2e tests in `packages/layer-tests/` must pass — both secp256k1 and BLS paths
 
 ## Key Decisions
 
@@ -77,4 +98,4 @@ libp2p 0.56 fully removed from workspace.
 | rand_chacha 0.3 (not 0.9) | commonware-cryptography depends on rand_core 0.6; 0.9 causes trait mismatch | ✓ Required — version pinning documented |
 
 ---
-*Last updated: 2026-03-18 after v1.0 milestone*
+*Last updated: 2026-03-18 after v1.1 milestone start*
