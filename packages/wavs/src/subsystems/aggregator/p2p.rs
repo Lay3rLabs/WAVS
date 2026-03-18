@@ -24,6 +24,7 @@
 
 use std::collections::{HashSet, VecDeque};
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use commonware_broadcast::buffered::{Config as BroadcastConfig, Engine};
 use commonware_broadcast::Broadcaster;
@@ -452,6 +453,10 @@ fn spawn_commonware_runtime(
     Ok(handle)
 }
 
+/// Reserved service ID used by heartbeat probes to discover connected peers.
+/// No real service uses all-zeros service ID, so ServiceRouter filters these out.
+const HEARTBEAT_SERVICE_ID: [u8; 32] = [0u8; 32];
+
 /// Run a lookup-mode P2P network inside the commonware runtime.
 ///
 /// This function:
@@ -649,6 +654,13 @@ async fn run_lookup_network(
     // Starts at empty (truthful -- no peers confirmed until message exchange).
     let connected_peers_tracker: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
 
+    // Heartbeat timer: probes the P2P mesh every 2 seconds so connected_peers_tracker
+    // is populated before any real trigger fires. Uses HEARTBEAT_SERVICE_ID (all-zeros
+    // sentinel) which ServiceRouter always filters out -- never forwarded to aggregator.
+    let mut heartbeat = tokio::time::interval(Duration::from_secs(2));
+    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    heartbeat.tick().await; // consume the immediate first tick
+
     // Bridge loop: handle P2pCommands and inbound messages from peers.
     loop {
         tokio::select! {
@@ -806,6 +818,39 @@ async fn run_lookup_network(
                         tracing::error!("Inbound bridge channel closed");
                         break;
                     }
+                }
+            }
+            _ = heartbeat.tick() => {
+                let probe = P2pMessage {
+                    service_id_bytes: HEARTBEAT_SERVICE_ID,
+                    payload: vec![],
+                };
+                let ack_rx = mailbox.broadcast(Recipients::All, probe.clone()).await;
+                let encoded = Encode::encode(&probe);
+                if let Err(e) = direct_sender.send(Recipients::All, encoded, false).await {
+                    tracing::trace!("Heartbeat direct send failed: {:?}", e);
+                }
+                match ack_rx.await {
+                    Ok(recipients) if !recipients.is_empty() => {
+                        let peer_hexes: Vec<String> = recipients
+                            .iter()
+                            .map(|pk| const_hex::encode(pk.as_ref()))
+                            .collect();
+                        *connected_peers_tracker.write().unwrap() = peer_hexes;
+                        tracing::debug!("Heartbeat: {} peers connected", recipients.len());
+                        if !retry_queue.is_empty() {
+                            let queued = retry_queue.drain_all();
+                            for queued_msg in queued {
+                                let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                let queued_bytes = Encode::encode(&queued_msg);
+                                if let Err(e) = direct_sender.send(Recipients::All, queued_bytes, false).await {
+                                    tracing::warn!("Retry send failed: {:?}", e);
+                                }
+                            }
+                        }
+                    }
+                    Ok(_) => tracing::trace!("Heartbeat: no peers connected yet"),
+                    Err(_) => tracing::error!("Heartbeat: broadcast engine shut down"),
                 }
             }
         }
@@ -993,6 +1038,13 @@ async fn run_discovery_network(
     // Starts at empty (truthful -- no peers confirmed until message exchange).
     let connected_peers_tracker: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
 
+    // Heartbeat timer: probes the P2P mesh every 2 seconds so connected_peers_tracker
+    // is populated before any real trigger fires. Uses HEARTBEAT_SERVICE_ID (all-zeros
+    // sentinel) which ServiceRouter always filters out -- never forwarded to aggregator.
+    let mut heartbeat = tokio::time::interval(Duration::from_secs(2));
+    heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    heartbeat.tick().await; // consume the immediate first tick
+
     // Bridge loop: handle P2pCommands and inbound messages from peers.
     loop {
         tokio::select! {
@@ -1140,6 +1192,39 @@ async fn run_discovery_network(
                         tracing::error!("Discovery inbound bridge channel closed");
                         break;
                     }
+                }
+            }
+            _ = heartbeat.tick() => {
+                let probe = P2pMessage {
+                    service_id_bytes: HEARTBEAT_SERVICE_ID,
+                    payload: vec![],
+                };
+                let ack_rx = mailbox.broadcast(Recipients::All, probe.clone()).await;
+                let encoded = Encode::encode(&probe);
+                if let Err(e) = direct_sender.send(Recipients::All, encoded, false).await {
+                    tracing::trace!("Heartbeat direct send failed: {:?}", e);
+                }
+                match ack_rx.await {
+                    Ok(recipients) if !recipients.is_empty() => {
+                        let peer_hexes: Vec<String> = recipients
+                            .iter()
+                            .map(|pk| const_hex::encode(pk.as_ref()))
+                            .collect();
+                        *connected_peers_tracker.write().unwrap() = peer_hexes;
+                        tracing::debug!("Heartbeat: {} peers connected", recipients.len());
+                        if !retry_queue.is_empty() {
+                            let queued = retry_queue.drain_all();
+                            for queued_msg in queued {
+                                let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                let queued_bytes = Encode::encode(&queued_msg);
+                                if let Err(e) = direct_sender.send(Recipients::All, queued_bytes, false).await {
+                                    tracing::warn!("Retry send failed: {:?}", e);
+                                }
+                            }
+                        }
+                    }
+                    Ok(_) => tracing::trace!("Heartbeat: no peers connected yet"),
+                    Err(_) => tracing::error!("Heartbeat: broadcast engine shut down"),
                 }
             }
         }
