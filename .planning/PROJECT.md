@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A refactor of the WAVS aggregator P2P networking layer, replacing libp2p with commonware primitives (`commonware-p2p`, `commonware-broadcast`, `commonware-cryptography`). This improves WAVS decentralization by adopting the commonware ecosystem's authenticated peer communication and broadcast infrastructure. The project also includes updated operator documentation, a blog post announcing the integration, and verified passing e2e tests.
+A completed refactor of the WAVS aggregator P2P networking layer, replacing libp2p with commonware primitives (`commonware-p2p`, `commonware-broadcast`, `commonware-cryptography`). The migration ships Ed25519 peer identity, bootstrapper-based discovery, broadcast with catch-up, per-service message filtering, a new config format, observability endpoint, and complete operator documentation including a blog post and migration guide.
 
 ## Core Value
 
@@ -24,21 +24,22 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 - ✓ Configurable discovery modes (local dev, remote production) — existing
 - ✓ `/p2p/status` endpoint exposes peer info, topics, mesh counts — existing
 - ✓ Quorum queue with automatic retry for transient errors — existing
+- ✓ Replace libp2p with commonware-p2p for authenticated peer communication — v1.0
+- ✓ Replace GossipSub with commonware-broadcast for per-service message dissemination — v1.0
+- ✓ Replace libp2p identity (secp256k1) with commonware-cryptography (Ed25519) — v1.0
+- ✓ Use commonware-p2p discovery mode (bootstrapper-based) for peer discovery — v1.0
+- ✓ Per-service message isolation using application-level ServiceRouter filtering — v1.0
+- ✓ Catch-up / message caching via commonware-broadcast buffered Engine — v1.0
+- ✓ New P2P config format tailored to commonware (Disabled / Local / Remote) — v1.0
+- ✓ Updated `/p2p/status` endpoint with Ed25519 peer ID, socket addresses, connected peers — v1.0
+- ✓ Updated P2P documentation in `docs/P2P.md` with commonware setup instructions — v1.0
+- ✓ Blog post in `docs/blog/` announcing the commonware integration — v1.0
+- ✓ All existing e2e tests pass with commonware P2P backend — v1.0
+- ✓ libp2p dependency removed from Cargo.toml — v1.0
 
 ### Active
 
-- [ ] Replace libp2p with commonware-p2p for authenticated peer communication
-- [ ] Replace GossipSub with commonware-broadcast for per-service message dissemination
-- [ ] Replace libp2p identity (secp256k1) with commonware-cryptography (Ed25519)
-- [ ] Use commonware-p2p discovery mode (bootstrapper-based) for peer discovery
-- [ ] Implement per-service channel isolation using commonware-p2p channels
-- [ ] Maintain catch-up / message caching via commonware-broadcast buffered engine
-- [ ] New P2P config format tailored to commonware (clean break from `[wavs.p2p] local/remote`)
-- [ ] Update `/p2p/status` endpoint to reflect commonware peer state
-- [ ] Update P2P documentation in `docs/P2P.md` with commonware setup instructions
-- [ ] Write blog post announcing the commonware integration in `docs/blog/`
-- [ ] All existing e2e tests pass with commonware P2P backend
-- [ ] Remove libp2p dependency from Cargo.toml
+(none — start `/gsd:new-milestone` for next milestone requirements)
 
 ### Out of Scope
 
@@ -52,38 +53,28 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 
 ## Context
 
-The current P2P layer is ~1,800 lines in `packages/wavs/src/subsystems/aggregator/p2p.rs` using libp2p 0.56 with:
-- GossipSub for per-service pub/sub (topics: `wavs/{service_id}/topic/v1`)
-- Kademlia DHT (prod) and mDNS (dev) for peer discovery
-- Request/Response protocol for catch-up on peer reconnection
-- AutoNAT + Identify for NAT traversal
-- secp256k1 keypair derived from signing mnemonic at HD path m/44'/60'/0'/0/0
-
-Commonware provides:
-- `commonware-p2p::authenticated::discovery` — bootstrapper-based peer discovery (replaces Kademlia/mDNS)
-- `commonware-p2p::authenticated::lookup` — address-known peer lookup (alternative for dev)
-- `commonware-broadcast::buffered` — broadcast engine with message caching and digest-based retrieval (replaces GossipSub + catch-up protocol)
-- `commonware-cryptography` — Ed25519 key generation and signing (replaces libp2p secp256k1 identity)
-
-The aggregator integrates with the dispatcher via `AggregatorCommand` enum over crossbeam channels. Key commands: `Broadcast`, `Receive`, `SubscribeService`, `UnsubscribeService`. The P2P layer is behind a `P2pHandle` abstraction that the aggregator calls into.
+Shipped v1.0 with ~1,100 lines of Rust (p2p.rs reduced from 1,839 to ~1,100 lines with full commonware backend).
+Tech stack: commonware-p2p 2026.3.0, commonware-broadcast, commonware-cryptography, commonware-runtime, commonware-math.
+libp2p 0.56 fully removed from workspace.
 
 ## Constraints
 
 - **Compatibility**: On-chain contracts expect ECDSA signatures — Ed25519 is only for P2P identity, not on-chain signing
-- **Runtime**: Must integrate with existing Tokio 1.47 async runtime — commonware-runtime compatibility needed
+- **Runtime**: Must integrate with existing Tokio 1.47 async runtime — commonware-runtime runs on dedicated OS thread
 - **Config**: Clean break on P2P config format, but `wavs.toml` structure for non-P2P sections stays the same
 - **Testing**: E2e tests in `packages/layer-tests/` must pass — they test the full operator flow including P2P aggregation
-- **Existing API**: `P2pHandle` interface and `AggregatorCommand` enum should remain stable to minimize changes outside the aggregator
+- **Existing API**: `P2pHandle` interface and `AggregatorCommand` enum preserved — no changes outside the aggregator
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Use commonware-p2p discovery mode | Bootstrapper-based discovery is closest to current Kademlia model, works for both dev and prod | — Pending |
-| Per-service channels (not single broadcast) | Mirrors current GossipSub topic isolation, operators only receive messages for their services | — Pending |
-| Ed25519 for P2P identity | Commonware's native crypto scheme, cleaner integration than wrapping secp256k1 | — Pending |
-| Clean break on config format | Major version change, simpler than maintaining compat layer for a networking rewrite | — Pending |
-| Announcement-style blog post | Focus on why we switched and what it means for operators, not a deep technical tutorial | — Pending |
+| Use commonware-p2p discovery mode | Bootstrapper-based discovery is closest to current Kademlia model, works for both dev and prod | ✓ Good — worked cleanly for both modes |
+| Single broadcast channel with ServiceRouter app-level filtering | Simpler than per-service channels; ServiceRouter achieves same isolation with less complexity | ✓ Good — clean implementation, BCAST-05 satisfied |
+| Ed25519 for P2P identity | Commonware's native crypto scheme, cleaner integration than wrapping secp256k1 | ✓ Good — BIP-39 + ChaCha20Rng seeding pattern established |
+| Clean break on config format | Major version change, simpler than maintaining compat layer for a networking rewrite | ✓ Good — Disabled/Local/Remote format is clean and operator-friendly |
+| Announcement-style blog post | Focus on why we switched and what it means for operators, not a deep technical tutorial | ✓ Good — completed in Phase 4 |
+| rand_chacha 0.3 (not 0.9) | commonware-cryptography depends on rand_core 0.6; 0.9 causes trait mismatch | ✓ Required — version pinning documented |
 
 ---
-*Last updated: 2026-03-17 after initialization*
+*Last updated: 2026-03-18 after v1.0 milestone*

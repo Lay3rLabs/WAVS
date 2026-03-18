@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-03-17T20:06:35.707Z"
-last_activity: 2026-03-17 — Connected peer tracking via broadcast ack and inbound message tracking, OBS-01 verified
+milestone_name: Commonware P2P Migration
+status: complete
+stopped_at: v1.0 milestone archived 2026-03-18
+last_updated: "2026-03-18T18:10:13.141Z"
+last_activity: 2026-03-18 — v1.0 milestone complete, archived to milestones/
 progress:
   total_phases: 4
   completed_phases: 4
@@ -18,17 +18,16 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-17)
+See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably using commonware instead of libp2p
-**Current focus:** Phase 3: Config and Observability
+**Current focus:** Planning next milestone — run `/gsd:new-milestone`
 
 ## Current Position
 
-Phase: 3 of 4 (Config and Observability)
-Plan: 4 of 4 in current phase
-Status: In Progress
-Last activity: 2026-03-17 — Connected peer tracking via broadcast ack and inbound message tracking, OBS-01 verified
+Milestone v1.0 complete and archived.
+Status: Complete
+Last activity: 2026-03-18 — All 4 phases shipped, libp2p removed, docs published
 
 Progress: [##########] 100%
 
