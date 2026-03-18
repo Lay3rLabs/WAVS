@@ -1,48 +1,52 @@
----
-gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: BLS Signatures
-status: in_progress
-stopped_at: defining requirements
-last_updated: "2026-03-18T00:00:00.000Z"
-last_activity: 2026-03-18 — Milestone v1.1 started
-progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
----
-
 # Project State
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-18)
 
-**Core value:** Multi-operator signature aggregation over P2P must work reliably — operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase not started — defining requirements
+**Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
+**Current focus:** Phase 5 - BLS Types and Key Derivation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-18 — Milestone v1.1 BLS Signatures started
+Phase: 5 of 8 (BLS Types and Key Derivation)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-03-18 -- Roadmap created for v1.1 BLS Signatures milestone
+
+Progress: [##########..........] 50% (4/8 phases, v1.0 complete)
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 11 (v1.0)
+- Average duration: see v1.0 retrospective
+- Total execution time: see v1.0 retrospective
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 1 | 3 | - | - |
+| 2 | 2 | - | - |
+| 3 | 4 | - | - |
+| 4 | 2 | - | - |
+| 5-8 | TBD | - | - |
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
 ### Decisions
 
-- BLS coexists with secp256k1 as a per-service option — no breaking changes to existing services
-- Off-chain BLS aggregation in WAVS aggregator — one aggregate sig per submission (cheaper gas, simpler contract)
-- No MCP tooling for BLS in this milestone — operators register manually, defer to v1.2
-- blst 0.3.16 already in Cargo.lock as transitive dep via commonware-cryptography — no new dep needed
-- poa-middleware BLS contracts are the target: POAStakeRegistry.sol + BLS12381.sol + HashToCurve.sol
-- EIP-2537 precompiles (Pectra) used on-chain for pairing verification
-- Hash-to-curve DST must match: BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_
-- signerPubkeys must be sorted by keccak256(pubkey) ascending — contract enforces this
+- BLS coexists with secp256k1 as a per-service option -- no breaking changes
+- Off-chain BLS aggregation in WAVS aggregator -- one aggregate sig per submission
+- blst 0.3.16 already in Cargo.lock as transitive dep via commonware-cryptography
+- Hash-to-curve DST must match contracts: BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_
+- signerPubkeys sorted by keccak256(pubkey) ascending -- contract enforces this
 - referenceBlock must be < current block at submission time
+- blst signing is CPU-bound -- must use spawn_blocking in async context
+- No MCP tooling for BLS in v1.1 -- defer to v1.2
 
 ### Pending Todos
 
@@ -51,3 +55,9 @@ None yet.
 ### Blockers/Concerns
 
 None yet.
+
+## Session Continuity
+
+Last session: 2026-03-18
+Stopped at: Roadmap created for v1.1 BLS Signatures milestone
+Resume file: None
