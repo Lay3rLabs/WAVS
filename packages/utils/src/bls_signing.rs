@@ -5,31 +5,103 @@
 //! This parallels the ed25519 derivation in aggregator/p2p.rs but adds HKDF
 //! to safely derive multiple keys from a single mnemonic.
 
-use commonware_cryptography::bls12381;
+use commonware_cryptography::{bls12381, Signer as _};
+use hkdf::Hkdf;
+use rand_chacha::ChaCha20Rng;
+use rand_core::SeedableRng;
+use sha2::Sha256;
 
 /// Domain separation label for HKDF info parameter.
 /// Prevents accidental collision with other HKDF usages of the same BIP-39 seed.
 const HKDF_INFO_PREFIX: &[u8] = b"WAVS-BLS-KEY-v1";
 
 /// Derive a BLS12-381 private key deterministically from a BIP-39 mnemonic and HD index.
+///
+/// Algorithm:
+/// 1. Parse BIP-39 mnemonic and derive 64-byte seed (empty passphrase)
+/// 2. HKDF-SHA256(ikm=seed, info=WAVS-BLS-KEY-v1 || hd_index.to_le_bytes()) -> 32-byte RNG seed
+/// 3. ChaCha20Rng::from_seed(rng_seed) -> deterministic PRNG
+/// 4. bls12381::PrivateKey::random(&mut rng) -> BLS private key
+///
+/// # Errors
+/// - Returns error if `mnemonic` starts with "0x" (raw key, not a mnemonic)
+/// - Returns error if mnemonic is invalid BIP-39
 pub fn bls_private_key_from_mnemonic(
-    _mnemonic: &str,
-    _hd_index: u32,
+    mnemonic: &str,
+    hd_index: u32,
 ) -> anyhow::Result<bls12381::PrivateKey> {
-    todo!("RED phase: not yet implemented")
+    // Guard: reject raw private keys
+    if mnemonic.starts_with("0x") {
+        anyhow::bail!("BLS key derivation requires a mnemonic, not a raw key");
+    }
+
+    // Parse BIP-39 mnemonic
+    let mnemonic = bip39::Mnemonic::parse(mnemonic)
+        .map_err(|e| anyhow::anyhow!("Invalid mnemonic: {}", e))?;
+
+    // Derive 64-byte BIP-39 seed (empty passphrase)
+    let seed = mnemonic.to_seed("");
+
+    // HKDF-SHA256: incorporate HD index with domain separation
+    let hk = Hkdf::<Sha256>::new(None, &seed);
+    let mut rng_seed = [0u8; 32];
+    // info = WAVS-BLS-KEY-v1 || hd_index (little-endian)
+    let mut info = Vec::with_capacity(HKDF_INFO_PREFIX.len() + 4);
+    info.extend_from_slice(HKDF_INFO_PREFIX);
+    info.extend_from_slice(&hd_index.to_le_bytes());
+    hk.expand(&info, &mut rng_seed)
+        .map_err(|e| anyhow::anyhow!("HKDF expand failed: {}", e))?;
+
+    // Deterministic RNG seeded from HKDF output
+    let mut rng = ChaCha20Rng::from_seed(rng_seed);
+
+    // Generate BLS private key using commonware's implementation
+    use commonware_math::algebra::Random;
+    Ok(bls12381::PrivateKey::random(&mut rng))
 }
 
 /// Convert a BLS private key's G1 public key to 128-byte EIP-2537 uncompressed format.
+///
+/// The commonware PublicKey is 48-byte ZCash compressed G1. This function:
+/// 1. Decompresses to affine point via blst FFI
+/// 2. Serializes to 96 bytes (x || y, each 48 bytes big-endian)
+/// 3. Pads each 48-byte coordinate to 64 bytes with leading zeros (EIP-2537 format)
+///
+/// The output matches `BLS12381.G1_POINT_SIZE = 128` in the poa-middleware contracts.
 pub fn bls_g1_pubkey_bytes(
-    _private_key: &bls12381::PrivateKey,
+    private_key: &bls12381::PrivateKey,
 ) -> anyhow::Result<[u8; 128]> {
-    todo!("RED phase: not yet implemented")
+    let pubkey = private_key.public_key();
+    let compressed: &[u8] = &pubkey; // 48-byte ZCash compressed G1
+
+    // Decompress to affine point via blst FFI
+    let mut affine = blst::blst_p1_affine::default();
+    let result = unsafe {
+        blst::blst_p1_uncompress(&mut affine, compressed.as_ptr())
+    };
+    if result != blst::BLST_ERROR::BLST_SUCCESS {
+        anyhow::bail!("Failed to uncompress G1 point: {:?}", result);
+    }
+
+    // Serialize to 96-byte uncompressed (x || y, each 48 bytes big-endian)
+    let mut uncompressed = [0u8; 96];
+    unsafe {
+        blst::blst_p1_affine_serialize(uncompressed.as_mut_ptr(), &affine);
+    }
+
+    // Pad each 48-byte coordinate to 64 bytes (EIP-2537 format)
+    // x: 16 zero bytes + 48-byte x coordinate
+    // y: 16 zero bytes + 48-byte y coordinate
+    let mut eip2537 = [0u8; 128];
+    eip2537[16..64].copy_from_slice(&uncompressed[0..48]);
+    eip2537[80..128].copy_from_slice(&uncompressed[48..96]);
+
+    Ok(eip2537)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use commonware_cryptography::Signer as _;
 
     const TEST_MNEMONIC: &str =
         "test test test test test test test test test test test junk";
@@ -38,7 +110,7 @@ mod tests {
     fn pubkey_bytes(key: &bls12381::PrivateKey) -> Vec<u8> {
         let pk = key.public_key();
         // Use Deref<Target=[u8]> to get the raw bytes
-        let bytes: &[u8] = &*pk;
+        let bytes: &[u8] = &pk;
         bytes.to_vec()
     }
 
