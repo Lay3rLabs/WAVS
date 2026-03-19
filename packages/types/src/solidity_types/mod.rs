@@ -7,3 +7,6 @@ cfg_if::cfg_if! {
         pub use not_rpc::*;
     }
 }
+
+mod bls;
+pub use bls::*;
