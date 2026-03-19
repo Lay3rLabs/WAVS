@@ -1,5 +1,5 @@
 # Base image with common dependencies
-FROM rust:1.90-slim-bookworm AS base
+FROM rust:1.91-slim-bookworm AS base
 RUN apt-get update && apt-get install -y pkg-config libssl-dev ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
 # This whole pile will pre-build and cache the dependencies, so we just recompile local code below
@@ -15,7 +15,7 @@ FROM base AS cacher
 WORKDIR /myapp
 RUN cargo install cargo-chef
 COPY --from=planner /myapp/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json -p wavs -p wavs-cli
 
 # This build step should just compile the local code and be faster
 FROM base AS builder
@@ -23,7 +23,7 @@ WORKDIR /myapp
 COPY . .
 # Copy over the cached dependencies
 COPY --from=cacher /myapp/target target
-RUN cargo build --release
+RUN cargo build --release -p wavs -p wavs-cli
 
 ### PRODUCTION
 

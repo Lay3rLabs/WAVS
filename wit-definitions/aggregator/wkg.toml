@@ -3,7 +3,7 @@ author = "Lay3r Labs Team"
 description = "WAVS WASI Aggregator"
 license = "MIT"
 homepage = "https://www.wavs.xyz/"
-repository = "https://github.com/Lay3rLabs/wavs-wasi"
+repository = "https://github.com/Lay3rLabs/WAVS"
 
 [overrides]
 "wavs:types" = { path = "../types/wit" }

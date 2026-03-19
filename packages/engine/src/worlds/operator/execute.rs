@@ -30,7 +30,7 @@ pub async fn execute(
                     deps.linker.as_operator_ref(),
                 )
                 .await
-                .map_err(EngineError::Instantiate)?
+                .map_err(|e| EngineError::Instantiate(e.into()))?
                 .call_run(deps.store.as_operator_mut(), &input)
                 .await
                 .map_err(|e| match e.downcast_ref::<Trap>() {
@@ -40,7 +40,7 @@ pub async fn execute(
                     Some(t) if *t == Trap::Interrupt => {
                         EngineError::OutOfTime(service_id, workflow_id)
                     }
-                    _ => EngineError::ComponentError(e),
+                    _ => EngineError::ComponentError(e.into()),
                 })?
                 .map_err(EngineError::ExecResult)
                 .map(|r| r.into_iter().map(|r| r.into()).collect())

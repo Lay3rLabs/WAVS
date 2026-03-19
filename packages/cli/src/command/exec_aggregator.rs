@@ -118,7 +118,6 @@ impl ExecAggregator {
 
         let mut wt_config = wasmtime::Config::new();
         wt_config.wasm_component_model(true);
-        wt_config.async_support(true);
         wt_config.consume_fuel(true);
         let engine = wasmtime::Engine::new(&wt_config)?;
 

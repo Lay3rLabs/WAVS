@@ -16,15 +16,8 @@ jobs:
     name: Verify and Publish Crate
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Extract Crate Version
         id: version
@@ -87,9 +80,12 @@ jobs:
           command: publish
           args: --manifest-path ${{ env.CRATE_PATH }}/Cargo.toml
 
-  publish_wasm:
-    name: Publish WASM to wa.dev
+  publish_wasi_utils:
+    name: Verify and Publish wavs-wasi-utils Crate
     runs-on: ubuntu-latest
+    env:
+      WASI_CRATE_NAME: wavs-wasi-utils
+      WASI_CRATE_PATH: packages/wasi-utils
     steps:
       - name: Checkout the repo
         uses: actions/checkout@v4
@@ -101,14 +97,60 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Install just
-        uses: extractions/setup-just@v2
+      - name: Extract Crate Version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(cargo read-manifest --manifest-path ${{ env.WASI_CRATE_PATH }}/Cargo.toml | jq -r .version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if crate exists
+        id: crate_exists
+        shell: bash
+        run: |
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "User-Agent: wavs-ci (https://github.com/Lay3rLabs/WAVS)" \
+            https://crates.io/api/v1/crates/${{ env.WASI_CRATE_NAME }}/${{ steps.version.outputs.version }})
+
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Crate ${{ env.WASI_CRATE_NAME }} version ${{ steps.version.outputs.version }} already exists"
+          elif [ "$HTTP_STATUS" = "404" ]; then
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Crate ${{ env.WASI_CRATE_NAME }} version ${{ steps.version.outputs.version }} not found - OK to publish"
+          else
+            echo "Error: Received unexpected HTTP status $HTTP_STATUS when checking if crate exists"
+            exit 1
+          fi
+
+      - name: Run cargo package
+        if: steps.crate_exists.outputs.exists == 'false'
+        uses: actions-rs/cargo@v1
+        with:
+          command: package
+          args: --manifest-path ${{ env.WASI_CRATE_PATH }}/Cargo.toml
+
+      - name: Publish to crates.io
+        if: steps.crate_exists.outputs.exists == 'false'
+        uses: actions-rs/cargo@v1
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        with:
+          command: publish
+          args: --manifest-path ${{ env.WASI_CRATE_PATH }}/Cargo.toml
+
+  publish_wasm:
+    name: Publish WASM to wa.dev
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Install wkg
         run: cargo install wkg
 
-      - name: Build WASI components with wasi-builder image
-        run: just wasi-build-native
+      - name: Build WASI components
+        run: just wasi-build
 
       - name: Check if checksums.txt changed
         run: git diff --exit-code -- checksums.txt
@@ -137,15 +179,8 @@ jobs:
     name: Publish TypeScript Bindings to NPM
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the repo
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -155,9 +190,6 @@ jobs:
 
       - name: Update npm to latest
         run: npm install -g npm@latest
-
-      - name: Install just
-        uses: extractions/setup-just@v2
 
       - name: Extract Crate Version
         id: version

@@ -37,8 +37,8 @@ pub enum ComponentStore {
 impl ComponentStore {
     pub fn get_fuel(&self) -> anyhow::Result<u64> {
         match self {
-            ComponentStore::OperatorComponentStore(store) => store.get_fuel(),
-            ComponentStore::AggregatorComponentStore(store) => store.get_fuel(),
+            ComponentStore::OperatorComponentStore(store) => Ok(store.get_fuel()?),
+            ComponentStore::AggregatorComponentStore(store) => Ok(store.get_fuel()?),
         }
     }
 
@@ -227,7 +227,7 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             }
             builder
                 .preopened_dir(data_dir, ".", DirPerms::all(), FilePerms::all())
-                .map_err(EngineError::Filesystem)?;
+                .map_err(|e| EngineError::Filesystem(e.into()))?;
         }
 
         // conditionally allow raw network access
@@ -321,7 +321,9 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
 }
 
 fn configure_store<T>(store: &mut Store<T>, fuel_limit: u64) -> Result<(), EngineError> {
-    store.set_fuel(fuel_limit).map_err(EngineError::Store)?;
+    store
+        .set_fuel(fuel_limit)
+        .map_err(|e| EngineError::Store(e.into()))?;
 
     // this only configures the component to yield periodically
     // killing is done from the outside via a tokio timeout

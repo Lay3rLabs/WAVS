@@ -1,6 +1,7 @@
 SUDO := if `groups | grep -q docker > /dev/null 2>&1 && echo true || echo false` == "true" { "" } else { "sudo" }
 TAG := env_var_or_default("TAG", "")
 WASI_OUT_DIR := "./examples/build/components"
+COMPONENTS_DIR := "./examples/components"
 COSMWASM_OUT_DIR := "./examples/build/contracts"
 REPO_ROOT := `git rev-parse --show-toplevel`
 DOCKER_WAVS_ID := `docker ps | grep wavs | awk '{print $1}'`
@@ -9,6 +10,22 @@ COSMWASM_OPTIMIZER_VERSION := env_var_or_default("COSMWASM_OPTIMIZER_VERSION", "
 
 help:
   just --list
+
+# WAVS Desktop App (React/TypeScript frontend)
+app-dev:
+    cd app && pnpm tauri dev
+
+app-dev-frontend:
+    cd app && pnpm dev
+
+app-build-release:
+    cd app && pnpm tauri build
+
+app-build-debug:
+    cd app && pnpm tauri build --debug
+
+app-build-frontend:
+    cd app && pnpm build
 
 # builds wavs
 docker-build TAG="local":
@@ -52,48 +69,11 @@ _install-native HOME DATA:
     @echo "export WAVS_CLI_DATA=\"{{DATA}}/wavs-cli\""
     @echo "export WAVS_DOTENV=\"{{HOME}}/.env\""
 
-wasi-build-native COMPONENT="*":
-    @if [ "{{COMPONENT}}" = "*" ]; then \
-        rm -f ./target/wasm32-wasip1/release/*.wasm; \
-    fi
-
-    @for C in examples/components/{{COMPONENT}}/Cargo.toml; do \
-        if [ "{{COMPONENT}}" != "_helpers" ] && [ "{{COMPONENT}}" != "_types" ]; then \
-            echo "Building WASI component in $(dirname $C)"; \
-            ( cd $(dirname $C) && cargo component build --release && cargo fmt); \
-        fi; \
-    done
-
-    rm -rf {{WASI_OUT_DIR}}
-    mkdir -p {{WASI_OUT_DIR}}
-    @cp ./target/wasm32-wasip1/release/*.wasm {{WASI_OUT_DIR}}
-    @sha256sum -- {{WASI_OUT_DIR}}/*.wasm | tee checksums.txt
-
-# FIXME
-# https://github.com/Lay3rLabs/wasi-builder/issues/2
-# https://github.com/Lay3rLabs/wasi-builder/issues/3
-wasi-build-docker COMPONENT="*" TAG="latest":
+wasi-build COMPONENT="*" TAG="latest":
     #!/usr/bin/env bash
     set -euo pipefail
 
     IMAGE_NAME="ghcr.io/lay3rlabs/wasi-builder:{{TAG}}"
-
-    # Determine which directories to process
-    if [ "{{COMPONENT}}" = "*" ]; then
-        # Find all directories in examples/components that don't start with _
-        COMPONENTS_DIR="examples/components"
-        COMPONENTS=$(find "$COMPONENTS_DIR" -maxdepth 1 -type d -name "[!_]*" | sed 's|^\./||' | sort)
-        if [ -z "$COMPONENTS" ]; then
-            echo "No component directories found in $COMPONENTS_DIR (excluding directories starting with _)"
-            exit 1
-        fi
-    else
-        COMPONENTS="{{COMPONENT}}"
-    fi
-
-    # Create and clean output directory
-    rm -rf "{{WASI_OUT_DIR}}"
-    mkdir -p "{{WASI_OUT_DIR}}"
 
     # Pull latest (unless tag is local)
     if [ "{{TAG}}" != "local" ]; then
@@ -101,11 +81,22 @@ wasi-build-docker COMPONENT="*" TAG="latest":
     fi
 
     # Run Docker build
-    docker run --rm \
-        -v "$(pwd):/docker" \
-        -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
-        -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
-        "$IMAGE_NAME"
+    if [ "{{COMPONENT}}" = "*" ]; then
+        docker run --rm \
+            -v "$(pwd):/docker" \
+            -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
+            -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
+            -e COMPONENTS_DIR="{{COMPONENTS_DIR}}" \
+            -e EXCLUDE_FOLDERS="_helpers,_types" \
+            "$IMAGE_NAME"
+    else
+        docker run --rm \
+            -v "$(pwd):/docker" \
+            -v "$(pwd)/{{WASI_OUT_DIR}}:/docker/output" \
+            -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) \
+            -e COMPONENTS_DIR="{{COMPONENTS_DIR}}" \
+            "$IMAGE_NAME" "{{COMPONENT}}"
+    fi
 
     just generate-checksums
 
@@ -153,6 +144,7 @@ solidity-build CLEAN="":
     # wavs-types
     cp -r {{REPO_ROOT}}/out/IWavsServiceHandler.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/IWavsServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
+    cp -r {{REPO_ROOT}}/out/SimpleServiceManager.sol {{REPO_ROOT}}/packages/types/src/contracts/solidity/abi/
     # layer-tests mock contracts
     cp -r {{REPO_ROOT}}/out/LogSpam.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
     cp -r {{REPO_ROOT}}/out/TestServiceContracts.sol {{REPO_ROOT}}/examples/contracts/solidity/abi/
@@ -259,29 +251,111 @@ start-anvil:
 cli-exec COMPONENT INPUT:
     @cd packages/cli && cargo run exec --component {{COMPONENT}} --input '{{INPUT}}'
 
-# downloads the latest WIT file from the wavs-wasi repo
-download-wit branch="main":
-    # Create a temporary directory
-    rm -rf temp_clone
-    mkdir temp_clone
+# remove fetched WIT dependency directories
+wit-deps-clean:
+    rm -rf wit-definitions/operator/wit/deps
+    rm -rf wit-definitions/aggregator/wit/deps
+    rm -rf wit-definitions/types/wit/deps
 
-    # Clone the specific branch into the temp directory
-    git -C temp_clone clone --depth=1 --branch {{branch}} --single-branch https://github.com/Lay3rLabs/wavs-wasi.git
-
-    # Clear existing content and create wit directory
-    rm -rf wit-definitions
-    mkdir -p wit-definitions
-
-    # Copy it over
-    cp -r temp_clone/wavs-wasi/wit-definitions/* wit-definitions/
-
-    # Fetch deps
+# fetch WIT dependencies for each wit-definitions subdirectory
+wit-deps-fetch:
+    cd wit-definitions/types && wkg wit fetch
     cd wit-definitions/operator && wkg wit fetch
     cd wit-definitions/aggregator && wkg wit fetch
-    cd wit-definitions/types && wkg wit fetch
 
-    # Clean up
-    rm -rf temp_clone
+# remove built WIT .wasm artifacts
+wit-clean:
+    rm -f wit-definitions/wasi-tls/*.wasm
+    rm -f wit-definitions/types/wavs:types@*.wasm
+    rm -f wit-definitions/operator/wavs:operator@*.wasm
+    rm -f wit-definitions/aggregator/wavs:aggregator@*.wasm
+
+# build WIT packages via wkg wit build
+wit-build config="":
+    just _inner-wit-build "{{ if config != '' { ' --config ' + '../../' + config } else { '' } }}"
+
+# publish WIT packages to registry
+wit-publish config="":
+    just _inner-wit-publish "{{ if config != '' { ' --config ' + '../../' + config } else { '' } }}"
+
+_inner-wit-build config-arg:
+    just wit-clean
+    cd wit-definitions/wasi-tls && wkg wit build{{config-arg}}
+    cd wit-definitions/types && wkg wit build{{config-arg}}
+    cd wit-definitions/operator && wkg wit build{{config-arg}}
+    cd wit-definitions/aggregator && wkg wit build{{config-arg}}
+
+_inner-wit-publish config-arg:
+    cd wit-definitions/types && wkg publish wavs:types@*.wasm{{config-arg}}
+    cd wit-definitions/operator && wkg publish wavs:operator@*.wasm{{config-arg}}
+    cd wit-definitions/aggregator && wkg publish wavs:aggregator@*.wasm{{config-arg}}
+
+# update version in root Cargo.toml and all WIT files (eg. just set-version v2.7.0)
+set-version version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Ensure version doesn't start with 'v' for file updates
+    VERSION="{{version}}"
+    if [[ "$VERSION" == v* ]]; then
+        VERSION="${VERSION#v}"
+    fi
+
+    echo "Setting version to: ${VERSION}"
+
+    if command -v gsed >/dev/null 2>&1; then
+        SED_CMD="gsed -i"
+    else
+        SED_CMD="sed -i"
+    fi
+
+    # root Cargo.toml workspace version
+    $SED_CMD 's/^version = ".*"/version = "'"${VERSION}"'"/' Cargo.toml
+
+    # all WIT packages
+    find wit-definitions -name "*.wit" -type f | while read -r file; do
+        $SED_CMD 's/^package wavs:\([^@]*\)@.*/package wavs:\1@'"${VERSION}"';/' "$file"
+        $SED_CMD 's|use wavs:\([^/]*/[^@]*\)@[^[:space:]]*|use wavs:\1@'"${VERSION}"'|g' "$file"
+    done
+
+    echo "Version updated to ${VERSION} in all files"
+
+# create and push git tags (eg. just push-tag v2.7.0)
+push-tag version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Ensure version starts with 'v'
+    if [[ "{{version}}" != v* ]]; then
+        TAG="v{{version}}"
+    else
+        TAG="{{version}}"
+    fi
+
+    GO_TAG="wasi/go/${TAG}"
+
+    echo "Creating tags: ${TAG} and ${GO_TAG}"
+
+    # check if main tag already exists
+    if git rev-parse "${TAG}" >/dev/null 2>&1; then
+        echo "Error: Tag ${TAG} already exists"
+        exit 1
+    fi
+
+    # check if go tag already exists
+    if git rev-parse "${GO_TAG}" >/dev/null 2>&1; then
+        echo "Error: Tag ${GO_TAG} already exists"
+        exit 1
+    fi
+
+    git tag "${TAG}" -m "Release ${TAG}"
+    git tag "${GO_TAG}" -m "Go module release ${TAG}"
+
+    echo "Pushing tags to origin..."
+    git push origin "${TAG}"
+    git push origin "${GO_TAG}"
+
+    echo "Successfully created and pushed tags: ${TAG} and ${GO_TAG}"
 
 # downloads the latest solidity repo
 download-solidity branch="dev":
@@ -358,6 +432,17 @@ ts-bindings:
     rm -rf packages/types/bindings
     cargo test -p wavs-types --features ts-bindings
     cargo run --bin ts
+
+# Install the WAVS Claude Code skill globally
+install-claude-skill:
+    @mkdir -p ~/.claude/skills
+    @cp -r .claude/skills/wavs ~/.claude/skills/wavs
+    @echo "WAVS skill installed to ~/.claude/skills/wavs"
+    @echo "Restart Claude Code to pick up the skill."
+
+# Register wavs-mcp with Claude Code (interactive wizard)
+setup-claude-mcp:
+    @node packages/wavs-mcp/bin/setup.mjs
 
 debug:
     cargo test --package wavs --features dev --test aggregator_tests send_to_self

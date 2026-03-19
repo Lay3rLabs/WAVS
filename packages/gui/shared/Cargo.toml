@@ -1,0 +1,24 @@
+[package]
+name = "wavs-gui-shared"
+description = "WAVS gui shared"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+backend = ["dep:tauri"]
+
+[dependencies]
+wavs-types = { workspace = true, features = ["full"] }
+serde_json = {workspace = true}
+serde = {workspace = true}
+thiserror = {workspace = true}
+anyhow = {workspace = true}
+tauri = {workspace = true, optional = true}

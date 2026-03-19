@@ -41,10 +41,9 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
     pub fn new(config: BaseEngineConfig, db: WavsDb, storage: Arc<S>) -> Result<Self, EngineError> {
         let mut wt_config = WTConfig::new();
         wt_config.wasm_component_model(true);
-        wt_config.async_support(true);
         wt_config.consume_fuel(true);
         wt_config.epoch_interruption(true);
-        let wasm_engine = WTEngine::new(&wt_config).map_err(EngineError::Compile)?;
+        let wasm_engine = WTEngine::new(&wt_config).map_err(|e| EngineError::Compile(e.into()))?;
 
         let lru_size = NonZeroUsize::new(config.lru_size)
             .unwrap_or(NonZeroUsize::new(DEFAULT_LRU_SIZE).unwrap());
@@ -94,8 +93,8 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
             .get_data(&digest.clone().into())
             .map_err(|e| EngineError::StorageError(format!("Failed to get component: {}", e)))?;
 
-        let component =
-            WasmComponent::new(&self.wasm_engine, &bytes).map_err(EngineError::Compile)?;
+        let component = WasmComponent::new(&self.wasm_engine, &bytes)
+            .map_err(|e| EngineError::Compile(e.into()))?;
 
         self.memory_cache
             .lock()
@@ -142,8 +141,8 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
                     EngineError::StorageError(format!("Failed to store component: {}", e))
                 })?;
 
-                let component =
-                    WasmComponent::new(&self.wasm_engine, &bytes).map_err(EngineError::Compile)?;
+                let component = WasmComponent::new(&self.wasm_engine, &bytes)
+                    .map_err(|e| EngineError::Compile(e.into()))?;
 
                 self.memory_cache
                     .lock()
@@ -157,8 +156,8 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
 
     pub fn store_component_bytes(&self, bytes: &[u8]) -> Result<ComponentDigest, EngineError> {
         // compile component (validate it is proper wasm)
-        let component =
-            WasmComponent::new(&self.wasm_engine, bytes).map_err(EngineError::Compile)?;
+        let component = WasmComponent::new(&self.wasm_engine, bytes)
+            .map_err(|e| EngineError::Compile(e.into()))?;
 
         // store original wasm
         let digest = ComponentDigest::from(

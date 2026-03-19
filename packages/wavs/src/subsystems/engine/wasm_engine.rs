@@ -499,19 +499,19 @@ fn log_operator(
 
     match level {
         wavs_engine::bindings::operator::world::host::LogLevel::Error => {
-            event!(parent: &span, tracing::Level::ERROR, "{}", message)
+            event!(parent: &span, tracing::Level::ERROR, service_id = %service_id, workflow_id = %workflow_id, digest = %digest, "{}", message)
         }
         wavs_engine::bindings::operator::world::host::LogLevel::Warn => {
-            event!(parent: &span, tracing::Level::WARN, "{}", message)
+            event!(parent: &span, tracing::Level::WARN, service_id = %service_id, workflow_id = %workflow_id, digest = %digest, "{}", message)
         }
         wavs_engine::bindings::operator::world::host::LogLevel::Info => {
-            event!(parent: &span, tracing::Level::INFO, "{}", message)
+            event!(parent: &span, tracing::Level::INFO, service_id = %service_id, workflow_id = %workflow_id, digest = %digest, "{}", message)
         }
         wavs_engine::bindings::operator::world::host::LogLevel::Debug => {
-            event!(parent: &span, tracing::Level::DEBUG, "{}", message)
+            event!(parent: &span, tracing::Level::DEBUG, service_id = %service_id, workflow_id = %workflow_id, digest = %digest, "{}", message)
         }
         wavs_engine::bindings::operator::world::host::LogLevel::Trace => {
-            event!(parent: &span, tracing::Level::TRACE, "{}", message)
+            event!(parent: &span, tracing::Level::TRACE, service_id = %service_id, workflow_id = %workflow_id, digest = %digest, "{}", message)
         }
     }
 }
@@ -533,19 +533,19 @@ fn log_aggregator(
 
     match level {
         wavs_engine::bindings::aggregator::world::host::LogLevel::Error => {
-            event!(parent: &span, tracing::Level::ERROR, "{}", message)
+            event!(parent: &span, tracing::Level::ERROR, service_id = %service_id, workflow_id = %workflow_id, digest = %digest, "{}", message)
         }
         wavs_engine::bindings::aggregator::world::host::LogLevel::Warn => {
-            event!(parent: &span, tracing::Level::WARN, "{}", message)
+            event!(parent: &span, tracing::Level::WARN, service_id = %service_id, workflow_id = %workflow_id, digest = %digest, "{}", message)
         }
         wavs_engine::bindings::aggregator::world::host::LogLevel::Info => {
-            event!(parent: &span, tracing::Level::INFO, "{}", message)
+            event!(parent: &span, tracing::Level::INFO, service_id = %service_id, workflow_id = %workflow_id, digest = %digest, "{}", message)
         }
         wavs_engine::bindings::aggregator::world::host::LogLevel::Debug => {
-            event!(parent: &span, tracing::Level::DEBUG, "{}", message)
+            event!(parent: &span, tracing::Level::DEBUG, service_id = %service_id, workflow_id = %workflow_id, digest = %digest, "{}", message)
         }
         wavs_engine::bindings::aggregator::world::host::LogLevel::Trace => {
-            event!(parent: &span, tracing::Level::TRACE, "{}", message)
+            event!(parent: &span, tracing::Level::TRACE, service_id = %service_id, workflow_id = %workflow_id, digest = %digest, "{}", message)
         }
     }
 }
