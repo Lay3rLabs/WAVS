@@ -36,7 +36,12 @@
   3. poa-middleware BLS contract ABIs (POAStakeRegistry BLS variant, BLS12381.sol) are importable from `packages/types` and generate Alloy bindings
   4. Given a signing mnemonic and an HD index, a BLS private key is deterministically derived via `blst` -- same mnemonic + index always produces the same key
   5. A 128-byte G1 public key can be derived from a BLS private key for use in operator registration
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 05-01-PLAN.md -- BLS ABI bindings, SignatureAlgorithm variant, WIT updates
+- [ ] 05-02-PLAN.md -- SignatureData/WavsSignature/WavsCryptoSigner enum migration
+- [ ] 05-03-PLAN.md -- BLS key derivation and G1 pubkey conversion
 
 ### Phase 6: BLS Signing Pipeline
 **Goal**: An operator configured for BLS can sign a submission envelope with its BLS key and propagate the signed submission (BLS signature + G1 pubkey) over P2P, while secp256k1 services continue working unchanged
@@ -79,7 +84,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8
 | 2. Broadcast and Routing | v1.0 | 2/2 | Complete | 2026-03-17 |
 | 3. Config and Observability | v1.0 | 4/4 | Complete | 2026-03-17 |
 | 4. Validation and Cleanup | v1.0 | 2/2 | Complete | 2026-03-17 |
-| 5. BLS Types and Key Derivation | v1.1 | 0/? | Not started | - |
+| 5. BLS Types and Key Derivation | v1.1 | 0/3 | Planned | - |
 | 6. BLS Signing Pipeline | v1.1 | 0/? | Not started | - |
 | 7. BLS Aggregation | v1.1 | 0/? | Not started | - |
 | 8. Integration and Verification | v1.1 | 0/? | Not started | - |
