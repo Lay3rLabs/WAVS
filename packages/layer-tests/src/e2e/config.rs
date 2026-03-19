@@ -290,11 +290,7 @@ impl From<TestConfig> for Configs {
                             .enumerate()
                             .filter(|(i, _)| *i != operator_index)
                             .map(|(i, pk)| {
-                                format!(
-                                    "{}@127.0.0.1:{}",
-                                    pk,
-                                    DEFAULT_P2P_BASE_PORT + i as u16
-                                )
+                                format!("{}@127.0.0.1:{}", pk, DEFAULT_P2P_BASE_PORT + i as u16)
                             })
                             .collect();
                         wavs_config.p2p = P2pConfig::Local {

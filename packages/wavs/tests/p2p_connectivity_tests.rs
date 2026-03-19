@@ -36,9 +36,7 @@ fn test_port(offset: u16) -> u16 {
 /// AppContext::test() does not exist -- use new_with_runtime with the current Tokio handle.
 /// P2pHandle::new takes _ctx as an unused parameter, so any valid AppContext works.
 fn test_app_context() -> AppContext {
-    AppContext::new_with_runtime(AnyRuntime::TokioHandle(
-        tokio::runtime::Handle::current(),
-    ))
+    AppContext::new_with_runtime(AnyRuntime::TokioHandle(tokio::runtime::Handle::current()))
 }
 
 #[tokio::test(flavor = "multi_thread")]

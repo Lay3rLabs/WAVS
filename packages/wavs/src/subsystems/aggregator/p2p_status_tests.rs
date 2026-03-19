@@ -19,8 +19,14 @@ mod tests {
         // Verify key fields exist
         let obj = parsed.as_object().unwrap();
         assert!(obj.contains_key("enabled"), "Missing 'enabled' field");
-        assert!(obj.contains_key("connected_peers"), "Missing 'connected_peers' field");
-        assert!(obj.contains_key("listen_addresses"), "Missing 'listen_addresses' field");
+        assert!(
+            obj.contains_key("connected_peers"),
+            "Missing 'connected_peers' field"
+        );
+        assert!(
+            obj.contains_key("listen_addresses"),
+            "Missing 'listen_addresses' field"
+        );
 
         // After Plan 03-01: verify no external_addresses, no topic_peer_counts,
         // and subscribed_services (not subscribed_topics).

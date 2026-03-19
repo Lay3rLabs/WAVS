@@ -5,15 +5,16 @@
 
 // Use the public API from the wavs crate
 use commonware_cryptography::Signer;
-use wavs::subsystems::aggregator::p2p::{ed25519_signer_from_mnemonic, pubkey_from_mnemonic, P2pConfig};
+use wavs::subsystems::aggregator::p2p::{
+    ed25519_signer_from_mnemonic, pubkey_from_mnemonic, P2pConfig,
+};
 
 /// Standard BIP-39 test mnemonic (12 words)
 const TEST_MNEMONIC_1: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
 /// Different test mnemonic
-const TEST_MNEMONIC_2: &str =
-    "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong";
+const TEST_MNEMONIC_2: &str = "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong";
 
 #[test]
 fn test_deterministic_derivation() {
@@ -34,15 +35,24 @@ fn test_consistent_across_restarts() {
     let hex2 = pubkey_from_mnemonic(TEST_MNEMONIC_1).unwrap();
     assert_eq!(hex1, hex2, "Peer ID must be consistent across invocations");
     // Verify hex format
-    assert!(hex1.chars().all(|c| c.is_ascii_hexdigit()), "Pubkey must be hex-encoded");
-    assert!(hex1.len() > 0 && hex1.len() % 2 == 0, "Hex string must have even length");
+    assert!(
+        hex1.chars().all(|c| c.is_ascii_hexdigit()),
+        "Pubkey must be hex-encoded"
+    );
+    assert!(
+        !hex1.is_empty() && hex1.len().is_multiple_of(2),
+        "Hex string must have even length"
+    );
 }
 
 #[test]
 fn test_different_mnemonics_produce_different_keys() {
     let pubkey1 = pubkey_from_mnemonic(TEST_MNEMONIC_1).unwrap();
     let pubkey2 = pubkey_from_mnemonic(TEST_MNEMONIC_2).unwrap();
-    assert_ne!(pubkey1, pubkey2, "Different mnemonics must produce different keys");
+    assert_ne!(
+        pubkey1, pubkey2,
+        "Different mnemonics must produce different keys"
+    );
 }
 
 #[test]

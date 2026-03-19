@@ -1,8 +1,8 @@
 #![allow(clippy::uninlined_format_args)]
 
 pub mod alloy_helpers;
-pub mod bls_signing;
 pub mod async_transaction;
+pub mod bls_signing;
 pub mod config;
 pub mod context;
 pub mod error;

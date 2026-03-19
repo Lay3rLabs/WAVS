@@ -36,8 +36,8 @@ pub fn bls_private_key_from_mnemonic(
     }
 
     // Parse BIP-39 mnemonic
-    let mnemonic = bip39::Mnemonic::parse(mnemonic)
-        .map_err(|e| anyhow::anyhow!("Invalid mnemonic: {}", e))?;
+    let mnemonic =
+        bip39::Mnemonic::parse(mnemonic).map_err(|e| anyhow::anyhow!("Invalid mnemonic: {}", e))?;
 
     // Derive 64-byte BIP-39 seed (empty passphrase)
     let seed = mnemonic.to_seed("");
@@ -68,17 +68,13 @@ pub fn bls_private_key_from_mnemonic(
 /// 3. Pads each 48-byte coordinate to 64 bytes with leading zeros (EIP-2537 format)
 ///
 /// The output matches `BLS12381.G1_POINT_SIZE = 128` in the poa-middleware contracts.
-pub fn bls_g1_pubkey_bytes(
-    private_key: &bls12381::PrivateKey,
-) -> anyhow::Result<[u8; 128]> {
+pub fn bls_g1_pubkey_bytes(private_key: &bls12381::PrivateKey) -> anyhow::Result<[u8; 128]> {
     let pubkey = private_key.public_key();
     let compressed: &[u8] = &pubkey; // 48-byte ZCash compressed G1
 
     // Decompress to affine point via blst FFI
     let mut affine = blst::blst_p1_affine::default();
-    let result = unsafe {
-        blst::blst_p1_uncompress(&mut affine, compressed.as_ptr())
-    };
+    let result = unsafe { blst::blst_p1_uncompress(&mut affine, compressed.as_ptr()) };
     if result != blst::BLST_ERROR::BLST_SUCCESS {
         anyhow::bail!("Failed to uncompress G1 point: {:?}", result);
     }
@@ -103,8 +99,7 @@ pub fn bls_g1_pubkey_bytes(
 mod tests {
     use super::*;
 
-    const TEST_MNEMONIC: &str =
-        "test test test test test test test test test test test junk";
+    const TEST_MNEMONIC: &str = "test test test test test test test test test test test junk";
 
     /// Helper to extract compressed pubkey bytes (48 bytes) for comparison.
     fn pubkey_bytes(key: &bls12381::PrivateKey) -> Vec<u8> {
@@ -212,6 +207,9 @@ mod tests {
         let key1 = bls_private_key_from_mnemonic(TEST_MNEMONIC, 1).unwrap();
         let pubkey0 = bls_g1_pubkey_bytes(&key0).unwrap();
         let pubkey1 = bls_g1_pubkey_bytes(&key1).unwrap();
-        assert_ne!(pubkey0, pubkey1, "Different keys must produce different pubkeys");
+        assert_ne!(
+            pubkey0, pubkey1,
+            "Different keys must produce different pubkeys"
+        );
     }
 }
