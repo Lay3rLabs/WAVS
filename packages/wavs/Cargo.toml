@@ -69,7 +69,7 @@ rand = { workspace = true }
 bip39 = { workspace = true }
 rand_chacha = "0.3"
 commonware-p2p = "2026.3.0"
-commonware-cryptography = "2026.3.0"
+commonware-cryptography = { workspace = true }
 commonware-math = "2026.3.0"
 commonware-runtime = "2026.3.0"
 commonware-utils = "2026.3.0"
@@ -90,7 +90,7 @@ wavs-benchmark-common = { workspace = true }
 utils = { workspace = true, features = ["test-utils"] }
 example-types = { workspace = true }
 alloy-node-bindings = { workspace = true }
-commonware-cryptography = "2026.3.0"
+commonware-cryptography = { workspace = true }
 
 
 [[bench]]

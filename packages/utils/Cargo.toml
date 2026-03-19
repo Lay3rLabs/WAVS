@@ -60,7 +60,7 @@ bip39 = { workspace = true }
 subtle = { workspace = true }
 
 # BLS key derivation dependencies
-commonware-cryptography = "2026.3.0"
+commonware-cryptography = { workspace = true }
 commonware-math = "2026.3.0"
 rand_chacha = "0.3"
 rand_core = "0.6"

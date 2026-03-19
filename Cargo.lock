@@ -14128,6 +14128,7 @@ dependencies = [
  "bincode",
  "cfg-if 1.0.4",
  "chrono",
+ "commonware-cryptography",
  "const-hex",
  "cosmwasm-schema",
  "cosmwasm-std",

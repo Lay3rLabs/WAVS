@@ -23,5 +23,8 @@ pub use service::*;
 pub use service_builder::*;
 pub use signing::*;
 pub use solidity_types::*;
+// Explicit re-export to disambiguate: signing::SignatureData (enum) wins over solidity_types::SignatureData (raw Alloy struct).
+// The raw Alloy type is still accessible as crate::solidity_types::SignatureData.
+pub use signing::SignatureData;
 pub use submission::*;
 pub use time::*;

@@ -11,7 +11,8 @@ publish = true
 
 [features]
 default = ["cosmwasm"]
-full = ["solidity-rpc", "cosmwasm", "signer", "clock"]
+full = ["solidity-rpc", "cosmwasm", "signer", "clock", "bls"]
+bls = ["dep:commonware-cryptography"]
 clock = ["dep:chrono"]
 signer = ["dep:alloy-signer", "dep:alloy-signer-local"]
 solidity-rpc = ["dep:alloy-contract", "dep:alloy-provider"]
@@ -51,6 +52,7 @@ alloy-contract = { workspace = true, optional = true }
 alloy-provider = { workspace = true, optional = true }
 alloy-signer = { workspace = true, optional = true }
 alloy-signer-local = { workspace = true, optional = true }
+commonware-cryptography = { workspace = true, optional = true }
 cosmwasm-schema = { workspace = true, optional = true }
 ts-rs = { version = "11.1", features = ["serde-compat"], optional = true }
 

@@ -261,6 +261,9 @@ mime_guess = "2.0.5"
 awsm_web = {version = "0.45.0", default-features = false, features = ["dom", "file"]}
 
 
+# P2P / crypto
+commonware-cryptography = "2026.3.0"
+
 # local
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
