@@ -7,7 +7,7 @@ wave_0_complete: false
 created: 2026-03-19
 ---
 
-# Phase 5 — Validation Strategy
+# Phase 5 -- Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.
 
@@ -38,22 +38,24 @@ created: 2026-03-19
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 5-01-01 | 01 | 1 | TYPES-01 | unit | `cargo test -p wavs-types --lib` | ❌ W0 | ⬜ pending |
-| 5-01-02 | 01 | 1 | TYPES-02 | unit | `cargo test -p wavs-types --lib` | ❌ W0 | ⬜ pending |
-| 5-01-03 | 01 | 1 | TYPES-03 | unit | `cargo test -p wavs-types --lib` | ❌ W0 | ⬜ pending |
-| 5-02-01 | 02 | 2 | KEYS-01 | unit | `cargo test -p utils --lib bls_signing` | ❌ W0 | ⬜ pending |
-| 5-02-02 | 02 | 2 | KEYS-02 | unit | `cargo test -p utils --lib bls_signing` | ❌ W0 | ⬜ pending |
+| 5-01-01 | 01 | 1 | TYPES-01, TYPES-03 | unit | `cargo test -p wavs-types --lib -- bls` | N/A (inline) | pending |
+| 5-01-02 | 01 | 1 | TYPES-01 | unit | `cargo test -p wavs-types --lib -- signature_algorithm` | N/A (inline) | pending |
+| 5-02-01 | 02 | 2 | TYPES-02 | unit + build | `cargo build -p wavs-types && cargo test -p wavs-types --lib -- wavs_signature` | N/A (inline) | pending |
+| 5-02-02 | 02 | 2 | TYPES-02 | build + lint | `cargo build && cargo test -p wavs-types -p utils --lib && just lint` | N/A | pending |
+| 5-03-01 | 03 | 1 | KEYS-01, KEYS-02 | build | `cargo check -p utils && cargo tree -p utils -i rand_chacha 2>&1 \| head -5` | N/A | pending |
+| 5-03-02 | 03 | 1 | KEYS-01, KEYS-02 | unit | `cargo test -p utils --lib bls_signing` | N/A (inline) | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `packages/utils/src/bls_signing.rs` — stubs for KEYS-01, KEYS-02 (new file with `#[cfg(test)]` module)
-- [ ] BLS binding compile test in `packages/types` — covers TYPES-03 (inline `#[test]`)
-- [ ] `SignatureData` enum serde test in `packages/types` — covers TYPES-02 (inline `#[test]`)
-- [ ] `SignatureAlgorithm` serde test including `Bls12381` — covers TYPES-01 (inline `#[test]`)
+- [ ] `packages/utils/src/bls_signing.rs` -- stubs for KEYS-01, KEYS-02 (new file with `#[cfg(test)]` module)
+- [ ] BLS binding compile test in `packages/types` -- covers TYPES-03 (inline `#[test]`)
+- [ ] `SignatureData` enum serde test in `packages/types` -- covers TYPES-02 (inline `#[test]`)
+- [ ] `WavsSignature` serde round-trip tests in `packages/types` -- covers TYPES-02 serialization change (inline `#[test]`)
+- [ ] `SignatureAlgorithm` serde test including `Bls12381` -- covers TYPES-01 (inline `#[test]`)
 
 ---
 
