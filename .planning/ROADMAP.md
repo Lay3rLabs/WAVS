@@ -41,7 +41,7 @@
 Plans:
 - [x] 05-01-PLAN.md -- BLS ABI bindings, SignatureAlgorithm variant, WIT updates
 - [ ] 05-02-PLAN.md -- SignatureData/WavsSignature/WavsCryptoSigner enum migration
-- [ ] 05-03-PLAN.md -- BLS key derivation and G1 pubkey conversion
+- [x] 05-03-PLAN.md -- BLS key derivation and G1 pubkey conversion
 
 ### Phase 6: BLS Signing Pipeline
 **Goal**: An operator configured for BLS can sign a submission envelope with its BLS key and propagate the signed submission (BLS signature + G1 pubkey) over P2P, while secp256k1 services continue working unchanged

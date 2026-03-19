@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: BLS Signatures
 status: executing
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-03-19T17:30:10Z"
-last_activity: 2026-03-19 -- Plan 05-01 complete (BLS ABI bindings and SignatureAlgorithm variant)
+stopped_at: Completed 05-03-PLAN.md
+last_updated: "2026-03-19T17:35:06Z"
+last_activity: 2026-03-19 -- Plan 05-03 complete (BLS key derivation and G1 pubkey conversion)
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
-  percent: 54
+  completed_plans: 2
+  percent: 58
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 ## Current Position
 
 Phase: 5 of 8 (BLS Types and Key Derivation)
-Plan: 1 of 3 complete
+Plan: 2 of 3 complete (05-03 done, 05-02 pending)
 Status: Executing phase 5
-Last activity: 2026-03-19 -- Plan 05-01 complete (BLS ABI bindings and SignatureAlgorithm variant)
+Last activity: 2026-03-19 -- Plan 05-03 complete (BLS key derivation and G1 pubkey conversion)
 
-Progress: [###########.........] 54% (4/8 phases, v1.0 complete; plan 1/3 in phase 5)
+Progress: [###########.........] 58% (4/8 phases, v1.0 complete; plan 2/3 in phase 5)
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Progress: [###########.........] 54% (4/8 phases, v1.0 complete; plan 1/3 in pha
 | 3 | 4 | - | - |
 | 4 | 2 | - | - |
 | 5-01 | 1 | 11min | 11min |
+| 5-03 | 1 | 15min | 15min |
 | 5-8 | TBD | - | - |
 
 *Updated after each plan completion*
@@ -68,6 +69,10 @@ Progress: [###########.........] 54% (4/8 phases, v1.0 complete; plan 1/3 in pha
 - BLS types re-exported as BlsServiceHandler/BlsStakeRegistry/BlsServiceManager to avoid collision with secp256k1
 - SignatureKind::bls_default() uses prefix=None -- BLS uses hash-to-curve with its own DST, not EIP-191
 - WavsSigner trait returns error for BLS -- dedicated BLS signer to be implemented in Plan 02
+- HKDF-SHA256 with domain separation (WAVS-BLS-KEY-v1 || hd_index LE) for BLS key derivation from mnemonic
+- rand_chacha pinned to 0.3 in packages/utils to match commonware's rand_core 0.6
+- bip39 made non-optional in packages/utils for BLS key derivation
+- blst FFI used directly for G1 decompression (blst_p1_uncompress + blst_p1_affine_serialize)
 
 ### Pending Todos
 
@@ -79,6 +84,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T17:30:10Z
-Stopped at: Completed 05-01-PLAN.md
-Resume file: .planning/phases/05-bls-types-and-key-derivation/05-01-SUMMARY.md
+Last session: 2026-03-19T17:35:06Z
+Stopped at: Completed 05-03-PLAN.md
+Resume file: .planning/phases/05-bls-types-and-key-derivation/05-03-SUMMARY.md

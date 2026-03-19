@@ -14,8 +14,8 @@
 
 ### Key Management
 
-- [ ] **KEYS-01**: BLS private key derived deterministically from signing mnemonic per service (HD index, using `blst` crate)
-- [ ] **KEYS-02**: BLS public key (G1 point, 128 bytes) derivable from private key for operator registration
+- [x] **KEYS-01**: BLS private key derived deterministically from signing mnemonic per service (HD index, using `blst` crate)
+- [x] **KEYS-02**: BLS public key (G1 point, 128 bytes) derivable from private key for operator registration
 
 ### Signing
 
@@ -64,8 +64,8 @@
 | TYPES-01 | Phase 5 | Complete |
 | TYPES-02 | Phase 5 | Pending |
 | TYPES-03 | Phase 5 | Complete |
-| KEYS-01 | Phase 5 | Pending |
-| KEYS-02 | Phase 5 | Pending |
+| KEYS-01 | Phase 5 | Complete |
+| KEYS-02 | Phase 5 | Complete |
 | SIGN-01 | Phase 6 | Pending |
 | SIGN-02 | Phase 6 | Pending |
 | SIGN-03 | Phase 6 | Pending |
