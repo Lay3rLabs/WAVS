@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: BLS Signatures
 status: completed
-stopped_at: Completed 05-02-PLAN.md (Phase 5 complete)
-last_updated: "2026-03-19T22:44:04.126Z"
+stopped_at: Phase 6 context gathered
+last_updated: "2026-03-19T23:35:52.827Z"
 last_activity: 2026-03-19 -- Plan 05-02 complete (enum-based signing types with full workspace migration)
 progress:
   total_phases: 4
@@ -89,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T22:34:00Z
-Stopped at: Completed 05-02-PLAN.md (Phase 5 complete)
-Resume file: .planning/phases/05-bls-types-and-key-derivation/05-02-SUMMARY.md
+Last session: 2026-03-19T23:35:52.825Z
+Stopped at: Phase 6 context gathered
+Resume file: .planning/phases/06-bls-signing-pipeline/06-CONTEXT.md
