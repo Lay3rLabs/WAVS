@@ -51,7 +51,11 @@ Plans:
   1. When a BLS-configured service produces a submission, the operator signs the envelope digest using hash-to-curve with DST `BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_` and produces a 256-byte G2 signature -- blst signing runs on a blocking thread pool (not Tokio async)
   2. The `Submission` message propagated over P2P includes the operator's G2 signature and G1 public key when the service uses BLS
   3. A service configured with `signature_algorithm: secp256k1` produces identical submissions to before this milestone -- no behavioral change in the secp256k1 path
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 06-01-PLAN.md -- BLS signing utilities (bls_sign_digest, bls_g2_signature_bytes) + WavsSigner::sign() BLS arm
+- [ ] 06-02-PLAN.md -- Pipeline integration (add_service_key dispatch, dispatcher algorithm detection, SignerResponse BLS)
 
 ### Phase 7: BLS Aggregation
 **Goal**: The aggregator collects BLS-signed submissions from multiple operators, aggregates them into a single BLS aggregate (one G2 sig + sorted G1 pubkeys + reference block), and submits the result to the BLS service manager contract on-chain
@@ -85,7 +89,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8
 | 3. Config and Observability | v1.0 | 4/4 | Complete | 2026-03-17 |
 | 4. Validation and Cleanup | v1.0 | 2/2 | Complete | 2026-03-17 |
 | 5. BLS Types and Key Derivation | v1.1 | 1/3 | In Progress | - |
-| 6. BLS Signing Pipeline | v1.1 | 0/? | Not started | - |
+| 6. BLS Signing Pipeline | v1.1 | 0/2 | Not started | - |
 | 7. BLS Aggregation | v1.1 | 0/? | Not started | - |
 | 8. Integration and Verification | v1.1 | 0/? | Not started | - |
 
