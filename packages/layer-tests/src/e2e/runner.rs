@@ -498,123 +498,93 @@ async fn run_test(
 
                 tracing::info!("Hypercore trigger detected with feed_key: {}", feed_key);
 
-                if let Some(hypercore_client) = hypercore_clients.get(&test.name) {
-                    let client_feed_key = hypercore_client.feed_key();
-                    tracing::info!(
+                let hypercore_client = hypercore_clients.get(&test.name).ok_or(anyhow::anyhow!(
+                    "No hypercore client found for test '{}'.",
+                    test.name
+                ))?;
+                let client_feed_key = hypercore_client.feed_key();
+                tracing::info!(
                         "Using real hypercore feed for test '{}', client feed_key: {}, service feed_key: {}",
                         test.name,
                         client_feed_key,
                         feed_key
                     );
 
-                    // Verify feed keys match before waiting for connectivity
-                    if client_feed_key != *feed_key {
-                        tracing::error!(
-                            "FEED KEY MISMATCH! Client has: {}, Service has: {}",
-                            client_feed_key,
-                            feed_key
-                        );
-                        return Err(anyhow::anyhow!(
-                            "Feed key mismatch between client and service"
-                        ));
-                    }
+                // Verify feed keys match before waiting for connectivity
+                if client_feed_key != *feed_key {
+                    tracing::error!(
+                        "FEED KEY MISMATCH! Client has: {}, Service has: {}",
+                        client_feed_key,
+                        feed_key
+                    );
+                    return Err(anyhow::anyhow!(
+                        "Feed key mismatch between client and service"
+                    ));
+                }
 
-                    // Wait for all instances' hypercore streams AND the test client mesh
-                    // to be ready concurrently. Both check the same underlying DHT
-                    // connectivity from different sides, so running them in parallel
-                    // avoids wasting the timeout budget on sequential per-instance waits.
-                    let connectivity_timeout = Duration::from_secs(60);
-                    let min_required_peers = 1;
-                    let total_operators = clients.http_clients.len();
+                // Wait for all instances' hypercore streams AND the test client mesh
+                // to be ready concurrently. Both check the same underlying DHT
+                // connectivity from different sides, so running them in parallel
+                // avoids wasting the timeout budget on sequential per-instance waits.
+                let connectivity_timeout = Duration::from_secs(60);
+                let min_required_peers = 1;
+                let total_operators = clients.http_clients.len();
 
-                    tracing::info!(
+                tracing::info!(
                         "Waiting for hypercore streams and mesh (min {} peer, {} total operators, timeout {}s)",
                         min_required_peers,
                         total_operators,
                         connectivity_timeout.as_secs(),
                     );
 
-                    let stream_futs: Vec<_> = clients
-                        .http_clients
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, http_client)| async move {
-                            tracing::info!(
-                                "Waiting for hypercore stream readiness on instance {} for feed_key {}",
-                                idx,
-                                feed_key
-                            );
-                            wait_for_hypercore_streams_to_finalize(
-                                http_client,
-                                feed_key,
-                                Some(connectivity_timeout),
-                            )
-                            .await
-                            .with_context(|| {
-                                format!(
-                                    "Hypercore stream failed to finalize on instance {idx}"
-                                )
-                            })
+                let stream_futs: Vec<_> = clients
+                    .http_clients
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, http_client)| async move {
+                        tracing::info!(
+                            "Waiting for hypercore stream readiness on instance {} for feed_key {}",
+                            idx,
+                            feed_key
+                        );
+                        wait_for_hypercore_streams_to_finalize(
+                            http_client,
+                            feed_key,
+                            Some(connectivity_timeout),
+                        )
+                        .await
+                        .with_context(|| {
+                            format!("Hypercore stream failed to finalize on instance {idx}")
                         })
-                        .collect();
+                    })
+                    .collect();
 
-                    let mesh_fut = wait_for_hypercore_mesh_ready(
-                        &hypercore_client,
-                        min_required_peers,
-                        connectivity_timeout,
-                    );
+                let mesh_fut = wait_for_hypercore_mesh_ready(
+                    &hypercore_client,
+                    min_required_peers,
+                    connectivity_timeout,
+                );
 
-                    let (streams_result, mesh_result) =
-                        tokio::join!(futures::future::try_join_all(stream_futs), mesh_fut,);
+                let (streams_result, mesh_result) =
+                    tokio::join!(futures::future::try_join_all(stream_futs), mesh_fut,);
 
-                    streams_result.context("Failed to wait for hypercore streams to finalize")?;
-                    let peer_count = mesh_result.context(
-                        "Hypercore mesh not ready: 0 peers connected, append will never replicate",
-                    )?;
+                streams_result.context("Failed to wait for hypercore streams to finalize")?;
+                let peer_count = mesh_result.context(
+                    "Hypercore mesh not ready: 0 peers connected, append will never replicate",
+                )?;
 
-                    tracing::info!(
+                tracing::info!(
                         "Hypercore streams and mesh ready: {} connected peers (min required: {}, total operators: {})",
                         peer_count,
                         min_required_peers,
                         total_operators
                     );
 
-                    // Append data to the hypercore feed
-                    tracing::info!("Appending {} bytes to hypercore feed...", payload.len());
-                    let index = hypercore_client.append(payload).await?;
+                // Append data to the hypercore feed
+                tracing::info!("Appending {} bytes to hypercore feed...", payload.len());
+                let index = hypercore_client.append(payload).await?;
 
-                    vec![TriggerId::new(index)]
-                } else {
-                    // Fallback to simulated trigger for backward compatibility
-                    tracing::warn!(
-                        "No hypercore client found for test '{}', using simulated trigger",
-                        test.name
-                    );
-
-                    let trigger_id = TriggerId::new(0);
-                    let hypercore_data = TriggerData::HypercoreAppend {
-                        feed_key: feed_key.clone(),
-                        index: trigger_id.u64(),
-                        data: payload,
-                    };
-
-                    let req = SimulatedTriggerRequest {
-                        service_id: service_deployment.service.id(),
-                        workflow_id: first_workflow_id.clone(),
-                        trigger: trigger.clone(),
-                        data: hypercore_data,
-                        count: 1,
-                        wait_for_completion: true,
-                    };
-
-                    let http_client = clients
-                        .http_clients
-                        .first()
-                        .ok_or_else(|| anyhow!("No HTTP clients available"))?;
-                    http_client.simulate_trigger(req).await?;
-
-                    vec![trigger_id]
-                }
+                vec![TriggerId::new(index)]
             }
             Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
         };
