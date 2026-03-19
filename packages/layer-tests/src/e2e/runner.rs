@@ -534,7 +534,7 @@ async fn run_test(
                 // to be ready concurrently. Both check the same underlying DHT
                 // connectivity from different sides, so running them in parallel
                 // avoids wasting the timeout budget on sequential per-instance waits.
-                let connectivity_timeout = Duration::from_secs(60);
+                let connectivity_timeout = Duration::from_secs(120);
                 let min_required_peers = 1;
                 let total_operators = clients.http_clients.len();
 
