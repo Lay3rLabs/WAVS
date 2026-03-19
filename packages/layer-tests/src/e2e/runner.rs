@@ -217,6 +217,14 @@ impl Runner {
                 .await
                 .expect("Failed to create hypercore clients");
 
+            // Give the test client's DHT time to fully bootstrap and announce
+            // before WAVS operators look it up. Without this, operators may
+            // issue lookups before the client has announced, leading to empty
+            // results until the next re-lookup cycle.
+            if !self.hypercore_clients.is_empty() {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+
             // All services are now deployed and ready for the tests
             // From here on in we're strictly testing the trigger->execute->aggregate->submit flow
 

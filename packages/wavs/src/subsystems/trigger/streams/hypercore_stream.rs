@@ -199,7 +199,7 @@ async fn start_swarm_replication(
         let peer_count = Arc::clone(&peer_count);
         let mut shutdown = relookup_shutdown;
         async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(5));
+            let mut interval = tokio::time::interval(Duration::from_secs(2));
             interval.tick().await; // skip immediate first tick
             loop {
                 tokio::select! {

@@ -62,6 +62,10 @@ impl HypercoreClients {
         Ok(())
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.clients.is_empty() && self.pending.is_empty()
+    }
+
     /// Get a hypercore test client by test name.
     pub fn get(&self, test_name: &str) -> Option<Arc<HypercoreTestClient>> {
         self.clients.get(test_name).cloned()
@@ -181,7 +185,7 @@ impl HypercoreTestClient {
         let swarm_handle_for_relookup = swarm.handle();
         let connection_count_for_relookup = Arc::clone(&connection_count_for_swarm);
         let relookup_handle = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(5));
+            let mut interval = tokio::time::interval(Duration::from_secs(2));
             interval.tick().await; // skip immediate first tick
             loop {
                 interval.tick().await;
