@@ -20,6 +20,9 @@ pub trait WavsSigner: WavsSignable {
                 Some(SignaturePrefix::Eip191) => self.prefix_eip191_hash()?,
                 None => self.unprefixed_hash()?,
             },
+            SignatureAlgorithm::Bls12381 => {
+                anyhow::bail!("BLS12-381 signing is not supported via WavsSigner trait; use dedicated BLS signer")
+            }
         };
 
         Ok(signer
@@ -87,6 +90,11 @@ impl WavsSignature {
                         )
                         .map_err(SigningError::RecoverSignerAddress),
                 }
+            }
+            SignatureAlgorithm::Bls12381 => {
+                Err(SigningError::DataHash(anyhow::anyhow!(
+                    "BLS12-381 does not use EVM signer addresses; use BLS public keys instead"
+                )))
             }
         }
     }
