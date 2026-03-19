@@ -8,9 +8,9 @@
 
 ### Types
 
-- [ ] **TYPES-01**: `SignatureAlgorithm::Bls12381` variant added to Rust enum and WIT interface
+- [x] **TYPES-01**: `SignatureAlgorithm::Bls12381` variant added to Rust enum and WIT interface
 - [ ] **TYPES-02**: BLS submission carries G2 aggregate signature + sorted G1 signer pubkeys + reference block
-- [ ] **TYPES-03**: poa-middleware BLS contract ABIs imported into `packages/types`
+- [x] **TYPES-03**: poa-middleware BLS contract ABIs imported into `packages/types`
 
 ### Key Management
 
@@ -61,9 +61,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TYPES-01 | Phase 5 | Pending |
+| TYPES-01 | Phase 5 | Complete |
 | TYPES-02 | Phase 5 | Pending |
-| TYPES-03 | Phase 5 | Pending |
+| TYPES-03 | Phase 5 | Complete |
 | KEYS-01 | Phase 5 | Pending |
 | KEYS-02 | Phase 5 | Pending |
 | SIGN-01 | Phase 6 | Pending |

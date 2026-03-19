@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: BLS Signatures
-status: planning
-stopped_at: Phase 5 context gathered
-last_updated: "2026-03-19T16:34:03.545Z"
-last_activity: 2026-03-18 -- Roadmap created for v1.1 BLS Signatures milestone
+status: executing
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-03-19T17:30:10Z"
+last_activity: 2026-03-19 -- Plan 05-01 complete (BLS ABI bindings and SignatureAlgorithm variant)
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 50
+  total_plans: 3
+  completed_plans: 1
+  percent: 54
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 ## Current Position
 
 Phase: 5 of 8 (BLS Types and Key Derivation)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-18 -- Roadmap created for v1.1 BLS Signatures milestone
+Plan: 1 of 3 complete
+Status: Executing phase 5
+Last activity: 2026-03-19 -- Plan 05-01 complete (BLS ABI bindings and SignatureAlgorithm variant)
 
-Progress: [##########..........] 50% (4/8 phases, v1.0 complete)
+Progress: [###########.........] 54% (4/8 phases, v1.0 complete; plan 1/3 in phase 5)
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Progress: [##########..........] 50% (4/8 phases, v1.0 complete)
 | 2 | 2 | - | - |
 | 3 | 4 | - | - |
 | 4 | 2 | - | - |
+| 5-01 | 1 | 11min | 11min |
 | 5-8 | TBD | - | - |
 
 *Updated after each plan completion*
@@ -63,6 +64,10 @@ Progress: [##########..........] 50% (4/8 phases, v1.0 complete)
 - referenceBlock must be < current block at submission time
 - blst signing is CPU-bound -- must use spawn_blocking in async context
 - No MCP tooling for BLS in v1.1 -- defer to v1.2
+- BLS bindings use non-rpc pattern (no #[sol(rpc)]) -- BLS contract interaction handled differently in Phase 7
+- BLS types re-exported as BlsServiceHandler/BlsStakeRegistry/BlsServiceManager to avoid collision with secp256k1
+- SignatureKind::bls_default() uses prefix=None -- BLS uses hash-to-curve with its own DST, not EIP-191
+- WavsSigner trait returns error for BLS -- dedicated BLS signer to be implemented in Plan 02
 
 ### Pending Todos
 
@@ -74,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T16:34:03.541Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-bls-types-and-key-derivation/05-CONTEXT.md
+Last session: 2026-03-19T17:30:10Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: .planning/phases/05-bls-types-and-key-derivation/05-01-SUMMARY.md
