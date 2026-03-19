@@ -26,8 +26,8 @@ use wavs_cli::{
     util::{write_output_file, ComponentInput},
 };
 use wavs_types::SignatureKind;
-use wavs_types::WavsSigner;
 use wavs_types::{ChainKeyId, Envelope, IWavsServiceHandler};
+use wavs_types::{SignatureData, WavsCryptoSigner, WavsSigner};
 
 // Shared function to create EVM client with any credential
 // duplicated here instead of using the one in CliContext so
@@ -307,8 +307,11 @@ async fn main() {
                         };
 
                         // Create signature using the operator EVM client's signer
+                        let crypto_signer = WavsCryptoSigner::Secp256k1(
+                            operator_evm_client.signer.as_ref().clone(),
+                        );
                         let signature = envelope
-                            .sign(&operator_evm_client.signer, SignatureKind::evm_default())
+                            .sign(&crypto_signer, SignatureKind::evm_default())
                             .await
                             .unwrap();
 
@@ -342,9 +345,18 @@ async fn main() {
                             payload: envelope.payload,
                         };
 
+                        // Extract the inner secp256k1 SignatureData for the contract call
+                        let inner_sig_data = match signature_data {
+                            SignatureData::Secp256k1(inner) => inner,
+                            SignatureData::Bls12381(_) => {
+                                eprintln!("BLS signature submission not yet implemented");
+                                std::process::exit(1);
+                            }
+                        };
+
                         // Submit to chain using the original EVM client (as transaction sender)
                         match contract
-                            .handleSignedEnvelope(contract_envelope, signature_data)
+                            .handleSignedEnvelope(contract_envelope, inner_sig_data)
                             .send()
                             .await
                         {

@@ -28,7 +28,10 @@ use std::time::Duration;
 
 use commonware_broadcast::buffered::{Config as BroadcastConfig, Engine};
 use commonware_broadcast::Broadcaster;
-use commonware_codec::{Decode, Encode, EncodeSize, Error as CodecError, RangeCfg, Read as CodecRead, ReadRangeExt, Write as CodecWrite};
+use commonware_codec::{
+    Decode, Encode, EncodeSize, Error as CodecError, RangeCfg, Read as CodecRead, ReadRangeExt,
+    Write as CodecWrite,
+};
 use commonware_cryptography::{ed25519, sha256, Digestible, Hasher, Sha256};
 use commonware_p2p::{Recipients, Sender as P2pSender};
 use commonware_runtime::{Buf, BufMut};
@@ -219,7 +222,7 @@ impl CodecRead for P2pMessage {
         let mut service_id_bytes = [0u8; 32];
         buf.copy_to_slice(&mut service_id_bytes);
         // Read payload as Vec<u8> using range config for length validation
-        let payload = <Vec<u8>>::read_range(buf, range.clone())?;
+        let payload = <Vec<u8>>::read_range(buf, *range)?;
         Ok(Self {
             service_id_bytes,
             payload,
@@ -264,7 +267,7 @@ impl ServiceRouter {
     pub fn subscribed_services(&self) -> Vec<String> {
         self.subscribed_services
             .iter()
-            .map(|s| const_hex::encode(s))
+            .map(const_hex::encode)
             .collect()
     }
 }
@@ -334,24 +337,23 @@ fn parse_peer_address(
     let pubkey = pubkey_from_bytes(&pubkey_bytes).map_err(|e| {
         AggregatorError::P2p(format!("Invalid Ed25519 pubkey in '{}': {}", addr, e))
     })?;
-    let socket_addr: std::net::SocketAddr = parts[1]
-        .parse()
-        .map_err(|e| AggregatorError::P2p(format!("Invalid socket address in '{}': {}", addr, e)))?;
+    let socket_addr: std::net::SocketAddr = parts[1].parse().map_err(|e| {
+        AggregatorError::P2p(format!("Invalid socket address in '{}': {}", addr, e))
+    })?;
     Ok((pubkey, socket_addr))
 }
 
 /// Parse hex-encoded Ed25519 public key strings into PublicKey values.
-fn parse_authorized_peers(
-    hex_keys: &[String],
-) -> Result<Vec<ed25519::PublicKey>, AggregatorError> {
+fn parse_authorized_peers(hex_keys: &[String]) -> Result<Vec<ed25519::PublicKey>, AggregatorError> {
     hex_keys
         .iter()
         .map(|hex| {
             let bytes = const_hex::decode(hex).map_err(|e| {
                 AggregatorError::P2p(format!("Invalid hex pubkey '{}': {}", hex, e))
             })?;
-            pubkey_from_bytes(&bytes)
-                .map_err(|e| AggregatorError::P2p(format!("Invalid Ed25519 pubkey '{}': {}", hex, e)))
+            pubkey_from_bytes(&bytes).map_err(|e| {
+                AggregatorError::P2p(format!("Invalid Ed25519 pubkey '{}': {}", hex, e))
+            })
         })
         .collect()
 }
@@ -360,9 +362,7 @@ fn parse_authorized_peers(
 /// into a Bootstrapper tuple (PublicKey, Ingress).
 ///
 /// Bootstrappers in discovery mode need their public key and a dialable address.
-fn parse_bootstrapper(
-    addr: &str,
-) -> Result<(ed25519::PublicKey, Ingress), AggregatorError> {
+fn parse_bootstrapper(addr: &str) -> Result<(ed25519::PublicKey, Ingress), AggregatorError> {
     let (pubkey, socket_addr) = parse_peer_address(addr)?;
     Ok((pubkey, Ingress::from(socket_addr)))
 }
@@ -370,7 +370,7 @@ fn parse_bootstrapper(
 /// Construct an Ed25519 PublicKey from raw bytes using commonware's codec.
 fn pubkey_from_bytes(bytes: &[u8]) -> Result<ed25519::PublicKey, String> {
     use commonware_codec::ReadExt;
-    let mut buf = &bytes[..];
+    let mut buf = bytes;
     ed25519::PublicKey::read(&mut buf).map_err(|e| format!("{}", e))
 }
 
@@ -506,8 +506,7 @@ async fn run_lookup_network(
         "P2P lookup config: rate limiting active (connection_rate_per_peer=1/s, handshake_rate_per_ip=16/s, handshake_rate_per_subnet=128/s)"
     );
 
-    let (mut network, mut oracle) =
-        lookup::Network::new(context.with_label("p2p_network"), config);
+    let (mut network, mut oracle) = lookup::Network::new(context.with_label("p2p_network"), config);
 
     // Build Oracle peer map: Map<PublicKey, Address>
     // Include own pubkey (implicitly trusted per user decision)
@@ -591,15 +590,13 @@ async fn run_lookup_network(
     let broadcast_config = BroadcastConfig {
         public_key: own_pubkey.clone(),
         mailbox_size: 256,
-        deque_size: deque_size_param,  // CATCH-02: bounded message storage per peer (configurable)
+        deque_size: deque_size_param, // CATCH-02: bounded message storage per peer (configurable)
         priority: false,
         codec_config: (RangeCfg::new(0..=(max_message_size as usize)), ()), // P2pMessage::Cfg = (RangeCfg<usize>, ())
         peer_provider: oracle.clone(),
     };
-    let (engine, mailbox) = Engine::<_, _, P2pMessage, _>::new(
-        context.with_label("p2p_broadcast"),
-        broadcast_config,
-    );
+    let (engine, mailbox) =
+        Engine::<_, _, P2pMessage, _>::new(context.with_label("p2p_broadcast"), broadcast_config);
 
     // Start the network (consumes self, returns a handle)
     let _net_handle = network.start();
@@ -667,7 +664,7 @@ async fn run_lookup_network(
             cmd = command_rx.recv() => {
                 match cmd {
                     Some(P2pCommand::Publish { service_id, submission }) => {
-                        match P2pMessage::from_submission(&service_id, &*submission) {
+                        match P2pMessage::from_submission(&service_id, &submission) {
                             Ok(msg) => {
                                 // Broadcast via Engine channel (for caching + catch-up / CATCH-01)
                                 let ack_rx = mailbox.broadcast(Recipients::All, msg.clone()).await;
@@ -857,7 +854,6 @@ async fn run_lookup_network(
     }
 }
 
-
 /// Run a discovery-mode P2P network inside the commonware runtime.
 ///
 /// This function:
@@ -981,7 +977,7 @@ async fn run_discovery_network(
     let broadcast_config = BroadcastConfig {
         public_key: own_pubkey.clone(),
         mailbox_size: 256,
-        deque_size: deque_size_param,  // CATCH-02: bounded message storage per peer (configurable)
+        deque_size: deque_size_param, // CATCH-02: bounded message storage per peer (configurable)
         priority: false,
         codec_config: (RangeCfg::new(0..=(max_message_size as usize)), ()), // P2pMessage::Cfg = (RangeCfg<usize>, ())
         peer_provider: oracle.clone(),
@@ -1051,7 +1047,7 @@ async fn run_discovery_network(
             cmd = command_rx.recv() => {
                 match cmd {
                     Some(P2pCommand::Publish { service_id, submission }) => {
-                        match P2pMessage::from_submission(&service_id, &*submission) {
+                        match P2pMessage::from_submission(&service_id, &submission) {
                             Ok(msg) => {
                                 let ack_rx = mailbox.broadcast(Recipients::All, msg.clone()).await;
                                 let encoded_bytes = Encode::encode(&msg);
@@ -1321,9 +1317,7 @@ impl P2pHandle {
             .send(P2pCommand::Unsubscribe {
                 service_id: service_id.clone(),
             })
-            .map_err(|e| {
-                AggregatorError::P2p(format!("Failed to send unsubscribe command: {}", e))
-            })
+            .map_err(|e| AggregatorError::P2p(format!("Failed to send unsubscribe command: {}", e)))
     }
 
     /// Block a misbehaving peer by their Ed25519 public key (hex-encoded).
@@ -1365,7 +1359,9 @@ use rand_chacha::ChaCha20Rng;
 ///
 /// Replaces the previous `keypair_from_mnemonic()` which derived a secp256k1
 /// keypair at HD path m/44'/60'/0'/0/0.
-pub fn ed25519_signer_from_mnemonic(mnemonic: &str) -> Result<ed25519::PrivateKey, AggregatorError> {
+pub fn ed25519_signer_from_mnemonic(
+    mnemonic: &str,
+) -> Result<ed25519::PrivateKey, AggregatorError> {
     let mnemonic = bip39::Mnemonic::parse(mnemonic)
         .map_err(|e| AggregatorError::P2p(format!("Invalid mnemonic: {}", e)))?;
 
@@ -1424,7 +1420,7 @@ mod p2p_broadcast_tests {
             eventId: alloy_primitives::FixedBytes([1; 20]),
             ordering: alloy_primitives::FixedBytes([0; 12]),
         };
-        let envelope_signature = WavsSignature {
+        let envelope_signature = WavsSignature::Secp256k1 {
             data: vec![0u8; 65],
             kind: SignatureKind::evm_default(),
         };
@@ -1471,8 +1467,7 @@ mod p2p_broadcast_tests {
         let encoded = msg.encode();
 
         // Decode using Read with a permissive range config
-        let decoded =
-            P2pMessage::read_range(&mut encoded.as_ref(), 0..=65536).unwrap();
+        let decoded = P2pMessage::read_range(&mut encoded.as_ref(), 0..=65536).unwrap();
 
         assert_eq!(msg.service_id_bytes, decoded.service_id_bytes);
         assert_eq!(msg.payload, decoded.payload);
@@ -1500,9 +1495,15 @@ mod p2p_broadcast_tests {
         let digest_c = msg_c.digest();
 
         // Identical messages produce the same digest
-        assert_eq!(digest_a, digest_b, "Identical messages must produce same digest");
+        assert_eq!(
+            digest_a, digest_b,
+            "Identical messages must produce same digest"
+        );
         // Different messages produce different digests
-        assert_ne!(digest_a, digest_c, "Different messages must produce different digests");
+        assert_ne!(
+            digest_a, digest_c,
+            "Different messages must produce different digests"
+        );
     }
 
     #[test]
@@ -1582,7 +1583,10 @@ mod p2p_broadcast_tests {
             payload: vec![],
         };
 
-        assert!(router.should_accept(&msg_a), "Should accept after subscribe");
+        assert!(
+            router.should_accept(&msg_a),
+            "Should accept after subscribe"
+        );
         router.unsubscribe(&service_id_a);
         assert!(
             !router.should_accept(&msg_a),

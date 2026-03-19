@@ -11,12 +11,14 @@ use crate::{
     subsystems::submission::data::SubmissionRequest, tracing_service_info, AppContext,
 };
 use alloy_primitives::FixedBytes;
-use alloy_signer_local::PrivateKeySigner;
 use error::SubmissionError;
 use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::Submission;
-use wavs_types::{Credential, Envelope, EventOrder, ServiceId, SignerResponse, Submit, WavsSigner};
+use wavs_types::{
+    Credential, Envelope, EventOrder, ServiceId, SignerResponse, Submit, WavsCryptoSigner,
+    WavsSigner,
+};
 
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -42,7 +44,7 @@ pub struct SubmissionManager {
 }
 
 struct SignerInfo {
-    signer: PrivateKeySigner,
+    signer: WavsCryptoSigner,
     hd_index: u32,
 }
 
@@ -255,19 +257,22 @@ impl SubmissionManager {
         self.signing_mnemonic_hd_index_count
             .fetch_max(next_index, std::sync::atomic::Ordering::SeqCst);
 
-        let signer = make_signer(&self.signing_mnemonic, Some(hd_index))
+        let pks = make_signer(&self.signing_mnemonic, Some(hd_index))
             .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service_id.clone(), e))?;
 
         tracing::info!(
             "Created new signing client for service {} -> {}",
             service_id,
-            signer.address()
+            pks.address()
         );
 
-        self.signers
-            .write()
-            .unwrap()
-            .insert(service_id, SignerInfo { signer, hd_index });
+        self.signers.write().unwrap().insert(
+            service_id,
+            SignerInfo {
+                signer: WavsCryptoSigner::Secp256k1(pks),
+                hd_index,
+            },
+        );
 
         Ok(())
     }
@@ -290,12 +295,15 @@ impl SubmissionManager {
             .ok_or_else(|| SubmissionError::MissingServiceKey {
                 service_id: service_id.clone(),
             })
-            .map(
-                |SignerInfo { signer, hd_index }| SignerResponse::Secp256k1 {
+            .map(|SignerInfo { signer, hd_index }| match signer {
+                WavsCryptoSigner::Secp256k1(pks) => SignerResponse::Secp256k1 {
                     hd_index: *hd_index,
-                    evm_address: signer.address().to_string(),
+                    evm_address: pks.address().to_string(),
                 },
-            )?;
+                WavsCryptoSigner::Bls12381(_) => {
+                    unimplemented!("BLS signer response not yet implemented")
+                }
+            })?;
 
         if tracing::enabled!(tracing::Level::INFO) {
             let address = match &key {

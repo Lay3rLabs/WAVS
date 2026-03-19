@@ -9,6 +9,7 @@ use async_trait::async_trait;
 
 /// Operator signing key supporting multiple signature algorithms.
 /// BLS arm is defined in Phase 5 but signing logic is implemented in Phase 6.
+#[derive(Clone)]
 pub enum WavsCryptoSigner {
     Secp256k1(PrivateKeySigner),
     #[cfg(feature = "bls")]

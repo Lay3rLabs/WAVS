@@ -5,13 +5,13 @@ cfg_if::cfg_if! {
     }
 }
 
+use crate::solidity_types::BlsServiceHandler;
 pub use crate::solidity_types::Envelope;
 use crate::{
     solidity_types::SignatureData as Secp256k1SignatureData, ServiceId, ServiceManagerEnvelope,
     ServiceManagerSignatureData, SignatureKind, SubmitAction, TriggerAction, TriggerData,
     WasmResponse, WorkflowId,
 };
-use crate::solidity_types::BlsServiceHandler;
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
 use alloy_sol_types::SolValue;
 use async_trait::async_trait;
@@ -389,8 +389,7 @@ mod tests {
     fn wavs_signature_old_format_does_not_deserialize() {
         // Document the breaking change: old struct format without "algorithm" tag
         // will fail to deserialize into the new enum. This is expected.
-        let old_format =
-            r#"{"data":[1,2,3],"kind":{"algorithm":"secp256k1","prefix":"eip191"}}"#;
+        let old_format = r#"{"data":[1,2,3],"kind":{"algorithm":"secp256k1","prefix":"eip191"}}"#;
         let result = serde_json::from_str::<WavsSignature>(old_format);
         assert!(
             result.is_err(),

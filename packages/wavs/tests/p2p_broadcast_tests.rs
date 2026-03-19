@@ -38,9 +38,7 @@ fn test_port(offset: u16) -> u16 {
 
 /// Create an AppContext suitable for tests.
 fn test_app_context() -> AppContext {
-    AppContext::new_with_runtime(AnyRuntime::TokioHandle(
-        tokio::runtime::Handle::current(),
-    ))
+    AppContext::new_with_runtime(AnyRuntime::TokioHandle(tokio::runtime::Handle::current()))
 }
 
 /// Create a minimal mock Submission for testing.
@@ -69,7 +67,7 @@ fn mock_submission_with_payload(service_id: &ServiceId, payload: &[u8]) -> Submi
         eventId: alloy_primitives::FixedBytes([1; 20]),
         ordering: alloy_primitives::FixedBytes([0; 12]),
     };
-    let envelope_signature = WavsSignature {
+    let envelope_signature = WavsSignature::Secp256k1 {
         data: vec![0u8; 65],
         kind: SignatureKind::evm_default(),
     };
@@ -190,12 +188,8 @@ async fn test_broadcast_to_all_peers() {
     let (handle_a, handle_b, _agg_rx_a, agg_rx_b) = setup_two_nodes(0).await;
 
     // Subscribe both nodes to service_id_x
-    handle_a
-        .subscribe(&service_id_x)
-        .expect("Node A subscribe");
-    handle_b
-        .subscribe(&service_id_x)
-        .expect("Node B subscribe");
+    handle_a.subscribe(&service_id_x).expect("Node A subscribe");
+    handle_b.subscribe(&service_id_x).expect("Node B subscribe");
 
     // Wait for connection to establish
     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -249,12 +243,8 @@ async fn test_service_filtering() {
     let submission_x = mock_submission(&service_id_x);
     let submission_y = mock_submission(&service_id_y);
 
-    handle_a
-        .publish(&submission_x)
-        .expect("Publish service_x");
-    handle_a
-        .publish(&submission_y)
-        .expect("Publish service_y");
+    handle_a.publish(&submission_x).expect("Publish service_x");
+    handle_a.publish(&submission_y).expect("Publish service_y");
 
     // Wait for delivery
     tokio::time::sleep(Duration::from_secs(3)).await;
@@ -307,7 +297,9 @@ async fn test_p2p_handle_api_preserved() {
     let service_id = ServiceId::hash(b"api-test-service");
 
     // subscribe() should not error
-    handle.subscribe(&service_id).expect("subscribe should work");
+    handle
+        .subscribe(&service_id)
+        .expect("subscribe should work");
 
     // get_status() should reflect subscription
     let status = handle.get_status().await.expect("get_status should work");
@@ -354,7 +346,10 @@ async fn test_p2p_handle_api_preserved() {
 
     // Final status check -- node is still alive
     let status = handle.get_status().await.expect("final get_status");
-    assert!(status.enabled, "P2P should still be enabled after all API calls");
+    assert!(
+        status.enabled,
+        "P2P should still be enabled after all API calls"
+    );
 }
 
 // ============================================================================
@@ -398,7 +393,10 @@ async fn test_retry_queue_on_no_peers() {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Verify node is still alive and responsive
-    let status = handle.get_status().await.expect("status after publish with no peers");
+    let status = handle
+        .get_status()
+        .await
+        .expect("status after publish with no peers");
     assert!(
         status.enabled,
         "Node should be alive after publishing with no peers"
@@ -417,21 +415,15 @@ async fn test_deduplication_by_digest() {
     let (handle_a, handle_b, _agg_rx_a, agg_rx_b) = setup_two_nodes(6).await;
 
     // Subscribe both nodes
-    handle_a
-        .subscribe(&service_id_x)
-        .expect("Node A subscribe");
-    handle_b
-        .subscribe(&service_id_x)
-        .expect("Node B subscribe");
+    handle_a.subscribe(&service_id_x).expect("Node A subscribe");
+    handle_b.subscribe(&service_id_x).expect("Node B subscribe");
 
     // Wait for connection
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Node A publishes the SAME submission twice (identical payload = same digest)
     let submission = mock_submission(&service_id_x);
-    handle_a
-        .publish(&submission)
-        .expect("First publish");
+    handle_a.publish(&submission).expect("First publish");
     handle_a
         .publish(&submission)
         .expect("Second publish (duplicate)");
@@ -483,9 +475,7 @@ async fn test_catchup_after_reconnect() {
         .expect("Node A should start")
         .expect("Node A should not be None");
 
-    handle_a
-        .subscribe(&service_id_x)
-        .expect("Node A subscribe");
+    handle_a.subscribe(&service_id_x).expect("Node A subscribe");
 
     // Step 1: Start Node B, connect, verify connection
     let config_b1 = P2pConfig::Local {
@@ -608,8 +598,7 @@ async fn test_cache_bounded_deque_size() {
 
     // Publish many messages -- more than deque_size (128) to exercise eviction
     for i in 0u32..200 {
-        let submission =
-            mock_submission_with_payload(&service_id, format!("msg-{}", i).as_bytes());
+        let submission = mock_submission_with_payload(&service_id, format!("msg-{}", i).as_bytes());
         handle.publish(&submission).expect("publish should succeed");
     }
 
@@ -617,7 +606,10 @@ async fn test_cache_bounded_deque_size() {
     tokio::time::sleep(Duration::from_secs(3)).await;
 
     // Verify node is still alive and responsive (Engine didn't crash)
-    let status = handle.get_status().await.expect("status after many publishes");
+    let status = handle
+        .get_status()
+        .await
+        .expect("status after many publishes");
     assert!(
         status.enabled,
         "Node should be alive after publishing 200 messages with bounded deque"
@@ -653,7 +645,10 @@ async fn test_status_connected_peers_after_broadcast() {
 
     // Verify message was delivered to B
     let received = agg_rx_b.try_recv();
-    assert!(received.is_ok(), "Node B should have received the broadcast");
+    assert!(
+        received.is_ok(),
+        "Node B should have received the broadcast"
+    );
 
     // Check status on node A -- should show connected peers from broadcast ack
     let status_a = handle_a.get_status().await.expect("get_status A");

@@ -48,6 +48,17 @@ impl EvmSigningClient {
         max_gas: Option<u64>,
         gas_price: Option<u128>,
     ) -> Result<TransactionReceipt, EvmClientError> {
+        // Extract secp256k1 inner type for the EVM contract call
+        let inner_sig_data = match signature_data {
+            SignatureData::Secp256k1(inner) => inner,
+            SignatureData::Bls12381(_) => {
+                // BLS EVM submission uses a different contract interface (Phase 7)
+                return Err(EvmClientError::SendTransaction(anyhow::anyhow!(
+                    "BLS signature submission not yet implemented"
+                )));
+            }
+        };
+
         if self
             .provider
             .get_code_at(service_handler)
@@ -62,7 +73,7 @@ impl EvmSigningClient {
             None => {
                 let gas_estimate = self
                     .service_handler(service_handler)
-                    .handleSignedEnvelope(envelope.clone(), signature_data.clone())
+                    .handleSignedEnvelope(envelope.clone(), inner_sig_data.clone())
                     .estimate_gas()
                     .await
                     .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
@@ -80,7 +91,7 @@ impl EvmSigningClient {
 
         let service_handler_instance = self.service_handler(service_handler);
         let mut tx_builder = service_handler_instance
-            .handleSignedEnvelope(envelope, signature_data)
+            .handleSignedEnvelope(envelope, inner_sig_data)
             .gas(gas);
 
         // Set gas price if provided
@@ -160,7 +171,7 @@ mod test {
     use alloy_provider::Provider;
     use alloy_rpc_types_eth::TransactionTrait;
     use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
-    use wavs_types::{Credential, Envelope, SignatureKind, WavsSigner};
+    use wavs_types::{Credential, Envelope, SignatureKind, WavsCryptoSigner, WavsSigner};
 
     use crate::{
         evm_client::{AnyNonceManager, EvmSigningClient, EvmSigningClientConfig},
@@ -196,10 +207,11 @@ mod test {
     #[tokio::test]
     async fn signature_validation() {
         let signer = mock_signer();
+        let crypto_signer = WavsCryptoSigner::Secp256k1(signer.clone());
         let envelope = mock_envelope();
 
         let signature = envelope
-            .sign(&signer, SignatureKind::evm_default())
+            .sign(&crypto_signer, SignatureKind::evm_default())
             .await
             .unwrap();
 
@@ -211,7 +223,7 @@ mod test {
         // also see that we can recover with no prefix
         let signature = envelope
             .sign(
-                &signer,
+                &crypto_signer,
                 SignatureKind {
                     algorithm: wavs_types::SignatureAlgorithm::Secp256k1,
                     prefix: None,
@@ -227,11 +239,14 @@ mod test {
 
         // and that it fails if we try the wrong prefix
         let mut signature = envelope
-            .sign(&signer, SignatureKind::evm_default())
+            .sign(&crypto_signer, SignatureKind::evm_default())
             .await
             .unwrap();
 
-        signature.kind.prefix = None;
+        match &mut signature {
+            wavs_types::WavsSignature::Secp256k1 { kind, .. } => kind.prefix = None,
+            _ => unreachable!("expected secp256k1 signature"),
+        }
 
         assert_ne!(
             signature.evm_signer_address(&envelope).unwrap(),
@@ -241,7 +256,7 @@ mod test {
         // in both directions
         let mut signature = envelope
             .sign(
-                &signer,
+                &crypto_signer,
                 SignatureKind {
                     algorithm: wavs_types::SignatureAlgorithm::Secp256k1,
                     prefix: None,
@@ -250,7 +265,12 @@ mod test {
             .await
             .unwrap();
 
-        signature.kind.prefix = Some(wavs_types::SignaturePrefix::Eip191);
+        match &mut signature {
+            wavs_types::WavsSignature::Secp256k1 { kind, .. } => {
+                kind.prefix = Some(wavs_types::SignaturePrefix::Eip191)
+            }
+            _ => unreachable!("expected secp256k1 signature"),
+        }
 
         assert_ne!(
             signature.evm_signer_address(&envelope).unwrap(),
@@ -361,8 +381,9 @@ mod test {
 
         // Build a signed envelope referencing the primary signer.
         let envelope = mock_envelope();
+        let crypto_signer = WavsCryptoSigner::Secp256k1(primary_client.signer.as_ref().clone());
         let signature = envelope
-            .sign(primary_client.signer.as_ref(), SignatureKind::evm_default())
+            .sign(&crypto_signer, SignatureKind::evm_default())
             .await
             .expect("signing envelope should succeed");
         let current_block = primary_client

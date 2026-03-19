@@ -202,17 +202,18 @@ mod tests {
             payload: vec![1, 2, 3].into(),
         };
 
-        let signature_data = crate::solidity_types::SignatureData {
-            signers: vec![
-                alloy_primitives::Address::new([42; 20]),
-                alloy_primitives::Address::new([1; 20]),
-            ],
-            signatures: vec![
-                alloy_primitives::Bytes::from(vec![1, 2, 3]),
-                alloy_primitives::Bytes::from(vec![4, 5, 6]),
-            ],
-            referenceBlock: 12345,
-        };
+        let signature_data =
+            crate::SignatureData::Secp256k1(crate::solidity_types::SignatureData {
+                signers: vec![
+                    alloy_primitives::Address::new([42; 20]),
+                    alloy_primitives::Address::new([1; 20]),
+                ],
+                signatures: vec![
+                    alloy_primitives::Bytes::from(vec![1, 2, 3]),
+                    alloy_primitives::Bytes::from(vec![4, 5, 6]),
+                ],
+                referenceBlock: 12345,
+            });
 
         // Create the messages for the service manger via .into()
         let msg_1 = ExampleServiceManagerQueryMsg::ServiceManager(
