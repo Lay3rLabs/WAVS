@@ -32,7 +32,7 @@
 
 ### Integration & Tests
 
-- [ ] **INT-01**: E2E test: BLS service on local anvil with poa-middleware BLS contracts, multi-operator quorum reached and verified on-chain
+- [x] **INT-01**: E2E test: BLS service on local anvil with poa-middleware BLS contracts, multi-operator quorum reached and verified on-chain
 - [ ] **INT-02**: Existing secp256k1 e2e tests unchanged and still passing
 
 ## v2 Requirements
@@ -73,7 +73,7 @@
 | AGG-02 | Phase 7 | Complete |
 | AGG-03 | Phase 7 | Complete |
 | AGG-04 | Phase 7 | Complete |
-| INT-01 | Phase 8 | Pending |
+| INT-01 | Phase 8 | Complete |
 | INT-02 | Phase 8 | Pending |
 
 **Coverage:**

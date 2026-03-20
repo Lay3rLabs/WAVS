@@ -99,6 +99,6 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8
 | 5. BLS Types and Key Derivation | v1.1 | 1/3 | In Progress | - |
 | 6. BLS Signing Pipeline | v1.1 | 0/2 | Not started | - |
 | 7. BLS Aggregation | v1.1 | 0/2 | Not started | - |
-| 8. Integration and Verification | v1.1 | 0/2 | Not started | - |
+| 8. Integration and Verification | v1.1 | 1/2 | In Progress | - |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.

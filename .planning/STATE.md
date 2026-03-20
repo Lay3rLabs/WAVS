@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: BLS Signatures
-status: completed
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-03-20T02:05:24.333Z"
-last_activity: 2026-03-20 -- Plan 07-02 complete (BLS submission pipeline wiring)
+status: in_progress
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-20T12:52:16Z"
+last_activity: 2026-03-20 -- Plan 08-01 complete (BLS test infrastructure)
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 8
+  completed_plans: 8
   percent: 100
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 7 - BLS Aggregation
+**Current focus:** Phase 8 - Integration and Verification
 
 ## Current Position
 
-Phase: 7 of 8 (BLS Aggregation)
-Plan: 2 of 2 complete
-Status: Phase 7 complete
-Last activity: 2026-03-20 -- Plan 07-02 complete (BLS submission pipeline wiring)
+Phase: 8 of 8 (Integration and Verification)
+Plan: 1 of 2 complete
+Status: Phase 8 in progress
+Last activity: 2026-03-20 -- Plan 08-01 complete (BLS test infrastructure)
 
-Progress: [####################] 100% (phase 7 complete)
+Progress: [##################..] 88% (plan 08-01 complete)
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [####################] 100% (phase 7 complete)
 | 6-02 | 1 | 12min | 12min |
 | 7-01 | 1 | 12min | 12min |
 | 7-02 | 1 | 21min | 21min |
+| 8-01 | 1 | 6min | 6min |
 | 5-8 | TBD | - | - |
 
 *Updated after each plan completion*
@@ -99,6 +100,10 @@ Progress: [####################] 100% (phase 7 complete)
 - BLS service manager validate() needs its own re-exported Envelope/SignatureData types (BlsServiceManagerEnvelope/BlsServiceManagerSignatureData)
 - send_bls_envelope_signatures accepts non-rpc BlsServiceHandler::SignatureData, converts to rpc types internally
 - BLS dispatch bypasses From<SignatureData> for ServiceManagerSignatureData -- constructs types directly
+- PoaBlsMiddleware uses local forge/cast instead of Docker image -- avoids uncertainty about BLS artifact inclusion
+- FOUNDRY_PROFILE=bls env var (not --profile flag) for forge commands matching poa-middleware shell scripts
+- SimpleBlsSubmit does not implement ISimpleSubmit -- BLS and ECDSA SignatureData are incompatible types
+- hardfork_prague parameter on EvmInstance::spawn with false default for backward compatibility
 
 ### Pending Todos
 
@@ -110,6 +115,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T01:58:48Z
-Stopped at: Completed 07-02-PLAN.md
-Resume file: .planning/phases/07-bls-aggregation/07-02-SUMMARY.md
+Last session: 2026-03-20T12:45:31Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: .planning/phases/08-integration-and-verification/08-01-SUMMARY.md
