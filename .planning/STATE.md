@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: BLS Signatures
 status: in-progress
-stopped_at: Plan 06-01 complete
-last_updated: "2026-03-20T00:21:00Z"
-last_activity: 2026-03-20 -- Plan 06-01 complete (BLS signing core with contract-matching DST)
+stopped_at: Plan 06-02 complete (Phase 6 complete)
+last_updated: "2026-03-20T00:37:31Z"
+last_activity: 2026-03-20 -- Plan 06-02 complete (BLS submission pipeline wiring)
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 3
-  completed_plans: 4
-  percent: 72
+  completed_plans: 5
+  percent: 85
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 
 ## Current Position
 
-Phase: 6 of 8 (BLS Signing Pipeline)
-Plan: 1 of 2 complete
-Status: Phase 6 in progress
-Last activity: 2026-03-20 -- Plan 06-01 complete (BLS signing core with contract-matching DST)
+Phase: 6 of 8 (BLS Signing Pipeline) -- COMPLETE
+Plan: 2 of 2 complete
+Status: Phase 6 complete
+Last activity: 2026-03-20 -- Plan 06-02 complete (BLS submission pipeline wiring)
 
-Progress: [##############......] 72% (plan 06-01 done, 06-02 next)
+Progress: [#################...] 85% (phase 6 complete, phase 7 next)
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Progress: [##############......] 72% (plan 06-01 done, 06-02 next)
 | 5-02 | 1 | 18min | 18min |
 | 5-03 | 1 | 15min | 15min |
 | 6-01 | 1 | 7min | 7min |
+| 6-02 | 1 | 12min | 12min |
 | 5-8 | TBD | - | - |
 
 *Updated after each plan completion*
@@ -84,6 +85,11 @@ Progress: [##############......] 72% (plan 06-01 done, 06-02 next)
 - commonware_codec::Encode for PrivateKey byte extraction (Bytes deref to &[u8])
 - tokio optional dep in wavs-types behind bls feature for spawn_blocking
 - bls feature made default-on in wavs-types
+- bls feature added and default-on in packages/wavs/Cargo.toml
+- add_service_key dispatches on SignatureAlgorithm to create correct signer type
+- Dispatcher auto-detects algorithm from Submit::Aggregator { signature_kind } with secp256k1 default
+- SignerResponse::Bls12381 variant with hd_index and g1_pubkey_hex for graceful HTTP API
+- get_service_signer uses and_then (not map) for fallible BLS G1 pubkey extraction
 
 ### Pending Todos
 
@@ -95,6 +101,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T00:21:00Z
-Stopped at: Completed 06-01-PLAN.md
-Resume file: .planning/phases/06-bls-signing-pipeline/06-01-SUMMARY.md
+Last session: 2026-03-20T00:37:31Z
+Stopped at: Completed 06-02-PLAN.md (Phase 6 complete)
+Resume file: .planning/phases/06-bls-signing-pipeline/06-02-SUMMARY.md
