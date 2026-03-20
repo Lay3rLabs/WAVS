@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: BLS Signatures
 status: in-progress
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-03-20T01:33:26Z"
-last_activity: 2026-03-20 -- Plan 07-01 complete (BLS aggregation and queue dedup)
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-03-20T01:58:48Z"
+last_activity: 2026-03-20 -- Plan 07-02 complete (BLS submission pipeline wiring)
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 7
-  completed_plans: 6
-  percent: 90
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 ## Current Position
 
 Phase: 7 of 8 (BLS Aggregation)
-Plan: 1 of 2 complete
-Status: Plan 07-01 complete, plan 07-02 next
-Last activity: 2026-03-20 -- Plan 07-01 complete (BLS aggregation and queue dedup)
+Plan: 2 of 2 complete
+Status: Phase 7 complete
+Last activity: 2026-03-20 -- Plan 07-02 complete (BLS submission pipeline wiring)
 
-Progress: [##################..] 90% (phase 7 in progress)
+Progress: [####################] 100% (phase 7 complete)
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [##################..] 90% (phase 7 in progress)
 | 6-01 | 1 | 7min | 7min |
 | 6-02 | 1 | 12min | 12min |
 | 7-01 | 1 | 12min | 12min |
+| 7-02 | 1 | 21min | 21min |
 | 5-8 | TBD | - | - |
 
 *Updated after each plan completion*
@@ -95,6 +96,9 @@ Progress: [##################..] 90% (phase 7 in progress)
 - Queue dedup uses signer_identity() abstraction (EVM addr for secp256k1, keccak256(g1_pubkey) for BLS)
 - BLS RPC bindings (#[sol(rpc)]) use cfg_if! inline in bls.rs
 - cfg(not(feature = bls)) fallback returns error instead of unimplemented!() panic
+- BLS service manager validate() needs its own re-exported Envelope/SignatureData types (BlsServiceManagerEnvelope/BlsServiceManagerSignatureData)
+- send_bls_envelope_signatures accepts non-rpc BlsServiceHandler::SignatureData, converts to rpc types internally
+- BLS dispatch bypasses From<SignatureData> for ServiceManagerSignatureData -- constructs types directly
 
 ### Pending Todos
 
@@ -106,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T01:33:26Z
-Stopped at: Completed 07-01-PLAN.md
-Resume file: .planning/phases/07-bls-aggregation/07-01-SUMMARY.md
+Last session: 2026-03-20T01:58:48Z
+Stopped at: Completed 07-02-PLAN.md
+Resume file: .planning/phases/07-bls-aggregation/07-02-SUMMARY.md

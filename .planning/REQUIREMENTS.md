@@ -27,8 +27,8 @@
 
 - [x] **AGG-01**: Aggregator collects BLS submissions from peers, accumulates G2 sigs and G1 pubkeys until quorum
 - [x] **AGG-02**: Aggregator aggregates G2 signatures into single aggregate sig via point addition; pubkeys sorted by keccak256 ascending (contract requirement)
-- [ ] **AGG-03**: Aggregator captures `referenceBlock` at quorum time (must be < submission block)
-- [ ] **AGG-04**: Aggregated `SignatureData { signerPubkeys[], aggregateSignature, referenceBlock }` submitted to BLS service manager contract
+- [x] **AGG-03**: Aggregator captures `referenceBlock` at quorum time (must be < submission block)
+- [x] **AGG-04**: Aggregated `SignatureData { signerPubkeys[], aggregateSignature, referenceBlock }` submitted to BLS service manager contract
 
 ### Integration & Tests
 
@@ -71,8 +71,8 @@
 | SIGN-03 | Phase 6 | Complete |
 | AGG-01 | Phase 7 | Complete |
 | AGG-02 | Phase 7 | Complete |
-| AGG-03 | Phase 7 | Pending |
-| AGG-04 | Phase 7 | Pending |
+| AGG-03 | Phase 7 | Complete |
+| AGG-04 | Phase 7 | Complete |
 | INT-01 | Phase 8 | Pending |
 | INT-02 | Phase 8 | Pending |
 
