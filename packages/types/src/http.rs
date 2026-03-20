@@ -17,6 +17,12 @@ pub enum SignerResponse {
         /// The evm-style address ("0x" prefixed hex string) derived from the key
         evm_address: String,
     },
+    Bls12381 {
+        /// The derivation index used to create this key from the mnemonic
+        hd_index: u32,
+        /// The 128-byte G1 public key in hex (EIP-2537 uncompressed format)
+        g1_pubkey_hex: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]

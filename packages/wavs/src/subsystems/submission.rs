@@ -322,19 +322,28 @@ impl SubmissionManager {
             .ok_or_else(|| SubmissionError::MissingServiceKey {
                 service_id: service_id.clone(),
             })
-            .map(|SignerInfo { signer, hd_index }| match signer {
-                WavsCryptoSigner::Secp256k1(pks) => SignerResponse::Secp256k1 {
+            .and_then(|SignerInfo { signer, hd_index }| match signer {
+                WavsCryptoSigner::Secp256k1(pks) => Ok(SignerResponse::Secp256k1 {
                     hd_index: *hd_index,
                     evm_address: pks.address().to_string(),
-                },
-                WavsCryptoSigner::Bls12381(_) => {
-                    unimplemented!("BLS signer response not yet implemented")
+                }),
+                #[cfg(feature = "bls")]
+                WavsCryptoSigner::Bls12381(ref bls_key) => {
+                    let g1_bytes = utils::bls_signing::bls_g1_pubkey_bytes(bls_key)
+                        .map_err(SubmissionError::FailedToSignEnvelope)?;
+                    Ok(SignerResponse::Bls12381 {
+                        hd_index: *hd_index,
+                        g1_pubkey_hex: const_hex::encode(g1_bytes),
+                    })
                 }
             })?;
 
         if tracing::enabled!(tracing::Level::INFO) {
             let address = match &key {
-                SignerResponse::Secp256k1 { evm_address, .. } => evm_address,
+                SignerResponse::Secp256k1 { evm_address, .. } => evm_address.clone(),
+                SignerResponse::Bls12381 { g1_pubkey_hex, .. } => {
+                    format!("BLS:{}", &g1_pubkey_hex[..16])
+                }
             };
 
             tracing_service_info!(

@@ -876,9 +876,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             });
         }
 
-        let SignerResponse::Secp256k1 { hd_index, .. } = self
+        let hd_index = match self
             .submission_manager
-            .get_service_signer(service_id.clone())?;
+            .get_service_signer(service_id.clone())?
+        {
+            SignerResponse::Secp256k1 { hd_index, .. } => hd_index,
+            SignerResponse::Bls12381 { hd_index, .. } => hd_index,
+        };
 
         if tracing::enabled!(tracing::Level::INFO) {
             let old_service = self.services.get(&service_id)?;

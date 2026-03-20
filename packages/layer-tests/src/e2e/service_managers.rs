@@ -262,13 +262,19 @@ impl ServiceManagers {
                 // Reuse existing HTTP client for this WAVS instance
                 let http_client = &clients.http_clients[operator_offset];
 
-                let SignerResponse::Secp256k1 {
-                    evm_address: avs_signer_address,
-                    hd_index: wavs_signer_hd_index,
-                } = http_client
+                let signer_resp = http_client
                     .get_service_signer(service_manager.clone())
                     .await
                     .unwrap();
+                let (avs_signer_address, wavs_signer_hd_index) = match signer_resp {
+                    SignerResponse::Secp256k1 {
+                        evm_address,
+                        hd_index,
+                    } => (evm_address, hd_index),
+                    SignerResponse::Bls12381 { hd_index, g1_pubkey_hex } => {
+                        (format!("BLS:{}", &g1_pubkey_hex[..16]), hd_index)
+                    }
+                };
 
                 // unique HD index per test and operator to avoid nonce collisions
                 let operator_hd_index =
