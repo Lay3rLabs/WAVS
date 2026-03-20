@@ -7,8 +7,81 @@ use alloy_signer::Signer;
 use alloy_signer_local::PrivateKeySigner;
 use async_trait::async_trait;
 
+#[cfg(feature = "bls")]
+mod bls_helpers {
+    //! BLS signing helpers for the WavsSigner::sign() BLS arm.
+    //!
+    //! These mirror `packages/utils/src/bls_signing.rs` (bls_sign_digest, bls_g1_pubkey_bytes).
+    //! Duplication exists because wavs-types cannot depend on layer-utils (circular dep:
+    //! layer-utils -> wavs-types). If refactoring the dep graph, consolidate these into a
+    //! shared crate and remove this module.
+
+    /// DST matching HashToCurve.sol line 20.
+    /// MUST match packages/utils/src/bls_signing.rs::BLS_SIGNING_DST exactly.
+    const BLS_SIGNING_DST: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_";
+
+    /// Sign a 32-byte digest, returning 256-byte EIP-2537 G2 signature.
+    /// Mirrors utils::bls_signing::bls_sign_digest().
+    pub(crate) fn bls_sign_digest_inner(
+        private_key: &commonware_cryptography::bls12381::PrivateKey,
+        digest: &[u8; 32],
+    ) -> anyhow::Result<[u8; 256]> {
+        use commonware_codec::Encode;
+        let raw_bytes = private_key.encode();
+        let sk = blst::min_pk::SecretKey::from_bytes(&raw_bytes)
+            .map_err(|e| anyhow::anyhow!("Failed to create blst SecretKey: {:?}", e))?;
+
+        let signature = sk.sign(digest, BLS_SIGNING_DST, &[]);
+
+        bls_g2_signature_bytes_inner(&signature)
+    }
+
+    /// Convert blst G2 signature to 256-byte EIP-2537 format.
+    /// Mirrors utils::bls_signing::bls_g2_signature_bytes().
+    fn bls_g2_signature_bytes_inner(
+        signature: &blst::min_pk::Signature,
+    ) -> anyhow::Result<[u8; 256]> {
+        let uncompressed = signature.serialize(); // 192 bytes
+        let mut eip2537 = [0u8; 256];
+        for i in 0..4 {
+            let src_offset = i * 48;
+            let dst_offset = i * 64 + 16;
+            eip2537[dst_offset..dst_offset + 48]
+                .copy_from_slice(&uncompressed[src_offset..src_offset + 48]);
+        }
+        Ok(eip2537)
+    }
+
+    /// Get 128-byte EIP-2537 G1 public key from BLS private key.
+    /// Mirrors utils::bls_signing::bls_g1_pubkey_bytes().
+    pub(crate) fn bls_g1_pubkey_bytes_inner(
+        private_key: &commonware_cryptography::bls12381::PrivateKey,
+    ) -> anyhow::Result<[u8; 128]> {
+        use commonware_cryptography::Signer as _;
+        let pubkey = private_key.public_key();
+        let compressed: &[u8] = &pubkey;
+
+        let mut affine = blst::blst_p1_affine::default();
+        // SAFETY: compressed is a valid 48-byte BLS public key from commonware
+        let result = unsafe { blst::blst_p1_uncompress(&mut affine, compressed.as_ptr()) };
+        if result != blst::BLST_ERROR::BLST_SUCCESS {
+            anyhow::bail!("Failed to uncompress G1 point: {:?}", result);
+        }
+        let mut uncompressed_g1 = [0u8; 96];
+        // SAFETY: affine is a valid P1 affine point, buffer is 96 bytes
+        unsafe {
+            blst::blst_p1_affine_serialize(uncompressed_g1.as_mut_ptr(), &affine);
+        }
+
+        let mut g1_eip2537 = [0u8; 128];
+        g1_eip2537[16..64].copy_from_slice(&uncompressed_g1[0..48]);
+        g1_eip2537[80..128].copy_from_slice(&uncompressed_g1[48..96]);
+
+        Ok(g1_eip2537)
+    }
+}
+
 /// Operator signing key supporting multiple signature algorithms.
-/// BLS arm is defined in Phase 5 but signing logic is implemented in Phase 6.
 #[derive(Clone)]
 pub enum WavsCryptoSigner {
     Secp256k1(PrivateKeySigner),
@@ -46,8 +119,31 @@ pub trait WavsSigner: WavsSignable {
                     .map_err(|e| anyhow::anyhow!("Failed to sign data: {e:?}"))?)
             }
             #[cfg(feature = "bls")]
-            WavsCryptoSigner::Bls12381(_) => {
-                unimplemented!("BLS signing implemented in Phase 6")
+            WavsCryptoSigner::Bls12381(ref bls_key) => {
+                let hash = match kind.algorithm {
+                    SignatureAlgorithm::Bls12381 => self.unprefixed_hash()?,
+                    SignatureAlgorithm::Secp256k1 => {
+                        anyhow::bail!("Cannot sign secp256k1 with a BLS key")
+                    }
+                };
+
+                let digest: [u8; 32] = hash.into();
+                let key = bls_key.clone();
+                let kind = kind.clone();
+
+                let (g2_sig, g1_pub) = tokio::task::spawn_blocking(move || {
+                    let g2 = bls_helpers::bls_sign_digest_inner(&key, &digest)?;
+                    let g1 = bls_helpers::bls_g1_pubkey_bytes_inner(&key)?;
+                    Ok::<_, anyhow::Error>((g2, g1))
+                })
+                .await
+                .map_err(|e| anyhow::anyhow!("BLS signing task failed: {e}"))??;
+
+                Ok(WavsSignature::Bls12381 {
+                    g2_signature: g2_sig.to_vec(),
+                    g1_pubkey: g1_pub.to_vec(),
+                    kind,
+                })
             }
         }
     }
