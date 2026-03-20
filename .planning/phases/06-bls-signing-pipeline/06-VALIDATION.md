@@ -2,8 +2,8 @@
 phase: 6
 slug: bls-signing-pipeline
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-03-20
 ---
 
@@ -19,7 +19,7 @@ created: 2026-03-20
 |----------|-------|
 | **Framework** | cargo test (Rust unit tests) |
 | **Config file** | Cargo.toml (workspace) |
-| **Quick run command** | `cargo test -p layer-utils bls` |
+| **Quick run command** | `cargo test -p layer-utils -- bls_signing` |
 | **Full suite command** | `cargo test -p layer-utils && cargo test -p wavs` |
 | **Estimated runtime** | ~30 seconds |
 
@@ -27,7 +27,7 @@ created: 2026-03-20
 
 ## Sampling Rate
 
-- **After every task commit:** Run `cargo test -p layer-utils bls`
+- **After every task commit:** Run `cargo test -p layer-utils -- bls_signing`
 - **After every plan wave:** Run `cargo test -p layer-utils && cargo test -p wavs`
 - **Before `/gsd:verify-work`:** Full suite must be green
 - **Max feedback latency:** 30 seconds
@@ -38,12 +38,12 @@ created: 2026-03-20
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 6-01-01 | 01 | 1 | SIGN-01 | unit | `cargo test -p layer-utils bls_sign_envelope` | ❌ W0 | ⬜ pending |
-| 6-01-02 | 01 | 1 | SIGN-01 | unit | `cargo test -p layer-utils bls_private_key_roundtrip` | ❌ W0 | ⬜ pending |
-| 6-01-03 | 01 | 1 | SIGN-01 | unit | `cargo test -p layer-utils bls_g2_signature_bytes` | ❌ W0 | ⬜ pending |
-| 6-02-01 | 02 | 2 | SIGN-02 | unit | `cargo test -p wavs submission_bls` | ❌ W0 | ⬜ pending |
-| 6-02-02 | 02 | 2 | SIGN-02 | unit | `cargo test -p wavs submission_secp256k1_unchanged` | ❌ W0 | ⬜ pending |
-| 6-03-01 | 03 | 2 | SIGN-03 | unit | `cargo test -p wavs secp256k1_path_no_regression` | ❌ W0 | ⬜ pending |
+| 6-01-01 | 01 | 1 | SIGN-01 | unit | `cargo test -p layer-utils -- bls_sign_digest_produces_256_bytes` | ✅ created in plan | ⬜ pending |
+| 6-01-02 | 01 | 1 | SIGN-01 | unit | `cargo test -p layer-utils -- private_key_roundtrip_through_blst` | ✅ created in plan | ⬜ pending |
+| 6-01-03 | 01 | 1 | SIGN-01 | unit | `cargo test -p layer-utils -- bls_g2_signature_eip2537_padding` | ✅ created in plan | ⬜ pending |
+| 6-02-01 | 02 | 2 | SIGN-02 | unit | `cargo test -p wavs -- submission_bls_signer_produces_correct_signature` | ✅ created in plan | ⬜ pending |
+| 6-02-02 | 02 | 2 | SIGN-02 | unit | `cargo test -p wavs -- submission_secp256k1_signer_unchanged` | ✅ created in plan | ⬜ pending |
+| 6-03-01 | 02 | 2 | SIGN-03 | unit | `cargo test -p wavs -- submission_secp256k1_signer_unchanged` | ✅ created in plan | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -51,11 +51,12 @@ created: 2026-03-20
 
 ## Wave 0 Requirements
 
-- [ ] `packages/utils/src/bls.rs` — test stubs for `bls_sign_envelope`, `bls_private_key_roundtrip`, `bls_g2_signature_bytes` (SIGN-01)
-- [ ] `packages/wavs/src/subsystems/submission/` — test stubs for `submission_bls`, `submission_secp256k1_unchanged` (SIGN-02)
-- [ ] `packages/wavs/src/subsystems/submission/` — test stub for `secp256k1_path_no_regression` (SIGN-03)
+Tests are created inline by the TDD tasks in the plans (not as separate Wave 0 stubs):
 
-*All Wave 0 items are test stubs — no framework install needed (cargo test already present).*
+- `packages/utils/src/bls_signing.rs` — tests `bls_sign_digest_produces_256_bytes`, `private_key_roundtrip_through_blst`, `bls_g2_signature_eip2537_padding` created by Plan 06-01 Task 1 (RED phase) before implementation (SIGN-01)
+- `packages/wavs/src/subsystems/submission.rs` — tests `submission_bls_signer_produces_correct_signature`, `submission_secp256k1_signer_unchanged` created by Plan 06-02 Task 1 (SIGN-02, SIGN-03)
+
+*Wave 0 pattern: TDD red-phase creates tests inline before GREEN phase implements the code.*
 
 ---
 
@@ -69,11 +70,11 @@ created: 2026-03-20
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (TDD inline creation pattern)
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** 2026-03-20
