@@ -95,6 +95,57 @@ pub fn bls_g1_pubkey_bytes(private_key: &bls12381::PrivateKey) -> anyhow::Result
     Ok(eip2537)
 }
 
+/// DST for BLS signing, matching HashToCurve.sol line 20.
+/// NOTE: This is NOT the same as commonware's G2_MESSAGE DST which has _POP_ suffix.
+pub const BLS_SIGNING_DST: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_";
+
+/// Sign a 32-byte digest with a BLS private key using hash-to-curve.
+/// Returns 256-byte EIP-2537 G2 signature.
+///
+/// The digest is typically `keccak256(abi_encode(envelope))` matching the contract's
+/// `digest = keccak256(abi.encode(envelope))` then `hashToCurveG2(abi.encodePacked(digest))`.
+///
+/// Uses blst directly (not commonware Signer::sign) because:
+/// - commonware uses DST `..._POP_` suffix, contract uses `..._RO_` suffix
+/// - commonware wraps message with union_unique(namespace, message), contract uses raw bytes
+pub fn bls_sign_digest(
+    private_key: &bls12381::PrivateKey,
+    digest: &[u8; 32],
+) -> anyhow::Result<[u8; 256]> {
+    use commonware_codec::Encode;
+    let raw_bytes = private_key.encode();
+    let sk = blst::min_pk::SecretKey::from_bytes(&raw_bytes)
+        .map_err(|e| anyhow::anyhow!("Failed to create blst SecretKey: {:?}", e))?;
+
+    // Sign with contract-matching DST. The message is the raw 32-byte digest.
+    let signature = sk.sign(digest, BLS_SIGNING_DST, &[]);
+
+    bls_g2_signature_bytes(&signature)
+}
+
+/// Convert a blst G2 signature to 256-byte EIP-2537 uncompressed format.
+///
+/// blst serializes G2 as 192 bytes: 4 x 48-byte Fp elements (x.c0, x.c1, y.c0, y.c1)
+/// EIP-2537 format: each Fp is 64 bytes (16 zero padding + 48 data) = 4 x 64 = 256 bytes
+///
+/// Matches `BLS12381.G2_POINT_SIZE = 256` in poa-middleware contracts.
+pub fn bls_g2_signature_bytes(
+    signature: &blst::min_pk::Signature,
+) -> anyhow::Result<[u8; 256]> {
+    let uncompressed = signature.serialize(); // 192 bytes
+    let mut eip2537 = [0u8; 256];
+
+    // Pad each 48-byte Fp to 64 bytes (16 zero prefix + 48 data)
+    for i in 0..4 {
+        let src_offset = i * 48;
+        let dst_offset = i * 64 + 16;
+        eip2537[dst_offset..dst_offset + 48]
+            .copy_from_slice(&uncompressed[src_offset..src_offset + 48]);
+    }
+
+    Ok(eip2537)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

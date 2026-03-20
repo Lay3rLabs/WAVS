@@ -66,6 +66,7 @@ rand_chacha = "0.3"
 rand_core = "0.6"
 hkdf = "0.12"
 blst = "0.3.16"
+commonware-codec = "2026.3.0"
 sha2 = { workspace = true }
 toml = { workspace = true, optional = true }
 cw-wavs-mock-api = { workspace = true, optional = true }
