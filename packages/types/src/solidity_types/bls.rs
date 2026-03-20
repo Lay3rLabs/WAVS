@@ -62,6 +62,10 @@ cfg_if::cfg_if! {
 
         pub use bls_service_handler_rpc::IWavsServiceHandler as BlsServiceHandlerRpc;
         pub use bls_service_manager_rpc::IWavsServiceManager as BlsServiceManagerRpc;
+        // Re-export BLS service manager's view of handler types (for validate() calls)
+        // Same pattern as rpc.rs ServiceManagerEnvelope/ServiceManagerSignatureData
+        pub use bls_service_manager_rpc::IWavsServiceHandler::Envelope as BlsServiceManagerEnvelope;
+        pub use bls_service_manager_rpc::IWavsServiceHandler::SignatureData as BlsServiceManagerSignatureData;
 
         pub type BlsServiceHandlerInstance = BlsServiceHandlerRpc::IWavsServiceHandlerInstance<alloy_provider::DynProvider>;
         pub type BlsServiceManagerInstance = BlsServiceManagerRpc::IWavsServiceManagerInstance<alloy_provider::DynProvider>;

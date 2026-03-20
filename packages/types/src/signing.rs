@@ -103,9 +103,8 @@ impl From<SignatureData> for ServiceManagerSignatureData {
                 referenceBlock: inner.referenceBlock,
             },
             SignatureData::Bls12381(_) => {
-                // BLS submission uses a different contract interface (Phase 7)
-                unimplemented!(
-                    "BLS SignatureData -> ServiceManagerSignatureData conversion implemented in Phase 7"
+                panic!(
+                    "BLS SignatureData cannot convert to ServiceManagerSignatureData -- use BLS contract interface directly"
                 )
             }
         }
