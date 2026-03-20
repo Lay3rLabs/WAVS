@@ -68,7 +68,8 @@ impl AppHandles {
         {
             let chains = configs.chains.read().unwrap();
             for chain_config in chains.evm_iter() {
-                let handle = EvmInstance::spawn(ctx.clone(), configs, chain_config.clone());
+                let handle =
+                    EvmInstance::spawn(ctx.clone(), configs, chain_config.clone(), false);
                 evm_chains.push(handle);
             }
 
