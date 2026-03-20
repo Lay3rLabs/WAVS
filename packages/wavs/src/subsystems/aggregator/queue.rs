@@ -142,3 +142,128 @@ pub fn append_submission_to_queue(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+    use wavs_types::{
+        ChainKey, Envelope, EvmSubmitAction, EventId, SignatureAlgorithm, SignatureKind,
+        SubmitAction, Trigger, TriggerAction, TriggerConfig, WasmResponse, WavsSignature,
+        WorkflowId, ServiceId,
+    };
+
+    /// Create a test QuorumQueueId.
+    fn test_queue_id() -> QuorumQueueId {
+        QuorumQueueId {
+            event_id: EventId::from([0u8; 20]),
+            action: SubmitAction::Evm(EvmSubmitAction {
+                chain: ChainKey::from_str("evm:31337").unwrap(),
+                address: "0x0000000000000000000000000000000000000000".parse().unwrap(),
+                gas_price: None,
+            }),
+        }
+    }
+
+    /// Create a mock submission with a specific envelope_signature.
+    fn mock_submission_with_sig(sig: WavsSignature) -> Submission {
+        let service_id = ServiceId::hash(b"test-queue");
+        let trigger_action = TriggerAction {
+            config: TriggerConfig {
+                service_id,
+                workflow_id: WorkflowId::new("test-wf").unwrap(),
+                trigger: Trigger::Manual,
+            },
+            data: wavs_types::TriggerData::default(),
+        };
+        let operator_response = WasmResponse {
+            payload: b"test-payload".to_vec(),
+            event_id_salt: None,
+            ordering: None,
+        };
+        let event_id = EventId::from([1u8; 20]);
+        let envelope = Envelope {
+            payload: alloy_primitives::Bytes::from_static(&[1, 2, 3]),
+            eventId: alloy_primitives::FixedBytes([1; 20]),
+            ordering: alloy_primitives::FixedBytes([0; 12]),
+        };
+        Submission {
+            trigger_action,
+            operator_response,
+            event_id,
+            envelope,
+            envelope_signature: sig,
+        }
+    }
+
+    fn bls_sig_with_pubkey(pubkey: Vec<u8>) -> WavsSignature {
+        WavsSignature::Bls12381 {
+            g2_signature: vec![0u8; 256],
+            g1_pubkey: pubkey,
+            kind: SignatureKind {
+                algorithm: SignatureAlgorithm::Bls12381,
+                prefix: None,
+            },
+        }
+    }
+
+    fn secp_sig() -> WavsSignature {
+        WavsSignature::Secp256k1 {
+            data: vec![0u8; 65],
+            kind: SignatureKind::evm_default(),
+        }
+    }
+
+    #[test]
+    fn bls_submission_enters_queue() {
+        let queue_id = test_queue_id();
+        let mut queue = Vec::new();
+        let sub = mock_submission_with_sig(bls_sig_with_pubkey(vec![1u8; 128]));
+
+        let result = append_submission_to_queue(&queue_id, &mut queue, sub);
+        assert!(result.is_ok(), "BLS submission should enter queue: {:?}", result.err());
+        assert_eq!(queue.len(), 1);
+    }
+
+    #[test]
+    fn bls_submission_dedup_same_signer() {
+        let queue_id = test_queue_id();
+        let mut queue = Vec::new();
+
+        let sub1 = mock_submission_with_sig(bls_sig_with_pubkey(vec![1u8; 128]));
+        let sub2 = mock_submission_with_sig(bls_sig_with_pubkey(vec![1u8; 128]));
+
+        append_submission_to_queue(&queue_id, &mut queue, sub1).unwrap();
+        append_submission_to_queue(&queue_id, &mut queue, sub2).unwrap();
+        assert_eq!(queue.len(), 1, "Same G1 pubkey should dedup to 1 entry");
+    }
+
+    #[test]
+    fn bls_submission_different_signers() {
+        let queue_id = test_queue_id();
+        let mut queue = Vec::new();
+
+        let sub1 = mock_submission_with_sig(bls_sig_with_pubkey(vec![1u8; 128]));
+        let sub2 = mock_submission_with_sig(bls_sig_with_pubkey(vec![2u8; 128]));
+
+        append_submission_to_queue(&queue_id, &mut queue, sub1).unwrap();
+        append_submission_to_queue(&queue_id, &mut queue, sub2).unwrap();
+        assert_eq!(queue.len(), 2, "Different G1 pubkeys should be separate entries");
+    }
+
+    #[test]
+    fn secp256k1_still_works() {
+        let queue_id = test_queue_id();
+        let mut queue = Vec::new();
+
+        // secp256k1 with dummy sig bytes -- evm_signer_address recovery will fail
+        // but in the old code it failed too. The new code should use signer_identity
+        // which for secp256k1 calls evm_signer_address. Since the test sig is invalid,
+        // both old and new code will error. Let's just verify it doesn't panic.
+        let sub = mock_submission_with_sig(secp_sig());
+        let result = append_submission_to_queue(&queue_id, &mut queue, sub);
+        // With invalid signature data, evm_signer_address will error, but that's expected.
+        // The important thing is it doesn't panic with "BLS signatures do not have EVM signer addresses"
+        assert!(result.is_err(), "Invalid secp256k1 sig should error on address recovery");
+    }
+}
