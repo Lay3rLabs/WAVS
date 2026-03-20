@@ -232,3 +232,135 @@ impl WavsSignature {
         }
     }
 }
+
+#[cfg(all(test, feature = "bls"))]
+mod tests {
+    use super::*;
+    use crate::{SignatureAlgorithm, WavsSignable};
+    use alloy_primitives::keccak256;
+
+    /// Minimal signable for tests -- just wraps raw bytes.
+    struct TestSignable(Vec<u8>);
+    impl WavsSignable for TestSignable {
+        fn encode_data(&self) -> anyhow::Result<Vec<u8>> {
+            Ok(self.0.clone())
+        }
+    }
+
+    /// Helper: generate a BLS key pair, sign a digest, return (g2_sig_bytes, g1_pubkey_bytes).
+    fn make_bls_signature(seed: u64) -> (Vec<u8>, Vec<u8>) {
+        use commonware_math::algebra::Random;
+        use rand_chacha::rand_core::SeedableRng;
+        // Create deterministic key from seed -- need rand_core 0.6 RNG for commonware
+        let mut seed_bytes = [0u8; 32];
+        seed_bytes[..8].copy_from_slice(&seed.to_le_bytes());
+        let mut rng = rand_chacha::ChaCha20Rng::from_seed(seed_bytes);
+        let key = commonware_cryptography::bls12381::PrivateKey::random(&mut rng);
+
+        let digest = [0xabu8; 32]; // fixed test digest
+        let g2_sig = bls_helpers::bls_sign_digest_inner(&key, &digest).unwrap();
+        let g1_pub = bls_helpers::bls_g1_pubkey_bytes_inner(&key).unwrap();
+        (g2_sig.to_vec(), g1_pub.to_vec())
+    }
+
+    fn bls_kind() -> SignatureKind {
+        SignatureKind {
+            algorithm: SignatureAlgorithm::Bls12381,
+            prefix: None,
+        }
+    }
+
+    #[test]
+    fn bls_signature_data_aggregates_g2() {
+        let signable = TestSignable(vec![1, 2, 3]);
+        let sigs: Vec<WavsSignature> = (1..=3u64)
+            .map(|seed| {
+                let (g2, g1) = make_bls_signature(seed);
+                WavsSignature::Bls12381 {
+                    g2_signature: g2,
+                    g1_pubkey: g1,
+                    kind: bls_kind(),
+                }
+            })
+            .collect();
+
+        let result = signable.signature_data(sigs, 42);
+        assert!(result.is_ok(), "signature_data must succeed: {:?}", result.err());
+        match result.unwrap() {
+            SignatureData::Bls12381(data) => {
+                assert_eq!(data.aggregateSignature.len(), 256, "Aggregate sig must be 256 bytes (EIP-2537)");
+                assert_eq!(data.signerPubkeys.len(), 3, "Must have 3 signer pubkeys");
+                for pk in &data.signerPubkeys {
+                    assert_eq!(pk.len(), 128, "Each G1 pubkey must be 128 bytes (EIP-2537)");
+                }
+                assert_eq!(data.referenceBlock, 42);
+            }
+            _ => panic!("Expected Bls12381 variant"),
+        }
+    }
+
+    #[test]
+    fn bls_signature_data_sorts_by_keccak() {
+        let signable = TestSignable(vec![1, 2, 3]);
+        let sigs: Vec<WavsSignature> = (1..=3u64)
+            .map(|seed| {
+                let (g2, g1) = make_bls_signature(seed);
+                WavsSignature::Bls12381 {
+                    g2_signature: g2,
+                    g1_pubkey: g1,
+                    kind: bls_kind(),
+                }
+            })
+            .collect();
+
+        let result = signable.signature_data(sigs, 100).unwrap();
+        match result {
+            SignatureData::Bls12381(data) => {
+                // Verify pubkeys are sorted by keccak256(pubkey) ascending
+                let hashes: Vec<_> = data
+                    .signerPubkeys
+                    .iter()
+                    .map(|pk| keccak256(pk.as_ref()))
+                    .collect();
+                for i in 1..hashes.len() {
+                    assert!(
+                        hashes[i - 1] < hashes[i],
+                        "Pubkeys must be sorted by keccak256 ascending: {:?} >= {:?}",
+                        hashes[i - 1],
+                        hashes[i]
+                    );
+                }
+            }
+            _ => panic!("Expected Bls12381 variant"),
+        }
+    }
+
+    #[test]
+    fn bls_signature_data_rejects_mixed() {
+        let signable = TestSignable(vec![1, 2, 3]);
+        let (g2, g1) = make_bls_signature(1);
+        let sigs = vec![
+            WavsSignature::Bls12381 {
+                g2_signature: g2,
+                g1_pubkey: g1,
+                kind: bls_kind(),
+            },
+            WavsSignature::Secp256k1 {
+                data: vec![0u8; 65],
+                kind: SignatureKind::evm_default(),
+            },
+        ];
+
+        let result = signable.signature_data(sigs, 50);
+        assert!(result.is_err(), "Mixed algorithms must fail");
+    }
+
+    #[test]
+    fn bls_signature_data_empty_rejects() {
+        let signable = TestSignable(vec![1, 2, 3]);
+        let result = signable.signature_data(vec![], 50);
+        assert!(result.is_err(), "Empty signatures must fail");
+    }
+
+    // bls_rpc_bindings_compile test is in bls.rs tests module (requires solidity-rpc feature)
+}
