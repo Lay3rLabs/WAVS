@@ -380,7 +380,7 @@ pub async fn deploy_submit_contract(
                     address
                 );
 
-                let result = crate::example_evm_client::solidity_types::example_bls_submit::SimpleBlsSubmit::deploy(
+                let result = crate::example_evm_client::example_bls_submit::SimpleBlsSubmit::deploy(
                     evm_client.provider.clone(),
                     address,
                 )

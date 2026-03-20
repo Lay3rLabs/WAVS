@@ -4,7 +4,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use utils::test_utils::{
     middleware::{
         cosmos::CosmosServiceManager,
-        evm::{EvmMiddleware, MiddlewareServiceManagerConfig},
+        evm::MiddlewareServiceManagerConfig,
         operator::AvsOperator,
     },
     mock_service_manager::MockEvmServiceManager,
