@@ -1,4 +1,5 @@
-use wavs_types::{QuorumQueue, QuorumQueueId, Submission};
+use alloy_primitives::keccak256;
+use wavs_types::{QuorumQueue, QuorumQueueId, Submission, WavsSignable, WavsSignature};
 
 use crate::subsystems::aggregator::{error::AggregatorError, Aggregator};
 
@@ -103,6 +104,21 @@ impl Aggregator {
     }
 }
 
+/// Extract a comparable signer identity from a signature.
+/// For secp256k1: recovers the EVM address (20 bytes) from the signature.
+/// For BLS12-381: uses keccak256(g1_pubkey) (32 bytes) as the identity.
+fn signer_identity<T: WavsSignable + ?Sized>(
+    sig: &WavsSignature,
+    signable: &T,
+) -> Result<Vec<u8>, wavs_types::SigningError> {
+    match sig {
+        WavsSignature::Secp256k1 { .. } => {
+            sig.evm_signer_address(signable).map(|addr| addr.0.to_vec())
+        }
+        WavsSignature::Bls12381 { g1_pubkey, .. } => Ok(keccak256(g1_pubkey).0.to_vec()),
+    }
+}
+
 pub fn append_submission_to_queue(
     queue_id: &QuorumQueueId,
     queue: &mut Vec<Submission>,
@@ -119,19 +135,19 @@ pub fn append_submission_to_queue(
         }
     }
 
-    // In addition to extracting for comparison, this also serves to validate the signature
-    let submission_signer_address = submission
-        .envelope_signature
-        .evm_signer_address(&submission.envelope)?;
+    // Use generic signer identity (EVM address for secp256k1, keccak256(g1_pubkey) for BLS)
+    let submission_identity =
+        signer_identity(&submission.envelope_signature, &submission.envelope)?;
 
     for queued_submission in queue.iter_mut() {
-        let queued_submission_signer_address = queued_submission
-            .envelope_signature
-            .evm_signer_address(&queued_submission.envelope)?;
+        let queued_identity = signer_identity(
+            &queued_submission.envelope_signature,
+            &queued_submission.envelope,
+        )?;
 
         // if the signer is the same as the one in the queue, we can just update it
         // this effectively allows re-trying failed aggregation
-        if submission_signer_address == queued_submission_signer_address {
+        if submission_identity == queued_identity {
             *queued_submission = submission;
 
             return Ok(());
