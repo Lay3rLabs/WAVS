@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: BLS Signatures
-status: completed
-stopped_at: Completed 06-02-PLAN.md (Phase 6 complete)
-last_updated: "2026-03-20T00:48:16.755Z"
-last_activity: 2026-03-20 -- Plan 06-02 complete (BLS submission pipeline wiring)
+status: in-progress
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-03-20T01:33:26Z"
+last_activity: 2026-03-20 -- Plan 07-01 complete (BLS aggregation and queue dedup)
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
-  percent: 85
+  total_plans: 7
+  completed_plans: 6
+  percent: 90
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 6 - BLS Signing Pipeline
+**Current focus:** Phase 7 - BLS Aggregation
 
 ## Current Position
 
-Phase: 6 of 8 (BLS Signing Pipeline) -- COMPLETE
-Plan: 2 of 2 complete
-Status: Phase 6 complete
-Last activity: 2026-03-20 -- Plan 06-02 complete (BLS submission pipeline wiring)
+Phase: 7 of 8 (BLS Aggregation)
+Plan: 1 of 2 complete
+Status: Plan 07-01 complete, plan 07-02 next
+Last activity: 2026-03-20 -- Plan 07-01 complete (BLS aggregation and queue dedup)
 
-Progress: [#################...] 85% (phase 6 complete, phase 7 next)
+Progress: [##################..] 90% (phase 7 in progress)
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [#################...] 85% (phase 6 complete, phase 7 next)
 | 5-03 | 1 | 15min | 15min |
 | 6-01 | 1 | 7min | 7min |
 | 6-02 | 1 | 12min | 12min |
+| 7-01 | 1 | 12min | 12min |
 | 5-8 | TBD | - | - |
 
 *Updated after each plan completion*
@@ -90,6 +91,10 @@ Progress: [#################...] 85% (phase 6 complete, phase 7 next)
 - Dispatcher auto-detects algorithm from Submit::Aggregator { signature_kind } with secp256k1 default
 - SignerResponse::Bls12381 variant with hd_index and g1_pubkey_hex for graceful HTTP API
 - get_service_signer uses and_then (not map) for fallible BLS G1 pubkey extraction
+- BLS G2 aggregate via blst AggregateSignature::aggregate with EIP-2537 roundtrip
+- Queue dedup uses signer_identity() abstraction (EVM addr for secp256k1, keccak256(g1_pubkey) for BLS)
+- BLS RPC bindings (#[sol(rpc)]) use cfg_if! inline in bls.rs
+- cfg(not(feature = bls)) fallback returns error instead of unimplemented!() panic
 
 ### Pending Todos
 
@@ -101,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T00:37:31Z
-Stopped at: Completed 06-02-PLAN.md (Phase 6 complete)
-Resume file: .planning/phases/06-bls-signing-pipeline/06-02-SUMMARY.md
+Last session: 2026-03-20T01:33:26Z
+Stopped at: Completed 07-01-PLAN.md
+Resume file: .planning/phases/07-bls-aggregation/07-01-SUMMARY.md
