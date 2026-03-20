@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: BLS Signatures
-status: completed
-stopped_at: Phase 6 context gathered
-last_updated: "2026-03-19T23:35:52.827Z"
-last_activity: 2026-03-19 -- Plan 05-02 complete (enum-based signing types with full workspace migration)
+status: in-progress
+stopped_at: Plan 06-01 complete
+last_updated: "2026-03-20T00:21:00Z"
+last_activity: 2026-03-20 -- Plan 06-01 complete (BLS signing core with contract-matching DST)
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 3
-  completed_plans: 3
-  percent: 68
+  completed_plans: 4
+  percent: 72
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 5 - BLS Types and Key Derivation
+**Current focus:** Phase 6 - BLS Signing Pipeline
 
 ## Current Position
 
-Phase: 5 of 8 (BLS Types and Key Derivation)
-Plan: 3 of 3 complete (phase 5 done)
-Status: Phase 5 complete
-Last activity: 2026-03-19 -- Plan 05-02 complete (enum-based signing types with full workspace migration)
+Phase: 6 of 8 (BLS Signing Pipeline)
+Plan: 1 of 2 complete
+Status: Phase 6 in progress
+Last activity: 2026-03-20 -- Plan 06-01 complete (BLS signing core with contract-matching DST)
 
-Progress: [##############......] 68% (5/8 phases complete; phase 5 done, phase 6 next)
+Progress: [##############......] 72% (plan 06-01 done, 06-02 next)
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [##############......] 68% (5/8 phases complete; phase 5 done, phase 6
 | 5-01 | 1 | 11min | 11min |
 | 5-02 | 1 | 18min | 18min |
 | 5-03 | 1 | 15min | 15min |
+| 6-01 | 1 | 7min | 7min |
 | 5-8 | TBD | - | - |
 
 *Updated after each plan completion*
@@ -78,6 +79,11 @@ Progress: [##############......] 68% (5/8 phases complete; phase 5 done, phase 6
 - SignatureData raw Alloy type pub(crate) in solidity_types; enum version is canonical crate-level export
 - WavsSignature uses #[serde(tag = "algorithm")] -- breaking serialization change from old struct format
 - WavsCryptoSigner::Bls12381 gated behind cfg(feature = "bls") for conditional compilation
+- Use blst directly (not commonware Signer::sign) for contract-compatible DST (RO vs POP suffix)
+- Mirror bls_helpers in wavs-types because circular dep prevents layer-utils import
+- commonware_codec::Encode for PrivateKey byte extraction (Bytes deref to &[u8])
+- tokio optional dep in wavs-types behind bls feature for spawn_blocking
+- bls feature made default-on in wavs-types
 
 ### Pending Todos
 
@@ -89,6 +95,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T23:35:52.825Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-bls-signing-pipeline/06-CONTEXT.md
+Last session: 2026-03-20T00:21:00Z
+Stopped at: Completed 06-01-PLAN.md
+Resume file: .planning/phases/06-bls-signing-pipeline/06-01-SUMMARY.md

@@ -19,7 +19,7 @@
 
 ### Signing
 
-- [ ] **SIGN-01**: Operator signs envelope digest with BLS key → G2 signature (256 bytes) using hash-to-curve consistent with `HashToCurve.sol` (RFC 9380, DST `BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_`)
+- [x] **SIGN-01**: Operator signs envelope digest with BLS key → G2 signature (256 bytes) using hash-to-curve consistent with `HashToCurve.sol` (RFC 9380, DST `BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_`)
 - [ ] **SIGN-02**: BLS signature and operator G1 pubkey included in `Submission` propagated over P2P
 - [ ] **SIGN-03**: Existing secp256k1 signing path unchanged — algorithm is per-service config
 
@@ -66,7 +66,7 @@
 | TYPES-03 | Phase 5 | Complete |
 | KEYS-01 | Phase 5 | Complete |
 | KEYS-02 | Phase 5 | Complete |
-| SIGN-01 | Phase 6 | Pending |
+| SIGN-01 | Phase 6 | Complete |
 | SIGN-02 | Phase 6 | Pending |
 | SIGN-03 | Phase 6 | Pending |
 | AGG-01 | Phase 7 | Pending |
