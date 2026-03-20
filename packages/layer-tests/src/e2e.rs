@@ -22,8 +22,9 @@ use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
     telemetry::{setup_metrics, setup_tracing, Metrics},
-    test_utils::middleware::evm::EvmMiddleware,
 };
+
+use handles::EvmMiddlewares;
 
 use crate::{
     args::TestArgs,
@@ -97,7 +98,7 @@ pub fn run(args: TestArgs, ctx: AppContext) {
             _ = kill_receiver.recv() => {
                 tracing::debug!("Test runner killed");
             },
-            _ = _run(configs, clients, mode, handles.evm_middleware.clone(), handles.cosmos_middlewares.clone()) => {
+            _ = _run(configs, clients, mode, handles.evm_middlewares.clone(), handles.cosmos_middlewares.clone()) => {
                 tracing::debug!("Test runner completed");
             }
         }
@@ -137,7 +138,7 @@ async fn _run(
     configs: Configs,
     clients: Clients,
     mode: TestMode,
-    evm_middleware: Option<EvmMiddleware>,
+    evm_middlewares: Option<EvmMiddlewares>,
     cosmos_middlewares: CosmosMiddlewares,
 ) {
     let report = TestReport::new();
@@ -160,7 +161,7 @@ async fn _run(
     // bootstrap service managers
     let mut service_managers = ServiceManagers::new(configs.clone());
     service_managers
-        .bootstrap(&registry, &clients, evm_middleware, cosmos_middlewares)
+        .bootstrap(&registry, &clients, evm_middlewares, cosmos_middlewares)
         .await;
 
     // upload components to ALL WAVS instances

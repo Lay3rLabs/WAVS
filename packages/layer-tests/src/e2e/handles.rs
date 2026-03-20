@@ -11,7 +11,7 @@ use utils::{
     telemetry::Metrics,
     test_utils::middleware::{
         cosmos::{CosmosMiddleware, CosmosMiddlewareKind},
-        evm::EvmMiddleware,
+        evm::{EvmMiddleware, EvmMiddlewareType},
     },
 };
 use wavs::dispatcher::{Dispatcher, TauriHandle};
@@ -26,10 +26,18 @@ use crate::config::TestP2pMode;
 use super::config::Configs;
 //use super::matrix::EvmService;
 
+/// Holds both the default (secp256k1) and optional BLS middleware so that
+/// per-test dispatch can select the right one without global state.
+#[derive(Clone)]
+pub struct EvmMiddlewares {
+    pub default: EvmMiddleware,
+    pub bls: Option<EvmMiddleware>,
+}
+
 pub struct AppHandles {
     /// One handle per WAVS operator instance
     pub wavs_handles: Vec<std::thread::JoinHandle<()>>,
-    pub evm_middleware: Option<EvmMiddleware>,
+    pub evm_middlewares: Option<EvmMiddlewares>,
     pub cosmos_middlewares: CosmosMiddlewares,
     _evm_chains: Vec<EvmInstance>,
     _cosmos_chains: Vec<CosmosInstance>,
@@ -64,12 +72,15 @@ impl AppHandles {
         let mut evm_chains = Vec::new();
         let mut cosmos_chains = Vec::new();
 
+        // Enable Prague hardfork when BLS tests are in the matrix (needed for EIP-2537 precompiles)
+        let hardfork_prague = configs.matrix.bls_multi_operator_enabled();
+
         let mut cosmos_middlewares = HashMap::new();
         {
             let chains = configs.chains.read().unwrap();
             for chain_config in chains.evm_iter() {
                 let handle =
-                    EvmInstance::spawn(ctx.clone(), configs, chain_config.clone(), false);
+                    EvmInstance::spawn(ctx.clone(), configs, chain_config.clone(), hardfork_prague);
                 evm_chains.push(handle);
             }
 
@@ -112,15 +123,21 @@ impl AppHandles {
             }
         }
 
-        let evm_middleware = if evm_chains.is_empty() {
+        let evm_middlewares = if evm_chains.is_empty() {
             None
         } else {
-            Some(EvmMiddleware::new(configs.evm_middleware_type).unwrap())
+            let default = EvmMiddleware::new(configs.evm_middleware_type).unwrap();
+            let bls = if configs.matrix.bls_multi_operator_enabled() {
+                Some(EvmMiddleware::new(EvmMiddlewareType::PoaBls).unwrap())
+            } else {
+                None
+            };
+            Some(EvmMiddlewares { default, bls })
         };
 
         Self {
             wavs_handles,
-            evm_middleware,
+            evm_middlewares,
             cosmos_middlewares: Arc::new(cosmos_middlewares),
             _evm_chains: evm_chains,
             _cosmos_chains: cosmos_chains,
