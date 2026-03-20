@@ -66,7 +66,11 @@ Plans:
   2. At quorum, G2 signatures are aggregated via BLS point addition into a single aggregate signature; signer G1 pubkeys are sorted by `keccak256(pubkey)` ascending (matching the contract's expected ordering)
   3. A `referenceBlock` is captured that is strictly less than the current block number at submission time and greater than or equal to the block when operators registered their keys
   4. The aggregated `SignatureData { signerPubkeys, aggregateSignature, referenceBlock }` is submitted to the BLS service manager contract via the existing EVM submission path
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 07-01-PLAN.md -- BLS signature_data() aggregation, queue dedup, RPC bindings
+- [ ] 07-02-PLAN.md -- BLS EVM submission path (send_bls_envelope_signatures, dispatch in aggregator)
 
 ### Phase 8: Integration and Verification
 **Goal**: The full BLS pipeline is verified end-to-end on a local anvil chain with real poa-middleware BLS contracts, and existing secp256k1 tests confirm no regressions
@@ -90,7 +94,7 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8
 | 4. Validation and Cleanup | v1.0 | 2/2 | Complete | 2026-03-17 |
 | 5. BLS Types and Key Derivation | v1.1 | 1/3 | In Progress | - |
 | 6. BLS Signing Pipeline | v1.1 | 0/2 | Not started | - |
-| 7. BLS Aggregation | v1.1 | 0/? | Not started | - |
+| 7. BLS Aggregation | v1.1 | 0/2 | Not started | - |
 | 8. Integration and Verification | v1.1 | 0/? | Not started | - |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
