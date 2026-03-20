@@ -36,6 +36,38 @@ pub use bls_service_handler::IWavsServiceHandler as BlsServiceHandler;
 pub use bls_service_manager::IWavsServiceManager as BlsServiceManager;
 pub use bls_stake_registry::IPOAStakeRegistry as BlsStakeRegistry;
 
+// Feature-gated RPC bindings for on-chain interaction (contract calls).
+// These mirror the pattern in rpc.rs but for BLS-specific contract interfaces.
+cfg_if::cfg_if! {
+    if #[cfg(feature = "solidity-rpc")] {
+        mod bls_service_handler_rpc {
+            alloy_sol_macro::sol!(
+                #[allow(missing_docs)]
+                #[sol(rpc)]
+                #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq, Eq)]
+                IWavsServiceHandler,
+                "./src/contracts/solidity/abi/bls/IWavsServiceHandler.json"
+            );
+        }
+
+        mod bls_service_manager_rpc {
+            alloy_sol_macro::sol!(
+                #[allow(missing_docs)]
+                #[sol(rpc)]
+                #[derive(Debug)]
+                IWavsServiceManager,
+                "./src/contracts/solidity/abi/bls/IWavsServiceManager.json"
+            );
+        }
+
+        pub use bls_service_handler_rpc::IWavsServiceHandler as BlsServiceHandlerRpc;
+        pub use bls_service_manager_rpc::IWavsServiceManager as BlsServiceManagerRpc;
+
+        pub type BlsServiceHandlerInstance = BlsServiceHandlerRpc::IWavsServiceHandlerInstance<alloy_provider::DynProvider>;
+        pub type BlsServiceManagerInstance = BlsServiceManagerRpc::IWavsServiceManagerInstance<alloy_provider::DynProvider>;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -60,5 +92,13 @@ mod tests {
         let _handler_type = std::any::type_name::<BlsServiceHandler::SignatureData>();
         let _registry_type = std::any::type_name::<BlsStakeRegistry::IPOAStakeRegistryCalls>();
         let _manager_type = std::any::type_name::<BlsServiceManager::IWavsServiceManagerCalls>();
+    }
+
+    #[cfg(feature = "solidity-rpc")]
+    #[test]
+    fn bls_rpc_bindings_compile() {
+        // Verify the RPC types are accessible when solidity-rpc feature is enabled.
+        let _handler_type = std::any::type_name::<BlsServiceHandlerInstance>();
+        let _manager_type = std::any::type_name::<BlsServiceManagerInstance>();
     }
 }

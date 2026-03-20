@@ -52,6 +52,46 @@ mod bls_helpers {
         Ok(eip2537)
     }
 
+    /// Deserialize a 256-byte EIP-2537 G2 signature back to a blst Signature.
+    /// Strips the 16-byte zero padding from each of the 4 coordinates to get 192-byte
+    /// uncompressed form, then calls Signature::deserialize().
+    pub(crate) fn deserialize_g2_from_eip2537(
+        eip2537_bytes: &[u8],
+    ) -> anyhow::Result<blst::min_pk::Signature> {
+        if eip2537_bytes.len() != 256 {
+            anyhow::bail!(
+                "Expected 256-byte EIP-2537 G2, got {}",
+                eip2537_bytes.len()
+            );
+        }
+        let mut uncompressed = [0u8; 192];
+        for i in 0..4 {
+            let src_offset = i * 64 + 16;
+            let dst_offset = i * 48;
+            uncompressed[dst_offset..dst_offset + 48]
+                .copy_from_slice(&eip2537_bytes[src_offset..src_offset + 48]);
+        }
+        blst::min_pk::Signature::deserialize(&uncompressed)
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize G2 signature: {:?}", e))
+    }
+
+    /// Serialize a blst AggregateSignature to 256-byte EIP-2537 format.
+    /// Converts 192-byte uncompressed to 256-byte padded EIP-2537.
+    pub(crate) fn serialize_aggregate_to_eip2537(
+        aggregate: &blst::min_pk::AggregateSignature,
+    ) -> [u8; 256] {
+        let sig = aggregate.to_signature();
+        let uncompressed = sig.serialize(); // 192 bytes
+        let mut eip2537 = [0u8; 256];
+        for i in 0..4 {
+            let src_offset = i * 48;
+            let dst_offset = i * 64 + 16;
+            eip2537[dst_offset..dst_offset + 48]
+                .copy_from_slice(&uncompressed[src_offset..src_offset + 48]);
+        }
+        eip2537
+    }
+
     /// Get 128-byte EIP-2537 G1 public key from BLS private key.
     /// Mirrors utils::bls_signing::bls_g1_pubkey_bytes().
     pub(crate) fn bls_g1_pubkey_bytes_inner(
@@ -191,10 +231,64 @@ pub trait WavsSigner: WavsSignable {
                     referenceBlock: block_height as u32,
                 }))
             }
+            #[cfg(feature = "bls")]
             WavsSignature::Bls12381 { .. } => {
-                // BLS aggregation is implemented in Phase 7
-                unimplemented!("BLS signature_data aggregation implemented in Phase 7")
+                use alloy_primitives::{keccak256, Bytes, FixedBytes};
+                use crate::solidity_types::BlsServiceHandler;
+
+                // Collect (keccak256_hash, g1_pubkey_bytes, deserialized_g2_sig) per operator
+                let mut entries: Vec<(FixedBytes<32>, Bytes, blst::min_pk::Signature)> = signatures
+                    .into_iter()
+                    .map(|sig| match sig {
+                        WavsSignature::Bls12381 {
+                            g2_signature,
+                            g1_pubkey,
+                            ..
+                        } => {
+                            let key_hash = keccak256(&g1_pubkey);
+                            let g2_sig =
+                                bls_helpers::deserialize_g2_from_eip2537(&g2_signature)
+                                    .map_err(SigningError::DataHash)?;
+                            Ok((key_hash, Bytes::from(g1_pubkey), g2_sig))
+                        }
+                        WavsSignature::Secp256k1 { .. } => Err(SigningError::DataHash(
+                            anyhow::anyhow!(
+                                "Mixed signature algorithms: expected BLS, got secp256k1"
+                            ),
+                        )),
+                    })
+                    .collect::<Result<_, _>>()?;
+
+                // Sort by keccak256(pubkey) ascending -- contract enforces lastKeyHash < keyHash
+                entries.sort_by_key(|(hash, _, _)| *hash);
+
+                // Aggregate G2 signatures via blst point addition
+                let sig_refs: Vec<&blst::min_pk::Signature> =
+                    entries.iter().map(|(_, _, s)| s).collect();
+                let aggregate =
+                    blst::min_pk::AggregateSignature::aggregate(&sig_refs, true).map_err(
+                        |e| {
+                            SigningError::DataHash(anyhow::anyhow!(
+                                "BLS aggregate failed: {:?}",
+                                e
+                            ))
+                        },
+                    )?;
+                let agg_sig_bytes = bls_helpers::serialize_aggregate_to_eip2537(&aggregate);
+
+                let signer_pubkeys: Vec<Bytes> =
+                    entries.into_iter().map(|(_, pk, _)| pk).collect();
+
+                Ok(SignatureData::Bls12381(BlsServiceHandler::SignatureData {
+                    signerPubkeys: signer_pubkeys,
+                    aggregateSignature: Bytes::from(agg_sig_bytes.to_vec()),
+                    referenceBlock: block_height as u32,
+                }))
             }
+            #[cfg(not(feature = "bls"))]
+            WavsSignature::Bls12381 { .. } => Err(SigningError::DataHash(anyhow::anyhow!(
+                "BLS aggregation requires the 'bls' feature"
+            ))),
         }
     }
 }
