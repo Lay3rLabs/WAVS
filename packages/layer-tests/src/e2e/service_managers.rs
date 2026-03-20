@@ -292,39 +292,46 @@ impl ServiceManagers {
                 let operator_private_key = const_hex::encode(operator_signer.to_bytes());
 
                 let avs_operator = if test.bls {
-                    // BLS operator registration: derive BLS key, create G1 pubkey + G2 proof
-                    match signer_resp {
-                        SignerResponse::Bls12381 { hd_index, g1_pubkey_hex: _ } => {
-                            let wavs_signer_hd_index = hd_index;
-
-                            // Derive BLS key from operator mnemonic + WAVS signer HD index
-                            let bls_secret = utils::bls_signing::bls_private_key_from_mnemonic(
-                                operator_mnemonic.as_str(),
-                                wavs_signer_hd_index,
-                            )
-                            .expect("Failed to derive BLS key from operator mnemonic");
-
-                            // Get G1 pubkey (128 bytes EIP-2537)
-                            let g1_pubkey = utils::bls_signing::bls_g1_pubkey_bytes(&bls_secret)
-                                .expect("Failed to get G1 pubkey bytes");
-
-                            // Create proof-of-possession: sign keccak256(abi.encode(operator_address))
-                            let encoded_addr = alloy_sol_types::sol_data::Address::abi_encode(&operator_address);
-                            let message = alloy_primitives::keccak256(&encoded_addr);
-                            let g2_proof = utils::bls_signing::bls_sign_digest(&bls_secret, message.as_ref())
-                                .expect("Failed to create BLS proof of possession");
-
-                            AvsOperator::with_bls_keys(
-                                operator_address,
-                                operator_private_key,
-                                g1_pubkey.to_vec(),
-                                g2_proof.to_vec(),
-                            )
+                    // BLS operator registration: derive BLS key, create G1 pubkey + G2 proof.
+                    // At bootstrap time the service may still be registered with Secp256k1 (empty
+                    // workflows placeholder). Accept either response type — only the HD index is
+                    // needed to derive the BLS key. The signer algorithm is corrected to Bls12381
+                    // later when update_services runs change_service_inner.
+                    let wavs_signer_hd_index = match signer_resp {
+                        SignerResponse::Bls12381 { hd_index, .. } => hd_index,
+                        SignerResponse::Secp256k1 { hd_index, .. } => {
+                            tracing::warn!(
+                                "BLS test '{}' got Secp256k1 signer response at bootstrap (HD {}); \
+                                 using HD index for BLS key derivation — algorithm will be updated by update_services",
+                                test.name, hd_index
+                            );
+                            hd_index
                         }
-                        SignerResponse::Secp256k1 { .. } => {
-                            panic!("Expected Bls12381 SignerResponse for BLS test, got Secp256k1");
-                        }
-                    }
+                    };
+
+                    // Derive BLS key from operator mnemonic + WAVS signer HD index
+                    let bls_secret = utils::bls_signing::bls_private_key_from_mnemonic(
+                        operator_mnemonic.as_str(),
+                        wavs_signer_hd_index,
+                    )
+                    .expect("Failed to derive BLS key from operator mnemonic");
+
+                    // Get G1 pubkey (128 bytes EIP-2537)
+                    let g1_pubkey = utils::bls_signing::bls_g1_pubkey_bytes(&bls_secret)
+                        .expect("Failed to get G1 pubkey bytes");
+
+                    // Create proof-of-possession: sign keccak256(abi.encode(operator_address))
+                    let encoded_addr = alloy_sol_types::sol_data::Address::abi_encode(&operator_address);
+                    let message = alloy_primitives::keccak256(&encoded_addr);
+                    let g2_proof = utils::bls_signing::bls_sign_digest(&bls_secret, message.as_ref())
+                        .expect("Failed to create BLS proof of possession");
+
+                    AvsOperator::with_bls_keys(
+                        operator_address,
+                        operator_private_key,
+                        g1_pubkey.to_vec(),
+                        g2_proof.to_vec(),
+                    )
                 } else {
                     // Secp256k1 operator registration: existing path unchanged
                     match signer_resp {
