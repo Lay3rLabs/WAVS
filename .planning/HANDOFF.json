@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-03-20T17:33:03.223Z",
+  "phase": "8",
+  "phase_name": "Integration and Verification",
+  "phase_dir": ".planning/phases/08-integration-and-verification",
+  "plan": 2,
+  "task": 3,
+  "total_tasks": 5,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "08-01 BLS test infrastructure", "status": "done", "commit": "614c9f4d"},
+    {"id": 2, "name": "Fix BLS bootstrap panic (accept Secp256k1 HD index)", "status": "done", "commit": "48b8405e"},
+    {"id": 3, "name": "Fix G2 coordinate ordering (ZCash c1|c0 → EIP-2537 c0|c1)", "status": "done", "commit": "23191da1"}
+  ],
+  "remaining_tasks": [
+    {"id": 4, "name": "Fix updateOperatorSigningKey revert (run with --gas 5000000 to diagnose)", "status": "in_progress"},
+    {"id": 5, "name": "Complete 08-02 SUMMARY.md and phase verification", "status": "not_started"}
+  ],
+  "blockers": [
+    {
+      "description": "updateOperatorSigningKey reverts — eth_estimateGas returns 0 (can't distinguish Prague precompile failure vs invalid BLS signature)",
+      "type": "technical",
+      "workaround": "Added --gas 5000000 to cast send command; next test run will show real revert reason"
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Run cargo test -p layer-tests -- --nocapture 2>&1 | tee logs.txt",
+      "context": "Need to see actual revert reason now that --gas 5000000 is added to updateOperatorSigningKey cast send",
+      "blocking": true
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "blst G2 format confirmed c1|c0 from source (e2.c line 183)",
+      "rationale": "X[1] (imaginary) written first, X[0] (real) second",
+      "phase": "8"
+    },
+    {
+      "decision": "Added --gas 5000000 to diagnostic cast send",
+      "rationale": "Bypass eth_estimateGas returning 0 to get actual revert reason",
+      "phase": "8"
+    }
+  ],
+  "uncommitted_files": [
+    "packages/utils/src/test_utils/middleware/evm/middleware_poa_bls.rs"
+  ],
+  "next_action": "Run E2E tests and check what error follows the updateOperatorSigningKey call — PrecompileCallFailed, InvalidBLSKeyOwnershipProof, or success",
+  "context_notes": "G2 fix is verified correct. The --gas bypass will tell us if Prague precompiles work or if the BLS signature itself is still wrong"
+}

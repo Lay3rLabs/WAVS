@@ -231,6 +231,8 @@ impl PoaBlsMiddleware {
                         operator_key,
                         "--rpc-url",
                         &service_manager.rpc_url,
+                        "--gas",
+                        "5000000",
                     ])
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
