@@ -49,6 +49,20 @@ pub mod example_submit {
     }
 }
 
+pub mod example_bls_submit {
+    use alloy_sol_types::sol;
+
+    sol!(
+        #[allow(missing_docs)]
+        #[sol(rpc)]
+        SimpleBlsSubmit,
+        "../../examples/contracts/solidity/abi/SimpleBlsSubmit.sol/SimpleBlsSubmit.json"
+    );
+}
+
+pub use example_bls_submit::SimpleBlsSubmit::SimpleBlsSubmitInstance;
+pub type SimpleBlsSubmitT = SimpleBlsSubmitInstance<DynProvider>;
+
 pub type SimpleTriggerT = SimpleTriggerInstance<DynProvider>;
 pub type SimpleSubmitT = SimpleSubmitInstance<DynProvider>;
 pub use example_log_spam::LogSpam;

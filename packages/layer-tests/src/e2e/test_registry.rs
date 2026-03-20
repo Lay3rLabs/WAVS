@@ -243,6 +243,9 @@ impl TestRegistry {
                 EvmService::MultiOperator => {
                     registry.register_evm_multi_operator_test(chain);
                 }
+                EvmService::BlsMultiOperator => {
+                    registry.register_evm_bls_multi_operator_test(chain);
+                }
             }
         }
 
@@ -1019,6 +1022,39 @@ impl TestRegistry {
                 )
                 .with_service_manager_chain(chain)
                 .with_multi_operator()
+                .with_group(TestGroupId::P2p)
+                .build(),
+        )
+    }
+
+    fn register_evm_bls_multi_operator_test(&mut self, chain: &ChainKey) -> &mut Self {
+        self.register(
+            TestBuilder::new("evm_bls_multi_operator")
+                .with_description(
+                    "Tests BLS multi-operator quorum with P2P and on-chain BLS signature verification",
+                )
+                .add_workflow(
+                    WorkflowId::new("bls_multi_operator_echo").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_operator_component(OperatorComponent::EchoData)
+                        .with_aggregator_component(AggregatorComponent::SimpleAggregator)
+                        .with_trigger(TriggerDefinition::NewEvmContract(
+                            EvmTriggerDefinition::SimpleContractEvent {
+                                chain: chain.clone(),
+                            },
+                        ))
+                        .with_submit(SubmitDefinition::Aggregator(Self::simple_aggregator(chain)))
+                        .with_input_data(InputData::Text(
+                            "bls-multi-operator test".to_string(),
+                        ))
+                        .with_expected_output(ExpectedOutput::Text(
+                            "bls-multi-operator test".to_string(),
+                        ))
+                        .build(),
+                )
+                .with_service_manager_chain(chain)
+                .with_multi_operator()
+                .with_bls()
                 .with_group(TestGroupId::P2p)
                 .build(),
         )
