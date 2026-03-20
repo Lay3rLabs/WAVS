@@ -130,26 +130,31 @@ impl MockEvmServiceManager {
             let mut all_valid = true;
 
             for avs_operator in &config.avs_operators {
-                // Check if the signer-to-operator mapping is correctly registered
-                let registered_operator = self
-                    .get_latest_operator_for_signing_key(avs_operator.signer)
-                    .await?;
-                if registered_operator != avs_operator.operator {
-                    if attempt < MAX_RETRIES - 1 {
-                        tracing::debug!(
-                            "Attempt {}: Expected operator {} for signer {}, got {}. Retrying...",
-                            attempt + 1,
-                            avs_operator.operator,
-                            avs_operator.signer,
-                            registered_operator
-                        );
-                        all_valid = false;
-                        break;
-                    } else {
-                        return Err(anyhow::anyhow!(
-                            "Operator registration failed: Expected operator {} for signer {}, got {}",
-                            avs_operator.operator, avs_operator.signer, registered_operator
-                        ));
+                // For ECDSA operators, verify the signer-to-operator mapping.
+                // BLS operators use a G1 pubkey hash as key (bytes32), not an EVM address —
+                // the getLatestOperatorForSigningKey(address) selector doesn't exist on the
+                // BLS contract, so skip this check when signer is zero (BLS path).
+                if avs_operator.signer != Address::ZERO {
+                    let registered_operator = self
+                        .get_latest_operator_for_signing_key(avs_operator.signer)
+                        .await?;
+                    if registered_operator != avs_operator.operator {
+                        if attempt < MAX_RETRIES - 1 {
+                            tracing::debug!(
+                                "Attempt {}: Expected operator {} for signer {}, got {}. Retrying...",
+                                attempt + 1,
+                                avs_operator.operator,
+                                avs_operator.signer,
+                                registered_operator
+                            );
+                            all_valid = false;
+                            break;
+                        } else {
+                            return Err(anyhow::anyhow!(
+                                "Operator registration failed: Expected operator {} for signer {}, got {}",
+                                avs_operator.operator, avs_operator.signer, registered_operator
+                            ));
+                        }
                     }
                 }
 

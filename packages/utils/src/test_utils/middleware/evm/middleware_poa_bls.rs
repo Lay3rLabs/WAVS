@@ -211,6 +211,30 @@ impl PoaBlsMiddleware {
             let bls_pubkey_hex = format!("0x{}", const_hex::encode(bls_pubkey));
             let bls_proof_hex = format!("0x{}", const_hex::encode(bls_proof));
 
+            // Fund the operator address via anvil_setBalance so it can pay for gas.
+            // The operator key is derived from the test mnemonic and may start with 0 ETH.
+            let operator_addr_hex = format!("{:?}", operator);
+            let fund_status = tokio::time::timeout(
+                Self::DEFAULT_TIMEOUT,
+                Command::new("cast")
+                    .args([
+                        "rpc",
+                        "anvil_setBalance",
+                        &operator_addr_hex,
+                        "0x10000000000000000000000",
+                        "--rpc-url",
+                        &service_manager.rpc_url,
+                    ])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()?
+                    .wait(),
+            )
+            .await??;
+            if !fund_status.success() {
+                bail!("Failed to fund operator address {} for BLS key update", operator);
+            }
+
             tracing::info!(
                 "Updating BLS signing key for operator {} (pubkey {} bytes, proof {} bytes)",
                 operator,
@@ -231,8 +255,6 @@ impl PoaBlsMiddleware {
                         operator_key,
                         "--rpc-url",
                         &service_manager.rpc_url,
-                        "--gas",
-                        "5000000",
                     ])
                     .stdout(Stdio::inherit())
                     .stderr(Stdio::inherit())
