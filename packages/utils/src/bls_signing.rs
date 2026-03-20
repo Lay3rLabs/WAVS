@@ -98,6 +98,7 @@ pub fn bls_g1_pubkey_bytes(private_key: &bls12381::PrivateKey) -> anyhow::Result
 #[cfg(test)]
 mod tests {
     use super::*;
+    use commonware_codec::Encode;
 
     const TEST_MNEMONIC: &str = "test test test test test test test test test test test junk";
 
@@ -211,5 +212,60 @@ mod tests {
             pubkey0, pubkey1,
             "Different keys must produce different pubkeys"
         );
+    }
+
+    #[test]
+    fn bls_sign_digest_produces_256_bytes() {
+        let key = bls_private_key_from_mnemonic(TEST_MNEMONIC, 0).unwrap();
+        let digest = [0xab_u8; 32]; // arbitrary 32-byte digest
+        let sig = bls_sign_digest(&key, &digest).unwrap();
+        assert_eq!(sig.len(), 256, "G2 EIP-2537 signature must be 256 bytes");
+    }
+
+    #[test]
+    fn bls_g2_signature_eip2537_padding() {
+        let key = bls_private_key_from_mnemonic(TEST_MNEMONIC, 0).unwrap();
+        let digest = [0xab_u8; 32];
+        let sig = bls_sign_digest(&key, &digest).unwrap();
+        // Each Fp element: 16 zero padding + 48 data = 64 bytes, 4 elements = 256 bytes
+        // Zero padding regions:
+        assert!(sig[0..16].iter().all(|&b| b == 0), "x.c0 padding must be zeros");
+        assert!(sig[64..80].iter().all(|&b| b == 0), "x.c1 padding must be zeros");
+        assert!(sig[128..144].iter().all(|&b| b == 0), "y.c0 padding must be zeros");
+        assert!(sig[192..208].iter().all(|&b| b == 0), "y.c1 padding must be zeros");
+        // Data regions must not be all zeros:
+        assert!(sig[16..64].iter().any(|&b| b != 0), "x.c0 data must not be all zeros");
+        assert!(sig[80..128].iter().any(|&b| b != 0), "x.c1 data must not be all zeros");
+    }
+
+    #[test]
+    fn private_key_roundtrip_through_blst() {
+        let key = bls_private_key_from_mnemonic(TEST_MNEMONIC, 0).unwrap();
+        let raw_bytes = key.encode();
+        let sk = blst::min_pk::SecretKey::from_bytes(&raw_bytes).expect("blst SecretKey from bytes");
+        // Derive pubkey from blst SecretKey and compare with commonware pubkey
+        let blst_pk = sk.sk_to_pk();
+        let blst_pk_compressed = blst_pk.compress();
+        let commonware_pk: &[u8] = &key.public_key();
+        assert_eq!(blst_pk_compressed.as_slice(), commonware_pk, "blst and commonware pubkeys must match");
+    }
+
+    #[test]
+    fn bls_sign_digest_deterministic() {
+        let key = bls_private_key_from_mnemonic(TEST_MNEMONIC, 0).unwrap();
+        let digest = [0xcd_u8; 32];
+        let sig1 = bls_sign_digest(&key, &digest).unwrap();
+        let sig2 = bls_sign_digest(&key, &digest).unwrap();
+        assert_eq!(sig1, sig2, "Same key + digest must produce identical signatures");
+    }
+
+    #[test]
+    fn bls_sign_digest_different_digests() {
+        let key = bls_private_key_from_mnemonic(TEST_MNEMONIC, 0).unwrap();
+        let digest_a = [0x01_u8; 32];
+        let digest_b = [0x02_u8; 32];
+        let sig_a = bls_sign_digest(&key, &digest_a).unwrap();
+        let sig_b = bls_sign_digest(&key, &digest_b).unwrap();
+        assert_ne!(sig_a, sig_b, "Different digests must produce different signatures");
     }
 }
