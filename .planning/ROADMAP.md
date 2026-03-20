@@ -79,7 +79,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. An E2E test deploys poa-middleware BLS contracts on local anvil, registers multiple operators with BLS keys, triggers a BLS service, and verifies that the aggregated BLS signature is accepted on-chain (pairing check passes via EIP-2537 precompiles)
   2. All existing secp256k1 E2E tests in `packages/layer-tests/` pass without modification -- the BLS addition causes zero regressions in the secp256k1 path
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md -- BLS test infrastructure (PoaBlsMiddleware, Prague anvil, SimpleBlsSubmit, BLS AvsOperator fields)
+- [ ] 08-02-PLAN.md -- BLS E2E test wiring (test matrix, operator registration, submit deployment, secp256k1 regression)
 
 ## Progress
 
@@ -95,6 +99,6 @@ Phases execute in numeric order: 5 -> 6 -> 7 -> 8
 | 5. BLS Types and Key Derivation | v1.1 | 1/3 | In Progress | - |
 | 6. BLS Signing Pipeline | v1.1 | 0/2 | Not started | - |
 | 7. BLS Aggregation | v1.1 | 0/2 | Not started | - |
-| 8. Integration and Verification | v1.1 | 0/? | Not started | - |
+| 8. Integration and Verification | v1.1 | 0/2 | Not started | - |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
