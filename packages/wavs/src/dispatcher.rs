@@ -41,7 +41,7 @@ use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessage
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, ServiceManager,
-    Submission, Submit, TriggerData, WorkflowIdError,
+    SignatureAlgorithm, Submission, Submit, TriggerData, WorkflowIdError,
 };
 use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction, WorkflowId};
 
@@ -1064,7 +1064,17 @@ fn add_service_to_managers(
     aggregator_tx: &crossbeam::channel::Sender<AggregatorCommand>,
     hd_index: Option<u32>,
 ) -> Result<(), DispatcherError> {
-    if let Err(err) = submissions.add_service_key(service.id(), hd_index) {
+    // Determine algorithm from the first workflow's submit configuration
+    let algorithm = service
+        .workflows
+        .values()
+        .find_map(|w| match &w.submit {
+            Submit::Aggregator { signature_kind, .. } => Some(signature_kind.algorithm.clone()),
+            Submit::None => None,
+        })
+        .unwrap_or(SignatureAlgorithm::Secp256k1); // default for backward compat
+
+    if let Err(err) = submissions.add_service_key(service.id(), hd_index, algorithm) {
         tracing::error!("Error adding service to submission manager: {:?}", err);
         return Err(err.into());
     }

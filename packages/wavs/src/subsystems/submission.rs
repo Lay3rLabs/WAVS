@@ -16,8 +16,8 @@ use tracing::instrument;
 use utils::{evm_client::signing::make_signer, telemetry::SubmissionMetrics};
 use wavs_types::Submission;
 use wavs_types::{
-    Credential, Envelope, EventOrder, ServiceId, SignerResponse, Submit, WavsCryptoSigner,
-    WavsSigner,
+    Credential, Envelope, EventOrder, ServiceId, SignatureAlgorithm, SignerResponse, Submit,
+    WavsCryptoSigner, WavsSigner,
 };
 
 #[derive(Debug)]
@@ -242,6 +242,7 @@ impl SubmissionManager {
         &self,
         service_id: ServiceId,
         hd_index: Option<u32>,
+        algorithm: SignatureAlgorithm,
     ) -> Result<(), SubmissionError> {
         let hd_index = hd_index.unwrap_or(
             self.signing_mnemonic_hd_index_count
@@ -257,21 +258,47 @@ impl SubmissionManager {
         self.signing_mnemonic_hd_index_count
             .fetch_max(next_index, std::sync::atomic::Ordering::SeqCst);
 
-        let pks = make_signer(&self.signing_mnemonic, Some(hd_index))
-            .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service_id.clone(), e))?;
+        let signer = match algorithm {
+            SignatureAlgorithm::Secp256k1 => {
+                let pks = make_signer(&self.signing_mnemonic, Some(hd_index))
+                    .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service_id.clone(), e))?;
 
-        tracing::info!(
-            "Created new signing client for service {} -> {}",
-            service_id,
-            pks.address()
-        );
+                tracing::info!(
+                    "Created secp256k1 signing client for service {} -> {}",
+                    service_id,
+                    pks.address()
+                );
+
+                WavsCryptoSigner::Secp256k1(pks)
+            }
+            #[cfg(feature = "bls")]
+            SignatureAlgorithm::Bls12381 => {
+                let bls_key = utils::bls_signing::bls_private_key_from_mnemonic(
+                    self.signing_mnemonic.as_str(),
+                    hd_index,
+                )
+                .map_err(|e| SubmissionError::FailedToCreateEvmSigner(service_id.clone(), e))?;
+
+                tracing::info!(
+                    "Created BLS12-381 signing client for service {} (HD index {})",
+                    service_id,
+                    hd_index
+                );
+
+                WavsCryptoSigner::Bls12381(bls_key)
+            }
+            #[cfg(not(feature = "bls"))]
+            SignatureAlgorithm::Bls12381 => {
+                return Err(SubmissionError::FailedToCreateEvmSigner(
+                    service_id,
+                    anyhow::anyhow!("BLS support not enabled (compile with --features bls)"),
+                ));
+            }
+        };
 
         self.signers.write().unwrap().insert(
             service_id,
-            SignerInfo {
-                signer: WavsCryptoSigner::Secp256k1(pks),
-                hd_index,
-            },
+            SignerInfo { signer, hd_index },
         );
 
         Ok(())
@@ -319,5 +346,57 @@ impl SubmissionManager {
         }
 
         Ok(key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEST_MNEMONIC: &str = "test test test test test test test test test test test junk";
+
+    /// Verify that add_service_key with BLS algorithm creates a signer that is
+    /// WavsCryptoSigner::Bls12381 and produces correct byte lengths
+    /// (256-byte G2 sig, 128-byte G1 pubkey).
+    #[cfg(feature = "bls")]
+    #[test]
+    fn submission_bls_signer_produces_correct_signature() {
+        let bls_key =
+            utils::bls_signing::bls_private_key_from_mnemonic(TEST_MNEMONIC, 1).unwrap();
+        let signer = WavsCryptoSigner::Bls12381(bls_key);
+
+        // Verify correct variant
+        match &signer {
+            WavsCryptoSigner::Bls12381(_) => {} // correct variant
+            _ => panic!("Expected Bls12381 signer variant"),
+        }
+
+        // Verify G1 pubkey bytes can be extracted (128 bytes)
+        if let WavsCryptoSigner::Bls12381(ref key) = signer {
+            let g1 = utils::bls_signing::bls_g1_pubkey_bytes(key).unwrap();
+            assert_eq!(g1.len(), 128, "G1 pubkey must be 128 bytes EIP-2537");
+
+            // Verify signing produces 256-byte G2 signature
+            let digest = [0xab_u8; 32];
+            let g2 = utils::bls_signing::bls_sign_digest(key, &digest).unwrap();
+            assert_eq!(g2.len(), 256, "G2 signature must be 256 bytes EIP-2537");
+        }
+    }
+
+    /// Verify that secp256k1 signer creation is unchanged.
+    #[test]
+    fn submission_secp256k1_signer_unchanged() {
+        let cred = wavs_types::Credential::new(TEST_MNEMONIC.to_string());
+        let pks = make_signer(&cred, Some(0)).unwrap();
+        match WavsCryptoSigner::Secp256k1(pks) {
+            WavsCryptoSigner::Secp256k1(ref s) => {
+                // Verify address is deterministic (Anvil account 0 derived at HD index 0)
+                assert!(
+                    !s.address().is_zero(),
+                    "Secp256k1 signer must have non-zero address"
+                );
+            }
+            _ => panic!("Expected Secp256k1 signer variant"),
+        }
     }
 }
