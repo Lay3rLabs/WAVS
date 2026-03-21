@@ -18,14 +18,16 @@ wstd = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-types = { workspace = true }
 alloy-json-rpc = { workspace = true }
-alloy-provider = { workspace = true }
-alloy-transport-http = { workspace = true }
+alloy-provider = { workspace = true, default-features = false }
 alloy-transport = { workspace = true }
-alloy-rpc-client = { workspace = true }
+alloy-rpc-client = { workspace = true, default-features = false }
 cfg-if = { workspace = true }
 tower-service = { workspace = true }
 futures-utils-wasm = { workspace = true }
 http = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+alloy-transport-http = { workspace = true }
 
 [lib]
 crate-type = ["rlib", "cdylib"]

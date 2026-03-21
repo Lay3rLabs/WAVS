@@ -15,7 +15,7 @@ use wavs_gui_shared::{
     error::{AppError, AppResult},
     settings::{SavedRegistry, Settings},
 };
-use wavs_types::{ChainConfigs, Credential, Service, ServiceId, ServiceManager};
+use wavs_types::{ChainConfigs, Credential, Service, ServiceId, ServiceManager, ServiceStatus};
 
 const KEYCHAIN_SERVICE: &str = "wavs-app";
 const KEYCHAIN_ACCOUNT: &str = "mnemonic";
@@ -365,6 +365,52 @@ pub async fn cmd_save_service_to_node(
         .map_err(|e| AppError::Service(format!("Failed to parse save response: {}", e)))?;
 
     Ok(format!("{}/dev/services/{}", wavs_url, save_resp.hash))
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_pause_service(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    wavs_instance: State<'_, WavsInstanceState>,
+    manager: ServiceManager,
+) -> AppResult<()> {
+    let service_id = ServiceId::from(&manager);
+    wavs_instance
+        .dispatcher()?
+        .pause_service(service_id)
+        .map_err(|e| AppError::Service(format!("Failed to pause service: {}", e)))?;
+    // Persist the paused state so it survives restarts
+    settings
+        .update(&app, |s| {
+            if let Some(svc) = s.saved_services.iter_mut().find(|svc| svc.manager == manager) {
+                svc.status = ServiceStatus::Paused;
+            }
+        })
+        .await?;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_resume_service(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    wavs_instance: State<'_, WavsInstanceState>,
+    manager: ServiceManager,
+) -> AppResult<()> {
+    let service_id = ServiceId::from(&manager);
+    wavs_instance
+        .dispatcher()?
+        .resume_service(service_id)
+        .map_err(|e| AppError::Service(format!("Failed to resume service: {}", e)))?;
+    // Persist the resumed state so it survives restarts
+    settings
+        .update(&app, |s| {
+            if let Some(svc) = s.saved_services.iter_mut().find(|svc| svc.manager == manager) {
+                svc.status = ServiceStatus::Active;
+            }
+        })
+        .await?;
+    Ok(())
 }
 
 /// Load mnemonic from OS keyring and populate the cache.

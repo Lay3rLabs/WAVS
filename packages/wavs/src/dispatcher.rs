@@ -551,7 +551,21 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                 // registration to avoid double-registration errors.
                 let already_in_memory = self.services.exists(&service.id()).unwrap_or(false);
 
-                // Always refresh the stored definition with the authoritative on-chain version
+                // Always refresh the stored definition with the authoritative on-chain version,
+                // but preserve the existing pause status — it is local-only state that the
+                // chain doesn't know about.
+                let service = if already_in_memory {
+                    if let Ok(existing) = self.services.get(&service.id()) {
+                        Service {
+                            status: existing.status,
+                            ..service
+                        }
+                    } else {
+                        service
+                    }
+                } else {
+                    service
+                };
                 self.services.save(&service)?;
 
                 // Store components
@@ -764,6 +778,22 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             hd_index,
         )?;
 
+        Ok(())
+    }
+
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    pub fn pause_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
+        let mut service = self.services.get(&id)?;
+        service.status = wavs_types::ServiceStatus::Paused;
+        self.services.save(&service)?;
+        Ok(())
+    }
+
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    pub fn resume_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
+        let mut service = self.services.get(&id)?;
+        service.status = wavs_types::ServiceStatus::Active;
+        self.services.save(&service)?;
         Ok(())
     }
 

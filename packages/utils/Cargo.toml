@@ -35,7 +35,7 @@ const-hex = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-types = { workspace = true }
 alloy-contract = { workspace = true }
-alloy-provider = { workspace = true}
+alloy-provider = { workspace = true, features = ["ws", "pubsub"] }
 alloy-node-bindings = { workspace = true }
 alloy-signer = { workspace = true }
 alloy-signer-local = { workspace = true }
