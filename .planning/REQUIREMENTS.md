@@ -2,7 +2,7 @@
 
 **Defined:** 2026-03-23
 **Milestone:** v1.2 Tauri App
-**Core Value:** Multi-operator signature aggregation over P2P must work reliably — operators broadcast signed submissions, reach quorum, and submit on-chain.
+**Core Value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain.
 
 ## v1.2 Requirements
 
@@ -38,7 +38,7 @@
 ### Settings UX
 
 - [ ] **SET-01**: Settings page reorganized into logical sections with clear visual hierarchy
-- [ ] **SET-02**: Visual polish — consistent spacing, typography, and component styling across all settings sections
+- [ ] **SET-02**: Visual polish -- consistent spacing, typography, and component styling across all settings sections
 
 ## v2 Requirements
 
@@ -60,43 +60,43 @@
 
 | Feature | Reason |
 |---------|--------|
-| MCP tooling for BLS operator registration | Defer — CLI/manual registration sufficient for now |
+| MCP tooling for BLS operator registration | Defer -- CLI/manual registration sufficient for now |
 | Threshold/DKG signatures | Foundational BLS first, threshold later |
 | Cosmos BLS submission | EVM only for now |
 | Trigger/engine subsystem changes | Unaffected by frontend milestone |
 | Mobile app | Desktop-first via Tauri |
-| Real-time P2P message feed | Complexity vs value — status polling is sufficient |
-| Component library migration (shadcn/Radix) | Existing hand-rolled Tailwind components work — not worth the churn |
+| Real-time P2P message feed | Complexity vs value -- status polling is sufficient |
+| Component library migration (shadcn/Radix) | Existing hand-rolled Tailwind components work -- not worth the churn |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FND-01 | TBD | Pending |
-| FND-02 | TBD | Pending |
-| FND-03 | TBD | Pending |
-| FND-04 | TBD | Pending |
-| P2P-01 | TBD | Pending |
-| P2P-02 | TBD | Pending |
-| P2P-03 | TBD | Pending |
-| P2P-04 | TBD | Pending |
-| P2P-05 | TBD | Pending |
-| P2P-06 | TBD | Pending |
-| BLS-01 | TBD | Pending |
-| BLS-02 | TBD | Pending |
-| BLS-03 | TBD | Pending |
-| BLS-04 | TBD | Pending |
-| ACT-01 | TBD | Pending |
-| ACT-02 | TBD | Pending |
-| ACT-03 | TBD | Pending |
-| SET-01 | TBD | Pending |
-| SET-02 | TBD | Pending |
+| FND-01 | Phase 9 | Pending |
+| FND-02 | Phase 9 | Pending |
+| FND-03 | Phase 9 | Pending |
+| FND-04 | Phase 9 | Pending |
+| P2P-01 | Phase 10 | Pending |
+| P2P-02 | Phase 10 | Pending |
+| P2P-03 | Phase 10 | Pending |
+| P2P-04 | Phase 10 | Pending |
+| P2P-05 | Phase 10 | Pending |
+| P2P-06 | Phase 10 | Pending (Stretch) |
+| BLS-01 | Phase 11 | Pending |
+| BLS-02 | Phase 11 | Pending |
+| BLS-03 | Phase 11 | Pending |
+| BLS-04 | Phase 11 | Pending |
+| ACT-01 | Phase 12 | Pending |
+| ACT-02 | Phase 12 | Pending |
+| ACT-03 | Phase 12 | Pending |
+| SET-01 | Phase 9 | Pending |
+| SET-02 | Phase 9 | Pending |
 
 **Coverage:**
-- v1.2 requirements: 19 total (16 core + 1 stretch + 2 settings)
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 19 ⚠️
+- v1.2 requirements: 19 total (18 core + 1 stretch)
+- Mapped to phases: 19/19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-23*
-*Last updated: 2026-03-23 after initial definition*
+*Last updated: 2026-03-23 after roadmap creation*
