@@ -185,29 +185,45 @@ impl Aggregator {
                     .await;
 
                 if let Err(err) = result {
-                    match err.as_revert_data() {
-                        Some(raw) => {
-                            let raw_str = raw.to_string();
-                            // SignerNotRegistered (0x3dda1739)
-                            if raw_str == "0x3dda1739" {
-                                tracing::warn!(
-                                    "BLS signer not registered yet for submission {}. Queue will be saved for retry.",
-                                    queue.last().unwrap().label()
-                                );
+                    // Try to decode typed errors first (same error selectors as secp256k1 service manager)
+                    match err.as_decoded_interface_error::<ServiceManagerError>() {
+                        Some(err) => match err {
+                            ServiceManagerError::InsufficientQuorum(info) => {
+                                return Err(AggregatorError::InsufficientQuorum {
+                                    signer_weight: info.signerWeight.to_string(),
+                                    threshold_weight: info.thresholdWeight.to_string(),
+                                    total_weight: info.totalWeight.to_string(),
+                                });
+                            }
+                            err => {
+                                return Err(AggregatorError::EvmServiceManagerValidateKnown(err));
+                            }
+                        },
+                        None => match err.as_revert_data() {
+                            Some(raw) => {
+                                let raw_str = raw.to_string();
+                                // SignerNotRegistered (0x3dda1739)
+                                if raw_str == "0x3dda1739" {
+                                    tracing::warn!(
+                                        "BLS signer not registered yet for submission {}. Queue will be saved for retry.",
+                                        queue.last().unwrap().label()
+                                    );
+                                    return Err(
+                                        AggregatorError::EvmServiceManagerValidateAnyRevert(
+                                            format!("SignerNotRegistered ({})", raw_str),
+                                        ),
+                                    );
+                                }
                                 return Err(
-                                    AggregatorError::EvmServiceManagerValidateAnyRevert(format!(
-                                        "SignerNotRegistered ({})",
-                                        raw_str
-                                    )),
+                                    AggregatorError::EvmServiceManagerValidateAnyRevert(raw_str),
                                 );
                             }
-                            return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(
-                                raw_str,
-                            ));
-                        }
-                        None => {
-                            return Err(AggregatorError::EvmServiceManagerValidateUnknown(err));
-                        }
+                            None => {
+                                return Err(AggregatorError::EvmServiceManagerValidateUnknown(
+                                    err,
+                                ));
+                            }
+                        },
                     }
                 }
 

@@ -543,6 +543,43 @@ pub async fn simulate_anvil_reorg(
     Ok(())
 }
 
+pub async fn evm_wait_for_bls_trigger_validated(
+    evm_submit_client: EvmSigningClient,
+    address: alloy_primitives::Address,
+    trigger_id: TriggerId,
+    submit_start_block: u64,
+    timeout: Duration,
+) -> Result<()> {
+    let submit_client = SimpleEvmSubmitClient::new(evm_submit_client, address);
+
+    tokio::time::timeout(timeout, async move {
+        loop {
+            let current_block = submit_client
+                .evm_client
+                .provider
+                .get_block_number()
+                .await
+                .map_err(|e| anyhow!("Failed to get block number: {e}"))?;
+
+            if current_block <= submit_start_block {
+                submit_client.evm_client.provider.evm_mine(None).await?;
+            }
+
+            if submit_client.trigger_validated(trigger_id).await {
+                return Ok(());
+            }
+
+            tracing::debug!(
+                "Waiting for BLS trigger validation on trigger {}",
+                trigger_id
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("Timeout when waiting for BLS trigger to be validated"))?
+}
+
 pub async fn evm_wait_for_task_to_land(
     evm_submit_client: EvmSigningClient,
     address: alloy_primitives::Address,
