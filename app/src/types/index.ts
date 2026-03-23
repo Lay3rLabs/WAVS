@@ -199,8 +199,30 @@ export interface SignatureKind {
   prefix: SignaturePrefix | null;
 }
 
-export type SignatureAlgorithm = 'secp256k1';
+export type SignatureAlgorithm = 'secp256k1' | 'bls12381';
 export type SignaturePrefix = 'eip191';
+
+// P2P network status (mirrors packages/types/src/http.rs:134 P2pStatus)
+export interface P2pStatus {
+  enabled: boolean;
+  local_peer_id: string | null;
+  listen_addresses: string[];
+  connected_peers: number;
+  peer_ids: string[];
+  subscribed_services: string[];
+}
+
+// Service signer response (mirrors packages/types/src/http.rs:13 SignerResponse)
+// Rust uses #[serde(rename_all = "snake_case")] with NO tag attribute = externally tagged enum
+// JSON output: {"secp256k1": {"hd_index": 0, "evm_address": "0x..."}} or {"bls12381": {"hd_index": 0, "g1_pubkey_hex": "..."}}
+export type SignerResponse =
+  | { secp256k1: { hd_index: number; evm_address: string } }
+  | { bls12381: { hd_index: number; g1_pubkey_hex: string } };
+
+// BLS public key derivation response (for cmd_derive_bls_pubkey)
+export interface BlsPubkeyResponse {
+  g1_pubkey_hex: string;
+}
 
 // Chain types
 export interface ChainConfigs {

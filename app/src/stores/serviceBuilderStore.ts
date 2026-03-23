@@ -8,6 +8,7 @@ import type {
   ComponentSource,
   AllowedHostPermission,
   ServiceManager,
+  SignatureAlgorithm,
 } from '../types';
 
 export type BuilderStep = 'contract' | 'service' | 'review' | 'deploy';
@@ -44,7 +45,7 @@ export interface ComponentDraft {
 export interface SubmitDraft {
   type: 'none' | 'aggregator';
   component: ComponentDraft;
-  signatureAlgorithm: 'secp256k1';
+  signatureAlgorithm: SignatureAlgorithm;
   signaturePrefix: 'eip191' | 'none';
 }
 
