@@ -15,7 +15,7 @@ use wavs_gui_shared::{
     error::{AppError, AppResult},
     settings::{SavedRegistry, Settings},
 };
-use wavs_types::{ChainConfigs, Credential, Service, ServiceId, ServiceManager, ServiceStatus};
+use wavs_types::{ChainConfigs, Credential, Service, ServiceId, ServiceManager, ServiceStatus, SignerResponse};
 
 const KEYCHAIN_SERVICE: &str = "wavs-app";
 const KEYCHAIN_ACCOUNT: &str = "mnemonic";
@@ -721,6 +721,11 @@ pub struct McpStatus {
     pub pid: Option<u32>,
 }
 
+#[derive(Serialize)]
+pub struct BlsPubkeyResponse {
+    pub g1_pubkey_hex: String,
+}
+
 /// Resolve the wavs-mcp binary path.
 /// Looks alongside the current executable first (bundled app), then checks both
 /// debug and release profiles under the workspace target/ directory.
@@ -1240,4 +1245,46 @@ pub async fn cmd_clear_persisted_services(
         .await?;
     log::info!("Cleared all persisted services and registries");
     Ok(())
+}
+
+// --- P2P Status ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_p2p_status(
+    wavs_instance: State<'_, WavsInstanceState>,
+) -> AppResult<wavs_types::P2pStatus> {
+    let dispatcher = wavs_instance.dispatcher()?;
+    Ok(dispatcher.aggregator.get_p2p_status().await)
+}
+
+// --- Service Signer ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_service_signer(
+    wavs_instance: State<'_, WavsInstanceState>,
+    service_manager: ServiceManager,
+) -> AppResult<SignerResponse> {
+    let service_id = ServiceId::from(&service_manager);
+    wavs_instance
+        .dispatcher()?
+        .get_service_signer(service_id)
+        .map_err(|e| AppError::Service(e.to_string()))
+}
+
+// --- BLS Key Derivation ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_derive_bls_pubkey(
+    mnemonic_cache: State<'_, MnemonicCacheState>,
+    hd_index: u32,
+) -> AppResult<BlsPubkeyResponse> {
+    let mnemonic = get_mnemonic_cached(&mnemonic_cache)
+        .ok_or_else(|| AppError::Keychain("No mnemonic found".to_string()))?;
+    let key = utils::bls_signing::bls_private_key_from_mnemonic(&mnemonic.to_string(), hd_index)
+        .map_err(|e| AppError::Service(format!("BLS key derivation failed: {}", e)))?;
+    let g1_bytes = utils::bls_signing::bls_g1_pubkey_bytes(&key)
+        .map_err(|e| AppError::Service(format!("G1 pubkey derivation failed: {}", e)))?;
+    Ok(BlsPubkeyResponse {
+        g1_pubkey_hex: const_hex::encode(g1_bytes),
+    })
 }

@@ -13964,6 +13964,7 @@ name = "wavs-app"
 version = "2.8.0"
 dependencies = [
  "anyhow",
+ "const-hex",
  "fix-path-env",
  "keyring",
  "log",
