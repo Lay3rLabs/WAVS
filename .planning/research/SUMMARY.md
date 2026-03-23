@@ -1,203 +1,235 @@
 # Project Research Summary
 
-**Project:** WAVS Commonware P2P Migration
-**Domain:** P2P networking layer replacement (libp2p 0.56 -> commonware 2026.3.0)
-**Researched:** 2026-03-17
-**Confidence:** MEDIUM
+**Project:** WAVS v1.2 Tauri App — New Feature Milestone
+**Domain:** Tauri 2 desktop app — node operator tooling for decentralized off-chain computation
+**Researched:** 2026-03-23
+**Confidence:** HIGH
 
 ## Executive Summary
 
-WAVS is replacing its libp2p-based P2P networking layer with commonware, an "anti-framework" suite of Rust crates designed for authenticated, known-operator networks. The migration scope is tightly bounded: the change is entirely within `packages/wavs/src/subsystems/aggregator/p2p.rs` (~1,840 lines), behind the existing `P2pHandle` abstraction that the rest of the codebase depends on. The recommended approach is a 6-phase incremental rewrite — starting with cryptographic identity, then the network skeleton, then broadcast, then service routing, then config migration, and finally e2e validation and libp2p removal. The `P2pHandle` interface (publish, subscribe, unsubscribe, get_status) is preserved throughout, meaning the Aggregator and Dispatcher see no changes.
+The v1.2 milestone adds four distinct feature areas to an existing, well-structured Tauri 2 + React 19 desktop app: P2P operator visibility, BLS service deployment, unified activity events, and settings UX overhaul. The research finding across all four areas is consistent — **no new npm dependencies, no new Cargo dependencies, and no architectural shifts are required**. The existing stack (Tauri commands, Zustand stores, hand-rolled Tailwind components, Viem, existing WAVS HTTP API) is sufficient. Every feature either consumes existing backend endpoints (`/p2p/status`, `/services/signer`) or requires small, scoped additions to existing Tauri command handlers and Rust event structs.
 
-The key architectural decision is how to bridge commonware's static-channel model against WAVS's dynamic service subscriptions. Commonware channels must be registered before `network.start()` and cannot be added at runtime, which conflicts with WAVS's `SubscribeService`/`UnsubscribeService` commands. The recommended resolution is a single broadcast channel for all services with application-level filtering by `service_id` — this sidesteps the static channel constraint entirely and is the simplest correct approach. The second key decision is runtime integration: commonware's `Runner` creates its own Tokio runtime internally, requiring WAVS to run it on a dedicated `std::thread` and bridge via cross-thread channels.
+The recommended approach is incremental: start with type system updates and settings decomposition (zero risk), then build the P2P dashboard (frontend-only, highest value-to-effort ratio), then BLS service builder support (moderate scope, unblocks a critical operator workflow), and finally activity event enrichment (requires backend event schema changes, moderate risk). Each phase is self-contained and delivers visible value. The BLS key registration flow is the most complex area — it requires a new `cmd_derive_bls_pubkey` Tauri command that keeps all BLS crypto in Rust and exposes only hex strings to the frontend.
 
-The main risks are: (1) commonware is ALPHA software with explicit breaking-change warnings — pin versions exactly and preserve the `P2pHandle` abstraction as an escape hatch; (2) the runtime integration strategy (dedicated thread + separate Tokio runtime) is sound in theory but needs early prototype validation before building P2P logic on top; (3) the identity scheme change from secp256k1 to Ed25519 is a hard cutover requiring all operators to upgrade simultaneously. None of these risks are blockers, but they must be addressed in the correct phase order to avoid rewrites.
+The primary risks are infrastructure-level rather than feature-level: Tauri's known event listener memory leak (Issue #13133) makes the polling architecture for the P2P dashboard a critical design decision; the settings struct deserialization is fragile across upgrades without `#[serde(default)]` on every new field; and the activity event correlation system requires a backend-emitted `event_id` to be correct rather than relying on fragile heuristic matching. Address these three risks explicitly before building the corresponding features — they are not implementation details, they are architectural prerequisites.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Replace all 13 libp2p feature flags with five commonware crates pinned at `2026.3.0` (CalVer). The crates are published in lockstep from the commonware monorepo, so version management is straightforward. The main addition beyond commonware is `rand_chacha` for deterministic Ed25519 key derivation from the existing BIP-39 mnemonic. All existing WAVS dependencies (tokio, crossbeam, serde, tracing, axum) are unchanged.
+The existing stack is validated and complete. See `.planning/research/STACK.md` for full detail.
 
-**Core technologies:**
-- `commonware-p2p 2026.3.0`: Authenticated peer networking — replaces libp2p Swarm, Kademlia, mDNS, Noise, yamux, Identify, AutoNAT
-- `commonware-broadcast 2026.3.0`: Message dissemination and caching — replaces GossipSub and the entire custom catch-up protocol
-- `commonware-cryptography 2026.3.0`: Ed25519 key generation and signing — replaces libp2p secp256k1 P2P identity
-- `commonware-runtime 2026.3.0`: Async runtime abstraction — required dependency of commonware-p2p; runs on a dedicated thread
-- `commonware-codec 2026.3.0`: Binary serialization — used by commonware-p2p internally; `Submission` needs `Encode + Decode` implementations
-- `rand_chacha 0.9+`: Deterministic RNG — seeds Ed25519 key derivation from BIP-39 mnemonic entropy
+**Core additions (not new dependencies — new usage of existing plumbing):**
+- **New Tauri commands (Rust):** `cmd_get_p2p_status`, `cmd_get_service_signer`, `cmd_get_operator_keys`, `cmd_derive_bls_pubkey` — proxy existing dispatcher methods or HTTP endpoints into the IPC layer following the `cmd_get_health_status` pattern
+- **New TypeScript types:** `P2pStatus`, `SignerResponse` (already defined in `packages/types/src/http.rs`), updated `SignatureAlgorithm = 'secp256k1' | 'bls12381'`
+- **New Zustand store:** `p2pStore.ts` — P2P status polling/push state, separate lifecycle from app/service stores
+- **New ABI file:** `POABlsStakeRegistry.ts` — BLS-specific `updateOperatorSigningKey(bytes blsKey, bytes blsSigProof)` variant; separate from existing secp256k1 ABI since the two contracts have incompatible function signatures
 
-See `.planning/research/STACK.md` for full dependency mapping and the runtime integration code pattern.
+BLS crypto must remain entirely in the Rust backend. The `cmd_derive_bls_pubkey` command returns hex-encoded G1 pubkey and G2 proof-of-possession; the frontend passes these as opaque byte strings to the contract via Viem. No JavaScript BLS library should be introduced.
 
 ### Expected Features
 
-The migration must preserve all existing P2P capabilities while adopting commonware's different primitives. The hardest mapping problem is dynamic service subscriptions against commonware's static channels — resolved by single-channel broadcast with service-ID filtering. The loss of mDNS for local dev is a minor DX change addressed by `lookup` mode with known addresses.
+See `.planning/research/FEATURES.md` for the full table-stakes / differentiator / anti-feature breakdown.
 
 **Must have (table stakes):**
-- Per-service message broadcast — `commonware-broadcast::buffered::Engine` replaces GossipSub; single channel, filter by `service_id`
-- Peer discovery (production) — `authenticated::discovery` with bootstrappers replaces Kademlia DHT
-- Peer discovery (local dev) — `authenticated::lookup` with known addresses replaces mDNS
-- Deterministic P2P identity from mnemonic — Ed25519 key derived from existing `WAVS_SIGNING_MNEMONIC` via ChaCha20Rng
-- Encrypted peer connections — built into commonware authenticated modules, no separate config needed
-- Missed message retrieval on reconnect — `buffered::Engine` digest-based retrieval replaces custom `CatchUpRequest`/`CatchUpResponse` protocol
-- `/p2p/status` endpoint — reconstructed from commonware Oracle and config primitives; address format changes from multiaddr to socket address
-- P2pHandle API preserved — `publish`, `subscribe`, `unsubscribe`, `get_status` interface stays identical
+- Connected peer count + peer list with Ed25519 peer ID display — operators need network health visibility; backend already exposes via `P2pStatus`
+- P2P mode indicator (Disabled / Local / Remote) and listen address display — required for diagnosing peer connectivity issues
+- Subscribed services list on P2P page — correlate hex service IDs with service names from the app store
+- BLS/ECDSA algorithm selector in service builder — currently hardcoded to secp256k1; this is a blocking gap for BLS service deployment
+- Post-deploy BLS key display (per-service, not global) with registration guidance card
+- Settings page collapsible sections — the 942-line monolith must be decomposed before adding more sections
+- Submission result status (success/fail/pending) and error display in activity cards — requires `SubmissionResult` field in `SubmissionEvent`
 
-**Should have (enabled by commonware that libp2p did not provide):**
-- Oracle-based authorized peer sets — register only known operators; security improvement over open GossipSub
-- Built-in per-peer and per-subnet rate limiting — DoS protection at the network layer
-- Peer blocking by cryptographic identity — block misbehaving peers across IP changes
-- Namespace-scoped replay protection — `discovery::Config::namespace` prevents cross-network message replay
-- Simulated networking for tests — `commonware-p2p::simulated` enables deterministic unit tests without real network
+**Should have (differentiators):**
+- One-click BLS operator registration (`registerOperator` + `updateOperatorSigningKey` from the UI) — high value, ports existing MCP tool logic to Tauri commands
+- BLS key backup warning after service creation — security UX, low effort
+- Registration status checker (on-chain read of `POAStakeRegistry.isRegistered`) — reduces support burden
+- Export activity as CSV/JSON — low effort, genuine utility for power users
+- P2P configuration editor in Settings (form over raw TOML for P2P mode/port/peers)
 
-**Defer (v2+):**
-- On-chain operator registry integration with Oracle — start with static peer sets from config
-- Priority message support — tune after observing production behavior
-- NAT traversal infrastructure — require operators to configure `dialable` address; no AutoNAT equivalent in commonware
+**Defer to v2+:**
+- Per-service quorum progress visualization — requires new `/aggregator/status` endpoint; significant backend work
+- Activity timeline / Gantt-style view — high effort, low operational necessity
+- Real-time peer connection/disconnection notifications — requires new Tauri event from P2P callbacks
+- Guided first-run wizard — valuable but not v1.2 scope
+- Network topology mini-map — impressive demo, low operational value
 
-See `.planning/research/FEATURES.md` for full feature dependency chain and anti-features to avoid.
+**Explicit anti-features (do not build):**
+- In-app BLS key generation — keys derive from mnemonic; separate generation UI contradicts the architecture
+- Manual peer add/remove UI — peer management is automated by commonware p2p
+- Transaction history / on-chain explorer — block explorer's domain
+- BLS DKG / threshold UI — out of scope per PROJECT.md
+- Cosmos BLS services — BLS submission is EVM-only in the current implementation
 
 ### Architecture Approach
 
-The migration is a contained replacement inside the existing `P2pHandle` abstraction boundary. The Dispatcher, Aggregator, engine, trigger, and submission subsystems are all unchanged. Inside the P2P module, four new components replace the libp2p Swarm: a network layer (`discovery::Network` or `lookup::Network`), a broadcast engine (`buffered::Engine`), a service router (new, application-level filtering), and an identity layer (Ed25519 derivation). All commonware types are kept strictly inside `p2p.rs` (or a `p2p/` module) to limit blast radius from future commonware ALPHA changes.
+The v1.2 features follow the existing Tauri command + Zustand store + React page architecture exactly. No structural changes. The four features add 5 new Tauri commands, 1 new Tauri event type (`P2pStatusEvent`), 1 new store (`p2pStore`), 1 new page (`Operators.tsx`), and 6 extracted settings sub-components. See `.planning/research/ARCHITECTURE.md` for complete data flow diagrams and component boundaries.
 
-**Major components:**
-1. `CommonwareP2pNetwork` — wraps `authenticated::discovery::Network` or `lookup::Network`; runs inside `commonware::tokio::Runner` on a dedicated OS thread; bridges commands via `mpsc::UnboundedSender<P2pCommand>`
-2. `BroadcastEngine` — wraps `commonware_broadcast::buffered::Engine`; handles reliable broadcast, per-peer message caching, and digest-based catch-up retrieval; eliminates ~180 lines of custom catch-up and storage code
-3. `ServiceRouter` — new thin struct with `HashSet<ServiceId>`; filters inbound messages from the single broadcast channel by subscribed services; replaces GossipSub topic isolation
-4. `P2pHandle` (preserved) — unchanged external facade; `publish`, `subscribe`, `unsubscribe`, `get_status` interface stays identical; internal implementation changes from libp2p Swarm event loop to commonware coordinator task
-5. `ed25519_signer_from_mnemonic()` — new identity function; derives Ed25519 key from BIP-39 mnemonic via ChaCha20Rng; replaces `keypair_from_mnemonic()` secp256k1 derivation
+**Major components affected:**
+1. **`commands.rs` (Rust backend)** — Add `cmd_get_p2p_status`, `cmd_get_service_signer`, `cmd_get_operator_keys`, `cmd_derive_bls_pubkey`; refactor into modules to manage 40+ command scale (currently 30 commands in one 1244-line file)
+2. **`gui_shared/event.rs` (Rust backend)** — Add `P2pStatusEvent`; enrich `SubmissionEvent` with `SubmissionResult { success: { tx_hash, algorithm } | error: { message } }` and `event_id`
+3. **`p2pStore.ts` + `Operators.tsx` (Frontend)** — New store populated by push events and on-demand command; new page showing Ed25519 identity, connected peers, subscribed services, operator keys
+4. **`serviceBuilderStore.ts` + `SubmitEditor.tsx` (Frontend)** — Widen `SignatureAlgorithm` type; add algorithm selector; handle BLS-specific post-deploy key display flow
+5. **`Settings.tsx` + `components/settings/` (Frontend)** — Decompose 942-line monolith into 6 section components; no behavior changes, pure structural refactor
+6. **`ActivityCard.tsx` + `listeners.ts` (Frontend)** — Correlation logic using backend-emitted `event_id`; result/error/algorithm badges; merged trigger+submission display
 
-See `.planning/research/ARCHITECTURE.md` for data flow diagrams and the full build order.
+**Key architectural pattern:** Prefer direct dispatcher access over HTTP proxy in Tauri commands — avoids HTTP server startup race conditions. P2P status uses a background Tokio task emitting `P2pStatusEvent` every 5s, not frontend polling.
 
 ### Critical Pitfalls
 
-1. **Static channel model vs. dynamic service subscriptions** — Commonware channels cannot be created after `network.start()`. Avoid a 1:1 GossipSub-topic-to-channel mapping. Use a single broadcast channel for all services and filter by `service_id` in the new `ServiceRouter`. Decide this before writing any code.
+See `.planning/research/PITFALLS.md` for the full 14-pitfall catalog with phase mappings.
 
-2. **Commonware Runtime ownership conflict** — `commonware-runtime::tokio::Runner` creates its own Tokio runtime. Calling it inside WAVS's existing `tokio::spawn` will panic ("cannot start a runtime from within a runtime"). Run commonware's Runner on a dedicated `std::thread` and bridge via cross-thread channels. Prototype this first in Phase 2 before building any P2P logic on top.
+1. **Tauri event listener memory leak (CRITICAL)** — Tauri 2 has a confirmed bug (Issue #13133) where `transformCallback` accumulates without cleanup. Use `invoke()` + `setInterval` for P2P status polling (not `listen()`), or store `UnlistenFn` and call it in `useEffect` cleanup. The P2P page is a "leave open" page — failure here causes app crash after hours of operation on macOS.
 
-3. **Catch-up protocol gap** — The custom `CatchUpRequest`/`CatchUpResponse` protocol provides service-scoped, TTL-bounded miss recovery. The `buffered::Engine` provides peer-scoped digest retrieval — close but not identical. Validate that the Engine's behavior meets the catch-up guarantee before removing custom catch-up code.
+2. **BLS key display without service context (CRITICAL)** — BLS keys are per-service (derived from mnemonic + HD index). Displaying a single global BLS key misleads operators into registering the wrong key. Always show BLS G1 pubkey in per-service context with a copy button (256 hex chars requires a button, not text selection), truncated display, and registration status badge.
 
-4. **Hard identity cutover** — secp256k1 peer IDs are mathematically unrelated to Ed25519 peer IDs derived from the same mnemonic. All operators must upgrade simultaneously. Bootstrap node addresses change. Plan coordinated upgrade and document clearly.
+3. **Activity correlation memory leak without EventId (CRITICAL)** — Heuristic correlation by `(serviceId, workflowId, triggerData)` leaks pending-trigger entries when submissions fail or never arrive. The correct fix is adding `event_id: String` to both `TriggerEvent` and `SubmissionEvent` in the Rust event structs. This is a backend change that must precede the frontend correlation UI.
 
-5. **Commonware ALPHA instability** — All commonware crates self-describe as ALPHA. Pin exact versions in `Cargo.toml`. Preserve the `P2pHandle` abstraction as an escape hatch. Do not let commonware types leak outside `p2p.rs`.
+4. **Settings migration breaks existing installations (CRITICAL)** — Every new field in the `Settings` Rust struct must have `#[serde(default)]`. Without it, upgrading from v1.1 fails to deserialize `settings.json` and shows an initialization error. Write an explicit migration function. Test the upgrade path from a v1.1 settings file before shipping.
 
-See `.planning/research/PITFALLS.md` for 12 total pitfalls with phase mappings.
+5. **`commands.rs` handler bloat at 40+ commands (MODERATE)** — Tauri's `generate_handler![]` only accepts one invocation; refactoring `commands.rs` into modules (`commands/p2p.rs`, `commands/bls.rs`, `commands/settings.rs`) is a prerequisite to adding more commands without creating an unmaintainable 1500-line file.
 
 ## Implications for Roadmap
 
-Based on research, the architecture's dependency chain naturally suggests 6 phases. Dependencies flow strictly top-down — each phase produces an artifact that the next phase builds on. The build order from ARCHITECTURE.md maps directly to phases.
+Based on combined research, four phases in dependency order:
 
-### Phase 1: Cryptographic Identity
+### Phase 1: Foundation — Types, Settings Decomposition, and Command Modules
 
-**Rationale:** Every subsequent component depends on having a working Ed25519 signer derived from the mnemonic. This is a pure function with no async, no networking, and no runtime concerns — lowest risk first.
-**Delivers:** `ed25519_signer_from_mnemonic()` function with unit tests proving deterministic derivation from known mnemonics
-**Addresses:** Key derivation (table stakes), Ed25519 seed choice (STACK.md recommendation: ChaCha20Rng seeded from BIP-39 entropy, not the insecure `from_seed(u64)`)
-**Avoids:** Pitfall 4 (identity scheme change) — establishes the deterministic derivation scheme before anything depends on peer IDs
+**Rationale:** Type changes affect every other phase. Settings decomposition is a low-risk structural prerequisite that reduces merge conflict surface for subsequent changes. Refactoring `commands.rs` into modules is required before adding 10+ new commands. Zero backend behavior changes — this phase cannot break anything.
 
-### Phase 2: P2P Network Skeleton
+**Delivers:**
+- Extended `types/index.ts`: `P2pStatus`, `SignerResponse`, `SubmissionResult`, `SignatureAlgorithm = 'secp256k1' | 'bls12381'`
+- `Settings.tsx` decomposed into 6 section components (`WalletSection`, `WavsHomeSection`, `TomlEditorSection`, `EnvVarsSection`, `McpSection`, `ResetSection`)
+- `commands.rs` refactored into `commands/` module structure
+- `#[serde(default)]` audit on `Settings` struct + migration function
+- `serviceBuilderStore.ts` algorithm field widened (type change only, no UI yet)
 
-**Rationale:** Runtime integration is the highest-risk unknown in the entire migration. It must be validated before building broadcast, service routing, or any other P2P logic on top. A two-node integration test at this phase proves the runtime bridge works.
-**Delivers:** `CommonwareP2pNetwork` wrapper with working peer connections; `commonware::tokio::Runner` running on a dedicated `std::thread`; two nodes can connect and the bridge channels pass messages
-**Uses:** `commonware-p2p 2026.3.0`, `commonware-runtime 2026.3.0` (STACK.md); dedicated-thread integration pattern (STACK.md)
-**Implements:** Connection layer component (ARCHITECTURE.md Phase 2)
-**Avoids:** Pitfall 2 (runtime ownership conflict) — this phase's sole purpose is to prove the runtime strategy works
+**Addresses:** Settings section collapsibility (prerequisite), BLS type support (prerequisite)
 
-### Phase 3: Broadcast Integration
+**Avoids:** Pitfall 4 (settings migration), Pitfall 6 (command handler bloat), Pitfall 5 (SignatureAlgorithm type mismatch)
 
-**Rationale:** With working peer connections, wire in the broadcast engine. This is where GossipSub and the entire custom catch-up protocol are replaced. Validates the single-channel routing decision.
-**Delivers:** `BroadcastEngine` + `ServiceRouter` wired to `CommonwareP2pNetwork`; three-node test proves broadcast delivery and service-ID filtering; catch-up behavior validated against reconnect scenarios
-**Uses:** `commonware-broadcast::buffered::Engine 2026.3.0` (STACK.md); `WavsMessage` with `Digestible + Codec` traits (ARCHITECTURE.md)
-**Implements:** BroadcastEngine and ServiceRouter components (ARCHITECTURE.md Phase 3)
-**Avoids:** Pitfall 1 (static channel vs. dynamic subscriptions) — single-channel approach is implemented here; Pitfall 3 (catch-up gap) — validate Engine behavior against catch-up requirements in this phase
+**Research flag:** Standard patterns — no additional research needed.
 
-### Phase 4: Full P2pHandle Reimplementation
+### Phase 2: P2P Operator Dashboard
 
-**Rationale:** With the underlying network and broadcast working, implement the complete `P2pHandle` command surface. This is well-understood application-level logic with the lowest technical risk.
-**Delivers:** Complete `P2pHandle` with `publish`, `subscribe`, `unsubscribe`, `get_status` reimplemented using commonware primitives; `ServiceRouter` subscribe/unsubscribe updates wired to `P2pCommand`; pending publish retry queue ported
-**Implements:** P2pHandle facade preservation (ARCHITECTURE.md Phase 4)
-**Avoids:** Pitfall 10 (pending publish retry queue) — explicit port of retry logic; Pitfall 8 (P2pStatus contract) — design backend-agnostic status struct here
+**Rationale:** P2P visibility is entirely frontend after Phase 1 types are in place. `GET /p2p/status` and `GET /info` already return all needed data. Adding `cmd_get_p2p_status` follows an exact existing pattern. Highest value-to-effort ratio of any v1.2 feature. Independent of BLS and activity changes.
 
-### Phase 5: Config Migration
+**Delivers:**
+- `cmd_get_p2p_status` and `cmd_get_node_info` Tauri commands (direct dispatcher access)
+- `cmd_get_operator_keys` Tauri command (returns signer info per service)
+- `P2pStatusEvent` background emitter (5s interval from `cmd_start_wavs`)
+- `p2pStore.ts` — populated by push event and on-demand command
+- `Operators.tsx` — new page with Ed25519 identity, peer count/list, listen addresses, P2P mode badge, subscribed services, operator key display per service
+- Header nav item + `App.tsx` route for `/operators`
 
-**Rationale:** Config is the last self-contained concern before full e2e validation. New `P2pConfig` format for commonware's discovery vs. lookup modes, updated `P2pStatus` struct, and dev-friendly local config preset.
-**Delivers:** New `P2pConfig` (Disabled / Local / Remote) tailored to commonware; updated `P2pStatus` with socket addresses instead of multiaddrs; dev preset for localhost multi-operator testing; updated CLI `wait_for_p2p_ready()` compatibility
-**Avoids:** Pitfall 7 (local dev discovery gap) — explicit dev config preset; Pitfall 8 (P2pStatus contract change) — backend-agnostic fields finalized here
+**Addresses:** All P2P table-stakes features (peer count, peer ID, mode indicator, listen addresses, subscribed services)
 
-### Phase 6: E2E Validation and libp2p Removal
+**Avoids:** Pitfall 1 (memory leak — use `invoke` + `setInterval`, not `listen`), Pitfall 10 (peer ID labeling — `PeerIdDisplay` component distinct from `AddressDisplay`), Pitfall 14 (nav routing — add to both `App.tsx` and `Header.tsx`)
 
-**Rationale:** Full system validation before removing the old dependency. libp2p is removed only after `just test-wavs-e2e` passes, confirming the migration is complete and the old stack is no longer needed.
-**Delivers:** Passing `just test-wavs-e2e` suite including `evm_multi_operator`; libp2p removed from `Cargo.toml`; all 13 libp2p feature flags gone; operator migration guide documenting bootstrap address format change and coordinated upgrade requirement
-**Avoids:** Pitfall 4 (identity cutover) — migration guide and coordinated upgrade docs; Pitfall 9 (ALPHA instability) — exact version pinning confirmed; Pitfall 6 (rate limiting drops) — burst testing with `dev-tool send-triggers --count 1000`
+**Research flag:** Standard patterns. The push-event architecture (background tokio task + `emit_ext`) is well-documented in the existing codebase.
+
+### Phase 3: BLS Service Deployment
+
+**Rationale:** Depends on Phase 1 type widening. Unblocks BLS service deployment from the UI, which is currently impossible. The `cmd_get_service_signer` and `cmd_derive_bls_pubkey` Tauri commands expose existing Rust BLS functionality. The BLS `POAStakeRegistry` ABI is already in `packages/types`. This phase completes the end-to-end BLS operator workflow.
+
+**Delivers:**
+- `cmd_get_service_signer` Tauri command
+- `cmd_derive_bls_pubkey` Tauri command (returns `{ g1_pubkey_hex, proof_of_possession_hex }` — all BLS crypto stays in Rust)
+- `POABlsStakeRegistry.ts` ABI file (separate from secp256k1 registry)
+- Algorithm selector radio in `SubmitEditor.tsx` (secp256k1 / BLS12-381)
+- Post-deploy BLS key display card (per-service, truncated + copy, HD index shown)
+- Registration guidance card with BLS G1 pubkey, registry address, and next steps
+- `updateOperatorSigningKey(blsKey, blsSigProof)` call via Viem (BLS ABI path)
+- BLS algorithm indicator badge in service list and detail views
+- Cosmos-BLS guard: disable BLS option when service manager is Cosmos
+
+**Addresses:** BLS algorithm selector (table stakes), BLS key display (table stakes), operator registration guidance (table stakes), dual key display per service (differentiator)
+
+**Avoids:** Pitfall 2 (key context confusion — per-service display, registration status check), Pitfall 8 (IPC payload size — fetch BLS keys once on mount, not on timer), Pitfall 12 (registration state on service resume — check on-chain before enabling), Pitfall 13 (per-workflow algorithm display)
+
+**Research flag:** The `cmd_derive_bls_pubkey` proof-of-possession computation needs verification against the exact encoding expected by `IPOAStakeRegistry.updateOperatorSigningKey`. The Rust-side logic exists in `packages/wavs-mcp/src/chain_ops.rs` — this command should be a direct port, not a reimplementation. Verify the G2 signature encoding (uncompressed vs compressed, coordinate order) before writing the command.
+
+### Phase 4: Unified Activity Events
+
+**Rationale:** Depends on Phase 1 types. Requires backend changes to `SubmissionEvent` (adding `SubmissionResult` and `event_id`) which touch the dispatcher's submission pipeline — moderate risk compared to earlier phases. Building this last ensures the backend change is isolated and the correlation infrastructure is solid before the UI is layered on top.
+
+**Delivers:**
+- `event_id: String` field added to both `TriggerEvent` and `SubmissionEvent` in `gui_shared/event.rs`
+- `SubmissionResult` enum with `Success { tx_hash, algorithm }` and `Error { message }` variants
+- Dispatcher pipeline change to propagate tx hash and algorithm through `DispatcherCommand::SubmissionConfirmed`
+- Frontend correlation logic in `listeners.ts` — Map keyed by `event_id`, TTL-based cleanup (5 minutes, matching `submission_ttl_secs`), bounded to `MAX_ACTIVITY_ITEMS`
+- Enhanced `ActivityCard.tsx` — result badge (green/amber/red), algorithm pill (BLS/ECDSA), tx hash with block explorer link, error message (collapsible), merged trigger+submission single-card view
+
+**Addresses:** Submission result status (table stakes), error display in activity (table stakes), merged trigger+submission cards (table stakes), algorithm badge
+
+**Avoids:** Pitfall 3 (correlation leak — `event_id` from backend, TTL cleanup, bounded map), Pitfall 9 (array growth — consider `Map<EventId, UnifiedEvent>` with LRU eviction instead of spread-copy array at high volume)
+
+**Research flag:** The `DispatcherCommand::SubmissionConfirmed` change propagates through the submission pipeline. Needs review of how the submission subsystem reports results back to the dispatcher to confirm `tx_hash` and `algorithm` are available at the point `emit_ext(SubmissionEvent)` is called.
 
 ### Phase Ordering Rationale
 
-- Identity before networking: `ed25519_signer_from_mnemonic()` is a required input to `discovery::Network::new()`; no other phase can proceed without it
-- Runtime prototype before broadcast: The dedicated-thread runtime strategy is unvalidated; all subsequent phases depend on it working correctly; discovering a fatal flaw in Phase 3 would require re-architecting Phase 2 work
-- Broadcast before P2pHandle: The P2pHandle's `publish` command must route to a working broadcast engine; wiring an incomplete broadcast to the command interface would require rework
-- Config after P2pHandle: Config parsing is straightforward once the components it configures are implemented; reversing this order would mean configuring components that do not yet exist
-- libp2p removal last: Acts as the migration's "done" gate; ensures all functionality is working before deleting the fallback
+- Phase 1 before everything: types and structure changes touch every file; doing them last creates conflicts across all other phases
+- Phase 2 before Phase 3: P2P page is frontend-only and validates the Tauri command pattern before more complex BLS commands are added
+- Phase 3 before Phase 4: BLS commands can be reviewed and tested independently; Phase 4's backend changes (dispatcher pipeline) are higher-risk and benefit from being isolated in the final phase
+- Phase 4 last: only phase with substantive backend risk; if it slips, the other three phases are already shipped and provide value
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-
-- **Phase 2 (P2P Network Skeleton):** Runtime integration is the most uncertain area. The dedicated-thread pattern is sound in theory but has no verified production examples in the WAVS context. May need to inspect commonware source for whether `Context` can be externally constructed. Also: Oracle dynamic peer set management (`track()` index semantics) needs validation.
-- **Phase 3 (Broadcast Integration):** Catch-up guarantee equivalence needs verification. The `buffered::Engine` provides peer-scoped caching; the current protocol is service-scoped. Message size limits for `Submission` payloads need checking against commonware's configurable `max_message_size`.
+- **Phase 3 (BLS deployment):** The `cmd_derive_bls_pubkey` proof-of-possession encoding must match exactly what the BLS `IPOAStakeRegistry` contract expects. The `chain_ops.rs` MCP implementation is the reference; verify the G2 signature encoding (uncompressed vs compressed, coordinate order) before implementation.
+- **Phase 4 (Unified events):** The dispatcher submission pipeline path from `SubmissionConfirmed` back through the submission subsystem needs tracing to confirm `tx_hash` availability at the event emit point.
 
 Phases with standard patterns (skip research-phase):
-
-- **Phase 1 (Cryptographic Identity):** Ed25519 from BIP-39 via ChaCha20Rng is a standard, well-documented pattern. STACK.md provides the exact code.
-- **Phase 4 (Full P2pHandle):** Application-level command routing; no new external APIs needed.
-- **Phase 5 (Config Migration):** Config struct refactoring; well-understood Rust pattern.
-- **Phase 6 (E2E Validation):** Running the existing test suite; no new research needed.
+- **Phase 1 (Foundation):** Type widening, settings decomposition, and serde defaults are all well-established patterns with zero uncertainty.
+- **Phase 2 (P2P dashboard):** `P2pStatus` struct, HTTP endpoint, and Tauri command pattern are all verified against the codebase. The push-event architecture mirrors existing patterns exactly.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All crates verified via docs.rs and GitHub. Version 2026.3.0 confirmed as latest release as of 2026-03-09. ALPHA warning is real but acceptable given abstraction boundary. |
-| Features | HIGH | Feature table researched directly against official commonware docs and current WAVS source code. The static channel constraint is a documented API fact. |
-| Architecture | MEDIUM | Component design is well-reasoned from docs. The dedicated-thread runtime integration pattern needs prototype validation — it is sound but unproven in this specific context. The open questions in ARCHITECTURE.md are real unknowns. |
-| Pitfalls | MEDIUM | Critical pitfalls derived from direct code analysis of p2p.rs and commonware API surface. Catch-up equivalence (Pitfall 3) is the most uncertain assessment — depends on `buffered::Engine` behavior under reconnect scenarios that were inferred from docs, not tested. |
+| Stack | HIGH | All source files verified directly against codebase. No new dependencies. All patterns confirmed with code references to specific files and line numbers. |
+| Features | HIGH | Table-stakes derived from direct codebase gap analysis (missing types, hardcoded values confirmed in `app/src/types/index.ts`). Ecosystem research confirms P2P visibility expectations. |
+| Architecture | HIGH | All component boundaries and data flows verified against `commands.rs`, `listeners.ts`, `appStore.ts`, `event.rs`. Phase build order confirmed by dependency tracing. |
+| Pitfalls | HIGH | Pitfalls 1, 3, 6 confirmed against Tauri GitHub issues. Pitfalls 2, 4, 5, 7-14 confirmed against direct codebase inspection. Each pitfall cites specific files and line ranges. |
 
-**Overall confidence:** MEDIUM
+**Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Runtime integration prototype:** The `commonware::tokio::Runner` on a dedicated `std::thread` approach needs a minimal prototype before Phase 2 is scoped. If `Runner::start()` cannot be called from a non-async OS thread context, the entire integration strategy changes. Validate in Phase 2 task planning.
+- **Proof-of-possession encoding:** Confirm exact byte format expected by `IPOAStakeRegistry.updateOperatorSigningKey` for the BLS G2 proof — uncompressed vs compressed, endianness, domain tag. The Rust implementation in `chain_ops.rs` is the reference but needs explicit comparison against the contract's Solidity verification logic before Phase 3 implementation.
 
-- **Oracle `track()` index semantics:** The Oracle manages peer sets at monotonically increasing `u64` indices. How this interacts with dynamic operator registration (operators joining/leaving between WAVS restarts) is not fully documented. Needs validation against the commonware chat example and GitHub issues during Phase 2.
+- **Quorum progress data source:** `P2pStatus` does not include per-service quorum state. If quorum visualization is desired in v1.2, a new `/aggregator/status` endpoint is needed. Research confirms this is a separate concern from P2P connectivity. Recommend deferring to a later milestone unless there is explicit operator demand.
 
-- **Catch-up guarantee equivalence:** The `buffered::Engine`'s digest-based retrieval replaces the `CatchUpRequest`/`CatchUpResponse` protocol in theory. In practice, the guarantees differ: current catch-up is service-scoped and peer-targeted; the Engine is peer-scoped and broadcast-driven. Whether this meets the operational requirement (operators that restart during active quorum collection can catch up within 5 minutes) needs an explicit test added in Phase 3.
-
-- **NAT traversal operational gap:** commonware has no AutoNAT equivalent. Production operators behind NAT must configure `dialable` address manually. This is acceptable for known-operator AVS deployments but needs clear documentation. Flag for post-migration operational review.
-
-- **Message size budget:** `Submission` struct size with typical payload needs to be checked against commonware's `max_message_size` config (default unknown). Add to Phase 3 validation checklist.
+- **Activity store data structure:** At high throughput (10+ events/second), the current spread-copy array in `appStore.ts` will show GC pressure. A `Map<EventId, UnifiedEvent>` with LRU eviction is architecturally cleaner for Phase 4. The choice between array-with-ring-buffer and Map-with-LRU should be decided at Phase 4 start, not mid-implementation.
 
 ## Sources
 
-### Primary (HIGH confidence)
-- [commonware-p2p docs.rs](https://docs.rs/commonware-p2p/2026.3.0/commonware_p2p/) — P2P API surface, channel registration, Oracle, discovery vs. lookup modes
-- [commonware-broadcast docs.rs](https://docs.rs/commonware-broadcast/2026.3.0/commonware_broadcast/) — buffered Engine API, digest retrieval, message caching
-- [commonware-cryptography docs.rs](https://docs.rs/commonware-cryptography/2026.3.0/commonware_cryptography/) — Ed25519 Signer trait, key generation
-- [commonware-runtime docs.rs](https://docs.rs/commonware-runtime/2026.3.0/commonware_runtime/) — Runner::start(), Context creation, Tokio runner
-- [commonware-runtime source (tokio/runtime.rs)](https://docs.rs/crate/commonware-runtime/2026.3.0/source/src/tokio/runtime.rs) — verified Runner creates own Tokio runtime
-- [commonware GitHub monorepo](https://github.com/commonwarexyz/monorepo) — release history, CalVer scheme, v2026.3.0 as latest
-- WAVS source: `packages/wavs/src/subsystems/aggregator/p2p.rs` (~1,840 lines) — current implementation, abstractions, catch-up protocol
-- WAVS source: `packages/types/src/http.rs` — P2pStatus struct fields
-- WAVS source: `packages/layer-tests/` — e2e test infrastructure and `wait_for_p2p_ready()`
+### Primary (HIGH confidence — direct codebase inspection)
 
-### Secondary (MEDIUM confidence)
-- [commonware-runtime blog post](https://commonware.xyz/blogs/commonware-runtime) — runtime design philosophy
-- [commonware anti-framework blog post](https://commonware.xyz/blogs/commonware-the-anti-framework) — trait-based design rationale
-- [commonware chat example](https://github.com/commonwarexyz/monorepo/blob/main/examples/chat/README.md) — reference implementation for channel registration pattern
-- [Your P2P demo runs locally. Now what?](https://commonware.xyz/blogs/commonware-deployer) — deployment patterns
+- `packages/types/src/http.rs` — `P2pStatus`, `SignerResponse` structs
+- `packages/types/src/service.rs` — `SignatureAlgorithm` enum with `Bls12381` variant
+- `packages/types/src/contracts/solidity/abi/bls/IPOAStakeRegistry.json` — BLS registry ABI
+- `app/src-tauri/src/commands.rs` — existing 30-command pattern, 1244 lines
+- `app/src/stores/` — all 4 Zustand stores including `appStore.ts` spread-copy pattern
+- `app/src/tauri/listeners.ts` — event listener pattern, 5 event types
+- `app/src/types/index.ts` — `SignatureAlgorithm = 'secp256k1'` (confirmed gap)
+- `app/src/pages/Settings.tsx` — 942-line monolith (confirmed)
+- `packages/gui/shared/src/event.rs` — `TriggerEvent`, `SubmissionEvent` without `event_id`
+- `packages/gui/shared/src/settings.rs` — `Settings` struct with serde defaults
+- `packages/wavs/src/subsystems/aggregator.rs` — `get_p2p_status()` method
+- `packages/wavs-mcp/src/chain_ops.rs` — BLS operator registration reference implementation
 
-### Tertiary (LOW confidence)
-- [Inside Commonware (Decipher Media)](https://medium.com/decipher-media/inside-commonware-50c58211953c) — third-party analysis; use STACK.md findings from official sources instead
-- [commonware anti-framework philosophy (deepwiki)](https://deepwiki.com/commonwarexyz/monorepo/1.1-anti-framework-philosophy) — third-party wiki; corroborates official blog
+### Secondary (HIGH confidence — confirmed Tauri/framework issues)
+
+- [Tauri Issue #13133](https://github.com/tauri-apps/tauri/issues/13133) — `transformCallback` memory leak
+- [Tauri Issue #12724](https://github.com/tauri-apps/tauri/issues/12724) — event emission memory leak
+- [Tauri Issue #11447](https://github.com/tauri-apps/tauri/issues/11447) — single `invoke_handler()` constraint
+
+### Tertiary (MEDIUM confidence — ecosystem research)
+
+- Prysm Web UI, Lighthouse Siren, Grafana eth2 dashboards — P2P node operator dashboard feature expectations
+- OWASP Key Management Cheat Sheet — key display security guidance (copy buttons for long keys, never display private keys)
 
 ---
-*Research completed: 2026-03-17*
+*Research completed: 2026-03-23*
 *Ready for roadmap: yes*

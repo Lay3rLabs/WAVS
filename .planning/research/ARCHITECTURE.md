@@ -1,455 +1,687 @@
-# Architecture Patterns: Commonware P2P Migration in WAVS Aggregator
+# Architecture Patterns
 
-**Domain:** P2P networking layer replacement (libp2p -> commonware)
-**Researched:** 2026-03-17
-**Overall confidence:** MEDIUM (commonware docs verified via docs.rs; runtime integration strategy needs prototype validation)
+**Domain:** Tauri 2 desktop app -- BLS deployment, P2P dashboard, unified events, settings UX
+**Researched:** 2026-03-23
+**Confidence:** HIGH (all findings verified against codebase)
 
-## Current Architecture (libp2p)
+## Current Architecture Snapshot
 
-The P2P layer lives entirely in `packages/wavs/src/subsystems/aggregator/p2p.rs` (~1,840 lines). It is self-contained behind a `P2pHandle` abstraction that the `Aggregator` struct holds as `Arc<RwLock<Option<P2pHandle>>>`.
+### Layers (Backend to Frontend)
 
 ```
-Dispatcher
-  |
-  v (crossbeam channel: AggregatorCommand)
-Aggregator
-  |-- p2p_handle: Arc<RwLock<Option<P2pHandle>>>
-  |       |
-  |       +-- command_tx: mpsc::UnboundedSender<P2pCommand>
-  |       |       |
-  |       |       v
-  |       +-- [tokio::spawn] run_event_loop()
-  |               |
-  |               +-- Swarm<WavsBehaviour>
-  |                       |
-  |                       +-- gossipsub (per-service topic pub/sub)
-  |                       +-- catchup (request/response for missed messages)
-  |                       +-- mdns (local discovery) OR kademlia (prod discovery)
-  |                       +-- identify (peer identification)
-  |                       +-- autonat (NAT traversal)
-  |
-  +-- aggregator_to_self_tx (crossbeam, for loopback)
+[WAVS Node]  <-- Dispatcher + Aggregator + HTTP API (Axum)
+     |
+     v
+[Tauri Backend]  <-- commands.rs (invoke), state.rs (managed state), logger.rs (log forwarding)
+     |               gui_shared/ (event.rs, settings.rs, error.rs)
+     v
+[Tauri Events]   <-- settings | log | trigger | submission | service
+     |
+     v
+[React Frontend] <-- Zustand stores -> React pages/components
 ```
 
-### Current Data Flow
+### Existing Tauri Commands (30 commands)
 
-1. **Outbound (Broadcast):** `Aggregator.handle_broadcast()` -> `P2pHandle.publish()` -> `P2pCommand::Publish` via mpsc -> event loop -> `swarm.gossipsub.publish(topic, data)`
-2. **Inbound (Receive):** swarm event -> `handle_gossip_message()` -> `aggregator_tx.send(AggregatorCommand::Receive)` via crossbeam -> Aggregator
-3. **Catch-up:** On connection established -> request catch-up for each subscribed service -> peer responds with stored submissions -> forwarded as `AggregatorCommand::Receive`
-4. **Subscribe/Unsubscribe:** `AggregatorCommand::SubscribeService` -> `P2pHandle.subscribe()` -> `P2pCommand::Subscribe` -> event loop subscribes gossipsub topic
+| Category | Commands | Pattern |
+|----------|----------|---------|
+| Settings | `get_settings`, `set_wavs_home`, `save_poa_registries`, `save_env_vars`, `save_mcp_settings` | Read/write `SettingsState` |
+| WAVS lifecycle | `start_wavs`, `restart`, `get_health_status` | `WavsInstanceState` + `WavsConfigState` |
+| Services | `get_services`, `add_service`, `remove_service`, `pause_service`, `resume_service`, `save_service_to_node` | `WavsInstanceState.dispatcher()` |
+| Wallet | `has_mnemonic`, `store_mnemonic`, `get_mnemonic`, `delete_mnemonic` | OS keyring via `MnemonicCacheState` |
+| Components | `get_component_digest`, `publish_component` | wkg registry client |
+| IPFS | `upload_to_ipfs` | reqwest to IPFS/Pinata |
+| MCP | `start_mcp_server`, `stop_mcp_server`, `get_mcp_status`, `save_mcp_settings`, `register_claude_mcp`, `get_mcp_binary_path`, `get_wavs_url` | `McpServerState` |
+| TOML | `read_wavs_toml`, `write_wavs_toml` | File I/O |
+| Storage | `list_kv_entries`, `list_fs_entries`, `read_fs_file` | HTTP to WAVS API |
+| Reset | `clear_persisted_services` | Combined dispatcher + settings |
 
-### Current Key Abstractions
+### Existing Zustand Stores (4 stores)
 
-| Abstraction | Type | Purpose |
-|-------------|------|---------|
-| `P2pHandle` | Clonable struct with mpsc sender | Facade for sending commands to the P2P event loop |
-| `P2pCommand` | Enum (Publish, Subscribe, Unsubscribe, GetStatus) | Commands from application to P2P |
-| `P2pConfig` | Enum (Disabled, Local, Remote) | Configuration variants |
-| `EventLoopState` | Struct | Mutable state for the event loop (topics, pending publishes, stored submissions) |
-| `Peer` | Enum (Me, Other(String)) | Identity of submission source |
-| `AggregatorCommand` | Enum (Kill, Broadcast, Receive, Actions, SubscribeService, UnsubscribeService) | Commands to aggregator (unchanged by migration) |
+| Store | Purpose | Key State |
+|-------|---------|-----------|
+| `appStore` | Global app state | settings, logList, activityList, services Map |
+| `walletStore` | Mnemonic/HD wallet | hasMnemonic, derivedAddresses, pendingMnemonic |
+| `serviceBuilderStore` | Service creation wizard | step, workflows, deploy state |
+| `poaStore` | POA registry connections | registries Map, operators, ownership |
+
+### Existing Event Flow
+
+```
+Dispatcher (Rust) --emit_ext()--> TauriHandle --Emitter::emit()--> Frontend listeners.ts
+                                                                        |
+                                                                        v
+                                                                   appStore actions
+```
+
+Events: `settings`, `log`, `trigger`, `submission`, `service`
+
+### Key Type Gaps (Frontend vs Backend)
+
+| Backend Type | Frontend Has | Gap |
+|-------------|-------------|-----|
+| `SignatureAlgorithm::Bls12381` | `SignatureAlgorithm = 'secp256k1'` only | Missing `'bls12381'` variant |
+| `SignerResponse::Bls12381 { hd_index, g1_pubkey_hex }` | Not present | Missing entirely |
+| `P2pStatus { enabled, local_peer_id, listen_addresses, connected_peers, peer_ids, subscribed_services }` | Not present | Missing entirely |
+| `SubmissionEvent` | Has `service_id, workflow_id, trigger_data` | Missing result/error data |
 
 ---
 
-## Recommended Architecture (commonware)
+## Recommended Architecture
 
-### Component Mapping
+### Overview: What Changes, What Stays
 
-| libp2p Component | commonware Replacement | Notes |
-|-----------------|----------------------|-------|
-| `libp2p::Swarm` | `commonware_p2p::authenticated::discovery::Network` | Handles connections, encryption, peer management |
-| GossipSub (per-service topics) | `commonware_broadcast::buffered::Engine` + per-service channels | One broadcast Engine per service, OR single Engine with message routing |
-| Kademlia DHT (prod discovery) | `commonware_p2p::authenticated::discovery` (bootstrapper-based) | Bootstrappers replace DHT bootstrap nodes |
-| mDNS (dev discovery) | `commonware_p2p::authenticated::lookup` | Known addresses for dev, provided by application |
-| Request/Response (catch-up) | `commonware_broadcast::buffered` (built-in caching + digest retrieval) | Buffered engine caches messages and serves them on demand |
-| libp2p secp256k1 identity | `commonware_cryptography::ed25519::Signer` | Ed25519 for P2P identity only (on-chain remains ECDSA) |
-| Identify + AutoNAT | Not needed | commonware handles peer authentication natively |
-
-### Component Boundaries
+The architecture follows the existing patterns exactly. No new state management libraries, no new event transport mechanisms, no architectural shifts. The four features map to well-scoped additions:
 
 ```
-Dispatcher
-  |
-  v (crossbeam channel: AggregatorCommand -- UNCHANGED)
-Aggregator
-  |-- p2p_handle: Arc<RwLock<Option<P2pHandle>>>  (INTERFACE PRESERVED)
-  |       |
-  |       +-- command_tx: mpsc::UnboundedSender<P2pCommand>  (PRESERVED)
-  |       |       |
-  |       |       v
-  |       +-- [commonware runtime] P2P Coordinator Task
-  |               |
-  |               +-- CommonwareP2pNetwork (authenticated::discovery::Network OR lookup::Network)
-  |               |       |
-  |               |       +-- Oracle (manages authorized peer sets)
-  |               |       +-- Channel: "wavs/broadcast" (main channel for broadcast Engine)
-  |               |       +-- Channel: "wavs/control" (optional: peer status queries)
-  |               |
-  |               +-- BroadcastEngine (commonware_broadcast::buffered::Engine)
-  |               |       |
-  |               |       +-- Mailbox (implements Broadcaster trait)
-  |               |       +-- Per-peer message caching (replaces stored_submissions)
-  |               |       +-- Digest-based retrieval (replaces catch-up protocol)
-  |               |
-  |               +-- ServiceRouter (new: routes messages to correct service)
-  |                       |
-  |                       +-- Maps service_id -> message filtering
-  |                       +-- Validates incoming messages
-  |
-  +-- aggregator_to_self_tx (crossbeam, for loopback -- UNCHANGED)
+NEW COMMANDS (5):     cmd_get_p2p_status, cmd_get_service_signer,
+                      cmd_get_node_info, cmd_derive_bls_pubkey,
+                      cmd_get_operator_keys
+
+NEW EVENTS (1):       p2p_status (periodic push)
+
+NEW STORES (1):       p2pStore
+
+MODIFIED STORES (2):  appStore (enhanced ActivityItem), serviceBuilderStore (BLS algorithm)
+
+NEW PAGES (1):        Operators.tsx (P2P/operator dashboard)
+
+MODIFIED PAGES (2):   Settings.tsx (component extraction), Activity.tsx (unified cards)
 ```
 
-### Detailed Component Design
+---
 
-#### 1. CommonwareP2pNetwork (Connection Layer)
+## Component Boundaries
 
-**Responsibility:** Authenticated peer connections, encryption, peer discovery.
+### 1. P2P Status Data Flow
 
-**Key decisions:**
-- Use `discovery::Network` for production (bootstrapper-based, replaces Kademlia)
-- Use `lookup::Network` for local dev (address-known, replaces mDNS)
-- Both implement the same channel-based Sender/Receiver interface, so the broadcast engine works with either
+**Problem:** Frontend has no P2P visibility. Backend has `/p2p/status` HTTP endpoint and `dispatcher.aggregator.get_p2p_status()`.
 
-**Configuration mapping:**
+**Solution:** Two-pronged approach -- a Tauri command for on-demand fetch, plus a periodic Tauri event for live updates.
 
-```
-P2pConfig::Disabled -> No network created (same as today)
-P2pConfig::Local { listen_port } -> lookup::Network with known peer addresses
-P2pConfig::Remote { listen_port, bootstrap_nodes } -> discovery::Network with bootstrappers
-```
-
-**Channel registration:**
-Register a single channel with the P2P network before calling `start()`. The broadcast Engine consumes the Sender/Receiver from this channel.
+#### New Tauri Command: `cmd_get_p2p_status`
 
 ```rust
-// Pseudocode
-let (mut network, mut oracle) = discovery::Network::new(context, p2p_config);
-let (sender, receiver) = network.register(
-    BROADCAST_CHANNEL,
-    Quota::per_second(/* rate limit */),
-    MESSAGE_BACKLOG,
+// commands.rs
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_p2p_status(
+    wavs_instance: State<'_, WavsInstanceState>,
+) -> AppResult<P2pStatus> {
+    let dispatcher = wavs_instance.dispatcher()?;
+    Ok(dispatcher.aggregator.get_p2p_status().await)
+}
+```
+
+This mirrors `cmd_get_health_status` but calls the dispatcher directly rather than going through HTTP. More efficient and avoids the "WAVS HTTP server not bound yet" race condition.
+
+#### New Tauri Event: `p2p_status` (periodic push)
+
+```rust
+// gui_shared/event.rs
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct P2pStatusEvent {
+    pub status: P2pStatus,
+}
+
+impl TauriEventExt for P2pStatusEvent {
+    const NAME: &'static str = "p2p_status";
+}
+```
+
+Emitted every 5 seconds from a background task spawned during `cmd_start_wavs`. This avoids frontend polling. The emitter runs alongside the existing log-forwarding tracing layer.
+
+```rust
+// In cmd_start_wavs, after dispatcher.start():
+{
+    let handle = app.clone();
+    let dispatcher = dispatcher.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(5));
+        loop {
+            interval.tick().await;
+            let status = dispatcher.aggregator.get_p2p_status().await;
+            let _ = handle.emit_ext(P2pStatusEvent { status });
+        }
+    });
+}
+```
+
+#### New Frontend Store: `p2pStore`
+
+```typescript
+// stores/p2pStore.ts
+interface P2pState {
+  status: P2pStatus | null;
+  isLoading: boolean;
+  setStatus: (status: P2pStatus) => void;
+  fetchStatus: () => Promise<void>;
+}
+```
+
+Populated by both the event listener (live) and the command (on-demand refresh). Separate store because P2P state has a different lifecycle than app/services/wallet state -- it only exists while WAVS is running.
+
+#### New Frontend Types
+
+```typescript
+// types/index.ts additions
+export interface P2pStatus {
+  enabled: boolean;
+  local_peer_id: string | null;
+  listen_addresses: string[];
+  connected_peers: number;
+  peer_ids: string[];
+  subscribed_services: string[];
+}
+```
+
+### 2. BLS Key Derivation + Registration
+
+**Problem:** Service builder only supports secp256k1. BLS services need: (a) algorithm selection, (b) BLS public key derivation, (c) on-chain registration of the BLS key via `updateOperatorSigningKey(blsKey, blsSigProof)`.
+
+**Solution:** Three changes -- extend types, add backend command, extend service builder UI + POA operator registration.
+
+#### Type Updates
+
+```typescript
+// types/index.ts -- extend existing types
+export type SignatureAlgorithm = 'secp256k1' | 'bls12381';
+export type SignaturePrefix = 'eip191';
+
+// Add to SubmitDraft in serviceBuilderStore
+export interface SubmitDraft {
+  signatureAlgorithm: SignatureAlgorithm;  // was 'secp256k1' only
+  // ... rest unchanged
+}
+
+// New type for signer response (matches Rust SignerResponse)
+export type SignerResponse =
+  | { secp256k1: { hd_index: number; evm_address: string } }
+  | { bls12381: { hd_index: number; g1_pubkey_hex: string } };
+```
+
+#### New Tauri Command: `cmd_get_service_signer`
+
+```rust
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_service_signer(
+    wavs_instance: State<'_, WavsInstanceState>,
+    manager: ServiceManager,
+) -> AppResult<SignerResponse> {
+    let dispatcher = wavs_instance.dispatcher()?;
+    let service_id = ServiceId::from(&manager);
+    dispatcher
+        .get_service_signer(service_id)
+        .map_err(|e| AppError::Service(format!("Failed to get signer: {}", e)))
+}
+```
+
+This wraps the existing `dispatcher.get_service_signer()` which already returns `SignerResponse::Bls12381 { hd_index, g1_pubkey_hex }` or `SignerResponse::Secp256k1 { hd_index, evm_address }`. The backend logic is complete -- we just need to expose it to Tauri.
+
+#### New Tauri Command: `cmd_get_operator_keys`
+
+Returns the signer info for all registered services, so the P2P/operator dashboard can show ECDSA addresses and BLS pubkeys.
+
+```rust
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_operator_keys(
+    wavs_instance: State<'_, WavsInstanceState>,
+) -> AppResult<Vec<(String, SignerResponse)>> {
+    let dispatcher = wavs_instance.dispatcher()?;
+    // Iterate services, collect signer info
+    let services = dispatcher.services.list(Bound::Unbounded, Bound::Unbounded)
+        .map_err(|e| AppError::Service(e.to_string()))?;
+    let mut keys = Vec::new();
+    for service in &services {
+        let service_id = ServiceId::from(&service.manager);
+        if let Ok(signer) = dispatcher.get_service_signer(service_id) {
+            keys.push((service_id.to_string(), signer));
+        }
+    }
+    Ok(keys)
+}
+```
+
+#### BLS Operator Registration (Frontend)
+
+The BLS `updateOperatorSigningKey(blsKey, blsSigProof)` call differs from the secp256k1 `updateOperatorSigningKey(newSigningKey, signingKeySignature)`:
+
+- **secp256k1**: `newSigningKey` is an address (20 bytes), `signingKeySignature` is ECDSA signature (65 bytes)
+- **BLS**: `blsKey` is G1 public key (128 bytes), `blsSigProof` is G2 proof-of-possession signature (256 bytes)
+
+The frontend currently calls `updateOperatorSigningKey` via viem in the POA operator management flows. The BLS variant needs:
+
+1. Call `cmd_get_service_signer` to get the BLS G1 pubkey hex from the backend
+2. The proof-of-possession signature must also come from the backend (it signs a domain-separated message proving ownership of the BLS key)
+
+**New Tauri Command: `cmd_derive_bls_pubkey`**
+
+```rust
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_derive_bls_pubkey(
+    wavs_instance: State<'_, WavsInstanceState>,
+    manager: ServiceManager,
+) -> AppResult<BlsKeyInfo> {
+    // Returns: { g1_pubkey_hex, proof_of_possession_hex }
+    // The PoP is sign(BLS_POP_DST, pubkey_bytes) -- needed for updateOperatorSigningKey
+}
+```
+
+This encapsulates all BLS crypto on the Rust side. The frontend never touches raw BLS keys -- it just passes the hex strings to the contract via viem.
+
+#### Service Builder Changes
+
+The `serviceBuilderStore` needs:
+
+1. `SubmitDraft.signatureAlgorithm` changes from `'secp256k1'` to `SignatureAlgorithm` (union type)
+2. `createDefaultSubmit()` keeps `'secp256k1'` as default
+3. `SubmitEditor.tsx` gets a radio/select for algorithm choice
+4. When `bls12381` is selected, signature prefix is forced to `'none'` (BLS uses hash-to-curve, not EIP-191)
+5. `reverseSubmit()` correctly handles `'bls12381'` from existing service hydration
+
+### 3. Unified Activity Events (Trigger + Submission Correlation)
+
+**Problem:** Triggers and submissions appear as separate `ActivityItem` entries with kind `'trigger'` or `'submission'`. No correlation between a trigger and its resulting submission. No error/result display.
+
+**Solution:** Extend `SubmissionEvent` payload, add correlation by `(serviceId, workflowId, triggerData)` composite key, and merge display.
+
+#### Backend: Enrich SubmissionEvent
+
+The current `SubmissionEvent` has `{ service_id, workflow_id, trigger_data }`. It needs:
+
+```rust
+// gui_shared/event.rs
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SubmissionEvent {
+    pub service_id: ServiceId,
+    pub workflow_id: WorkflowId,
+    pub trigger_data: TriggerData,
+    // NEW FIELDS:
+    pub result: SubmissionResult,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubmissionResult {
+    Success {
+        tx_hash: Option<String>,
+        algorithm: String,  // "secp256k1" or "bls12381"
+    },
+    Error {
+        message: String,
+    },
+}
+```
+
+The dispatcher already knows the result at the point it emits `SubmissionConfirmed`. The change is to propagate the tx hash and algorithm from the submission subsystem through `DispatcherCommand::SubmissionConfirmed`.
+
+#### Frontend: Unified Activity Cards
+
+The current `ActivityItem` type gets extended:
+
+```typescript
+export interface ActivityItem {
+  id: number;
+  ts: number;
+  kind: ActivityKind;  // still 'trigger' | 'submission'
+  serviceId: ServiceId;
+  workflowId: WorkflowId;
+  triggerData: TriggerData;
+  triggerConfig?: TriggerConfig;
+  // NEW:
+  submissionResult?: SubmissionResult;
+  correlatedTriggerId?: number;  // links submission back to its trigger
+}
+
+export type SubmissionResult =
+  | { success: { tx_hash: string | null; algorithm: string } }
+  | { error: { message: string } };
+```
+
+**Correlation logic** in `listeners.ts`:
+
+When a `submission` event arrives, search the last N trigger items for a match on `(serviceId, workflowId, triggerData)`. If found, set `correlatedTriggerId`. The `ActivityCard` then renders merged:
+
+- Trigger card shows "Trigger -> Submitted (success)" badge if it has a correlated submission
+- Submission card shows the trigger context inline, plus tx hash / error
+
+This is a display-layer correlation -- no backend changes to event timing. The trigger always arrives before its submission, so the search is backwards in the list.
+
+#### ActivityCard Enhancement
+
+`ActivityCard.tsx` gains:
+- Result badge (green check for success, red X for error)
+- Algorithm indicator pill ("BLS" or "ECDSA")
+- Tx hash link (clickable, opens block explorer)
+- Error message display (collapsible)
+- Merged view: when a trigger has a correlated submission, show both in one card
+
+### 4. Settings Page Restructuring
+
+**Problem:** `Settings.tsx` is 942 lines -- a monolithic component with 20+ `useState` calls, mixing Wallet, WAVS Home, TOML Editor, Env Vars, MCP Server, and Reset sections.
+
+**Solution:** Extract each section into its own component. No new stores needed -- each section component receives props or accesses stores directly.
+
+#### Component Extraction Plan
+
+| Current Section | New Component | Props/Store |
+|----------------|---------------|-------------|
+| Wallet (accounts, balances, export, reset) | `settings/WalletSection.tsx` | `useWalletStore`, `useAppStore` |
+| WAVS Home Directory | `settings/WavsHomeSection.tsx` | `useAppStore` |
+| Configuration (wavs.toml) | `settings/TomlEditorSection.tsx` | `useAppStore` |
+| Environment Variables | `settings/EnvVarsSection.tsx` | `useAppStore` |
+| MCP Server | `settings/McpSection.tsx` | `useAppStore` |
+| Reset App State | `settings/ResetSection.tsx` | `usePOAStore`, `useAppStore` |
+
+`Settings.tsx` becomes a thin layout shell:
+
+```tsx
+export function Settings() {
+  const [changed, setChanged] = useState(false);
+  return (
+    <div className="flex flex-col gap-6 max-h-[calc(100vh-12rem)] overflow-y-auto pr-2">
+      {changed && <RestartBanner onRestart={handleRestart} />}
+      <WalletSection />
+      <WavsHomeSection onChanged={() => setChanged(true)} />
+      <TomlEditorSection onChanged={() => setChanged(true)} />
+      <EnvVarsSection />
+      <McpSection />
+      <ResetSection />
+    </div>
+  );
+}
+```
+
+Each section manages its own local state (loading, error, form fields). The `onChanged` callback signals that a restart is needed.
+
+---
+
+## Data Flow Diagrams
+
+### P2P Status Flow
+
+```
+Aggregator.get_p2p_status()
+    |
+    +--[every 5s]--> TauriHandle.emit_ext(P2pStatusEvent) --> listeners.ts --> p2pStore.setStatus()
+    |
+    +--[on demand]--> cmd_get_p2p_status --> invoke('cmd_get_p2p_status') --> p2pStore.setStatus()
+
+p2pStore --> Operators.tsx (P2P dashboard)
+             ServiceDetailPage.tsx (per-service peer count)
+             HealthIndicator.tsx (peer count badge)
+```
+
+### BLS Registration Flow
+
+```
+User selects BLS in ServiceBuilder
+    |
+    v
+Service deployed with algorithm: 'bls12381' via IPFS + on-chain
+    |
+    v
+cmd_add_service adds service --> dispatcher derives BLS key for this service
+    |
+    v
+cmd_get_service_signer(manager) --> returns { bls12381: { g1_pubkey_hex } }
+    |
+    v
+cmd_derive_bls_pubkey(manager) --> returns { g1_pubkey_hex, proof_of_possession_hex }
+    |
+    v
+Frontend calls BLS POA registry: updateOperatorSigningKey(blsKey, blsSigProof) via viem
+```
+
+### Unified Activity Event Flow
+
+```
+Dispatcher: trigger fires
+    |
+    v
+emit_ext(TriggerEvent) --> listeners.ts --> appStore.addActivity({ kind: 'trigger', ... })
+    |
+    v
+Engine executes WASM component
+    |
+    v
+Aggregator collects + aggregates signatures
+    |
+    v
+Submission submits on-chain
+    |
+    v
+DispatcherCommand::SubmissionConfirmed { result: Success { tx_hash, algorithm } }
+    |
+    v
+emit_ext(SubmissionEvent) --> listeners.ts --> correlate with trigger --> appStore.addActivity({ kind: 'submission', correlatedTriggerId, submissionResult })
+```
+
+---
+
+## Patterns to Follow
+
+### Pattern 1: Tauri Command for Direct Dispatcher Access
+
+**What:** Wrap `dispatcher` methods as Tauri commands instead of going through the HTTP API.
+
+**When:** For all new commands that need WAVS node state. The existing pattern (`cmd_get_services`) accesses `dispatcher.services.list()` directly, while `cmd_get_health_status` goes through HTTP. Prefer direct access.
+
+**Why:** Avoids the HTTP server startup race. The HTTP API may not be bound yet when the frontend first renders. Direct dispatcher access works as soon as `cmd_start_wavs` completes.
+
+**Example:**
+
+```rust
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_p2p_status(
+    wavs_instance: State<'_, WavsInstanceState>,
+) -> AppResult<P2pStatus> {
+    wavs_instance.dispatcher()?.aggregator.get_p2p_status().await
+}
+```
+
+### Pattern 2: Event Push for Live-Updating Data
+
+**What:** Use Tauri events (not polling commands) for data that changes frequently.
+
+**When:** P2P status, trigger/submission activity, service state changes.
+
+**Why:** Tauri events are zero-cost when no listener is attached. Frontend listeners update Zustand stores atomically. Already proven with `log`, `trigger`, `submission`, `service`, `settings` events.
+
+**Example:** The existing `TriggerEvent` / `SubmissionEvent` pattern, extended for `P2pStatusEvent`.
+
+### Pattern 3: Frontend-Only Correlation
+
+**What:** Correlate related events on the frontend rather than in the backend.
+
+**When:** Matching triggers to submissions. The backend emits them as separate events with overlapping data (same `service_id`, `workflow_id`, `trigger_data`).
+
+**Why:** No backend coupling between trigger and submission lifecycles. The correlation is purely a display concern. The backend might emit triggers that never get submissions (engine errors), or submissions for triggers the frontend missed (catch-up). Frontend correlation is best-effort and non-blocking.
+
+**Example:**
+
+```typescript
+// In listeners.ts submission handler:
+const triggerMatch = activityList.findLast(
+  item => item.kind === 'trigger'
+    && item.serviceId === payload.service_id
+    && item.workflowId === payload.workflow_id
+    && JSON.stringify(item.triggerData) === JSON.stringify(payload.trigger_data)
 );
-// Pass sender/receiver to broadcast engine
 ```
 
-#### 2. BroadcastEngine (Message Dissemination Layer)
+### Pattern 4: Section Components for Complex Pages
 
-**Responsibility:** Reliable broadcast of submissions, message caching, digest-based retrieval.
+**What:** Extract page sections into standalone components that manage their own local state.
 
-**This replaces three libp2p components at once:**
-- GossipSub (broadcast)
-- Stored submissions (caching)
-- Request/Response catch-up protocol (digest-based retrieval)
+**When:** A page exceeds ~300 lines or has 10+ `useState` hooks.
 
-**Key insight:** The buffered Engine already handles the catch-up problem. When a peer reconnects, it can request messages by digest from the Engine's cache. This eliminates the need for the entire `CatchUpRequest`/`CatchUpResponse`/`CatchUpCodec` implementation (~100 lines) and the `stored_submissions` tracking in `EventLoopState` (~80 lines).
+**Why:** Prevents re-render cascades (each section only re-renders when its own state changes). Makes the page scannable. Each section can be independently tested.
 
-**Message type:** Define a `WavsMessage` that wraps `Submission` and implements `Digestible + Codec`:
-
-```rust
-#[derive(Clone, Serialize, Deserialize)]
-struct WavsMessage {
-    service_id: ServiceId,
-    submission: Submission,
-}
-
-impl Digestible for WavsMessage {
-    fn digest(&self) -> [u8; 32] {
-        // Hash of (service_id, event_id, signer_address) for deduplication
-    }
-}
-```
-
-#### 3. ServiceRouter (Message Routing Layer)
-
-**Responsibility:** Per-service message filtering and validation (replaces GossipSub topic isolation).
-
-**Why this is needed:** commonware-broadcast does not have per-topic isolation like GossipSub. All messages go through a single broadcast Engine. The ServiceRouter filters inbound messages by service_id and validates that the local node is subscribed to the relevant service.
-
-**Design:**
-
-```rust
-struct ServiceRouter {
-    subscribed_services: HashSet<ServiceId>,
-}
-
-impl ServiceRouter {
-    fn should_accept(&self, msg: &WavsMessage) -> bool {
-        self.subscribed_services.contains(&msg.service_id)
-    }
-
-    fn subscribe(&mut self, service_id: ServiceId) { ... }
-    fn unsubscribe(&mut self, service_id: ServiceId) { ... }
-}
-```
-
-**Tradeoff:** With libp2p GossipSub, operators only receive messages for their subscribed services (topic filtering happens at the network level). With commonware broadcast, all operators receive all messages and filter locally. For WAVS's expected scale (tens to low hundreds of operators, moderate message rates), this is acceptable. If scale becomes a concern, multiple broadcast channels per service could be introduced later.
-
-#### 4. P2pHandle (Preserved Facade)
-
-**Responsibility:** Unchanged external interface for the Aggregator.
-
-The `P2pHandle` struct, `P2pCommand` enum, and the `publish`/`subscribe`/`unsubscribe`/`get_status` methods remain the same. The internal implementation changes from sending to a libp2p swarm event loop to sending to the commonware coordinator task.
-
-```rust
-// P2pHandle interface remains identical:
-impl P2pHandle {
-    pub fn publish(&self, submission: &Submission) -> Result<(), AggregatorError>;
-    pub fn subscribe(&self, service_id: &ServiceId) -> Result<(), AggregatorError>;
-    pub fn unsubscribe(&self, service_id: &ServiceId) -> Result<(), AggregatorError>;
-    pub async fn get_status(&self) -> Result<P2pStatus, AggregatorError>;
-}
-```
-
-#### 5. Identity Layer (Ed25519)
-
-**Responsibility:** Deterministic P2P identity from signing mnemonic.
-
-**Key change:** Replace secp256k1 derivation with Ed25519 key generation.
-
-The current `keypair_from_mnemonic()` derives a secp256k1 key from the mnemonic via the EVM HD path (m/44'/60'/0'/0/0). For commonware, derive an Ed25519 key instead:
-
-```rust
-fn ed25519_signer_from_mnemonic(mnemonic: &str) -> Result<ed25519::Signer, AggregatorError> {
-    // Option A: Hash the mnemonic seed to get 32 bytes for Ed25519
-    // Option B: Use commonware_cryptography::ed25519::Signer::from_seed()
-    // The seed should be deterministic from the mnemonic
-}
-```
-
-**Constraint:** On-chain signatures remain ECDSA (handled by SubmissionManager, out of scope). Ed25519 is only for P2P peer authentication.
-
----
-
-## Runtime Integration Strategy
-
-### The Challenge
-
-commonware-runtime's `tokio::Runner` creates its own Tokio runtime via `tokio::runtime::Builder::new_multi_thread()`. WAVS already has its own Tokio runtime. Running two Tokio runtimes in the same process is technically possible but wasteful and can cause confusion.
-
-### Recommended Approach: Dedicated commonware Runtime
-
-**Confidence: MEDIUM -- needs prototype validation**
-
-Run commonware's `tokio::Runner` as the owner of the P2P subsystem in its own thread. The WAVS aggregator communicates with it via the existing `mpsc::UnboundedSender<P2pCommand>` channel (which is cross-runtime safe since tokio mpsc channels work across runtime boundaries).
-
-```
-WAVS Main Tokio Runtime (existing)
-  |
-  +-- Aggregator thread
-  |       |
-  |       +-- P2pHandle (holds mpsc::UnboundedSender)
-  |
-  +-- [std::thread::spawn] Commonware Runtime Thread
-          |
-          +-- commonware::tokio::Runner::start(|ctx| async {
-          |       let (network, oracle) = discovery::Network::new(ctx, cfg);
-          |       let (sender, receiver) = network.register(...);
-          |       let (engine, mailbox) = broadcast::buffered::Engine::new(ctx, broadcast_cfg);
-          |       network.start();
-          |       engine.start((sender, receiver));
-          |       // Event loop: bridge mpsc commands to commonware
-          |       loop {
-          |           select! {
-          |               cmd = command_rx.recv() => handle_command(cmd, &mailbox, &oracle),
-          |               msg = broadcast_receiver.recv() => forward_to_aggregator(msg),
-          |           }
-          |       }
-          |   });
-```
-
-**Why this works:**
-- `mpsc::UnboundedSender` is `Send + Sync` and works across thread/runtime boundaries
-- `crossbeam::channel::Sender` (for `AggregatorCommand`) is also cross-thread safe
-- The boundary is clean: all commonware types stay inside the commonware runtime thread
-- No need to implement custom `Spawner`/`Clock`/`Network` traits (complex, error-prone)
-
-**Alternative (NOT recommended): Custom Runtime Traits**
-Implement `Spawner`, `Clock`, `Network`, etc. for WAVS's existing Tokio context. This is technically possible (commonware is an "anti-framework" that supports this), but:
-- Requires implementing 7+ traits with complex semantics
-- Tightly couples WAVS to commonware's trait evolution
-- Higher maintenance burden as commonware adds new required methods
-- The dedicated-thread approach is simpler and achieves the same result
-
-### Alternative (lower risk): Use `tokio::Handle::enter()` Guard
-
-If the commonware `tokio::Runner` causes issues with two runtimes, investigate whether commonware's `Context` can be manually constructed using `tokio::Handle::current()` from the existing runtime. This would require reading commonware source more carefully.
-
-**Confidence: LOW -- unverified, would need source code inspection**
-
----
-
-## Data Flow (After Migration)
-
-### Outbound (Broadcast Submission)
-
-```
-1. Aggregator.handle_broadcast()
-2. P2pHandle.publish(&submission)
-3. P2pCommand::Publish { service_id, submission }  --[mpsc channel]-->
-4. Commonware Coordinator Task receives command
-5. mailbox.broadcast(WavsMessage { service_id, submission })
-6. Broadcast Engine disseminates to all connected peers
-7. Peers receive, filter by service_id in their ServiceRouter
-```
-
-### Inbound (Receive Submission)
-
-```
-1. Broadcast Engine receives message from peer
-2. Coordinator Task receives from broadcast receiver
-3. ServiceRouter.should_accept(&msg) -- filter by subscribed services
-4. If accepted: aggregator_tx.send(AggregatorCommand::Receive { submission, peer })
-5. Aggregator processes submission (unchanged from current flow)
-```
-
-### Catch-up (Peer Reconnection)
-
-```
-1. Peer connects to network
-2. Broadcast Engine's buffered cache automatically handles message retrieval
-3. Peer can request messages by digest from any connected peer
-4. No explicit catch-up protocol needed -- the buffered Engine handles this
-```
-
-This eliminates: `CatchUpRequest`, `CatchUpResponse`, `CatchUpCodec`, `request_catchup_from_peer()`, `handle_catchup_request()`, `handle_catchup_response()`, `stored_submissions`, `catchup_requested_peers`.
-
-### Subscribe/Unsubscribe
-
-```
-1. AggregatorCommand::SubscribeService { service_id }
-2. P2pHandle.subscribe(&service_id)
-3. P2pCommand::Subscribe { service_id }  --[mpsc channel]-->
-4. Coordinator Task: service_router.subscribe(service_id)
-   (No network-level action needed -- filtering is local)
-```
-
----
-
-## Suggested Build Order
-
-Dependencies flow top-down. Each layer can be tested independently before composing.
-
-### Phase 1: Cryptographic Identity (no network needed)
-
-**Build:** `ed25519_signer_from_mnemonic()` function
-**Test:** Unit test that derives deterministic Ed25519 keys from known mnemonics
-**Dependencies:** `commonware-cryptography` only
-**Risk:** Low. Pure function, no async, no networking.
-
-### Phase 2: P2P Network Skeleton (connections, no broadcast)
-
-**Build:** `CommonwareP2pNetwork` wrapper that:
-- Creates `discovery::Network` or `lookup::Network` based on config
-- Sets up Oracle with authorized peer set
-- Registers a single broadcast channel
-- Runs inside `commonware::tokio::Runner`
-- Bridges commands via mpsc channel
-
-**Test:** Integration test: 2 nodes connect, verify peer discovery works
-**Dependencies:** Phase 1 (Ed25519 identity), `commonware-p2p`, `commonware-runtime`
-**Risk:** Medium. Runtime integration is the main unknown.
-
-### Phase 3: Broadcast Integration (message dissemination)
-
-**Build:** Wire `commonware_broadcast::buffered::Engine` to the P2P channel:
-- Create Engine with appropriate config
-- Start Engine with P2P sender/receiver
-- Bridge Mailbox.broadcast() to P2pCommand::Publish
-- Bridge Engine receiver to AggregatorCommand::Receive
-
-**Test:** Integration test: 3 nodes, broadcast submission, verify all receive it
-**Dependencies:** Phase 2 (working P2P connections)
-**Risk:** Medium. Message serialization format, deduplication behavior.
-
-### Phase 4: Service Routing and Full P2pHandle
-
-**Build:** ServiceRouter + complete P2pHandle reimplementation:
-- Subscribe/unsubscribe updates ServiceRouter filter
-- GetStatus returns commonware peer state
-- Pending publish retry logic (may be simpler with commonware's built-in buffering)
-
-**Test:** Integration test: multiple services, verify topic isolation via filtering
-**Dependencies:** Phase 3 (working broadcast)
-**Risk:** Low. Application-level logic, well-understood.
-
-### Phase 5: Config Migration and P2pStatus
-
-**Build:** New `P2pConfig` format tailored to commonware:
-- Replace `Local { listen_port }` with lookup-specific config
-- Replace `Remote { listen_port, bootstrap_nodes }` with discovery-specific config
-- Update P2pStatus to reflect commonware state (no GossipSub mesh, different peer info)
-
-**Test:** Config parsing tests, status endpoint tests
-**Dependencies:** Phase 4 (full P2pHandle)
-**Risk:** Low. Configuration is well-defined.
-
-### Phase 6: E2E Testing and libp2p Removal
-
-**Build:** Run full e2e test suite, fix any issues, remove libp2p dependency
-**Test:** `just test-wavs-e2e` passes
-**Dependencies:** All previous phases
-**Risk:** Medium. Integration issues may surface only in e2e.
+**Example:** Settings.tsx split into WalletSection, TomlEditorSection, etc.
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Implementing Custom Runtime Traits
-**What:** Implementing `Spawner`, `Clock`, `Network`, etc. to use WAVS's existing Tokio runtime.
-**Why bad:** 7+ traits with complex semantics, tightly couples to commonware internals, high maintenance cost as traits evolve.
-**Instead:** Run commonware in its own `tokio::Runner` thread and bridge via channels.
+### Anti-Pattern 1: HTTP Proxy Commands
 
-### Anti-Pattern 2: One Broadcast Engine Per Service
-**What:** Creating a separate `commonware_broadcast::buffered::Engine` for each registered service.
-**Why bad:** Each Engine needs its own P2P channel registration, and channels must be registered before `network.start()`. Services are registered dynamically after the node starts.
-**Instead:** Use a single broadcast Engine for all services, with application-level routing in ServiceRouter.
+**What:** Tauri commands that make HTTP requests to the local WAVS server.
 
-### Anti-Pattern 3: Exposing commonware Types Outside P2P Module
-**What:** Letting commonware's `PublicKey`, `Sender`, `Receiver` types leak into the Aggregator or Dispatcher.
-**Why bad:** Couples the entire codebase to commonware. If commonware changes, the blast radius is huge.
-**Instead:** Keep all commonware types inside `p2p.rs` (or a `p2p/` module). The `P2pHandle` facade isolates the rest of the codebase.
+**Why bad:** Race condition on startup (server not bound yet). Extra network hop. Bypasses Tauri's managed state. Currently `cmd_get_health_status`, `cmd_list_kv_entries`, `cmd_list_fs_entries`, `cmd_read_fs_file`, `cmd_save_service_to_node` use this pattern.
 
-### Anti-Pattern 4: Trying to Preserve secp256k1 Identity
-**What:** Wrapping secp256k1 keys to satisfy commonware's Ed25519 `Signer` trait.
-**Why bad:** commonware expects Ed25519 natively. Wrapping adds complexity and may break authentication.
-**Instead:** Clean break to Ed25519 for P2P identity. On-chain signing stays ECDSA (separate concern).
+**Instead:** Access the dispatcher directly when possible. For dev-only endpoints (KV, FS, logs), the HTTP proxy pattern is acceptable since those APIs are specifically designed for external tooling and may not have direct dispatcher methods.
+
+### Anti-Pattern 2: Polling from Frontend
+
+**What:** `setInterval` in React components to periodically call Tauri commands.
+
+**Why bad:** Wasted IPC when nothing changed. Difficult to coordinate intervals across components. The MCP status poll (`useEffect` with `setInterval(poll, 3000)` in Settings.tsx) is an existing example.
+
+**Instead:** Backend pushes events. Frontend subscribes. For MCP status specifically, consider adding a `McpStatusEvent` later.
+
+### Anti-Pattern 3: Storing Derived State in Zustand
+
+**What:** Storing computed values that can be derived from other store state.
+
+**Why bad:** Stale computed values, sync bugs, unnecessary updates.
+
+**Instead:** Use Zustand selectors or `useMemo` in components. Example: service labels are already computed via `getServiceLabel(serviceId)` rather than stored per-activity-item.
+
+### Anti-Pattern 4: BLS Crypto in Frontend
+
+**What:** Using a JavaScript BLS library (e.g., `@noble/bls12-381`) to derive keys or sign proofs.
+
+**Why bad:** The backend already has correct, tested BLS key derivation with specific DST, HKDF parameters, and G1/G2 coordinate handling. Reimplementing in JS risks subtle crypto mismatches (wrong DST, wrong endianness, incompatible point formats).
+
+**Instead:** All BLS operations go through Tauri commands that call the Rust backend. The frontend only handles hex-encoded keys as opaque strings.
+
+---
+
+## New/Modified Components Summary
+
+### Backend (Rust)
+
+| File | Change | Type |
+|------|--------|------|
+| `gui_shared/event.rs` | Add `P2pStatusEvent`, enrich `SubmissionEvent` with `SubmissionResult` | Modified |
+| `app/src-tauri/src/commands.rs` | Add `cmd_get_p2p_status`, `cmd_get_service_signer`, `cmd_get_operator_keys`, `cmd_derive_bls_pubkey` | Modified |
+| `app/src-tauri/src/lib.rs` | Register new commands in `generate_handler![]` | Modified |
+| `app/src-tauri/src/commands.rs` | P2P status background emitter in `cmd_start_wavs` | Modified |
+| `packages/wavs/src/dispatcher.rs` | Enrich `SubmissionConfirmed` with result/tx_hash/algorithm | Modified |
+
+### Frontend (TypeScript/React)
+
+| File | Change | Type |
+|------|--------|------|
+| `types/index.ts` | Add `P2pStatus`, `SignerResponse`, `SubmissionResult`; extend `SignatureAlgorithm`, `ActivityItem` | Modified |
+| `stores/p2pStore.ts` | New store for P2P network state | New |
+| `stores/appStore.ts` | No structural changes (enhanced `ActivityItem` type handled transparently) | Unchanged |
+| `stores/serviceBuilderStore.ts` | `SubmitDraft.signatureAlgorithm` widened to `SignatureAlgorithm` union | Modified |
+| `tauri/commands.ts` | Add `getP2pStatus`, `getServiceSigner`, `getOperatorKeys`, `deriveBlsPubkey` | Modified |
+| `tauri/listeners.ts` | Add `p2p_status` listener, correlation logic for submissions | Modified |
+| `pages/Operators.tsx` | New page: P2P dashboard + operator keys | New |
+| `pages/Settings.tsx` | Thin layout shell (extract sections) | Modified (major refactor) |
+| `components/settings/WalletSection.tsx` | Extracted from Settings | New |
+| `components/settings/WavsHomeSection.tsx` | Extracted from Settings | New |
+| `components/settings/TomlEditorSection.tsx` | Extracted from Settings | New |
+| `components/settings/EnvVarsSection.tsx` | Extracted from Settings | New |
+| `components/settings/McpSection.tsx` | Extracted from Settings | New |
+| `components/settings/ResetSection.tsx` | Extracted from Settings | New |
+| `components/activity/ActivityCard.tsx` | Unified trigger+submission display, result/error badges | Modified |
+| `components/service/SubmitEditor.tsx` | Algorithm selector (secp256k1 / bls12381) | Modified |
+| `components/layout/Header.tsx` | Add "Operators" nav item | Modified |
+| `App.tsx` | Add `/operators` route | Modified |
+
+### Contract Interactions (Frontend via Viem)
+
+| Contract | Change | Type |
+|----------|--------|------|
+| BLS POAStakeRegistry ABI | Need `BlsPOAStakeRegistryABI` in `contracts/` | New file |
+| Existing POAStakeRegistry ABI | Unchanged (secp256k1 path) | Unchanged |
+
+The BLS `updateOperatorSigningKey(blsKey, blsSigProof)` has different parameter types than the secp256k1 variant (bytes vs address). The frontend needs the BLS ABI to call this correctly.
+
+---
+
+## Suggested Build Order
+
+The features have dependencies that constrain ordering:
+
+### Phase 1: Foundation Types + Settings Refactor
+
+**Build:** Type extensions, settings page decomposition.
+
+**Why first:** Types are imported everywhere. Settings refactor is a low-risk prerequisite that reduces the surface area for subsequent changes. No backend changes needed.
+
+**Deliverables:**
+1. Extended `types/index.ts` with `P2pStatus`, `SignerResponse`, `SubmissionResult`, widened `SignatureAlgorithm`
+2. Settings.tsx decomposed into 6 section components
+3. `serviceBuilderStore.ts` algorithm field widened
+
+### Phase 2: P2P Status + Operators Page
+
+**Build:** Backend `cmd_get_p2p_status`, `P2pStatusEvent`, `p2pStore`, `Operators.tsx` page, event listener.
+
+**Why second:** P2P status is a standalone read-only feature with no dependencies on BLS or activity changes. Provides immediate user-visible value.
+
+**Deliverables:**
+1. `cmd_get_p2p_status` and `cmd_get_operator_keys` Tauri commands
+2. `P2pStatusEvent` background emitter
+3. `p2pStore.ts`
+4. `Operators.tsx` page with Ed25519 identity, connected peers, subscribed services, operator key display
+5. Nav item added, route added
+
+### Phase 3: BLS Service Builder + Registration
+
+**Build:** Backend `cmd_get_service_signer`, `cmd_derive_bls_pubkey`, `SubmitEditor` algorithm selector, BLS POA registry ABI, operator registration flow.
+
+**Why third:** Depends on Phase 1 types. The BLS registration flow touches the service builder, POA contract interactions, and the new Tauri commands.
+
+**Deliverables:**
+1. `cmd_get_service_signer` and `cmd_derive_bls_pubkey` Tauri commands
+2. Algorithm selector in `SubmitEditor.tsx`
+3. BLS POAStakeRegistry ABI
+4. `updateOperatorSigningKey` call with BLS key + proof
+
+### Phase 4: Unified Activity Events
+
+**Build:** Enriched `SubmissionEvent`, correlation logic, enhanced `ActivityCard`.
+
+**Why last:** Depends on Phase 1 types. Touches the dispatcher's submission pipeline (moderate risk). Can be built in parallel with Phase 3 if resources allow, but sequential is safer since both touch `types/index.ts`.
+
+**Deliverables:**
+1. Enriched `SubmissionEvent` with `SubmissionResult`
+2. Dispatcher pipeline change to propagate tx_hash + algorithm
+3. Frontend correlation logic in `listeners.ts`
+4. Enhanced `ActivityCard` with result badges, algorithm pills, merged view
 
 ---
 
 ## Scalability Considerations
 
-| Concern | Current (libp2p) | After (commonware) | Notes |
-|---------|------------------|---------------------|-------|
-| Per-service isolation | GossipSub topics (network-level) | ServiceRouter filter (application-level) | Acceptable at WAVS scale (<1000 operators). All operators receive all messages. |
-| Message caching | Manual `stored_submissions` HashMap | Buffered Engine built-in cache | Engine handles eviction, per-peer queues, capacity limits |
-| Catch-up on reconnect | Custom request/response protocol | Engine's digest-based retrieval | Simpler, built-in, no custom protocol code |
-| Peer discovery | Kademlia DHT (decentralized) | Bootstrapper-based (semi-centralized) | Bootstrappers must be available. Multiple bootstrappers for redundancy. |
-| NAT traversal | AutoNAT + Identify | Not built-in to commonware | May need external STUN/TURN or relay if operators are behind NAT. Flag for research. |
-
----
-
-## Open Questions Requiring Phase-Specific Research
-
-1. **Runtime integration:** Does running `commonware::tokio::Runner` in a separate `std::thread` work cleanly alongside WAVS's existing Tokio runtime? (Validate in Phase 2)
-
-2. **NAT traversal:** commonware does not include AutoNAT or relay protocols. How do operators behind NAT connect? (Research in Phase 2)
-
-3. **Dynamic peer sets:** The Oracle's `track()` method registers peer sets at indices. How does this work when operators join/leave dynamically? Does WAVS need to manage a monotonically increasing index? (Research in Phase 2)
-
-4. **Message size limits:** commonware has configurable `max_message_size`. What is the typical size of a serialized `Submission`? Does it fit within reasonable limits? (Validate in Phase 3)
-
-5. **Ed25519 seed derivation:** What is the best way to deterministically derive an Ed25519 seed from a BIP-39 mnemonic? (Validate in Phase 1)
+| Concern | Current (10 services) | At 100 services | At 1000 services |
+|---------|----------------------|-----------------|------------------|
+| P2P status event size | ~500 bytes/5s | ~2KB/5s (more peer_ids, subscribed_services) | 10-20KB/5s; consider throttling or only sending diffs |
+| Activity correlation | O(n) scan, n < 2000 | Fine, ring buffer caps at 2000 | Fine -- ring buffer prevents unbounded growth |
+| Operator keys | One command returns all | Paginate if >50 services | Not realistic for desktop app |
+| Service builder BLS | One derivation per deploy | Fine | Fine |
 
 ---
 
 ## Sources
 
-- [commonware-p2p docs.rs](https://docs.rs/commonware-p2p/latest/commonware_p2p/) -- HIGH confidence (official docs)
-- [commonware-p2p authenticated::discovery](https://docs.rs/commonware-p2p/latest/commonware_p2p/authenticated/discovery/index.html) -- HIGH confidence
-- [commonware-p2p authenticated::lookup](https://docs.rs/commonware-p2p/latest/commonware_p2p/authenticated/lookup/index.html) -- HIGH confidence
-- [commonware-broadcast buffered](https://docs.rs/commonware-broadcast/latest/commonware_broadcast/buffered/index.html) -- HIGH confidence
-- [commonware-cryptography](https://docs.rs/commonware-cryptography/latest/commonware_cryptography/) -- HIGH confidence
-- [commonware-runtime tokio](https://docs.rs/commonware-runtime/latest/commonware_runtime/tokio/index.html) -- HIGH confidence
-- [commonwarexyz/monorepo GitHub](https://github.com/commonwarexyz/monorepo) -- HIGH confidence
-- [commonware chat example](https://github.com/commonwarexyz/monorepo/blob/main/examples/chat/README.md) -- MEDIUM confidence (example, not WAVS-specific)
-- [WAVS source code: p2p.rs, aggregator.rs, dispatcher.rs](packages/wavs/src/subsystems/aggregator/) -- HIGH confidence (direct code reading)
+All findings verified against codebase:
+- `app/src-tauri/src/commands.rs` -- existing Tauri command patterns
+- `app/src-tauri/src/state.rs` -- managed state patterns
+- `packages/gui/shared/src/event.rs` -- event emission pattern
+- `packages/wavs/src/subsystems/aggregator.rs` -- `get_p2p_status()` method
+- `packages/wavs/src/http/handlers/info.rs` -- P2pStatus in HTTP response
+- `packages/types/src/http.rs` -- `P2pStatus` struct, `SignerResponse` enum
+- `packages/types/src/service.rs` -- `SignatureAlgorithm` enum
+- `packages/types/src/solidity_types/bls.rs` -- BLS contract ABI bindings
+- `packages/types/src/contracts/solidity/abi/bls/IPOAStakeRegistry.json` -- BLS `updateOperatorSigningKey(blsKey, blsSigProof)`
+- `app/src/stores/` -- all 4 existing stores
+- `app/src/tauri/listeners.ts` -- event listener pattern
+- `app/src/types/index.ts` -- all frontend types
+- `app/src/pages/Settings.tsx` -- 942-line monolith to decompose
+- `app/src/components/activity/ActivityCard.tsx` -- current activity rendering

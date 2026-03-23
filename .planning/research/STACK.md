@@ -1,224 +1,264 @@
 # Technology Stack
 
-**Project:** WAVS Commonware P2P Migration
-**Researched:** 2026-03-17
+**Project:** WAVS v1.2 Tauri App -- New Feature Stack Additions
+**Researched:** 2026-03-23
+**Overall confidence:** HIGH
 
-## Recommended Stack
+This document covers ONLY the stack additions/changes needed for the v1.2 milestone features: BLS service deployment UI, P2P operator dashboard, unified activity events, and settings UX overhaul. The existing stack (Tauri 2, React 19, Vite 7, Zustand 5, Viem 2, Tailwind 3, CodeMirror 6, @tanstack/react-virtual, @scure/bip39) is validated and NOT re-researched.
 
-### Core Commonware Crates
+## Executive Summary
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `commonware-p2p` | 2026.3.0 | Authenticated peer networking | Replaces libp2p 0.56. Provides encrypted connections between authenticated peers with discovery and lookup modes. The `authenticated::discovery` module maps directly to the current Kademlia+mDNS pattern. |
-| `commonware-broadcast` | 2026.3.0 | Message dissemination + caching | Replaces GossipSub + the custom catch-up protocol. The `buffered::Engine` handles both broadcast and digest-based retrieval of missed messages, eliminating ~300 lines of custom catch-up code. |
-| `commonware-cryptography` | 2026.3.0 | Ed25519 key generation and signing | Replaces libp2p's secp256k1 P2P identity. Ed25519 is commonware's native scheme; the `Signer` trait provides `sign(namespace, msg)` with cross-domain attack prevention. |
-| `commonware-runtime` | 2026.3.0 | Async runtime abstraction layer | Required dependency of commonware-p2p. Provides the `Context` that satisfies `Spawner`, `Clock`, `Network`, `Storage`, `Metrics` traits needed by the p2p and broadcast engines. |
-| `commonware-codec` | 2026.3.0 | Binary serialization | Transitive dependency. Used by commonware-p2p for message encoding. Submission types will need `commonware_codec::Encode + Decode` implementations. |
+The existing stack is sufficient for nearly everything. The new features are primarily UI pages that consume data already available from the WAVS HTTP API (P2P status, signer info) and existing Tauri events (triggers, submissions). **No new frontend npm dependencies are needed.** The work is:
 
-**Version scheme:** CalVer (YYYY.M.PATCH). All crates are published in lockstep from the monorepo at [github.com/commonwarexyz/monorepo](https://github.com/commonwarexyz/monorepo). Pin to `2026.3.0` -- this is the latest release as of 2026-03-09.
+1. **New Tauri commands** (Rust backend) to proxy existing HTTP API endpoints (`/p2p/status`, `/services/signer`) into the Tauri IPC layer
+2. **New TypeScript types** for P2P status, BLS signer responses, and updated `SignatureAlgorithm` enum
+3. **New React pages and components** using existing patterns (Zustand stores, hand-rolled Tailwind components, `@tanstack/react-virtual` for lists)
+4. **Updated service builder store** to support `bls12381` algorithm selection
+5. **New BLS POAStakeRegistry ABI** in the frontend for BLS operator key registration
 
-**ALPHA WARNING:** All commonware crates are self-described as ALPHA software. Expect breaking changes between CalVer releases. This is acceptable for WAVS because: (a) the P2P layer is already behind the `P2pHandle` abstraction, limiting blast radius; (b) WAVS itself is pre-1.0; (c) commonware is well-funded ($25M raise, Nov 2025) and actively maintained.
+No new runtime dependencies. No architecture changes. The app already has all the plumbing.
 
-### Transitive Commonware Dependencies (pulled in automatically)
+## Recommended Stack -- Additions Only
 
-| Technology | Version | Purpose | Notes |
-|------------|---------|---------|-------|
-| `commonware-stream` | 2026.3.0 | Transport-layer message exchange | Used internally by commonware-p2p |
-| `commonware-macros` | 2026.3.0 | Derive macros | Used for codec derivation |
-| `commonware-parallel` | 2026.3.0 | Parallel fold operations | Used by cryptography internals |
-| `commonware-utils` | 2026.3.0 | Shared utilities | Common helpers |
-| `commonware-math` | 2026.3.0 | Math primitives | Used by cryptography |
+### New Tauri Commands (Rust Backend)
 
-### Existing WAVS Dependencies (unchanged)
+| Command | Proxies | Purpose | Why Not Direct HTTP |
+|---------|---------|---------|---------------------|
+| `cmd_get_p2p_status` | `GET /p2p/status` | P2P dashboard data | Consistent with existing pattern (all data flows through Tauri IPC, not direct HTTP from renderer). The app's renderer process does not know the WAVS HTTP port; only the Rust backend does via `WavsConfigState`. |
+| `cmd_get_service_signer` | `POST /services/signer` | BLS/ECDSA key display | Same reason. Returns `SignerResponse` (either `Secp256k1 { hd_index, evm_address }` or `Bls12381 { hd_index, g1_pubkey_hex }`). |
 
-| Technology | Version | Purpose | Notes |
-|------------|---------|---------|-------|
-| `tokio` | 1.47.1 | Async runtime | WAVS primary runtime. See runtime integration section below. |
-| `crossbeam` | (workspace) | Inter-subsystem channels | Aggregator <-> Dispatcher communication unchanged |
-| `serde` | (workspace) | Config serialization | `wavs.toml` parsing for new P2P config format |
-| `tracing` | (workspace) | Structured logging | commonware also uses tracing internally |
-| `axum` | (workspace) | HTTP API | `/p2p/status` endpoint updated but Axum stays |
+**Implementation pattern:** Follow `cmd_get_health_status` exactly -- read config from `WavsConfigState`, make `reqwest` call to local HTTP API, deserialize response, return to frontend.
 
-### Dependencies to Remove
+**Alternative considered: direct Dispatcher access.** The P2P status could be fetched via `state.dispatcher.aggregator.get_p2p_status()` (like the HTTP handler does). This avoids the HTTP round-trip but couples the Tauri command to internal APIs. Both approaches work. The HTTP proxy approach is simpler and consistent with existing patterns.
 
-| Technology | Current Version | Why Remove |
-|------------|----------------|------------|
-| `libp2p` | 0.56 | Fully replaced by commonware-p2p + commonware-broadcast. All 13 feature flags (tokio, tcp, dns, noise, yamux, identify, ping, gossipsub, request-response, kad, mdns, autonat, secp256k1) become unnecessary. This is a significant dependency reduction. |
+### New TypeScript Types
 
-## Critical Architecture Decision: Runtime Integration
+These types mirror Rust structs already defined in `packages/types/src/http.rs` and `packages/types/src/service.rs`:
 
-**Confidence: MEDIUM** -- verified from source code, but no production examples of this pattern exist.
+| Type | Source | Status |
+|------|--------|--------|
+| `P2pStatus` | `packages/types/src/http.rs` | New -- not yet in frontend |
+| `SignerResponse` | `packages/types/src/http.rs` | New -- not yet in frontend |
+| `SignatureAlgorithm: 'secp256k1' \| 'bls12381'` | `packages/types/src/service.rs` | **Update** -- currently hardcoded to `'secp256k1'` only in `app/src/types/index.ts` |
 
-### The Problem
+### BLS POAStakeRegistry ABI (Frontend)
 
-`commonware-runtime::tokio::Runner` creates its own Tokio multi-thread runtime internally via `tokio::runtime::Builder::new_multi_thread()`. WAVS already has its own Tokio runtime (1.47.1 with `full` features). You cannot nest `block_on()` calls -- Tokio will panic with "Cannot start a runtime from within a runtime."
+The BLS `IPOAStakeRegistry` contract interface is different from the existing secp256k1 one:
 
-### The Solution: Dedicated Thread with Separate Runtime
+| Difference | secp256k1 (existing) | BLS (new) |
+|-----------|---------------------|-----------|
+| `getLatestOperatorSigningKey` returns | `address` | `bytes` (128-byte G1 pubkey) |
+| `updateOperatorSigningKey` args | `(address newSigningKey, bytes signingKeySignature)` | `(bytes blsKey, bytes blsSigProof)` |
+| `SigningKeyUpdate` event | `newSigningKey: address` | `newKeyHash: bytes32` |
+| New errors | -- | `InvalidBLSKeyLength`, `InvalidBLSKeyOwnershipProof`, `InvalidBLSSignature`, `InvalidBLSSignatureLength` |
 
-Run `commonware-runtime::tokio::Runner::start()` on a dedicated OS thread via `std::thread::spawn`. The commonware runtime gets its own Tokio instance. Communication between the WAVS Tokio runtime and the commonware runtime happens over thread-safe channels (crossbeam or `tokio::sync::mpsc`).
+**Action:** Create `app/src/contracts/POABlsStakeRegistry.ts` with the ABI from `packages/types/src/contracts/solidity/abi/bls/IPOAStakeRegistry.json`. The existing `POAStakeRegistry.ts` remains for secp256k1 registries.
 
-```rust
-// Pseudocode for the integration pattern
-let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel();
-let (event_tx, event_rx) = crossbeam::channel::unbounded();
+### Frontend Patterns to Follow
 
-let handle = std::thread::spawn(move || {
-    let runner = commonware_runtime::tokio::Runner::default();
-    runner.start(|context| async move {
-        // Inside commonware's runtime context
-        let (network, oracle) = discovery::Network::new(context.clone(), config);
-        let (sender, receiver) = network.register(channel, rate_limit, backlog);
-        let net_handle = network.start();
+| Pattern | Existing Example | Apply To |
+|---------|-----------------|----------|
+| Zustand store | `appStore.ts` | New `p2pStore.ts` for P2P status polling state |
+| Tauri command wrapper | `tauri/commands.ts` | New `getP2pStatus()`, `getServiceSigner()` commands |
+| Tauri event listener | `tauri/listeners.ts` | No new events needed -- P2P status uses polling, not push |
+| Virtualized list | `ActivityFeed.tsx` | Peer list (if many peers, unlikely in practice) |
+| Hand-rolled components | `components/atoms/` | New `KeyDisplay`, `PeerCard`, `QuorumProgress` components |
+| Page layout | `pages/Health.tsx` | New `P2P.tsx` page, updated `Settings.tsx` |
 
-        // Bridge: read from cmd_rx, write to event_tx
-        // This loop receives P2pCommands from WAVS and
-        // translates them to commonware sender.send() calls
-        loop {
-            tokio::select! {
-                Some(cmd) = cmd_rx.recv() => { /* handle command */ }
-                Ok(msg) = receiver.recv() => { /* forward to event_tx */ }
-            }
-        }
-    });
-});
+### What NOT to Add
+
+| Category | Temptation | Why Not |
+|----------|-----------|---------|
+| UI component library | Radix, Headless UI, shadcn | App uses hand-rolled Tailwind components (Button, Modal, Dropdown, Tabs, Toast, etc.). Adding a component library would create inconsistency. The existing atoms are sufficient. |
+| Charting library | recharts, victory, d3 | Quorum progress is a simple bar/percentage. A full charting library is overkill. Use Tailwind width percentages. |
+| WebSocket client | socket.io-client, ws | P2P status is infrequent (poll every 5-10s via Tauri command). The WAVS HTTP API does not expose a WebSocket endpoint for P2P status. Polling with `setInterval` + Zustand is the correct pattern. |
+| State machine library | XState, Robot | BLS key registration is a 2-step flow (register operator + register BLS key). A simple state variable in Zustand is sufficient, like the existing `DeployState` pattern in `serviceBuilderStore.ts`. |
+| Copy-to-clipboard library | clipboard-copy, react-copy-to-clipboard | Use `navigator.clipboard.writeText()` directly. All Tauri webview targets support it. |
+| BLS crypto in frontend | noble-bls12-381 | BLS key derivation happens in the Rust backend only. The frontend displays hex strings, never computes BLS operations. |
+| react-query / tanstack-query | Data fetching + caching | The app uses Zustand + manual `invoke()` calls. Adding react-query would create two competing data-fetching paradigms. Keep using Zustand. |
+| Form library | react-hook-form, formik | Settings page uses controlled inputs with Zustand. Continue this pattern. |
+
+## Detailed Component Analysis
+
+### 1. P2P Dashboard Page
+
+**Data source:** `GET /p2p/status` via new `cmd_get_p2p_status` Tauri command.
+
+**Response shape** (from `packages/types/src/http.rs`):
+```typescript
+interface P2pStatus {
+  enabled: boolean;
+  local_peer_id: string | null;  // Ed25519 pubkey hex
+  listen_addresses: string[];     // e.g. ["0.0.0.0:9000"]
+  connected_peers: number;
+  peer_ids: string[];            // Ed25519 pubkeys of connected peers
+  subscribed_services: string[]; // hex service ID hashes
+}
 ```
 
-**Why this works:**
-- `std::thread::spawn` creates a new OS thread with no Tokio context
-- `Runner::start()` calls `Builder::new_multi_thread().build()` safely on that thread
-- Channel-based bridging is the same pattern WAVS already uses (crossbeam channels between subsystems)
-- The `P2pHandle` interface stays identical -- it still wraps an `mpsc::UnboundedSender<P2pCommand>`
+**Polling pattern:** `useEffect` with `setInterval(5000)`. Store in a `p2pStore.ts` (Zustand). Display:
+- Node identity card (Ed25519 peer ID, listen addresses)
+- Connected peers list (peer IDs, truncated with copy)
+- Subscribed services (correlated with service names from `appStore.services`)
 
-**Why NOT alternative approaches:**
-- **Cannot use `tokio::spawn`**: Runner::start() is blocking, would block a Tokio worker thread
-- **Cannot use `tokio::task::spawn_blocking`**: That thread pool still has a Tokio context; nested runtime creation panics
-- **Cannot construct Context directly**: `Context` and `Executor` have no public constructors; only `Runner::start()` creates them
-- **Cannot implement runtime traits yourself**: Theoretically possible (commonware is trait-based), but impractical -- you'd need to implement `Spawner`, `Clock`, `Network`, `Storage`, `BufferPooler`, `ThreadPooler`, `Metrics`, `Resolver`, and `CryptoRngCore`. The commonware Tokio runner on a separate thread is vastly simpler.
+**No new dependencies needed.** Truncation + copy uses existing `AddressDisplay` component pattern. Periodic refetch uses `setInterval` like Health page already does.
 
-### Runtime Config
+### 2. BLS Key Display + Registration
 
-```rust
-let runner = commonware_runtime::tokio::Runner::new(
-    commonware_runtime::tokio::Config::default()
-        .with_worker_threads(2)           // Minimal: P2P doesn't need many
-        .with_max_blocking_threads(4)     // For DNS resolution, etc.
-        .with_tcp_nodelay(true)           // Low-latency messaging
-);
+**Key display data:** `POST /services/signer` via new `cmd_get_service_signer` Tauri command.
+
+**Response shape** (from `packages/types/src/http.rs`):
+```typescript
+type SignerResponse =
+  | { secp256k1: { hd_index: number; evm_address: string } }
+  | { bls12381: { hd_index: number; g1_pubkey_hex: string } };
 ```
 
-Keep worker threads low (2-4). The commonware runtime handles only P2P networking; WAVS's main runtime handles everything else.
+**Key registration flow for BLS:**
+1. Owner calls `registerOperator(operatorAddress, weight)` -- same as secp256k1
+2. Operator calls `updateOperatorSigningKey(blsKey, blsSigProof)` where:
+   - `blsKey` = 128-byte G1 pubkey (from SignerResponse)
+   - `blsSigProof` = 256-byte G2 signature proving key ownership
 
-## Commonware P2P Architecture Mapping
+**Critical: BLS sig proof computation happens on the backend.** The frontend cannot compute BLS signatures. A new Tauri command `cmd_get_bls_key_proof` is needed that calls the Rust backend to sign `keccak256(abi.encode(operatorAddress))` with the BLS private key and return the G2 signature bytes. This is the ONLY new crypto operation needed.
 
-### libp2p to commonware Concept Mapping
+**Contract interaction:** Uses existing Viem `writeContract()` pattern from `app/src/utils/evm.ts`. The BLS `updateOperatorSigningKey` takes `(bytes, bytes)` instead of `(address, bytes)` -- the ABI handles this.
 
-| libp2p Concept | commonware Equivalent | Notes |
-|----------------|----------------------|-------|
-| `Swarm` | `discovery::Network` | Main network lifecycle manager |
-| `PeerId` (secp256k1) | `ed25519::PublicKey` | Peer identity type |
-| `Keypair::generate_secp256k1()` | `ed25519::PrivateKey::from_seed(seed)` | Key generation. `from_seed` takes u64, so mnemonic must be hashed to u64 first, OR use `ed25519::PrivateKey::random()` with a seeded RNG. |
-| `GossipSub` topic | `Channel` + `discovery::Sender/Receiver` | One channel per service for topic isolation |
-| `Kademlia` DHT | `authenticated::discovery` with bootstrappers | Bootstrapper-based discovery replaces DHT |
-| `mDNS` | `authenticated::lookup` OR `discovery` with local config | `lookup` works when peer addresses are known; `discovery::Config::local()` for dev-friendly settings |
-| Request/Response (catch-up) | `buffered::Engine` digest retrieval | Built-in message caching eliminates custom catch-up protocol |
-| `AutoNAT` + `Identify` | Not needed | commonware handles connection management internally |
-| `NetworkBehaviour` derive | Not applicable | commonware uses channel registration, not behavior composition |
+### 3. Unified Activity Events
 
-### Key Derivation Change
+**Current state:** Activity events already unify triggers and submissions. Each `ActivityItem` has a `kind: 'trigger' | 'submission'` discriminator. The `ActivityCard` and `ActivityFeed` components already handle both.
 
-**Current (libp2p):** Mnemonic -> BIP39 seed -> secp256k1 keypair at HD path m/44'/60'/0'/0/0
+**What needs to change:**
+- Add submission result data (success/error) to `SubmissionEvent` -- currently only has `service_id`, `workflow_id`, `trigger_data`
+- Correlate trigger-to-submission by matching `serviceId + workflowId + triggerData` (or EventId if available)
+- Display error information when submission fails
+- Show BLS/secp256k1 algorithm badge on submission cards
 
-**New (commonware):** Mnemonic -> SHA-256 hash of seed bytes -> first 8 bytes as u64 -> `ed25519::PrivateKey::from_seed(u64)` OR Mnemonic -> BIP39 seed -> 32 bytes -> construct ed25519 key via `commonware_codec::Read` trait
+**Backend change needed:** The Rust `SubmissionEvent` (emitted via `app.emit_ext()`) needs to include:
+- `success: boolean`
+- `error: string | null`
+- `signature_algorithm: string` (for badge display)
+- Optional: `event_id: string` for correlation
 
-**Recommendation:** Use `ed25519::PrivateKey::random(&mut seeded_rng)` where the RNG is seeded from the BIP39 mnemonic's entropy. This gives deterministic key derivation with full 256-bit entropy, rather than truncating to u64 which loses entropy. The `from_seed(u64)` method is explicitly marked as "insecure" and for testing only.
+**No new frontend dependencies.** Just type updates and conditional rendering in `ActivityCard`.
 
-```rust
-use rand::SeedableRng;
-use rand_chacha::ChaCha20Rng;
+### 4. Settings Page Reorganization
 
-let bip39_seed = /* derive from mnemonic */;
-let mut rng = ChaCha20Rng::from_seed(bip39_seed[..32].try_into().unwrap());
-let private_key = ed25519::PrivateKey::random(&mut rng);
+**Current state:** `Settings.tsx` is 33K -- a single large file with all settings sections inlined.
+
+**Recommended approach:** Extract sections into sub-components:
+- `settings/GeneralSection.tsx` (wavs home, restart)
+- `settings/WalletSection.tsx` (mnemonic management, derived addresses)
+- `settings/McpSection.tsx` (MCP server config)
+- `settings/EnvVarsSection.tsx` (environment variables)
+- `settings/RegistrySection.tsx` (POA registries)
+- `settings/AdvancedSection.tsx` (TOML editor, reset)
+
+Use existing `Tabs` component from `components/atoms/Tabs.tsx` for navigation between sections.
+
+**No new dependencies.** This is pure refactoring + UI reorganization.
+
+### 5. Service Builder BLS Support
+
+**Current state:** `serviceBuilderStore.ts` has `signatureAlgorithm: 'secp256k1'` hardcoded in `SubmitDraft`.
+
+**Changes needed:**
+- Update `SignatureAlgorithm` type to `'secp256k1' | 'bls12381'`
+- Update `SubmitDraft.signatureAlgorithm` to accept both
+- When `bls12381` is selected, set `signaturePrefix` to `'none'` (BLS uses hash-to-curve, not EIP-191)
+- UI: Algorithm selector radio/toggle in the submit section of the service builder
+- UI: When BLS selected, show the BLS G1 pubkey (from `cmd_get_service_signer`) and registration status
+
+## New Tauri Commands Summary
+
+| Command | Input | Output | Backend Implementation |
+|---------|-------|--------|----------------------|
+| `cmd_get_p2p_status` | (none) | `P2pStatus` | HTTP GET to `/p2p/status` |
+| `cmd_get_service_signer` | `{ service_manager: ServiceManager }` | `SignerResponse` | HTTP POST to `/services/signer` |
+| `cmd_get_bls_key_proof` | `{ service_manager: ServiceManager, operator_address: string }` | `{ g1_pubkey: string, g2_proof: string }` | Derive BLS key from mnemonic, sign keccak256(abi.encode(operator)) |
+
+## New Zustand Store
+
+```typescript
+// p2pStore.ts -- minimal, follows appStore pattern
+interface P2pState {
+  status: P2pStatus | null;
+  isPolling: boolean;
+  error: string | null;
+
+  fetchStatus: () => Promise<void>;
+  startPolling: (intervalMs?: number) => void;
+  stopPolling: () => void;
+}
 ```
 
-**Confidence: HIGH** -- `random()` takes `impl CryptoRngCore`, ChaCha20Rng implements this, and seeding from mnemonic entropy is standard practice.
+## New React Router Routes
 
-### Channel Registration Pattern
+```typescript
+// In App.tsx, add:
+<Route path="/p2p" element={<P2PPage />} />
+```
 
-commonware-p2p requires all channels to be registered before `network.start()`. This is different from libp2p where GossipSub topics can be subscribed/unsubscribed dynamically.
+## File Structure for New Code
 
-**Impact:** Service subscribe/unsubscribe at runtime must be handled differently. Two approaches:
+```
+app/src/
+  types/index.ts          -- UPDATE: add P2pStatus, SignerResponse, update SignatureAlgorithm
+  tauri/commands.ts        -- UPDATE: add getP2pStatus(), getServiceSigner(), getBlsKeyProof()
+  stores/p2pStore.ts       -- NEW: P2P status polling store
+  stores/serviceBuilderStore.ts -- UPDATE: BLS algorithm support
+  pages/P2P.tsx            -- NEW: P2P dashboard page
+  pages/Settings.tsx       -- REFACTOR: extract into settings/ sub-components
+  contracts/POABlsStakeRegistry.ts -- NEW: BLS registry ABI + helpers
+  utils/evm.ts             -- UPDATE: add BLS operator registration functions
+  components/p2p/          -- NEW: PeerCard, NodeIdentity, QuorumProgress
+  components/activity/ActivityCard.tsx -- UPDATE: submission result display, algorithm badge
+```
 
-1. **Pre-register a single broadcast channel, multiplex services in application layer.** Register one `Channel` for all WAVS traffic, include `ServiceId` in the message envelope, filter on receive. Simple but loses network-level isolation.
+## Rust Backend (src-tauri/)
 
-2. **Pre-register a pool of channels, map services to channels dynamically.** Register N channels at startup (e.g., 256), assign services to channels via consistent hashing of ServiceId. Channels are reusable across service lifetimes.
+```
+app/src-tauri/src/
+  commands.rs              -- UPDATE: add cmd_get_p2p_status, cmd_get_service_signer, cmd_get_bls_key_proof
+  lib.rs                   -- UPDATE: register new commands in handler macro
+```
 
-**Recommendation:** Approach 1 (single channel with application-layer routing) for the initial migration. Rationale: it's simpler, maps well to the existing `P2pHandle` interface, and the `buffered::Engine` handles message caching per-sender regardless. Per-service isolation at the network level is a nice-to-have, not a requirement for correctness -- the aggregator already validates messages by service ID.
-
-**Confidence: MEDIUM** -- this is an architectural choice, not a technical constraint. May revisit if message volume per-service becomes a concern.
-
-### Oracle Peer Management
-
-The `Oracle` struct manages authorized peer sets. Key methods:
-- `oracle.track(index, peer_set)` -- register a set of authorized peers at a given index
-- `oracle.subscribe()` -- get notified of peer set changes
-- `oracle.block(peer)` -- block a misbehaving peer
-
-Peers not explicitly tracked via the Oracle are rejected. This is more restrictive than libp2p's open gossip model. For WAVS, the operator set for each service is known from on-chain registration, so this maps well -- the aggregator already knows which operators are registered for which services.
-
-## Supporting Libraries
-
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| `rand_chacha` | 0.9+ | Deterministic RNG | Seeding Ed25519 key from mnemonic entropy |
-| `sha2` | 0.10+ | SHA-256 hashing | Hashing mnemonic seed for key derivation (if needed) |
-| `bip39` | (existing) | Mnemonic handling | Already in WAVS for mnemonic-based key derivation |
-| `prometheus-client` | 0.24 | Metrics | commonware-runtime uses this internally; WAVS may want to expose commonware metrics via existing Prometheus endpoint |
+**Cargo.toml change:** None needed. The `wavs` workspace dependency already includes all BLS and P2P functionality. The Tauri commands proxy to the HTTP API or access the dispatcher directly.
 
 ## Alternatives Considered
 
 | Category | Recommended | Alternative | Why Not |
 |----------|-------------|-------------|---------|
-| P2P Framework | commonware-p2p | Keep libp2p 0.56 | Project requirement is to migrate to commonware. Also, commonware's authenticated model is a better fit for known-operator AVS networks. |
-| P2P Framework | commonware-p2p | libp2p 0.57+ | Same as above; plus libp2p 0.57 has its own breaking changes |
-| Broadcast | commonware-broadcast buffered | Custom over commonware-p2p raw channels | buffered::Engine provides message caching and digest retrieval for free, eliminating the need to rewrite the catch-up protocol |
-| Runtime integration | Dedicated thread + separate runtime | Implement commonware traits on WAVS runtime | Implementing 10+ traits to wrap the existing Tokio runtime is high effort and fragile across commonware version bumps |
-| Runtime integration | Dedicated thread + separate runtime | Single shared Tokio runtime | Not possible; Runner creates its own runtime with no public constructor for Context |
-| Crypto identity | Ed25519 via commonware-cryptography | Wrap secp256k1 to satisfy commonware Signer trait | commonware's Signer trait expects associated PublicKey/Signature types; wrapping secp256k1 would fight the type system. Ed25519 is the native, tested path. |
-| Discovery (dev) | `discovery::Config::local()` | `authenticated::lookup` | `lookup` requires knowing all peer addresses upfront. `Config::local()` with `allow_private_ips: true` gives automatic LAN discovery similar to mDNS. |
-| Discovery (prod) | `discovery` with bootstrappers | `lookup` | `discovery` with bootstrappers is the direct replacement for Kademlia DHT. Bootstrapper nodes serve the same role as current bootstrap_nodes config. |
+| P2P data fetching | Tauri command + setInterval polling | Tauri event push from backend | P2P status changes infrequently (peers join/leave). Polling every 5s is simpler than adding a new Rust event emitter to the P2P subsystem. Avoids coupling Tauri to aggregator internals. |
+| BLS key proof | New Tauri command `cmd_get_bls_key_proof` | Frontend BLS library (noble-bls12-381) | BLS private key only exists in Rust backend (derived from mnemonic via blst). Sending private key material to the renderer is a security risk. Keep all crypto in Rust. |
+| Settings page | Tab-based sections via existing Tabs atom | Accordion layout | Tabs are clearer for discrete sections. App already has a Tabs component. |
+| Activity correlation | Client-side match by serviceId+workflowId+triggerData hash | Backend-emitted correlation ID | Backend EventId computation uses RIPEMD160 which is not available in the browser WebCrypto API. Client-side matching by composite key is simpler and sufficient for display purposes. |
+| BLS ABI source | Separate `POABlsStakeRegistry.ts` file | Extend existing `POAStakeRegistry.ts` with conditional types | The ABIs are different contracts with different function signatures. Separate files are cleaner. The secp256k1 registry returns `address` for signing keys; the BLS registry returns `bytes`. |
 
 ## Installation
 
-```toml
-# In packages/wavs/Cargo.toml (or workspace Cargo.toml)
+**No new npm packages to install.** All features use existing dependencies.
 
-[dependencies]
-commonware-p2p = "2026.3.0"
-commonware-broadcast = "2026.3.0"
-commonware-cryptography = "2026.3.0"
-commonware-runtime = "2026.3.0"
-commonware-codec = "2026.3.0"
-rand_chacha = "0.9"
+**No new Cargo dependencies.** The Tauri backend already has access to everything needed via workspace dependencies (`wavs`, `wavs-types`, `wavs-gui-shared`).
 
-# Remove:
-# libp2p = { version = "0.56", features = [...] }
-```
+## Verification Notes
 
-**Feature flags to consider:**
-- `commonware-runtime`: no default features needed; the `tokio` module is always compiled for non-WASM targets
-- `commonware-cryptography`: default `std` feature is sufficient; `mocks` feature useful for tests
-- `commonware-p2p`: no optional features needed for production use; `arbitrary` for property testing
+- `P2pStatus` struct verified in `packages/types/src/http.rs` lines 132-147 (HIGH confidence)
+- `SignerResponse` enum verified in `packages/types/src/http.rs` lines 13-26 (HIGH confidence)
+- `SignatureAlgorithm::Bls12381` variant verified in `packages/types/src/service.rs` lines 565-568 (HIGH confidence)
+- BLS `IPOAStakeRegistry` ABI verified in `packages/types/src/contracts/solidity/abi/bls/IPOAStakeRegistry.json` (HIGH confidence)
+- BLS `updateOperatorSigningKey(bytes blsKey, bytes blsSigProof)` signature verified in same ABI (HIGH confidence)
+- Existing Tauri command pattern verified in `app/src-tauri/src/commands.rs` (HIGH confidence)
+- Frontend type mismatch: `SignatureAlgorithm` is `'secp256k1'` only in `app/src/types/index.ts` but Rust has both variants (confirmed, needs update)
 
 ## Sources
 
-- [commonware-p2p docs.rs](https://docs.rs/commonware-p2p/2026.3.0/commonware_p2p/) -- HIGH confidence, official API docs
-- [commonware-broadcast docs.rs](https://docs.rs/commonware-broadcast/2026.3.0/commonware_broadcast/) -- HIGH confidence
-- [commonware-cryptography docs.rs](https://docs.rs/commonware-cryptography/2026.3.0/commonware_cryptography/) -- HIGH confidence
-- [commonware-runtime docs.rs](https://docs.rs/commonware-runtime/2026.3.0/commonware_runtime/) -- HIGH confidence
-- [commonware-runtime source (tokio/runtime.rs)](https://docs.rs/crate/commonware-runtime/2026.3.0/source/src/tokio/runtime.rs) -- HIGH confidence, verified Runner creates own Tokio runtime
-- [commonware GitHub monorepo](https://github.com/commonwarexyz/monorepo) -- HIGH confidence
-- [commonware releases](https://github.com/commonwarexyz/monorepo/releases) -- HIGH confidence, v2026.3.0 is latest
-- [commonware anti-framework philosophy](https://deepwiki.com/commonwarexyz/monorepo/1.1-anti-framework-philosophy) -- MEDIUM confidence (third-party wiki)
-- [commonware-runtime blog post](https://commonware.xyz/blogs/commonware-runtime) -- HIGH confidence, official blog
-- [commonware-chat example](https://docs.rs/crate/commonware-chat/latest/source/src/main.rs) -- HIGH confidence, shows usage patterns
+- `packages/types/src/http.rs` -- P2pStatus, SignerResponse structs
+- `packages/types/src/service.rs` -- SignatureAlgorithm, SignatureKind
+- `packages/types/src/contracts/solidity/abi/bls/IPOAStakeRegistry.json` -- BLS registry contract ABI
+- `app/src-tauri/src/commands.rs` -- existing Tauri command patterns
+- `app/src/types/index.ts` -- current frontend type definitions
+- `app/src/stores/` -- existing Zustand store patterns
+- `app/src/utils/evm.ts` -- existing operator registration helpers
+- `packages/wavs/src/http/handlers/p2p.rs` -- P2P status endpoint
+- `packages/wavs/src/http/handlers/service/key.rs` -- signer endpoint
