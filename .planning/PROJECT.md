@@ -2,21 +2,11 @@
 
 ## What This Is
 
-WAVS (WebAssembly-based Actively Validated Services) is a platform for running decentralized off-chain computation anchored to blockchains. Operators run sandboxed WASM components, reach multi-operator consensus via P2P (commonware), and submit verified results on-chain. Services declare their own trigger, signature scheme, and submission target.
+WAVS (WebAssembly-based Actively Validated Services) is a platform for running decentralized off-chain computation anchored to blockchains. Operators run sandboxed WASM components, reach multi-operator consensus via P2P (commonware), and submit verified results on-chain. Services declare their own trigger, signature scheme (secp256k1 or BLS12-381), and submission target.
 
 ## Core Value
 
 Multi-operator signature aggregation over P2P must work reliably — operators broadcast signed submissions, reach quorum, and submit on-chain.
-
-## Current Milestone: v1.1 BLS Signatures
-
-**Goal:** Add BLS12-381 as a per-service signature scheme alongside secp256k1 — operators sign submissions with BLS keys, the aggregator combines signatures off-chain into a single aggregate, and submissions are verified by the poa-middleware BLS service manager contracts.
-
-**Target features:**
-- BLS12-381 signing in the submission pipeline (blst crate, hash-to-curve consistent with contracts)
-- Off-chain BLS aggregation in the aggregator (G2 sig + G1 pubkey accumulation → single aggregate)
-- poa-middleware BLS contract ABI integration and on-chain verification
-- Per-service algorithm config: secp256k1 and bls12381 coexist, existing services unchanged
 
 ## Requirements
 
@@ -46,56 +36,62 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 - ✓ Blog post in `docs/blog/` announcing the commonware integration — v1.0
 - ✓ All existing e2e tests pass with commonware P2P backend — v1.0
 - ✓ libp2p dependency removed from Cargo.toml — v1.0
+- ✓ `SignatureAlgorithm::Bls12381` variant in Rust types and WIT interface — v1.1
+- ✓ BLS submission type: G2 aggregate sig + sorted G1 signer pubkeys + reference block — v1.1
+- ✓ poa-middleware BLS contract ABIs imported into `packages/types` — v1.1
+- ✓ BLS private key derived deterministically from signing mnemonic per service (blst crate) — v1.1
+- ✓ BLS public key (G1, 128 bytes) derivable from private key for operator registration — v1.1
+- ✓ Operator signs envelope with BLS key → G2 signature via hash-to-curve (consistent with HashToCurve.sol) — v1.1
+- ✓ BLS signature + G1 pubkey propagated in Submission over P2P — v1.1
+- ✓ Secp256k1 signing path unchanged for secp256k1 services — v1.1
+- ✓ Aggregator accumulates BLS sigs and pubkeys until quorum, aggregates G2 + G1, captures referenceBlock — v1.1
+- ✓ Aggregated SignatureData submitted to BLS service manager contract — v1.1
+- ✓ E2E test: BLS service on local anvil with poa-middleware BLS contracts, multi-operator quorum — v1.1
+- ✓ Existing secp256k1 e2e tests unchanged and passing — v1.1
 
 ### Active
 
-- [ ] `SignatureAlgorithm::Bls12381` variant in Rust types and WIT interface — v1.1
-- [ ] BLS submission type: G2 aggregate sig + sorted G1 signer pubkeys + reference block — v1.1
-- [ ] poa-middleware BLS contract ABIs imported into `packages/types` — v1.1
-- [ ] BLS private key derived deterministically from signing mnemonic per service (blst crate) — v1.1
-- [ ] BLS public key (G1, 128 bytes) derivable from private key for operator registration — v1.1
-- [ ] Operator signs envelope with BLS key → G2 signature via hash-to-curve (consistent with HashToCurve.sol) — v1.1
-- [ ] BLS signature + G1 pubkey propagated in Submission over P2P — v1.1
-- [ ] Secp256k1 signing path unchanged for secp256k1 services — v1.1
-- [ ] Aggregator accumulates BLS sigs and pubkeys until quorum, aggregates G2 + G1, captures referenceBlock — v1.1
-- [ ] Aggregated SignatureData submitted to BLS service manager contract — v1.1
-- [ ] E2E test: BLS service on local anvil with poa-middleware BLS contracts, multi-operator quorum — v1.1
-- [ ] Existing secp256k1 e2e tests unchanged and passing — v1.1
+(None — next milestone requirements TBD via `/gsd:new-milestone`)
 
 ### Out of Scope
 
 - MCP tooling updates for BLS operator registration — manual registration for now, defer to v1.2
 - Tauri desktop app changes — backend signature scheme transparent to frontend
 - Threshold/DKG signatures (commonware threshold-simplex) — foundational BLS first, threshold later
-- Cosmos submission with BLS — EVM only for this milestone
+- Cosmos submission with BLS — EVM only for now
 - Trigger and engine subsystem changes — unaffected by signature scheme
 
 ## Context
 
-v1.0 shipped: commonware-p2p backend, Ed25519 P2P identity, libp2p fully removed.
-v1.1 target: BLS12-381 submission signatures, off-chain aggregation, poa-middleware integration.
-Tech stack additions: `blst` 0.3.16 (already transitive dep via commonware-cryptography), poa-middleware BLS contracts at `contracts/poa-middleware/`.
-EIP-2537 precompiles (Pectra) used by BLS contracts for on-chain pairing verification.
+v1.0 shipped (2026-03-18): commonware-p2p backend, Ed25519 P2P identity, libp2p fully removed.
+v1.1 shipped (2026-03-23): BLS12-381 submission signatures, off-chain aggregation, poa-middleware BLS contract integration, E2E verified.
+Tech stack: Rust 1.91, Wasmtime, Alloy, commonware (p2p + broadcast + cryptography), blst 0.3.16, poa-middleware BLS contracts.
++9,362 / -550 lines across 122 files in v1.1. Both secp256k1 and BLS paths fully tested.
 
 ## Constraints
 
-- **Coexistence**: secp256k1 and bls12381 must work as per-service options — no breaking changes to existing services
-- **Runtime**: blst signing is sync/CPU-bound — must not block Tokio async runtime (run on blocking thread pool)
-- **Hash-to-curve**: WAVS hash-to-curve implementation must match `HashToCurve.sol` (RFC 9380, DST `BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_`) for on-chain verification
-- **Pubkey sort**: aggregator must sort signerPubkeys by keccak256(pubkey) ascending — contract enforces this
-- **Reference block**: referenceBlock must be < current block at submission time, >= block when operators registered keys
-- **Testing**: E2e tests in `packages/layer-tests/` must pass — both secp256k1 and BLS paths
+- **Coexistence**: secp256k1 and bls12381 work as per-service options — no breaking changes to existing services
+- **Runtime**: blst signing is sync/CPU-bound — runs on blocking thread pool (spawn_blocking)
+- **Hash-to-curve**: hash-to-curve matches `HashToCurve.sol` (RFC 9380, DST `BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_`)
+- **Pubkey sort**: aggregator sorts signerPubkeys by keccak256(pubkey) ascending — contract enforces this
+- **Reference block**: referenceBlock < current block at submission, >= block when operators registered keys
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Use commonware-p2p discovery mode | Bootstrapper-based discovery is closest to current Kademlia model, works for both dev and prod | ✓ Good — worked cleanly for both modes |
-| Single broadcast channel with ServiceRouter app-level filtering | Simpler than per-service channels; ServiceRouter achieves same isolation with less complexity | ✓ Good — clean implementation, BCAST-05 satisfied |
-| Ed25519 for P2P identity | Commonware's native crypto scheme, cleaner integration than wrapping secp256k1 | ✓ Good — BIP-39 + ChaCha20Rng seeding pattern established |
-| Clean break on config format | Major version change, simpler than maintaining compat layer for a networking rewrite | ✓ Good — Disabled/Local/Remote format is clean and operator-friendly |
-| Announcement-style blog post | Focus on why we switched and what it means for operators, not a deep technical tutorial | ✓ Good — completed in Phase 4 |
-| rand_chacha 0.3 (not 0.9) | commonware-cryptography depends on rand_core 0.6; 0.9 causes trait mismatch | ✓ Required — version pinning documented |
+| Use commonware-p2p discovery mode | Bootstrapper-based discovery closest to Kademlia, works for dev and prod | ✓ Good |
+| Single broadcast channel with ServiceRouter filtering | Simpler than per-service channels; same isolation | ✓ Good |
+| Ed25519 for P2P identity | Commonware's native crypto, cleaner than wrapping secp256k1 | ✓ Good |
+| Clean break on config format | Simpler than compat layer for networking rewrite | ✓ Good |
+| rand_chacha 0.3 (not 0.9) | commonware-cryptography depends on rand_core 0.6 | ✓ Required |
+| HKDF-SHA256 for BLS key derivation | Deterministic from mnemonic+HD index, domain-separated (WAVS-BLS-KEY-v1) | ✓ Good — consistent keys across restarts |
+| blst directly (not commonware Signer::sign) | Contract-compatible DST requires RO suffix, not POP | ✓ Required — DST mismatch would break on-chain verification |
+| SignatureData/WavsSignature/WavsCryptoSigner as enums | Clean BLS/secp256k1 dispatch, pattern matching for algorithm paths | ✓ Good — extensible for future algorithms |
+| WavsSignature tagged serde | Breaking serialization change from old struct, but cleaner wire format | ✓ Good — clean migration |
+| Per-test middleware dispatch (EvmMiddlewares) | BLS and secp256k1 tests need different contract stacks | ✓ Good — enables mixed-mode testing |
+| SimpleBlsSubmit (not ISimpleSubmit) | BLS and ECDSA SignatureData are incompatible types | ✓ Required — separate contract |
+| Prague anvil default (no --hardfork flag) | anvil 1.4.4 defaults to Prague; flag was redundant | ✓ Good — simpler config |
 
 ---
-*Last updated: 2026-03-18 after v1.1 milestone start*
+*Last updated: 2026-03-23 after v1.1 milestone*
