@@ -33,15 +33,14 @@ Declared values (must be multiples of 4):
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| xs | 4px (`gap-1`, `p-1`) | Mnemonic word grid gaps, balance row internal gaps, inline spacing |
-| sm | 8px (`gap-2`, `p-2`) | Button gaps, form row gaps, inner container padding |
-| md | 16px (`gap-4`, `p-4`) | Card padding, section internal gaps, standard element spacing |
+| xs | 4px (`gap-1`, `p-1`, `py-1`) | Mnemonic word grid gaps, balance row vertical padding, inline spacing, sidebar nav item gaps |
+| sm | 8px (`gap-2`, `p-2`, `py-2`) | Button gaps, form row gaps, inner container padding, sidebar nav item vertical padding |
+| sm-md | 12px (`gap-3`, `p-3`, `px-3`) | Sidebar nav item horizontal padding, compact input horizontal padding, destructive confirmation panel padding. Justified: 12px is 3x4 and serves as a touch-target intermediate between 8px and 16px for interactive elements that need comfortable hit areas without full card-level padding. |
+| md | 16px (`gap-4`, `p-4`, `px-4`) | Card padding, section internal gaps, standard element spacing, primary input horizontal padding |
 | lg | 24px (`gap-6`, `p-6`) | Section-to-section gap in scrollable content, sidebar-to-content gap |
 | xl | 32px (`gap-8`, `px-8`) | Header horizontal padding, page-level horizontal padding |
 
-Exceptions:
-- Sidebar nav items use `px-3 py-2` (12px / 8px) for comfortable click targets without wasted vertical space
-- `py-1.5` (6px) is used on BalanceRow for compact data rows -- acceptable deviation from strict 8-point for data-dense elements
+Exceptions: none -- all values are multiples of 4.
 
 ---
 
@@ -87,6 +86,8 @@ Exceptions:
 - 60% -- `charcoal-darkest` page background + `charcoal-dark` input backgrounds
 - 30% -- `charcoal-medium` section cards + `charcoal-light` borders
 - 10% -- `beige-light` headings + `red-4` destructive text + `success-600` confirmation text
+
+**Primary focal point:** Active sidebar item and the section heading of the visible card. When visible, the restart banner takes visual priority over both (red CTA draws the eye first).
 
 ---
 
@@ -213,14 +214,16 @@ Sections that MUST have a description (explaining what the section does):
 | Destructive: Reset Wallet trigger | "Reset Wallet" (red outline button) |
 | Destructive: Reset Wallet confirmation | "Are you sure you want to reset your wallet? This will delete your recovery phrase from the keychain. Make sure you have backed it up first!" |
 | Destructive: Reset Wallet confirm button | "Yes, Reset Wallet" |
+| Destructive: Reset Wallet cancel button | "Keep Wallet" |
 | Destructive: Clear Services trigger | "Clear All Services & Registries" (red outline button) |
 | Destructive: Clear Services confirmation | "This will stop all running services and clear all saved registries. They can be re-added from the Services page." |
 | Destructive: Clear Services confirm button | "Yes, Clear Everything" |
+| Destructive: Clear Services cancel button | "Keep Everything" |
 | Recovery phrase warning | "Keep this recovery phrase safe. Anyone with it can access your wallet." |
 | MCP registration success | "Registered for {path}. Restart Claude Code to pick up the change." |
 | MCP binary missing | "Binary not found. Build it with: cargo build --release -p wavs-mcp" |
 
-All copy is preserved as-is from the current Settings.tsx. Phase 9 does not introduce new copy -- it decomposes and polishes existing content.
+All copy is preserved as-is from the current Settings.tsx, with the exception of destructive cancel buttons which now use specific labels ("Keep Wallet", "Keep Everything") instead of generic "Cancel" for consistency with the specificity of the confirm buttons.
 
 ---
 
@@ -236,7 +239,7 @@ Both destructive actions (Reset Wallet, Clear Services) follow the same interact
    - Border radius: `rounded`
    - Warning text: `text-sm text-red-4` (#C38D99)
 3. **Actions:** Two buttons in a `flex gap-3` row
-   - Cancel: `variant="outline"` (neutral)
+   - Cancel: `variant="outline"` (neutral) -- label is context-specific (see Copywriting Contract)
    - Confirm: `color="red"` (solid red)
 4. **Loading state:** Confirm button text changes (e.g., "Resetting...") with `disabled` prop
 
@@ -252,9 +255,21 @@ All text inputs in Settings share this styling:
 | Border | `border border-charcoal-light` (#383232) |
 | Text color | `text-beige-warm` (#CEC3B7) |
 | Font | `font-mono text-sm` (14px monospace) |
-| Padding | `px-3 py-2` (12px / 8px) for compact inputs, `px-4 py-3` (16px / 12px) for primary inputs |
+| Padding | `px-3 py-2` (12px / 8px) for compact inputs, `px-4 py-2` (16px / 8px) for primary inputs |
 | Border radius | `rounded-md` (6px) |
 | Outline | `outline-none` (no focus ring -- existing pattern) |
+
+---
+
+## Balance Row Contract
+
+Balance rows within the Wallet section use compact vertical padding.
+
+| Property | Value |
+|----------|-------|
+| Vertical padding | `py-1` (4px) |
+| Layout | Flex row with internal `gap-1` (4px) |
+| Font | `text-xs` (12px) for balance values |
 
 ---
 
