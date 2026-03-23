@@ -38,13 +38,21 @@ mod bls_helpers {
 
     /// Convert blst G2 signature to 256-byte EIP-2537 format.
     /// Mirrors utils::bls_signing::bls_g2_signature_bytes().
+    ///
+    /// blst (ZCash) serializes G2 as 192 bytes with the imaginary part first:
+    ///   [x_c1(48)] [x_c0(48)] [y_c1(48)] [y_c0(48)]
+    /// EIP-2537 expects the real part first, each Fp padded to 64 bytes:
+    ///   [x_c0(64)] [x_c1(64)] [y_c0(64)] [y_c1(64)]
     fn bls_g2_signature_bytes_inner(
         signature: &blst::min_pk::Signature,
     ) -> anyhow::Result<[u8; 256]> {
-        let uncompressed = signature.serialize(); // 192 bytes
+        let uncompressed = signature.serialize(); // 192 bytes: x_c1|x_c0|y_c1|y_c0 (ZCash)
         let mut eip2537 = [0u8; 256];
-        for i in 0..4 {
-            let src_offset = i * 48;
+        // blst source offsets for [x_c0, x_c1, y_c0, y_c1] (EIP-2537 order):
+        //   x_c0 is at blst[48..96], x_c1 is at blst[0..48]
+        //   y_c0 is at blst[144..192], y_c1 is at blst[96..144]
+        let blst_src_offsets = [48usize, 0, 144, 96];
+        for (i, &src_offset) in blst_src_offsets.iter().enumerate() {
             let dst_offset = i * 64 + 16;
             eip2537[dst_offset..dst_offset + 48]
                 .copy_from_slice(&uncompressed[src_offset..src_offset + 48]);
@@ -53,8 +61,8 @@ mod bls_helpers {
     }
 
     /// Deserialize a 256-byte EIP-2537 G2 signature back to a blst Signature.
-    /// Strips the 16-byte zero padding from each of the 4 coordinates to get 192-byte
-    /// uncompressed form, then calls Signature::deserialize().
+    /// Strips the 16-byte zero padding and reverses the coordinate swap to get
+    /// 192-byte ZCash/blst uncompressed form, then calls Signature::deserialize().
     pub(crate) fn deserialize_g2_from_eip2537(
         eip2537_bytes: &[u8],
     ) -> anyhow::Result<blst::min_pk::Signature> {
@@ -65,9 +73,13 @@ mod bls_helpers {
             );
         }
         let mut uncompressed = [0u8; 192];
-        for i in 0..4 {
+        // EIP-2537 order: [x_c0, x_c1, y_c0, y_c1]; blst ZCash order: [x_c1, x_c0, y_c1, y_c0]
+        // Map EIP-2537 position i to blst destination offset:
+        //   EIP-2537[0]=x_c0 → blst[48..96], EIP-2537[1]=x_c1 → blst[0..48]
+        //   EIP-2537[2]=y_c0 → blst[144..192], EIP-2537[3]=y_c1 → blst[96..144]
+        let blst_dst_offsets = [48usize, 0, 144, 96];
+        for (i, &dst_offset) in blst_dst_offsets.iter().enumerate() {
             let src_offset = i * 64 + 16;
-            let dst_offset = i * 48;
             uncompressed[dst_offset..dst_offset + 48]
                 .copy_from_slice(&eip2537_bytes[src_offset..src_offset + 48]);
         }
@@ -76,15 +88,16 @@ mod bls_helpers {
     }
 
     /// Serialize a blst AggregateSignature to 256-byte EIP-2537 format.
-    /// Converts 192-byte uncompressed to 256-byte padded EIP-2537.
+    /// Converts 192-byte ZCash/blst uncompressed to 256-byte padded EIP-2537.
     pub(crate) fn serialize_aggregate_to_eip2537(
         aggregate: &blst::min_pk::AggregateSignature,
     ) -> [u8; 256] {
         let sig = aggregate.to_signature();
-        let uncompressed = sig.serialize(); // 192 bytes
+        let uncompressed = sig.serialize(); // 192 bytes: x_c1|x_c0|y_c1|y_c0 (ZCash)
         let mut eip2537 = [0u8; 256];
-        for i in 0..4 {
-            let src_offset = i * 48;
+        // Same coordinate swap as bls_g2_signature_bytes_inner
+        let blst_src_offsets = [48usize, 0, 144, 96];
+        for (i, &src_offset) in blst_src_offsets.iter().enumerate() {
             let dst_offset = i * 64 + 16;
             eip2537[dst_offset..dst_offset + 48]
                 .copy_from_slice(&uncompressed[src_offset..src_offset + 48]);
