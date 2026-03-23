@@ -52,7 +52,7 @@
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md -- Foundation types and Tauri commands (FND-01, FND-02, FND-03)
+- [x] 09-01-PLAN.md -- Foundation types and Tauri commands (FND-01, FND-02, FND-03)
 - [ ] 09-02-PLAN.md -- Settings decomposition with sidebar nav (FND-04, SET-01, SET-02)
 
 ### Phase 10: P2P Operator Dashboard

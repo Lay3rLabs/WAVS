@@ -2,16 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Tauri App
-status: planning
-stopped_at: Phase 9 context gathered
-last_updated: "2026-03-23T17:20:57.133Z"
-last_activity: 2026-03-23 -- Roadmap created for v1.2 (4 phases, 19 requirements mapped)
+status: unknown
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-03-23T23:50:58.062Z"
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 2
+  completed_plans: 1
 ---
 
 # Project State
@@ -21,16 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 9 -- Foundation Types and Settings Refactor
+**Current focus:** Phase 09 — foundation-types-and-settings-refactor
 
 ## Current Position
 
-Phase: 9 of 12 (Foundation Types and Settings Refactor)
-Plan: --
-Status: Ready to plan
-Last activity: 2026-03-23 -- Roadmap created for v1.2 (4 phases, 19 requirements mapped)
-
-Progress: [░░░░░░░░░░] 0%
+Phase: 09 (foundation-types-and-settings-refactor) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -46,6 +40,8 @@ Progress: [░░░░░░░░░░] 0%
 
 - Settings (SET-01, SET-02) grouped with Foundation (FND-*) in Phase 9 -- both are structural prerequisites with zero behavioral risk
 - P2P-06 (quorum progress) marked as stretch goal -- requires `/aggregator/status` endpoint that does not exist yet
+- [Phase 09]: Added const-hex to wavs-app for BLS pubkey hex encoding
+- [Phase 09]: Registered pre-existing cmd_pause_service/cmd_resume_service in generate_handler (bug fix)
 
 ### Pending Todos
 
@@ -58,5 +54,5 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T17:20:57.131Z
-Stopped at: Phase 9 context gathered
+Last session: 2026-03-23T23:50:58.061Z
+Stopped at: Completed 09-01-PLAN.md

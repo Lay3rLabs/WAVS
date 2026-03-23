@@ -8,9 +8,9 @@
 
 ### Foundation
 
-- [ ] **FND-01**: `SignatureAlgorithm` type updated to include `'bls12381'` alongside `'secp256k1'` in frontend types
-- [ ] **FND-02**: New Tauri commands for P2P status (`cmd_get_p2p_status`), service signer info (`cmd_get_service_signer`), and BLS key derivation (`cmd_derive_bls_pubkey`)
-- [ ] **FND-03**: `P2pStatus` and `SignerResponse` TypeScript types matching backend Rust structs
+- [x] **FND-01**: `SignatureAlgorithm` type updated to include `'bls12381'` alongside `'secp256k1'` in frontend types
+- [x] **FND-02**: New Tauri commands for P2P status (`cmd_get_p2p_status`), service signer info (`cmd_get_service_signer`), and BLS key derivation (`cmd_derive_bls_pubkey`)
+- [x] **FND-03**: `P2pStatus` and `SignerResponse` TypeScript types matching backend Rust structs
 - [ ] **FND-04**: Settings.tsx decomposed from monolithic 940-line file into section components
 
 ### P2P Dashboard
@@ -72,9 +72,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FND-01 | Phase 9 | Pending |
-| FND-02 | Phase 9 | Pending |
-| FND-03 | Phase 9 | Pending |
+| FND-01 | Phase 9 | Complete |
+| FND-02 | Phase 9 | Complete |
+| FND-03 | Phase 9 | Complete |
 | FND-04 | Phase 9 | Pending |
 | P2P-01 | Phase 10 | Pending |
 | P2P-02 | Phase 10 | Pending |
