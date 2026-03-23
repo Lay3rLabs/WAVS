@@ -49,11 +49,11 @@
   3. Settings page renders identically to before but is composed of section components (no 940-line monolith)
   4. Settings sections have clear visual hierarchy with consistent spacing and typography
   5. Existing app functionality is unchanged (no regressions from type widening or settings decomposition)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 09-01: TBD
-- [ ] 09-02: TBD
+- [ ] 09-01-PLAN.md -- Foundation types and Tauri commands (FND-01, FND-02, FND-03)
+- [ ] 09-02-PLAN.md -- Settings decomposition with sidebar nav (FND-04, SET-01, SET-02)
 
 ### Phase 10: P2P Operator Dashboard
 **Goal**: Operators can see their P2P network status, connected peers, and per-service keys from a dedicated page
@@ -115,7 +115,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12
 | 6. BLS Signing Pipeline | v1.1 | 2/2 | Complete | 2026-03-20 |
 | 7. BLS Aggregation | v1.1 | 2/2 | Complete | 2026-03-20 |
 | 8. Integration and Verification | v1.1 | 2/2 | Complete | 2026-03-23 |
-| 9. Foundation Types and Settings Refactor | v1.2 | 0/? | Not started | - |
+| 9. Foundation Types and Settings Refactor | v1.2 | 0/2 | Planned | - |
 | 10. P2P Operator Dashboard | v1.2 | 0/? | Not started | - |
 | 11. BLS Service Builder and Registration | v1.2 | 0/? | Not started | - |
 | 12. Unified Activity Events | v1.2 | 0/? | Not started | - |
