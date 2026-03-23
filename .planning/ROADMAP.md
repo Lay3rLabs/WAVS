@@ -82,8 +82,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md -- BLS test infrastructure (PoaBlsMiddleware, Prague anvil, SimpleBlsSubmit, BLS AvsOperator fields)
-- [ ] 08-02-PLAN.md -- BLS E2E test wiring (test matrix, operator registration, submit deployment, secp256k1 regression)
+- [x] 08-01-PLAN.md -- BLS test infrastructure (PoaBlsMiddleware, Prague anvil, SimpleBlsSubmit, BLS AvsOperator fields)
+- [x] 08-02-PLAN.md -- BLS E2E test wiring (test matrix, operator registration, submit deployment, secp256k1 regression)
 
 ## Progress
 

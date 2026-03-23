@@ -72,15 +72,11 @@ impl AppHandles {
         let mut evm_chains = Vec::new();
         let mut cosmos_chains = Vec::new();
 
-        // Enable Prague hardfork when BLS tests are in the matrix (needed for EIP-2537 precompiles)
-        let hardfork_prague = configs.matrix.bls_multi_operator_enabled();
-
         let mut cosmos_middlewares = HashMap::new();
         {
             let chains = configs.chains.read().unwrap();
             for chain_config in chains.evm_iter() {
-                let handle =
-                    EvmInstance::spawn(ctx.clone(), configs, chain_config.clone(), hardfork_prague);
+                let handle = EvmInstance::spawn(ctx.clone(), configs, chain_config.clone());
                 evm_chains.push(handle);
             }
 

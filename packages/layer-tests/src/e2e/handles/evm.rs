@@ -15,7 +15,6 @@ impl EvmInstance {
         _ctx: AppContext,
         _configs: &Configs,
         chain_config: EvmChainConfig,
-        hardfork_prague: bool,
     ) -> Self {
         let port = chain_config
             .http_endpoint
@@ -34,10 +33,11 @@ impl EvmInstance {
         );
 
         // Something is broken with Alloy's anvil thing... let's use our own
+        // Note: anvil 1.4.4+ defaults to Prague hardfork, which includes EIP-2537
+        // precompiles needed for BLS. No explicit --hardfork flag needed.
         let anvil = LameAnvilInstanceBuilder {
             port,
             chain_id: chain_config.chain_id.to_string(),
-            hardfork_prague,
         }
         .spawn();
 
@@ -56,7 +56,6 @@ impl EvmInstance {
 struct LameAnvilInstanceBuilder {
     pub port: u16,
     pub chain_id: String,
-    pub hardfork_prague: bool,
 }
 
 impl LameAnvilInstanceBuilder {
@@ -78,11 +77,6 @@ impl LameAnvilInstanceBuilder {
             "0".to_string(),
             "--disable-block-gas-limit".to_string(),
         ];
-
-        if self.hardfork_prague {
-            args.push("--hardfork".to_string());
-            args.push("prague".to_string());
-        }
 
         let child = Command::new("anvil")
             .args(args)
