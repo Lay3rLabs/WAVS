@@ -8,6 +8,16 @@ WAVS (WebAssembly-based Actively Validated Services) is a platform for running d
 
 Multi-operator signature aggregation over P2P must work reliably — operators broadcast signed submissions, reach quorum, and submit on-chain.
 
+## Current Milestone: v1.2 Tauri App
+
+**Goal:** Bring the Tauri desktop app up to date with v1.0/v1.1 backend features — BLS service deployment with operator registration, full P2P/operator visibility, unified activity events, and settings UX overhaul.
+
+**Target features:**
+- BLS/ECDSA algorithm selector in service builder with BLS operator key registration flow
+- P2P page: connected peers, Ed25519 identity, BLS/ECDSA key display, quorum progress per service
+- Unified event cards in Activity (trigger + submission result merged, error display)
+- Settings page reorganization and visual polish
+
 ## Requirements
 
 ### Validated
@@ -51,12 +61,11 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 
 ### Active
 
-(None — next milestone requirements TBD via `/gsd:new-milestone`)
+(Defined in REQUIREMENTS.md for v1.2)
 
 ### Out of Scope
 
-- MCP tooling updates for BLS operator registration — manual registration for now, defer to v1.2
-- Tauri desktop app changes — backend signature scheme transparent to frontend
+- MCP tooling updates for BLS operator registration — manual registration for now
 - Threshold/DKG signatures (commonware threshold-simplex) — foundational BLS first, threshold later
 - Cosmos submission with BLS — EVM only for now
 - Trigger and engine subsystem changes — unaffected by signature scheme
@@ -93,5 +102,22 @@ Tech stack: Rust 1.91, Wasmtime, Alloy, commonware (p2p + broadcast + cryptograp
 | SimpleBlsSubmit (not ISimpleSubmit) | BLS and ECDSA SignatureData are incompatible types | ✓ Required — separate contract |
 | Prague anvil default (no --hardfork flag) | anvil 1.4.4 defaults to Prague; flag was redundant | ✓ Good — simpler config |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd:transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd:complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-03-23 after v1.1 milestone*
+*Last updated: 2026-03-23 after v1.2 milestone start*
