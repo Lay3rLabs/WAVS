@@ -12,7 +12,7 @@ Three capability extensions to the WAVS platform — OCI component distribution,
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: OCI Component Pull** - Service definitions accept `oci://` URIs; components are pulled, verified, and cached at deploy time
+- [x] **Phase 1: OCI Component Pull** - Service definitions accept `oci://` URIs; components are pulled, verified, and cached at deploy time
 - [ ] **Phase 2: WIT-to-Schema Tooling** - Developer can inspect any compiled WASM component and get a JSON Schema describing its interface
 - [ ] **Phase 3: MCP Execution Interface** - Deployed service components appear as callable MCP tools with three explicit trust tiers
 
@@ -30,8 +30,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Pulling from a private registry succeeds when credentials are provided via environment variables
 **Plans**: 2 plans
 Plans:
-- [ ] 01-01-PLAN.md — Add ComponentSource::Oci type variant and create OCI puller module
-- [ ] 01-02-PLAN.md — Wire OCI pull into engine, fix digest() Option callers, full integration
+- [x] 01-01-PLAN.md — Add ComponentSource::Oci type variant and create OCI puller module
+- [x] 01-02-PLAN.md — Wire OCI pull into engine, fix digest() Option callers, full integration
 
 ### Phase 2: WIT-to-Schema Tooling
 **Goal**: Developers and the MCP execution layer can retrieve a machine-readable JSON Schema describing the input and output types of any compiled WASM component
@@ -64,6 +64,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. OCI Component Pull | 0/2 | Planned | - |
+| 1. OCI Component Pull | 2/2 | Complete | 2026-03-24 |
 | 2. WIT-to-Schema Tooling | 0/? | Not started | - |
 | 3. MCP Execution Interface | 0/? | Not started | - |

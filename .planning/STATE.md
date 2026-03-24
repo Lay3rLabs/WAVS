@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 ## Current Position
 
 Phase: 1 of 3 (OCI Component Pull)
-Plan: 1 of 2 in current phase
-Status: Plan 01 complete, Plan 02 next
-Last activity: 2026-03-24 — Plan 01 executed (OCI types + puller module)
+Plan: 2 of 2 in current phase
+Status: Phase 1 complete (all plans done)
+Last activity: 2026-03-24 — Plan 02 executed (OCI engine integration)
 
-Progress: [█████░░░░░] 50%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 21min
-- Total execution time: 0.35 hours
+- Total plans completed: 2
+- Average duration: 16.5min
+- Total execution time: 0.55 hours
 
 **By Phase:**
 
@@ -48,6 +48,7 @@ Recent decisions affecting current work:
 - WIT-to-schema before MCP execution — auto-generated tool descriptions are core to the Wassette-parity experience
 - [Phase 01]: digest() returns Option<&ComponentDigest> to accommodate Oci variant where digest may be absent
 - [Phase 01]: OciPuller exposes only Vec<u8> to avoid oci-client version conflicts with wasm-pkg-client
+- [Phase 01]: load_component_from_source returns (WasmComponent, ComponentDigest) tuple to always provide computed digest even for tag-only OCI pulls
 
 ### Research Flags (active going into planning)
 
@@ -65,5 +66,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Completed 01-01-PLAN.md
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
