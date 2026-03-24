@@ -760,23 +760,34 @@ export function ServiceDetailPage() {
 
         {/* BLS Operator Key Section */}
         {serviceBls && (
-          <div className="p-3 rounded bg-charcoal-dark border border-charcoal-light mt-3 mb-1">
-            {blsLoading ? (
-              <p className="text-tan-muted text-xs">Loading operator key...</p>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-tan-muted text-xs font-semibold">BLS Operator Key</span>
-                  <RegistrationBadge status={blsRegStatus} />
-                </div>
-                {blsPubkey ? (
-                  <AddressDisplay address={`0x${blsPubkey}`} />
-                ) : (
-                  <p className="text-red-3 text-xs">Failed to load BLS operator key.</p>
-                )}
-              </>
+          <>
+            <div className="p-3 rounded bg-charcoal-dark border border-charcoal-light mt-3 mb-1">
+              {blsLoading ? (
+                <p className="text-tan-muted text-xs">Loading operator key...</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-tan-muted text-xs font-semibold">BLS Operator Key</span>
+                    <RegistrationBadge status={blsRegStatus} />
+                  </div>
+                  {blsPubkey ? (
+                    <AddressDisplay address={`0x${blsPubkey}`} />
+                  ) : (
+                    <p className="text-red-3 text-xs">Failed to load BLS operator key.</p>
+                  )}
+                </>
+              )}
+            </div>
+            {!registry && (
+              <div className="p-3 rounded bg-charcoal-dark border border-amber-700/50 mt-2">
+                <p className="text-amber-400 text-xs font-semibold mb-1">Registry Required for BLS Registration</p>
+                <p className="text-tan-muted text-xs">
+                  To register your BLS key on-chain, add this service's contract address as a POA registry
+                  from the Services page. The registry enables on-chain key registration and operator management.
+                </p>
+              </div>
             )}
-          </div>
+          </>
         )}
 
         {/* Actions — primary left, destructive right */}
