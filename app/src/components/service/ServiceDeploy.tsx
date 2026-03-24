@@ -1,9 +1,9 @@
-import { useMemo } from 'react';
-import { Button, Toast } from '../atoms';
+import { useMemo, useState } from 'react';
+import { Button, Toast, AddressDisplay } from '../atoms';
 import { useServiceBuilderStore, type DeployStepStatus } from '../../stores/serviceBuilderStore';
 import { usePOAStore } from '../../stores/poaStore';
 import { TextInput, Dropdown, type DropdownOption } from '../atoms';
-import { uploadToIpfs } from '../../tauri/commands';
+import { uploadToIpfs, getServiceSigner, deriveBlsPubkey } from '../../tauri/commands';
 import { addService as addServiceCmd, getServices } from '../../tauri/commands';
 import { setServiceURI } from '../../utils/evm';
 import { getPublicClient, getWalletClient } from '../../hooks/useViemClient';
@@ -59,6 +59,10 @@ export function ServiceDeploy({ onDeployComplete }: ServiceDeployProps) {
   const registries = usePOAStore((s) => s.registries);
   const setServices = useAppStore((s) => s.setServices);
 
+  const [blsPubkey, setBlsPubkey] = useState<string | null>(null);
+  const [blsPubkeyLoading, setBlsPubkeyLoading] = useState(false);
+  const [blsPubkeyError, setBlsPubkeyError] = useState<string | null>(null);
+
   // Resolve the service manager
   const resolvedManager: { manager: ServiceManager; chainKey: string; chainId: number; rpcUrl: string; address: string } | null = useMemo(() => {
     if (selectedRegistryKey) {
@@ -91,6 +95,14 @@ export function ServiceDeploy({ onDeployComplete }: ServiceDeployProps) {
     if (!built || !resolvedManager) return null;
     return { ...built, manager: resolvedManager.manager };
   }, [buildServiceJson, resolvedManager]);
+
+  const isBls = useMemo(() => {
+    if (!service) return false;
+    return Object.values(service.workflows).some((wf) => {
+      if (wf.submit === 'none') return false;
+      return wf.submit.aggregator.signature_kind.algorithm === 'bls12381';
+    });
+  }, [service]);
 
   const handleDeploy = async () => {
     if (!service || !resolvedManager) {
@@ -131,6 +143,27 @@ export function ServiceDeploy({ onDeployComplete }: ServiceDeployProps) {
       const servicesData = await getServices();
       setServices(await buildServiceMap(servicesData));
       setDeployState({ registerStatus: 'done' });
+
+      // After deploy completes, fetch BLS pubkey if applicable
+      if (isBls && resolvedManager) {
+        setBlsPubkeyLoading(true);
+        try {
+          const signerResp = await getServiceSigner(resolvedManager.manager);
+          if ('bls12381' in signerResp) {
+            setBlsPubkey(signerResp.bls12381.g1_pubkey_hex);
+          }
+        } catch {
+          // Fallback: derive directly with default HD index
+          try {
+            const resp = await deriveBlsPubkey(0);
+            setBlsPubkey(resp.g1_pubkey_hex);
+          } catch {
+            setBlsPubkeyError('Failed to load BLS key. Check that the WAVS node is running.');
+          }
+        } finally {
+          setBlsPubkeyLoading(false);
+        }
+      }
 
       if (onDeployComplete && resolvedManager) {
         onDeployComplete(resolvedManager.chainId, resolvedManager.address);
@@ -211,6 +244,27 @@ export function ServiceDeploy({ onDeployComplete }: ServiceDeployProps) {
           </div>
         )}
       </div>
+
+      {/* BLS Operator Key (post-deploy) */}
+      {isBls && deployState.registerStatus === 'done' && (
+        <div className="p-4 rounded bg-charcoal-medium border border-charcoal-light">
+          <h4 className="text-beige-warm text-sm font-medium mb-2">BLS Operator Key</h4>
+          {blsPubkeyLoading && (
+            <p className="text-tan-muted text-xs">Loading BLS key...</p>
+          )}
+          {blsPubkeyError && (
+            <p className="text-red-3 text-xs">{blsPubkeyError}</p>
+          )}
+          {blsPubkey && (
+            <>
+              <AddressDisplay address={`0x${blsPubkey}`} />
+              <p className="text-tan-muted text-xs mt-2">
+                Register this key on-chain from the service detail page.
+              </p>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Deploy Button */}
       <Button
