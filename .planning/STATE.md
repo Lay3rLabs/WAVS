@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 ## Current Position
 
 Phase: 1 of 3 (OCI Component Pull)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-03-24 — Roadmap created, phases derived from requirements
+Plan: 1 of 2 in current phase
+Status: Plan 01 complete, Plan 02 next
+Last activity: 2026-03-24 — Plan 01 executed (OCI types + puller module)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 21min
+- Total execution time: 0.35 hours
 
 **By Phase:**
 
@@ -46,6 +46,8 @@ Recent decisions affecting current work:
 - OCI pull-only for v1 — publishing deferred; use `wkg oci push` externally
 - Three trust tiers as explicit agent choice — matches "dial not binary" positioning
 - WIT-to-schema before MCP execution — auto-generated tool descriptions are core to the Wassette-parity experience
+- [Phase 01]: digest() returns Option<&ComponentDigest> to accommodate Oci variant where digest may be absent
+- [Phase 01]: OciPuller exposes only Vec<u8> to avoid oci-client version conflicts with wasm-pkg-client
 
 ### Research Flags (active going into planning)
 
@@ -63,5 +65,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-24
-Stopped at: Roadmap written; ready for `/gsd:plan-phase 1`
+Stopped at: Completed 01-01-PLAN.md
 Resume file: None
