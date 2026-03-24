@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Tauri App
 status: unknown
-stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-03-24T17:44:20.370Z"
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-03-24T20:51:24.014Z"
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 11 — bls-service-builder-and-registration
+**Current focus:** Phase 12 — unified-activity-events
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
+Phase: 12 (unified-activity-events) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -49,6 +49,10 @@ Plan: Not started
 - [Phase 11]: Fallback from getServiceSigner to deriveBlsPubkey(0) for BLS key display
 - [Phase 11]: Lifted BLS state to ServiceDetailPage rather than encapsulating in BlsRegistrationSection -- enables Register BLS Key button in actions bar
 - [Phase 11]: Used alloy-primitives keccak256 + alloy-sol-types SolValue::abi_encode for BLS proof digest in Rust backend
+- [Phase 12]: Map-based correlation store keyed by deterministic correlationKey for O(1) trigger-to-submission matching
+- [Phase 12]: Orphaned submissions create standalone entries rather than being dropped
+- [Phase 01]: digest() returns Option<&ComponentDigest> to accommodate Oci variant where digest may be absent
+- [Phase 01]: OciPuller exposes only Vec<u8> to avoid oci-client version conflicts with wasm-pkg-client
 
 ### Pending Todos
 
@@ -61,5 +65,5 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T17:40:19.920Z
-Stopped at: Completed 11-02-PLAN.md
+Last session: 2026-03-24T20:51:24.012Z
+Stopped at: Completed 01-01-PLAN.md

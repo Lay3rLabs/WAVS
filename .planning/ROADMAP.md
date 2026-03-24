@@ -97,7 +97,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 12-01-PLAN.md -- Backend event pipeline + frontend types, store, and listeners (ACT-01, ACT-02, ACT-03)
+- [x] 12-01-PLAN.md -- Backend event pipeline + frontend types, store, and listeners (ACT-01, ACT-02, ACT-03)
 - [ ] 12-02-PLAN.md -- Unified ActivityCard and ActivityFeed with status filter (ACT-01, ACT-02, ACT-03)
 
 ## Progress
@@ -107,7 +107,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 1. Secure Peer Connectivity | v1.0 | 3/3 | Complete | 2026-03-17 |
+| 1. Secure Peer Connectivity | v1.0 | 3/3 | Complete   | 2026-03-24 |
 | 2. Broadcast and Routing | v1.0 | 2/2 | Complete | 2026-03-17 |
 | 3. Config and Observability | v1.0 | 4/4 | Complete | 2026-03-17 |
 | 4. Validation and Cleanup | v1.0 | 2/2 | Complete | 2026-03-17 |
@@ -118,7 +118,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12
 | 9. Foundation Types and Settings Refactor | v1.2 | 2/2 | Complete | 2026-03-24 |
 | 10. P2P Operator Dashboard | v1.2 | 2/2 | Complete    | 2026-03-24 |
 | 11. BLS Service Builder and Registration | v1.2 | 2/2 | Complete    | 2026-03-24 |
-| 12. Unified Activity Events | v1.2 | 0/2 | Not started | - |
+| 12. Unified Activity Events | v1.2 | 1/2 | In Progress|  |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
 See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) for v1.1 phase details.

@@ -31,9 +31,9 @@
 
 ### Activity
 
-- [ ] **ACT-01**: Trigger and submission events merged into unified event cards (trigger event with submission result inlined)
-- [ ] **ACT-02**: Event status progression displayed (pending → submitted → confirmed/error)
-- [ ] **ACT-03**: Submission errors displayed inline on event cards
+- [x] **ACT-01**: Trigger and submission events merged into unified event cards (trigger event with submission result inlined)
+- [x] **ACT-02**: Event status progression displayed (pending → submitted → confirmed/error)
+- [x] **ACT-03**: Submission errors displayed inline on event cards
 
 ### Settings UX
 
@@ -86,9 +86,9 @@
 | BLS-02 | Phase 11 | Complete |
 | BLS-03 | Phase 11 | Complete |
 | BLS-04 | Phase 11 | Complete |
-| ACT-01 | Phase 12 | Pending |
-| ACT-02 | Phase 12 | Pending |
-| ACT-03 | Phase 12 | Pending |
+| ACT-01 | Phase 12 | Complete |
+| ACT-02 | Phase 12 | Complete |
+| ACT-03 | Phase 12 | Complete |
 | SET-01 | Phase 9 | Complete |
 | SET-02 | Phase 9 | Complete |
 
