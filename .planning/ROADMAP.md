@@ -36,7 +36,7 @@
 - [x] **Phase 10: P2P Operator Dashboard** - Full P2P visibility page with Ed25519 identity, peers, services, and operator keys (completed 2026-03-24)
 - [x] **Phase 11: BLS Service Builder and Registration** - BLS algorithm selection in service builder, post-deploy key display, one-click operator registration (completed 2026-03-24)
 - [x] **Phase 12: Unified Activity Events** - Merged trigger+submission event cards with status progression and error display (completed 2026-03-24)
-- [ ] **Phase 13: BLS Registration UX and Type Cleanup** - Gap closure: guide POA registry setup before BLS registration, fix SignaturePrefix type drift
+- [x] **Phase 13: BLS Registration UX and Type Cleanup** - Gap closure: guide POA registry setup before BLS registration, fix SignaturePrefix type drift (completed 2026-03-24)
 
 ## Phase Details
 
@@ -113,7 +113,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 13-01-PLAN.md -- Fix SignaturePrefix type drift and add BLS registration guidance banner (FND-01, BLS-03)
+- [x] 13-01-PLAN.md -- Fix SignaturePrefix type drift and add BLS registration guidance banner (FND-01, BLS-03)
 
 ## Progress
 
@@ -134,7 +134,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 10. P2P Operator Dashboard | v1.2 | 2/2 | Complete    | 2026-03-24 |
 | 11. BLS Service Builder and Registration | v1.2 | 2/2 | Complete    | 2026-03-24 |
 | 12. Unified Activity Events | v1.2 | 2/2 | Complete    | 2026-03-24 |
-| 13. BLS Registration UX and Type Cleanup | v1.2 | 0/1 | Not started | - |
+| 13. BLS Registration UX and Type Cleanup | v1.2 | 1/1 | Complete   | 2026-03-24 |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
 See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) for v1.1 phase details.

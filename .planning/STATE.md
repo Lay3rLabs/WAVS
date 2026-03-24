@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Tauri App
 status: unknown
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-24T23:06:01.477Z"
+stopped_at: Completed 13-01-PLAN.md
+last_updated: "2026-03-24T23:33:24.437Z"
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
+  completed_phases: 5
+  total_plans: 9
+  completed_plans: 9
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 12 — unified-activity-events
+**Current focus:** Phase 13 — bls-registration-ux-and-type-cleanup
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
+Phase: 13 (bls-registration-ux-and-type-cleanup) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -66,5 +66,5 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T23:06:01.474Z
-Stopped at: Phase 2 context gathered
+Last session: 2026-03-24T23:33:24.435Z
+Stopped at: Completed 13-01-PLAN.md
