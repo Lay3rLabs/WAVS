@@ -225,6 +225,16 @@ pub enum ComponentSource {
     /// An already deployed component
     #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
     Digest(ComponentDigest),
+    /// The wasm bytecode pulled from an OCI registry (e.g. ghcr.io)
+    #[cfg_attr(feature = "ts-bindings", ts(type = "{ uri: string, digest?: string }"))]
+    Oci {
+        /// Full OCI URI, e.g. "oci://ghcr.io/org/component:v1.0"
+        uri: String,
+        /// Digest for content verification. Parsed from @sha256: suffix in URI or provided explicitly.
+        /// If None, the component is pulled by tag only (a warning is emitted at deploy time).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        digest: Option<ComponentDigest>,
+    },
 }
 
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
@@ -247,11 +257,12 @@ pub struct Registry {
 }
 
 impl ComponentSource {
-    pub fn digest(&self) -> &ComponentDigest {
+    pub fn digest(&self) -> Option<&ComponentDigest> {
         match self {
-            ComponentSource::Download { digest, .. } => digest,
-            ComponentSource::Registry { registry } => &registry.digest,
-            ComponentSource::Digest(digest) => digest,
+            ComponentSource::Download { digest, .. } => Some(digest),
+            ComponentSource::Registry { registry } => Some(&registry.digest),
+            ComponentSource::Digest(digest) => Some(digest),
+            ComponentSource::Oci { digest, .. } => digest.as_ref(),
         }
     }
 }
