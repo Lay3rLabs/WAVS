@@ -329,6 +329,41 @@ export const POAStakeRegistryABI = [
 ] as const satisfies Abi;
 
 /**
+ * BLS POAStakeRegistry ABI - For BLS-variant POA middleware contracts.
+ * Key difference from ECDSA: updateOperatorSigningKey takes (bytes, bytes) not (address, bytes),
+ * and getLatestOperatorSigningKey returns bytes (not address).
+ */
+export const BLSPOAStakeRegistryABI = [
+  // updateOperatorSigningKey for BLS: (bytes blsKey, bytes blsSigProof)
+  {
+    type: 'function',
+    name: 'updateOperatorSigningKey',
+    inputs: [
+      { name: 'blsKey', type: 'bytes', internalType: 'bytes' },
+      { name: 'blsSigProof', type: 'bytes', internalType: 'bytes' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  // getLatestOperatorSigningKey for BLS: returns bytes (128-byte BLS key, not 20-byte address)
+  {
+    type: 'function',
+    name: 'getLatestOperatorSigningKey',
+    inputs: [{ name: 'operator', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'bytes', internalType: 'bytes' }],
+    stateMutability: 'view',
+  },
+  // operatorRegistered is the same as ECDSA version
+  {
+    type: 'function',
+    name: 'operatorRegistered',
+    inputs: [{ name: 'operator', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'view',
+  },
+] as const satisfies Abi;
+
+/**
  * TransparentUpgradeableProxy ABI - OpenZeppelin standard
  */
 export const TransparentUpgradeableProxyABI = [

@@ -11,6 +11,7 @@ import {
 } from 'viem';
 import {
   POAStakeRegistryABI,
+  BLSPOAStakeRegistryABI,
   POAStakeRegistryBytecode,
   TransparentUpgradeableProxyBytecode,
   type RegistryInfo,
@@ -415,4 +416,51 @@ export async function createSigningKeySignature(
     encodeAbiParameters([{ type: 'address' }], [operatorAddress])
   );
   return signingKeyAccount.sign({ hash: messageHash });
+}
+
+/**
+ * Update an operator's BLS signing key on the BLS POA registry.
+ * Must be called by the operator (HD index 0 EVM address).
+ * blsKeyHex: 0x-prefixed 128-byte G1 pubkey (256 hex chars after 0x)
+ * blsProofHex: 0x-prefixed 256-byte G2 proof-of-possession (512 hex chars after 0x)
+ */
+export async function updateBlsSigningKey(
+  publicClient: PublicClient<Transport, Chain>,
+  walletClient: WalletClient<Transport, Chain, HDAccount>,
+  registryAddress: Address,
+  blsKeyHex: `0x${string}`,
+  blsProofHex: `0x${string}`,
+): Promise<`0x${string}`> {
+  const hash = await walletClient.writeContract({
+    address: registryAddress,
+    abi: BLSPOAStakeRegistryABI,
+    functionName: 'updateOperatorSigningKey',
+    args: [blsKeyHex, blsProofHex],
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
+  return hash;
+}
+
+/**
+ * Check BLS operator registration status by reading getLatestOperatorSigningKey.
+ * Returns 'registered' if non-empty bytes, 'unregistered' if empty, 'unknown' on error.
+ */
+export async function checkBlsRegistrationStatus(
+  publicClient: PublicClient<Transport, Chain>,
+  registryAddress: Address,
+  operatorAddress: Address,
+): Promise<'registered' | 'unregistered' | 'unknown'> {
+  try {
+    const signingKey = await publicClient.readContract({
+      address: registryAddress,
+      abi: BLSPOAStakeRegistryABI,
+      functionName: 'getLatestOperatorSigningKey',
+      args: [operatorAddress],
+    });
+    // BLS returns bytes - empty or "0x" means unregistered
+    const keyHex = signingKey as `0x${string}`;
+    return keyHex.length > 2 ? 'registered' : 'unregistered';
+  } catch {
+    return 'unknown';
+  }
 }
