@@ -1252,9 +1252,22 @@ pub async fn cmd_clear_persisted_services(
 #[tauri::command(rename_all = "snake_case")]
 pub async fn cmd_get_p2p_status(
     wavs_instance: State<'_, WavsInstanceState>,
+    wavs_config: State<'_, WavsConfigState>,
 ) -> AppResult<wavs_types::P2pStatus> {
     let dispatcher = wavs_instance.dispatcher()?;
-    Ok(dispatcher.aggregator.get_p2p_status().await)
+    let mut status = dispatcher.aggregator.get_p2p_status().await;
+
+    let mode = match wavs_config.get_cloned() {
+        Some(config) => match config.p2p {
+            wavs::subsystems::aggregator::p2p::P2pConfig::Disabled => "disabled",
+            wavs::subsystems::aggregator::p2p::P2pConfig::Local { .. } => "local",
+            wavs::subsystems::aggregator::p2p::P2pConfig::Remote { .. } => "remote",
+        },
+        None => "unknown",
+    };
+    status.discovery_mode = mode.to_string();
+
+    Ok(status)
 }
 
 // --- Service Signer ---

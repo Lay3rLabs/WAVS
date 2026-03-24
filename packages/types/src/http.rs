@@ -134,6 +134,9 @@ pub enum DevTriggerStreamSubscriptionKind {
 pub struct P2pStatus {
     /// Whether P2P networking is enabled
     pub enabled: bool,
+    /// Discovery mode: "disabled", "local", "remote", or "unknown"
+    #[serde(default)]
+    pub discovery_mode: String,
     /// Local peer ID (Ed25519 public key, hex-encoded)
     pub local_peer_id: Option<String>,
     /// Listen addresses (socket format, e.g. "0.0.0.0:9000")

@@ -205,6 +205,7 @@ export type SignaturePrefix = 'eip191';
 // P2P network status (mirrors packages/types/src/http.rs:134 P2pStatus)
 export interface P2pStatus {
   enabled: boolean;
+  discovery_mode: string;
   local_peer_id: string | null;
   listen_addresses: string[];
   connected_peers: number;

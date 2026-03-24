@@ -726,6 +726,7 @@ async fn run_lookup_network(
                         let peers = connected_peers_tracker.read().unwrap().clone();
                         let status = P2pStatus {
                             enabled: true,
+                            discovery_mode: "local".to_string(),
                             local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
                             listen_addresses: vec![listen_addr.to_string()],
                             connected_peers: peers.len(),
@@ -1101,6 +1102,7 @@ async fn run_discovery_network(
                         let peers = connected_peers_tracker.read().unwrap().clone();
                         let status = P2pStatus {
                             enabled: true,
+                            discovery_mode: "remote".to_string(),
                             local_peer_id: Some(const_hex::encode(own_pubkey.as_ref())),
                             listen_addresses: vec![listen_addr.to_string()],
                             connected_peers: peers.len(),
