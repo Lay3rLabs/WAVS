@@ -110,7 +110,10 @@ Plans:
   1. ServiceDetailPage shows a hint/guidance when BLS service has no POA registry configured, directing user to add registry
   2. `SubmitDraft.signaturePrefix` uses the `SignaturePrefix` type alias instead of inline `'eip191' | 'none'` union
   3. BLS registration flow is reachable without prior knowledge of POA registry setup
-**Plans**: 0 plans (not yet planned)
+**Plans**: 1 plan
+
+Plans:
+- [ ] 13-01-PLAN.md -- Fix SignaturePrefix type drift and add BLS registration guidance banner (FND-01, BLS-03)
 
 ## Progress
 
@@ -131,7 +134,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 10. P2P Operator Dashboard | v1.2 | 2/2 | Complete    | 2026-03-24 |
 | 11. BLS Service Builder and Registration | v1.2 | 2/2 | Complete    | 2026-03-24 |
 | 12. Unified Activity Events | v1.2 | 2/2 | Complete    | 2026-03-24 |
-| 13. BLS Registration UX and Type Cleanup | v1.2 | 0/0 | Not started | - |
+| 13. BLS Registration UX and Type Cleanup | v1.2 | 0/1 | Not started | - |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
 See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) for v1.1 phase details.
