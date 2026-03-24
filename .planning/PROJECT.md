@@ -120,4 +120,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-23 after v1.2 milestone start*
+*Last updated: 2026-03-25 after Phase 13 complete — SignaturePrefix type unified, BLS guidance banner added*
