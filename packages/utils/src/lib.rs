@@ -9,6 +9,7 @@ pub mod evm_client;
 pub mod filesystem;
 pub mod health;
 pub mod http;
+pub mod oci;
 pub mod serde;
 pub mod service;
 pub mod storage;
@@ -16,7 +17,6 @@ pub mod telemetry;
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 pub mod wkg;
-pub mod oci;
 
 // the test version of init_tracing does not take a config
 // since config itself is tested and modified from different parallel tests

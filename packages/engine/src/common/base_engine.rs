@@ -123,9 +123,8 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
                 })?
             }
             ComponentSource::Registry { registry } => {
-                let client = WkgClient::new(
-                    registry.domain.clone().unwrap_or("wa.dev".to_string()),
-                )?;
+                let client =
+                    WkgClient::new(registry.domain.clone().unwrap_or("wa.dev".to_string()))?;
                 client.fetch(registry).await?
             }
             ComponentSource::Oci { uri, digest } => {
@@ -168,9 +167,9 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
         }
 
         // Store in content-addressed storage (OCI-04: cache by digest)
-        self.storage.set_data(&bytes).map_err(|e| {
-            EngineError::StorageError(format!("Failed to store component: {}", e))
-        })?;
+        self.storage
+            .set_data(&bytes)
+            .map_err(|e| EngineError::StorageError(format!("Failed to store component: {}", e)))?;
 
         let component = WasmComponent::new(&self.wasm_engine, &bytes)
             .map_err(|e| EngineError::Compile(e.into()))?;

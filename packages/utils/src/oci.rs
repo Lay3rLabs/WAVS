@@ -5,9 +5,7 @@
 //! digest verification and content-addressed storage.
 
 use anyhow::{anyhow, Result};
-use oci_client::{
-    client::ClientConfig, secrets::RegistryAuth, Client as OciClient, Reference,
-};
+use oci_client::{client::ClientConfig, secrets::RegistryAuth, Client as OciClient, Reference};
 use oci_wasm::WasmClient;
 
 /// Parsed OCI URI components.
@@ -112,15 +110,9 @@ impl OciPuller {
 
         // oci-wasm returns ImageData with layers filtered to WASM media types.
         // The WASM binary is the first (and typically only) layer.
-        let wasm_layer = image_data
-            .layers
-            .into_iter()
-            .next()
-            .ok_or_else(|| {
-                anyhow!(
-                    "No WASM layer found in OCI manifest for {}",
-                    uri.reference
-                )
+        let wasm_layer =
+            image_data.layers.into_iter().next().ok_or_else(|| {
+                anyhow!("No WASM layer found in OCI manifest for {}", uri.reference)
             })?;
 
         tracing::info!(
