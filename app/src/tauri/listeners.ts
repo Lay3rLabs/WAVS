@@ -1,6 +1,6 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { useAppStore, nextActivityId } from '../stores/appStore';
-import { buildServiceMap, type SettingsEvent, type LogEvent, type TriggerEvent, type SubmissionEvent, type ServiceEvent, type LogLevel } from '../types';
+import { useAppStore } from '../stores/appStore';
+import { buildServiceMap, type SettingsEvent, type LogEvent, type TriggerEvent, type SubmissionEvent, type SubmissionErrorEvent, type ServiceEvent, type LogLevel } from '../types';
 import { getServices } from './commands';
 
 // Event names matching the Rust backend
@@ -9,6 +9,7 @@ const EVENTS = {
   LOG: 'log',
   TRIGGER: 'trigger',
   SUBMISSION: 'submission',
+  SUBMISSION_ERROR: 'submission_error',
   SERVICE: 'service',
 } as const;
 
@@ -37,34 +38,23 @@ export async function startListeners(): Promise<void> {
   });
   unlistenFns.push(unlistenLog);
 
-  // Trigger listener -> ActivityItem
+  // Trigger listener -> UnifiedActivity (pending)
   const unlistenTrigger = await listen<TriggerEvent>(EVENTS.TRIGGER, (event) => {
-    const action = event.payload.action;
-    store.addActivity({
-      id: nextActivityId(),
-      ts: Date.now(),
-      kind: 'trigger',
-      serviceId: action.config.service_id,
-      workflowId: action.config.workflow_id,
-      triggerData: action.data,
-      triggerConfig: action.config,
-    });
+    store.handleTrigger(event.payload);
   });
   unlistenFns.push(unlistenTrigger);
 
-  // Submission listener -> ActivityItem
+  // Submission listener -> UnifiedActivity (confirmed)
   const unlistenSubmission = await listen<SubmissionEvent>(EVENTS.SUBMISSION, (event) => {
-    const payload = event.payload;
-    store.addActivity({
-      id: nextActivityId(),
-      ts: Date.now(),
-      kind: 'submission',
-      serviceId: payload.service_id,
-      workflowId: payload.workflow_id,
-      triggerData: payload.trigger_data,
-    });
+    store.handleSubmission(event.payload);
   });
   unlistenFns.push(unlistenSubmission);
+
+  // Submission error listener -> UnifiedActivity (error)
+  const unlistenSubmissionError = await listen<SubmissionErrorEvent>(EVENTS.SUBMISSION_ERROR, (event) => {
+    store.handleSubmissionError(event.payload);
+  });
+  unlistenFns.push(unlistenSubmissionError);
 
   // Service listener -> re-fetch service list
   const unlistenService = await listen<ServiceEvent>(EVENTS.SERVICE, async (_event) => {

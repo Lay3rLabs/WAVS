@@ -103,6 +103,14 @@ export interface SubmissionEvent {
   service_id: ServiceId;
   workflow_id: WorkflowId;
   trigger_data: TriggerData;
+  tx_hash: string | null;
+}
+
+export interface SubmissionErrorEvent {
+  service_id: ServiceId;
+  workflow_id: WorkflowId;
+  trigger_data: TriggerData;
+  error_message: string;
 }
 
 export type ServiceAction = 'added' | 'removed' | 'paused' | 'resumed';
@@ -316,16 +324,50 @@ export interface FsEntry {
 }
 
 // Activity types (unified triggers + submissions)
-export type ActivityKind = 'trigger' | 'submission';
+export type ActivityStatus = 'pending' | 'confirmed' | 'error';
 
-export interface ActivityItem {
+export interface UnifiedActivity {
   id: number;
-  ts: number;
-  kind: ActivityKind;
+  correlationKey: string;
+  triggerTs: number;
+  submissionTs: number | null;
+  status: ActivityStatus;
   serviceId: ServiceId;
   workflowId: WorkflowId;
   triggerData: TriggerData;
   triggerConfig?: TriggerConfig;
+  txHash: string | null;
+  errorMessage: string | null;
+}
+
+export function correlationKey(serviceId: string, workflowId: string, triggerData: TriggerData): string {
+  if ('EvmContractEvent' in triggerData) {
+    const d = triggerData.EvmContractEvent;
+    return `${serviceId}:${workflowId}:evm:${d.chain}:${d.block_number}:${d.log_index}`;
+  }
+  if ('CosmosContractEvent' in triggerData) {
+    const d = triggerData.CosmosContractEvent;
+    return `${serviceId}:${workflowId}:cosmos:${d.chain}:${d.block_height}:${d.event_index}`;
+  }
+  if ('BlockInterval' in triggerData) {
+    const d = triggerData.BlockInterval;
+    return `${serviceId}:${workflowId}:block:${d.chain}:${d.block_height}`;
+  }
+  if ('Cron' in triggerData) {
+    return `${serviceId}:${workflowId}:cron:${triggerData.Cron.trigger_time}`;
+  }
+  if ('AtProtoEvent' in triggerData) {
+    const d = triggerData.AtProtoEvent;
+    return `${serviceId}:${workflowId}:atproto:${d.sequence}`;
+  }
+  if ('HypercoreAppend' in triggerData) {
+    const d = triggerData.HypercoreAppend;
+    return `${serviceId}:${workflowId}:hypercore:${d.feed_key}:${d.index}`;
+  }
+  if ('Raw' in triggerData) {
+    return `${serviceId}:${workflowId}:raw:${triggerData.Raw.length}:${Date.now()}`;
+  }
+  return `${serviceId}:${workflowId}:unknown:${Date.now()}`;
 }
 
 /** Check if a service uses BLS signature algorithm in any workflow */
