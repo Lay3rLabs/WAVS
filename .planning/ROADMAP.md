@@ -28,7 +28,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Deploying the same service twice does not re-pull the component from the registry (cache hit confirmed in logs)
   4. A deploy using only a mutable tag (no `@sha256:` pin) emits a visible warning before proceeding
   5. Pulling from a private registry succeeds when credentials are provided via environment variables
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 01-01-PLAN.md — Add ComponentSource::Oci type variant and create OCI puller module
+- [ ] 01-02-PLAN.md — Wire OCI pull into engine, fix digest() Option callers, full integration
 
 ### Phase 2: WIT-to-Schema Tooling
 **Goal**: Developers and the MCP execution layer can retrieve a machine-readable JSON Schema describing the input and output types of any compiled WASM component
@@ -61,6 +64,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. OCI Component Pull | 0/? | Not started | - |
+| 1. OCI Component Pull | 0/2 | Planned | - |
 | 2. WIT-to-Schema Tooling | 0/? | Not started | - |
 | 3. MCP Execution Interface | 0/? | Not started | - |
