@@ -63,31 +63,31 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHEMA-01 | — | Pending |
-| SCHEMA-02 | — | Pending |
-| SCHEMA-03 | — | Pending |
-| SCHEMA-04 | — | Pending |
-| SCHEMA-05 | — | Pending |
-| EXEC-01 | — | Pending |
-| EXEC-02 | — | Pending |
-| EXEC-03 | — | Pending |
-| EXEC-04 | — | Pending |
-| EXEC-05 | — | Pending |
-| EXEC-06 | — | Pending |
-| EXEC-07 | — | Pending |
-| EXEC-08 | — | Pending |
-| OCI-01 | — | Pending |
-| OCI-02 | — | Pending |
-| OCI-03 | — | Pending |
-| OCI-04 | — | Pending |
-| OCI-05 | — | Pending |
-| OCI-06 | — | Pending |
+| SCHEMA-01 | Phase 2 | Pending |
+| SCHEMA-02 | Phase 2 | Pending |
+| SCHEMA-03 | Phase 2 | Pending |
+| SCHEMA-04 | Phase 2 | Pending |
+| SCHEMA-05 | Phase 2 | Pending |
+| EXEC-01 | Phase 3 | Pending |
+| EXEC-02 | Phase 3 | Pending |
+| EXEC-03 | Phase 3 | Pending |
+| EXEC-04 | Phase 3 | Pending |
+| EXEC-05 | Phase 3 | Pending |
+| EXEC-06 | Phase 3 | Pending |
+| EXEC-07 | Phase 3 | Pending |
+| EXEC-08 | Phase 3 | Pending |
+| OCI-01 | Phase 1 | Pending |
+| OCI-02 | Phase 1 | Pending |
+| OCI-03 | Phase 1 | Pending |
+| OCI-04 | Phase 1 | Pending |
+| OCI-05 | Phase 1 | Pending |
+| OCI-06 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19 ⚠️
+- Mapped to phases: 19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 after initial definition*
+*Last updated: 2026-03-24 after roadmap creation (traceability populated)*
