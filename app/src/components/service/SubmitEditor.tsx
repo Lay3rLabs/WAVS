@@ -1,7 +1,7 @@
 import { Dropdown, type DropdownOption } from '../atoms';
 import { ComponentEditor } from './ComponentEditor';
 import type { SubmitDraft } from '../../stores/serviceBuilderStore';
-import type { SignatureAlgorithm } from '../../types';
+import type { SignatureAlgorithm, SignaturePrefix } from '../../types';
 
 type SubmitType = 'none' | 'aggregator';
 
@@ -17,9 +17,7 @@ const ALGORITHM_OPTIONS: DropdownOption<SigAlgorithm>[] = [
   { label: 'BLS (bls12381)', value: 'bls12381' },
 ];
 
-type SigPrefix = 'eip191' | 'none';
-
-const PREFIX_OPTIONS: DropdownOption<SigPrefix>[] = [
+const PREFIX_OPTIONS: DropdownOption<SignaturePrefix>[] = [
   { label: 'EIP-191', value: 'eip191' },
   { label: 'None', value: 'none' },
 ];

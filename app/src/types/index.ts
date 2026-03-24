@@ -208,7 +208,7 @@ export interface SignatureKind {
 }
 
 export type SignatureAlgorithm = 'secp256k1' | 'bls12381';
-export type SignaturePrefix = 'eip191';
+export type SignaturePrefix = 'eip191' | 'none';
 
 // P2P network status (mirrors packages/types/src/http.rs:134 P2pStatus)
 export interface P2pStatus {

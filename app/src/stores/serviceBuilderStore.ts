@@ -9,6 +9,7 @@ import type {
   AllowedHostPermission,
   ServiceManager,
   SignatureAlgorithm,
+  SignaturePrefix,
 } from '../types';
 
 export type BuilderStep = 'contract' | 'service' | 'review' | 'deploy';
@@ -46,7 +47,7 @@ export interface SubmitDraft {
   type: 'none' | 'aggregator';
   component: ComponentDraft;
   signatureAlgorithm: SignatureAlgorithm;
-  signaturePrefix: 'eip191' | 'none';
+  signaturePrefix: SignaturePrefix;
 }
 
 function createDefaultComponent(): ComponentDraft {
