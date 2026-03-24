@@ -134,7 +134,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 10. P2P Operator Dashboard | v1.2 | 2/2 | Complete    | 2026-03-24 |
 | 11. BLS Service Builder and Registration | v1.2 | 2/2 | Complete    | 2026-03-24 |
 | 12. Unified Activity Events | v1.2 | 2/2 | Complete    | 2026-03-24 |
-| 13. BLS Registration UX and Type Cleanup | v1.2 | 1/1 | Complete   | 2026-03-24 |
+| 13. BLS Registration UX and Type Cleanup | v1.2 | 1/1 | Complete    | 2026-03-24 |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
 See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) for v1.1 phase details.
