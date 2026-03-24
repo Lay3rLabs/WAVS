@@ -57,10 +57,24 @@ pub struct SubmissionEvent {
     pub service_id: ServiceId,
     pub workflow_id: WorkflowId,
     pub trigger_data: TriggerData,
+    pub tx_hash: Option<String>,
 }
 
 impl TauriEventExt for SubmissionEvent {
     const NAME: &'static str = "submission";
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SubmissionErrorEvent {
+    pub service_id: ServiceId,
+    pub workflow_id: WorkflowId,
+    pub trigger_data: TriggerData,
+    pub error_message: String,
+}
+
+impl TauriEventExt for SubmissionErrorEvent {
+    const NAME: &'static str = "submission_error";
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

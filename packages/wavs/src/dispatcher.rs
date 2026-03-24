@@ -132,6 +132,13 @@ pub enum DispatcherCommand {
         service_id: ServiceId,
         workflow_id: WorkflowId,
         trigger_data: TriggerData,
+        tx_hash: Option<String>,
+    },
+    SubmissionError {
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
+        trigger_data: TriggerData,
+        error_message: String,
     },
 }
 
@@ -456,16 +463,38 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             service_id,
                             workflow_id,
                             trigger_data,
+                            tx_hash,
                         } => {
                             if let Err(err) = _self.tauri_handle.emit_ext(
                                 wavs_gui_shared::event::SubmissionEvent {
                                     service_id,
                                     workflow_id,
                                     trigger_data,
+                                    tx_hash,
                                 },
                             ) {
                                 tracing::error!(
                                     "Error emitting submission event to GUI: {:?}",
+                                    err
+                                );
+                            }
+                        }
+                        DispatcherCommand::SubmissionError {
+                            service_id,
+                            workflow_id,
+                            trigger_data,
+                            error_message,
+                        } => {
+                            if let Err(err) = _self.tauri_handle.emit_ext(
+                                wavs_gui_shared::event::SubmissionErrorEvent {
+                                    service_id,
+                                    workflow_id,
+                                    trigger_data,
+                                    error_message,
+                                },
+                            ) {
+                                tracing::error!(
+                                    "Error emitting submission error event to GUI: {:?}",
                                     err
                                 );
                             }
