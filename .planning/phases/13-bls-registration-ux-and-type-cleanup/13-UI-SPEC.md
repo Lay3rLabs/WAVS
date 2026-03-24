@@ -21,7 +21,7 @@ created: 2026-03-24
 | Preset | not applicable |
 | Component library | none (hand-rolled Tailwind) |
 | Icon library | none |
-| Font | Montserrat (Google Fonts, weights 400/600/700) |
+| Font | Montserrat (Google Fonts, weights 400/600) |
 
 Source: `app/src/index.css`, `app/tailwind.config.js`, REQUIREMENTS.md ("Component library migration -- not worth the churn")
 
@@ -39,7 +39,7 @@ Declared values (must be multiples of 4):
 | lg | 16px | Section padding (`p-4`, `gap-4`) |
 | xl | 24px | Layout gaps (`gap-6`) |
 
-Exceptions: `p-3` (12px) is the existing standard for inline cards and callouts in ServiceDetailPage. The guidance banner MUST use `p-3` to match the adjacent BLS Operator Key card. `mt-3 mb-1` spacing matches the existing BLS section pattern.
+Exceptions: `p-3` (12px) is the existing standard for inline cards and callouts in ServiceDetailPage. 12px is a multiple of 4 (4 x 3 = 12) and therefore grid-compliant. The guidance banner MUST use `p-3` to match the adjacent BLS Operator Key card. `mt-3 mb-1` spacing matches the existing BLS section pattern.
 
 Source: ServiceDetailPage.tsx lines 763, 144; Tailwind default spacing scale
 
@@ -51,10 +51,8 @@ Source: ServiceDetailPage.tsx lines 763, 144; Tailwind default spacing scale
 |------|------|--------|-------------|----------------|
 | Body | 12px | 400 (regular) | 1.5 | `text-xs` |
 | Label | 12px | 600 (semibold) | 1.5 | `text-xs font-semibold` |
-| Heading | 14px | 600 (semibold) | 1.4 | `text-sm font-semibold` |
-| Page Title | 18px | 700 (bold) | 1.2 | `text-lg font-bold` |
 
-Note: This phase only adds `text-xs` body copy and `text-xs font-semibold` label copy. No new heading or title text is introduced.
+This phase only adds `text-xs` body copy (weight 400) and `text-xs font-semibold` label copy (weight 600). No headings or page titles are introduced.
 
 Source: Codebase analysis -- `text-xs` is the dominant size in ServiceDetailPage (42 occurrences); `font-semibold` is the standard label weight throughout.
 
@@ -69,6 +67,8 @@ Source: Codebase analysis -- `text-xs` is the dominant size in ServiceDetailPage
 | Accent (10%) | `#9D7DC5` (primary-600) | Register BLS Key button, active nav items |
 | Warning | amber-700/50 border, amber-400 text | Guidance banner border and title text |
 | Destructive | `#A7656F` (red-3) | Error text for failed BLS key loads |
+
+**Focal Point:** The amber-400 banner title ("Registry Required for BLS Registration") is the primary visual anchor of the new UI added in this phase -- it draws the eye to the actionable guidance when a BLS service lacks a connected registry.
 
 **Guidance banner color contract:**
 
