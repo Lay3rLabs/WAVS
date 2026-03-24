@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Tauri App
 status: unknown
-stopped_at: Completed 10-02-PLAN.md
-last_updated: "2026-03-24T14:48:29.276Z"
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-03-24T17:34:10.482Z"
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 10 — p2p-operator-dashboard
+**Current focus:** Phase 11 — bls-service-builder-and-registration
 
 ## Current Position
 
-Phase: 11
-Plan: Not started
+Phase: 11 (bls-service-builder-and-registration) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -45,6 +45,8 @@ Plan: Not started
 - [Phase 09]: Settings monolith decomposed into 6 self-contained section components with sidebar nav -- each section owns its state/effects/handlers
 - [Phase 10]: Set discovery_mode at both P2P task level and Tauri command level for consistency across HTTP API and desktop app
 - [Phase 10]: Registration checks run on mount + manual refresh only (not on 15s poll) to avoid expensive on-chain reads
+- [Phase 11]: Used useMemo with service object to detect BLS rather than reading from store directly
+- [Phase 11]: Fallback from getServiceSigner to deriveBlsPubkey(0) for BLS key display
 
 ### Pending Todos
 
@@ -57,5 +59,5 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T14:47:39.864Z
-Stopped at: Completed 10-02-PLAN.md
+Last session: 2026-03-24T17:34:10.481Z
+Stopped at: Completed 11-01-PLAN.md

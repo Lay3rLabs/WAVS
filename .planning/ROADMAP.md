@@ -83,7 +83,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 11-01-PLAN.md -- Algorithm selector in service builder + post-deploy BLS key display (BLS-01, BLS-02)
+- [x] 11-01-PLAN.md -- Algorithm selector in service builder + post-deploy BLS key display (BLS-01, BLS-02)
 - [ ] 11-02-PLAN.md -- BLS proof-of-possession command, BLS ABI, one-click registration + status (BLS-03, BLS-04)
 
 ### Phase 12: Unified Activity Events
@@ -117,7 +117,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12
 | 8. Integration and Verification | v1.1 | 2/2 | Complete | 2026-03-23 |
 | 9. Foundation Types and Settings Refactor | v1.2 | 2/2 | Complete | 2026-03-24 |
 | 10. P2P Operator Dashboard | v1.2 | 2/2 | Complete    | 2026-03-24 |
-| 11. BLS Service Builder and Registration | v1.2 | 0/2 | Not started | - |
+| 11. BLS Service Builder and Registration | v1.2 | 1/2 | In Progress|  |
 | 12. Unified Activity Events | v1.2 | 0/? | Not started | - |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
