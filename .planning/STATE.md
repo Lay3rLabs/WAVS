@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Tauri App
 status: unknown
-stopped_at: Completed 09-02-PLAN.md (Phase 9 complete)
-last_updated: "2026-03-24T13:09:04.178Z"
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-03-24T14:42:27.487Z"
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 09 — foundation-types-and-settings-refactor
+**Current focus:** Phase 10 — p2p-operator-dashboard
 
 ## Current Position
 
-Phase: 10
-Plan: Not started
+Phase: 10 (p2p-operator-dashboard) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Plan: Not started
 - [Phase 09]: Added const-hex to wavs-app for BLS pubkey hex encoding
 - [Phase 09]: Registered pre-existing cmd_pause_service/cmd_resume_service in generate_handler (bug fix)
 - [Phase 09]: Settings monolith decomposed into 6 self-contained section components with sidebar nav -- each section owns its state/effects/handlers
+- [Phase 10]: Set discovery_mode at both P2P task level and Tauri command level for consistency across HTTP API and desktop app
 
 ### Pending Todos
 
@@ -55,5 +56,5 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T12:44:34.181Z
-Stopped at: Completed 09-02-PLAN.md (Phase 9 complete)
+Last session: 2026-03-24T14:42:27.485Z
+Stopped at: Completed 10-01-PLAN.md

@@ -68,7 +68,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 10-01-PLAN.md -- P2P page with identity, peers, and services cards (P2P-01, P2P-02, P2P-03, P2P-06)
+- [x] 10-01-PLAN.md -- P2P page with identity, peers, and services cards (P2P-01, P2P-02, P2P-03, P2P-06)
 - [ ] 10-02-PLAN.md -- Per-service operator key display and registration status (P2P-04, P2P-05)
 
 ### Phase 11: BLS Service Builder and Registration
@@ -116,7 +116,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12
 | 7. BLS Aggregation | v1.1 | 2/2 | Complete | 2026-03-20 |
 | 8. Integration and Verification | v1.1 | 2/2 | Complete | 2026-03-23 |
 | 9. Foundation Types and Settings Refactor | v1.2 | 2/2 | Complete | 2026-03-24 |
-| 10. P2P Operator Dashboard | v1.2 | 0/2 | Planned | - |
+| 10. P2P Operator Dashboard | v1.2 | 1/2 | In Progress|  |
 | 11. BLS Service Builder and Registration | v1.2 | 0/? | Not started | - |
 | 12. Unified Activity Events | v1.2 | 0/? | Not started | - |
 
