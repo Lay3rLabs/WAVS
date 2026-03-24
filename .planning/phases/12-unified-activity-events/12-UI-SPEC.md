@@ -31,7 +31,7 @@ Declared values (Tailwind utility classes, multiples of 4):
 
 | Token | Value | Tailwind | Usage in this phase |
 |-------|-------|----------|---------------------|
-| xs | 4px | `gap-1`, `p-1`, `py-0.5` | Status badge vertical padding, icon-to-text gaps, detail row gaps |
+| xs | 4px | `gap-1`, `p-1` | Icon-to-text gaps, detail row gaps |
 | sm | 8px | `gap-2`, `p-2`, `px-2` | Header row element gaps, badge horizontal padding, card vertical padding between sections |
 | md | 16px | `gap-4`, `p-4` | Not used this phase (cards use `pl-3 pr-4 pt-3 pb-3` inherited from current ActivityCard) |
 | lg | 24px | `gap-6`, `p-6` | Not used this phase |
@@ -39,7 +39,10 @@ Declared values (Tailwind utility classes, multiples of 4):
 | 2xl | 48px | `gap-12` | Not used this phase |
 | 3xl | 64px | `gap-16` | Not used this phase |
 
-Exceptions: ActivityCard inner padding uses `pl-3 pr-4 pt-3 pb-3` (12px left, 16px right, 12px top/bottom) -- this is the existing card pattern from `ActivityCard.tsx` and must be preserved for visual consistency with the rest of the app.
+Exceptions:
+
+1. ActivityCard inner padding uses `pl-3 pr-4 pt-3 pb-3` (12px left, 16px right, 12px top/bottom) -- this is the existing card pattern from `ActivityCard.tsx` and must be preserved for visual consistency with the rest of the app.
+2. StatusBadge uses `px-1.5 py-0.5` (6px horizontal / 2px vertical) for tight badge padding -- standard 4px padding is proportionally too large for 10px badge text.
 
 ---
 
@@ -357,13 +360,15 @@ No destructive actions exist in this phase. The "Clear" button already exists in
 
 - Layout: `shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide`
 - Position: First element in header row (replaces kind badge)
+- Spacing exception: `px-1.5 py-0.5` (6px/2px) -- see Spacing Scale exceptions item 2
 
 ### Trigger Type Pill (preserved from current)
 
 Unchanged from existing `ActivityCard.tsx`. Uses `getTriggerAccent()` function for per-trigger-type coloring.
 
-- Layout: `shrink-0 px-2 py-0.5 rounded text-xs font-medium`
+- Layout: `shrink-0 px-2 py-0.5 rounded text-xs font-semibold`
 - Position: Second element in header row (after StatusBadge)
+- Spacing exception: `py-0.5` (2px) -- see Spacing Scale exceptions item 2
 
 ---
 
