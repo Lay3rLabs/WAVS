@@ -10,6 +10,7 @@ import {
   WalletSetup,
   Health,
   ComponentsPage,
+  P2pPage,
 } from './pages';
 import {
   ServicesLayout,
@@ -45,6 +46,7 @@ function MainAppContent() {
           <Route path="/triggers" element={<Navigate to="/activity" replace />} />
           <Route path="/submissions" element={<Navigate to="/activity" replace />} />
           <Route path="/poa-registry" element={<Navigate to="/services" replace />} />
+          <Route path="/p2p" element={<P2pPage />} />
           <Route path="/health" element={<Health />} />
           <Route path="/404" element={<NotFound />} />
           {/* Default route: go to settings if not complete, otherwise logs */}
