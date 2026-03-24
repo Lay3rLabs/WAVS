@@ -36,6 +36,7 @@
 - [x] **Phase 10: P2P Operator Dashboard** - Full P2P visibility page with Ed25519 identity, peers, services, and operator keys (completed 2026-03-24)
 - [x] **Phase 11: BLS Service Builder and Registration** - BLS algorithm selection in service builder, post-deploy key display, one-click operator registration (completed 2026-03-24)
 - [x] **Phase 12: Unified Activity Events** - Merged trigger+submission event cards with status progression and error display (completed 2026-03-24)
+- [ ] **Phase 13: BLS Registration UX and Type Cleanup** - Gap closure: guide POA registry setup before BLS registration, fix SignaturePrefix type drift
 
 ## Phase Details
 
@@ -100,10 +101,21 @@ Plans:
 - [x] 12-01-PLAN.md -- Backend event pipeline + frontend types, store, and listeners (ACT-01, ACT-02, ACT-03)
 - [x] 12-02-PLAN.md -- Unified ActivityCard and ActivityFeed with status filter (ACT-01, ACT-02, ACT-03)
 
+### Phase 13: BLS Registration UX and Type Cleanup
+**Goal**: Close audit gaps — guide POA registry setup for BLS registration and fix SignaturePrefix type drift
+**Depends on**: Phase 11 (BLS registration), Phase 12 (complete)
+**Requirements**: BLS-03 (UX improvement), FND-01 (type fix)
+**Gap Closure**: Closes integration gap BLS-03 and flow gap bls-registration-without-registry from v1.2 audit
+**Success Criteria** (what must be TRUE):
+  1. ServiceDetailPage shows a hint/guidance when BLS service has no POA registry configured, directing user to add registry
+  2. `SubmitDraft.signaturePrefix` uses the `SignaturePrefix` type alias instead of inline `'eip191' | 'none'` union
+  3. BLS registration flow is reachable without prior knowledge of POA registry setup
+**Plans**: 0 plans (not yet planned)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 9 → 10 → 11 → 12
+Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -119,6 +131,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12
 | 10. P2P Operator Dashboard | v1.2 | 2/2 | Complete    | 2026-03-24 |
 | 11. BLS Service Builder and Registration | v1.2 | 2/2 | Complete    | 2026-03-24 |
 | 12. Unified Activity Events | v1.2 | 2/2 | Complete    | 2026-03-24 |
+| 13. BLS Registration UX and Type Cleanup | v1.2 | 0/0 | Not started | - |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
 See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) for v1.1 phase details.
