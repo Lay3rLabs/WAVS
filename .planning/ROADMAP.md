@@ -94,11 +94,11 @@ Plans:
   1. Trigger and submission events are merged into unified event cards (one card per workflow execution, not separate trigger and submission entries)
   2. Each event card shows status progression (pending, submitted, confirmed, or error) with visual indicators
   3. Submission errors are displayed inline on the event card with the error message visible
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 12-01: TBD
-- [ ] 12-02: TBD
+- [ ] 12-01-PLAN.md -- Backend event pipeline + frontend types, store, and listeners (ACT-01, ACT-02, ACT-03)
+- [ ] 12-02-PLAN.md -- Unified ActivityCard and ActivityFeed with status filter (ACT-01, ACT-02, ACT-03)
 
 ## Progress
 
@@ -118,7 +118,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12
 | 9. Foundation Types and Settings Refactor | v1.2 | 2/2 | Complete | 2026-03-24 |
 | 10. P2P Operator Dashboard | v1.2 | 2/2 | Complete    | 2026-03-24 |
 | 11. BLS Service Builder and Registration | v1.2 | 2/2 | Complete    | 2026-03-24 |
-| 12. Unified Activity Events | v1.2 | 0/? | Not started | - |
+| 12. Unified Activity Events | v1.2 | 0/2 | Not started | - |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
 See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) for v1.1 phase details.
