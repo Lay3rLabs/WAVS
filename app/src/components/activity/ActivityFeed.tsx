@@ -180,7 +180,7 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
       <div className="flex items-center gap-2.5 flex-wrap pb-4 border-b border-charcoal-medium mb-4">
         {/* Status filter tabs */}
         <div className="flex rounded-md overflow-hidden border border-charcoal-light">
-          {(['all', 'pending', 'confirmed', 'error'] as StatusFilter[]).map((s) => (
+          {(['all', 'pending', 'executed', 'confirmed', 'error'] as StatusFilter[]).map((s) => (
             <button
               key={s}
               type="button"
@@ -191,7 +191,7 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
               }`}
               onClick={() => setStatusFilter(s)}
             >
-              {s === 'all' ? 'All' : s === 'pending' ? 'Pending' : s === 'confirmed' ? 'Confirmed' : 'Error'}
+              {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
             </button>
           ))}
         </div>

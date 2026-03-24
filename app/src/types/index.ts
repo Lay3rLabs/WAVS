@@ -324,7 +324,7 @@ export interface FsEntry {
 }
 
 // Activity types (unified triggers + submissions)
-export type ActivityStatus = 'pending' | 'confirmed' | 'error';
+export type ActivityStatus = 'pending' | 'executed' | 'confirmed' | 'error';
 
 export interface UnifiedActivity {
   id: number;

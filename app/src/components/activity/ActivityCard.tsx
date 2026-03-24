@@ -168,11 +168,13 @@ function DetailRows({ data, config }: { data: TriggerData; config?: TriggerConfi
 function StatusBadge({ status }: { status: ActivityStatus }) {
   const styles = {
     pending: 'bg-amber-900/40 text-amber-400',
+    executed: 'bg-blue-900/40 text-blue-400',
     confirmed: 'bg-green-900/40 text-green-400',
     error: 'bg-red-900/40 text-red-400',
   };
   const labels = {
     pending: 'PENDING',
+    executed: 'EXECUTED',
     confirmed: 'CONFIRMED',
     error: 'ERROR',
   };
@@ -189,7 +191,7 @@ function truncateTxHash(hash: string): string {
 }
 
 function SubmissionSection({ item }: { item: UnifiedActivity }) {
-  if (item.status === 'pending') return null;
+  if (item.status === 'pending' || item.status === 'executed') return null;
 
   if (item.status === 'confirmed') {
     return (
@@ -243,6 +245,7 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
 
   const statusBorder = {
     pending: 'border-charcoal-light/30',
+    executed: 'border-blue-900/30',
     confirmed: 'border-green-900/30',
     error: 'border-red-900/30',
   }[item.status];

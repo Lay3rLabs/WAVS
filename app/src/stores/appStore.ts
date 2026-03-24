@@ -94,13 +94,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       const triggerData = action.data;
       const key = correlationKey(serviceId, workflowId, triggerData);
 
+      // Check if this workflow has submission configured
+      const service = state.services.get(serviceId);
+      const workflow = service?.workflows[workflowId];
+      const hasSubmission = workflow?.submit !== 'none';
+
       const newMap = new Map(state.activityMap);
       newMap.set(key, {
         id: nextActivityId(),
         correlationKey: key,
         triggerTs: Date.now(),
         submissionTs: null,
-        status: 'pending',
+        status: hasSubmission ? 'pending' : 'executed',
         serviceId,
         workflowId,
         triggerData,
