@@ -18,8 +18,8 @@
 - [x] **P2P-01**: P2P page accessible from header nav showing Ed25519 identity, discovery mode, and listen addresses
 - [x] **P2P-02**: Connected peers list with peer IDs and connection status
 - [x] **P2P-03**: Subscribed services list showing which services are active on P2P topics
-- [ ] **P2P-04**: Per-service operator key display (BLS G1 pubkey or ECDSA address) with copy button
-- [ ] **P2P-05**: Operator key registration status indicator (registered/unregistered on-chain)
+- [x] **P2P-04**: Per-service operator key display (BLS G1 pubkey or ECDSA address) with copy button
+- [x] **P2P-05**: Operator key registration status indicator (registered/unregistered on-chain)
 - [x] **P2P-06**: *(Stretch)* Live quorum accumulation progress per service
 
 ### BLS Service Deployment
@@ -79,8 +79,8 @@
 | P2P-01 | Phase 10 | Complete |
 | P2P-02 | Phase 10 | Complete |
 | P2P-03 | Phase 10 | Complete |
-| P2P-04 | Phase 10 | Pending |
-| P2P-05 | Phase 10 | Pending |
+| P2P-04 | Phase 10 | Complete |
+| P2P-05 | Phase 10 | Complete |
 | P2P-06 | Phase 10 | Pending (Stretch) |
 | BLS-01 | Phase 11 | Pending |
 | BLS-02 | Phase 11 | Pending |

@@ -33,7 +33,7 @@
 **Milestone Goal:** Bring the Tauri desktop app up to date with v1.0/v1.1 backend features -- BLS service deployment with operator registration, full P2P/operator visibility, unified activity events, and settings UX overhaul.
 
 - [ ] **Phase 9: Foundation Types and Settings Refactor** - Frontend type system updated for BLS/P2P, settings decomposed, Tauri command infrastructure ready
-- [ ] **Phase 10: P2P Operator Dashboard** - Full P2P visibility page with Ed25519 identity, peers, services, and operator keys
+- [x] **Phase 10: P2P Operator Dashboard** - Full P2P visibility page with Ed25519 identity, peers, services, and operator keys (completed 2026-03-24)
 - [ ] **Phase 11: BLS Service Builder and Registration** - BLS algorithm selection in service builder, post-deploy key display, one-click operator registration
 - [ ] **Phase 12: Unified Activity Events** - Merged trigger+submission event cards with status progression and error display
 
@@ -69,7 +69,7 @@ Plans:
 
 Plans:
 - [x] 10-01-PLAN.md -- P2P page with identity, peers, and services cards (P2P-01, P2P-02, P2P-03, P2P-06)
-- [ ] 10-02-PLAN.md -- Per-service operator key display and registration status (P2P-04, P2P-05)
+- [x] 10-02-PLAN.md -- Per-service operator key display and registration status (P2P-04, P2P-05)
 
 ### Phase 11: BLS Service Builder and Registration
 **Goal**: Operators can deploy BLS services and register their BLS keys on-chain entirely from the app
@@ -116,7 +116,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12
 | 7. BLS Aggregation | v1.1 | 2/2 | Complete | 2026-03-20 |
 | 8. Integration and Verification | v1.1 | 2/2 | Complete | 2026-03-23 |
 | 9. Foundation Types and Settings Refactor | v1.2 | 2/2 | Complete | 2026-03-24 |
-| 10. P2P Operator Dashboard | v1.2 | 1/2 | In Progress|  |
+| 10. P2P Operator Dashboard | v1.2 | 2/2 | Complete   | 2026-03-24 |
 | 11. BLS Service Builder and Registration | v1.2 | 0/? | Not started | - |
 | 12. Unified Activity Events | v1.2 | 0/? | Not started | - |
 
