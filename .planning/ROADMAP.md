@@ -65,11 +65,11 @@ Plans:
   3. Subscribed services list shows which services are active on P2P topics with human-readable names
   4. Each service displays its operator key (BLS G1 pubkey or ECDSA address) with a copy-to-clipboard button and on-chain registration status indicator
   5. *(Stretch)* Live quorum accumulation progress is visible per service when data is available
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 10-01: TBD
-- [ ] 10-02: TBD
+- [ ] 10-01-PLAN.md -- P2P page with identity, peers, and services cards (P2P-01, P2P-02, P2P-03, P2P-06)
+- [ ] 10-02-PLAN.md -- Per-service operator key display and registration status (P2P-04, P2P-05)
 
 ### Phase 11: BLS Service Builder and Registration
 **Goal**: Operators can deploy BLS services and register their BLS keys on-chain entirely from the app
@@ -115,8 +115,8 @@ Phases execute in numeric order: 9 → 10 → 11 → 12
 | 6. BLS Signing Pipeline | v1.1 | 2/2 | Complete | 2026-03-20 |
 | 7. BLS Aggregation | v1.1 | 2/2 | Complete | 2026-03-20 |
 | 8. Integration and Verification | v1.1 | 2/2 | Complete | 2026-03-23 |
-| 9. Foundation Types and Settings Refactor | v1.2 | 0/2 | Planned | - |
-| 10. P2P Operator Dashboard | v1.2 | 0/? | Not started | - |
+| 9. Foundation Types and Settings Refactor | v1.2 | 2/2 | Complete | 2026-03-24 |
+| 10. P2P Operator Dashboard | v1.2 | 0/2 | Planned | - |
 | 11. BLS Service Builder and Registration | v1.2 | 0/? | Not started | - |
 | 12. Unified Activity Events | v1.2 | 0/? | Not started | - |
 
