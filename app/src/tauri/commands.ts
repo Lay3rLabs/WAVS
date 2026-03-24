@@ -15,6 +15,7 @@ import type {
   P2pStatus,
   SignerResponse,
   BlsPubkeyResponse,
+  BlsProofResponse,
 } from '../types';
 
 export async function setWavsHome(): Promise<string | null> {
@@ -192,4 +193,15 @@ export async function getServiceSigner(serviceManager: ServiceManager): Promise<
 // BLS public key derivation command
 export async function deriveBlsPubkey(hdIndex: number): Promise<BlsPubkeyResponse> {
   return invoke<BlsPubkeyResponse>('cmd_derive_bls_pubkey', { hd_index: hdIndex });
+}
+
+// BLS proof of possession command
+export async function blsSignProofOfPossession(
+  hdIndex: number,
+  operatorAddress: string
+): Promise<BlsProofResponse> {
+  return invoke<BlsProofResponse>('cmd_bls_sign_proof_of_possession', {
+    hd_index: hdIndex,
+    operator_address: operatorAddress,
+  });
 }

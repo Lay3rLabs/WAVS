@@ -225,6 +225,12 @@ export interface BlsPubkeyResponse {
   g1_pubkey_hex: string;
 }
 
+// BLS proof-of-possession response (for cmd_bls_sign_proof_of_possession)
+export interface BlsProofResponse {
+  g1_pubkey_hex: string;
+  g2_proof_hex: string;
+}
+
 // Chain types
 export interface ChainConfigs {
   cosmos: Record<string, CosmosChainConfigBuilder>;

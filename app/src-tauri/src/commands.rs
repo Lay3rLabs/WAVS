@@ -726,6 +726,12 @@ pub struct BlsPubkeyResponse {
     pub g1_pubkey_hex: String,
 }
 
+#[derive(Serialize)]
+pub struct BlsProofResponse {
+    pub g1_pubkey_hex: String,
+    pub g2_proof_hex: String,
+}
+
 /// Resolve the wavs-mcp binary path.
 /// Looks alongside the current executable first (bundled app), then checks both
 /// debug and release profiles under the workspace target/ directory.
@@ -1299,5 +1305,38 @@ pub async fn cmd_derive_bls_pubkey(
         .map_err(|e| AppError::Service(format!("G1 pubkey derivation failed: {}", e)))?;
     Ok(BlsPubkeyResponse {
         g1_pubkey_hex: const_hex::encode(g1_bytes),
+    })
+}
+
+// --- BLS Proof of Possession ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_bls_sign_proof_of_possession(
+    mnemonic_cache: State<'_, MnemonicCacheState>,
+    hd_index: u32,
+    operator_address: String,
+) -> AppResult<BlsProofResponse> {
+    let mnemonic = get_mnemonic_cached(&mnemonic_cache)
+        .ok_or_else(|| AppError::Keychain("No mnemonic found".to_string()))?;
+    let key = utils::bls_signing::bls_private_key_from_mnemonic(&mnemonic.to_string(), hd_index)
+        .map_err(|e| AppError::Service(format!("BLS key derivation failed: {}", e)))?;
+
+    // Compute the digest the contract expects: keccak256(abi.encode(operator))
+    let operator: alloy_primitives::Address = operator_address
+        .parse()
+        .map_err(|e| AppError::Service(format!("Invalid operator address: {}", e)))?;
+    let encoded = alloy_sol_types::SolValue::abi_encode(&(operator,));
+    let digest: [u8; 32] = alloy_primitives::keccak256(&encoded).into();
+
+    let proof = utils::bls_signing::bls_sign_digest(&key, &digest)
+        .map_err(|e| AppError::Service(format!("BLS proof signing failed: {}", e)))?;
+
+    // Also return the G1 pubkey for convenience
+    let g1_bytes = utils::bls_signing::bls_g1_pubkey_bytes(&key)
+        .map_err(|e| AppError::Service(format!("G1 pubkey derivation failed: {}", e)))?;
+
+    Ok(BlsProofResponse {
+        g1_pubkey_hex: const_hex::encode(g1_bytes),
+        g2_proof_hex: const_hex::encode(proof),
     })
 }
