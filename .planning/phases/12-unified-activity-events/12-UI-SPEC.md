@@ -21,7 +21,7 @@ created: 2026-03-24
 | Preset | not applicable |
 | Component library | none -- hand-rolled Tailwind components (per REQUIREMENTS.md: "Component library migration (shadcn/Radix) -- not worth the churn") |
 | Icon library | Inline SVGs (14x14 viewBox, `fill="currentColor"`) -- follow `Header.tsx` icon pattern |
-| Font | Montserrat (loaded via Google Fonts in `index.css`, weights: 400, 600, 700) |
+| Font | Montserrat (loaded via Google Fonts in `index.css`, weights: 400, 600) |
 
 ---
 
@@ -52,7 +52,7 @@ Font: Montserrat. This phase uses exactly 2 weights: 400 (regular) and 600 (semi
 | Body | `text-sm` | 14px | 400 | 1.5 (Tailwind default) | Service name line, detail row values, filter dropdown labels |
 | Label | `text-xs font-semibold` | 12px | 600 | 1.33 | Status filter tab text, workflow ID suffix, "Raw" toggle label |
 | Helper | `text-xs` | 12px | 400 | 1.33 | Detail row labels (chain, block, tx), timestamp, error message text, empty state body, tx_hash display |
-| Badge | `text-[10px] font-bold uppercase tracking-wide` | 10px | 700 | 1.0 | StatusBadge ("PENDING", "CONFIRMED", "ERROR"), trigger type pill |
+| Badge | `text-[10px] font-semibold uppercase tracking-wide` | 10px | 600 | 1.0 | StatusBadge ("PENDING", "CONFIRMED", "ERROR"), trigger type pill |
 
 Note: No new page titles or display-level headings are introduced. All new UI is within the existing Activity page and ServiceActivity layouts that already have their own headings.
 
@@ -116,7 +116,7 @@ Components needed for Phase 12, mapped to existing atoms or modifications to exi
 
 | Component | Parent | Description |
 |-----------|--------|-------------|
-| `StatusBadge` | `ActivityCard.tsx` | Local function: renders status pill with pending/confirmed/error styling (10px bold uppercase) |
+| `StatusBadge` | `ActivityCard.tsx` | Local function: renders status pill with pending/confirmed/error styling (10px semibold uppercase) |
 | `SubmissionSection` | `ActivityCard.tsx` | Local function: renders tx_hash row (confirmed) or error message block (error), only visible when `status !== 'pending'` |
 
 ---
@@ -355,7 +355,7 @@ No destructive actions exist in this phase. The "Clear" button already exists in
 | confirmed | `bg-green-900/40` | `text-green-400` | CONFIRMED | `border-green-900/30` |
 | error | `bg-red-900/40` | `text-red-400` | ERROR | `border-red-900/30` |
 
-- Layout: `shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide`
+- Layout: `shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide`
 - Position: First element in header row (replaces kind badge)
 
 ### Trigger Type Pill (preserved from current)
