@@ -11,7 +11,7 @@
 - [x] **FND-01**: `SignatureAlgorithm` type updated to include `'bls12381'` alongside `'secp256k1'` in frontend types
 - [x] **FND-02**: New Tauri commands for P2P status (`cmd_get_p2p_status`), service signer info (`cmd_get_service_signer`), and BLS key derivation (`cmd_derive_bls_pubkey`)
 - [x] **FND-03**: `P2pStatus` and `SignerResponse` TypeScript types matching backend Rust structs
-- [ ] **FND-04**: Settings.tsx decomposed from monolithic 940-line file into section components
+- [x] **FND-04**: Settings.tsx decomposed from monolithic 940-line file into section components
 
 ### P2P Dashboard
 
@@ -37,8 +37,8 @@
 
 ### Settings UX
 
-- [ ] **SET-01**: Settings page reorganized into logical sections with clear visual hierarchy
-- [ ] **SET-02**: Visual polish -- consistent spacing, typography, and component styling across all settings sections
+- [x] **SET-01**: Settings page reorganized into logical sections with clear visual hierarchy
+- [x] **SET-02**: Visual polish -- consistent spacing, typography, and component styling across all settings sections
 
 ## v2 Requirements
 
@@ -75,7 +75,7 @@
 | FND-01 | Phase 9 | Complete |
 | FND-02 | Phase 9 | Complete |
 | FND-03 | Phase 9 | Complete |
-| FND-04 | Phase 9 | Pending |
+| FND-04 | Phase 9 | Complete |
 | P2P-01 | Phase 10 | Pending |
 | P2P-02 | Phase 10 | Pending |
 | P2P-03 | Phase 10 | Pending |
@@ -89,8 +89,8 @@
 | ACT-01 | Phase 12 | Pending |
 | ACT-02 | Phase 12 | Pending |
 | ACT-03 | Phase 12 | Pending |
-| SET-01 | Phase 9 | Pending |
-| SET-02 | Phase 9 | Pending |
+| SET-01 | Phase 9 | Complete |
+| SET-02 | Phase 9 | Complete |
 
 **Coverage:**
 - v1.2 requirements: 19 total (18 core + 1 stretch)

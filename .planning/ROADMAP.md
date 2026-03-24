@@ -53,7 +53,7 @@
 
 Plans:
 - [x] 09-01-PLAN.md -- Foundation types and Tauri commands (FND-01, FND-02, FND-03)
-- [ ] 09-02-PLAN.md -- Settings decomposition with sidebar nav (FND-04, SET-01, SET-02)
+- [x] 09-02-PLAN.md -- Settings decomposition with sidebar nav (FND-04, SET-01, SET-02)
 
 ### Phase 10: P2P Operator Dashboard
 **Goal**: Operators can see their P2P network status, connected peers, and per-service keys from a dedicated page
