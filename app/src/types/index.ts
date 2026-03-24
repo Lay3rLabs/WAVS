@@ -322,6 +322,14 @@ export interface ActivityItem {
   triggerConfig?: TriggerConfig;
 }
 
+/** Check if a service uses BLS signature algorithm in any workflow */
+export function isBLSService(service: Service): boolean {
+  return Object.values(service.workflows).some((wf) => {
+    if (wf.submit === 'none') return false;
+    return wf.submit.aggregator.signature_kind.algorithm === 'bls12381';
+  });
+}
+
 // Helper to get a human-readable service key from manager (for display/fallback only)
 export function getServiceKey(service: Service): string {
   const manager = service.manager;
