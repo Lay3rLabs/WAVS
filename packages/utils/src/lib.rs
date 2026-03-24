@@ -16,6 +16,7 @@ pub mod telemetry;
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
 pub mod wkg;
+pub mod oci;
 
 // the test version of init_tracing does not take a config
 // since config itself is tested and modified from different parallel tests
