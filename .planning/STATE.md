@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Tauri App
 status: unknown
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-03-24T17:34:10.482Z"
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-03-24T17:40:19.922Z"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -47,6 +47,8 @@ Plan: 2 of 2
 - [Phase 10]: Registration checks run on mount + manual refresh only (not on 15s poll) to avoid expensive on-chain reads
 - [Phase 11]: Used useMemo with service object to detect BLS rather than reading from store directly
 - [Phase 11]: Fallback from getServiceSigner to deriveBlsPubkey(0) for BLS key display
+- [Phase 11]: Lifted BLS state to ServiceDetailPage rather than encapsulating in BlsRegistrationSection -- enables Register BLS Key button in actions bar
+- [Phase 11]: Used alloy-primitives keccak256 + alloy-sol-types SolValue::abi_encode for BLS proof digest in Rust backend
 
 ### Pending Todos
 
@@ -59,5 +61,5 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T17:34:10.481Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-03-24T17:40:19.920Z
+Stopped at: Completed 11-02-PLAN.md

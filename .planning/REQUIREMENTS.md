@@ -26,8 +26,8 @@
 
 - [x] **BLS-01**: Algorithm selector (ECDSA/BLS) in service builder submit step
 - [x] **BLS-02**: Post-deploy BLS G1 pubkey display with copy-to-clipboard
-- [ ] **BLS-03**: One-click BLS key registration on-chain (calls `updateOperatorSigningKey` on BLS registry)
-- [ ] **BLS-04**: BLS registration status shown on service detail page
+- [x] **BLS-03**: One-click BLS key registration on-chain (calls `updateOperatorSigningKey` on BLS registry)
+- [x] **BLS-04**: BLS registration status shown on service detail page
 
 ### Activity
 
@@ -84,8 +84,8 @@
 | P2P-06 | Phase 10 | Pending (Stretch) |
 | BLS-01 | Phase 11 | Complete |
 | BLS-02 | Phase 11 | Complete |
-| BLS-03 | Phase 11 | Pending |
-| BLS-04 | Phase 11 | Pending |
+| BLS-03 | Phase 11 | Complete |
+| BLS-04 | Phase 11 | Complete |
 | ACT-01 | Phase 12 | Pending |
 | ACT-02 | Phase 12 | Pending |
 | ACT-03 | Phase 12 | Pending |
