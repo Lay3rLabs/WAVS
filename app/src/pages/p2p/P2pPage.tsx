@@ -1,40 +1,147 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button, AddressDisplay } from '../../components/atoms';
-import { getP2pStatus } from '../../tauri';
-import type { P2pStatus, Service } from '../../types';
+import { getP2pStatus, getServiceSigner } from '../../tauri';
+import type { P2pStatus, Service, SignerResponse } from '../../types';
 import { getErrorMessage } from '../../types';
 import { useAppStore } from '../../stores/appStore';
+import { getPublicClient } from '../../hooks/useViemClient';
+import { POAStakeRegistryABI } from '../../contracts/POAStakeRegistry';
+import type { Address } from 'viem';
 
 const REFRESH_INTERVAL_MS = 15000;
+
+type RegistrationStatus = 'registered' | 'unregistered' | 'unknown' | 'na';
+
+interface ServiceSignerInfo {
+  signer: SignerResponse | null;
+  registrationStatus: RegistrationStatus;
+}
 
 export function P2pPage() {
   const [p2pStatus, setP2pStatus] = useState<P2pStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [signerInfo, setSignerInfo] = useState<Map<string, ServiceSignerInfo>>(new Map());
   const services = useAppStore((state) => state.services);
 
-  const fetchP2pStatus = useCallback(async () => {
+  const fetchSignerInfo = useCallback(async (serviceHashes: string[]) => {
+    const newInfo = new Map<string, ServiceSignerInfo>();
+
+    for (const hash of serviceHashes) {
+      const service = services.get(hash);
+      if (!service) {
+        newInfo.set(hash, { signer: null, registrationStatus: 'unknown' });
+        continue;
+      }
+
+      // Fetch signer
+      let signer: SignerResponse | null = null;
+      try {
+        signer = await getServiceSigner(service.manager);
+      } catch {
+        // Signer not available
+      }
+
+      // Check on-chain registration
+      let registrationStatus: RegistrationStatus = 'unknown';
+      if ('evm' in service.manager) {
+        try {
+          const chainKey = service.manager.evm.chain;
+
+          // Find a matching saved registry for this service's chain
+          const settings = useAppStore.getState().settings;
+          const savedRegistry = settings.saved_registries.find(
+            (r) => r.chain_key === chainKey,
+          );
+
+          if (savedRegistry && signer) {
+            const publicClient = getPublicClient(savedRegistry.rpc_url, savedRegistry.chain_id);
+            const operatorAddress =
+              'secp256k1' in signer
+                ? (signer.secp256k1.evm_address as Address)
+                : null;
+
+            if (operatorAddress) {
+              const isRegistered = await publicClient.readContract({
+                address: savedRegistry.address as Address,
+                abi: POAStakeRegistryABI,
+                functionName: 'operatorRegistered',
+                args: [operatorAddress],
+              });
+              registrationStatus = isRegistered ? 'registered' : 'unregistered';
+            } else {
+              // BLS signer -- registration check requires EVM operator address
+              // BLS registration is Phase 11 scope
+              registrationStatus = 'unknown';
+            }
+          } else if (!savedRegistry) {
+            registrationStatus = 'unknown';
+          }
+        } catch {
+          registrationStatus = 'unknown';
+        }
+      } else {
+        // Cosmos service -- registration checks are EVM-only
+        registrationStatus = 'na';
+      }
+
+      newInfo.set(hash, { signer, registrationStatus });
+    }
+
+    setSignerInfo(newInfo);
+  }, [services]);
+
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
       const status = await getP2pStatus();
       setP2pStatus(status);
       setError(null);
       setLastRefresh(new Date());
+      if (status.subscribed_services.length > 0) {
+        await fetchSignerInfo(status.subscribed_services);
+      }
     } catch (err) {
       setError(getErrorMessage(err));
       setP2pStatus(null);
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [fetchSignerInfo]);
 
   useEffect(() => {
-    fetchP2pStatus();
+    const init = async () => {
+      try {
+        const status = await getP2pStatus();
+        setP2pStatus(status);
+        setError(null);
+        setLastRefresh(new Date());
+        // Fetch signer info for subscribed services (one-time on mount)
+        if (status.subscribed_services.length > 0) {
+          fetchSignerInfo(status.subscribed_services);
+        }
+      } catch (err) {
+        setError(getErrorMessage(err));
+      }
+    };
+    init();
 
-    const interval = setInterval(fetchP2pStatus, REFRESH_INTERVAL_MS);
+    const interval = setInterval(async () => {
+      setIsRefreshing(true);
+      try {
+        const status = await getP2pStatus();
+        setP2pStatus(status);
+        setError(null);
+        setLastRefresh(new Date());
+      } catch (err) {
+        setError(getErrorMessage(err));
+      } finally {
+        setIsRefreshing(false);
+      }
+    }, REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [fetchP2pStatus]);
+  }, [fetchSignerInfo]);
 
   return (
     <div className="flex flex-col gap-6 max-h-[calc(100vh-12rem)] overflow-y-auto pr-2">
@@ -49,7 +156,7 @@ export function P2pPage() {
           )}
           <Button
             text={isRefreshing ? 'Refreshing...' : 'Refresh Status'}
-            onClick={fetchP2pStatus}
+            onClick={handleRefresh}
             disabled={isRefreshing}
           />
         </div>
@@ -67,7 +174,7 @@ export function P2pPage() {
             <>
               <IdentityCard status={p2pStatus} />
               <PeersCard status={p2pStatus} />
-              <ServicesCard status={p2pStatus} services={services} />
+              <ServicesCard status={p2pStatus} services={services} signerInfo={signerInfo} />
               <QuorumPlaceholder />
             </>
           )}
@@ -151,9 +258,11 @@ function PeersCard({ status }: { status: P2pStatus }) {
 function ServicesCard({
   status,
   services,
+  signerInfo,
 }: {
   status: P2pStatus;
   services: Map<string, Service>;
+  signerInfo: Map<string, ServiceSignerInfo>;
 }) {
   return (
     <div className="p-6 rounded-lg bg-charcoal-medium border border-charcoal-light">
@@ -165,19 +274,102 @@ function ServicesCard({
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {status.subscribed_services.map((serviceHash) => (
-            <div
-              key={serviceHash}
-              className="p-3 rounded bg-charcoal-dark border border-charcoal-light"
-            >
-              <span className="text-beige-warm font-medium">
-                {services.get(serviceHash)?.name ?? serviceHash.slice(0, 12) + '...'}
-              </span>
-            </div>
-          ))}
+          {status.subscribed_services.map((hash) => {
+            const service = services.get(hash);
+            const info = signerInfo.get(hash);
+            return (
+              <ServiceOperatorRow
+                key={hash}
+                serviceHash={hash}
+                serviceName={service?.name ?? hash.slice(0, 12) + '...'}
+                signer={info?.signer ?? null}
+                registrationStatus={info?.registrationStatus ?? 'unknown'}
+              />
+            );
+          })}
         </div>
       )}
     </div>
+  );
+}
+
+function ServiceOperatorRow({
+  serviceHash: _serviceHash,
+  serviceName,
+  signer,
+  registrationStatus,
+}: {
+  serviceHash: string;
+  serviceName: string;
+  signer: SignerResponse | null;
+  registrationStatus: RegistrationStatus;
+}) {
+  const isSecp = signer && 'secp256k1' in signer;
+  const isBls = signer && 'bls12381' in signer;
+  const keyDisplay = isSecp
+    ? signer.secp256k1.evm_address
+    : isBls
+      ? signer.bls12381.g1_pubkey_hex
+      : null;
+  const algorithmLabel = isSecp ? 'ECDSA' : isBls ? 'BLS' : null;
+
+  return (
+    <div className="p-4 rounded bg-charcoal-dark border border-charcoal-light">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-beige-light font-medium">{serviceName}</span>
+        {algorithmLabel && (
+          <span className="inline-flex items-center px-2 py-1 rounded bg-charcoal-light text-xs font-semibold text-beige-warm">
+            {algorithmLabel}
+          </span>
+        )}
+        <RegistrationBadge status={registrationStatus} />
+      </div>
+      {keyDisplay && (
+        <div className="flex items-center gap-2">
+          <span className="text-tan-muted text-xs font-semibold">Operator Key</span>
+          <AddressDisplay address={keyDisplay} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RegistrationBadge({ status }: { status: RegistrationStatus }) {
+  const styles: Record<RegistrationStatus, { bg: string; text: string; label: string }> = {
+    registered: {
+      bg: 'bg-success-900/30',
+      text: 'text-success-500',
+      label: 'Registered',
+    },
+    unregistered: {
+      bg: 'bg-charcoal-light',
+      text: 'text-tan-muted',
+      label: 'Unregistered',
+    },
+    unknown: {
+      bg: 'bg-charcoal-light',
+      text: 'text-tan-muted',
+      label: 'Unknown',
+    },
+    na: {
+      bg: 'bg-charcoal-light',
+      text: 'text-tan-muted',
+      label: 'N/A',
+    },
+  };
+
+  const style = styles[status];
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold ${style.bg} ${style.text}`}
+      title={
+        status === 'na'
+          ? 'Registration checks are only available for EVM services'
+          : undefined
+      }
+    >
+      {style.label}
+    </span>
   );
 }
 
