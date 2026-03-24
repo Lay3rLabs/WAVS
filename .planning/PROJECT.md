@@ -27,7 +27,7 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 - [ ] WIT-to-schema tooling — auto-generate JSON Schema from component WIT interfaces
 - [ ] End-user MCP execution interface — deployed service components surfaced as callable MCP tools
 - [ ] Three trust tiers per tool call: result only / result + signature / on-chain submission
-- [ ] OCI component pull — `oci://` URIs in service.json, WAVS fetches and caches at deploy time
+- [x] OCI component pull — `oci://` URIs in service.json, WAVS fetches and caches at deploy time — Validated in Phase 1: OCI Component Pull
 
 ### Out of Scope
 
@@ -84,4 +84,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-24 after initialization*
+*Last updated: 2026-03-24 after Phase 1 (OCI Component Pull) completion*
