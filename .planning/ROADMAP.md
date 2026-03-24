@@ -35,7 +35,7 @@
 - [ ] **Phase 9: Foundation Types and Settings Refactor** - Frontend type system updated for BLS/P2P, settings decomposed, Tauri command infrastructure ready
 - [x] **Phase 10: P2P Operator Dashboard** - Full P2P visibility page with Ed25519 identity, peers, services, and operator keys (completed 2026-03-24)
 - [x] **Phase 11: BLS Service Builder and Registration** - BLS algorithm selection in service builder, post-deploy key display, one-click operator registration (completed 2026-03-24)
-- [ ] **Phase 12: Unified Activity Events** - Merged trigger+submission event cards with status progression and error display
+- [x] **Phase 12: Unified Activity Events** - Merged trigger+submission event cards with status progression and error display (completed 2026-03-24)
 
 ## Phase Details
 
@@ -98,7 +98,7 @@ Plans:
 
 Plans:
 - [x] 12-01-PLAN.md -- Backend event pipeline + frontend types, store, and listeners (ACT-01, ACT-02, ACT-03)
-- [ ] 12-02-PLAN.md -- Unified ActivityCard and ActivityFeed with status filter (ACT-01, ACT-02, ACT-03)
+- [x] 12-02-PLAN.md -- Unified ActivityCard and ActivityFeed with status filter (ACT-01, ACT-02, ACT-03)
 
 ## Progress
 
@@ -118,7 +118,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12
 | 9. Foundation Types and Settings Refactor | v1.2 | 2/2 | Complete | 2026-03-24 |
 | 10. P2P Operator Dashboard | v1.2 | 2/2 | Complete    | 2026-03-24 |
 | 11. BLS Service Builder and Registration | v1.2 | 2/2 | Complete    | 2026-03-24 |
-| 12. Unified Activity Events | v1.2 | 1/2 | In Progress|  |
+| 12. Unified Activity Events | v1.2 | 2/2 | Complete    | 2026-03-24 |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
 See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) for v1.1 phase details.

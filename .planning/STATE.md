@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Tauri App
 status: unknown
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-03-24T20:51:24.014Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-03-24T21:28:20.501Z"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 12 (unified-activity-events) — EXECUTING
-Plan: 2 of 2
+Phase: 12
+Plan: Not started
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Plan: 2 of 2
 - [Phase 12]: Orphaned submissions create standalone entries rather than being dropped
 - [Phase 01]: digest() returns Option<&ComponentDigest> to accommodate Oci variant where digest may be absent
 - [Phase 01]: OciPuller exposes only Vec<u8> to avoid oci-client version conflicts with wasm-pkg-client
+- [Phase 01]: load_component_from_source returns (WasmComponent, ComponentDigest) tuple to always provide computed digest even for tag-only OCI pulls
 
 ### Pending Todos
 
@@ -65,5 +66,5 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-24T20:51:24.012Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-03-24T21:08:28.206Z
+Stopped at: Completed 01-02-PLAN.md
