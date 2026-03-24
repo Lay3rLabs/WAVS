@@ -31,8 +31,8 @@ Declared values (Tailwind utility classes, multiples of 4):
 
 | Token | Value | Tailwind | Usage in this phase |
 |-------|-------|----------|---------------------|
-| xs | 4px | `gap-1`, `p-1` | Icon-to-text gaps inside badges, inline elements |
-| sm | 8px | `gap-2`, `p-2` | Badge padding, tight list item spacing |
+| xs | 4px | `gap-1`, `p-1`, `py-1` | Icon-to-text gaps inside badges, badge vertical padding |
+| sm | 8px | `gap-2`, `p-2`, `px-2` | Badge horizontal padding, tight list item spacing |
 | md | 16px | `gap-4`, `p-4` | Inner card padding for compact cards (service operator cards) |
 | lg | 24px | `gap-6`, `p-6` | Primary card padding, section gaps between cards |
 | xl | 32px | `gap-8`, `p-8` | Page-level horizontal padding (inherited from header `px-8`) |
@@ -45,17 +45,14 @@ Exceptions: none
 
 ## Typography
 
-Font: Montserrat. Three weights are available (400, 600, 700). This phase uses exactly 2 weights.
+Font: Montserrat. This phase uses exactly 2 weights: 400 (regular) and 600 (semibold).
 
 | Role | Tailwind Class | Size | Weight | Line Height | Usage |
 |------|---------------|------|--------|-------------|-------|
-| Page title | `text-2xl font-bold` | 24px | 700 | 1.33 (Tailwind default) | "P2P Network" page heading |
+| Page title | `text-2xl font-semibold` | 24px | 600 | 1.33 (Tailwind default) | "P2P Network" page heading |
 | Section heading | `text-xl font-semibold` | 20px | 600 | 1.4 (Tailwind default) | Card titles: "Node Identity", "Connected Peers", "Subscribed Services" |
-| Body | `text-base` | 16px | 400 | 1.5 (Tailwind default) | Primary content text, peer IDs, addresses |
-| Label | `text-xs font-medium` | 12px | 500 | 1.33 | Field labels ("Peer ID (Ed25519)", "Discovery Mode", "Operator Key"), badge text |
-| Small | `text-sm` | 14px | 400 | 1.43 | Secondary info, timestamps, monospace addresses, error messages |
-
-Note: `font-medium` (500) is used only for labels and badges. The two primary weights are 400 (body) and 600/700 (headings). This matches the existing Health.tsx and Settings patterns exactly.
+| Body | `text-base` | 16px | 400 | 1.5 (Tailwind default) | Primary content text, peer IDs, addresses, secondary info, timestamps, monospace addresses, error messages |
+| Label | `text-xs font-semibold` | 12px | 600 | 1.33 | Field labels ("Peer ID (Ed25519)", "Discovery Mode", "Operator Key"), badge text |
 
 ---
 
@@ -77,9 +74,11 @@ All colors are from the existing `tailwind.config.js` palette. No new colors int
 | Destructive | `red-3` | #A7656F | "Unregistered" badge text, error messages |
 | Error background | `red-900/20` + `red-800` border | -- | Error alert container (matches Health.tsx error pattern) |
 
+Primary visual anchor: the page title ("P2P Network") and the Node Identity card, which sits at the top of the content area and orients the operator to their node's network identity.
+
 Accent reserved for:
-- Status dots indicating "online" / "connected" state (green `bg-green-500`)
-- "Registered" badge on operator keys (`success-600` background)
+- Status dots indicating "online" / "connected" state (`bg-success-600`)
+- "Registered" badge on operator keys (`bg-success-900/30` background with `text-success-500` text)
 - Copy-success checkmark icon (`text-green-4` -- existing pattern in AddressDisplay)
 
 ---
@@ -92,7 +91,7 @@ Components needed for Phase 10, mapped to existing atoms or new phase-local comp
 
 | Component | Source | Usage |
 |-----------|--------|-------|
-| `Button` | `components/atoms/Button.tsx` | "Refresh" action in page header, "Check Registration" action |
+| `Button` | `components/atoms/Button.tsx` | "Refresh Status" action in page header, "Check Registration" action |
 | `AddressDisplay` | `components/atoms/AddressDisplay.tsx` | Peer ID display, Ed25519 identity display, operator key (BLS/ECDSA) with copy |
 | `Header` (nav item) | `components/layout/Header.tsx` | Add "P2P" nav entry with icon |
 
@@ -121,7 +120,7 @@ These are **not** separate files. They are local functions within the P2P page c
 +------------------------------------------------------------------+
 | Header (existing)                            [P2P] nav active    |
 +------------------------------------------------------------------+
-| Page title: "P2P Network"        [Last updated: HH:MM] [Refresh]|
+| Page title: "P2P Network"  [Last updated: HH:MM] [Refresh Status]|
 |                                                                  |
 | +--------------------------------------------------------------+ |
 | | Node Identity (IdentityCard)                                 | |
@@ -174,7 +173,7 @@ These are **not** separate files. They are local functions within the P2P page c
 |----------|-------|
 | Auto-refresh interval | 15000ms (15 seconds) |
 | Refresh on mount | Yes |
-| Manual refresh | "Refresh" button in page header |
+| Manual refresh | "Refresh Status" button in page header |
 | Visual feedback during refresh | Button text changes to "Refreshing..." + `disabled` state |
 | What is polled | `cmd_get_p2p_status` (P2P status) |
 | What is NOT polled | On-chain registration checks (too expensive for auto-poll) |
@@ -204,7 +203,7 @@ These are **not** separate files. They are local functions within the P2P page c
 | Condition | `P2pStatus.enabled === false` |
 |-----------|-------------------------------|
 | Display | Single card spanning full width |
-| Content | Icon + "P2P networking is disabled" heading + "This node is running in single-operator mode. P2P features require enabling local or remote discovery in the WAVS configuration." body |
+| Content | Icon + "P2P Networking Disabled" heading + "This node is running in single-operator mode. P2P features require enabling local or remote discovery in the WAVS configuration." body |
 | Sections hidden | Peers card, Services card are NOT rendered |
 | Identity card | Still rendered (shows that P2P is disabled with no peer ID) |
 
@@ -235,7 +234,7 @@ These are **not** separate files. They are local functions within the P2P page c
 | Identity card heading | Node Identity |
 | Peers card heading | Connected Peers |
 | Services card heading | Subscribed Services |
-| Refresh button (idle) | Refresh |
+| Refresh button (idle) | Refresh Status |
 | Refresh button (loading) | Refreshing... |
 | Last updated label | Last updated: {HH:MM:SS} |
 | Peer ID label | Peer ID (Ed25519) |
@@ -280,9 +279,9 @@ These are **not** separate files. They are local functions within the P2P page c
 
 ### Algorithm Badge
 
-- Layout: `inline-flex items-center px-1.5 py-0.5 rounded`
+- Layout: `inline-flex items-center px-2 py-1 rounded`
 - Background: `bg-charcoal-light`
-- Text: `text-xs font-medium text-beige-warm`
+- Text: `text-xs font-semibold text-beige-warm`
 - Values: "ECDSA" or "BLS"
 
 ### Registration Badge
@@ -294,14 +293,14 @@ These are **not** separate files. They are local functions within the P2P page c
 | Unknown | `bg-charcoal-light` | `text-tan-muted` | Unknown |
 | N/A | `bg-charcoal-light` | `text-tan-muted` | N/A |
 
-- Layout: `inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium`
+- Layout: `inline-flex items-center px-2 py-1 rounded text-xs font-semibold`
 
 ### Peer Count Badge
 
 - Positioned inline with "Connected Peers" heading
-- Layout: `inline-flex items-center px-2 py-0.5 rounded-full`
+- Layout: `inline-flex items-center px-2 py-1 rounded-full`
 - Background: `bg-charcoal-light`
-- Text: `text-xs font-medium text-beige-warm`
+- Text: `text-xs font-semibold text-beige-warm`
 - Content: `{count} connected`
 
 ---
