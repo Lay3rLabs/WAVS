@@ -10,6 +10,7 @@ members = [
     "packages/utils",
     "packages/version-pins",
     "packages/wavs",
+    "packages/wit-schema",
     "examples/components/cosmos-query",
     "examples/components/chain-trigger-lookup",
     "examples/components/echo-data",
@@ -293,3 +294,4 @@ example-types = { path = "examples/components/_types" }
 cw-wavs-mock-api = { path = "examples/contracts/cosmwasm/mock/api" }
 cw-wavs-trigger-api = { path = "examples/contracts/cosmwasm/trigger/api" }
 wavs-gui-shared = { path = "packages/gui/shared" }
+wit-schema = { path = "packages/wit-schema" }
