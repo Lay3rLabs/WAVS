@@ -193,7 +193,7 @@ function IdentityCard({ status }: { status: P2pStatus }) {
         <div className="flex flex-col gap-1">
           <span className="text-tan-muted text-xs font-semibold">Peer ID (Ed25519)</span>
           {status.local_peer_id ? (
-            <AddressDisplay address={status.local_peer_id} />
+            <AddressDisplay address={status.local_peer_id} full alwaysShowCopy />
           ) : (
             <span className="text-tan-muted italic">Not available</span>
           )}
@@ -246,7 +246,7 @@ function PeersCard({ status }: { status: P2pStatus }) {
               className="p-3 rounded bg-charcoal-dark border border-charcoal-light flex items-center gap-3"
             >
               <div className="w-2 h-2 rounded-full bg-success-600" />
-              <AddressDisplay address={peerId} />
+              <AddressDisplay address={peerId} full alwaysShowCopy />
             </div>
           ))}
         </div>
@@ -327,7 +327,7 @@ function ServiceOperatorRow({
       {keyDisplay && (
         <div className="flex items-center gap-2">
           <span className="text-tan-muted text-xs font-semibold">Operator Key</span>
-          <AddressDisplay address={keyDisplay} />
+          <AddressDisplay address={keyDisplay} full alwaysShowCopy />
         </div>
       )}
     </div>

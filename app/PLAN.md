@@ -1,8 +1,8 @@
 # WAVS APP
 
 Goal: make the WAVS app more useful and intuitive.
-- [ ] Clean up settings page design
-- [ ] Merge Trigger / Submissions into just "events" (which have triggers and sometimes submissions)
+- [ ] Clean up and improve settings page design and ux
+- [ ] In Activity page (and on service detail activity tab) Merge Trigger / Submissions into just "events" (which have triggers and sometimes submissions), show errors on submission if failed.
 - [ ] Refactor MCP to use less tokens? Maybe kill?
 - [ ] Get MCP working with claude desktop
 - [ ] Improve skills and MCP installation DX. gsd shows how to install things globally.
