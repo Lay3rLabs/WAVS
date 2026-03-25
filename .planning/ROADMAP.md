@@ -53,12 +53,16 @@ Plans:
 **Depends on**: Phase 2
 **Requirements**: EXEC-01, EXEC-02, EXEC-03, EXEC-04, EXEC-05, EXEC-06, EXEC-07, EXEC-08
 **Success Criteria** (what must be TRUE):
-  1. An MCP client calling `tools/list` sees one `wavs_run_` tool per deployed service workflow, with a populated `inputSchema` derived from the service's trigger type
+  1. An MCP client calling `tools/list` sees one `wavs_exec_` tool per deployed service workflow, with a populated `inputSchema` including trust_tier and timeout_ms parameters
   2. An agent calling `tools/call` with `trust_tier: "result_only"` receives the component execution output within 25 seconds or a structured timeout error
   3. An agent calling with `trust_tier: "signed_result"` receives a response envelope containing the result, operator signature, and signer public key
-  4. An agent calling with `trust_tier: "on_chain"` receives a transaction hash confirming the result was submitted to the configured chain, and the call is gated by a `--exec-enabled` flag and a service-level flag in `service.json`
+  4. An agent calling with `trust_tier: "on_chain"` receives a gas estimate on the first call and a submission result on the confirmation call, gated by `--exec-enabled` flag and service submit config
   5. Deploying or removing a service causes `notifications/tools/list_changed` to fire so agents discover tool changes without reconnecting
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 03-01-PLAN.md — Execution foundation: exec types, errors, schema merging, service cache, --exec-enabled flag, /dev/execute node endpoint
+- [ ] 03-02-PLAN.md — Dynamic tool discovery and Tier 1 execution: list_tools merge, call_tool dispatch, timeout, notifications
+- [ ] 03-03-PLAN.md — Tier 2 signed_result signing and Tier 3 on_chain two-step estimate-then-submit
 
 ## Progress
 
@@ -69,4 +73,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. OCI Component Pull | 2/2 | Complete | 2026-03-24 |
 | 2. WIT-to-Schema Tooling | 2/2 | Complete | 2026-03-25 |
-| 3. MCP Execution Interface | 0/? | Not started | - |
+| 3. MCP Execution Interface | 0/3 | In progress | - |
