@@ -1,16 +1,18 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use rmcp::{
     handler::server::tool::schema_for_type,
     model::*,
     schemars,
-    service::{RequestContext, RoleServer},
+    service::{Peer, RequestContext, RoleServer},
     ServerHandler,
 };
 use serde::Deserialize;
 
 use crate::chain_ops;
 use crate::client::WavsClient;
+use crate::exec;
 use crate::scaffold;
 
 // ── Parameter structs ──────────────────────────────────────────────────────
@@ -235,6 +237,9 @@ pub struct WavsMcpServer {
     mcp_chain_credential: Option<String>,
     signing_mnemonic: Option<String>,
     exec_enabled: bool,
+    service_cache: Arc<exec::ServiceCache>,
+    peer: Arc<tokio::sync::RwLock<Option<Peer<RoleServer>>>>,
+    pending_confirmations: Arc<exec::PendingConfirmations>,
 }
 
 impl WavsMcpServer {
@@ -250,6 +255,9 @@ impl WavsMcpServer {
             mcp_chain_credential,
             signing_mnemonic,
             exec_enabled,
+            service_cache: Arc::new(exec::ServiceCache::new(Duration::from_secs(5))),
+            peer: Arc::new(tokio::sync::RwLock::new(None)),
+            pending_confirmations: Arc::new(exec::PendingConfirmations::new()),
         }
     }
 
@@ -291,6 +299,32 @@ impl WavsMcpServer {
                     data: None,
                 })
             })
+    }
+
+    // ── Service cache helpers ──────────────────────────────────────────────
+
+    async fn get_services_cached(&self) -> Result<serde_json::Value, McpError> {
+        if let Some(cached) = self.service_cache.get().await {
+            return Ok(cached);
+        }
+        let services = self.client.list_services().await.map_err(|e| ErrorData {
+            code: ErrorCode::INTERNAL_ERROR,
+            message: format!("Failed to fetch services: {e:#}").into(),
+            data: None,
+        })?;
+        self.service_cache.set(services.clone()).await;
+        Ok(services)
+    }
+
+    /// Invalidate the service cache and notify the MCP client that the tool
+    /// list has changed. Called after deploy/delete operations.
+    async fn notify_tools_changed(&self) {
+        self.service_cache.invalidate().await;
+        if let Some(peer) = self.peer.try_read().ok().and_then(|g| g.clone()) {
+            if let Err(e) = peer.notify_tool_list_changed().await {
+                tracing::warn!("Failed to send tools/list_changed notification: {e}");
+            }
+        }
     }
 
     // ── Tool implementations ───────────────────────────────────────────────
@@ -348,9 +382,13 @@ impl WavsMcpServer {
                     }
                     Err(_) => String::new(),
                 };
+                self.notify_tools_changed().await;
                 ok(format!("Service registered successfully.{signer_info}"))
             }
-            Ok(v) => ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string())),
+            Ok(v) => {
+                self.notify_tools_changed().await;
+                ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string()))
+            }
             Err(e) => err(format!("Failed to deploy service: {e:#}")),
         }
     }
@@ -365,7 +403,10 @@ impl WavsMcpServer {
             Err(e) => return err(format!("Invalid service_manager_json: {e}")),
         };
         match self.client.delete_service(manager).await {
-            Ok(()) => ok("Service deleted successfully"),
+            Ok(()) => {
+                self.notify_tools_changed().await;
+                ok("Service deleted successfully")
+            }
             Err(e) => err(format!("Failed to delete service: {e:#}")),
         }
     }
@@ -465,6 +506,7 @@ impl WavsMcpServer {
                 } else {
                     String::new()
                 };
+                self.notify_tools_changed().await;
                 ok(format!("Service registered.\nHash: {hash}{signer_info}"))
             }
             Err(e) => err(format!("Failed to deploy dev service: {e:#}")),
@@ -949,29 +991,49 @@ Note: trigger_json for simulate uses {"manual": null}, not the bare string "manu
 
 impl ServerHandler for WavsMcpServer {
     fn get_info(&self) -> ServerInfo {
+        let mut instructions = String::from(
+            "MCP server for the WAVS (WebAssembly-based Actively Validated Services) platform.\n\
+             \n\
+             Read tools (no auth needed): wavs_get_node_info, wavs_get_health, wavs_list_services, wavs_get_service\n\
+             Write tools (need --token): wavs_deploy_service, wavs_delete_service\n\
+             Dev tools (need dev endpoints): wavs_upload_component, wavs_save_service, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv\n\
+             Chain-write tools (need WAVS_MCP_CHAIN_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
+             Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator, wavs_deploy_and_register, wavs_get_signing_address\n\
+             Node-read tools (need --token): wavs_get_service_signer\n\
+             Local tools: wavs_get_service_schema, wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component",
+        );
+        if self.exec_enabled {
+            instructions.push_str(
+                "\n\nExecution tools (--exec-enabled): wavs_exec_* tools are dynamically generated \
+                 for each deployed service workflow. Use trust_tier to select result_only, signed_result, \
+                 or on_chain execution mode.",
+            );
+        }
         ServerInfo {
             server_info: Implementation {
                 name: "wavs-mcp".into(),
                 version: env!("CARGO_PKG_VERSION").into(),
             },
             capabilities: ServerCapabilities {
-                tools: Some(Default::default()),
+                tools: Some(ToolsCapability {
+                    list_changed: Some(true),
+                }),
                 ..Default::default()
             },
-            instructions: Some(
-                "MCP server for the WAVS (WebAssembly-based Actively Validated Services) platform.\n\
-                 \n\
-                 Read tools (no auth needed): wavs_get_node_info, wavs_get_health, wavs_list_services, wavs_get_service\n\
-                 Write tools (need --token): wavs_deploy_service, wavs_delete_service\n\
-                 Dev tools (need dev endpoints): wavs_upload_component, wavs_save_service, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv\n\
-                 Chain-write tools (need WAVS_MCP_CHAIN_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
-                 Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator, wavs_deploy_and_register, wavs_get_signing_address\n\
-                 Node-read tools (need --token): wavs_get_service_signer\n\
-                 Local tools: wavs_get_service_schema, wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component"
-                    .to_string(),
-            ),
+            instructions: Some(instructions),
             ..Default::default()
         }
+    }
+
+    fn set_peer(&mut self, peer: Peer<RoleServer>) {
+        let peer_store = self.peer.clone();
+        tokio::spawn(async move {
+            *peer_store.write().await = Some(peer);
+        });
+    }
+
+    fn get_peer(&self) -> Option<Peer<RoleServer>> {
+        self.peer.try_read().ok().and_then(|g| g.clone())
     }
 
     async fn list_tools(
@@ -981,8 +1043,7 @@ impl ServerHandler for WavsMcpServer {
     ) -> Result<ListToolsResult, McpError> {
         let empty = no_params();
 
-        Ok(ListToolsResult {
-            tools: vec![
+        let mut tools = vec![
                 // Read tools
                 tool("wavs_get_node_info",
                      "Get WAVS node information: service count, chain keys, aggregator config, P2P status",
@@ -1160,9 +1221,26 @@ impl ServerHandler for WavsMcpServer {
                         Returns full build output.".into(),
                     input_schema: schema_for_type::<BuildComponentParams>().into(),
                 },
-            ],
-            next_cursor: None,
-        })
+            ];
+
+            // Conditionally add dynamic exec tools for deployed services
+            if self.exec_enabled {
+                match self.get_services_cached().await {
+                    Ok(services) => {
+                        let exec_tools = exec::build_exec_tools(&services);
+                        tools.extend(exec_tools);
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to build exec tools: {}", e.message);
+                        // Continue with just management tools -- don't fail the whole list
+                    }
+                }
+            }
+
+            Ok(ListToolsResult {
+                tools,
+                next_cursor: None,
+            })
     }
 
     async fn call_tool(
@@ -1196,6 +1274,26 @@ impl ServerHandler for WavsMcpServer {
             "wavs_get_wit_interface" => self.tool_get_wit_interface().await,
             "wavs_scaffold_component" => self.tool_scaffold_component(args).await,
             "wavs_build_component" => self.tool_build_component(args).await,
+            name if name.starts_with("wavs_exec_") => {
+                if !self.exec_enabled {
+                    return Err(ErrorData {
+                        code: ErrorCode::INVALID_REQUEST,
+                        message: "Execution tools are disabled. Restart the MCP server with --exec-enabled.".into(),
+                        data: None,
+                    });
+                }
+                let services = self.get_services_cached().await?;
+                // For Tier 1 only (Plan 02), signing/chain credentials and
+                // pending_confirmations are passed as None. Plan 03 will populate.
+                let ctx = exec::ExecContext {
+                    client: &self.client,
+                    services_json: &services,
+                    signing_mnemonic: None,
+                    mcp_chain_credential: None,
+                    pending_confirmations: None,
+                };
+                exec::handle_exec_tool(&ctx, name, args).await
+            }
             name => Err(ErrorData {
                 code: ErrorCode::METHOD_NOT_FOUND,
                 message: format!("Unknown tool: {name}").into(),
