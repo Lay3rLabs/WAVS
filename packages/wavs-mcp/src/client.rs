@@ -258,6 +258,37 @@ impl WavsClient {
             Err(_) => const_hex::encode(&bytes),
         })
     }
+
+    /// POST /dev/execute -- synchronously execute a component and return results.
+    ///
+    /// Calls the WAVS node's `/dev/execute` endpoint which bypasses the full
+    /// trigger/aggregator/submission pipeline and returns the raw component output.
+    pub async fn execute_component(
+        &self,
+        service_id: &str,
+        workflow_id: &str,
+        trigger_json: &serde_json::Value,
+        data_json: &serde_json::Value,
+    ) -> Result<Vec<serde_json::Value>> {
+        let body = serde_json::json!({
+            "service_id": service_id,
+            "workflow_id": workflow_id,
+            "trigger": trigger_json,
+            "data": data_json,
+        });
+        let resp = self
+            .request(Method::POST, "/dev/execute")
+            .json(&body)
+            .send()
+            .await
+            .context("POST /dev/execute")?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(dev_err(status, &body));
+        }
+        resp.json().await.context("parse execute response")
+    }
 }
 
 fn dev_err(status: reqwest::StatusCode, body: &str) -> anyhow::Error {
