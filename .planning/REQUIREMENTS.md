@@ -19,10 +19,10 @@
 - [ ] **EXEC-02**: Agent can call a component via `tools/call` and receive execution result (Tier 1: result only)
 - [ ] **EXEC-03**: Agent can request signed result with operator signature proving authenticity (Tier 2)
 - [ ] **EXEC-04**: Agent can request on-chain submission with transaction hash (Tier 3), gated by service-level flag in service.json
-- [ ] **EXEC-05**: Trust tier is an explicit `inputSchema` parameter on each tool (not parallel tools)
+- [x] **EXEC-05**: Trust tier is an explicit `inputSchema` parameter on each tool (not parallel tools)
 - [ ] **EXEC-06**: MCP `notifications/tools/list_changed` fires when services are deployed or removed
-- [ ] **EXEC-07**: Execution tools are guarded by `--exec-enabled` flag and use `wavs_exec_` naming prefix
-- [ ] **EXEC-08**: Per-call timeout cap (25s) enforced at MCP layer, independent of component time limit
+- [x] **EXEC-07**: Execution tools are guarded by `--exec-enabled` flag and use `wavs_exec_` naming prefix
+- [x] **EXEC-08**: Per-call timeout cap (25s) enforced at MCP layer, independent of component time limit
 
 ### OCI Distribution
 
@@ -72,10 +72,10 @@
 | EXEC-02 | Phase 3 | Pending |
 | EXEC-03 | Phase 3 | Pending |
 | EXEC-04 | Phase 3 | Pending |
-| EXEC-05 | Phase 3 | Pending |
+| EXEC-05 | Phase 3 | Complete (03-01) |
 | EXEC-06 | Phase 3 | Pending |
-| EXEC-07 | Phase 3 | Pending |
-| EXEC-08 | Phase 3 | Pending |
+| EXEC-07 | Phase 3 | Complete (03-01) |
+| EXEC-08 | Phase 3 | Complete (03-01) |
 | OCI-01 | Phase 1 | Pending |
 | OCI-02 | Phase 1 | Pending |
 | OCI-03 | Phase 1 | Pending |
