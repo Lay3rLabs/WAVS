@@ -43,7 +43,10 @@ Plans:
   3. A component with WIT record and enum/variant types produces a schema with `object` and `oneOf` entries including a required discriminator field
   4. WIT doc comments on functions and types appear as `description` fields in the generated schema
   5. Running the schema command twice on the same unchanged binary takes measurably less time than the first run (cache hit)
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 02-01-PLAN.md — Create wit-schema library crate with core type conversion, traversal, cache, and doc enrichment
+- [ ] 02-02-PLAN.md — Wire CLI command into wavs-cli, end-to-end verification with real components
 
 ### Phase 3: MCP Execution Interface
 **Goal**: AI agents can discover and invoke deployed WAVS service components as MCP tools, choosing an explicit trust tier per call — from raw result through cryptographically signed result to on-chain submission
@@ -65,5 +68,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. OCI Component Pull | 2/2 | Complete | 2026-03-24 |
-| 2. WIT-to-Schema Tooling | 0/? | Not started | - |
+| 2. WIT-to-Schema Tooling | 0/2 | In Progress | - |
 | 3. MCP Execution Interface | 0/? | Not started | - |
