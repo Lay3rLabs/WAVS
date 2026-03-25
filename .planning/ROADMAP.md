@@ -13,7 +13,7 @@ Three capability extensions to the WAVS platform — OCI component distribution,
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: OCI Component Pull** - Service definitions accept `oci://` URIs; components are pulled, verified, and cached at deploy time
-- [ ] **Phase 2: WIT-to-Schema Tooling** - Developer can inspect any compiled WASM component and get a JSON Schema describing its interface
+- [x] **Phase 2: WIT-to-Schema Tooling** - Developer can inspect any compiled WASM component and get a JSON Schema describing its interface
 - [ ] **Phase 3: MCP Execution Interface** - Deployed service components appear as callable MCP tools with three explicit trust tiers
 
 ## Phase Details
@@ -45,8 +45,8 @@ Plans:
   5. Running the schema command twice on the same unchanged binary takes measurably less time than the first run (cache hit)
 **Plans**: 2 plans
 Plans:
-- [ ] 02-01-PLAN.md — Create wit-schema library crate with core type conversion, traversal, cache, and doc enrichment
-- [ ] 02-02-PLAN.md — Wire CLI command into wavs-cli, end-to-end verification with real components
+- [x] 02-01-PLAN.md — Create wit-schema library crate with core type conversion, traversal, cache, and doc enrichment
+- [x] 02-02-PLAN.md — Wire CLI command into wavs-cli, end-to-end verification with real components
 
 ### Phase 3: MCP Execution Interface
 **Goal**: AI agents can discover and invoke deployed WAVS service components as MCP tools, choosing an explicit trust tier per call — from raw result through cryptographically signed result to on-chain submission
@@ -68,5 +68,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. OCI Component Pull | 2/2 | Complete | 2026-03-24 |
-| 2. WIT-to-Schema Tooling | 0/2 | In Progress | - |
+| 2. WIT-to-Schema Tooling | 2/2 | Complete | 2026-03-25 |
 | 3. MCP Execution Interface | 0/? | Not started | - |
