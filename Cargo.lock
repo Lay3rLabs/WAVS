@@ -14743,7 +14743,9 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "utils",
+ "wasmtime",
  "wavs-types",
+ "wit-schema",
 ]
 
 [[package]]
