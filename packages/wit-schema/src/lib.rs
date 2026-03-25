@@ -4,6 +4,7 @@ pub mod docs;
 pub mod traverse;
 pub mod types;
 
+pub use cache::SchemaCache;
 pub use types::SchemaOptions;
 
 use std::collections::{BTreeMap, HashMap};
@@ -84,6 +85,41 @@ pub fn generate_schema(
         "exports": Value::Object(export_schemas),
         "$defs": defs
     });
+
+    Ok(schema)
+}
+
+/// Generate schema with caching and optional doc enrichment.
+///
+/// Wraps `generate_schema` with:
+/// 1. Digest-based cache lookup (skips regeneration for known components)
+/// 2. Optional WIT source doc comment enrichment (D-07)
+/// 3. Cache storage of the result
+pub fn generate_schema_cached(
+    engine: &wasmtime::Engine,
+    component: &wasmtime::component::Component,
+    wasm_bytes: &[u8],
+    options: &SchemaOptions,
+    cache: &SchemaCache,
+) -> anyhow::Result<Value> {
+    let digest = wavs_types::ComponentDigest::hash(wasm_bytes);
+
+    // Check cache first
+    if let Some(cached) = cache.get(&digest) {
+        tracing::debug!("Schema cache hit for {}", digest);
+        return Ok(cached);
+    }
+
+    // Generate schema
+    let mut schema = generate_schema(engine, component, options)?;
+
+    // Optionally enrich with doc comments from WIT source
+    if let Some(ref wit_path) = options.wit_path {
+        docs::enrich_with_docs(&mut schema, wit_path)?;
+    }
+
+    // Store in cache
+    cache.put(digest, schema.clone());
 
     Ok(schema)
 }
@@ -386,5 +422,76 @@ mod tests {
             exports_str.contains("$ref"),
             "exports should contain $ref pointers to $defs"
         );
+    }
+
+    #[test]
+    fn test_generate_schema_cached_returns_cached_on_second_call() {
+        let engine = make_engine();
+        let path = format!(
+            "{}/examples/build/components/echo_data.wasm",
+            env!("CARGO_MANIFEST_DIR").replace("/packages/wit-schema", ""),
+        );
+        let wasm_bytes = std::fs::read(&path).unwrap();
+        let component = wasmtime::component::Component::new(&engine, &wasm_bytes).unwrap();
+        let cache = SchemaCache::default();
+        let options = SchemaOptions::default();
+
+        // First call should generate and cache
+        let schema1 =
+            generate_schema_cached(&engine, &component, &wasm_bytes, &options, &cache).unwrap();
+
+        // Second call should return cached result
+        let schema2 =
+            generate_schema_cached(&engine, &component, &wasm_bytes, &options, &cache).unwrap();
+
+        assert_eq!(schema1, schema2, "cached schema should match original");
+
+        // Verify the digest is in the cache
+        let digest = wavs_types::ComponentDigest::hash(&wasm_bytes);
+        assert!(
+            cache.get(&digest).is_some(),
+            "cache should contain the schema"
+        );
+    }
+
+    #[test]
+    fn test_generate_schema_cached_different_bytes_generates_new() {
+        let engine = make_engine();
+        let cache = SchemaCache::default();
+        let options = SchemaOptions::default();
+
+        // Load echo_data (operator world: single "run" export)
+        let echo_path = format!(
+            "{}/examples/build/components/echo_data.wasm",
+            env!("CARGO_MANIFEST_DIR").replace("/packages/wit-schema", ""),
+        );
+        let echo_bytes = std::fs::read(&echo_path).unwrap();
+        let echo_component = wasmtime::component::Component::new(&engine, &echo_bytes).unwrap();
+
+        // Load timer_aggregator (aggregator world: 3 exports)
+        let agg_path = format!(
+            "{}/examples/build/components/timer_aggregator.wasm",
+            env!("CARGO_MANIFEST_DIR").replace("/packages/wit-schema", ""),
+        );
+        let agg_bytes = std::fs::read(&agg_path).unwrap();
+        let agg_component = wasmtime::component::Component::new(&engine, &agg_bytes).unwrap();
+
+        let schema1 =
+            generate_schema_cached(&engine, &echo_component, &echo_bytes, &options, &cache)
+                .unwrap();
+        let schema2 =
+            generate_schema_cached(&engine, &agg_component, &agg_bytes, &options, &cache)
+                .unwrap();
+
+        assert_ne!(
+            schema1, schema2,
+            "different components should produce different schemas"
+        );
+
+        // Verify both are in the cache
+        let echo_digest = wavs_types::ComponentDigest::hash(&echo_bytes);
+        let agg_digest = wavs_types::ComponentDigest::hash(&agg_bytes);
+        assert!(cache.get(&echo_digest).is_some(), "echo should be cached");
+        assert!(cache.get(&agg_digest).is_some(), "aggregator should be cached");
     }
 }

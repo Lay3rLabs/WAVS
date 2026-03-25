@@ -15913,10 +15913,12 @@ dependencies = [
  "anyhow",
  "lru 0.16.3",
  "serde_json",
+ "tempfile",
  "tokio 1.50.0",
  "tracing",
  "wasmtime",
  "wavs-types",
+ "wit-parser 0.244.0",
 ]
 
 [[package]]

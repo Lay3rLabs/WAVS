@@ -180,6 +180,7 @@ wasmtime-wasi = { version = "42.0.1", default-features = true }
 wasmtime-wasi-http = "42.0.1"
 wasmtime-wasi-tls = "42.0.1"
 wit-bindgen = "0.53.1"
+wit-parser = "0.244.0"
 wavs-wasi-utils = { path = "packages/wasi-utils" }
 wasip2 = "1.0.1"
 wstd = "0.6.5"
