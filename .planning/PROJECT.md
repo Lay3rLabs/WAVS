@@ -2,21 +2,11 @@
 
 ## What This Is
 
-WAVS (WebAssembly-based Actively Validated Services) is a platform for running decentralized off-chain computation anchored to blockchains. Operators run sandboxed WASM components, reach multi-operator consensus via P2P (commonware), and submit verified results on-chain. Services declare their own trigger, signature scheme (secp256k1 or BLS12-381), and submission target.
+WAVS (WebAssembly-based Actively Validated Services) is a platform for running decentralized off-chain computation anchored to blockchains. Operators run sandboxed WASM components, reach multi-operator consensus via P2P (commonware), and submit verified results on-chain. Services declare their own trigger, signature scheme (secp256k1 or BLS12-381), and submission target. The Tauri desktop app provides a GUI for deploying services, monitoring P2P network state, and managing operator keys.
 
 ## Core Value
 
 Multi-operator signature aggregation over P2P must work reliably — operators broadcast signed submissions, reach quorum, and submit on-chain.
-
-## Current Milestone: v1.2 Tauri App
-
-**Goal:** Bring the Tauri desktop app up to date with v1.0/v1.1 backend features — BLS service deployment with operator registration, full P2P/operator visibility, unified activity events, and settings UX overhaul.
-
-**Target features:**
-- BLS/ECDSA algorithm selector in service builder with BLS operator key registration flow
-- P2P page: connected peers, Ed25519 identity, BLS/ECDSA key display, quorum progress per service
-- Unified event cards in Activity (trigger + submission result merged, error display)
-- Settings page reorganization and visual polish
 
 ## Requirements
 
@@ -58,10 +48,16 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 - ✓ Aggregated SignatureData submitted to BLS service manager contract — v1.1
 - ✓ E2E test: BLS service on local anvil with poa-middleware BLS contracts, multi-operator quorum — v1.1
 - ✓ Existing secp256k1 e2e tests unchanged and passing — v1.1
+- ✓ `SignatureAlgorithm` type in frontend includes `'bls12381'` with P2P/signer types and Tauri commands — v1.2
+- ✓ Settings page decomposed from 940-line monolith into section components with sidebar nav — v1.2
+- ✓ P2P page with Ed25519 identity, connected peers, subscribed services, and operator key display — v1.2
+- ✓ BLS/ECDSA algorithm selector in service builder with BLS operator key registration flow — v1.2
+- ✓ Unified activity event cards merging trigger and submission lifecycle with status progression — v1.2
+- ✓ BLS registration guidance banner for services without POA registry — v1.2
 
 ### Active
 
-(Defined in REQUIREMENTS.md for v1.2)
+(No active milestone — run `/gsd:new-milestone` to define next)
 
 ### Out of Scope
 
@@ -69,13 +65,17 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 - Threshold/DKG signatures (commonware threshold-simplex) — foundational BLS first, threshold later
 - Cosmos submission with BLS — EVM only for now
 - Trigger and engine subsystem changes — unaffected by signature scheme
+- Component library migration (shadcn/Radix) — existing hand-rolled Tailwind components work
+- Real-time P2P message feed — status polling is sufficient
+- Mobile app — desktop-first via Tauri
 
 ## Context
 
 v1.0 shipped (2026-03-18): commonware-p2p backend, Ed25519 P2P identity, libp2p fully removed.
 v1.1 shipped (2026-03-23): BLS12-381 submission signatures, off-chain aggregation, poa-middleware BLS contract integration, E2E verified.
-Tech stack: Rust 1.91, Wasmtime, Alloy, commonware (p2p + broadcast + cryptography), blst 0.3.16, poa-middleware BLS contracts.
-+9,362 / -550 lines across 122 files in v1.1. Both secp256k1 and BLS paths fully tested.
+v1.2 shipped (2026-03-25): Tauri desktop app updated — P2P dashboard, BLS service builder with one-click registration, unified activity events, settings overhaul.
+Tech stack: Rust 1.91, Wasmtime 42, Alloy 1.0, commonware (p2p + broadcast + cryptography), blst 0.3.16, Tauri 2 + React 19 + Vite 7.
++2,333 / -1,033 lines across 35 files in v1.2. Both secp256k1 and BLS paths fully tested.
 
 ## Constraints
 
@@ -94,13 +94,17 @@ Tech stack: Rust 1.91, Wasmtime, Alloy, commonware (p2p + broadcast + cryptograp
 | Ed25519 for P2P identity | Commonware's native crypto, cleaner than wrapping secp256k1 | ✓ Good |
 | Clean break on config format | Simpler than compat layer for networking rewrite | ✓ Good |
 | rand_chacha 0.3 (not 0.9) | commonware-cryptography depends on rand_core 0.6 | ✓ Required |
-| HKDF-SHA256 for BLS key derivation | Deterministic from mnemonic+HD index, domain-separated (WAVS-BLS-KEY-v1) | ✓ Good — consistent keys across restarts |
-| blst directly (not commonware Signer::sign) | Contract-compatible DST requires RO suffix, not POP | ✓ Required — DST mismatch would break on-chain verification |
-| SignatureData/WavsSignature/WavsCryptoSigner as enums | Clean BLS/secp256k1 dispatch, pattern matching for algorithm paths | ✓ Good — extensible for future algorithms |
-| WavsSignature tagged serde | Breaking serialization change from old struct, but cleaner wire format | ✓ Good — clean migration |
-| Per-test middleware dispatch (EvmMiddlewares) | BLS and secp256k1 tests need different contract stacks | ✓ Good — enables mixed-mode testing |
-| SimpleBlsSubmit (not ISimpleSubmit) | BLS and ECDSA SignatureData are incompatible types | ✓ Required — separate contract |
-| Prague anvil default (no --hardfork flag) | anvil 1.4.4 defaults to Prague; flag was redundant | ✓ Good — simpler config |
+| HKDF-SHA256 for BLS key derivation | Deterministic from mnemonic+HD index, domain-separated (WAVS-BLS-KEY-v1) | ✓ Good |
+| blst directly (not commonware Signer::sign) | Contract-compatible DST requires RO suffix, not POP | ✓ Required |
+| SignatureData/WavsSignature/WavsCryptoSigner as enums | Clean BLS/secp256k1 dispatch, pattern matching for algorithm paths | ✓ Good |
+| WavsSignature tagged serde | Breaking serialization change from old struct, but cleaner wire format | ✓ Good |
+| Per-test middleware dispatch (EvmMiddlewares) | BLS and secp256k1 tests need different contract stacks | ✓ Good |
+| SimpleBlsSubmit (not ISimpleSubmit) | BLS and ECDSA SignatureData are incompatible types | ✓ Required |
+| Prague anvil default (no --hardfork flag) | anvil 1.4.4 defaults to Prague; flag was redundant | ✓ Good |
+| Settings decomposed into 6 section components | Each section owns state/effects/handlers, sticky sidebar nav | ✓ Good — v1.2 |
+| Map-based correlation store for activity events | Deterministic correlationKey for O(1) trigger-to-submission matching | ✓ Good — v1.2 |
+| BLS state lifted to ServiceDetailPage | Enables Register button in actions bar, shared across sub-sections | ✓ Good — v1.2 |
+| Registration checks on mount + manual refresh only | Avoids expensive on-chain reads on 15s poll cycle | ✓ Good — v1.2 |
 
 ## Evolution
 
@@ -120,4 +124,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 after Phase 13 complete — SignaturePrefix type unified, BLS guidance banner added*
+*Last updated: 2026-03-25 after v1.2 milestone*

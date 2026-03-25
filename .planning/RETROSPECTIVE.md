@@ -96,6 +96,48 @@
 
 ---
 
+## Milestone: v1.2 — Tauri App
+
+**Shipped:** 2026-03-25
+**Phases:** 5 | **Plans:** 9 | **Tasks:** 16
+
+### What Was Built
+- Frontend type system widened for BLS: SignatureAlgorithm, P2pStatus, SignerResponse, BlsPubkeyResponse types + 3 new Tauri IPC commands
+- Settings page refactored from 940-line monolith into 6 section components with sticky sidebar navigation
+- P2P operator dashboard: Ed25519 identity card, connected peers list, subscribed services with operator key display and on-chain registration status
+- BLS service builder: algorithm selector dropdown in SubmitEditor, post-deploy BLS G1 pubkey display, one-click BLS key registration via proof-of-possession
+- Unified activity events: Rust backend error/success emission through Tauri IPC to Map-based Zustand correlation store with status progression
+- Gap closure: SignaturePrefix type unified across 3 files, amber guidance banner for BLS services missing POA registry
+
+### What Worked
+- **Phase 9 as foundation**: Investing a full phase in types, Tauri commands, and settings decomposition before feature phases meant phases 10-12 could focus purely on UI features without structural blockers
+- **Audit-driven gap closure**: The milestone audit (v1.2-MILESTONE-AUDIT.md) surfaced the SignaturePrefix type drift and missing BLS registration guidance, which became Phase 13 — catching real issues before shipping
+- **Single-session phases**: Phases 10-13 each completed in a single session, maintaining momentum
+
+### What Was Inefficient
+- **Verification gaps accumulated**: Phases 9, 10, 12 shipped without VERIFICATION.md — the GSD verifier was disabled for speed, but this meant the milestone audit had to retroactively verify everything
+- **Nyquist VALIDATION.md drafts never executed**: All 4 original phases have nyquist_compliant: false VALIDATION files that were created but never run through the auditor
+- **P2P-06 quorum progress is placeholder**: The stretch goal for live quorum accumulation requires an `/aggregator/status` endpoint that doesn't exist — should have been deferred to Out of Scope earlier
+
+### Patterns Established
+- Tauri IPC command pattern: Rust `#[tauri::command]` → TypeScript wrapper in `utils/commands.ts` → Zustand store consumer
+- Map-based correlation store for event matching: deterministic `correlationKey` (serviceId + triggerId + workflowIndex) for O(1) lookup
+- BLS state lifting: BLS pubkey/registration status lifted to page level for cross-section sharing (rather than encapsulating in sub-components)
+- Registration checks on mount + manual refresh only (avoids expensive on-chain reads in poll cycles)
+
+### Key Lessons
+1. **Foundation phases pay compound dividends**: The type system and Tauri command infrastructure from Phase 9 was reused by every subsequent phase without modification
+2. **Audit before shipping catches real gaps**: The milestone audit found both a type inconsistency and a UX dead-end that would have confused operators
+3. **Verification debt compounds**: Skipping phase verification for speed meant 15/19 requirements had only partial (summary-claimed) verification at audit time
+4. **Stretch goals should be scoped earlier**: P2P-06 should have been moved to Out of Scope during requirements rather than carried as a placeholder through execution
+
+### Cost Observations
+- Model: opus for execution, sonnet for verification
+- Sessions: ~3 sessions across 2 days (2026-03-24 to 2026-03-25)
+- Notable: Phase 13 (gap closure) was fastest — 1 plan, 2 tasks, completed in ~4 min
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -104,6 +146,7 @@
 |-----------|--------|-------|----------|------------|
 | v1.0 | 4 | 11 | 15 min | First milestone — established WAVS+commonware patterns |
 | v1.1 | 4 | 9 | 11 min | BLS signatures — enum dispatch, blst integration, E2E BLS |
+| v1.2 | 5 | 9 | ~10 min | Tauri app — frontend types, P2P dashboard, BLS UX, activity events |
 
 ### Cumulative Quality
 
@@ -111,6 +154,7 @@
 |-----------|-------------|--------------|---------|
 | v1.0 | 28 | 27/27 | libp2p fully removed |
 | v1.1 | 3 (BLS E2E) | 14/14 | BLS + secp256k1 coexistence verified |
+| v1.2 | 0 (UI) | 19/19 | Tauri desktop app fully synced with backend |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -118,3 +162,5 @@
 2. External crate version pinning is critical for embedded runtimes with transitive rand/crypto deps
 3. ROADMAP.md checkboxes fall behind during execution — consider automating this via gsd-tools post-plan hooks
 4. Enum-based type design enables clean multi-algorithm dispatch without if/else proliferation
+5. Foundation phases (types, commands, infrastructure) before feature phases yields compound returns — every v1.2 feature phase reused Phase 9 work
+6. Milestone audits catch real shipping gaps — both v1.0 and v1.2 benefited from pre-ship audits that found issues automated checks missed

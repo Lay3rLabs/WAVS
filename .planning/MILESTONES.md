@@ -1,5 +1,22 @@
 # Milestones
 
+## v1.2 Tauri App (Shipped: 2026-03-25)
+
+**Phases completed:** 5 phases, 9 plans, 16 tasks
+
+**Key accomplishments:**
+
+- Widened SignatureAlgorithm for BLS support, added P2pStatus/SignerResponse/BlsPubkeyResponse types, and three new Tauri IPC commands with TypeScript wrappers
+- 942-line Settings monolith replaced by 8 files (container + 6 sections + barrel) with sticky sidebar navigation and consistent visual polish
+- P2P dashboard page with node identity (Ed25519 peer ID, discovery mode), connected peers list, subscribed services with name resolution, and quorum accumulation placeholder
+- Per-service operator signing key display with algorithm badge (ECDSA/BLS), copy-to-clipboard via AddressDisplay, and on-chain registration status badge from POAStakeRegistry readContract
+- BLS algorithm selector dropdown in SubmitEditor with auto-prefix-reset, isBLSService helper, and post-deploy BLS G1 pubkey card with copy-to-clipboard
+- BLS proof-of-possession Tauri command with alloy keccak256 digest, BLS-specific POA registry ABI, one-click registration button, and status badge on service detail page
+- Complete event pipeline from Rust backend error/success emission through Tauri IPC to Map-based Zustand correlation store with UnifiedActivity type
+- Unified SignaturePrefix type alias across 3 files and added amber guidance banner for BLS services missing POA registry
+
+---
+
 ## v1.1 BLS Signatures (Shipped: 2026-03-23)
 
 **Phases completed:** 4 phases, 9 plans, 16 tasks
