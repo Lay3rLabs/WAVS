@@ -15,12 +15,12 @@
 
 ### MCP Execution
 
-- [ ] **EXEC-01**: Deployed service components appear as callable MCP tools via `tools/list`
-- [ ] **EXEC-02**: Agent can call a component via `tools/call` and receive execution result (Tier 1: result only)
+- [x] **EXEC-01**: Deployed service components appear as callable MCP tools via `tools/list`
+- [x] **EXEC-02**: Agent can call a component via `tools/call` and receive execution result (Tier 1: result only)
 - [ ] **EXEC-03**: Agent can request signed result with operator signature proving authenticity (Tier 2)
 - [ ] **EXEC-04**: Agent can request on-chain submission with transaction hash (Tier 3), gated by service-level flag in service.json
 - [x] **EXEC-05**: Trust tier is an explicit `inputSchema` parameter on each tool (not parallel tools)
-- [ ] **EXEC-06**: MCP `notifications/tools/list_changed` fires when services are deployed or removed
+- [x] **EXEC-06**: MCP `notifications/tools/list_changed` fires when services are deployed or removed
 - [x] **EXEC-07**: Execution tools are guarded by `--exec-enabled` flag and use `wavs_exec_` naming prefix
 - [x] **EXEC-08**: Per-call timeout cap (25s) enforced at MCP layer, independent of component time limit
 
@@ -68,12 +68,12 @@
 | SCHEMA-03 | Phase 2 | Pending |
 | SCHEMA-04 | Phase 2 | Pending |
 | SCHEMA-05 | Phase 2 | Pending |
-| EXEC-01 | Phase 3 | Pending |
-| EXEC-02 | Phase 3 | Pending |
+| EXEC-01 | Phase 3 | Complete (03-02) |
+| EXEC-02 | Phase 3 | Complete (03-02) |
 | EXEC-03 | Phase 3 | Pending |
 | EXEC-04 | Phase 3 | Pending |
 | EXEC-05 | Phase 3 | Complete (03-01) |
-| EXEC-06 | Phase 3 | Pending |
+| EXEC-06 | Phase 3 | Complete (03-02) |
 | EXEC-07 | Phase 3 | Complete (03-01) |
 | EXEC-08 | Phase 3 | Complete (03-01) |
 | OCI-01 | Phase 1 | Pending |

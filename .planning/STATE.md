@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 ## Current Position
 
 Phase: 3 of 3 (MCP Execution Interface)
-Plan: 0 of ? in current phase
-Status: Phase 2 complete, Phase 3 not started
-Last activity: 2026-03-25 — Phase 2 complete (WIT-to-Schema Tooling)
+Plan: 2 of 3 in current phase
+Status: Plan 03-02 complete (exec tool pipeline), Plan 03-03 remaining
+Last activity: 2026-03-25 — Plan 03-02 complete (exec tool pipeline)
 
-Progress: [██████░░░░] 67%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
-- Average duration: 14.3min
-- Total execution time: 0.72 hours
+- Total plans completed: 5
+- Average duration: 11.2min
+- Total execution time: 0.93 hours
 
 **By Phase:**
 
@@ -52,6 +52,8 @@ Recent decisions affecting current work:
 - [Phase 02]: Two-pass $defs deduplication with structural fingerprinting for shared WIT types
 - [Phase 02]: result<T,string> output simplification: show ok type as primary with error noted in description
 - [Phase 02]: wit-parser 0.244.0 pinned to match wasmtime 42.0.1 transitive dep
+- [Phase 03]: Permissive input schema for exec tools (MCP server lacks component bytes for WIT parsing)
+- [Phase 03]: Peer<RoleServer> stored in Arc<RwLock> with tokio::spawn bridging set_peer sync/async boundary
 
 ### Research Flags (active going into planning)
 
@@ -69,5 +71,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-25
-Stopped at: Phase 2 complete, ready for Phase 3
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
