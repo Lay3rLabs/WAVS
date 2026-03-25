@@ -14661,6 +14661,7 @@ dependencies = [
  "wasmtime",
  "wavs-engine",
  "wavs-types",
+ "wit-schema",
 ]
 
 [[package]]
