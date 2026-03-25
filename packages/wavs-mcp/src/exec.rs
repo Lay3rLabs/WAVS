@@ -11,9 +11,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
+use alloy_provider::Provider;
 use rmcp::model::{CallToolResult, Content, ErrorCode, Tool};
 use serde::Deserialize;
 use tokio::sync::RwLock;
+use utils::evm_client::signing::make_signer;
+use utils::evm_client::{EvmEndpoint, EvmSigningClient, EvmSigningClientConfig};
+use wavs_types::{Credential, ServiceManager, SignatureKind, WavsSignable};
 
 use crate::client::WavsClient;
 
@@ -82,6 +86,41 @@ pub fn exec_error(
         )],
         is_error: Some(true),
     })
+}
+
+/// Convenience wrapper: same as `exec_error` but returns the inner
+/// `CallToolResult` directly (useful when building an `McpError::data` field).
+fn exec_error_value(
+    code: &str,
+    message: &str,
+    partial_result: Option<&[u8]>,
+) -> McpError {
+    let mut error = serde_json::json!({
+        "error_code": code,
+        "message": message,
+    });
+    if let Some(payload) = partial_result {
+        error["partial_result"] = serde_json::json!({
+            "payload": const_hex::encode(payload),
+        });
+    }
+    McpError {
+        code: ErrorCode::INTERNAL_ERROR,
+        message: message.to_string().into(),
+        data: Some(error.into()),
+    }
+}
+
+// ── RawPayload (signable wrapper for arbitrary bytes) ────────────────
+
+/// Thin wrapper that makes arbitrary bytes signable via the `WavsSigner`
+/// blanket implementation.
+struct RawPayload(Vec<u8>);
+
+impl WavsSignable for RawPayload {
+    fn encode_data(&self) -> anyhow::Result<Vec<u8>> {
+        Ok(self.0.clone())
+    }
 }
 
 // ── Tool name sanitization (Pitfall 3) ───────────────────────────────────
@@ -235,6 +274,8 @@ pub struct PendingExecution {
     pub payload: Vec<u8>,
     pub gas_estimate: String,
     pub chain_id: String,
+    pub service_manager_address: String,
+    pub rpc_url: Option<String>,
     pub created_at: Instant,
 }
 
@@ -548,18 +589,461 @@ pub async fn handle_exec_tool(
             })
         }
 
-        TrustTier::SignedResult => exec_error(
-            ERR_TIER_NOT_ENABLED,
-            "Tier signed_result is not yet implemented -- coming in next update",
-            None,
-        ),
+        TrustTier::SignedResult => {
+            // ── Execute component (same as Tier 1) ──────────────────────
+            let trigger = serde_json::json!({"manual": null});
+            let input_bytes = serde_json::to_vec(&input).unwrap_or_default();
+            let data = serde_json::json!({"Raw": input_bytes});
 
-        TrustTier::OnChain => exec_error(
-            ERR_TIER_NOT_ENABLED,
-            "Tier on_chain is not yet implemented -- coming in next update",
-            None,
-        ),
+            let execute_fut =
+                ctx.client
+                    .execute_component(&service_id, &workflow_id, &trigger, &data);
+
+            let result = match tokio::time::timeout(
+                Duration::from_millis(timeout_ms),
+                execute_fut,
+            )
+            .await
+            {
+                Err(_elapsed) => {
+                    return exec_error(
+                        ERR_EXECUTION_TIMEOUT,
+                        &format!("Component execution timed out after {timeout_ms}ms"),
+                        None,
+                    );
+                }
+                Ok(Err(e)) => {
+                    return exec_error(
+                        ERR_COMPONENT_FAILED,
+                        &format!(
+                            "Component execution failed for {service_name}/{workflow_id}: {e:#}"
+                        ),
+                        None,
+                    );
+                }
+                Ok(Ok(responses)) => responses,
+            };
+
+            if result.is_empty() {
+                return exec_error(ERR_COMPONENT_FAILED, "Component returned no responses", None);
+            }
+
+            // Extract payload bytes from the first response
+            let first = &result[0];
+            let payload = extract_payload_bytes(first);
+
+            // ── Get signing credential ──────────────────────────────────
+            let credential = match ctx.signing_mnemonic {
+                Some(c) => c,
+                None => {
+                    return exec_error(
+                        ERR_SIGNING_FAILED,
+                        "Tier 2 requires --signing-mnemonic (WAVS_SIGNING_MNEMONIC) on the MCP server",
+                        Some(&payload),
+                    );
+                }
+            };
+
+            // ── Get HD index for the service from the WAVS node ─────────
+            let service_obj = find_service_obj(ctx.services_json, &service_id);
+            let service_manager: ServiceManager = match service_obj
+                .and_then(|s| s.get("manager"))
+                .and_then(|m| serde_json::from_value(m.clone()).ok())
+            {
+                Some(m) => m,
+                None => {
+                    return exec_error(
+                        ERR_SIGNING_FAILED,
+                        "Could not parse service manager from service definition",
+                        Some(&payload),
+                    );
+                }
+            };
+
+            let signer_resp = match ctx.client.get_service_signer(service_manager).await {
+                Ok(r) => r,
+                Err(e) => {
+                    return exec_error(
+                        ERR_SIGNING_FAILED,
+                        &format!("Failed to get service signer: {e:#}"),
+                        Some(&payload),
+                    );
+                }
+            };
+
+            let hd_index = match signer_resp {
+                wavs_types::SignerResponse::Secp256k1 { hd_index, .. } => hd_index,
+            };
+
+            // ── Derive the signing key ──────────────────────────────────
+            let signer = match make_signer(credential, Some(hd_index)) {
+                Ok(s) => s,
+                Err(e) => {
+                    return exec_error(
+                        ERR_SIGNING_FAILED,
+                        &format!("Failed to derive signing key: {e:#}"),
+                        Some(&payload),
+                    );
+                }
+            };
+
+            // ── Sign the payload ────────────────────────────────────────
+            let raw_payload = RawPayload(payload.clone());
+            let signature = match wavs_types::WavsSigner::sign(
+                &raw_payload,
+                &signer,
+                SignatureKind::evm_default(),
+            )
+            .await
+            {
+                Ok(sig) => sig,
+                Err(e) => {
+                    return exec_error(
+                        ERR_SIGNING_FAILED,
+                        &format!("Signing failed: {e:#}"),
+                        Some(&payload),
+                    );
+                }
+            };
+
+            // ── Build response envelope (D-06, hex-encoded) ─────────────
+            let signed_result = serde_json::json!({
+                "result": const_hex::encode(&payload),
+                "signature": format!("0x{}", const_hex::encode(&signature.data)),
+                "signer_address": format!("{}", signer.address()),
+                "algorithm": "secp256k1",
+                "prefix": "eip191",
+            });
+            ok(serde_json::to_string_pretty(&signed_result).unwrap())
+        }
+
+        TrustTier::OnChain => {
+            // ── Check per-service exec_enabled gating (D-10) ────────────
+            let service_obj = find_service_obj(ctx.services_json, &service_id);
+            let exec_enabled = service_obj
+                .and_then(|s| s.get("exec_enabled"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
+            if !exec_enabled {
+                return exec_error(
+                    ERR_TIER_NOT_ENABLED,
+                    "on_chain tier not enabled for this service \
+                     -- set exec_enabled: true in service.json (per D-10)",
+                    None,
+                );
+            }
+
+            // ── Check if this is a confirmation (second step) ───────────
+            let confirm_nonce = args_map
+                .get("confirm")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let pending_confirmations = match ctx.pending_confirmations {
+                Some(pc) => pc,
+                None => {
+                    return exec_error(
+                        ERR_SUBMISSION_FAILED,
+                        "Internal error: pending confirmations not initialized",
+                        None,
+                    );
+                }
+            };
+
+            if let Some(nonce) = confirm_nonce {
+                // === CONFIRMATION STEP (second call) =====================
+                let pending = match pending_confirmations.take(&nonce).await {
+                    Some(p) => p,
+                    None => {
+                        return exec_error(
+                            ERR_SUBMISSION_FAILED,
+                            "Confirmation nonce expired or invalid. \
+                             Re-execute with trust_tier: on_chain to get a new estimate.",
+                            None,
+                        );
+                    }
+                };
+
+                let credential = match ctx.mcp_chain_credential {
+                    Some(c) => c,
+                    None => {
+                        return exec_error(
+                            ERR_SUBMISSION_FAILED,
+                            "On-chain submission requires --mcp-chain-credential \
+                             (WAVS_MCP_CHAIN_CREDENTIAL)",
+                            Some(&pending.payload),
+                        );
+                    }
+                };
+
+                // Determine RPC URL
+                let rpc_url = match &pending.rpc_url {
+                    Some(url) => url.clone(),
+                    None => {
+                        // Fallback: try to get chains from the WAVS node
+                        match get_chain_rpc_url(ctx.client, &pending.chain_id).await {
+                            Ok(url) => url,
+                            Err(_) => {
+                                return exec_error(
+                                    ERR_SUBMISSION_FAILED,
+                                    &format!(
+                                        "Could not determine RPC URL for chain '{}'. \
+                                         Ensure the WAVS node has chain config for this chain.",
+                                        pending.chain_id
+                                    ),
+                                    Some(&pending.payload),
+                                );
+                            }
+                        }
+                    }
+                };
+
+                // Submit on-chain via EvmSigningClient
+                let endpoint: EvmEndpoint = match rpc_url.parse() {
+                    Ok(ep) => ep,
+                    Err(e) => {
+                        return exec_error(
+                            ERR_SUBMISSION_FAILED,
+                            &format!("Invalid RPC URL '{rpc_url}': {e:#}"),
+                            Some(&pending.payload),
+                        );
+                    }
+                };
+
+                let config = EvmSigningClientConfig::new(endpoint, credential.clone());
+                let client = match EvmSigningClient::new(config).await {
+                    Ok(c) => c,
+                    Err(e) => {
+                        return exec_error(
+                            ERR_SUBMISSION_FAILED,
+                            &format!("Failed to create signing client: {e:#}"),
+                            Some(&pending.payload),
+                        );
+                    }
+                };
+
+                // Build transaction: self-transfer with result data in input field
+                let result_hash = alloy_primitives::keccak256(&pending.payload);
+                let tx_data = alloy_primitives::Bytes::from(
+                    [
+                        pending.service_id.as_bytes(),
+                        pending.workflow_id.as_bytes(),
+                        result_hash.as_slice(),
+                    ]
+                    .concat(),
+                );
+
+                let from_address = client.address();
+                let tx = alloy_rpc_types_eth::TransactionRequest::default()
+                    .to(from_address)
+                    .input(tx_data.into());
+
+                let receipt = match client
+                    .provider
+                    .send_transaction(tx)
+                    .await
+                    .map_err(|e| {
+                        exec_error_value(
+                            ERR_SUBMISSION_FAILED,
+                            &format!("Transaction send failed: {e:#}"),
+                            Some(&pending.payload),
+                        )
+                    })?
+                    .get_receipt()
+                    .await
+                {
+                    Ok(r) => r,
+                    Err(e) => {
+                        return exec_error(
+                            ERR_SUBMISSION_FAILED,
+                            &format!("Transaction receipt failed: {e:#}"),
+                            Some(&pending.payload),
+                        );
+                    }
+                };
+
+                let tx_hash = format!("{}", receipt.transaction_hash);
+
+                let result = serde_json::json!({
+                    "status": "submitted",
+                    "tx_hash": tx_hash,
+                    "chain_id": pending.chain_id,
+                    "service_id": pending.service_id,
+                    "workflow_id": pending.workflow_id,
+                    "result_hex": const_hex::encode(&pending.payload),
+                });
+                return ok(serde_json::to_string_pretty(&result).unwrap());
+            }
+
+            // === ESTIMATE STEP (first call) ==============================
+            let trigger = serde_json::json!({"manual": null});
+            let input_bytes = serde_json::to_vec(&input).unwrap_or_default();
+            let data = serde_json::json!({"Raw": input_bytes});
+
+            let execute_fut =
+                ctx.client
+                    .execute_component(&service_id, &workflow_id, &trigger, &data);
+
+            let result = match tokio::time::timeout(
+                Duration::from_millis(timeout_ms),
+                execute_fut,
+            )
+            .await
+            {
+                Err(_elapsed) => {
+                    return exec_error(
+                        ERR_EXECUTION_TIMEOUT,
+                        &format!("Component execution timed out after {timeout_ms}ms"),
+                        None,
+                    );
+                }
+                Ok(Err(e)) => {
+                    return exec_error(
+                        ERR_COMPONENT_FAILED,
+                        &format!(
+                            "Component execution failed for {service_name}/{workflow_id}: {e:#}"
+                        ),
+                        None,
+                    );
+                }
+                Ok(Ok(responses)) => responses,
+            };
+
+            if result.is_empty() {
+                return exec_error(ERR_COMPONENT_FAILED, "Component returned no responses", None);
+            }
+
+            let first = &result[0];
+            let payload = extract_payload_bytes(first);
+
+            // Determine chain_id and service_manager_address from services_json
+            let (chain_id, sm_address, rpc_url) = match service_obj
+                .and_then(|s| s.get("manager"))
+                .and_then(|m| serde_json::from_value::<ServiceManager>(m.clone()).ok())
+            {
+                Some(ServiceManager::Evm { chain, address }) => (
+                    chain.to_string(),
+                    format!("{address}"),
+                    get_chain_rpc_url(ctx.client, &chain.to_string()).await.ok(),
+                ),
+                Some(ServiceManager::Cosmos { chain, .. }) => {
+                    (chain.to_string(), String::new(), None)
+                }
+                None => ("unknown".to_string(), String::new(), None),
+            };
+
+            // Gas estimation (static for v1)
+            let gas_estimate = match ctx.mcp_chain_credential {
+                Some(_) => "~300000 gas (estimate)".to_string(),
+                None => {
+                    "~300000 gas (estimate -- provide --mcp-chain-credential for actual estimation)"
+                        .to_string()
+                }
+            };
+
+            // Store in pending confirmations cache
+            let pending = PendingExecution {
+                service_id: service_id.clone(),
+                workflow_id: workflow_id.clone(),
+                payload: payload.clone(),
+                gas_estimate: gas_estimate.clone(),
+                chain_id: chain_id.clone(),
+                service_manager_address: sm_address.clone(),
+                rpc_url,
+                created_at: Instant::now(),
+            };
+            let nonce = pending_confirmations.store(pending).await;
+
+            // Return estimate response (D-09)
+            let estimate = serde_json::json!({
+                "status": "estimate",
+                "nonce": nonce,
+                "gas_estimate": gas_estimate,
+                "chain_id": chain_id,
+                "service_manager_address": sm_address,
+                "result_preview_hex": const_hex::encode(&payload[..payload.len().min(64)]),
+                "expires_in_seconds": 60,
+                "instructions": format!(
+                    "To submit on-chain, call this tool again with trust_tier: \"on_chain\" and confirm: \"{}\"",
+                    nonce
+                )
+            });
+            ok(serde_json::to_string_pretty(&estimate).unwrap())
+        }
     }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+/// Find the service JSON object in the services map by service_id (hex key).
+fn find_service_obj<'a>(
+    services_json: &'a serde_json::Value,
+    service_id: &str,
+) -> Option<&'a serde_json::Value> {
+    services_json.as_object()?.get(service_id)
+}
+
+/// Extract raw payload bytes from a response object.
+///
+/// The `/dev/execute` response items have a `payload` field that is either
+/// a hex string or an array of byte values.
+fn extract_payload_bytes(response: &serde_json::Value) -> Vec<u8> {
+    if let Some(payload) = response.get("payload") {
+        if let Some(hex_str) = payload.as_str() {
+            if let Ok(bytes) = const_hex::decode(hex_str) {
+                return bytes;
+            }
+        }
+        if let Some(arr) = payload.as_array() {
+            return arr
+                .iter()
+                .filter_map(|v| v.as_u64().map(|n| n as u8))
+                .collect();
+        }
+    }
+    Vec::new()
+}
+
+/// Get the RPC URL for a given chain key from the WAVS node.
+///
+/// Queries `GET /chains` and parses the chain config. Falls back to
+/// well-known defaults for local development chains.
+async fn get_chain_rpc_url(client: &WavsClient, chain_key: &str) -> Result<String, McpError> {
+    // Try getting chains from the WAVS node
+    if let Ok(chains) = client.get_chains().await {
+        // chains is typically a map of chain_key -> config with rpc_url
+        if let Some(obj) = chains.as_object() {
+            if let Some(chain_config) = obj.get(chain_key) {
+                if let Some(url) = chain_config
+                    .get("rpc_url")
+                    .or_else(|| chain_config.get("endpoint"))
+                    .and_then(|v| v.as_str())
+                {
+                    return Ok(url.to_string());
+                }
+            }
+        }
+    }
+
+    // Fallback for well-known local chains
+    if chain_key.contains("31337") || chain_key.contains("anvil") {
+        return Ok("http://localhost:8545".to_string());
+    }
+
+    Err(McpError {
+        code: ErrorCode::INTERNAL_ERROR,
+        message: format!("No RPC URL configured for chain '{chain_key}'").into(),
+        data: None,
+    })
+}
+
+/// Return a successful `CallToolResult` with a text content body.
+fn ok(text: impl Into<String>) -> Result<CallToolResult, McpError> {
+    Ok(CallToolResult {
+        content: vec![Content::text(text.into())],
+        is_error: Some(false),
+    })
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────

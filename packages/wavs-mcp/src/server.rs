@@ -1283,14 +1283,20 @@ impl ServerHandler for WavsMcpServer {
                     });
                 }
                 let services = self.get_services_cached().await?;
-                // For Tier 1 only (Plan 02), signing/chain credentials and
-                // pending_confirmations are passed as None. Plan 03 will populate.
+                let signing_cred = self
+                    .signing_mnemonic
+                    .as_deref()
+                    .and_then(|s| s.parse::<wavs_types::Credential>().ok());
+                let chain_cred = self
+                    .mcp_chain_credential
+                    .as_deref()
+                    .and_then(|s| s.parse::<wavs_types::Credential>().ok());
                 let ctx = exec::ExecContext {
                     client: &self.client,
                     services_json: &services,
-                    signing_mnemonic: None,
-                    mcp_chain_credential: None,
-                    pending_confirmations: None,
+                    signing_mnemonic: signing_cred.as_ref(),
+                    mcp_chain_credential: chain_cred.as_ref(),
+                    pending_confirmations: Some(&self.pending_confirmations),
                 };
                 exec::handle_exec_tool(&ctx, name, args).await
             }

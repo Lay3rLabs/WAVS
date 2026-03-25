@@ -14727,7 +14727,10 @@ version = "2.8.0"
 dependencies = [
  "alloy-contract",
  "alloy-primitives",
+ "alloy-provider",
+ "alloy-rpc-types-eth",
  "alloy-signer",
+ "alloy-signer-local",
  "alloy-sol-macro",
  "alloy-sol-types",
  "anyhow",

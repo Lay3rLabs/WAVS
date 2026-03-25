@@ -81,6 +81,12 @@ pub struct Service {
     pub status: ServiceStatus,
 
     pub manager: ServiceManager,
+
+    /// Per-service flag to enable execution via MCP tools (per D-10).
+    /// When None or Some(false), Tier 3 (on_chain) is disabled for this service.
+    /// Defaults to None for backward compatibility with existing service.json files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exec_enabled: Option<bool>,
 }
 
 impl Service {
@@ -173,6 +179,7 @@ impl Service {
             workflows,
             status: ServiceStatus::Active,
             manager,
+            exec_enabled: None,
         }
     }
 }

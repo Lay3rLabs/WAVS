@@ -40,6 +40,15 @@ impl WavsClient {
         parse_json_response(resp).await
     }
 
+    pub async fn get_chains(&self) -> Result<Value> {
+        let resp = self
+            .request(Method::GET, "/chains")
+            .send()
+            .await
+            .context("GET /chains")?;
+        parse_json_response(resp).await
+    }
+
     pub async fn get_health(&self) -> Result<Value> {
         let resp = self
             .request(Method::GET, "/health")
