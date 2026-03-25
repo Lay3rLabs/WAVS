@@ -50,6 +50,7 @@ fn create_dummy_service(
             chain: "evm:dummy".parse().unwrap(),
             address: alloy_primitives::Address::ZERO,
         },
+        exec_enabled: None,
     }
 }
 fn create_dummy_input(service: &Service) -> AggregatorInput {
@@ -265,6 +266,7 @@ mod test {
                 chain: "evm:anvil".parse().unwrap(),
                 address: alloy_primitives::Address::ZERO,
             },
+            exec_enabled: None,
         }
     }
 

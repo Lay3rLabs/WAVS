@@ -11,6 +11,7 @@ Build, test, and deploy a new WAVS WASM component from scratch.
 - [ ] **Step 3** — Implement logic in `src/lib.rs` using the patterns below.
 - [ ] **Step 4** — `wavs:wavs_build_component` — Compile; read stderr and fix errors; repeat until exit code 0.
 - [ ] **Step 5** — `wavs:wavs_upload_component` — Upload `.wasm`; save the returned digest (raw 64-char hex, no `sha256:` prefix).
+  - **OCI alternative:** If the component is published to an OCI registry (e.g. ghcr.io), you can skip upload and use an OCI source in the service definition instead: `"source": {"oci": {"uri": "oci://ghcr.io/org/component:v1.0"}}`. See [`reference/service-json.md`](../reference/service-json.md#oci-pull-from-registry-at-deploy-time) for details.
 - [ ] **Step 6** — `wavs:wavs_deploy_dev_service` (no on-chain contract) **or** follow [`deployment.md`](deployment.md) for a real deployment.
 - [ ] **Step 7** — `wavs:wavs_simulate_trigger` — Verify output.
 
@@ -190,6 +191,8 @@ Use the **absolute path** when calling `wavs_upload_component`.
 **Runtime errors** (from `wavs_simulate_trigger`):
 - Error message comes directly from your `?` or `return Err(...)` calls
 - Add `host::log(host::LogLevel::Debug, &format!("data: {:?}", data))` and re-simulate
+- Use `wavs_query_component_logs(service_id="<id>", level="debug")` to read component `host::log()` output after simulation
+- Use `wavs_query_logs(target="wavs::subsystems::engine", level="warn")` for broader engine-level diagnostics
 
 **Missing config vars** — component returns `"config var X not found"`:
 - Service definition must include the key in its `config` map

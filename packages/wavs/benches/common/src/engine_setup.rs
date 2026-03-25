@@ -76,6 +76,7 @@ impl EngineSetup {
                 chain: "evm:exec".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let chain_configs = ChainConfigs::default();

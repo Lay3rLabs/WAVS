@@ -690,6 +690,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -753,6 +754,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -853,6 +855,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -920,6 +923,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1003,6 +1007,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1129,6 +1134,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1167,6 +1173,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1205,6 +1212,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1248,6 +1256,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();

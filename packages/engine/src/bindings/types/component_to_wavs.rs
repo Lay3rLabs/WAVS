@@ -111,6 +111,7 @@ impl TryFrom<component_service::Service> for wavs_types::Service {
                 .collect::<anyhow::Result<BTreeMap<WorkflowId, wavs_types::Workflow>>>()?,
             status: src.status.into(),
             manager: src.manager.try_into()?,
+            exec_enabled: None,
         })
     }
 }
