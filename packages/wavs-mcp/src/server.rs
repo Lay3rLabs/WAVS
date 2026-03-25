@@ -234,6 +234,7 @@ pub struct WavsMcpServer {
     client: WavsClient,
     mcp_chain_credential: Option<String>,
     signing_mnemonic: Option<String>,
+    exec_enabled: bool,
 }
 
 impl WavsMcpServer {
@@ -242,11 +243,13 @@ impl WavsMcpServer {
         token: Option<String>,
         mcp_chain_credential: Option<String>,
         signing_mnemonic: Option<String>,
+        exec_enabled: bool,
     ) -> Self {
         Self {
             client: WavsClient::new(wavs_url, token),
             mcp_chain_credential,
             signing_mnemonic,
+            exec_enabled,
         }
     }
 

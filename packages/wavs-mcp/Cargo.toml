@@ -21,6 +21,8 @@ const-hex = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 utils = { path = "../utils" }
+wit-schema = { path = "../wit-schema" }
+wasmtime = { workspace = true, features = ["component-model"] }
 alloy-primitives = { workspace = true }
 alloy-signer = { workspace = true }
 alloy-sol-types = { workspace = true }
