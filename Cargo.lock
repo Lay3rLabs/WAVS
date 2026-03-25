@@ -15907,6 +15907,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "wit-schema"
+version = "2.8.0"
+dependencies = [
+ "anyhow",
+ "lru 0.16.3",
+ "serde_json",
+ "tokio 1.50.0",
+ "tracing",
+ "wasmtime",
+ "wavs-types",
+]
+
+[[package]]
 name = "witx"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

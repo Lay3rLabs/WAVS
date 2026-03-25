@@ -6,10 +6,16 @@ pub mod types;
 
 pub use types::SchemaOptions;
 
+use std::collections::{BTreeMap, HashMap};
+
+use serde_json::{json, Value};
+use wasmtime::component::types::Type;
+
 /// Generate a JSON Schema describing the exported functions of a WASM component.
 ///
 /// This is the primary public API. It introspects the component's type information
-/// (without instantiating it) and produces a JSON Schema document with the structure:
+/// (without instantiating it) and produces a JSON Schema document with the structure
+/// specified by D-04:
 /// ```json
 /// {
 ///   "world": "<component-world-name>",
@@ -22,19 +28,206 @@ pub use types::SchemaOptions;
 ///   "$defs": { ... }
 /// }
 /// ```
+///
+/// Only exported functions are included (D-05). Imported functions (WASI, host, etc.)
+/// are excluded.
 pub fn generate_schema(
     engine: &wasmtime::Engine,
     component: &wasmtime::component::Component,
     _options: &SchemaOptions,
-) -> anyhow::Result<serde_json::Value> {
-    let _ = (engine, component);
-    todo!("implement generate_schema")
+) -> anyhow::Result<Value> {
+    let component_type = component.component_type();
+    let exports = traverse::gather_exports(&component_type, engine);
+
+    let mut defs: BTreeMap<String, Value> = BTreeMap::new();
+    let mut seen_types: HashMap<String, usize> = HashMap::new();
+    let mut export_schemas = serde_json::Map::new();
+
+    // First pass: generate schemas for all exports to discover shared types
+    // We need two passes for proper $defs deduplication:
+    // 1. First pass discovers all types and which are shared
+    // 2. Second pass generates final schemas with $ref pointers
+
+    // Collect type fingerprints across all exports to pre-populate seen_types
+    for (_name, func) in &exports {
+        for (_param_name, param_ty) in func.params() {
+            count_type_occurrences(&param_ty, &mut seen_types);
+        }
+        for result_ty in func.results() {
+            count_type_occurrences(&result_ty, &mut seen_types);
+        }
+    }
+
+    // Reset counts but keep fingerprints that appeared more than once
+    let shared_fingerprints: HashMap<String, usize> = seen_types
+        .iter()
+        .filter(|(_, count)| **count > 1)
+        .map(|(fp, _)| (fp.clone(), 0))
+        .collect();
+    seen_types = shared_fingerprints;
+
+    // Second pass: generate actual schemas, using $ref for shared types
+    for (name, func) in &exports {
+        let input_schema = build_input_schema(func, &mut defs, &mut seen_types);
+        let output_schema = build_output_schema(func, &mut defs, &mut seen_types);
+
+        let mut entry = serde_json::Map::new();
+        entry.insert("inputSchema".to_string(), input_schema);
+        entry.insert("outputSchema".to_string(), output_schema);
+
+        export_schemas.insert(name.clone(), Value::Object(entry));
+    }
+
+    // Assemble top-level schema per D-04
+    let schema = json!({
+        "world": "unknown",
+        "exports": Value::Object(export_schemas),
+        "$defs": defs
+    });
+
+    Ok(schema)
+}
+
+/// Count type occurrences for deduplication discovery (first pass).
+fn count_type_occurrences(ty: &Type, seen_types: &mut HashMap<String, usize>) {
+    if let Some(fingerprint) = type_fingerprint_for_counting(ty) {
+        *seen_types.entry(fingerprint).or_insert(0) += 1;
+    }
+
+    // Recurse into complex types
+    match ty {
+        Type::Record(record) => {
+            for field in record.fields() {
+                count_type_occurrences(&field.ty, seen_types);
+            }
+        }
+        Type::Variant(variant) => {
+            for case in variant.cases() {
+                if let Some(ref payload_ty) = case.ty {
+                    count_type_occurrences(payload_ty, seen_types);
+                }
+            }
+        }
+        Type::List(list) => {
+            count_type_occurrences(&list.ty(), seen_types);
+        }
+        Type::Option(opt) => {
+            count_type_occurrences(&opt.ty(), seen_types);
+        }
+        Type::Result(result) => {
+            if let Some(ok) = result.ok() {
+                count_type_occurrences(&ok, seen_types);
+            }
+            if let Some(err) = result.err() {
+                count_type_occurrences(&err, seen_types);
+            }
+        }
+        Type::Tuple(tuple) => {
+            for item_ty in tuple.types() {
+                count_type_occurrences(&item_ty, seen_types);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Same as convert module's fingerprint but accessible here for counting.
+fn type_fingerprint_for_counting(ty: &Type) -> Option<String> {
+    match ty {
+        Type::Record(record) => {
+            let fields: Vec<String> = record.fields().map(|f| f.name.to_string()).collect();
+            Some(format!("record:{}", fields.join("|")))
+        }
+        Type::Variant(variant) => {
+            let cases: Vec<String> = variant.cases().map(|c| c.name.to_string()).collect();
+            Some(format!("variant:{}", cases.join("|")))
+        }
+        Type::Enum(enum_ty) => {
+            let names: Vec<String> = enum_ty.names().map(|n| n.to_string()).collect();
+            Some(format!("enum:{}", names.join("|")))
+        }
+        Type::Flags(flags) => {
+            let names: Vec<String> = flags.names().map(|n| n.to_string()).collect();
+            Some(format!("flags:{}", names.join("|")))
+        }
+        _ => None,
+    }
+}
+
+/// Build the inputSchema for a function.
+fn build_input_schema(
+    func: &wasmtime::component::types::ComponentFunc,
+    defs: &mut BTreeMap<String, Value>,
+    seen_types: &mut HashMap<String, usize>,
+) -> Value {
+    let params: Vec<_> = func.params().collect();
+
+    match params.len() {
+        0 => json!({"type": "object", "properties": {}, "additionalProperties": false}),
+        1 => {
+            let (name, ty) = &params[0];
+            convert::type_to_schema_named(ty, defs, seen_types, Some(name))
+        }
+        _ => {
+            // Multiple params -- wrap in an object
+            let mut properties = serde_json::Map::new();
+            let mut required = Vec::new();
+            for (name, ty) in &params {
+                properties.insert(
+                    name.to_string(),
+                    convert::type_to_schema_named(ty, defs, seen_types, Some(name)),
+                );
+                required.push(json!(name));
+            }
+            json!({
+                "type": "object",
+                "properties": Value::Object(properties),
+                "required": required,
+                "additionalProperties": false
+            })
+        }
+    }
+}
+
+/// Build the outputSchema for a function.
+fn build_output_schema(
+    func: &wasmtime::component::types::ComponentFunc,
+    defs: &mut BTreeMap<String, Value>,
+    seen_types: &mut HashMap<String, usize>,
+) -> Value {
+    let results: Vec<_> = func.results().collect();
+
+    match results.len() {
+        0 => json!({"type": "null"}),
+        1 => {
+            let ty = &results[0];
+            // Use result_to_output_schema for result types (simplifies result<T, string>)
+            if let Type::Result(ref result_ty) = ty {
+                convert::result_to_output_schema(result_ty, defs, seen_types)
+            } else {
+                convert::type_to_schema(ty, defs, seen_types)
+            }
+        }
+        _ => {
+            // Multiple results -- create a tuple schema
+            let items: Vec<Value> = results
+                .iter()
+                .map(|ty| convert::type_to_schema(ty, defs, seen_types))
+                .collect();
+            let len = items.len();
+            json!({
+                "type": "array",
+                "prefixItems": items,
+                "minItems": len,
+                "maxItems": len
+            })
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     fn make_engine() -> wasmtime::Engine {
         let mut config = wasmtime::Config::new();
@@ -48,7 +241,8 @@ mod tests {
             env!("CARGO_MANIFEST_DIR").replace("/packages/wit-schema", ""),
             name
         );
-        let bytes = std::fs::read(&path).unwrap_or_else(|e| panic!("failed to read {}: {}", path, e));
+        let bytes =
+            std::fs::read(&path).unwrap_or_else(|e| panic!("failed to read {}: {}", path, e));
         wasmtime::component::Component::new(engine, &bytes)
             .unwrap_or_else(|e| panic!("failed to load component {}: {}", name, e))
     }
@@ -59,18 +253,42 @@ mod tests {
         let component = load_component(&engine, "echo_data");
         let schema = generate_schema(&engine, &component, &SchemaOptions::default()).unwrap();
 
-        assert!(schema.get("exports").is_some(), "schema must have 'exports' key");
-        let exports = schema.get("exports").unwrap();
-        // echo_data exports a "run" function (possibly namespaced under an instance)
-        let has_run = exports.as_object().unwrap().keys().any(|k| k.contains("run"));
-        assert!(has_run, "exports must contain 'run' function, got: {:?}", exports);
+        println!(
+            "echo_data schema:\n{}",
+            serde_json::to_string_pretty(&schema).unwrap()
+        );
 
-        let run_export = exports.as_object().unwrap().iter()
+        assert!(
+            schema.get("exports").is_some(),
+            "schema must have 'exports' key"
+        );
+        let exports = schema.get("exports").unwrap();
+        let has_run = exports
+            .as_object()
+            .unwrap()
+            .keys()
+            .any(|k| k.contains("run"));
+        assert!(
+            has_run,
+            "exports must contain 'run' function, got: {:?}",
+            exports
+        );
+
+        let run_export = exports
+            .as_object()
+            .unwrap()
+            .iter()
             .find(|(k, _)| k.contains("run"))
             .map(|(_, v)| v)
             .unwrap();
-        assert!(run_export.get("inputSchema").is_some(), "run must have inputSchema");
-        assert!(run_export.get("outputSchema").is_some(), "run must have outputSchema");
+        assert!(
+            run_export.get("inputSchema").is_some(),
+            "run must have inputSchema"
+        );
+        assert!(
+            run_export.get("outputSchema").is_some(),
+            "run must have outputSchema"
+        );
     }
 
     #[test]
@@ -79,17 +297,30 @@ mod tests {
         let component = load_component(&engine, "echo_data");
         let schema = generate_schema(&engine, &component, &SchemaOptions::default()).unwrap();
 
-        assert!(schema.get("world").is_some(), "schema must have 'world' key");
-        assert!(schema.get("exports").is_some(), "schema must have 'exports' key");
-        assert!(schema.get("$defs").is_some(), "schema must have '$defs' key");
+        assert!(
+            schema.get("world").is_some(),
+            "schema must have 'world' key"
+        );
+        assert!(
+            schema.get("exports").is_some(),
+            "schema must have 'exports' key"
+        );
+        assert!(
+            schema.get("$defs").is_some(),
+            "schema must have '$defs' key"
+        );
     }
 
     #[test]
     fn test_aggregator_multiple_exports() {
         let engine = make_engine();
-        // Try timer_aggregator first, fall back to simple_aggregator
         let component = load_component(&engine, "timer_aggregator");
         let schema = generate_schema(&engine, &component, &SchemaOptions::default()).unwrap();
+
+        println!(
+            "timer_aggregator schema:\n{}",
+            serde_json::to_string_pretty(&schema).unwrap()
+        );
 
         let exports = schema.get("exports").unwrap().as_object().unwrap();
         // Aggregator world has 3 exports: process-input, handle-timer-callback, handle-submit-callback
@@ -107,18 +338,21 @@ mod tests {
         let component = load_component(&engine, "square");
         let schema = generate_schema(&engine, &component, &SchemaOptions::default()).unwrap();
 
+        println!(
+            "square schema:\n{}",
+            serde_json::to_string_pretty(&schema).unwrap()
+        );
+
         assert!(schema.get("exports").is_some(), "schema must have exports");
     }
 
     #[test]
     fn test_exports_only_d05() {
-        // Verify that the schema only contains exported functions, not imports
         let engine = make_engine();
         let component = load_component(&engine, "echo_data");
         let schema = generate_schema(&engine, &component, &SchemaOptions::default()).unwrap();
 
         let exports = schema.get("exports").unwrap().as_object().unwrap();
-        // Should not contain imported host functions like get-evm-chain-config, config-var, etc.
         for (name, _) in exports {
             assert!(
                 !name.contains("get-evm-chain-config")
@@ -136,15 +370,17 @@ mod tests {
         let component = load_component(&engine, "timer_aggregator");
         let schema = generate_schema(&engine, &component, &SchemaOptions::default()).unwrap();
 
+        println!(
+            "timer_aggregator $defs:\n{}",
+            serde_json::to_string_pretty(schema.get("$defs").unwrap()).unwrap()
+        );
+
         let defs = schema.get("$defs").unwrap().as_object().unwrap();
-        // The aggregator has shared types across its 3 exports (e.g. aggregator-input)
-        // At least some types should be deduplicated into $defs
         assert!(
             !defs.is_empty(),
             "aggregator schema should have shared types in $defs"
         );
 
-        // Verify $ref pointers exist somewhere in the exports
         let exports_str = serde_json::to_string(schema.get("exports").unwrap()).unwrap();
         assert!(
             exports_str.contains("$ref"),
