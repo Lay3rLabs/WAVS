@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: unknown
 stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-03-25T01:22:59.464Z"
+last_updated: "2026-03-25T13:37:59.334Z"
 progress:
   total_phases: 0
   completed_phases: 0
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 02 — WIT-to-Schema Tooling
+**Current focus:** Phase 02 — broadcast-and-routing
 
 ## Current Position
 
-Phase: 02 (WIT-to-Schema Tooling) — EXECUTING
-Plan: 2 of 2
+Phase: 02 (broadcast-and-routing) — EXECUTING
+Plan: 1 of 2
 
 ## Performance Metrics
 
