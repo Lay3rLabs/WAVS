@@ -35,6 +35,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
+          package_json_file: app/package.json
           run_install: false
 
       - name: Install frontend dependencies
