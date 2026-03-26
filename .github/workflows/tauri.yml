@@ -43,14 +43,33 @@ jobs:
       - name: Install frontend dependencies
         run: cd app && pnpm install
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri app
+        id: tauri-build
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: "./app"
-          tagName: ${{ github.ref_name }}
-          releaseName: ${{ github.ref_name }}
-          releaseBody: "See the assets to download this version and install."
-          releaseDraft: false
-          prerelease: false
+          includeRelease: false
           args: ${{ matrix.args }}
+
+      - name: Upload artifacts to release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          ARTIFACTS='${{ steps.tauri-build.outputs.artifactPaths }}'
+
+          for artifact in $(echo "$ARTIFACTS" | jq -r '.[]'); do
+            if [ ! -f "$artifact" ]; then
+              continue
+            fi
+
+            filename=$(basename "$artifact")
+            # Strip version from filename: WAVS_0.0.1_aarch64.dmg -> WAVS_aarch64.dmg
+            renamed=$(echo "$filename" | sed -E 's/_[0-9]+\.[0-9]+\.[0-9]+//')
+
+            cp "$artifact" "/tmp/$renamed"
+            gh release upload "$TAG" "/tmp/$renamed" --repo "${{ github.repository }}" --clobber
+          done
