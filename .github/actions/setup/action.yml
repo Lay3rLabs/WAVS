@@ -15,6 +15,9 @@ runs:
           librsvg2-dev \
           patchelf
 
+    - name: Install protoc
+      uses: arduino/setup-protoc@v3
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
