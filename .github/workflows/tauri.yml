@@ -43,33 +43,30 @@ jobs:
       - name: Install frontend dependencies
         run: cd app && pnpm install
 
-      - name: Build Tauri app
-        id: tauri-build
-        uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: "./app"
-          includeRelease: false
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ github.ref_name }}
+          releaseBody: "See the assets to download this version and install."
+          releaseDraft: false
+          prerelease: false
           args: ${{ matrix.args }}
 
-      - name: Upload artifacts to release
+      - name: Rename release assets to strip version
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.ref_name }}"
-          ARTIFACTS='${{ steps.tauri-build.outputs.artifactPaths }}'
+          REPO="${{ github.repository }}"
 
-          for artifact in $(echo "$ARTIFACTS" | jq -r '.[]'); do
-            if [ ! -f "$artifact" ]; then
-              continue
+          gh api "repos/${REPO}/releases/tags/${TAG}" --jq '.assets[] | "\(.id) \(.name)"' | while read -r id name; do
+            renamed=$(echo "$name" | sed 's/-0\.0\.1-1/_/' | sed 's/[_-]0\.0\.1//' | sed 's/__/_/g; s/_\./\./')
+            if [ "$renamed" != "$name" ]; then
+              echo "Renaming: $name -> $renamed"
+              gh api --method PATCH "repos/${REPO}/releases/assets/${id}" -f name="$renamed" --silent
             fi
-
-            filename=$(basename "$artifact")
-            # Strip version from filename: WAVS_0.0.1_aarch64.dmg -> WAVS_aarch64.dmg
-            renamed=$(echo "$filename" | sed -E 's/_[0-9]+\.[0-9]+\.[0-9]+//')
-
-            cp "$artifact" "/tmp/$renamed"
-            gh release upload "$TAG" "/tmp/$renamed" --repo "${{ github.repository }}" --clobber
           done
