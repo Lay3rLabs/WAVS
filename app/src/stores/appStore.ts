@@ -38,7 +38,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set, get) => ({
   // Initial state
-  settings: { wavs_home: null, saved_registries: [], saved_service_managers: [] },
+  settings: { wavs_home: null, saved_registries: [], saved_service_managers: [], saved_services: [], mcp_enabled: false, mcp_auto_start: false, mcp_token: null, env_vars: {} },
   logList: [],
   activityList: [],
   services: new Map(),
