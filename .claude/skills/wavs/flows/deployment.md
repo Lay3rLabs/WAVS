@@ -18,6 +18,7 @@ Deploy a new WAVS service with an on-chain ServiceManager contract.
   - **SimpleServiceManager** (lightweight PoA): `wavs:wavs_deploy_service_manager` — returns `address`
   - **POAStakeRegistry** (full middleware): `wavs:wavs_deploy_poa_service_manager` — returns proxy `address`; requires Docker
 - [ ] **Step 3** — `wavs:wavs_upload_component` — Upload the compiled `.wasm`; save the returned digest (raw 64-char hex, no `sha256:` prefix).
+  - **OCI alternative:** If the component is published to an OCI registry, skip upload and use `"source": {"oci": {"uri": "oci://ghcr.io/org/component:v1.0"}}` in the service definition. The WAVS node pulls it at deploy time. See [`reference/service-json.md`](../reference/service-json.md#oci-pull-from-registry-at-deploy-time).
 - [ ] **Step 4** — `wavs:wavs_save_service` — Save the service definition JSON; get back a URI.
 - [ ] **Step 5** — `wavs:wavs_set_service_uri` — Call `setServiceURI` on-chain with the URI from step 4.
 - [ ] **Step 6** — `wavs:wavs_deploy_service` — Register the service with the WAVS node (reads definition from chain).
@@ -25,6 +26,7 @@ Deploy a new WAVS service with an on-chain ServiceManager contract.
 - [ ] **Step 7 (POA only)** — `wavs:wavs_register_operator` — Register the node's signing key on the POAStakeRegistry. **Must be called AFTER `wavs_deploy_service`** so the node has assigned a service-specific HD-derived signing key to register on-chain.
 - [ ] **Step 8** — `wavs:wavs_simulate_trigger` — Smoke test.
 - [ ] **Step 9** — `wavs:wavs_list_services` — Confirm the service appears with `status: active`.
+- [ ] **Step 10 (optional)** — If `--exec-enabled` is set on the MCP server, the service is now available as a `wavs_exec_*` tool. Follow [`flows/execution.md`](execution.md) to execute it at any trust tier.
 
 ---
 
@@ -86,6 +88,7 @@ Pass to `wavs_save_service` or `wavs_deploy_dev_service`:
 {
   "name": "my-service",
   "status": "active",
+  "exec_enabled": true,
   "manager": {
     "evm": {
       "chain": "evm:31337",

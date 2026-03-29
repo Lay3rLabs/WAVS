@@ -148,6 +148,7 @@ impl ExecComponent {
                 chain: chain.clone(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let data = match simulates_trigger {

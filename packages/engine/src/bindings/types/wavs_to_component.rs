@@ -230,6 +230,16 @@ impl From<wavs_types::ComponentSource> for component_service::ComponentSource {
             wavs_types::ComponentSource::Registry { registry } => {
                 component_service::ComponentSource::Registry(registry.into())
             }
+            wavs_types::ComponentSource::Oci { uri, digest } => {
+                component_service::ComponentSource::Download(
+                    component_service::ComponentSourceDownload {
+                        uri,
+                        digest: digest
+                            .map(|d| d.to_string())
+                            .unwrap_or_else(|| "unresolved".to_string()),
+                    },
+                )
+            }
         }
     }
 }
@@ -777,6 +787,16 @@ impl From<wavs_types::ComponentSource> for aggregator_service::ComponentSource {
             }
             wavs_types::ComponentSource::Registry { registry } => {
                 aggregator_service::ComponentSource::Registry(registry.into())
+            }
+            wavs_types::ComponentSource::Oci { uri, digest } => {
+                aggregator_service::ComponentSource::Download(
+                    aggregator_service::ComponentSourceDownload {
+                        uri,
+                        digest: digest
+                            .map(|d| d.to_string())
+                            .unwrap_or_else(|| "unresolved".to_string()),
+                    },
+                )
             }
         }
     }

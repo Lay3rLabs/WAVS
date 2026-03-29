@@ -53,5 +53,6 @@ pub fn make_service(wasm_digest: ComponentDigest, config: BTreeMap<String, Strin
             chain: "evm:noop".parse().unwrap(),
             address: Default::default(),
         },
+        exec_enabled: None,
     }
 }

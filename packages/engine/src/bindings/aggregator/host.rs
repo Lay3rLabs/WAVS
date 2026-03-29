@@ -75,14 +75,10 @@ impl Host for AggregatorHostComponent {
     }
 
     fn log(&mut self, level: LogLevel, message: String) {
-        let digest = self
+        let workflow = self
             .service
             .workflows
             .get(&self.workflow_id)
-            .and_then(|workflow| match &workflow.submit {
-                wavs_types::Submit::Aggregator { component, .. } => Some(component.source.digest()),
-                _ => unreachable!(),
-            })
             .unwrap_or_else(|| {
                 panic!(
                     "Workflow with ID {} not found in service {}",
@@ -90,6 +86,14 @@ impl Host for AggregatorHostComponent {
                     self.service.id()
                 )
             });
+
+        let digest = match &workflow.submit {
+            wavs_types::Submit::Aggregator { component, .. } => component
+                .source
+                .digest()
+                .expect("aggregator component must have a digest for logging"),
+            _ => unreachable!(),
+        };
 
         (self.inner_log)(
             &self.service.id(),

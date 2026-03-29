@@ -1239,6 +1239,7 @@ mod tests {
             )]
             .into_iter()
             .collect(),
+            exec_enabled: None,
         };
         services.save(&service).unwrap();
 
@@ -1332,6 +1333,7 @@ mod tests {
             )]
             .into_iter()
             .collect(),
+            exec_enabled: None,
         };
         services.save(&service).unwrap();
 

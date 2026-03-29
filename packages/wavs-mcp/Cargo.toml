@@ -15,14 +15,19 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
-wavs-types = { workspace = true }
+wavs-types = { workspace = true, features = ["signer"] }
+alloy-signer-local = { workspace = true }
 anyhow = { workspace = true }
 const-hex = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 utils = { path = "../utils" }
+wit-schema = { path = "../wit-schema" }
+wasmtime = { workspace = true, features = ["component-model"] }
 alloy-primitives = { workspace = true }
 alloy-signer = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
+alloy-provider = { workspace = true }
 alloy-sol-types = { workspace = true }
 alloy-sol-macro = { workspace = true }
 alloy-contract = { workspace = true }

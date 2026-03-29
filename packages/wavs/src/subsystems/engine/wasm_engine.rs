@@ -71,20 +71,26 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         &self,
         source: &ComponentSource,
     ) -> Result<ComponentDigest, EngineError> {
-        let digest = source.digest().clone();
-        if self.engine.storage.data_exists(&digest.clone().into())? {
-            Ok(digest)
-        } else {
-            match source {
-                ComponentSource::Download { .. } | ComponentSource::Registry { .. } => {
-                    // Fetches component, validates it has the expected digest, and stores it in the lookup
-                    self.engine.load_component_from_source(source).await?;
-                    Ok(digest)
-                }
-                ComponentSource::Digest(_) => {
+        // If we have a known digest, check cache first
+        if let Some(digest) = source.digest() {
+            if self.engine.storage.data_exists(&digest.clone().into())? {
+                return Ok(digest.clone());
+            }
+        }
+
+        match source {
+            ComponentSource::Download { .. }
+            | ComponentSource::Registry { .. }
+            | ComponentSource::Oci { .. } => {
+                let (_component, digest) = self.engine.load_component_from_source(source).await?;
+                Ok(digest)
+            }
+            ComponentSource::Digest(digest) => {
+                if !self.engine.storage.data_exists(&digest.clone().into())? {
                     self.metrics.increment_total_errors("unknown digest");
-                    Err(EngineError::UnknownDigest(digest))
+                    return Err(EngineError::UnknownDigest(digest.clone()));
                 }
+                Ok(digest.clone())
             }
         }
     }
@@ -127,10 +133,11 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 )
             })?;
 
-        let digest = workflow.component.source.digest().clone();
+        let (component, _digest) = self
+            .engine
+            .load_component_from_source(&workflow.component.source)
+            .await?;
         let chain_configs = self.engine.get_chain_configs()?;
-
-        let component = self.engine.load_component(&digest).await?;
 
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
@@ -415,17 +422,19 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 )
             })?;
 
-        let digest = match &workflow.submit {
-            wavs_types::Submit::Aggregator { component, .. } => component.source.digest().clone(),
+        let aggregator_source = match &workflow.submit {
+            wavs_types::Submit::Aggregator { component, .. } => &component.source,
             wavs_types::Submit::None => {
                 tracing::info!("Submit is None for service_id: {}", service.id(),);
                 return Ok(None);
             }
         };
 
+        let (component, _digest) = self
+            .engine
+            .load_component_from_source(aggregator_source)
+            .await?;
         let chain_configs = self.engine.get_chain_configs()?;
-
-        let component = self.engine.load_component(&digest).await?;
 
         let instance_deps = InstanceDepsBuilder {
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
@@ -681,6 +690,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -744,6 +754,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -844,6 +855,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -911,6 +923,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -994,6 +1007,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1120,6 +1134,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1158,6 +1173,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1196,6 +1212,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1239,6 +1256,7 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
+            exec_enabled: None,
         };
 
         let service_id = service.id();
