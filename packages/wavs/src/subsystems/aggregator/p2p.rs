@@ -829,11 +829,11 @@ async fn run_lookup_network(
                                 // Broadcast via Engine channel (for caching + catch-up / CATCH-01)
                                 let ack_rx = mailbox.broadcast(Recipients::All, msg.clone()).await;
 
-                                // CRITICAL: Encode P2pMessage to bytes before sending on direct channel.
-                                // direct_sender.send() requires impl Into<IoBufs>, not P2pMessage.
-                                // Encode::encode() is auto-derived from Write + EncodeSize on P2pMessage.
+                                // Channel 1: targeted delivery to subscribed peers only (TGT-01)
+                                // get_recipients() returns Recipients::All as fallback when set is empty (TGT-02)
+                                let direct_recipients = peer_subscriptions.get_recipients(&service_id.inner());
                                 let encoded_bytes = Encode::encode(&msg);
-                                if let Err(e) = direct_sender.send(Recipients::All, encoded_bytes, false).await {
+                                if let Err(e) = direct_sender.send(direct_recipients, encoded_bytes, false).await {
                                     tracing::warn!("Direct channel send failed: {:?}", e);
                                 }
 
@@ -857,8 +857,10 @@ async fn run_lookup_network(
                                             let queued = retry_queue.drain_all();
                                             for queued_msg in queued {
                                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                                // TGT-04: Re-resolve recipients at drain time from current subscription state
+                                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes);
                                                 let queued_bytes = Encode::encode(&queued_msg);
-                                                if let Err(e) = direct_sender.send(Recipients::All, queued_bytes, false).await {
+                                                if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                                     tracing::warn!("Direct channel retry send failed: {:?}", e);
                                                 }
                                             }
@@ -1076,8 +1078,10 @@ async fn run_lookup_network(
                             let queued = retry_queue.drain_all();
                             for queued_msg in queued {
                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                // TGT-04: Re-resolve recipients at drain time from current subscription state
+                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes);
                                 let queued_bytes = Encode::encode(&queued_msg);
-                                if let Err(e) = direct_sender.send(Recipients::All, queued_bytes, false).await {
+                                if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                     tracing::warn!("Retry send failed: {:?}", e);
                                 }
                             }
