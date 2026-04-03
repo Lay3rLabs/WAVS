@@ -1,264 +1,217 @@
 # Technology Stack
 
-**Project:** WAVS v1.2 Tauri App -- New Feature Stack Additions
-**Researched:** 2026-03-23
+**Project:** WAVS v1.3 Per-Service P2P Targeting
+**Researched:** 2026-04-03
 **Overall confidence:** HIGH
 
-This document covers ONLY the stack additions/changes needed for the v1.2 milestone features: BLS service deployment UI, P2P operator dashboard, unified activity events, and settings UX overhaul. The existing stack (Tauri 2, React 19, Vite 7, Zustand 5, Viem 2, Tailwind 3, CodeMirror 6, @tanstack/react-virtual, @scure/bip39) is validated and NOT re-researched.
+This document covers ONLY the stack additions/changes needed for v1.3: replacing `Recipients::All` broadcast with `Recipients::Some(service_peers)` targeted delivery, adding a service subscription protocol between peers, scoping catch-up per service, and managing subscription lifecycle. The existing commonware stack (p2p 2026.3.0, broadcast 2026.3.0, cryptography 2026.3.0, codec 2026.3.0) is validated and NOT re-researched.
 
 ## Executive Summary
 
-The existing stack is sufficient for nearly everything. The new features are primarily UI pages that consume data already available from the WAVS HTTP API (P2P status, signer info) and existing Tauri events (triggers, submissions). **No new frontend npm dependencies are needed.** The work is:
+**No new crate dependencies are needed.** The entire v1.3 feature set is achievable with the existing commonware-p2p 2026.3.0 stack. The `Recipients::Some(Vec<PublicKey>)` variant already exists in commonware-p2p and is already imported but unused -- every call site currently uses `Recipients::All`. The work is:
 
-1. **New Tauri commands** (Rust backend) to proxy existing HTTP API endpoints (`/p2p/status`, `/services/signer`) into the Tauri IPC layer
-2. **New TypeScript types** for P2P status, BLS signer responses, and updated `SignatureAlgorithm` enum
-3. **New React pages and components** using existing patterns (Zustand stores, hand-rolled Tailwind components, `@tanstack/react-virtual` for lists)
-4. **Updated service builder store** to support `bls12381` algorithm selection
-5. **New BLS POAStakeRegistry ABI** in the frontend for BLS operator key registration
+1. **New subscription protocol** -- peers exchange service subscription announcements over the existing P2P channels to build a `service_id -> Set<PublicKey>` map
+2. **Replace `Recipients::All` with `Recipients::Some`** -- look up service peers from the subscription map when publishing
+3. **Per-service catch-up scoping** -- filter the broadcast Engine's cached messages by service_id on replay, or use subscription announcements to avoid replaying irrelevant messages
+4. **Subscription lifecycle** -- extend existing `P2pCommand::Subscribe`/`Unsubscribe` to trigger announcement broadcasts to peers
 
-No new runtime dependencies. No architecture changes. The app already has all the plumbing.
+No new runtime dependencies. No commonware version bump required. No architecture changes to the two-channel broadcast pattern. The subscription protocol is a pure application-layer addition.
 
-## Recommended Stack -- Additions Only
+## Recommended Stack -- NO Additions, Internal Changes Only
 
-### New Tauri Commands (Rust Backend)
+### Existing Dependencies (unchanged)
 
-| Command | Proxies | Purpose | Why Not Direct HTTP |
-|---------|---------|---------|---------------------|
-| `cmd_get_p2p_status` | `GET /p2p/status` | P2P dashboard data | Consistent with existing pattern (all data flows through Tauri IPC, not direct HTTP from renderer). The app's renderer process does not know the WAVS HTTP port; only the Rust backend does via `WavsConfigState`. |
-| `cmd_get_service_signer` | `POST /services/signer` | BLS/ECDSA key display | Same reason. Returns `SignerResponse` (either `Secp256k1 { hd_index, evm_address }` or `Bls12381 { hd_index, g1_pubkey_hex }`). |
+| Crate | Version | Role in v1.3 | Confidence |
+|-------|---------|-------------|------------|
+| `commonware-p2p` | 2026.3.0 | `Recipients::Some(Vec<PublicKey>)` for targeted send. `Sender::send()` already accepts `Recipients` enum. | HIGH -- verified from source in cargo registry |
+| `commonware-broadcast` | 2026.3.0 | `Mailbox::broadcast()` already accepts `Recipients` enum. Engine caches per-peer, no changes needed. | HIGH -- verified from source |
+| `commonware-codec` | 2026.3.0 | `Encode`/`Decode` for new `SubscriptionMessage` type. Existing derive pattern via `Write`/`Read`/`EncodeSize`. | HIGH -- same pattern as `P2pMessage` |
+| `commonware-cryptography` | 2026.3.0 | `ed25519::PublicKey` for peer identification in subscription map. `Sha256` for message dedup. | HIGH -- unchanged |
+| `commonware-runtime` | 2026.3.0 | `Buf`/`BufMut` for codec. No changes. | HIGH |
+| `commonware-utils` | 2026.3.0 | `ordered::Map`/`ordered::Set` for peer tracking. Already used for Oracle. | HIGH |
+| `commonware-math` | 2026.3.0 | `Random` trait for Ed25519 key derivation. Unchanged. | HIGH |
 
-**Implementation pattern:** Follow `cmd_get_health_status` exactly -- read config from `WavsConfigState`, make `reqwest` call to local HTTP API, deserialize response, return to frontend.
+### Standard Library / Existing Workspace Dependencies Used
 
-**Alternative considered: direct Dispatcher access.** The P2P status could be fetched via `state.dispatcher.aggregator.get_p2p_status()` (like the HTTP handler does). This avoids the HTTP round-trip but couples the Tauri command to internal APIs. Both approaches work. The HTTP proxy approach is simpler and consistent with existing patterns.
+| Dependency | Already In | Use in v1.3 |
+|-----------|-----------|-------------|
+| `std::collections::HashMap` | stdlib | `service_id -> HashSet<PublicKey>` subscription map |
+| `std::collections::HashSet` | stdlib | Per-service peer set |
+| `dashmap` | workspace | Alternative for thread-safe subscription map if shared across tasks (already used elsewhere in WAVS) |
+| `serde` + `serde_json` | workspace | Serialization of subscription announcements |
+| `tokio::sync::mpsc` | workspace | Already used for P2P command channel |
+| `tracing` | workspace | Logging subscription events |
 
-### New TypeScript Types
+## Key Integration Points
 
-These types mirror Rust structs already defined in `packages/types/src/http.rs` and `packages/types/src/service.rs`:
+### 1. `Recipients::Some` -- Already Available, Zero Changes to commonware
 
-| Type | Source | Status |
-|------|--------|--------|
-| `P2pStatus` | `packages/types/src/http.rs` | New -- not yet in frontend |
-| `SignerResponse` | `packages/types/src/http.rs` | New -- not yet in frontend |
-| `SignatureAlgorithm: 'secp256k1' \| 'bls12381'` | `packages/types/src/service.rs` | **Update** -- currently hardcoded to `'secp256k1'` only in `app/src/types/index.ts` |
+The `Recipients` enum in commonware-p2p 2026.3.0 (verified from `/Users/jacobhartnell/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/commonware-p2p-2026.3.0/src/lib.rs` line 42-46):
 
-### BLS POAStakeRegistry ABI (Frontend)
-
-The BLS `IPOAStakeRegistry` contract interface is different from the existing secp256k1 one:
-
-| Difference | secp256k1 (existing) | BLS (new) |
-|-----------|---------------------|-----------|
-| `getLatestOperatorSigningKey` returns | `address` | `bytes` (128-byte G1 pubkey) |
-| `updateOperatorSigningKey` args | `(address newSigningKey, bytes signingKeySignature)` | `(bytes blsKey, bytes blsSigProof)` |
-| `SigningKeyUpdate` event | `newSigningKey: address` | `newKeyHash: bytes32` |
-| New errors | -- | `InvalidBLSKeyLength`, `InvalidBLSKeyOwnershipProof`, `InvalidBLSSignature`, `InvalidBLSSignatureLength` |
-
-**Action:** Create `app/src/contracts/POABlsStakeRegistry.ts` with the ABI from `packages/types/src/contracts/solidity/abi/bls/IPOAStakeRegistry.json`. The existing `POAStakeRegistry.ts` remains for secp256k1 registries.
-
-### Frontend Patterns to Follow
-
-| Pattern | Existing Example | Apply To |
-|---------|-----------------|----------|
-| Zustand store | `appStore.ts` | New `p2pStore.ts` for P2P status polling state |
-| Tauri command wrapper | `tauri/commands.ts` | New `getP2pStatus()`, `getServiceSigner()` commands |
-| Tauri event listener | `tauri/listeners.ts` | No new events needed -- P2P status uses polling, not push |
-| Virtualized list | `ActivityFeed.tsx` | Peer list (if many peers, unlikely in practice) |
-| Hand-rolled components | `components/atoms/` | New `KeyDisplay`, `PeerCard`, `QuorumProgress` components |
-| Page layout | `pages/Health.tsx` | New `P2P.tsx` page, updated `Settings.tsx` |
-
-### What NOT to Add
-
-| Category | Temptation | Why Not |
-|----------|-----------|---------|
-| UI component library | Radix, Headless UI, shadcn | App uses hand-rolled Tailwind components (Button, Modal, Dropdown, Tabs, Toast, etc.). Adding a component library would create inconsistency. The existing atoms are sufficient. |
-| Charting library | recharts, victory, d3 | Quorum progress is a simple bar/percentage. A full charting library is overkill. Use Tailwind width percentages. |
-| WebSocket client | socket.io-client, ws | P2P status is infrequent (poll every 5-10s via Tauri command). The WAVS HTTP API does not expose a WebSocket endpoint for P2P status. Polling with `setInterval` + Zustand is the correct pattern. |
-| State machine library | XState, Robot | BLS key registration is a 2-step flow (register operator + register BLS key). A simple state variable in Zustand is sufficient, like the existing `DeployState` pattern in `serviceBuilderStore.ts`. |
-| Copy-to-clipboard library | clipboard-copy, react-copy-to-clipboard | Use `navigator.clipboard.writeText()` directly. All Tauri webview targets support it. |
-| BLS crypto in frontend | noble-bls12-381 | BLS key derivation happens in the Rust backend only. The frontend displays hex strings, never computes BLS operations. |
-| react-query / tanstack-query | Data fetching + caching | The app uses Zustand + manual `invoke()` calls. Adding react-query would create two competing data-fetching paradigms. Keep using Zustand. |
-| Form library | react-hook-form, formik | Settings page uses controlled inputs with Zustand. Continue this pattern. |
-
-## Detailed Component Analysis
-
-### 1. P2P Dashboard Page
-
-**Data source:** `GET /p2p/status` via new `cmd_get_p2p_status` Tauri command.
-
-**Response shape** (from `packages/types/src/http.rs`):
-```typescript
-interface P2pStatus {
-  enabled: boolean;
-  local_peer_id: string | null;  // Ed25519 pubkey hex
-  listen_addresses: string[];     // e.g. ["0.0.0.0:9000"]
-  connected_peers: number;
-  peer_ids: string[];            // Ed25519 pubkeys of connected peers
-  subscribed_services: string[]; // hex service ID hashes
+```rust
+pub enum Recipients<P: PublicKey> {
+    All,
+    Some(Vec<P>),
+    One(P),
 }
 ```
 
-**Polling pattern:** `useEffect` with `setInterval(5000)`. Store in a `p2pStore.ts` (Zustand). Display:
-- Node identity card (Ed25519 peer ID, listen addresses)
-- Connected peers list (peer IDs, truncated with copy)
-- Subscribed services (correlated with service names from `appStore.services`)
+Both `Sender::send()` (direct channel) and `Broadcaster::broadcast()` (Engine mailbox) accept `Recipients` as a parameter. The current code passes `Recipients::All` at **14 call sites** in `p2p.rs`. Replacing with `Recipients::Some(peers)` requires only a peer lookup per service_id before each send.
 
-**No new dependencies needed.** Truncation + copy uses existing `AddressDisplay` component pattern. Periodic refetch uses `setInterval` like Health page already does.
+**How `Recipients::Some` works in commonware-p2p:**
+- The network layer iterates `Vec<P>` and sends to each connected peer in the list
+- Peers not currently connected are silently skipped (same as `Recipients::All` for offline peers)
+- The `send()` return value is `Vec<PublicKey>` -- the peers that actually received the message
+- Rate limiting still applies per-peer via `LimitedSender::check()`
 
-### 2. BLS Key Display + Registration
+**Confidence:** HIGH -- read directly from commonware-p2p source code.
 
-**Key display data:** `POST /services/signer` via new `cmd_get_service_signer` Tauri command.
+### 2. Subscription Protocol -- Application Layer Over Existing Channels
 
-**Response shape** (from `packages/types/src/http.rs`):
-```typescript
-type SignerResponse =
-  | { secp256k1: { hd_index: number; evm_address: string } }
-  | { bls12381: { hd_index: number; g1_pubkey_hex: string } };
-```
+No commonware-level subscription mechanism exists. The subscription protocol is entirely application-level, running on the same two P2P channels already configured.
 
-**Key registration flow for BLS:**
-1. Owner calls `registerOperator(operatorAddress, weight)` -- same as secp256k1
-2. Operator calls `updateOperatorSigningKey(blsKey, blsSigProof)` where:
-   - `blsKey` = 128-byte G1 pubkey (from SignerResponse)
-   - `blsSigProof` = 256-byte G2 signature proving key ownership
+**Approach:** Introduce a new `P2pEnvelope` enum (or extend `P2pMessage`) that wraps both data messages and control messages:
 
-**Critical: BLS sig proof computation happens on the backend.** The frontend cannot compute BLS signatures. A new Tauri command `cmd_get_bls_key_proof` is needed that calls the Rust backend to sign `keccak256(abi.encode(operatorAddress))` with the BLS private key and return the G2 signature bytes. This is the ONLY new crypto operation needed.
+```rust
+enum P2pEnvelope {
+    /// Submission data (existing P2pMessage content)
+    Submission(P2pMessage),
+    /// Subscription announcement
+    Subscription(SubscriptionAnnouncement),
+}
 
-**Contract interaction:** Uses existing Viem `writeContract()` pattern from `app/src/utils/evm.ts`. The BLS `updateOperatorSigningKey` takes `(bytes, bytes)` instead of `(address, bytes)` -- the ABI handles this.
-
-### 3. Unified Activity Events
-
-**Current state:** Activity events already unify triggers and submissions. Each `ActivityItem` has a `kind: 'trigger' | 'submission'` discriminator. The `ActivityCard` and `ActivityFeed` components already handle both.
-
-**What needs to change:**
-- Add submission result data (success/error) to `SubmissionEvent` -- currently only has `service_id`, `workflow_id`, `trigger_data`
-- Correlate trigger-to-submission by matching `serviceId + workflowId + triggerData` (or EventId if available)
-- Display error information when submission fails
-- Show BLS/secp256k1 algorithm badge on submission cards
-
-**Backend change needed:** The Rust `SubmissionEvent` (emitted via `app.emit_ext()`) needs to include:
-- `success: boolean`
-- `error: string | null`
-- `signature_algorithm: string` (for badge display)
-- Optional: `event_id: string` for correlation
-
-**No new frontend dependencies.** Just type updates and conditional rendering in `ActivityCard`.
-
-### 4. Settings Page Reorganization
-
-**Current state:** `Settings.tsx` is 33K -- a single large file with all settings sections inlined.
-
-**Recommended approach:** Extract sections into sub-components:
-- `settings/GeneralSection.tsx` (wavs home, restart)
-- `settings/WalletSection.tsx` (mnemonic management, derived addresses)
-- `settings/McpSection.tsx` (MCP server config)
-- `settings/EnvVarsSection.tsx` (environment variables)
-- `settings/RegistrySection.tsx` (POA registries)
-- `settings/AdvancedSection.tsx` (TOML editor, reset)
-
-Use existing `Tabs` component from `components/atoms/Tabs.tsx` for navigation between sections.
-
-**No new dependencies.** This is pure refactoring + UI reorganization.
-
-### 5. Service Builder BLS Support
-
-**Current state:** `serviceBuilderStore.ts` has `signatureAlgorithm: 'secp256k1'` hardcoded in `SubmitDraft`.
-
-**Changes needed:**
-- Update `SignatureAlgorithm` type to `'secp256k1' | 'bls12381'`
-- Update `SubmitDraft.signatureAlgorithm` to accept both
-- When `bls12381` is selected, set `signaturePrefix` to `'none'` (BLS uses hash-to-curve, not EIP-191)
-- UI: Algorithm selector radio/toggle in the submit section of the service builder
-- UI: When BLS selected, show the BLS G1 pubkey (from `cmd_get_service_signer`) and registration status
-
-## New Tauri Commands Summary
-
-| Command | Input | Output | Backend Implementation |
-|---------|-------|--------|----------------------|
-| `cmd_get_p2p_status` | (none) | `P2pStatus` | HTTP GET to `/p2p/status` |
-| `cmd_get_service_signer` | `{ service_manager: ServiceManager }` | `SignerResponse` | HTTP POST to `/services/signer` |
-| `cmd_get_bls_key_proof` | `{ service_manager: ServiceManager, operator_address: string }` | `{ g1_pubkey: string, g2_proof: string }` | Derive BLS key from mnemonic, sign keccak256(abi.encode(operator)) |
-
-## New Zustand Store
-
-```typescript
-// p2pStore.ts -- minimal, follows appStore pattern
-interface P2pState {
-  status: P2pStatus | null;
-  isPolling: boolean;
-  error: string | null;
-
-  fetchStatus: () => Promise<void>;
-  startPolling: (intervalMs?: number) => void;
-  stopPolling: () => void;
+struct SubscriptionAnnouncement {
+    /// Services this peer subscribes to (full set, not delta)
+    service_ids: Vec<[u8; 32]>,
 }
 ```
 
-## New React Router Routes
+**Why full-set, not delta:** Simpler convergence. On reconnect or missed announcement, peers exchange full subscription lists. No need for sequence numbers or conflict resolution. Small payloads -- even 100 services is only 3.2KB.
 
-```typescript
-// In App.tsx, add:
-<Route path="/p2p" element={<P2PPage />} />
+**Why not a separate P2P channel:** Registering a third channel adds complexity. Subscription announcements are infrequent (on service add/remove and peer connect) and small. Sharing the existing channel with envelope-based multiplexing is simpler and the established pattern.
+
+**Confidence:** HIGH -- this is standard application-layer protocol design with no commonware dependencies.
+
+### 3. Subscription Map -- New Data Structure in Bridge Loop
+
+The bridge loop (inside `run_lookup_network` and `run_discovery_network`) needs a new data structure:
+
+```rust
+/// Maps service_id -> set of peer public keys subscribed to that service
+struct PeerSubscriptionMap {
+    /// service_id bytes -> set of peer pubkeys
+    subscriptions: HashMap<[u8; 32], HashSet<ed25519::PublicKey>>,
+    /// reverse index: peer -> set of service_ids (for cleanup on disconnect)
+    peer_services: HashMap<ed25519::PublicKey, HashSet<[u8; 32]>>,
+}
 ```
 
-## File Structure for New Code
+**Why `HashMap` not `DashMap`:** The subscription map lives inside the single-threaded bridge loop (`tokio::select!`). No concurrent access. `HashMap` is simpler and faster.
 
-```
-app/src/
-  types/index.ts          -- UPDATE: add P2pStatus, SignerResponse, update SignatureAlgorithm
-  tauri/commands.ts        -- UPDATE: add getP2pStatus(), getServiceSigner(), getBlsKeyProof()
-  stores/p2pStore.ts       -- NEW: P2P status polling store
-  stores/serviceBuilderStore.ts -- UPDATE: BLS algorithm support
-  pages/P2P.tsx            -- NEW: P2P dashboard page
-  pages/Settings.tsx       -- REFACTOR: extract into settings/ sub-components
-  contracts/POABlsStakeRegistry.ts -- NEW: BLS registry ABI + helpers
-  utils/evm.ts             -- UPDATE: add BLS operator registration functions
-  components/p2p/          -- NEW: PeerCard, NodeIdentity, QuorumProgress
-  components/activity/ActivityCard.tsx -- UPDATE: submission result display, algorithm badge
-```
+**Why reverse index:** When a peer disconnects (detected via heartbeat timeout or `evict_untracked_peers` from the Provider subscription), we need to remove that peer from all service sets. Without the reverse index, this is O(services * peers). With it, O(services_for_that_peer).
 
-## Rust Backend (src-tauri/)
+**Confidence:** HIGH -- straightforward Rust data structures, no external dependencies.
 
-```
-app/src-tauri/src/
-  commands.rs              -- UPDATE: add cmd_get_p2p_status, cmd_get_service_signer, cmd_get_bls_key_proof
-  lib.rs                   -- UPDATE: register new commands in handler macro
-```
+### 4. Catch-Up Scoping -- Filtered Replay via Existing Engine
 
-**Cargo.toml change:** None needed. The `wavs` workspace dependency already includes all BLS and P2P functionality. The Tauri commands proxy to the HTTP API or access the dispatcher directly.
+The broadcast Engine (commonware-broadcast 2026.3.0) caches messages per-peer in bounded deques. On peer reconnect, the Engine automatically replays cached messages. Currently, ALL cached messages are replayed regardless of service_id.
 
-## Alternatives Considered
+**Two approaches for per-service catch-up scoping:**
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| P2P data fetching | Tauri command + setInterval polling | Tauri event push from backend | P2P status changes infrequently (peers join/leave). Polling every 5s is simpler than adding a new Rust event emitter to the P2P subsystem. Avoids coupling Tauri to aggregator internals. |
-| BLS key proof | New Tauri command `cmd_get_bls_key_proof` | Frontend BLS library (noble-bls12-381) | BLS private key only exists in Rust backend (derived from mnemonic via blst). Sending private key material to the renderer is a security risk. Keep all crypto in Rust. |
-| Settings page | Tab-based sections via existing Tabs atom | Accordion layout | Tabs are clearer for discrete sections. App already has a Tabs component. |
-| Activity correlation | Client-side match by serviceId+workflowId+triggerData hash | Backend-emitted correlation ID | Backend EventId computation uses RIPEMD160 which is not available in the browser WebCrypto API. Client-side matching by composite key is simpler and sufficient for display purposes. |
-| BLS ABI source | Separate `POABlsStakeRegistry.ts` file | Extend existing `POAStakeRegistry.ts` with conditional types | The ABIs are different contracts with different function signatures. Separate files are cleaner. The secp256k1 registry returns `address` for signing keys; the BLS registry returns `bytes`. |
+**Approach A (Recommended): Receiver-side filtering (no Engine changes)**
+- The reconnecting peer already has a `ServiceRouter` that filters inbound messages by `should_accept()`
+- Irrelevant replayed messages are filtered at the application layer
+- The Engine replays everything, but only subscribed-service messages reach the Aggregator
+- **Pro:** Zero changes to commonware-broadcast. Already works today.
+- **Con:** Wastes bandwidth replaying messages the peer will filter out
 
-## Installation
+**Approach B: Separate Engine instances per service**
+- Create one broadcast Engine per service_id
+- Each Engine only caches messages for its service
+- Reconnecting peers only get catch-up for their subscribed services
+- **Pro:** Perfect catch-up scoping, no wasted bandwidth
+- **Con:** Major refactor. Multiple Engine instances means multiple P2P channels per service, requiring dynamic channel registration. commonware-p2p's `network.register()` must be called before `network.start()` -- channels cannot be added dynamically.
 
-**No new npm packages to install.** All features use existing dependencies.
+**Recommendation: Approach A.** The bandwidth cost of replaying filtered messages is negligible for realistic deployments (catch-up deque is bounded at 128 messages per peer, each message is small). The complexity cost of Approach B is prohibitive and would require upstream commonware changes for dynamic channel registration.
 
-**No new Cargo dependencies.** The Tauri backend already has access to everything needed via workspace dependencies (`wavs`, `wavs-types`, `wavs-gui-shared`).
+**Confidence:** HIGH for Approach A (verified from Engine source that replay is push-based, no filtering capability). MEDIUM for Approach B assessment (based on reading `network.register()` API -- channels appear to be registered before `start()`).
 
-## Verification Notes
+### 5. Heartbeat Integration -- Subscription Exchange on Connect
 
-- `P2pStatus` struct verified in `packages/types/src/http.rs` lines 132-147 (HIGH confidence)
-- `SignerResponse` enum verified in `packages/types/src/http.rs` lines 13-26 (HIGH confidence)
-- `SignatureAlgorithm::Bls12381` variant verified in `packages/types/src/service.rs` lines 565-568 (HIGH confidence)
-- BLS `IPOAStakeRegistry` ABI verified in `packages/types/src/contracts/solidity/abi/bls/IPOAStakeRegistry.json` (HIGH confidence)
-- BLS `updateOperatorSigningKey(bytes blsKey, bytes blsSigProof)` signature verified in same ABI (HIGH confidence)
-- Existing Tauri command pattern verified in `app/src-tauri/src/commands.rs` (HIGH confidence)
-- Frontend type mismatch: `SignatureAlgorithm` is `'secp256k1'` only in `app/src/types/index.ts` but Rust has both variants (confirmed, needs update)
+The existing heartbeat mechanism (2-second interval, all-zeros `HEARTBEAT_SERVICE_ID` sentinel) already probes the mesh and tracks connected peers via `connected_peers_tracker`. This is the natural place to exchange subscription announcements.
+
+**When to send subscription announcements:**
+1. **On service subscribe/unsubscribe** -- broadcast to all peers (since we don't yet know who cares)
+2. **On new peer detected** -- send our subscription list to the newly connected peer
+3. **Periodically (optional)** -- piggyback on heartbeat for convergence safety
+
+New peer detection already happens in the inbound message handler when a peer_pubkey is first seen in `connected_peers_tracker`. This is the trigger point.
+
+**Confidence:** HIGH -- leverages existing heartbeat and peer tracking code.
+
+## What NOT to Add
+
+### Crates to Avoid
+
+| Crate | Why Considered | Why NOT |
+|-------|---------------|---------|
+| `libp2p` | GossipSub has native topic-based pub/sub | Already removed in v1.0. Going back would be a regression. commonware's `Recipients::Some` achieves the same goal. |
+| `commonware-consensus` | Could provide consensus on subscription state | Massive overkill. Subscription state is soft/best-effort, not safety-critical. |
+| `commonware-sync` | Could synchronize subscription state | Same reason. Application-level announcement convergence is sufficient. |
+| `tokio-cron-scheduler` | Could schedule periodic subscription refresh | `tokio::time::interval` (already used for heartbeat) is sufficient. |
+| Any pub/sub crate | Topic-based subscription | Re-implementing what we already have with `ServiceRouter` + `Recipients::Some`. |
+
+### Patterns to Avoid
+
+| Pattern | Why Tempting | Why Bad |
+|---------|-------------|---------|
+| Per-service P2P channels | Clean isolation | `network.register()` appears to require pre-start registration. Dynamic services would break this. Even if dynamic registration worked, N services = N channels = complexity explosion. |
+| Delta-based subscription updates | Lower bandwidth per update | Requires sequence numbers, missed-message recovery, conflict resolution. Full-set announcements are small enough (32 bytes * num_services) that simplicity wins. |
+| Persistent subscription storage | Survives restart | Subscriptions are re-announced on connect. Persisting adds complexity with zero benefit -- peers re-send their subscription lists when they reconnect. |
+| Separate subscription channel (3rd P2P channel) | Clean separation of control and data | More channels = more complexity, more Engine instances. Envelope-based multiplexing on existing channels is simpler. |
+
+## Migration Path (Existing -> v1.3)
+
+### Step 1: New Message Types (non-breaking)
+Add `P2pEnvelope` and `SubscriptionAnnouncement` types with `commonware_codec` derive. Add `PeerSubscriptionMap` struct. All additive, no existing behavior changes.
+
+### Step 2: Envelope Wrapping (breaking internal wire format)
+Wrap existing `P2pMessage` in `P2pEnvelope::Submission`. Update encode/decode paths. Old peers will fail to decode new messages and vice versa -- this is acceptable because v1.3 is a breaking P2P protocol change.
+
+### Step 3: Subscription Protocol
+On subscribe/unsubscribe, broadcast `P2pEnvelope::Subscription` to `Recipients::All`. On inbound subscription announcement, update `PeerSubscriptionMap`. On new peer detected, send own subscription list.
+
+### Step 4: Targeted Delivery
+Replace `Recipients::All` with `Recipients::Some(service_peers)` at publish call sites. Fall back to `Recipients::All` if no subscription data available (graceful degradation for mixed-version networks during rollout).
+
+### Step 5: Status Endpoint Enhancement
+Extend `P2pStatus` to include per-peer subscription info for observability.
+
+## Wire Format Compatibility
+
+v1.3 introduces a **breaking wire format change** (P2pMessage -> P2pEnvelope). This is acceptable because:
+- WAVS is pre-production (v2.8.0, all operators in coordinated deployments)
+- The existing P2P protocol has no versioning -- adding it now (via envelope discriminant byte) sets up future compatibility
+- All operators in a deployment upgrade together
+
+## Versions Summary
+
+| Dependency | Current | v1.3 | Change |
+|-----------|---------|------|--------|
+| commonware-p2p | 2026.3.0 | 2026.3.0 | None |
+| commonware-broadcast | 2026.3.0 | 2026.3.0 | None |
+| commonware-codec | 2026.3.0 | 2026.3.0 | None |
+| commonware-cryptography | 2026.3.0 | 2026.3.0 | None |
+| commonware-runtime | 2026.3.0 | 2026.3.0 | None |
+| commonware-utils | 2026.3.0 | 2026.3.0 | None |
+| commonware-math | 2026.3.0 | 2026.3.0 | None |
+| New external crates | -- | -- | None needed |
 
 ## Sources
 
-- `packages/types/src/http.rs` -- P2pStatus, SignerResponse structs
-- `packages/types/src/service.rs` -- SignatureAlgorithm, SignatureKind
-- `packages/types/src/contracts/solidity/abi/bls/IPOAStakeRegistry.json` -- BLS registry contract ABI
-- `app/src-tauri/src/commands.rs` -- existing Tauri command patterns
-- `app/src/types/index.ts` -- current frontend type definitions
-- `app/src/stores/` -- existing Zustand store patterns
-- `app/src/utils/evm.ts` -- existing operator registration helpers
-- `packages/wavs/src/http/handlers/p2p.rs` -- P2P status endpoint
-- `packages/wavs/src/http/handlers/service/key.rs` -- signer endpoint
+- commonware-p2p 2026.3.0 source: `/Users/jacobhartnell/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/commonware-p2p-2026.3.0/src/lib.rs` (Recipients enum, Sender/Broadcaster traits) -- HIGH confidence
+- commonware-broadcast 2026.3.0 source: `/Users/jacobhartnell/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/commonware-broadcast-2026.3.0/src/` (Engine cache behavior, Mailbox broadcast API) -- HIGH confidence
+- WAVS p2p.rs source: `/Users/jacobhartnell/Dev/projects/Layer/WAVS/packages/wavs/src/subsystems/aggregator/p2p.rs` (current implementation, 14 `Recipients::All` call sites, ServiceRouter, P2pCommand enum) -- HIGH confidence
+- [commonware-p2p on crates.io](https://crates.io/crates/commonware-p2p) -- version 2026.3.0 is latest
+- [commonware-p2p docs](https://docs.rs/commonware-p2p/2026.3.0/commonware_p2p/) -- API reference
+- [commonware GitHub monorepo](https://github.com/commonwarexyz/monorepo) -- source of truth for commonware crates

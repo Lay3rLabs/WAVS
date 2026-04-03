@@ -1,266 +1,247 @@
 # Domain Pitfalls
 
-**Domain:** Adding P2P dashboard, BLS deployment, unified events, and settings UX to existing Tauri 2 + React desktop app
-**Researched:** 2026-03-23
-**Previous research:** 2026-03-17 (P2P migration, commonware integration -- v1.0/v1.1 pitfalls)
+**Domain:** Adding per-service P2P targeting to existing broadcast-all system (commonware-p2p)
+**Researched:** 2026-04-03
+**Previous research:** 2026-03-23 (v1.2 Tauri desktop app pitfalls), 2026-03-17 (v1.0/v1.1 commonware migration)
 
-This document covers pitfalls specific to the **v1.2 Tauri app milestone**: integrating P2P operator visibility, BLS service deployment with key registration, unified activity events, and settings page reorganization into the existing Tauri 2 desktop app.
+This document covers pitfalls specific to the **v1.3 per-service P2P targeting milestone**: replacing `Recipients::All` with `Recipients::Some(service_peers)` for targeted delivery, adding a subscription announcement protocol, scoping catch-up per service, and maintaining backward compatibility with existing broadcast-all services.
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites, security issues, or major UX breakage.
+Mistakes that cause message loss, quorum failures, or require architectural rewrites.
 
-### Pitfall 1: P2P Status Polling Creates Memory Leak via Tauri Event Listeners
+### Pitfall 1: Subscription State Race Between Service Add and In-Flight Messages
 
-**What goes wrong:** The P2P dashboard requires real-time data about connected peers, Ed25519 identity, subscribed services, and quorum progress. The natural approach is polling the `/p2p/status` endpoint (or a new Tauri command wrapping `dispatcher.aggregator.get_p2p_status()`) on an interval. However, if the polling fires Tauri events or uses `listen()` callbacks that are not properly cleaned up, each poll cycle accumulates callbacks on the window object. Tauri 2 has a known bug where `transformCallback` saves callbacks but never deletes them ([Issue #13133](https://github.com/tauri-apps/tauri/issues/13133)). Over hours/days of P2P dashboard polling, memory grows unboundedly.
+**What goes wrong:** A peer adds a new service (triggering a subscription announcement) while messages for that service are already in flight from other peers. The current system uses `Recipients::All` so every message reaches every peer regardless of subscription timing. When switching to `Recipients::Some(service_peers)`, there is a window between:
+1. Peer A starts the service and begins execution
+2. Peer A broadcasts its subscription announcement
+3. Other peers receive the announcement and add A to their `service_id -> Set<PeerPubkey>` map
+4. Other peers begin sending to A via `Recipients::Some`
 
-**Why it happens:** The existing codebase already has a polling pattern in `Settings.tsx` (MCP status poll every 3 seconds with `setInterval`). This pattern works fine for settings because users navigate away. But the P2P dashboard is likely a "leave it open" page -- operators will keep it visible while monitoring their node. A 3-second poll running for 8 hours = 9,600 accumulated callbacks if cleanup is wrong.
+During steps 1-3, other peers may have already completed execution and sent their submissions via `Recipients::Some` -- but Peer A was not yet in their peer set for that service. Peer A misses those submissions. The quorum queue on Peer A stalls because it never receives enough signatures.
 
-**Consequences:** Webview memory grows from ~50MB to 500MB+ over a day. On macOS, Tauri's webview process (WKWebView) eventually gets killed by the OS. The entire app crashes with no error message, and the operator loses visibility into their node at the worst possible time.
+**Why it happens:** The existing system avoids this entirely because `Recipients::All` ensures every peer gets every message. The ServiceRouter filters locally. With targeted send, the sender must know the receiver's subscriptions *before* sending. This creates a distributed consensus problem: "who is subscribed to what?" with no strong consistency guarantee.
 
-**Prevention:**
-- Use `invoke()` (Tauri commands) for polling, NOT `listen()` (Tauri events) for periodic status checks. The `invoke()` pattern creates a one-shot promise that is garbage-collected. The `listen()` pattern creates a persistent callback that must be manually unlistened.
-- Follow the existing `getMcpStatus()` pattern from `Settings.tsx`: `setInterval` + `invoke` + cancelled flag. This is correct.
-- If using Tauri events (push model) for real-time P2P updates, store the `UnlistenFn` and call it in `useEffect` cleanup. The existing `listeners.ts` does this correctly at the app level -- but page-level listeners (P2P page mount/unmount) need the same discipline.
-- Add a `MAX_P2P_HISTORY` constant (similar to `MAX_LOG_ITEMS = 5000` in `appStore.ts`) to bound any stored P2P status history.
-- Consider using `document.visibilityState` to pause polling when the app is minimized/hidden.
-
-**Detection:** Memory profiler in DevTools shows growing retained size of `window.__TAURI_INTERNALS__` callbacks. `performance.memory.usedJSHeapSize` grows linearly over time on the P2P page.
-
-**Phase mapping:** Must be addressed in the P2P dashboard phase. The polling architecture should be designed before UI components.
-
-### Pitfall 2: BLS Public Key Displayed in UI Creates Operator Registration Confusion
-
-**What goes wrong:** The v1.2 milestone adds BLS key display (128-byte G1 pubkey) alongside Ed25519 peer ID and secp256k1 EVM addresses in the P2P page. Operators need their BLS G1 public key to register with the BLS service manager contract. The pitfall is displaying the wrong key, at the wrong time, in the wrong format. Specifically:
-
-1. **Key derivation is per-service**: BLS keys are derived via HKDF-SHA256 from the mnemonic with a per-service HD index. There is no single "BLS public key" -- each service has its own. Displaying a single BLS key without service context misleads operators.
-2. **128-byte uncompressed G1 format**: The BLS G1 pubkey is 128 bytes (256 hex chars) in EIP-2537 uncompressed format. This is massive compared to a 20-byte EVM address. Copy errors are extremely likely.
-3. **Registration timing matters**: The `referenceBlock` constraint means operators must register their BLS key before the reference block used at submission. If the UI shows the key but the operator hasn't registered it on-chain, submissions will revert with signature verification failures.
-
-**Why it happens:** The existing `SignerResponse` enum in `packages/types/src/http.rs` already distinguishes `Secp256k1 { hd_index, evm_address }` from `Bls12381 { hd_index, g1_pubkey_hex }`. The `/signer` endpoint returns the right data. But the UI must make it clear which key belongs to which service, and that registration is a prerequisite -- not just information.
-
-**Consequences:** Operator registers wrong BLS key (e.g., from a different HD index), or copies a truncated key from the UI, or does not register at all. On-chain BLS signature verification fails. The service appears broken even though the node is operating correctly. Debugging requires understanding the HD derivation path, which most operators will not.
+**Consequences:** Missed submissions lead to quorum stalls. The aggregator on the late-joining peer accumulates only its own signature and waits indefinitely for quorum (or until the quorum timeout fires). In a 3-of-5 quorum, if 2 peers add a service slightly late, they miss each other's first round of submissions entirely.
 
 **Prevention:**
-- Display BLS keys in a **per-service context**, not globally. The P2P overview can show "BLS keys: N services" but the full key should appear on the service detail page.
-- Add a copy button that copies the complete hex string (not relying on text selection of 256 characters).
-- Show registration status: query the BLS service manager contract for whether the operator's G1 pubkey is registered. Display "Registered" / "Not Registered" badge.
-- Add a registration action button that calls `registerOperatorWithSignature` or equivalent directly from the UI.
-- Truncate display to first 8 + last 8 hex chars with "..." in between, but copy always gets the full key.
-- Show the HD index alongside the key so advanced operators can verify derivation.
+- **Keep `Recipients::All` as fallback for the Engine (channel 0)**. The broadcast Engine's catch-up mechanism caches messages globally per-peer in a deque. If you change the Engine channel to `Recipients::Some`, the Engine will not cache messages for peers that were not in the recipient set at broadcast time. Those messages are lost for catch-up forever. Only apply targeted send to the direct channel (channel 1). The Engine channel must remain `Recipients::All` so that its deque-based catch-up can deliver messages to any peer that reconnects or joins late.
+- **Announce-then-wait pattern**: After sending a subscription announcement, do not immediately start publishing. Wait for at least one heartbeat round-trip (2 seconds in the current config) to allow peers to update their maps before the first trigger fires.
+- **Receiver-side filter keeps working**: Even with `Recipients::All` on the Engine channel, the receiver-side ServiceRouter still filters. This means the fallback is correct -- peers only process messages for services they run. The targeting on channel 1 is a bandwidth optimization, not a correctness requirement.
 
-**Detection:** Operators report "BLS verification failed" errors in submission logs. The aggregator receives signatures but on-chain submission reverts. The error is not visible in the app because the submission event doesn't include the revert reason.
+**Detection:** Monitor quorum queue depth per service. If a service consistently has queues with only 1 signature (self), it suggests peers are not receiving targeted sends. Log `Recipients::Some` send results -- if `sent_to` count is lower than expected peer count, subscription state is stale.
 
-**Phase mapping:** Must be addressed in the BLS deployment phase. The key display component should be built with registration flow awareness from the start.
+**Phase mapping:** Must be the first thing addressed. The subscription protocol design determines whether targeted send is safe to enable.
 
-### Pitfall 3: Trigger-to-Submission Event Correlation Leaks Memory or Loses References
+### Pitfall 2: Broadcast Engine Global Deque Incompatible with Per-Service Catch-Up
 
-**What goes wrong:** The v1.2 milestone adds unified event cards that merge trigger events with their corresponding submission results. The current implementation stores triggers and submissions as separate `ActivityItem` entries with a monotonic `id` counter. There is no correlation ID linking a trigger to its resulting submission. Attempting to correlate them post-hoc (by matching `serviceId` + `workflowId` + time window) is fragile and produces incorrect matches under load.
+**What goes wrong:** The commonware-broadcast `Engine` maintains a single global deque per peer (bounded by `deque_size`, default 128). When a peer reconnects, the Engine replays all cached messages from that peer's deque -- regardless of which service they belong to. The v1.3 goal of "per-service catch-up scoping" (reconnecting peers only replay messages for their subscribed services) is fundamentally at odds with the Engine's architecture.
 
-**Why it happens:** Looking at the existing event system:
-- `TriggerEvent` contains `action.config.service_id`, `action.config.workflow_id`, `action.data`
-- `SubmissionEvent` contains `service_id`, `workflow_id`, `trigger_data`
-- Both carry `trigger_data` but there is no shared correlation ID
+The Engine's `insert_message` method (verified from source at `commonware-broadcast-2026.3.0/src/buffered/engine.rs`) caches messages by digest in a per-peer `VecDeque<Digest>` with a global `BTreeMap<Digest, M>` for the actual messages. There is no concept of "service" or "topic" in the Engine -- it just sees `P2pMessage` objects and their digests. When a peer reconnects, the Engine re-broadcasts all cached messages to that peer, including messages for services the peer does not subscribe to.
 
-The `EventId` (from `signing.rs`) is the canonical correlation key -- it's derived from `service_id + workflow_id + trigger_data`. But it is not currently emitted in either event. Adding it requires changes to the Rust event emitters.
+**Why it happens:** The Engine was designed as a general-purpose broadcast caching layer. It does not inspect message content. Adding per-service awareness would require forking commonware-broadcast or adding an application-level interception layer between the Engine and the network.
 
 **Consequences:**
-1. **Without correlation**: If two triggers fire for the same service within 100ms (common for block interval triggers), the UI cannot determine which submission corresponds to which trigger. It either pairs them incorrectly or shows them as unlinked.
-2. **With naive time-window matching**: A HashMap from `(serviceId, workflowId)` to "pending trigger" grows unboundedly if submissions are delayed or fail. Triggers that never receive a submission (component crash, quorum failure) remain in the pending map forever.
-3. **With EventId correlation**: Works correctly, but EventId computation requires `Ripemd160(service_id + workflow_id + bincode(trigger_data))` which involves binary encoding in the frontend. Mismatching the Rust bincode serialization in TypeScript is likely.
+1. **Bandwidth waste on reconnect**: A peer subscribing to 1 of 10 services still receives all 128 cached messages on reconnect, 90% of which are filtered by ServiceRouter. For large messages (BLS signatures are ~300+ bytes per submission), this multiplies reconnection bandwidth by 10x.
+2. **False catch-up completion**: The Engine replays all 128 messages, but if 120 were for other services, the peer effectively only catches up on 8 messages for its service. If the service had 50 messages while the peer was disconnected, 42 are still missing. The operator sees "caught up" (Engine deque drained) but quorum queues are incomplete.
+3. **Deque eviction bias**: High-traffic services push out low-traffic service messages from the shared 128-slot deque. A peer running a niche service alongside a high-frequency service may never catch up on the niche service because its messages were evicted before the peer reconnected.
 
 **Prevention:**
-- **Add EventId to both events on the Rust side.** Modify `TriggerEvent` and `SubmissionEvent` in `packages/gui/shared/src/event.rs` to include `event_id: String` (hex-encoded). Compute it in the dispatcher where `TriggerAction` already exists. This is a backend change, not a frontend one.
-- Use `event_id` as the Map key for correlation in the Zustand store. When a trigger arrives, create an entry. When a submission arrives with the same `event_id`, merge them.
-- Set a TTL (e.g., 5 minutes matching `submission_ttl_secs`) on unmatched triggers. After the TTL, mark them as "no submission" rather than holding them forever.
-- Bound the correlation map to `MAX_ACTIVITY_ITEMS` (currently 2000). When the map exceeds the limit, evict oldest entries.
-- Do NOT attempt bincode serialization in TypeScript. The Rust backend should provide the EventId.
+- **Do NOT attempt to modify the Engine for per-service scoping in v1.3.** This is an upstream change to commonware-broadcast that would be fragile and out of scope.
+- **Accept that catch-up remains global for now.** Document this as a known limitation. The ServiceRouter already filters irrelevant catch-up messages, so correctness is maintained -- only bandwidth efficiency is affected.
+- **Increase `deque_size` proportionally to service count.** If operators are expected to run N services, recommend `deque_size = 128 * N` or similar scaling. Add a note in the P2P config documentation.
+- **Separate per-service catch-up as a future milestone.** The right solution is either: (a) upstream enhancement to commonware-broadcast with topic-aware caching, or (b) a WAVS-level catch-up protocol that queries specific peers for missed messages by service ID. Neither belongs in v1.3.
+- **Track catch-up gaps per service**: Add metrics tracking "messages received via catch-up" per service to detect when deque eviction is causing data loss.
 
-**Detection:** Activity feed shows triggers and submissions that don't match (wrong pairing). Memory of the Zustand store grows over time (inspect via React DevTools or Zustand devtools middleware). Operators see "pending" triggers that never resolve.
+**Detection:** After reconnection, compare quorum queue completeness per service against expected peer count. If a service's quorum queue has fewer signatures than expected peers, catch-up likely missed messages due to deque eviction.
 
-**Phase mapping:** This is a cross-cutting concern: the backend event change should happen first (early phase), then the frontend correlation UI can be built on top.
+**Phase mapping:** This should be addressed in the research/planning phase as a scope limitation. Do not attempt per-service catch-up scoping in v1.3 -- document it as a v1.4+ goal.
 
-### Pitfall 4: Settings State Migration Breaks Existing Operator Installations
+### Pitfall 3: Subscription Announcement Delivery Not Guaranteed
 
-**What goes wrong:** The v1.2 milestone reorganizes the Settings page and adds new fields (BLS-related settings, P2P display preferences, possibly new env var patterns). The `Settings` struct in `packages/gui/shared/src/settings.rs` is serialized to `settings.json` in the app config directory. Adding new fields without `#[serde(default)]` breaks deserialization of existing settings files, causing the app to fail to load on operators who upgrade from v1.1.
+**What goes wrong:** The subscription protocol needs peers to announce which services they run. These announcements travel over the same P2P channels as regular messages. If an announcement is lost (peer temporarily disconnected, message dropped by rate limiter, direct channel send failure), the sender believes it announced but other peers never update their `service_id -> Set<PeerPubkey>` map. The sender is silently excluded from targeted sends for that service.
 
-**Why it happens:** The current `Settings` struct already uses `#[serde(default)]` on most fields. But every new field MUST also have this attribute. The Rust serde default behavior is: if a field is missing from JSON and has no `#[serde(default)]`, deserialization fails. This is a common issue in apps that persist state across versions.
+Unlike regular submissions which have quorum-based retry logic, subscription announcements are metadata about the peer itself. There is no quorum check for "did everyone receive my subscription?" The peer has no way to verify that all peers have the correct subscription state.
 
-**Consequences:** Operator upgrades from v1.1 to v1.2. The app opens, tries to load `settings.json`, deserialization fails because a new field like `bls_registration_cache: Vec<BlsRegistration>` is missing from the old file. The app shows the initialization error screen: "Initialization Error: Json: missing field `bls_registration_cache`". The operator has to manually edit or delete `settings.json` to recover.
+**Why it happens:** The current P2P system treats all messages as fire-and-forget at the application level (the Engine and direct channel both drop messages for offline recipients). Heartbeat messages (`HEARTBEAT_SERVICE_ID`) probe connectivity but do not carry subscription state. A subscription announcement that fails on one peer creates an asymmetric view: peer A thinks peers B/C/D know about its subscription, but peer C missed the announcement and never sends to A for that service.
+
+**Consequences:** Silent message loss. Peer A runs a service, signs submissions correctly, but never receives submissions from peer C (which uses `Recipients::Some` that excludes A). Peer A's quorum queue for that service has N-1 signatures instead of N, potentially below quorum threshold. The operator sees "quorum not reached" errors with no indication that the root cause is a stale subscription map.
 
 **Prevention:**
-- Every new field in `Settings` MUST have `#[serde(default)]`.
-- Write an explicit migration function that runs at startup: read raw JSON, check for missing keys, add defaults, write back. This is more robust than relying on serde defaults alone because it handles nested structure changes.
-- The corresponding TypeScript `Settings` interface must have all new fields as optional (`?:`) with fallback values in the Zustand store initializer.
-- Test the upgrade path: take a v1.1 `settings.json`, load it with v1.2 code, verify no errors.
-- Do NOT rename existing fields. If a field name changes, keep the old one with `#[serde(alias = "old_name")]`.
+- **Periodic re-announcement**: Do not rely on a single announcement. Piggyback subscription state on heartbeat messages. Every 2-second heartbeat already probes the mesh -- extend the heartbeat payload to include the sender's subscribed service IDs. This makes subscription state eventually consistent even if individual announcements are lost. The HEARTBEAT_SERVICE_ID sentinel already exists and is filtered by ServiceRouter, so extending heartbeat payload is backward-compatible.
+- **Heartbeat-as-subscription-sync**: When a peer receives a heartbeat with subscription data, it updates its `service_id -> Set<PeerPubkey>` map. Stale entries (peer no longer subscribed) are cleaned up. This provides continuous consistency repair.
+- **Log subscription map mismatches**: When `Recipients::Some` returns fewer `sent_to` peers than the subscription map suggests, log a warning. This detects cases where a peer is in the map but no longer connected.
+- **Fallback to `Recipients::All` if subscription map is empty**: If a peer has no subscription data from other peers yet (fresh start, all announcements lost), fall back to `Recipients::All` rather than sending to nobody. This prevents total communication failure during subscription protocol bootstrap.
 
-**Detection:** QA testing on a clean install works fine. The bug only appears when upgrading from a previous version with an existing `settings.json`. The initialization error screen appears with a JSON deserialization error.
+**Detection:** Compare the subscription map size per service against the connected_peers count from heartbeat. If `subscribed_peers(service_id).len()` is consistently less than `connected_peers.len()` for a service that all peers should run, subscription announcements are being lost.
 
-**Phase mapping:** Must be addressed at the start of the settings refactoring phase. The migration strategy should be decided before any new fields are added.
+**Phase mapping:** Must be addressed in the subscription protocol design phase. The heartbeat-based sync approach should be the default implementation.
+
+### Pitfall 4: Dual-Channel Divergence When One Channel Gets Recipients::Some and the Other Gets Recipients::All
+
+**What goes wrong:** The current publish path sends every message on BOTH channels:
+- Channel 0 (Engine): `mailbox.broadcast(Recipients::All, msg.clone()).await`
+- Channel 1 (direct): `direct_sender.send(Recipients::All, encoded_bytes, false).await`
+
+When switching to targeted send, the obvious approach is changing both to `Recipients::Some(service_peers)`. But this creates a subtle bug: the Engine (channel 0) caches messages per-peer and uses `Recipients::All` to resolve which peers to send to via the `Connected` trait (Oracle). If you pass `Recipients::Some(subset)`, the Engine only sends to that subset, but still caches the message as coming from the local peer. When a peer NOT in the original subset reconnects, the Engine may relay the cached message to them during catch-up (because the Engine's deque is keyed by sender peer, not by original recipients). This creates inconsistent delivery: some peers get the message only on channel 0 catch-up but not channel 1 direct, leading to deduplication-set mismatches and potential double-processing.
+
+**Why it happens:** The Engine's cache is sender-keyed, not recipient-keyed. The `insert_message` method stores `(peer, digest)` tuples regardless of who was in the original recipient set. The catch-up replay sends to ALL connected peers that the Engine knows about, not just the original recipients. This is by design (the Engine is a best-effort replication layer), but it means `Recipients::Some` on the Engine channel only affects the initial send, not catch-up replays.
+
+**Consequences:**
+- Peer X subscribes to service S after Peer Y already sent a submission via `Recipients::Some` that excluded X.
+- X reconnects (or was temporarily disconnected).
+- Engine catch-up replays Y's cached message to X on channel 0.
+- X receives the message on channel 0 but its `seen_digests` set (channel 1 dedup) does not have this digest, so it is processed.
+- Meanwhile, X's ServiceRouter accepts it (X is subscribed to service S now).
+- This is actually CORRECT behavior -- the message reaches X via catch-up. But it masks a problem: if the subscription map was wrong, the operator has no way to distinguish "message arrived via targeted send" from "message arrived via catch-up fallback." Debugging subscription protocol issues becomes nearly impossible.
+
+**Prevention:**
+- **Keep Engine channel (channel 0) at `Recipients::All` always.** The Engine is the reliability layer. Its catch-up mechanism is the safety net. Do not restrict it. The bandwidth cost of `Recipients::All` on the Engine channel is minimal because the Engine only caches the digest + message once regardless of recipient count.
+- **Apply `Recipients::Some` ONLY to the direct channel (channel 1).** This is the "fast path" optimization. If a peer is not in the targeted set, it misses the direct delivery but still gets the message via Engine catch-up when it next connects. This gives you bandwidth savings on channel 1 without breaking catch-up reliability on channel 0.
+- **If you must target both channels**, accept that catch-up will "leak" messages to non-targeted peers. Document this as expected behavior, not a bug.
+
+**Detection:** Track message delivery source (channel 0 catch-up vs channel 1 direct) per message. If a high percentage of messages for a service arrive via catch-up rather than direct, the subscription map for that service is likely stale.
+
+**Phase mapping:** This is an architectural decision that must be made before any code changes. The "Engine=All, Direct=Some" split should be the recommended approach.
 
 ## Moderate Pitfalls
 
-### Pitfall 5: Service Builder Type Mismatch -- SignatureAlgorithm Only Has secp256k1
+### Pitfall 5: Backward Compatibility -- Existing Services Break During Rolling Migration
 
-**What goes wrong:** The existing `serviceBuilderStore.ts` hardcodes `signatureAlgorithm: 'secp256k1'` in `SubmitDraft` and the `SignatureAlgorithm` TypeScript type is `export type SignatureAlgorithm = 'secp256k1'`. The Rust backend now supports `SignatureAlgorithm::Bls12381`. Adding BLS to the UI requires updating the TypeScript types, the service builder store defaults, the `SubmitEditor.tsx` component, and the `buildSubmit()` function. Missing any one of these creates a type mismatch where the UI sends `"secp256k1"` but the operator intended BLS.
+**What goes wrong:** Existing deployed services (both secp256k1 and BLS) expect `Recipients::All` behavior. If the v1.3 update is deployed to some operators before others (rolling update), the updated operators start using `Recipients::Some` while the non-updated operators still use `Recipients::All` and have no subscription map. The updated operators send targeted messages to peers in their subscription map, but the non-updated operators are not in the map (they never sent subscription announcements). Messages from updated operators never reach non-updated operators on the direct channel.
 
-**Prevention:**
-- Update `SignatureAlgorithm` type to `'secp256k1' | 'bls12381'`.
-- Add algorithm selector dropdown in `SubmitEditor.tsx` (currently only has `SignaturePrefix` dropdown).
-- Update `SubmitDraft.signatureAlgorithm` default to remain `'secp256k1'` for backward compatibility, but show the selector when submit type is `'aggregator'`.
-- Update `buildSubmit()` to pass the selected algorithm through to the service JSON.
-- When BLS is selected, hide the signature prefix dropdown (BLS does not use EIP-191 prefix).
-- Test that editing an existing secp256k1 service (`hydrateFromService`) correctly preserves the algorithm field.
+**Why it happens:** The subscription protocol is a new wire protocol. Old nodes do not understand subscription announcements and do not send them. They do not appear in the subscription map. If the updated node switches to `Recipients::Some` for the direct channel, old nodes are excluded.
 
-**Phase mapping:** BLS service deployment phase.
-
-### Pitfall 6: Tauri Command Handler List Grows to 40+ Commands
-
-**What goes wrong:** The existing `lib.rs` already registers 30 commands in `tauri::generate_handler![]`. Adding P2P status, BLS signer info, BLS registration, P2P peer details, quorum status, event correlation, and settings subcommands could add 10-15 more. Tauri's `generate_handler!` macro has compile-time cost proportional to command count. More importantly, the flat list becomes unmaintainable.
-
-**Why it happens:** Tauri 2 requires all commands to be listed in a single `generate_handler![]` invocation. You cannot call `invoke_handler()` multiple times -- only the last call is used ([Issue #11447](https://github.com/tauri-apps/tauri/issues/11447)).
+**Consequences:** Quorum breaks during rolling update. If 3-of-5 operators update and 2 do not, the 3 updated operators only target each other, and the 2 old operators only receive via Engine catch-up (if Engine stays at `Recipients::All`). If Engine is also targeted, the old operators are completely isolated. The service becomes non-functional until all operators update.
 
 **Prevention:**
-- Group commands into modules: `commands/mod.rs`, `commands/p2p.rs`, `commands/bls.rs`, `commands/settings.rs`, etc.
-- Import all command functions in `lib.rs` but keep the actual logic in separate files. The current `commands.rs` single file is already ~1200 lines.
-- Consider a "proxy" pattern: instead of one Tauri command per backend query, create a `cmd_query_wavs_api(endpoint: String, params: serde_json::Value)` command that forwards to the Axum HTTP API. This avoids duplicating every HTTP handler as a Tauri command. The existing `cmd_get_health_status` already does this (fetches from `http://host:port/health`).
-- For P2P status specifically, use the existing HTTP API endpoint (`/p2p/status`) via the proxy pattern rather than adding a direct dispatcher access command.
+- **`Recipients::All` remains the default for peers without subscription data.** If a connected peer has not sent any subscription announcements, treat it as subscribed to ALL services (backward-compatible assumption). Only use `Recipients::Some` when you have positive evidence of a peer's subscriptions from received announcements.
+- **Feature flag**: Add a config option `p2p.targeted_send_enabled = true/false` (default false). Operators opt in to targeted send only after confirming all peers in their network have updated. This allows deployment without behavior change.
+- **Version negotiation**: Include a protocol version in the heartbeat payload. If a peer's heartbeat does not include subscription data (old protocol), assume it subscribes to everything.
+- **Never remove a peer from "all services" unless it explicitly says so.** The subscription map should be additive: start with "this peer is subscribed to everything" and narrow down only based on explicit announcements.
 
-**Phase mapping:** Should be addressed at the start of the milestone before adding new commands. Refactoring `commands.rs` into modules is a prerequisite.
+**Detection:** Monitor broadcast `sent_to` counts. If `sent_to` drops after a deployment (e.g., from 4 to 2 peers), the non-updated peers are being excluded. Alert on `sent_to < expected_peer_count`.
 
-### Pitfall 7: Quorum Progress Display Requires Data the P2pStatus Struct Doesn't Have
+**Phase mapping:** Must be addressed in the initial protocol design. The backward-compatibility assumption (unknown peers = subscribed to all) is a Phase 1 requirement.
 
-**What goes wrong:** The v1.2 milestone includes "quorum progress per service" in the P2P page. This requires knowing: (a) how many operators have submitted for each active event, (b) what the quorum threshold is, and (c) what the total operator set is. The current `P2pStatus` struct only has `connected_peers`, `peer_ids`, and `subscribed_services`. It does not include per-service quorum progress.
+### Pitfall 6: Subscription Map Memory and Staleness
 
-**Why it happens:** Quorum tracking lives in the aggregator's `QuorumQueue` (in `packages/wavs/src/subsystems/aggregator/queue.rs`), not in the P2P layer. The P2P status endpoint only knows about network connectivity, not about aggregation state. Exposing quorum progress requires a new API endpoint or extending the existing `/p2p/status` response, which mixes concerns.
+**What goes wrong:** The `service_id -> Set<PeerPubkey>` map grows without bounds as services are added and never cleaned up. If a peer crashes and restarts with a different set of services, its old subscriptions remain in other peers' maps until they explicitly hear an unsubscription. With dynamic service add/remove, the map can accumulate stale entries.
 
-**Consequences:** The P2P page either shows incomplete information (connected peers but no quorum data), or a new endpoint is created that duplicates aggregator state, or the `P2pStatus` struct is bloated with aggregation data that doesn't belong there.
+**Why it happens:** The current ServiceRouter is local-only (`HashSet<[u8; 32]>` of subscribed services on this node). It has no concept of remote peer subscriptions. The new subscription map is a distributed data structure that must be maintained across all peers. There is no garbage collection mechanism.
 
-**Prevention:**
-- Create a separate `/aggregator/status` or `/services/quorum` endpoint that returns per-service quorum progress. Do NOT add it to `P2pStatus`.
-- The response should include: `service_id`, `active_events` (count), `per_event_progress` (submissions received / quorum needed), `total_operators` (from Oracle peer set).
-- The P2P page in the UI can make two parallel requests: one for P2P connectivity status, one for quorum status. Display them in separate sections.
-- If the aggregator is not running (P2P disabled), the quorum endpoint should return empty data, not an error.
-
-**Phase mapping:** P2P dashboard phase. The backend endpoint should be added before the UI.
-
-### Pitfall 8: Tauri Serialization of Large BLS Keys Causes IPC Slowness
-
-**What goes wrong:** BLS G1 public keys are 128 bytes (256 hex chars) and G2 signatures are 256 bytes (512 hex chars). When the UI requests signer info for all services, and each service has BLS keys, the IPC payload grows significantly. Tauri serializes command return values as JSON over the webview bridge. For 50 services with BLS keys, this is 50 * 512 hex chars = ~25KB per poll -- manageable but noticeable if polled frequently.
+**Consequences:**
+- Stale entries: Peer A removes service S, but peer B's map still shows A as subscribed to S. B sends targeted messages to A for service S. A receives them but ServiceRouter rejects them. Wasted bandwidth.
+- Memory leak: Over time with many services being added and removed, the map grows. Each entry is 32 bytes (service_id) + 32 bytes (peer pubkey) = 64 bytes. At 1000 services x 100 peers = 6.4 MB. Not catastrophic, but grows unboundedly.
+- Incorrect peer counts: `get_status()` reports subscription counts including stale peers, misleading operators.
 
 **Prevention:**
-- Do NOT poll BLS key data on a timer. Fetch it once when the P2P page mounts and on service add/remove events.
-- Use the service event listener (already in `listeners.ts`) to invalidate cached key data.
-- For quorum display, only transmit event counts and progress percentages, not raw signature bytes.
-- Consider a lazy-load pattern: show service names and connection status immediately, load BLS key details on-demand when the user expands a service card.
+- **Heartbeat-based full subscription sync**: As recommended in Pitfall 3, piggyback the full subscription list on heartbeats. When a heartbeat arrives, REPLACE the peer's subscription set rather than merging. This provides self-healing: if peer A removes service S and sends a heartbeat without S, all peers automatically drop A from service S's subscriber set.
+- **Subscription TTL**: If no heartbeat with subscription data is received from a peer within 3 heartbeat intervals (6 seconds), remove all of that peer's subscriptions. This handles the crash-without-unsubscribe case.
+- **Bound the map**: Cap at `MAX_SERVICES_PER_PEER` (e.g., 256) and `MAX_PEERS_PER_SERVICE` (e.g., 128). Reject subscription announcements that would exceed these limits.
 
-**Phase mapping:** P2P dashboard and BLS deployment phases.
+**Detection:** Log subscription map size periodically. Alert if map size exceeds expected bounds.
 
-### Pitfall 9: Activity Feed Unbounded Array Growth Under High Throughput
+**Phase mapping:** Addressed as part of the subscription protocol implementation. The heartbeat-based full-sync approach prevents staleness by design.
 
-**What goes wrong:** The current `addActivity` in `appStore.ts` creates a new array on every event: `const next = [...state.activityList, item]`. For high-throughput services (block interval triggers every 12 seconds across multiple chains and services), this creates significant GC pressure. The `MAX_ACTIVITY_ITEMS = 2000` cap helps, but the `[...spread, item].slice()` pattern allocates a 2001-element array, copies all elements, then allocates a 2000-element array and copies again. Under sustained 10 events/second, this is 20 full-array copies per second.
+### Pitfall 7: Testing Multi-Node Subscription Coordination is Fundamentally Harder
 
-**Why it happens:** The spread-copy pattern is idiomatic React/Zustand for immutable updates. It works fine at low volumes. The current app already handles this load level, but adding unified events (where each trigger creates a pending entry AND each submission updates it) doubles the mutation rate.
+**What goes wrong:** The existing P2P tests (in `packages/wavs/tests/p2p_broadcast_tests.rs`) verify message delivery between 2 nodes with pre-configured subscriptions. Testing per-service targeting requires:
+1. Dynamic subscription changes during test execution
+2. Verifying that targeted sends exclude non-subscribed peers
+3. Testing subscription protocol convergence (multiple announcement rounds)
+4. Verifying catch-up correctness after subscription changes
+5. Testing the rolling update scenario (mixed old/new protocol peers)
+
+The current test infrastructure (`setup_two_nodes`) creates nodes with static configurations. There is no mechanism to change subscriptions during a test run and verify the effect on message delivery.
+
+**Why it happens:** `P2pHandle::subscribe()` sends a command to the P2P bridge loop, which updates the local ServiceRouter. But the ServiceRouter update is local -- there is no mechanism for node A to discover that node B has subscribed to a service. The subscription protocol (announcement messages) is the new thing that must be tested, and it requires observing state changes across multiple nodes.
+
+**Consequences:**
+- Tests pass with 2 nodes but fail with 3+ nodes due to subscription race conditions not reproduced in 2-node tests.
+- Test flakiness due to timing-dependent subscription convergence.
+- Missing test coverage for stale subscription cleanup, rolling updates, and partial announcement delivery.
 
 **Prevention:**
-- Switch to a ring buffer implementation: pre-allocate a fixed-size array and track head/tail indices. Mutations are O(1) instead of O(n).
-- Alternatively, use `immer` middleware with Zustand to make in-place mutations that are automatically wrapped in immutable updates.
-- For the unified event model, consider a separate `Map<EventId, UnifiedEvent>` store with LRU eviction rather than an array. Lookups by EventId are O(1) instead of O(n) scans.
-- The virtualized list (`@tanstack/react-virtual`, already in use) handles rendering fine -- the bottleneck is state mutation, not rendering.
+- **Extend `setup_two_nodes` to `setup_n_nodes` with parameterized subscriptions.** The helper should support creating N nodes with configurable initial subscriptions and the ability to change subscriptions during the test.
+- **Add a `wait_for_subscription_convergence` helper**: After changing subscriptions, poll `get_status()` on all nodes until they all report consistent subscription maps (or timeout). This eliminates timing-dependent flakiness.
+- **Test the negative case explicitly**: Verify that a peer NOT subscribed to service X does NOT receive targeted messages for service X on channel 1 (it may still receive via Engine catch-up on channel 0, which is expected).
+- **Use `tokio::time::pause()` for deterministic timing**: The existing tests use `tokio::time::sleep(Duration::from_secs(5))` for connection establishment. This makes tests slow and flaky. Consider using Tokio's time-mocking facilities for subscription convergence testing.
+- **Test 3-node minimum for subscription coordination**: 2-node tests cannot reproduce "peer C excludes peer A because C thinks A is not subscribed." The minimum for meaningful subscription protocol testing is 3 nodes.
 
-**Phase mapping:** Activity/events unification phase. The store refactoring should happen before adding correlation logic.
+**Detection:** Test failure rate on CI. If P2P subscription tests fail > 5% of runs, the test timing assumptions are wrong.
+
+**Phase mapping:** Test infrastructure should be extended in the same phase as the subscription protocol implementation. Tests and implementation evolve together.
+
+### Pitfall 8: `Recipients::Some` with Empty Vec Silently Drops Messages
+
+**What goes wrong:** If the subscription map returns an empty set for a service (no peers known to be subscribed), `Recipients::Some(vec![])` is passed to `direct_sender.send()`. The commonware-p2p `send()` implementation for an empty recipient list returns `Ok(vec![])` (no error, zero recipients). The message is silently dropped. There is no retry, no warning, no fallback to `Recipients::All`.
+
+**Why it happens:** The `Sender::send` trait implementation in commonware-p2p handles `Recipients::Some` by iterating over the provided peers and sending to each. An empty vec means zero iterations, zero sends, and a successful return. This is technically correct behavior for the P2P layer, but the application layer should never construct an empty recipient set.
+
+**Consequences:** Messages for newly deployed services (where no peer has announced subscriptions yet) are silently lost. The operator sees successful publish (no error returned) but no peer receives the message. Quorum is never reached. The service appears broken with no error logs.
+
+**Prevention:**
+- **Never construct `Recipients::Some(vec![])`.** Add an assertion or fallback: if `service_peers.is_empty()`, use `Recipients::All` instead of `Recipients::Some(vec![])`.
+- **Treat empty subscriber set as "subscription protocol not yet converged"**: Fall back to broadcast. This is the safe default.
+- **Add a `warn!` log**: If the subscription map lookup returns an empty set for a service that this node is publishing for, log a warning. The node is running the service, so at minimum it should be in its own subscriber set.
+- **Include self in the subscriber set**: When looking up peers for `Recipients::Some`, always include the local peer's pubkey if the local node subscribes to that service. This ensures at least one recipient (self is always available for local loopback through the aggregator's `Receive` path, but the P2P layer does not deliver to self).
+
+**Detection:** Log `Recipients::Some` recipient count per publish. Alert if count is 0.
+
+**Phase mapping:** Must be a defensive check in the publish path. Add in the same phase as the targeted send implementation.
 
 ## Minor Pitfalls
 
-### Pitfall 10: Ed25519 Peer ID Display Format Confusion
+### Pitfall 9: Heartbeat Messages Become Bandwidth-Heavy with Subscription Data
 
-**What goes wrong:** The P2P page shows the operator's Ed25519 peer ID (hex-encoded public key). This is a 64-character hex string -- visually similar to an EVM address but longer and with no `0x` prefix or checksum. Operators may confuse it with their EVM address or try to use it in contract interactions.
-
-**Prevention:**
-- Label clearly: "P2P Peer ID (Ed25519)" with a tooltip explaining what it is.
-- Use a different visual treatment (different color, different font, different truncation pattern) from EVM addresses.
-- The existing `AddressDisplay` component formats EVM addresses. Create a `PeerIdDisplay` component with distinct styling.
-- Show the full hex on hover or copy, truncated by default.
-
-**Phase mapping:** P2P dashboard phase.
-
-### Pitfall 11: Settings Page Scroll Position Lost on Section Reorganization
-
-**What goes wrong:** The current Settings page is a single scrollable column with 6 sections. The v1.2 milestone adds more sections (P2P configuration, BLS settings). If sections are reorganized (reordered, grouped into tabs, or moved to sub-pages), users who have muscle memory for "scroll down to MCP Server" will be confused and frustrated.
+**What goes wrong:** The current heartbeat is a minimal `P2pMessage` with `service_id_bytes: [0u8; 32]` and `payload: vec![]` (32 bytes + overhead). If heartbeats carry the full subscription list (N service IDs x 32 bytes each), the heartbeat size grows to 32 + (N * 32) bytes. At 10 services, that is 352 bytes. At 100 services, 3.2 KB. With heartbeats every 2 seconds to every peer, the bandwidth is: `100 services * 3.2 KB * 5 peers * 0.5 Hz = 8 KB/s`. Not catastrophic but noticeable.
 
 **Prevention:**
-- If switching to tabs, use URL-based tab navigation (`/settings/general`, `/settings/p2p`, `/settings/mcp`) so browser back/forward work.
-- Preserve the section order for existing sections. Add new sections at logical positions (P2P after Wallet, BLS within the service context).
-- If keeping a single scroll layout, add a mini-nav sidebar or anchor links for quick section jumping.
-- Consider whether P2P/BLS settings belong in Settings at all, or should be on the P2P page / service detail page respectively.
+- **Use a compact representation**: Send a Bloom filter or bitmap of subscribed service IDs instead of the full list. A 256-bit bitmap can represent 256 services with only 32 bytes of overhead.
+- **Delta encoding**: Only send changes since the last heartbeat. A counter + diff is more compact than the full list.
+- **Separate cadence**: Subscription sync does not need to be as frequent as heartbeat. Send subscription state every 10th heartbeat (every 20 seconds) instead of every heartbeat. The initial announcement covers the first sync; heartbeat-carried state is just consistency repair.
 
-**Phase mapping:** Settings UX phase.
+**Phase mapping:** Optimization. Can be addressed after the basic protocol works. Start with the simple "full list in every heartbeat" approach and optimize if bandwidth becomes an issue.
 
-### Pitfall 12: Service Pause/Resume Commands Don't Account for BLS Registration State
+### Pitfall 10: Deduplication Set (`seen_digests`) Does Not Distinguish Channel Source
 
-**What goes wrong:** The existing `cmd_pause_service` and `cmd_resume_service` commands toggle `ServiceStatus`. For BLS services, pausing and resuming is fine at the dispatcher level. But if an operator pauses a BLS service, deregisters their BLS key from the on-chain contract, and then resumes -- the service will execute but submissions will fail on-chain because the key is no longer registered. The UI shows the service as "Active" with no indication of the registration problem.
+**What goes wrong:** The current deduplication uses a `HashSet<sha256::Digest>` with a cap of 1024 entries. When a message arrives on channel 1 (direct), its digest is added to `seen_digests`. If the same message later arrives via Engine catch-up on channel 0 (e.g., because channel 1 delivery was delayed), it is deduplicated and dropped. This is correct behavior. However, if the "Engine=All, Direct=Some" strategy is adopted (Pitfall 4 recommendation), a peer that is NOT in the `Recipients::Some` set will only receive the message via Engine catch-up. It has no prior entry in `seen_digests` for this message. The first channel 0 delivery is accepted, which is correct. But if the Engine replays the same message multiple times during catch-up (reconnect cycles), `seen_digests` prevents double processing, which is also correct. No actual bug here -- but the dedup set must be sized to handle the increased traffic from Engine catch-up messages that would not have existed under pure `Recipients::All`.
 
-**Prevention:**
-- On service resume for BLS services, check BLS key registration status against the contract.
-- Display a warning if the BLS key is not registered: "Service resumed but BLS key not registered. Submissions will fail."
-- Consider adding a health check for BLS services that periodically verifies key registration.
+**Prevention:** Monitor `seen_digests` set size. If it hits `MAX_SEEN_DIGESTS = 1024` frequently, increase the cap. With per-service targeting, the direct channel delivers fewer messages, but the Engine channel may replay more during catch-up, so the total message rate through dedup does not decrease.
 
-**Phase mapping:** BLS deployment phase, after the basic key display is working.
+**Phase mapping:** Low priority. Monitor after deployment. Increase cap if needed.
 
-### Pitfall 13: Multiple Signature Algorithm Display in Service Detail
+### Pitfall 11: P2pHandle API Does Not Expose Subscription Map for Observability
 
-**What goes wrong:** A service can have multiple workflows, each potentially with different signature algorithms (one secp256k1, one BLS). The service detail page must display per-workflow signature information, not a single "this service uses BLS" badge. The current `WorkflowViewer.tsx` shows trigger and component info but the submission section is minimal.
+**What goes wrong:** The current `P2pHandle::get_status()` returns `P2pStatus` with `subscribed_services` (local node's subscriptions) and `connected_peers` (count of connected peers). It does not expose the subscription map (`service_id -> Set<PeerPubkey>`). Operators cannot see which peers are subscribed to which services. When quorum stalls due to subscription state issues, there is no diagnostic tool.
 
 **Prevention:**
-- Display signature algorithm per-workflow in the service detail view.
-- In the P2P operator section, show the relevant key (EVM address for secp256k1 workflows, G1 pubkey for BLS workflows).
-- The service list page can show a summary badge (e.g., "ECDSA + BLS" if mixed).
+- Extend `P2pStatus` to include `peer_subscriptions: HashMap<String, Vec<String>>` (service_id_hex -> list of peer_id_hex).
+- Expose this in the `/p2p/status` HTTP endpoint and the Tauri desktop app's P2P page.
+- Add a `P2pCommand::GetSubscriptionMap` variant that returns the full map.
 
-**Phase mapping:** BLS deployment and P2P dashboard phases.
-
-### Pitfall 14: React Router Navigation Adds P2P Page Without Updating Header Navigation
-
-**What goes wrong:** The current `Header.tsx` has navigation links for existing pages. Adding a P2P page requires updating both `App.tsx` (route definition) and `Header.tsx` (navigation link). If the route is added but the nav link is forgotten, the page is unreachable except by direct URL.
-
-**Prevention:**
-- Define routes and navigation items from a single source of truth (e.g., a `ROUTES` constant that both the router and header consume).
-- Add the P2P route alongside the existing pattern in `App.tsx`.
-- Test navigation between all pages after adding new routes.
-
-**Phase mapping:** First phase that adds the P2P page.
+**Phase mapping:** Should be implemented alongside the subscription protocol. Observability enables debugging.
 
 ## Phase-Specific Warnings
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| P2P dashboard | Polling memory leak (Pitfall 1) | Use invoke(), not listen(). Add visibility-based pausing. Bound stored history. |
-| P2P dashboard | Missing quorum data (Pitfall 7) | Create separate aggregator status endpoint. Don't bloat P2pStatus. |
-| P2P dashboard | Peer ID confusion (Pitfall 10) | Distinct PeerIdDisplay component. Clear labeling. |
-| BLS deployment | Key display confusion (Pitfall 2) | Per-service key display. Registration status check. Copy button for full key. |
-| BLS deployment | Type mismatch in builder (Pitfall 5) | Update all TypeScript types. Add algorithm selector. Test hydration. |
-| BLS deployment | IPC payload size (Pitfall 8) | Lazy-load BLS keys. Don't poll key data. |
-| BLS deployment | Registration state (Pitfall 12) | Check registration on resume. Health check for BLS services. |
-| Unified events | Correlation memory leak (Pitfall 3) | Add EventId to Rust events. TTL-based cleanup. Bound correlation map. |
-| Unified events | Array growth performance (Pitfall 9) | Ring buffer or Map-based store. Avoid spread-copy at high volume. |
-| Settings UX | State migration (Pitfall 4) | serde(default) on all new fields. Test upgrade from v1.1 settings.json. |
-| Settings UX | Scroll/navigation disruption (Pitfall 11) | Preserve existing section order. URL-based tabs if splitting. |
-| All phases | Command handler bloat (Pitfall 6) | Refactor commands.rs into modules first. Use HTTP proxy pattern. |
-| All phases | Multi-workflow display (Pitfall 13) | Per-workflow algorithm display. Mixed badge on service list. |
+| Subscription protocol design | Pitfall 1 (race), Pitfall 3 (lost announcements), Pitfall 5 (backward compat) | Heartbeat-based full sync, unknown peers = subscribed to all |
+| Targeted send implementation | Pitfall 4 (dual-channel divergence), Pitfall 8 (empty recipients) | Engine=All / Direct=Some split, fallback on empty subscriber set |
+| Per-service catch-up | Pitfall 2 (Engine incompatibility) | Defer to v1.4+, increase deque_size as interim measure |
+| Subscription lifecycle (add/remove) | Pitfall 6 (staleness), Pitfall 1 (race) | Heartbeat-based full-sync with TTL, replace-not-merge on update |
+| Testing | Pitfall 7 (multi-node testing) | 3-node minimum, subscription convergence helper, negative case tests |
+| Migration / rolling update | Pitfall 5 (backward compat) | Feature flag, version negotiation, default-to-all for unknown peers |
+| Observability | Pitfall 11 (hidden subscription state) | Extend P2pStatus, expose subscription map in API |
+| Performance | Pitfall 9 (heartbeat bandwidth) | Start simple, optimize later with bloom filters or delta encoding |
 
 ## Sources
 
-- [Tauri event listener memory leak (Issue #13133)](https://github.com/tauri-apps/tauri/issues/13133) - HIGH confidence (confirmed Tauri bug)
-- [Tauri event emission memory leak (Issue #12724)](https://github.com/tauri-apps/tauri/issues/12724) - HIGH confidence (confirmed Tauri bug)
-- [Tauri multiple invoke_handler limitation (Issue #11447)](https://github.com/tauri-apps/tauri/issues/11447) - HIGH confidence (Tauri design constraint)
-- [Tauri command boilerplate (Issue #10075)](https://github.com/tauri-apps/tauri/issues/10075) - MEDIUM confidence (feature request, documents the problem)
-- [Zustand memory leak discussion (#2540)](https://github.com/pmndrs/zustand/discussions/2540) - MEDIUM confidence (community pattern)
-- [OWASP Key Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html) - HIGH confidence (authoritative security guidance)
-- WAVS codebase analysis: `app/src-tauri/src/commands.rs` (1244 lines, 30 commands) - HIGH confidence (direct code inspection)
-- WAVS codebase analysis: `app/src/tauri/listeners.ts` (87 lines, 5 event types) - HIGH confidence (direct code inspection)
-- WAVS codebase analysis: `app/src/stores/appStore.ts` (spread-copy pattern, MAX caps) - HIGH confidence (direct code inspection)
-- WAVS codebase analysis: `packages/gui/shared/src/event.rs` (TriggerEvent, SubmissionEvent -- no EventId) - HIGH confidence (direct code inspection)
-- WAVS codebase analysis: `packages/types/src/http.rs` (P2pStatus struct, SignerResponse enum) - HIGH confidence (direct code inspection)
-- WAVS codebase analysis: `packages/types/src/signing.rs` (EventId, WavsSignature, SignatureData enums) - HIGH confidence (direct code inspection)
-- WAVS codebase analysis: `app/src/stores/serviceBuilderStore.ts` (hardcoded secp256k1 type) - HIGH confidence (direct code inspection)
-- WAVS codebase analysis: `packages/gui/shared/src/settings.rs` (Settings struct with serde defaults) - HIGH confidence (direct code inspection)
+- commonware-p2p 2026.3.0 source: `Recipients` enum definition at `src/lib.rs` lines 40-46 (`All`, `Some(Vec<P>)`, `One(P)`)
+- commonware-broadcast 2026.3.0 source: `Engine` cache implementation at `src/buffered/engine.rs` (per-peer deque, global digest cache, no topic awareness)
+- commonware-p2p `Sender::send` trait: offline recipients silently dropped, empty recipient set returns `Ok(vec![])`
+- WAVS P2P module: `packages/wavs/src/subsystems/aggregator/p2p.rs` (ServiceRouter, dual-channel broadcast, heartbeat, retry queue)
+- WAVS P2P tests: `packages/wavs/tests/p2p_broadcast_tests.rs` (BCAST-01 through CATCH-02 test coverage, 2-node setup helper)
+- [GossipSub specification](https://research.protocol.ai/blog/2019/a-new-lab-for-resilient-networks-research/PL-TechRep-gossipsub-v0.1-Dec30.pdf) -- per-topic subscription with mesh management provides reference for subscription protocol design
+- [Gossip protocol split-brain considerations](https://en.wikipedia.org/wiki/Gossip_protocol) -- eventual consistency guarantees and split-brain scenarios in gossip-based systems

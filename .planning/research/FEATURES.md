@@ -1,193 +1,190 @@
 # Feature Landscape
 
-**Domain:** WAVS Tauri desktop app v1.2 -- P2P dashboard, BLS service deployment, unified activity events, settings UX
-**Researched:** 2026-03-23
-**Overall confidence:** MEDIUM-HIGH (based on codebase analysis, ecosystem research, and existing backend API inspection)
+**Domain:** Per-service P2P targeting for WAVS v1.3 -- replace broadcast-all-and-filter with targeted per-service message delivery
+**Researched:** 2026-04-03
+**Overall confidence:** HIGH (based on commonware-p2p source code analysis, existing codebase inspection, GossipSub specification study, and distributed pub/sub pattern research)
+
+---
+
+## Context: Current Architecture
+
+Before cataloguing features, the existing architecture must be understood because every v1.3 feature builds on (or replaces) existing primitives.
+
+**What exists today (v1.0-v1.2):**
+- Single commonware broadcast Engine for all services
+- `Recipients::All` on every `mailbox.broadcast()` and `direct_sender.send()` call
+- `ServiceRouter` with `HashSet<[u8; 32]>` filtering inbound messages at application level
+- Per-peer deque catch-up via broadcast Engine (replays ALL cached messages, not service-scoped)
+- `P2pCommand::Subscribe`/`Unsubscribe` update local `ServiceRouter` only (no peer notification)
+- Messages carry `service_id_bytes` in `P2pMessage` envelope (32 bytes prefix)
+
+**What commonware-p2p provides natively:**
+- `Recipients::All` -- send to all connected peers
+- `Recipients::Some(Vec<PublicKey>)` -- send to specific peers by Ed25519 pubkey
+- `Recipients::One(PublicKey)` -- send to a single peer
+- Rate-limited and unlimited sender traits
+- Broadcast Engine with per-peer bounded deques and digest-based lookup
+
+**Key insight:** The `Recipients::Some` primitive already exists in commonware-p2p. WAVS currently hardcodes `Recipients::All` everywhere. The v1.3 work is about building the application-level subscription tracking to know WHICH peers to include in `Recipients::Some`.
+
+---
 
 ## Table Stakes
 
-Features users expect from a node operator desktop app at this level of maturity. Missing = product feels incomplete given the backend capabilities that already exist.
+Features that are fundamental requirements for per-service P2P targeting. Without these, the feature is incomplete or broken.
 
-### P2P Network Visibility
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Connected peers count and list | Every node dashboard (Prysm, Lighthouse/Siren, Grafana eth2 dashboards) shows connected peer count as the primary P2P health signal. WAVS backend already exposes this via `GET /p2p/status` returning `P2pStatus { connected_peers, peer_ids }`. Not showing it makes the app feel blind about network state. | Low | Backend `P2pStatus` struct already has `connected_peers: usize` and `peer_ids: Vec<String>` (Ed25519 hex). Poll the endpoint every 5-10s. Display count in header badge + full list on P2P page. |
-| Local peer ID display | Operators need to know their own identity to share with other operators for peering configuration, troubleshooting, and verification. `P2pStatus.local_peer_id` (Ed25519 hex) is already available. Standard in all P2P node dashboards. | Low | Display truncated hex with copy-to-clipboard. Show full hex on expand/hover. Ed25519 public key is 32 bytes = 64 hex chars. |
-| P2P enabled/disabled/mode indicator | Operators must know whether P2P is active and in what mode (Disabled/Local/Remote). The `GET /info` endpoint returns `p2p_config` (the enum) alongside `p2p_status`. Without this, operators cannot diagnose "why is my node not finding peers?" | Low | `InfoResponse.p2p_config` is already the `P2pConfig` enum (Disabled / Local { ... } / Remote { ... }). Show mode badge: "P2P Disabled", "P2P Local (port 9000)", "P2P Remote (2 bootstrappers)". |
-| Listen address display | Operators need to know what address/port their P2P is binding to. `P2pStatus.listen_addresses` is already exposed. Required for configuring peers and firewall rules. | Low | Show socket addresses (e.g., `0.0.0.0:9000`). Available from `P2pStatus.listen_addresses: Vec<String>`. |
-| Subscribed services indicator | The P2P page should show which services this node is participating in via P2P (sending/receiving submissions). `P2pStatus.subscribed_services` lists hex service ID hashes. Cross-reference with service names from the service registry. | Low | Map hex service IDs from `P2pStatus.subscribed_services` to service names from `appStore.services`. Display as tagged list. |
-
-### BLS Service Deployment
+### Subscription Tracking (service_id -> Set<PeerPubkey>)
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Signature algorithm selector in service builder | Backend supports both `secp256k1` and `bls12381` since v1.1. The current service builder UI hardcodes `signatureAlgorithm: 'secp256k1'` in `SubmitDraft`. Without a selector, operators cannot deploy BLS services from the UI at all. This is a blocking gap. | Low | Add `'bls12381'` to the `SignatureAlgorithm` type union. Add radio/toggle to `SubmitEditor` component. When `bls12381` is selected, hide `signaturePrefix` (BLS has no EIP-191 prefix concept). |
-| BLS operator key display per service | After deploying a BLS service, operators need to see the BLS G1 public key that the node will use for signing. The `POST /services/signer` endpoint already returns `SignerResponse::Bls12381 { hd_index, g1_pubkey_hex }`. Without this, operators cannot complete the registration step. | Medium | Call `/services/signer` after deploy to retrieve the G1 pubkey. Display the 128-byte (256 hex char) key with truncation and copy button. Show HD index. This is significantly longer than an EVM address, so UI must handle gracefully. |
-| Operator registration guidance | After deploying a BLS service, operators must register their BLS key with the POAStakeRegistry contract on-chain. The MCP tool does this via `wavs_register_operator`. The UI must at minimum tell the operator what to do next, even if it does not automate it. Without guidance, operators are stuck after deploy. | Low | Show a post-deploy info card: "BLS service deployed. Register your operator key with the POAStakeRegistry contract to begin participating in quorum." Include the G1 pubkey, the registry address, and a link to docs or CLI command. |
+| Local subscription registry | Every P2P pub/sub system (GossipSub, NATS, Kafka) maintains a mapping of topics/subjects to interested parties. Without `service_id -> Set<Ed25519::PublicKey>`, the node cannot know which peers to target. This is the central data structure. | Low | `HashMap<[u8; 32], HashSet<ed25519::PublicKey>>` (or equivalent). Lives alongside `ServiceRouter` in the bridge loop. Updated by subscription announcements from peers. |
+| Own-subscription bootstrapping | When a node subscribes to a service (via `P2pCommand::Subscribe`), it must both update local `ServiceRouter` AND announce to peers. Without this, peers never learn about subscriptions. | Low | Extend `P2pCommand::Subscribe` handler to: (1) update ServiceRouter, (2) broadcast a subscription announcement message to all connected peers. |
+| Peer subscription state initialization | When a new peer connects (or reconnects), the node needs to learn that peer's current service subscriptions. GossipSub does this with a "hello" packet containing all current subscriptions. Without this, new peers receive no targeted messages until they announce. | Medium | Requires detecting peer connection events from commonware-p2p. On connect, exchange subscription sets. The commonware `Provider::subscribe()` method provides peer set change notifications that can trigger this. |
 
-### Unified Activity Events
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Merged trigger + submission cards | Currently activity shows triggers and submissions as separate cards. Operators want to see the lifecycle: trigger fired -> component ran -> submission signed -> quorum reached -> on-chain submit. Separate cards force mental correlation. Merged cards show the journey in one place. | Medium | The existing `ActivityItem` has `kind: 'trigger' | 'submission'` and both share `serviceId`, `workflowId`, `triggerData`. Merge by matching trigger events to their resulting submissions via event ID correlation. Requires backend changes to include a correlation ID in both events, or heuristic matching on (serviceId + workflowId + timestamp window). |
-| Error display in activity cards | When execution or submission fails, operators need to see the error inline in the activity feed. Currently errors only appear in logs, which requires cross-referencing timestamps. Every production monitoring tool (Grafana, Datadog, Sentry) surfaces errors inline with the events that caused them. | Medium | Requires backend to emit error details in submission events (e.g., `SubmissionEvent` gains an optional `error: string` field). Frontend `ActivityCard` renders error state with red accent and error message. |
-| Submission result status | Activity cards should show whether a submission succeeded, failed, or is pending quorum. The aggregator already tracks `QuorumQueue::Active` vs `QuorumQueue::Burned` (completed). Surfacing this makes the activity feed actionable rather than just informational. | Medium | Requires a new event type or enriched `SubmissionEvent` that includes outcome (success/fail/pending). Display as status badge on the card: green check (submitted), amber clock (pending quorum), red X (failed). |
-
-### Settings UX
+### Subscription Announcement Protocol
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Section collapsibility / accordion | The current Settings page is a single scrollable list of 6 sections (~940 lines of TSX). As more sections are added (P2P config, key display), the page becomes unwieldy. Every complex settings page in professional apps uses collapsible sections or tabs. | Low | Use the existing `Expander` atom component or a simple accordion pattern. Default-open the sections that need attention, default-closed the rest. |
-| Section anchoring / scroll-to | Operators should be able to jump directly to a settings section, especially when redirected from another page ("configure your P2P settings"). Without anchoring, operators have to scroll hunt. | Low | Add `id` attributes to section headers. Use URL hash fragments (e.g., `/settings#p2p`) or a sidebar table of contents. |
-| Visual feedback on unsaved changes | The current TOML editor tracks `hasUnsavedChanges` but other sections (env vars, MCP settings) lack consistent save-state indicators. This causes confusion about whether settings are persisted. | Low | Apply the same pattern across all sections: show "(unsaved)" badge, disable navigation away warning, consistent Save/Revert buttons. |
+| Subscription announcement message type | A new P2pMessage variant (or separate message type) that carries subscription changes: `{action: Subscribe|Unsubscribe, service_ids: Vec<[u8; 32]>}`. Every pub/sub protocol has this (GossipSub uses `RPC.subscriptions[]` with `subscribe: bool` and `topicid`). Without it, peers cannot communicate interest. | Low | Add a `P2pControlMessage` enum alongside `P2pMessage`. Options: (A) multiplex control and data on the same channel via a tagged envelope, or (B) use a separate P2P channel. Option A is simpler and recommended. |
+| Broadcast subscription changes to all peers | When a service is added/removed, the subscription announcement must go to ALL connected peers (not just service subscribers). GossipSub sends SUBSCRIBE/UNSUBSCRIBE to all pubsub-capable peers. This is correct because the announcement itself is metadata, not service data. | Low | Use `Recipients::All` for subscription announcements. These are small control messages, so bandwidth is negligible. |
+| Idempotent subscription handling | Peers may reconnect, replay announcements, or send duplicate subscriptions. The registry must handle duplicates gracefully (insert into set is naturally idempotent). | Low | HashSet insert is O(1) and idempotent. Log duplicates at trace level. |
+
+### Targeted Send via Recipients::Some
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Replace `Recipients::All` with `Recipients::Some` for service submissions | The core value proposition of v1.3. On `P2pCommand::Publish`, look up `service_id` in the subscription registry, collect peer pubkeys, and use `Recipients::Some(peers)`. If no peers are subscribed, fall back to `Recipients::All` (graceful degradation). | Medium | Modify both `mailbox.broadcast()` and `direct_sender.send()` calls in the bridge loop. Must handle both lookup and discovery mode bridge loops (code is duplicated). Also include self (own pubkey) is NOT in the recipients list per commonware semantics (broadcast does not echo to self). |
+| Fallback to broadcast-all for unknown services | If a service has no known subscribers (e.g., just deployed, peers haven't announced yet), the node should broadcast to all peers rather than silently dropping. This prevents message loss during bootstrap. | Low | `if subscribers.is_empty() { Recipients::All } else { Recipients::Some(subscribers) }`. Log when falling back. |
+| Include all peers for subscription announcements | Subscription control messages themselves must always use `Recipients::All` because they are network metadata, not service-specific data. Targeting subscription messages only to service subscribers creates a chicken-and-egg problem. | Low | Already natural -- announcements go to all peers. |
+
+### Subscription Lifecycle
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Dynamic service add: announce subscription | When a service is registered at runtime (via `POST /service`), the node subscribes locally and announces to peers. Existing `AggregatorCommand::SubscribeService` already triggers `P2pCommand::Subscribe`. The P2P command handler must now also send an announcement. | Low | Extend the `Subscribe` arm of the bridge loop to broadcast a control message. |
+| Dynamic service remove: announce unsubscription | When a service is removed, the node unsubscribes locally and announces to peers. Existing `AggregatorCommand::UnsubscribeService` already triggers `P2pCommand::Unsubscribe`. | Low | Extend the `Unsubscribe` arm similarly. |
+| Peer disconnect: cleanup subscription state | When a peer disconnects, its entries in the subscription registry must be removed. Otherwise, `Recipients::Some` will target disconnected peers (commonware drops the message silently for offline recipients, but the intent is wrong). | Medium | Detect peer disconnects via commonware `Provider::subscribe()` peer set change notifications. When a peer leaves tracked sets, remove all its subscription entries. Alternatively, rely on commonware's behavior that `Recipients::Some` with an offline peer simply drops the message -- no error, just wasted effort. |
+| Node restart: re-announce all subscriptions | On startup, after P2P connects, the node must announce its full subscription set to all peers (like GossipSub's "hello" packet). Without this, returning peers are invisible to the network until they add a new service. | Medium | After network startup and initial peer connections, iterate all registered services and send a bulk subscription announcement. Timing is tricky -- must wait for peers to connect first. Use the heartbeat timer or a dedicated startup delay. |
+
+---
 
 ## Differentiators
 
-Features that set this app apart from typical node operator tooling. Not expected, but create significant value.
+Features that go beyond basic targeted send and provide additional value. Not strictly required for v1.3 to work, but make it significantly better.
 
-### P2P Network -- Advanced
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Real-time peer connection/disconnection notifications | Toast or inline notification when a peer connects or drops. Goes beyond static peer count to give operators live awareness of network dynamics. No Ethereum client UI does this well. | Medium | Would require a new Tauri event from the backend (emit on peer connect/disconnect from commonware p2p callbacks). Not available from polling alone. Deferred unless backend support is added. |
-| Per-service quorum progress visualization | Show a progress bar or ring for each active service: "3/5 operators have submitted for event X". This turns the P2P page from a static info page into a live operations dashboard. No existing AVS operator tool provides this. | High | Requires polling `QuorumQueue` state per active event, per service. The aggregator tracks `QuorumQueue::Active(Vec<Submission>)` internally. Would need a new HTTP endpoint to expose quorum queue sizes per service. Significant backend work. |
-| Peer latency / health indicators | Show approximate latency or "last seen" for each connected peer. Makes network quality visible. Grafana eth2 dashboards show peer latency as a standard metric. | High | Commonware p2p does not expose per-peer latency. Would require custom ping/pong or timing the message receipt. Not worth the complexity for v1.2. |
-| Network topology mini-map | Visual graph showing this node's connections to peers. Prysm had a "peer map" feature (now deprecated). Visually compelling but of limited operational value. | High | Would require a graph rendering library (e.g., react-force-graph). Cool demo but high effort for low operational value. Defer. |
-
-### BLS Keys -- Advanced
+### Per-Service Catch-Up Scoping
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| One-click BLS operator registration | Instead of just showing the key and telling the operator to register manually, automate the entire `registerOperator` + `updateOperatorSigningKey` flow from the UI. This is what EigenLayer's CLI does but no existing UI provides it as a one-click flow. | High | Requires: (1) Tauri command wrapping `chain_ops::register_operator()`, (2) owner credential input (separate from signing mnemonic), (3) registry address detection, (4) transaction signing and submission, (5) error handling for AlreadyRegistered, InsufficientFunds, etc. The MCP tool already has this logic in `chain_ops.rs`. Port to Tauri command layer. |
-| BLS key backup/export warning | When a BLS service is deployed, remind operators that their BLS key is derived from their mnemonic. If the mnemonic is lost, the BLS key cannot be recovered. This is a security UX differentiator. | Low | Show a warning card after BLS service creation: "Your BLS signing key is derived from your recovery phrase. Ensure your recovery phrase is backed up." Link to Settings > Wallet > Export. |
-| Dual key display (ECDSA + BLS per service) | Show both the secp256k1 operator address AND the BLS G1 public key for a BLS service. The ECDSA key is the operator identity (for registration); the BLS key is the signing key (for submissions). Making both visible prevents confusion. | Low | Call `/services/signer` per service. For BLS services, the response includes `hd_index` and `g1_pubkey_hex`. Also derive the ECDSA address from the same `hd_index` (already available via wallet store). Display both in service detail page. |
-| Registration status checker | After showing the registration guidance, check on-chain whether the operator is actually registered on the POAStakeRegistry. Green check if registered, amber warning if not. Reduces support burden. | Medium | Requires reading `POAStakeRegistry.isRegistered(operator)` or equivalent view function on-chain. Need the registry address (from service manager -> get stake registry address). Uses existing viem/alloy infrastructure. |
+| Filter catch-up replay by service subscription | Currently, the broadcast Engine replays ALL cached messages on reconnect. With per-service targeting, a reconnecting peer should only receive catch-up messages for services it subscribes to. Reduces bandwidth and processing for operators running few services in a many-service network. | High | The commonware broadcast Engine does NOT support per-message filtering on replay. It replays the entire per-peer deque. Options: (A) Accept unfiltered catch-up and rely on ServiceRouter to discard (current behavior, simplest), (B) Build application-level catch-up on top of the Engine's `mailbox.get(digest)` API, (C) Maintain separate per-service message caches at application level. **Recommendation: defer to v1.4 or accept option A for now.** The Engine's deque is bounded (default 128 messages) so the overhead is manageable. |
+| Service-scoped message cache | Instead of one global deque per peer in the Engine, maintain per-service message caches at the application level. On reconnect, only replay messages for the reconnecting peer's subscribed services. | High | Requires a parallel caching layer outside the Engine. The Engine caches all messages indiscriminately. Application would need to intercept outbound messages and store them by service_id, then replay on demand. Significant complexity for modest gain. **Recommendation: not for v1.3.** |
 
-### Activity -- Advanced
+### Observability Enhancements
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Activity timeline / Gantt-style view | Instead of a flat list, show events on a time axis with service lanes. Makes patterns visible: "service A triggers every 5 blocks, service B has a 2-minute cron." No node operator tool provides this view. | High | Would require a custom canvas/SVG rendering or a library like vis-timeline. High effort, impressive demo. Defer to later milestone. |
-| Event correlation chains | Link related events: trigger -> engine execution -> submission -> aggregation -> on-chain submit. Click one event, see the entire chain highlighted. This is the "distributed trace" view that Jaeger provides but integrated natively. | High | Requires a trace ID or correlation ID propagated through the system. The backend already integrates with Jaeger (OpenTelemetry). Could fetch trace data from Jaeger API, but this creates an external dependency. |
-| Export activity as CSV/JSON | Operators may need to export activity data for analysis, reporting, or debugging. Simple export button. Low effort, real value. | Low | Serialize the filtered `activityList` to JSON or CSV. Use Tauri's file dialog to save. Straightforward feature with genuine utility. |
+| Per-service peer count in /p2p/status | Expose `service_subscriptions: Map<ServiceId, Vec<PeerHex>>` in the P2pStatus response. Operators can see which peers handle which services. Useful for debugging quorum failures ("why did my 3-operator BLS service only get 2 signatures? peer C isn't subscribed"). | Low | Add field to `P2pStatus` struct. Populate from the subscription registry. This is low-cost high-value observability. |
+| Targeted vs broadcast metric | Track how many messages are sent via `Recipients::Some` vs `Recipients::All` (fallback). High fallback rate indicates subscription protocol issues. | Low | Counter metrics: `p2p_targeted_sends`, `p2p_broadcast_fallback_sends`. Increment in the publish handler. |
+| Subscription event logging | Structured log entries when peers subscribe/unsubscribe, with peer ID and service ID. Essential for debugging "peer X says it handles service Y but never sends submissions." | Low | Already partially done (tracing::info on subscribe/unsubscribe). Extend to log peer subscription announcements received. |
 
-### Settings -- Advanced
+### Protocol Robustness
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Guided first-run wizard | Instead of dumping new operators on a settings page, walk them through: (1) set WAVS home, (2) configure P2P, (3) set up wallet, (4) deploy first service. Progressive disclosure reduces overwhelm. | Medium | The app already has `WalletSetup` as a first-run gate. Extend this concept to cover full initial setup. Would replace the current "settings page as landing page" pattern. |
-| P2P configuration editor | Currently P2P is configured only through `wavs.toml`. A dedicated P2P section in Settings with mode selector (Disabled/Local/Remote), port input, peer address list editor, and bootstrapper config would make P2P setup accessible without editing TOML. | Medium | Read current P2P config from `GET /info` response. Build a form that maps to the `P2pConfig` enum variants. Write changes back to `wavs.toml` via existing TOML write commands. The form fields directly mirror the config struct. |
-| Settings import/export | Operators running multiple nodes or reinstalling need to transfer settings. Export as JSON file, import to restore. | Low | Serialize `Settings` struct + `wavs.toml` content to a single JSON blob. Import reverses the process. Low effort, useful for power users. |
+| Subscription heartbeat/refresh | Periodic re-announcement of full subscription set (e.g., every 60s). Protects against subscription state drift if announcements are lost. GossipSub relies on connection-time hello packets, not heartbeats. A heartbeat is more robust for long-running connections. | Low | Piggyback on the existing 2-second heartbeat interval (currently used for peer discovery probes). Every N heartbeats (e.g., every 30th = 60s), re-broadcast full subscription set. |
+| Subscription validation | Verify that a peer announcing subscription to service X actually has the service registered (i.e., is in the on-chain operator set). Prevents peers from subscribing to services they don't operate, reducing unnecessary message delivery. | High | Requires on-chain lookups (POA/EigenLayer operator registries). Not practical for v1.3 -- would need per-service contract queries. **Recommendation: trust peer announcements for now. Misbehaving peers are handled by Oracle-level blocking.** |
+
+---
 
 ## Anti-Features
 
-Features to explicitly NOT build in v1.2.
+Features to explicitly NOT build in v1.3. Important to document to prevent scope creep.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| In-app key generation (BLS or ECDSA) | Keys are deterministically derived from the mnemonic. There is no separate BLS key generation step. Building a key generation UI implies a key model that does not match WAVS's architecture (HKDF-SHA256 derivation from mnemonic + HD index + domain separator). | Show the derived keys. Explain they come from the mnemonic. Do not offer "generate new key" or "import key" flows. |
-| Custom P2P peer management (add/remove/block) | Commonware p2p manages peer connections automatically via discovery or lookup. Manual peer add/remove would conflict with the automated peer set. Peer blocking is a backend feature that does not need a UI in v1.2. | Show connected peers read-only. Configuration of authorized peers happens in `wavs.toml` peer_addresses / authorized_peers arrays. |
-| Transaction history / on-chain explorer | Showing on-chain transaction history (submitted envelopes, registration txs) requires indexing on-chain data. This is the domain of block explorers (Etherscan) not a node operator app. | Link to block explorer for relevant transactions. Show tx hash with explorer link when available. |
-| Multi-node management | Managing multiple WAVS node instances from one app would require SSH/remote connections and dramatically increase scope. | WAVS app manages the local node only. Operators needing multi-node use Grafana + Prometheus (already supported). |
-| BLS threshold / DKG UI | Threshold BLS (DKG key ceremonies) is explicitly out of scope per PROJECT.md. Building UI for it prematurely creates expectations. | Do not mention DKG in the UI. The algorithm selector should be "ECDSA (secp256k1)" and "BLS (BLS12-381)". No "threshold" option. |
-| Cosmos BLS services | BLS submission is EVM-only per the current implementation constraint. Building Cosmos BLS UI would create a dead path. | Only show BLS algorithm option when the service manager is EVM. If Cosmos manager selected, disable BLS with tooltip "BLS is currently EVM-only." |
-| Real-time log streaming to activity | Merging raw log lines into the activity feed conflates two different views. Logs are for debugging (verbose, noisy). Activity is for operations (structured, filtered). | Keep Logs and Activity as separate pages. Activity shows structured events. Logs shows raw tracing output. They serve different audiences. |
+| Per-service P2P channels | Registering a separate commonware P2P channel per service would provide true network-level isolation. However, commonware channels are registered at startup time via `network.register()` before `network.start()`. Dynamic channel creation is not supported. Multiple channels also multiply rate-limit tracking and connection overhead. | Keep single broadcast channel. Use `Recipients::Some` for targeting within the channel. ServiceRouter remains as a safety net for any messages that leak through. |
+| Content-based routing | Routing based on message content attributes (e.g., chain, signature algorithm, workflow ID). More flexible than topic-based but adds matching complexity and is overkill for service-level isolation. | Use simple service_id-based topic routing. The service_id is already the first 32 bytes of every P2pMessage, making it trivially extractable. |
+| Separate subscription protocol channel | Using channel 2 exclusively for subscription control messages. Adds another channel to manage, rate-limit, and bridge. Control messages are small and infrequent. | Multiplex control and data messages on the existing channels via a tagged envelope (discriminator byte or enum). |
+| Recursive subscription propagation | In GossipSub, subscription announcements propagate only to direct peers (one hop). Some systems propagate subscriptions across multiple hops. For WAVS with small operator sets (typically 3-20), all peers are directly connected. Multi-hop propagation is unnecessary overhead. | Direct-peer-only announcements. All WAVS peers are typically within one hop of each other in the mesh. |
+| Threshold-based subscription gating | Requiring a minimum number of subscribers before enabling targeted send. Over-engineering for a feature that works fine with graceful fallback to broadcast-all. | Fall back to `Recipients::All` when subscriber set is empty. No artificial minimums. |
+| On-chain subscription verification | Verifying subscription claims against on-chain operator registries before accepting. Adds latency, requires chain queries, and is fragile if chains are slow or unavailable. | Trust peer announcements. Malicious peers are handled at the Oracle/block level. Unregistered operators fail at submission time anyway (contract rejects their signatures). |
+| Per-service catch-up protocol | Building a custom catch-up mechanism that replays only service-specific messages on reconnect. The commonware Engine's existing deque replay is unfiltered. Building filtered replay requires a parallel caching layer. | Accept the current catch-up behavior for v1.3. The Engine replays all cached messages (bounded by deque_size, default 128), and ServiceRouter filters at application level. The bandwidth overhead is acceptable for the current scale. Revisit in v1.4 if operator counts exceed ~50. |
+
+---
 
 ## Feature Dependencies
 
 ```
-Existing: Service Builder (4-step wizard)
-         |
-         +-- [NEW] Signature algorithm selector (modify SubmitEditor)
-         |     |
-         |     +-- [NEW] BLS-aware deploy step (different contract ABI)
-         |           |
-         |           +-- [NEW] Post-deploy BLS key display
-         |                 |
-         |                 +-- [NEW] Registration guidance card
-         |                       |
-         |                       +-- [DIFFERENTIATOR] One-click registration
+Subscription Registry ──────┐
+                             │
+Subscription Announcement ──┤── Targeted Send (Recipients::Some)
+Protocol                     │
+                             │
+Peer Connection Detection ──┘
+        │
+        └── Peer Disconnect Cleanup
+        └── Node Restart Re-announce
 
-Existing: Activity Feed (virtualized list, filter/search)
-         |
-         +-- [NEW] Enriched SubmissionEvent (status, error, correlation)
-         |     |
-         |     +-- [NEW] Merged trigger+submission cards
-         |     |
-         |     +-- [NEW] Error display in cards
-         |     |
-         |     +-- [NEW] Status badges (success/pending/failed)
+Targeted Send ──────────────── Fallback to Recipients::All
+                                (when subscriber set empty)
 
-[NEW] P2P Page (new top-level route)
-  |
-  +-- Polls GET /p2p/status and GET /info
-  |
-  +-- [TABLE STAKES] Peer count + list
-  +-- [TABLE STAKES] Local peer ID
-  +-- [TABLE STAKES] P2P mode indicator
-  +-- [TABLE STAKES] Listen addresses
-  +-- [TABLE STAKES] Subscribed services
-  +-- [DIFFERENTIATOR] Quorum progress visualization
+Subscription Registry ──────── /p2p/status enhancements
+                                (per-service peer counts)
 
-Existing: Settings Page (6 sections)
-  |
-  +-- [TABLE STAKES] Section collapsibility
-  +-- [TABLE STAKES] Section anchoring
-  +-- [TABLE STAKES] Consistent save-state UX
-  +-- [DIFFERENTIATOR] P2P configuration editor
+[Independent]
+Per-Service Catch-Up Scoping ── NOT a dependency of targeting
+                                 (deferred, Engine handles catch-up)
 ```
 
-Key dependency observations:
-- BLS selector is the entry point -- everything downstream depends on it
-- P2P page is fully independent of other features (no dependencies)
-- Activity enrichment requires backend event schema changes
-- Settings refactor is independent and can be done any time
-- The P2P page depends only on existing backend endpoints (no new backend work)
+**Critical path:** Subscription Registry -> Announcement Protocol -> Targeted Send. These three are tightly coupled and must be built together.
+
+**Independent:** Observability enhancements, heartbeat refresh, peer disconnect cleanup. These can be added incrementally.
+
+---
+
+## Comparison: GossipSub Topics vs WAVS Per-Service Targeting
+
+This comparison is explicitly requested by the quality gate and is important for understanding the design space.
+
+| Aspect | GossipSub (libp2p) | WAVS v1.3 Per-Service Targeting |
+|--------|-------------------|-------------------------------|
+| **Topic isolation** | Full network-level isolation. Each topic has its own mesh (D peers), gossip set, and message flow. Topics never mix at the transport level. | Application-level targeting via `Recipients::Some`. All messages share the same commonware channel. ServiceRouter provides a safety net. |
+| **Subscription protocol** | Built into pubsub spec. `RPC.subscriptions[]` with `subscribe: bool, topicid: string`. "Hello" packet on connect with all current subscriptions. Subscriptions are NOT propagated beyond direct peers. | Must be built as application-level control messages. Equivalent to GossipSub's hello + subscription change announcements. |
+| **Mesh management** | D_lo/D_hi mesh bounds per topic. GRAFT/PRUNE to maintain mesh density. Heartbeat (1s default) checks mesh health. Fan-out for unsubscribed topics. | No mesh management needed. commonware-p2p handles connection management. WAVS just selects recipients from the subscription registry. Simpler because there is no per-topic mesh to maintain. |
+| **Catch-up** | IHAVE/IWANT gossip. Peers exchange message IDs, request missing messages. Per-topic. | Broadcast Engine deque replay (all messages, all topics). Not per-service. ServiceRouter filters at application level. |
+| **Complexity** | High. GossipSub v1.1 is ~50 pages of spec. Scoring, flood publishing, peer exchange, message validation. | Low-Medium. Subscription tracking + `Recipients::Some`. No mesh management, no scoring, no GRAFT/PRUNE. Commonware handles the hard networking parts. |
+| **When better** | Large networks (>100 peers), many topics (>50), topics with very different subscriber sets, need for gossip-based catch-up. | Small-medium networks (<50 peers), moderate topics (<50 services), all peers authenticated, trusted operator environment. |
+
+**Verdict:** WAVS does not need GossipSub-level complexity. The commonware-p2p `Recipients::Some` primitive combined with application-level subscription tracking achieves the goal with dramatically less complexity. GossipSub's mesh management (GRAFT/PRUNE/heartbeat/scoring) is designed for untrusted, large-scale networks. WAVS has authenticated, Oracle-managed peer sets -- a much simpler environment.
+
+---
 
 ## MVP Recommendation
 
-Prioritize (in order):
+**Phase 1 (v1.3 core) -- build together, they are interdependent:**
 
-1. **P2P page with peer visibility** -- Entirely frontend, zero backend changes needed. `GET /p2p/status` and `GET /info` already return all needed data. Highest value-to-effort ratio. Gives operators the one thing they most lack: network visibility.
+1. **Subscription Registry** (`HashMap<[u8; 32], HashSet<ed25519::PublicKey>>`) -- the central data structure
+2. **Control Message Protocol** -- tagged P2pMessage variant for subscribe/unsubscribe announcements
+3. **Targeted Send** -- replace `Recipients::All` with `Recipients::Some(service_peers)` in publish handler, with fallback
+4. **Subscription Lifecycle** -- announce on subscribe/unsubscribe, re-announce on startup
+5. **Per-service peer count in /p2p/status** -- low-effort, high-value observability
 
-2. **BLS/ECDSA algorithm selector in service builder** -- Unblocks BLS service deployment from the UI. Small type change (`SignatureAlgorithm` union), small UI change (radio buttons), large capability unlock.
+**Defer to v1.4 or later:**
 
-3. **Post-deploy BLS key display + registration guidance** -- Completes the BLS deploy flow. Without this, operators deploy but cannot finish setup. Uses existing `/services/signer` endpoint.
+- **Per-service catch-up scoping**: High complexity, low urgency. The Engine's bounded deque (128 messages) and ServiceRouter filtering are sufficient at current scale. Only becomes important with >50 services or >50 operators.
+- **Subscription heartbeat/refresh**: Nice-to-have robustness. Can be added later as a small enhancement. Subscription state drift is unlikely in small operator sets.
+- **Peer disconnect cleanup**: Low priority because commonware silently drops messages to offline peers. The subscription registry will have stale entries, but `Recipients::Some` handles offline recipients gracefully. Can add via `Provider::subscribe()` notifications later.
+- **Subscription validation**: Requires on-chain lookups. Not practical for v1.3.
 
-4. **Settings page collapsible sections** -- Quick win that improves UX for all future settings additions. Use existing `Expander` component.
-
-5. **Activity event enrichment (status + errors)** -- Requires backend changes (new event fields). Do after the simpler frontend-only features are done.
-
-Defer to later milestone:
-- **One-click BLS registration**: High complexity, requires owner credential handling. Provide guidance card first.
-- **Merged trigger+submission cards**: Requires correlation ID infrastructure. Current separate cards work.
-- **Per-service quorum progress**: Requires new backend endpoints. Show subscribed services list first.
-- **P2P config editor in settings**: Operators can use TOML editor for now. Build after validating demand.
-- **Activity timeline/Gantt view**: Cool but not critical. Activity list with filters is sufficient.
+---
 
 ## Sources
 
-### Codebase Analysis (HIGH confidence)
-- `packages/types/src/http.rs` -- `P2pStatus`, `SignerResponse` (Bls12381 variant), `InfoResponse` structs
-- `packages/wavs/src/http/handlers/p2p.rs` -- `GET /p2p/status` handler
-- `packages/wavs/src/http/handlers/info.rs` -- `GET /info` handler returning P2P config + status
-- `packages/wavs/src/http/handlers/service/key.rs` -- `POST /services/signer` returning BLS G1 pubkey
-- `packages/wavs/src/subsystems/aggregator/p2p.rs` -- `P2pConfig` enum (Disabled/Local/Remote)
-- `packages/wavs-mcp/src/chain_ops.rs` -- `register_operator()` function (BLS registration flow)
-- `packages/types/src/solidity_types/bls.rs` -- BLS contract ABI bindings
-- `app/src/stores/serviceBuilderStore.ts` -- Current builder hardcodes `secp256k1`
-- `app/src/types/index.ts` -- Current `SignatureAlgorithm` type only has `'secp256k1'`
-- `app/src/components/activity/ActivityFeed.tsx` -- Existing virtualized activity list
-- `app/src/pages/Settings.tsx` -- Current settings page structure (~940 lines)
-
-### Ecosystem Research (MEDIUM confidence)
-- [Prysm Web UI docs](https://prysm.offchainlabs.com/docs/prysm-usage/web-interface/) -- Validator dashboard features: wallet management, key management, peer map, validator state. Notably deprecated in favor of Grafana dashboards.
-- [eth-docker Web UI docs](https://ethdocker.com/Usage/WebUI/) -- Lighthouse Siren and Prysm web UI comparison
-- [Grafana eth2 dashboards](https://github.com/metanull-operator/eth2-grafana) -- Standard peer count, peer list, connection metrics for Ethereum nodes
-- [EigenLayer AVS Dashboard onboarding](https://docs.eigenlayer.xyz/developers/HowTo/onboard-avs-dashboard) -- AVS dashboard shows operator list, quorum status, restaked strategies
-- [EigenLayer CLI key management](https://docs.eigencloud.xyz/products/eigenlayer/concepts/keys-and-signatures) -- ECDSA for operator identity, BLS for attestation signatures
-- [EigenLayer operator registration](https://blog.unit410.com/engineering/eigenlayer/ethereum/2024/07/23/secure-operator-registration-in-eigenlayer.html) -- Secure registration flow: ECDSA + BLS keys, quorum registration
-- [Ava Protocol operator docs](https://avaprotocol.org/docs/ethereum/EigenLayer-AVS/3-operator) -- Registration with ECDSA private key and BLS keypair
-- [OWASP Key Management](https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html) -- Never display private keys in plaintext, log access, overwrite after use
-- [Crypto UX/UI Design Patterns](https://avark.agency/learn/article/blockchain-ux-design-guide/) -- Dark theme standard for crypto apps, progressive disclosure, minimalist design
+- [GossipSub v1.0 Specification](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.0.md) -- subscription protocol, mesh management, hello packets
+- [GossipSub v1.1 Specification](https://github.com/libp2p/specs/blob/master/pubsub/gossipsub/gossipsub-v1.1.md) -- peer scoring, extended validation
+- [Publish-subscribe pattern (Wikipedia)](https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern) -- topic-based vs content-based routing
+- [commonware-p2p source](https://github.com/commonwarexyz/monorepo) -- `Recipients` enum, `Sender` trait, rate limiting (v2026.3.0)
+- [commonware-broadcast source](https://github.com/commonwarexyz/monorepo) -- `Engine` cache/deque, `Mailbox` API (v2026.3.0)
+- Codebase analysis: `packages/wavs/src/subsystems/aggregator/p2p.rs` (ServiceRouter, P2pHandle, bridge loops)
+- Codebase analysis: `packages/wavs/src/subsystems/aggregator.rs` (AggregatorCommand variants, subscription lifecycle)
+- [Selective Delivery in P2P Topic-Based Pub/Sub Systems](https://www.researchgate.net/publication/308814521_Selective_Delivery_of_Event_Messages_in_Peer-to-Peer_Topic-Based_Publish_Subscribe_Systems)
