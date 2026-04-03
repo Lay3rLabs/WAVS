@@ -2704,4 +2704,32 @@ mod p2p_broadcast_tests {
             ),
         }
     }
+
+    #[test]
+    fn test_peer_subscription_counts() {
+        let peer_a = test_pubkey(1);
+        let peer_b = test_pubkey(2);
+        let svc_a = [0xAA; 32];
+        let svc_b = [0xBB; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+
+        // Empty map returns empty counts
+        assert!(map.peer_subscription_counts().is_empty());
+
+        // After subscriptions, counts reflect state
+        map.set_peer_subscriptions(&peer_a, vec![svc_a, svc_b]);
+        map.set_peer_subscriptions(&peer_b, vec![svc_a]);
+
+        let counts = map.peer_subscription_counts();
+        assert_eq!(counts.len(), 2);
+        assert_eq!(*counts.get(&const_hex::encode(svc_a)).unwrap(), 2);
+        assert_eq!(*counts.get(&const_hex::encode(svc_b)).unwrap(), 1);
+
+        // After removing a peer, counts update
+        map.remove_peer(&peer_b);
+        let counts = map.peer_subscription_counts();
+        assert_eq!(*counts.get(&const_hex::encode(svc_a)).unwrap(), 1);
+        assert_eq!(*counts.get(&const_hex::encode(svc_b)).unwrap(), 1);
+    }
 }
