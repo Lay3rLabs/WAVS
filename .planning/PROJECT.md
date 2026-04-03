@@ -57,6 +57,7 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 
 - ✓ Subscription protocol — peers announce/withdraw subscribed services via P2P; `PeerSubscriptionMap` tracks service→peers — v1.3
 - ✓ Targeted delivery — `run_lookup_network` and `run_discovery_network` use `get_recipients()` for direct channel submission sends; Engine channel stays `Recipients::All` (TGT-03) — v1.3
+- ✓ `/p2p/status` includes `peer_subscriptions: HashMap<String, usize>` (hex service_id → peer count) via `peer_subscription_counts()` on `PeerSubscriptionMap` — v1.3 (OBS-01) — Validated in Phase 17: subscription-observability
 
 ### Active
 
