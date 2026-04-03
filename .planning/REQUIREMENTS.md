@@ -15,10 +15,10 @@ Requirements for per-service P2P targeting. Each maps to roadmap phases.
 
 ### Announcement Protocol
 
-- [ ] **ANN-01**: When an operator adds a service, a subscription announcement is broadcast to all connected peers
-- [ ] **ANN-02**: When an operator removes a service, an unsubscribe announcement is broadcast to all connected peers
+- [x] **ANN-01**: When an operator adds a service, a subscription announcement is broadcast to all connected peers
+- [x] **ANN-02**: When an operator removes a service, an unsubscribe announcement is broadcast to all connected peers
 - [x] **ANN-03**: Subscription state is piggybacked on periodic heartbeats for self-healing eventual consistency
-- [ ] **ANN-04**: When a new peer connects, the node sends its full subscription set as a hello message
+- [x] **ANN-04**: When a new peer connects, the node sends its full subscription set as a hello message
 - [x] **ANN-05**: Subscription announcements use a sentinel service_id to multiplex on the existing direct channel (no new channels required)
 
 ### Targeted Send
@@ -73,10 +73,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SUB-01 | Phase 14 | Complete |
 | SUB-02 | Phase 14 | Complete |
 | SUB-03 | Phase 14 | Complete |
-| ANN-01 | Phase 15 | Pending |
-| ANN-02 | Phase 15 | Pending |
+| ANN-01 | Phase 15 | Complete |
+| ANN-02 | Phase 15 | Complete |
 | ANN-03 | Phase 15 | Complete |
-| ANN-04 | Phase 15 | Pending |
+| ANN-04 | Phase 15 | Complete |
 | ANN-05 | Phase 14 | Complete |
 | TGT-01 | Phase 16 | Pending |
 | TGT-02 | Phase 16 | Pending |

@@ -43,7 +43,7 @@
 ### v1.3 Per-Service P2P Targeting (In Progress)
 
 - [x] **Phase 14: Subscription Data Structures** - PeerSubscriptionMap, SubscriptionAnnouncement type, sentinel constant, disconnect cleanup (completed 2026-04-03)
-- [ ] **Phase 15: Subscription Protocol** - Announce/receive lifecycle wired into bridge loops with heartbeat sync and backward compat
+- [x] **Phase 15: Subscription Protocol** - Announce/receive lifecycle wired into bridge loops with heartbeat sync and backward compat (completed 2026-04-03)
 - [ ] **Phase 16: Targeted Delivery** - Replace Recipients::All with Recipients::Some on direct channel with fallback and retry re-resolution
 - [ ] **Phase 17: Subscription Observability** - Per-service peer counts in /p2p/status endpoint
 
@@ -72,10 +72,10 @@ Plans:
   3. Subscription state is re-broadcast on every heartbeat cycle so peers that missed an announcement eventually converge
   4. When a new peer connects, the node sends its full subscription set as a hello message
   5. A peer that has never sent any subscription announcement is treated as subscribed to all services (backward compatible with pre-v1.3 nodes)
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 15-01-PLAN.md -- Extend data structures with full_state field, set_peer_subscriptions, has_announced, and unit tests
-- [ ] 15-02-PLAN.md -- Wire subscription protocol into both bridge loops (subscribe/unsubscribe, inbound, heartbeat, hello)
+- [x] 15-02-PLAN.md -- Wire subscription protocol into both bridge loops (subscribe/unsubscribe, inbound, heartbeat, hello)
 
 ### Phase 16: Targeted Delivery
 **Goal**: Submissions on the direct channel reach only peers subscribed to that service, with reliable fallback to broadcast-all
@@ -116,7 +116,7 @@ Plans:
 | 12. Unified Activity Events | v1.2 | 2/2 | Complete | 2026-03-24 |
 | 13. BLS Registration UX and Type Cleanup | v1.2 | 1/1 | Complete | 2026-03-24 |
 | 14. Subscription Data Structures | v1.3 | 1/1 | Complete    | 2026-04-03 |
-| 15. Subscription Protocol | v1.3 | 1/2 | In Progress|  |
+| 15. Subscription Protocol | v1.3 | 2/2 | Complete   | 2026-04-03 |
 | 16. Targeted Delivery | v1.3 | 0/? | Not started | - |
 | 17. Subscription Observability | v1.3 | 0/? | Not started | - |
 
