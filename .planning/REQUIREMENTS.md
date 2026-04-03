@@ -9,9 +9,9 @@ Requirements for per-service P2P targeting. Each maps to roadmap phases.
 
 ### Subscription Tracking
 
-- [ ] **SUB-01**: Node maintains a per-service peer subscription map (`service_id → Set<PeerPubkey>`) updated from announcement messages
-- [ ] **SUB-02**: Node maintains a reverse index (`PeerPubkey → Set<service_id>`) for efficient cleanup on peer disconnect
-- [ ] **SUB-03**: When a peer disconnects, all its subscription entries are removed from both maps
+- [x] **SUB-01**: Node maintains a per-service peer subscription map (`service_id → Set<PeerPubkey>`) updated from announcement messages
+- [x] **SUB-02**: Node maintains a reverse index (`PeerPubkey → Set<service_id>`) for efficient cleanup on peer disconnect
+- [x] **SUB-03**: When a peer disconnects, all its subscription entries are removed from both maps
 
 ### Announcement Protocol
 
@@ -19,7 +19,7 @@ Requirements for per-service P2P targeting. Each maps to roadmap phases.
 - [ ] **ANN-02**: When an operator removes a service, an unsubscribe announcement is broadcast to all connected peers
 - [ ] **ANN-03**: Subscription state is piggybacked on periodic heartbeats for self-healing eventual consistency
 - [ ] **ANN-04**: When a new peer connects, the node sends its full subscription set as a hello message
-- [ ] **ANN-05**: Subscription announcements use a sentinel service_id to multiplex on the existing direct channel (no new channels required)
+- [x] **ANN-05**: Subscription announcements use a sentinel service_id to multiplex on the existing direct channel (no new channels required)
 
 ### Targeted Send
 
@@ -70,14 +70,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUB-01 | Phase 14 | Pending |
-| SUB-02 | Phase 14 | Pending |
-| SUB-03 | Phase 14 | Pending |
+| SUB-01 | Phase 14 | Complete |
+| SUB-02 | Phase 14 | Complete |
+| SUB-03 | Phase 14 | Complete |
 | ANN-01 | Phase 15 | Pending |
 | ANN-02 | Phase 15 | Pending |
 | ANN-03 | Phase 15 | Pending |
 | ANN-04 | Phase 15 | Pending |
-| ANN-05 | Phase 14 | Pending |
+| ANN-05 | Phase 14 | Complete |
 | TGT-01 | Phase 16 | Pending |
 | TGT-02 | Phase 16 | Pending |
 | TGT-03 | Phase 16 | Pending |
