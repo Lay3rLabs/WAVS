@@ -112,7 +112,7 @@ Plans:
 | 11. BLS Service Builder and Registration | v1.2 | 2/2 | Complete | 2026-03-24 |
 | 12. Unified Activity Events | v1.2 | 2/2 | Complete | 2026-03-24 |
 | 13. BLS Registration UX and Type Cleanup | v1.2 | 1/1 | Complete | 2026-03-24 |
-| 14. Subscription Data Structures | v1.3 | 1/1 | Complete   | 2026-04-03 |
+| 14. Subscription Data Structures | v1.3 | 1/1 | Complete    | 2026-04-03 |
 | 15. Subscription Protocol | v1.3 | 0/? | Not started | - |
 | 16. Targeted Delivery | v1.3 | 0/? | Not started | - |
 | 17. Subscription Observability | v1.3 | 0/? | Not started | - |
