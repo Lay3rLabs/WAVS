@@ -1808,4 +1808,308 @@ mod p2p_broadcast_tests {
         let drained = queue.drain_all();
         assert!(drained.is_empty());
     }
+
+    // ---- Subscription test helpers ----
+
+    /// Create a deterministic ed25519 public key from a seed byte (for subscription tests).
+    fn test_pubkey(seed_byte: u8) -> ed25519::PublicKey {
+        use commonware_math::algebra::Random;
+        use rand_chacha::rand_core::SeedableRng;
+        use rand_chacha::ChaCha20Rng;
+        let mut rng = ChaCha20Rng::from_seed([seed_byte; 32]);
+        let private = ed25519::PrivateKey::random(&mut rng);
+        private.public_key()
+    }
+
+    // ---- PeerSubscriptionMap tests ----
+
+    #[test]
+    fn test_peer_subscription_map_forward_index() {
+        // SUB-01: handle_announcement with subscribe list populates forward index
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+        let svc_b = [0xBB; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        let announcement = SubscriptionAnnouncement {
+            subscribe: vec![svc_a, svc_b],
+            unsubscribe: vec![],
+        };
+        map.handle_announcement(&peer_a, &announcement);
+
+        // Forward index: both services should map to peer_a
+        match map.get_recipients(&svc_a) {
+            Recipients::Some(peers) => {
+                assert_eq!(peers.len(), 1);
+                assert!(peers.contains(&peer_a));
+            }
+            other => panic!("Expected Recipients::Some for svc_a, got {:?}", other),
+        }
+        match map.get_recipients(&svc_b) {
+            Recipients::Some(peers) => {
+                assert_eq!(peers.len(), 1);
+                assert!(peers.contains(&peer_a));
+            }
+            other => panic!("Expected Recipients::Some for svc_b, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_peer_subscription_map_remove_peer() {
+        // SUB-02: remove_peer clears peer from both forward and reverse indexes
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+        let svc_b = [0xBB; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        let announcement = SubscriptionAnnouncement {
+            subscribe: vec![svc_a, svc_b],
+            unsubscribe: vec![],
+        };
+        map.handle_announcement(&peer_a, &announcement);
+
+        // Verify peer is subscribed
+        assert!(matches!(map.get_recipients(&svc_a), Recipients::Some(_)));
+
+        // Remove peer
+        map.remove_peer(&peer_a);
+
+        // Both services should now fallback to Recipients::All
+        assert!(matches!(map.get_recipients(&svc_a), Recipients::All));
+        assert!(matches!(map.get_recipients(&svc_b), Recipients::All));
+    }
+
+    #[test]
+    fn test_peer_subscription_map_disconnect_cleanup() {
+        // SUB-03: remove_peer leaves no trace in either map
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+        let svc_b = [0xBB; 32];
+        let svc_c = [0xCC; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        let announcement = SubscriptionAnnouncement {
+            subscribe: vec![svc_a, svc_b, svc_c],
+            unsubscribe: vec![],
+        };
+        map.handle_announcement(&peer_a, &announcement);
+        map.remove_peer(&peer_a);
+
+        // Both internal maps should be completely empty
+        assert!(
+            map.service_to_peers.is_empty(),
+            "Forward index should be empty after remove_peer"
+        );
+        assert!(
+            map.peer_to_services.is_empty(),
+            "Reverse index should be empty after remove_peer"
+        );
+    }
+
+    #[test]
+    fn test_subscription_announcement_roundtrip() {
+        // ANN-05: SubscriptionAnnouncement round-trips through P2pMessage encoding
+        let original = SubscriptionAnnouncement {
+            subscribe: vec![[0xAA; 32], [0xBB; 32]],
+            unsubscribe: vec![[0xCC; 32]],
+        };
+
+        let p2p_msg = original
+            .to_p2p_message()
+            .expect("to_p2p_message should succeed");
+        assert_eq!(
+            p2p_msg.service_id_bytes, SUBSCRIPTION_SENTINEL,
+            "P2pMessage must use sentinel"
+        );
+
+        let recovered = SubscriptionAnnouncement::from_payload(&p2p_msg.payload)
+            .expect("from_payload should succeed");
+        assert_eq!(
+            original, recovered,
+            "Round-trip must produce identical announcement"
+        );
+    }
+
+    #[test]
+    fn test_subscription_sentinel_distinguishable() {
+        // ANN-05: SUBSCRIPTION_SENTINEL is distinct from HEARTBEAT_SERVICE_ID and real service IDs
+        assert_ne!(
+            SUBSCRIPTION_SENTINEL, HEARTBEAT_SERVICE_ID,
+            "Sentinel must differ from heartbeat"
+        );
+
+        // Real service IDs are SHA-256 hashes -- verify sentinel differs from a sample
+        let real_service = ServiceId::hash(b"my-production-service");
+        assert_ne!(
+            SUBSCRIPTION_SENTINEL,
+            real_service.inner(),
+            "Sentinel must differ from real service IDs"
+        );
+
+        // is_subscription_announcement works correctly
+        let sentinel_msg = P2pMessage {
+            service_id_bytes: SUBSCRIPTION_SENTINEL,
+            payload: vec![],
+        };
+        let heartbeat_msg = P2pMessage {
+            service_id_bytes: HEARTBEAT_SERVICE_ID,
+            payload: vec![],
+        };
+        let service_msg = P2pMessage {
+            service_id_bytes: real_service.inner(),
+            payload: vec![],
+        };
+
+        assert!(
+            is_subscription_announcement(&sentinel_msg),
+            "Sentinel message should be detected"
+        );
+        assert!(
+            !is_subscription_announcement(&heartbeat_msg),
+            "Heartbeat should not be detected as subscription"
+        );
+        assert!(
+            !is_subscription_announcement(&service_msg),
+            "Real service should not be detected as subscription"
+        );
+    }
+
+    #[test]
+    fn test_get_recipients_empty_fallback() {
+        // SUB-01 fallback: get_recipients returns Recipients::All when no peers subscribed
+        let map = PeerSubscriptionMap::new();
+        let unknown_svc = [0xDD; 32];
+
+        // Unknown service -> Recipients::All
+        assert!(
+            matches!(map.get_recipients(&unknown_svc), Recipients::All),
+            "Unknown service must fallback to All"
+        );
+
+        // Subscribe then unsubscribe -> Recipients::All
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+        let mut map2 = PeerSubscriptionMap::new();
+        map2.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+            },
+        );
+        map2.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![],
+                unsubscribe: vec![svc_a],
+            },
+        );
+        assert!(
+            matches!(map2.get_recipients(&svc_a), Recipients::All),
+            "Empty set after unsubscribe must fallback to All"
+        );
+    }
+
+    #[test]
+    fn test_peer_subscription_map_idempotent() {
+        // Duplicate subscribe is a no-op (idempotent)
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        let announcement = SubscriptionAnnouncement {
+            subscribe: vec![svc_a],
+            unsubscribe: vec![],
+        };
+        map.handle_announcement(&peer_a, &announcement);
+        map.handle_announcement(&peer_a, &announcement); // duplicate
+
+        match map.get_recipients(&svc_a) {
+            Recipients::Some(peers) => assert_eq!(
+                peers.len(),
+                1,
+                "Duplicate subscribe should not create duplicates"
+            ),
+            other => panic!("Expected Recipients::Some, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_peer_subscription_map_multiple_peers() {
+        // Multiple peers subscribing to the same service
+        let peer_a = test_pubkey(1);
+        let peer_b = test_pubkey(2);
+        let svc_a = [0xAA; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        map.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+            },
+        );
+        map.handle_announcement(
+            &peer_b,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+            },
+        );
+
+        match map.get_recipients(&svc_a) {
+            Recipients::Some(peers) => {
+                assert_eq!(peers.len(), 2, "Both peers should be in recipient set");
+                assert!(peers.contains(&peer_a));
+                assert!(peers.contains(&peer_b));
+            }
+            other => panic!("Expected Recipients::Some with 2 peers, got {:?}", other),
+        }
+
+        // Remove one peer, other remains
+        map.remove_peer(&peer_a);
+        match map.get_recipients(&svc_a) {
+            Recipients::Some(peers) => {
+                assert_eq!(peers.len(), 1, "Only peer_b should remain");
+                assert!(peers.contains(&peer_b));
+            }
+            other => panic!("Expected Recipients::Some with 1 peer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_peer_subscription_map_remove_unknown_peer() {
+        // remove_peer on unknown peer is a no-op (no panic)
+        let peer_a = test_pubkey(1);
+        let mut map = PeerSubscriptionMap::new();
+        map.remove_peer(&peer_a); // should not panic
+        assert!(map.service_to_peers.is_empty());
+        assert!(map.peer_to_services.is_empty());
+    }
+
+    // ---- ServiceRouter extension tests ----
+
+    #[test]
+    fn test_service_router_subscribed_services_raw() {
+        // subscribed_services_raw returns raw [u8; 32] bytes
+        let service_id_a = ServiceId::hash(b"test-service-a");
+        let service_id_b = ServiceId::hash(b"test-service-b");
+
+        let mut router = ServiceRouter::new();
+        assert!(router.subscribed_services_raw().is_empty());
+
+        router.subscribe(&service_id_a);
+        router.subscribe(&service_id_b);
+
+        let raw = router.subscribed_services_raw();
+        assert_eq!(raw.len(), 2, "Should have 2 raw service IDs");
+        assert!(
+            raw.contains(&service_id_a.inner()),
+            "Should contain service_a bytes"
+        );
+        assert!(
+            raw.contains(&service_id_b.inner()),
+            "Should contain service_b bytes"
+        );
+    }
 }
