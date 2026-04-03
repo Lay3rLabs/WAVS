@@ -22,7 +22,7 @@
 //! bridged to Tokio), are deduplicated by SHA-256 digest, filtered by ServiceRouter, and
 //! forwarded to the Aggregator as `AggregatorCommand::Receive`.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -270,6 +270,11 @@ impl ServiceRouter {
             .map(const_hex::encode)
             .collect()
     }
+
+    /// Return raw bytes of subscribed service IDs (for building subscription announcements).
+    pub fn subscribed_services_raw(&self) -> Vec<[u8; 32]> {
+        self.subscribed_services.iter().copied().collect()
+    }
 }
 
 // ============================================================================
@@ -307,6 +312,113 @@ impl RetryQueue {
 
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
+    }
+}
+
+// ============================================================================
+// Subscription Tracking (Per-Service P2P Targeting)
+// ============================================================================
+
+/// Subscription announcement carried as P2pMessage payload (ANN-05).
+/// The service_id_bytes field of the wrapping P2pMessage is set to SUBSCRIPTION_SENTINEL.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct SubscriptionAnnouncement {
+    /// Services this peer is subscribing to
+    pub subscribe: Vec<[u8; 32]>,
+    /// Services this peer is unsubscribing from
+    pub unsubscribe: Vec<[u8; 32]>,
+}
+
+impl SubscriptionAnnouncement {
+    /// Encode as a P2pMessage with the subscription sentinel.
+    pub fn to_p2p_message(&self) -> Result<P2pMessage, serde_json::Error> {
+        let payload = serde_json::to_vec(self)?;
+        Ok(P2pMessage {
+            service_id_bytes: SUBSCRIPTION_SENTINEL,
+            payload,
+        })
+    }
+
+    /// Decode from a P2pMessage payload (caller must verify sentinel first).
+    pub fn from_payload(payload: &[u8]) -> Result<Self, serde_json::Error> {
+        serde_json::from_slice(payload)
+    }
+}
+
+/// Bidirectional subscription index tracking which peers subscribe to which services (SUB-01, SUB-02).
+///
+/// Maintains forward (service_id -> Set<PeerPubkey>) and reverse (PeerPubkey -> Set<service_id>)
+/// indexes kept in sync. Single-threaded -- lives inside the bridge loop's tokio::select!.
+pub(crate) struct PeerSubscriptionMap {
+    /// Forward index: service_id -> set of subscribed peers
+    service_to_peers: HashMap<[u8; 32], HashSet<ed25519::PublicKey>>,
+    /// Reverse index: peer -> set of subscribed services (for disconnect cleanup)
+    peer_to_services: HashMap<ed25519::PublicKey, HashSet<[u8; 32]>>,
+}
+
+impl PeerSubscriptionMap {
+    pub fn new() -> Self {
+        Self {
+            service_to_peers: HashMap::new(),
+            peer_to_services: HashMap::new(),
+        }
+    }
+
+    /// Process a subscription announcement from a peer.
+    /// Idempotent -- duplicate subscriptions are no-ops.
+    pub fn handle_announcement(
+        &mut self,
+        peer: &ed25519::PublicKey,
+        announcement: &SubscriptionAnnouncement,
+    ) {
+        for service_id in &announcement.subscribe {
+            self.service_to_peers
+                .entry(*service_id)
+                .or_default()
+                .insert(peer.clone());
+            self.peer_to_services
+                .entry(peer.clone())
+                .or_default()
+                .insert(*service_id);
+        }
+        for service_id in &announcement.unsubscribe {
+            if let Some(peers) = self.service_to_peers.get_mut(service_id) {
+                peers.remove(peer);
+                if peers.is_empty() {
+                    self.service_to_peers.remove(service_id);
+                }
+            }
+            if let Some(services) = self.peer_to_services.get_mut(peer) {
+                services.remove(service_id);
+                if services.is_empty() {
+                    self.peer_to_services.remove(peer);
+                }
+            }
+        }
+    }
+
+    /// Remove all subscriptions for a disconnected peer (SUB-03).
+    /// Uses the reverse index for efficient cleanup.
+    pub fn remove_peer(&mut self, peer: &ed25519::PublicKey) {
+        if let Some(services) = self.peer_to_services.remove(peer) {
+            for service_id in services {
+                if let Some(peers) = self.service_to_peers.get_mut(&service_id) {
+                    peers.remove(peer);
+                    if peers.is_empty() {
+                        self.service_to_peers.remove(&service_id);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Get the recipient set for targeted delivery.
+    /// Returns Recipients::Some(peers) if peers are known, or Recipients::All as fallback (TGT-02 prep).
+    pub fn get_recipients(&self, service_id: &[u8; 32]) -> Recipients<ed25519::PublicKey> {
+        match self.service_to_peers.get(service_id) {
+            Some(peers) if !peers.is_empty() => Recipients::Some(peers.iter().cloned().collect()),
+            _ => Recipients::All,
+        }
     }
 }
 
@@ -456,6 +568,16 @@ fn spawn_commonware_runtime(
 /// Reserved service ID used by heartbeat probes to discover connected peers.
 /// No real service uses all-zeros service ID, so ServiceRouter filters these out.
 const HEARTBEAT_SERVICE_ID: [u8; 32] = [0u8; 32];
+
+/// Sentinel service_id for subscription announcement messages (ANN-05).
+/// Distinguished from HEARTBEAT_SERVICE_ID ([0x00; 32]) and real service_id SHA-256 hashes.
+/// A valid SHA-256 hash producing all-0xFF is astronomically unlikely (~1/2^256).
+pub(crate) const SUBSCRIPTION_SENTINEL: [u8; 32] = [0xFF; 32];
+
+/// Check if a P2pMessage is a subscription announcement by its sentinel service_id.
+fn is_subscription_announcement(msg: &P2pMessage) -> bool {
+    msg.service_id_bytes == SUBSCRIPTION_SENTINEL
+}
 
 /// Run a lookup-mode P2P network inside the commonware runtime.
 ///
