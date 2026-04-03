@@ -57,7 +57,15 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to define next)
+## Current Milestone: v1.3 Per-Service P2P Targeting
+
+**Goal:** Replace broadcast-all-and-filter with targeted per-service message delivery so operators only pay for services they subscribe to.
+
+**Target features:**
+- Service subscription protocol — peers announce subscribed services, maintain `service_id → Set<PeerPubkey>` map
+- Targeted send via `Recipients::Some(service_peers)` — submissions only delivered to peers handling that service
+- Per-service catch-up scoping — reconnecting peers only replay messages for their subscribed services
+- Subscription lifecycle — handle dynamic service add/remove with subscription announcements
 
 ### Out of Scope
 
@@ -74,8 +82,10 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 v1.0 shipped (2026-03-18): commonware-p2p backend, Ed25519 P2P identity, libp2p fully removed.
 v1.1 shipped (2026-03-23): BLS12-381 submission signatures, off-chain aggregation, poa-middleware BLS contract integration, E2E verified.
 v1.2 shipped (2026-03-25): Tauri desktop app updated — P2P dashboard, BLS service builder with one-click registration, unified activity events, settings overhaul.
+v1.3 started (2026-04-03): Per-service P2P targeting — replace `Recipients::All` with `Recipients::Some(service_peers)` for targeted delivery, add subscription protocol, scope catch-up per service.
 Tech stack: Rust 1.91, Wasmtime 42, Alloy 1.0, commonware (p2p + broadcast + cryptography), blst 0.3.16, Tauri 2 + React 19 + Vite 7.
 +2,333 / -1,033 lines across 35 files in v1.2. Both secp256k1 and BLS paths fully tested.
+PR feedback identified that broadcast-all + app-level filter is inefficient for many-services use case. `Recipients::Some` in commonware-p2p enables per-service targeting without upstream changes.
 
 ## Constraints
 
@@ -124,4 +134,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-25 after v1.2 milestone*
+*Last updated: 2026-04-03 after v1.3 milestone start*
