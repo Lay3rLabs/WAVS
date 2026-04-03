@@ -4,7 +4,7 @@ milestone: v1.3
 milestone_name: Per-Service P2P Targeting
 status: verifying
 stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-04-03T15:04:57.872Z"
+last_updated: "2026-04-03T15:05:56.032Z"
 last_activity: 2026-04-03
 progress:
   total_phases: 4
@@ -24,8 +24,8 @@ See: .planning/PROJECT.md (updated 2026-04-03)
 
 ## Current Position
 
-Phase: 15 (subscription-protocol) — EXECUTING
-Plan: 2 of 2
+Phase: 16
+Plan: Not started
 Status: Phase complete — ready for verification
 Last activity: 2026-04-03
 
