@@ -35,7 +35,7 @@ Requirements for per-service P2P targeting. Each maps to roadmap phases.
 ### Compatibility
 
 - [x] **COMPAT-01**: Existing secp256k1 e2e tests pass unchanged
-- [ ] **COMPAT-02**: Existing BLS e2e tests pass unchanged
+- [x] **COMPAT-02**: Existing BLS e2e tests pass unchanged
 - [x] **COMPAT-03**: Nodes without v1.3 targeting are treated as subscribed-to-all (backward compatible during rolling updates)
 
 ## Future Requirements
@@ -84,7 +84,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TGT-04 | Phase 16 | Complete |
 | OBS-01 | Phase 17 | Pending |
 | COMPAT-01 | Phase 16 | Complete |
-| COMPAT-02 | Phase 16 | Pending |
+| COMPAT-02 | Phase 16 | Complete |
 | COMPAT-03 | Phase 15 | Complete |
 
 **Coverage:**

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Per-Service P2P Targeting
 status: executing
-stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-04-03T15:43:14.905Z"
-last_activity: 2026-04-03 -- Phase 16 execution started
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-04-03T16:08:31.227Z"
+last_activity: 2026-04-03
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 5
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-04-03)
 ## Current Position
 
 Phase: 16 (targeted-delivery) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 16
-Last activity: 2026-04-03 -- Phase 16 execution started
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-04-03
 
 Progress (v1.3): [##........] 25% (1/4 phases)
 
@@ -60,6 +60,8 @@ Recent decisions affecting current work:
 - [Phase 15]: Subscription announcements sent via direct_sender only (never mailbox.broadcast) to avoid Engine caching stale subscription state
 - [Phase 15]: Inbound subscription announcements intercepted BEFORE ServiceRouter filtering and consumed with continue
 - [Phase 15]: full_state=true dispatches to set_peer_subscriptions (replace); full_state=false dispatches to handle_announcement (incremental)
+- [Phase 16]: Discovery loop changes character-for-character identical to lookup loop (Plan 01 pattern preserved)
+- [Phase 16]: has_announced dead_code warning is pre-existing from Phase 15 (test-only method, bridge loops use known_peers HashSet)
 
 ### Pending Todos
 
@@ -71,6 +73,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-03T15:04:57.870Z
-Stopped at: Completed 15-02-PLAN.md
+Last session: 2026-04-03T16:08:31.224Z
+Stopped at: Completed 16-02-PLAN.md
 Resume file: None
