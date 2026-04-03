@@ -30,7 +30,7 @@ Requirements for per-service P2P targeting. Each maps to roadmap phases.
 
 ### Observability
 
-- [ ] **OBS-01**: `/p2p/status` endpoint includes per-service peer counts (how many peers subscribe to each service)
+- [x] **OBS-01**: `/p2p/status` endpoint includes per-service peer counts (how many peers subscribe to each service)
 
 ### Compatibility
 
@@ -82,7 +82,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TGT-02 | Phase 16 | Complete |
 | TGT-03 | Phase 16 | Complete |
 | TGT-04 | Phase 16 | Complete |
-| OBS-01 | Phase 17 | Pending |
+| OBS-01 | Phase 17 | Complete |
 | COMPAT-01 | Phase 16 | Complete |
 | COMPAT-02 | Phase 16 | Complete |
 | COMPAT-03 | Phase 15 | Complete |

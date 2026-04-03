@@ -45,7 +45,7 @@
 - [x] **Phase 14: Subscription Data Structures** - PeerSubscriptionMap, SubscriptionAnnouncement type, sentinel constant, disconnect cleanup (completed 2026-04-03)
 - [x] **Phase 15: Subscription Protocol** - Announce/receive lifecycle wired into bridge loops with heartbeat sync and backward compat (completed 2026-04-03)
 - [x] **Phase 16: Targeted Delivery** - Replace Recipients::All with Recipients::Some on direct channel with fallback and retry re-resolution (completed 2026-04-03)
-- [ ] **Phase 17: Subscription Observability** - Per-service peer counts in /p2p/status endpoint
+- [x] **Phase 17: Subscription Observability** - Per-service peer counts in /p2p/status endpoint (completed 2026-04-03)
 
 ## Phase Details
 
@@ -99,9 +99,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. `/p2p/status` response includes a `peer_subscriptions` field showing per-service peer counts (which peers subscribe to which services)
   2. The subscription data is consistent with the live `PeerSubscriptionMap` state
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 17-01-PLAN.md -- Add peer_subscription_counts() to PeerSubscriptionMap, wire into P2pStatus and both GetStatus handlers
+- [x] 17-01-PLAN.md -- Add peer_subscription_counts() to PeerSubscriptionMap, wire into P2pStatus and both GetStatus handlers
 
 ## Progress
 
@@ -123,7 +123,7 @@ Plans:
 | 14. Subscription Data Structures | v1.3 | 1/1 | Complete    | 2026-04-03 |
 | 15. Subscription Protocol | v1.3 | 2/2 | Complete    | 2026-04-03 |
 | 16. Targeted Delivery | v1.3 | 2/2 | Complete    | 2026-04-03 |
-| 17. Subscription Observability | v1.3 | 0/1 | Not started | - |
+| 17. Subscription Observability | v1.3 | 1/1 | Complete    | 2026-04-03 |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
 See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) for v1.1 phase details.
