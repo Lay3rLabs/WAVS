@@ -928,6 +928,7 @@ async fn run_lookup_network(
                             connected_peers: peers.len(),
                             peer_ids: peers,
                             subscribed_services: service_router.subscribed_services(),
+                            peer_subscriptions: peer_subscriptions.peer_subscription_counts(),
                         };
                         let _ = response_tx.send(status);
                     }
@@ -1407,6 +1408,7 @@ async fn run_discovery_network(
                             connected_peers: peers.len(),
                             peer_ids: peers,
                             subscribed_services: service_router.subscribed_services(),
+                            peer_subscriptions: peer_subscriptions.peer_subscription_counts(),
                         };
                         let _ = response_tx.send(status);
                     }

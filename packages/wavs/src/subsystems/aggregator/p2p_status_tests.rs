@@ -27,8 +27,17 @@ mod tests {
             obj.contains_key("listen_addresses"),
             "Missing 'listen_addresses' field"
         );
+        assert!(
+            obj.contains_key("peer_subscriptions"),
+            "Missing 'peer_subscriptions' field"
+        );
 
-        // After Plan 03-01: verify no external_addresses, no topic_peer_counts,
-        // and subscribed_services (not subscribed_topics).
+        // OBS-01: peer_subscriptions defaults to empty object
+        let subs = obj.get("peer_subscriptions").unwrap();
+        assert!(subs.is_object(), "peer_subscriptions should be an object");
+        assert!(
+            subs.as_object().unwrap().is_empty(),
+            "default peer_subscriptions should be empty"
+        );
     }
 }

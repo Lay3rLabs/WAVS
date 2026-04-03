@@ -219,6 +219,7 @@ export interface P2pStatus {
   connected_peers: number;
   peer_ids: string[];
   subscribed_services: string[];
+  peer_subscriptions: Record<string, number>;  // OBS-01: per-service peer counts
 }
 
 // Service signer response (mirrors packages/types/src/http.rs:13 SignerResponse)

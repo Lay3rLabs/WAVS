@@ -147,4 +147,9 @@ pub struct P2pStatus {
     pub peer_ids: Vec<String>,
     /// Services this node is subscribed to (hex-encoded service ID hashes)
     pub subscribed_services: Vec<String>,
+    /// Per-service peer subscription counts (OBS-01).
+    /// Keys are hex-encoded service_id hashes, values are the number of
+    /// peers that have announced subscription to that service.
+    #[serde(default)]
+    pub peer_subscriptions: HashMap<String, usize>,
 }
