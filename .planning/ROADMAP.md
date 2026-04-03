@@ -58,7 +58,9 @@
   2. `PeerSubscriptionMap` maintains a reverse index (`PeerPubkey -> Set<service_id>`) and removing a peer clears all its entries from both maps
   3. `SubscriptionAnnouncement` encodes/decodes via commonware-codec with a sentinel service_id (`[0xFF; 32]`) distinguishable from real service messages
   4. `get_recipients()` returns `Recipients::All` when the subscriber set for a service is empty (defensive fallback built into the data structure)
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 14-01-PLAN.md -- Subscription data structures, wire format, and comprehensive unit tests
 
 ### Phase 15: Subscription Protocol
 **Goal**: Peers exchange subscription state over the existing P2P channels so every node knows which services each peer handles
@@ -110,7 +112,7 @@
 | 11. BLS Service Builder and Registration | v1.2 | 2/2 | Complete | 2026-03-24 |
 | 12. Unified Activity Events | v1.2 | 2/2 | Complete | 2026-03-24 |
 | 13. BLS Registration UX and Type Cleanup | v1.2 | 1/1 | Complete | 2026-03-24 |
-| 14. Subscription Data Structures | v1.3 | 0/? | Not started | - |
+| 14. Subscription Data Structures | v1.3 | 0/1 | In progress | - |
 | 15. Subscription Protocol | v1.3 | 0/? | Not started | - |
 | 16. Targeted Delivery | v1.3 | 0/? | Not started | - |
 | 17. Subscription Observability | v1.3 | 0/? | Not started | - |
