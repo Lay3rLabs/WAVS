@@ -1311,8 +1311,11 @@ async fn run_discovery_network(
                         match P2pMessage::from_submission(&service_id, &submission) {
                             Ok(msg) => {
                                 let ack_rx = mailbox.broadcast(Recipients::All, msg.clone()).await;
+                                // Channel 1: targeted delivery to subscribed peers only (TGT-01)
+                                // get_recipients() returns Recipients::All as fallback when set is empty (TGT-02)
+                                let direct_recipients = peer_subscriptions.get_recipients(&service_id.inner());
                                 let encoded_bytes = Encode::encode(&msg);
-                                if let Err(e) = direct_sender.send(Recipients::All, encoded_bytes, false).await {
+                                if let Err(e) = direct_sender.send(direct_recipients, encoded_bytes, false).await {
                                     tracing::warn!("Discovery direct channel send failed: {:?}", e);
                                 }
                                 match ack_rx.await {
@@ -1333,8 +1336,10 @@ async fn run_discovery_network(
                                             let queued = retry_queue.drain_all();
                                             for queued_msg in queued {
                                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                                // TGT-04: Re-resolve recipients at drain time from current subscription state
+                                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes);
                                                 let queued_bytes = Encode::encode(&queued_msg);
-                                                if let Err(e) = direct_sender.send(Recipients::All, queued_bytes, false).await {
+                                                if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                                     tracing::warn!("Discovery direct channel retry send failed: {:?}", e);
                                                 }
                                             }
@@ -1550,8 +1555,10 @@ async fn run_discovery_network(
                             let queued = retry_queue.drain_all();
                             for queued_msg in queued {
                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                // TGT-04: Re-resolve recipients at drain time from current subscription state
+                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes);
                                 let queued_bytes = Encode::encode(&queued_msg);
-                                if let Err(e) = direct_sender.send(Recipients::All, queued_bytes, false).await {
+                                if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                     tracing::warn!("Retry send failed: {:?}", e);
                                 }
                             }
