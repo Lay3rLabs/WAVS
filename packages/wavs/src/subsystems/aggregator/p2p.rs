@@ -417,6 +417,34 @@ impl PeerSubscriptionMap {
         }
     }
 
+    /// Returns true if this peer has ever sent a subscription announcement (COMPAT-03).
+    /// Peers that have never announced are treated as subscribed-to-all by callers.
+    pub fn has_announced(&self, peer: &ed25519::PublicKey) -> bool {
+        self.peer_to_services.contains_key(peer)
+    }
+
+    /// Replace all subscriptions for a peer with the given set.
+    /// Uses replace-not-merge semantics for heartbeat/hello full state sync.
+    pub fn set_peer_subscriptions(
+        &mut self,
+        peer: &ed25519::PublicKey,
+        services: Vec<[u8; 32]>,
+    ) {
+        // Remove existing subscriptions first
+        self.remove_peer(peer);
+        // Then set the new full set (if non-empty)
+        if !services.is_empty() {
+            let service_set: HashSet<[u8; 32]> = services.iter().copied().collect();
+            for service_id in &service_set {
+                self.service_to_peers
+                    .entry(*service_id)
+                    .or_default()
+                    .insert(peer.clone());
+            }
+            self.peer_to_services.insert(peer.clone(), service_set);
+        }
+    }
+
     /// Get the recipient set for targeted delivery.
     /// Returns Recipients::Some(peers) if peers are known, or Recipients::All as fallback (TGT-02 prep).
     pub fn get_recipients(&self, service_id: &[u8; 32]) -> Recipients<ed25519::PublicKey> {
@@ -2135,8 +2163,8 @@ mod p2p_broadcast_tests {
         let json_no_field = r#"{"subscribe":[[170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170]],"unsubscribe":[]}"#;
         let deserialized: SubscriptionAnnouncement =
             serde_json::from_str(json_no_field).expect("Should deserialize without full_state");
-        assert_eq!(
-            deserialized.full_state, false,
+        assert!(
+            !deserialized.full_state,
             "Missing full_state should default to false"
         );
         assert_eq!(deserialized.subscribe.len(), 1);
@@ -2150,7 +2178,7 @@ mod p2p_broadcast_tests {
         };
         let json = serde_json::to_string(&with_true).unwrap();
         let recovered: SubscriptionAnnouncement = serde_json::from_str(&json).unwrap();
-        assert_eq!(recovered.full_state, true, "Explicit true must round-trip");
+        assert!(recovered.full_state, "Explicit true must round-trip");
         assert_eq!(recovered, with_true);
     }
 
@@ -2355,7 +2383,7 @@ mod p2p_broadcast_tests {
 
         let recovered =
             SubscriptionAnnouncement::from_payload(&p2p_msg.payload).expect("from_payload");
-        assert_eq!(recovered.full_state, true, "full_state must survive roundtrip");
+        assert!(recovered.full_state, "full_state must survive roundtrip");
         assert_eq!(recovered.subscribe.len(), 2);
         assert!(recovered.subscribe.contains(&svc_a));
         assert!(recovered.subscribe.contains(&svc_b));
@@ -2382,7 +2410,7 @@ mod p2p_broadcast_tests {
             SubscriptionAnnouncement::from_payload(&p2p_msg.payload).expect("from_payload");
         assert_eq!(recovered.subscribe, vec![svc_a]);
         assert!(recovered.unsubscribe.is_empty());
-        assert_eq!(recovered.full_state, false);
+        assert!(!recovered.full_state);
     }
 
     #[test]
@@ -2405,7 +2433,7 @@ mod p2p_broadcast_tests {
             SubscriptionAnnouncement::from_payload(&p2p_msg.payload).expect("from_payload");
         assert!(recovered.subscribe.is_empty());
         assert_eq!(recovered.unsubscribe, vec![svc_a]);
-        assert_eq!(recovered.full_state, false);
+        assert!(!recovered.full_state);
     }
 
     #[test]
@@ -2427,8 +2455,8 @@ mod p2p_broadcast_tests {
 
         let recovered =
             SubscriptionAnnouncement::from_payload(&p2p_msg.payload).expect("from_payload");
-        assert_eq!(
-            recovered.full_state, true,
+        assert!(
+            recovered.full_state,
             "Hello must preserve full_state=true (ANN-04)"
         );
         assert_eq!(recovered.subscribe.len(), 2);
