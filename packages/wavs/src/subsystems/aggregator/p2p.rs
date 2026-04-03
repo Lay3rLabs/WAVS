@@ -327,6 +327,11 @@ pub(crate) struct SubscriptionAnnouncement {
     pub subscribe: Vec<[u8; 32]>,
     /// Services this peer is unsubscribing from
     pub unsubscribe: Vec<[u8; 32]>,
+    /// If true, `subscribe` is the FULL set of services (replace-not-merge).
+    /// If false, `subscribe`/`unsubscribe` are incremental changes.
+    /// Defaults to false for backward compatibility with Phase 14 announcements.
+    #[serde(default)]
+    pub full_state: bool,
 }
 
 impl SubscriptionAnnouncement {
@@ -1834,6 +1839,7 @@ mod p2p_broadcast_tests {
         let announcement = SubscriptionAnnouncement {
             subscribe: vec![svc_a, svc_b],
             unsubscribe: vec![],
+            full_state: false,
         };
         map.handle_announcement(&peer_a, &announcement);
 
@@ -1865,6 +1871,7 @@ mod p2p_broadcast_tests {
         let announcement = SubscriptionAnnouncement {
             subscribe: vec![svc_a, svc_b],
             unsubscribe: vec![],
+            full_state: false,
         };
         map.handle_announcement(&peer_a, &announcement);
 
@@ -1891,6 +1898,7 @@ mod p2p_broadcast_tests {
         let announcement = SubscriptionAnnouncement {
             subscribe: vec![svc_a, svc_b, svc_c],
             unsubscribe: vec![],
+            full_state: false,
         };
         map.handle_announcement(&peer_a, &announcement);
         map.remove_peer(&peer_a);
@@ -1912,6 +1920,7 @@ mod p2p_broadcast_tests {
         let original = SubscriptionAnnouncement {
             subscribe: vec![[0xAA; 32], [0xBB; 32]],
             unsubscribe: vec![[0xCC; 32]],
+            full_state: false,
         };
 
         let p2p_msg = original
@@ -1995,6 +2004,7 @@ mod p2p_broadcast_tests {
             &SubscriptionAnnouncement {
                 subscribe: vec![svc_a],
                 unsubscribe: vec![],
+                full_state: false,
             },
         );
         map2.handle_announcement(
@@ -2002,6 +2012,7 @@ mod p2p_broadcast_tests {
             &SubscriptionAnnouncement {
                 subscribe: vec![],
                 unsubscribe: vec![svc_a],
+                full_state: false,
             },
         );
         assert!(
@@ -2020,6 +2031,7 @@ mod p2p_broadcast_tests {
         let announcement = SubscriptionAnnouncement {
             subscribe: vec![svc_a],
             unsubscribe: vec![],
+            full_state: false,
         };
         map.handle_announcement(&peer_a, &announcement);
         map.handle_announcement(&peer_a, &announcement); // duplicate
@@ -2047,6 +2059,7 @@ mod p2p_broadcast_tests {
             &SubscriptionAnnouncement {
                 subscribe: vec![svc_a],
                 unsubscribe: vec![],
+                full_state: false,
             },
         );
         map.handle_announcement(
@@ -2054,6 +2067,7 @@ mod p2p_broadcast_tests {
             &SubscriptionAnnouncement {
                 subscribe: vec![svc_a],
                 unsubscribe: vec![],
+                full_state: false,
             },
         );
 
@@ -2110,6 +2124,319 @@ mod p2p_broadcast_tests {
         assert!(
             raw.contains(&service_id_b.inner()),
             "Should contain service_b bytes"
+        );
+    }
+
+    // ---- Phase 15 Plan 01: full_state, set_peer_subscriptions, has_announced ----
+
+    #[test]
+    fn test_full_state_serde_default() {
+        // Deserialize JSON without full_state key -> defaults to false (backward compat)
+        let json_no_field = r#"{"subscribe":[[170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170,170]],"unsubscribe":[]}"#;
+        let deserialized: SubscriptionAnnouncement =
+            serde_json::from_str(json_no_field).expect("Should deserialize without full_state");
+        assert_eq!(
+            deserialized.full_state, false,
+            "Missing full_state should default to false"
+        );
+        assert_eq!(deserialized.subscribe.len(), 1);
+        assert_eq!(deserialized.subscribe[0], [0xAA; 32]);
+
+        // Explicit full_state=true round-trips
+        let with_true = SubscriptionAnnouncement {
+            subscribe: vec![[0xBB; 32]],
+            unsubscribe: vec![],
+            full_state: true,
+        };
+        let json = serde_json::to_string(&with_true).unwrap();
+        let recovered: SubscriptionAnnouncement = serde_json::from_str(&json).unwrap();
+        assert_eq!(recovered.full_state, true, "Explicit true must round-trip");
+        assert_eq!(recovered, with_true);
+    }
+
+    #[test]
+    fn test_set_peer_subscriptions_replaces() {
+        // set_peer_subscriptions replaces (not merges) existing subscriptions
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+        let svc_b = [0xBB; 32];
+        let svc_c = [0xCC; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        // First subscribe to A and B via handle_announcement
+        map.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a, svc_b],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+        assert!(matches!(map.get_recipients(&svc_a), Recipients::Some(_)));
+        assert!(matches!(map.get_recipients(&svc_b), Recipients::Some(_)));
+
+        // Now replace with only C
+        map.set_peer_subscriptions(&peer_a, vec![svc_c]);
+
+        // A and B should be gone (fallback to All)
+        assert!(
+            matches!(map.get_recipients(&svc_a), Recipients::All),
+            "svc_a should fallback to All after replace"
+        );
+        assert!(
+            matches!(map.get_recipients(&svc_b), Recipients::All),
+            "svc_b should fallback to All after replace"
+        );
+        // C should be present
+        match map.get_recipients(&svc_c) {
+            Recipients::Some(peers) => {
+                assert_eq!(peers.len(), 1);
+                assert!(peers.contains(&peer_a));
+            }
+            other => panic!("Expected Recipients::Some for svc_c, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_set_peer_subscriptions_empty_removes() {
+        // set_peer_subscriptions with empty vec removes peer entirely
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        map.set_peer_subscriptions(&peer_a, vec![svc_a]);
+        assert!(matches!(map.get_recipients(&svc_a), Recipients::Some(_)));
+
+        // Set to empty -> peer removed
+        map.set_peer_subscriptions(&peer_a, vec![]);
+
+        assert!(
+            map.service_to_peers.is_empty(),
+            "Forward index should be empty after set_peer_subscriptions([])"
+        );
+        assert!(
+            map.peer_to_services.is_empty(),
+            "Reverse index should be empty after set_peer_subscriptions([])"
+        );
+    }
+
+    #[test]
+    fn test_has_announced_compat03() {
+        // COMPAT-03: has_announced tracks whether peer has sent any announcement
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        assert!(
+            !map.has_announced(&peer_a),
+            "Unknown peer should return false"
+        );
+
+        // After handle_announcement -> true
+        map.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+        assert!(
+            map.has_announced(&peer_a),
+            "Peer should be announced after handle_announcement"
+        );
+
+        // After remove_peer -> false
+        map.remove_peer(&peer_a);
+        assert!(
+            !map.has_announced(&peer_a),
+            "Peer should not be announced after remove_peer"
+        );
+    }
+
+    #[test]
+    fn test_has_announced_after_set_peer_subscriptions() {
+        // has_announced returns true after set_peer_subscriptions with non-empty services
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        assert!(!map.has_announced(&peer_a));
+
+        map.set_peer_subscriptions(&peer_a, vec![svc_a]);
+        assert!(
+            map.has_announced(&peer_a),
+            "Peer should be announced after set_peer_subscriptions"
+        );
+    }
+
+    #[test]
+    fn test_incremental_vs_full_state_processing() {
+        // Validates data structure behavior for full_state vs incremental semantics.
+        // The dispatch logic (if full_state -> set_peer_subscriptions else handle_announcement)
+        // is a bridge loop concern (Plan 02), but we test the DATA STRUCTURE behavior here.
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+        let svc_b = [0xBB; 32];
+        let svc_c = [0xCC; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+
+        // Subscribe peer to svc_a via handle_announcement (incremental)
+        map.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+        assert!(matches!(map.get_recipients(&svc_a), Recipients::Some(_)));
+
+        // Simulate full_state=true: replace with svc_b only
+        // Bridge loop would call set_peer_subscriptions for full_state=true
+        map.set_peer_subscriptions(&peer_a, vec![svc_b]);
+
+        // svc_a should be gone, svc_b should be present
+        assert!(
+            matches!(map.get_recipients(&svc_a), Recipients::All),
+            "svc_a should be gone after full_state replace"
+        );
+        match map.get_recipients(&svc_b) {
+            Recipients::Some(peers) => assert!(peers.contains(&peer_a)),
+            other => panic!("Expected Recipients::Some for svc_b, got {:?}", other),
+        }
+
+        // Simulate full_state=false: incremental add svc_c
+        // Bridge loop would call handle_announcement for full_state=false
+        map.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_c],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+
+        // Both svc_b and svc_c should be present (incremental merge)
+        match map.get_recipients(&svc_b) {
+            Recipients::Some(peers) => assert!(peers.contains(&peer_a)),
+            other => panic!(
+                "Expected Recipients::Some for svc_b after incremental, got {:?}",
+                other
+            ),
+        }
+        match map.get_recipients(&svc_c) {
+            Recipients::Some(peers) => assert!(peers.contains(&peer_a)),
+            other => panic!(
+                "Expected Recipients::Some for svc_c after incremental, got {:?}",
+                other
+            ),
+        }
+    }
+
+    #[test]
+    fn test_heartbeat_subscription_announcement() {
+        // full_state=true announcement round-trips through P2pMessage encoding
+        let svc_a = [0xAA; 32];
+        let svc_b = [0xBB; 32];
+
+        let announcement = SubscriptionAnnouncement {
+            subscribe: vec![svc_a, svc_b],
+            unsubscribe: vec![],
+            full_state: true,
+        };
+
+        let p2p_msg = announcement.to_p2p_message().expect("to_p2p_message");
+        assert_eq!(
+            p2p_msg.service_id_bytes, SUBSCRIPTION_SENTINEL,
+            "Must use sentinel service_id"
+        );
+
+        let recovered =
+            SubscriptionAnnouncement::from_payload(&p2p_msg.payload).expect("from_payload");
+        assert_eq!(recovered.full_state, true, "full_state must survive roundtrip");
+        assert_eq!(recovered.subscribe.len(), 2);
+        assert!(recovered.subscribe.contains(&svc_a));
+        assert!(recovered.subscribe.contains(&svc_b));
+        assert!(recovered.unsubscribe.is_empty());
+    }
+
+    #[test]
+    fn test_subscribe_builds_announcement() {
+        // Basic subscribe announcement: subscribe=[svc_a], unsubscribe=[], full_state=false
+        let svc_a = [0xAA; 32];
+        let announcement = SubscriptionAnnouncement {
+            subscribe: vec![svc_a],
+            unsubscribe: vec![],
+            full_state: false,
+        };
+
+        let p2p_msg = announcement.to_p2p_message().expect("to_p2p_message");
+        assert_eq!(
+            p2p_msg.service_id_bytes, SUBSCRIPTION_SENTINEL,
+            "Subscribe announcement must use sentinel"
+        );
+
+        let recovered =
+            SubscriptionAnnouncement::from_payload(&p2p_msg.payload).expect("from_payload");
+        assert_eq!(recovered.subscribe, vec![svc_a]);
+        assert!(recovered.unsubscribe.is_empty());
+        assert_eq!(recovered.full_state, false);
+    }
+
+    #[test]
+    fn test_unsubscribe_builds_announcement() {
+        // ANN-02: Unsubscribe announcement round-trips correctly
+        let svc_a = [0xAA; 32];
+        let announcement = SubscriptionAnnouncement {
+            subscribe: vec![],
+            unsubscribe: vec![svc_a],
+            full_state: false,
+        };
+
+        let p2p_msg = announcement.to_p2p_message().expect("to_p2p_message");
+        assert_eq!(
+            p2p_msg.service_id_bytes, SUBSCRIPTION_SENTINEL,
+            "Unsubscribe announcement must use SUBSCRIPTION_SENTINEL (ANN-02)"
+        );
+
+        let recovered =
+            SubscriptionAnnouncement::from_payload(&p2p_msg.payload).expect("from_payload");
+        assert!(recovered.subscribe.is_empty());
+        assert_eq!(recovered.unsubscribe, vec![svc_a]);
+        assert_eq!(recovered.full_state, false);
+    }
+
+    #[test]
+    fn test_hello_on_first_contact() {
+        // ANN-04: Hello-on-first-contact announcement preserves full_state=true and both services
+        let svc_a = [0xAA; 32];
+        let svc_b = [0xBB; 32];
+        let announcement = SubscriptionAnnouncement {
+            subscribe: vec![svc_a, svc_b],
+            unsubscribe: vec![],
+            full_state: true,
+        };
+
+        let p2p_msg = announcement.to_p2p_message().expect("to_p2p_message");
+        assert_eq!(
+            p2p_msg.service_id_bytes, SUBSCRIPTION_SENTINEL,
+            "Hello announcement must use SUBSCRIPTION_SENTINEL"
+        );
+
+        let recovered =
+            SubscriptionAnnouncement::from_payload(&p2p_msg.payload).expect("from_payload");
+        assert_eq!(
+            recovered.full_state, true,
+            "Hello must preserve full_state=true (ANN-04)"
+        );
+        assert_eq!(recovered.subscribe.len(), 2);
+        assert!(recovered.subscribe.contains(&svc_a));
+        assert!(recovered.subscribe.contains(&svc_b));
+        assert!(
+            recovered.unsubscribe.is_empty(),
+            "Hello should have empty unsubscribe"
         );
     }
 }
