@@ -87,9 +87,9 @@ Plans:
   3. The broadcast Engine channel (channel 0) continues using `Recipients::All` unconditionally for catch-up reliability
   4. Retry queue messages re-resolve their recipient set at drain time using current subscription state, not the stale set from original send
   5. All existing secp256k1 and BLS e2e tests pass unchanged
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 16-01-PLAN.md -- Wave 0 test (test_retry_re_resolution) + targeted delivery wired into run_lookup_network bridge loop
+- [x] 16-01-PLAN.md -- Wave 0 test (test_retry_re_resolution) + targeted delivery wired into run_lookup_network bridge loop
 - [ ] 16-02-PLAN.md -- Targeted delivery wired into run_discovery_network bridge loop + full suite verification + clippy clean
 
 ### Phase 17: Subscription Observability
@@ -120,7 +120,7 @@ Plans:
 | 13. BLS Registration UX and Type Cleanup | v1.2 | 1/1 | Complete | 2026-03-24 |
 | 14. Subscription Data Structures | v1.3 | 1/1 | Complete    | 2026-04-03 |
 | 15. Subscription Protocol | v1.3 | 2/2 | Complete    | 2026-04-03 |
-| 16. Targeted Delivery | v1.3 | 0/2 | Not started | - |
+| 16. Targeted Delivery | v1.3 | 1/2 | In Progress|  |
 | 17. Subscription Observability | v1.3 | 0/? | Not started | - |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.

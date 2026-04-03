@@ -23,10 +23,10 @@ Requirements for per-service P2P targeting. Each maps to roadmap phases.
 
 ### Targeted Send
 
-- [ ] **TGT-01**: Submissions on the direct channel (channel 1) use `Recipients::Some(service_peers)` instead of `Recipients::All`
-- [ ] **TGT-02**: When the subscriber set for a service is empty or a peer hasn't announced yet, the node falls back to `Recipients::All`
-- [ ] **TGT-03**: The broadcast Engine channel (channel 0) continues using `Recipients::All` for catch-up reliability
-- [ ] **TGT-04**: Retry queue messages re-resolve recipients at drain time (not cached from original send)
+- [x] **TGT-01**: Submissions on the direct channel (channel 1) use `Recipients::Some(service_peers)` instead of `Recipients::All`
+- [x] **TGT-02**: When the subscriber set for a service is empty or a peer hasn't announced yet, the node falls back to `Recipients::All`
+- [x] **TGT-03**: The broadcast Engine channel (channel 0) continues using `Recipients::All` for catch-up reliability
+- [x] **TGT-04**: Retry queue messages re-resolve recipients at drain time (not cached from original send)
 
 ### Observability
 
@@ -34,7 +34,7 @@ Requirements for per-service P2P targeting. Each maps to roadmap phases.
 
 ### Compatibility
 
-- [ ] **COMPAT-01**: Existing secp256k1 e2e tests pass unchanged
+- [x] **COMPAT-01**: Existing secp256k1 e2e tests pass unchanged
 - [ ] **COMPAT-02**: Existing BLS e2e tests pass unchanged
 - [x] **COMPAT-03**: Nodes without v1.3 targeting are treated as subscribed-to-all (backward compatible during rolling updates)
 
@@ -78,12 +78,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ANN-03 | Phase 15 | Complete |
 | ANN-04 | Phase 15 | Complete |
 | ANN-05 | Phase 14 | Complete |
-| TGT-01 | Phase 16 | Pending |
-| TGT-02 | Phase 16 | Pending |
-| TGT-03 | Phase 16 | Pending |
-| TGT-04 | Phase 16 | Pending |
+| TGT-01 | Phase 16 | Complete |
+| TGT-02 | Phase 16 | Complete |
+| TGT-03 | Phase 16 | Complete |
+| TGT-04 | Phase 16 | Complete |
 | OBS-01 | Phase 17 | Pending |
-| COMPAT-01 | Phase 16 | Pending |
+| COMPAT-01 | Phase 16 | Complete |
 | COMPAT-02 | Phase 16 | Pending |
 | COMPAT-03 | Phase 15 | Complete |
 

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Per-Service P2P Targeting
-status: verifying
-stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-04-03T15:05:56.032Z"
-last_activity: 2026-04-03
+status: executing
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-04-03T15:53:48.437Z"
+last_activity: 2026-04-03 -- Completed 16-01 targeted delivery in run_lookup_network
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
 ---
 
 # Project State
@@ -20,16 +20,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 15 — subscription-protocol
+**Current focus:** Phase 16 — targeted-delivery
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-04-03
+Phase: 16 (targeted-delivery) — EXECUTING
+Plan: 2 of 2
+Status: Executing Phase 16 - Plan 01 complete
+Last activity: 2026-04-03 -- Completed 16-01 targeted delivery in run_lookup_network
 
-Progress (v1.3): [##........] 25% (1/4 phases)
+Progress (v1.3): [████████░░] 80% (4/5 plans)
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Recent decisions affecting current work:
 - [Phase 15]: Subscription announcements sent via direct_sender only (never mailbox.broadcast) to avoid Engine caching stale subscription state
 - [Phase 15]: Inbound subscription announcements intercepted BEFORE ServiceRouter filtering and consumed with continue
 - [Phase 15]: full_state=true dispatches to set_peer_subscriptions (replace); full_state=false dispatches to handle_announcement (incremental)
+- [Phase 16]: Only run_lookup_network modified in Plan 01; run_discovery_network is Plan 02 scope
 
 ### Pending Todos
 
@@ -71,6 +72,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-03T15:04:57.870Z
-Stopped at: Completed 15-02-PLAN.md
+Last session: 2026-04-03T15:53:48.435Z
+Stopped at: Completed 16-01-PLAN.md
 Resume file: None
