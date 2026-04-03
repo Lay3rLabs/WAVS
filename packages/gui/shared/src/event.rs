@@ -80,3 +80,32 @@ pub enum ServiceAction {
 impl TauriEventExt for ServiceEvent {
     const NAME: &'static str = "service";
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AgentStatusEvent {
+    pub status: String,
+    pub error: Option<String>,
+}
+
+impl TauriEventExt for AgentStatusEvent {
+    const NAME: &'static str = "agent:status";
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AgentRpcEvent {
+    pub event: serde_json::Value,
+}
+
+impl TauriEventExt for AgentRpcEvent {
+    const NAME: &'static str = "agent:event";
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AgentUiControlEvent {
+    pub action: String,
+    pub payload: serde_json::Value,
+}
+
+impl TauriEventExt for AgentUiControlEvent {
+    const NAME: &'static str = "agent:ui_control";
+}

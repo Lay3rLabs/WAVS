@@ -8,6 +8,7 @@ export function WalletSetup() {
   const [mode, setMode] = useState<SetupMode>('choose');
   const [importInput, setImportInput] = useState('');
   const [backupConfirmed, setBackupConfirmed] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const {
     pendingMnemonic,
@@ -124,6 +125,16 @@ export function WalletSetup() {
                   </div>
                 ))}
               </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(pendingMnemonic);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="px-3 py-1.5 rounded text-xs bg-charcoal-medium hover:bg-charcoal-light text-tan-muted hover:text-beige-warm transition-colors cursor-pointer"
+              >
+                {copied ? '✓ Copied' : 'Copy to clipboard'}
+              </button>
 
               {derivedAddresses.length > 0 && (
                 <div className="flex flex-col gap-2 w-full">

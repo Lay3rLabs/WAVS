@@ -29,4 +29,14 @@ pub struct Settings {
     pub mcp_token: Option<String>,
     #[serde(default)]
     pub env_vars: HashMap<String, String>,
+    #[serde(default)]
+    pub agent_model_provider: Option<String>,
+    #[serde(default)]
+    pub agent_model_id: Option<String>,
+    #[serde(default)]
+    pub agent_thinking_level: Option<String>,
+    #[serde(default)]
+    pub agent_auto_start: bool,
+    #[serde(default)]
+    pub agent_panel_width: Option<f64>,
 }

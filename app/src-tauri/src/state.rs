@@ -20,8 +20,15 @@ impl SettingsState {
     pub async fn load_or_new(app: &AppHandle) -> AppResult<Self> {
         let mut _self = Self::new(app).await?;
 
-        if let Ok(settings) = Self::load_inner(&_self.path).await {
-            *_self.inner.write().unwrap() = settings;
+        tracing::info!("Loading settings from: {}", _self.path.display());
+        match Self::load_inner(&_self.path).await {
+            Ok(settings) => {
+                tracing::info!("Settings loaded, wavs_home: {:?}", settings.wavs_home);
+                *_self.inner.write().unwrap() = settings;
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load settings: {}", e);
+            }
         }
 
         Ok(_self)

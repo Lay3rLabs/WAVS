@@ -15,6 +15,11 @@ export interface Settings {
   mcp_auto_start: boolean;
   mcp_token: string | null;
   env_vars: Record<string, string>;
+  agent_model_provider: string | null;
+  agent_model_id: string | null;
+  agent_thinking_level: string | null;
+  agent_auto_start: boolean;
+  agent_panel_width: number | null;
 }
 
 // Health types

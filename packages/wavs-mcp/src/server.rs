@@ -13,6 +13,74 @@ use serde::Deserialize;
 use crate::chain_ops;
 use crate::client::WavsClient;
 use crate::exec;
+
+/// Serde helper: deserialize a number that may arrive as a JSON string (LLMs often quote numbers).
+mod string_or_number {
+    use serde::{self, Deserialize, Deserializer};
+
+    pub fn deserialize_option_usize<'de, D>(deserializer: D) -> Result<Option<usize>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum StringOrNum {
+            Num(usize),
+            Str(String),
+        }
+        let opt: Option<StringOrNum> = Option::deserialize(deserializer)?;
+        match opt {
+            None => Ok(None),
+            Some(StringOrNum::Num(n)) => Ok(Some(n)),
+            Some(StringOrNum::Str(s)) => s
+                .parse::<usize>()
+                .map(Some)
+                .map_err(serde::de::Error::custom),
+        }
+    }
+
+    pub fn deserialize_option_u64<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum StringOrNum {
+            Num(u64),
+            Str(String),
+        }
+        let opt: Option<StringOrNum> = Option::deserialize(deserializer)?;
+        match opt {
+            None => Ok(None),
+            Some(StringOrNum::Num(n)) => Ok(Some(n)),
+            Some(StringOrNum::Str(s)) => s
+                .parse::<u64>()
+                .map(Some)
+                .map_err(serde::de::Error::custom),
+        }
+    }
+
+    pub fn deserialize_option_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum StringOrNum {
+            Num(u32),
+            Str(String),
+        }
+        let opt: Option<StringOrNum> = Option::deserialize(deserializer)?;
+        match opt {
+            None => Ok(None),
+            Some(StringOrNum::Num(n)) => Ok(Some(n)),
+            Some(StringOrNum::Str(s)) => s
+                .parse::<u32>()
+                .map(Some)
+                .map_err(serde::de::Error::custom),
+        }
+    }
+}
 use crate::scaffold;
 
 // ── Parameter structs ──────────────────────────────────────────────────────
@@ -51,6 +119,7 @@ pub struct SimulateTriggerParams {
     /// TriggerData as JSON, e.g. `{"Cron":{"trigger_time":0}}`
     pub data_json: String,
     /// How many times to fire the trigger (default: 1)
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_usize")]
     pub count: Option<usize>,
 }
 
@@ -84,8 +153,10 @@ pub struct QueryKvParams {
 pub struct QueryLogsParams {
     /// Return only entries with id >= since_id. Pass the `next_id` from the previous response
     /// to page forward. Defaults to 0 (return from the oldest buffered entry).
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_u64")]
     pub since_id: Option<u64>,
     /// Maximum number of entries to return (default: 100, max: 1000).
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_usize")]
     pub limit: Option<usize>,
     /// Minimum log level filter: trace | debug | info | warn | error.
     /// Returns entries at this level and above (e.g. "info" includes warn + error).
@@ -99,8 +170,10 @@ pub struct QueryLogsParams {
 pub struct QueryComponentLogsParams {
     /// Return only entries with id >= since_id. Pass the `next_id` from the previous response
     /// to page forward. Defaults to 0 (return from the oldest buffered entry).
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_u64")]
     pub since_id: Option<u64>,
     /// Maximum number of entries to return (default: 100, max: 1000).
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_usize")]
     pub limit: Option<usize>,
     /// Minimum log level filter: trace | debug | info | warn | error.
     pub level: Option<String>,
@@ -154,6 +227,7 @@ pub struct RegisterOperatorParams {
     /// Weight to assign to the operator (default: 100).
     /// Represents relative stake weight — higher weight = more influence in multi-operator consensus.
     /// For single-operator setups, any positive value works; 100 is conventional.
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_u64")]
     pub weight: Option<u64>,
     /// RPC endpoint URL for the chain (e.g. "http://localhost:8545")
     pub rpc_url: String,
@@ -171,6 +245,7 @@ pub struct BuildComponentParams {
 pub struct GetSigningAddressParams {
     /// HD derivation index to use (default: 0). Use the hd_index reported by
     /// wavs_get_service_signer to check a service-specific signing key.
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_u32")]
     pub hd_index: Option<u32>,
 }
 
@@ -180,6 +255,7 @@ pub struct DeployAndRegisterParams {
     /// EVM: `{"evm":{"chain":"evm:31337","address":"0xAbCd..."}}`
     pub service_manager_json: String,
     /// Weight to assign to the operator (default: 100).
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_u64")]
     pub weight: Option<u64>,
     /// RPC endpoint URL for the chain (e.g. "http://localhost:8545")
     pub rpc_url: String,
