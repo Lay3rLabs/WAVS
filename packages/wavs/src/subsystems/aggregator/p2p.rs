@@ -801,6 +801,11 @@ async fn run_lookup_network(
     let mut seen_digests: HashSet<sha256::Digest> = HashSet::new();
     const MAX_SEEN_DIGESTS: usize = 1024;
 
+    // Phase 15: Peer subscription tracking
+    let mut peer_subscriptions = PeerSubscriptionMap::new();
+    // Track peers we have received any message from (for hello on first contact, ANN-04)
+    let mut known_peers: HashSet<ed25519::PublicKey> = HashSet::new();
+
     // Connected peer tracking for OBS-01.
     // Updated from broadcast acknowledgment results and inbound message senders.
     // Starts at empty (truthful -- no peers confirmed until message exchange).
@@ -872,10 +877,34 @@ async fn run_lookup_network(
                     Some(P2pCommand::Subscribe { service_id }) => {
                         service_router.subscribe(&service_id);
                         tracing::info!("Subscribed to service: {}", service_id);
+                        // ANN-01: Announce subscription to all connected peers
+                        let announcement = SubscriptionAnnouncement {
+                            subscribe: vec![service_id.inner()],
+                            unsubscribe: vec![],
+                            full_state: false,
+                        };
+                        if let Ok(msg) = announcement.to_p2p_message() {
+                            let encoded = Encode::encode(&msg);
+                            if let Err(e) = direct_sender.send(Recipients::All, encoded, false).await {
+                                tracing::debug!("Subscription announcement send failed: {:?}", e);
+                            }
+                        }
                     }
                     Some(P2pCommand::Unsubscribe { service_id }) => {
                         service_router.unsubscribe(&service_id);
                         tracing::info!("Unsubscribed from service: {}", service_id);
+                        // ANN-02: Announce unsubscription to all connected peers
+                        let announcement = SubscriptionAnnouncement {
+                            subscribe: vec![],
+                            unsubscribe: vec![service_id.inner()],
+                            full_state: false,
+                        };
+                        if let Ok(msg) = announcement.to_p2p_message() {
+                            let encoded = Encode::encode(&msg);
+                            if let Err(e) = direct_sender.send(Recipients::All, encoded, false).await {
+                                tracing::debug!("Unsubscription announcement send failed: {:?}", e);
+                            }
+                        }
                     }
                     Some(P2pCommand::GetStatus { response_tx }) => {
                         let peers = connected_peers_tracker.read().unwrap().clone();
@@ -945,6 +974,58 @@ async fn run_lookup_network(
                         }
                         seen_digests.insert(digest);
 
+                        // ANN-04: Send hello on first contact with a new peer
+                        if !known_peers.contains(&peer_pubkey) {
+                            known_peers.insert(peer_pubkey.clone());
+                            let my_services = service_router.subscribed_services_raw();
+                            if !my_services.is_empty() {
+                                let hello = SubscriptionAnnouncement {
+                                    subscribe: my_services,
+                                    unsubscribe: vec![],
+                                    full_state: true,
+                                };
+                                if let Ok(msg) = hello.to_p2p_message() {
+                                    let encoded = Encode::encode(&msg);
+                                    if let Err(e) = direct_sender.send(
+                                        Recipients::One(peer_pubkey.clone()),
+                                        encoded,
+                                        false,
+                                    ).await {
+                                        tracing::debug!("Hello announcement to new peer failed: {:?}", e);
+                                    }
+                                }
+                            }
+                        }
+
+                        // Phase 15: Intercept subscription announcements before service filtering
+                        if is_subscription_announcement(&p2p_msg) {
+                            match SubscriptionAnnouncement::from_payload(&p2p_msg.payload) {
+                                Ok(announcement) => {
+                                    if announcement.full_state {
+                                        // Replace-not-merge for full state updates (heartbeat/hello)
+                                        peer_subscriptions.set_peer_subscriptions(
+                                            &peer_pubkey,
+                                            announcement.subscribe.clone(),
+                                        );
+                                    } else {
+                                        // Incremental for event-driven announcements
+                                        peer_subscriptions.handle_announcement(&peer_pubkey, &announcement);
+                                    }
+                                    tracing::debug!(
+                                        "Subscription update from {}: +{} -{}{}",
+                                        const_hex::encode(peer_pubkey.as_ref()),
+                                        announcement.subscribe.len(),
+                                        announcement.unsubscribe.len(),
+                                        if announcement.full_state { " (full)" } else { "" },
+                                    );
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Invalid subscription announcement: {:?}", e);
+                                }
+                            }
+                            continue; // Do not forward subscription announcements to Aggregator
+                        }
+
                         // Service filtering (BCAST-05)
                         if !service_router.should_accept(&p2p_msg) {
                             tracing::trace!("Filtered message for unsubscribed service");
@@ -1004,6 +1085,21 @@ async fn run_lookup_network(
                     }
                     Ok(_) => tracing::trace!("Heartbeat: no peers connected yet"),
                     Err(_) => tracing::error!("Heartbeat: broadcast engine shut down"),
+                }
+                // ANN-03: Piggyback full subscription state for self-healing consistency
+                let my_services = service_router.subscribed_services_raw();
+                if !my_services.is_empty() {
+                    let announcement = SubscriptionAnnouncement {
+                        subscribe: my_services,
+                        unsubscribe: vec![],
+                        full_state: true,
+                    };
+                    if let Ok(msg) = announcement.to_p2p_message() {
+                        let encoded = Encode::encode(&msg);
+                        if let Err(e) = direct_sender.send(Recipients::All, encoded, false).await {
+                            tracing::trace!("Heartbeat subscription announcement failed: {:?}", e);
+                        }
+                    }
                 }
             }
         }
