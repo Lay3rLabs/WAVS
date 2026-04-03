@@ -2659,4 +2659,38 @@ mod p2p_broadcast_tests {
             "Hello should have empty unsubscribe"
         );
     }
+
+    // TGT-04: Re-resolution returns different results before and after subscription state arrives
+    #[test]
+    fn test_retry_re_resolution() {
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+
+        // Before any subscription state: get_recipients returns Recipients::All
+        // This is what a message queued at startup would see if it cached recipients
+        assert!(
+            matches!(map.get_recipients(&svc_a), Recipients::All),
+            "Before subscription state, must return Recipients::All"
+        );
+
+        // Simulate peer announcing subscription (as if subscription state arrived)
+        map.set_peer_subscriptions(&peer_a, vec![svc_a]);
+
+        // After subscription state: get_recipients returns Recipients::Some with peer_a
+        // This proves re-resolution at drain time sees different results than cached All
+        match map.get_recipients(&svc_a) {
+            Recipients::Some(peers) => {
+                assert!(
+                    peers.contains(&peer_a),
+                    "After subscription, peers must contain peer_a"
+                );
+            }
+            other => panic!(
+                "Expected Recipients::Some after subscription state, got {:?}",
+                other
+            ),
+        }
+    }
 }
