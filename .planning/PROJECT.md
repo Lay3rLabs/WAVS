@@ -55,6 +55,9 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 - ✓ Unified activity event cards merging trigger and submission lifecycle with status progression — v1.2
 - ✓ BLS registration guidance banner for services without POA registry — v1.2
 
+- ✓ Subscription protocol — peers announce/withdraw subscribed services via P2P; `PeerSubscriptionMap` tracks service→peers — v1.3
+- ✓ Targeted delivery — `run_lookup_network` and `run_discovery_network` use `get_recipients()` for direct channel submission sends; Engine channel stays `Recipients::All` (TGT-03) — v1.3
+
 ### Active
 
 ## Current Milestone: v1.3 Per-Service P2P Targeting
