@@ -1,7 +1,7 @@
 # Requirements: WAVS v1.3
 
 **Defined:** 2026-04-03
-**Core Value:** Multi-operator signature aggregation over P2P must work reliably — operators broadcast signed submissions, reach quorum, and submit on-chain
+**Core Value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
 
 ## v1.3 Requirements
 
@@ -44,20 +44,20 @@ Deferred to v1.4+. Tracked but not in current roadmap.
 
 ### Catch-Up Scoping
 
-- **CATCH-01**: Per-service catch-up filtering — Engine only replays cached messages for services the reconnecting peer subscribes to
+- **CATCH-01**: Per-service catch-up filtering -- Engine only replays cached messages for services the reconnecting peer subscribes to
 - **CATCH-02**: Per-service Engine instances with independent deque caches
 
 ### Scale Optimization
 
-- **SCALE-01**: Gossip relay mode — send to K random peers who relay, for services with 50+ operators
-- **SCALE-02**: Aggregator hub mode — operators send to designated aggregator nodes only, for 500+ operator services
-- **SCALE-03**: Differential subscription updates — only send changes vs full state on heartbeat
+- **SCALE-01**: Gossip relay mode -- send to K random peers who relay, for services with 50+ operators
+- **SCALE-02**: Aggregator hub mode -- operators send to designated aggregator nodes only, for 500+ operator services
+- **SCALE-03**: Differential subscription updates -- only send changes vs full state on heartbeat
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Per-service catch-up scoping | Engine has no service awareness; requires commonware fork or separate caching layer — defer to v1.4 |
+| Per-service catch-up scoping | Engine has no service awareness; requires commonware fork or separate caching layer -- defer to v1.4 |
 | Gossip relay / aggregator hub | Not needed at current operator scale (3-50); foundation (Recipients::Some) enables later |
 | Multiple Network instances per service | Connection/identity overhead not justified at current scale |
 | Dynamic channel registration | commonware-p2p requires channels before network.start(); architectural constraint |
@@ -70,28 +70,28 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SUB-01 | — | Pending |
-| SUB-02 | — | Pending |
-| SUB-03 | — | Pending |
-| ANN-01 | — | Pending |
-| ANN-02 | — | Pending |
-| ANN-03 | — | Pending |
-| ANN-04 | — | Pending |
-| ANN-05 | — | Pending |
-| TGT-01 | — | Pending |
-| TGT-02 | — | Pending |
-| TGT-03 | — | Pending |
-| TGT-04 | — | Pending |
-| OBS-01 | — | Pending |
-| COMPAT-01 | — | Pending |
-| COMPAT-02 | — | Pending |
-| COMPAT-03 | — | Pending |
+| SUB-01 | Phase 14 | Pending |
+| SUB-02 | Phase 14 | Pending |
+| SUB-03 | Phase 14 | Pending |
+| ANN-01 | Phase 15 | Pending |
+| ANN-02 | Phase 15 | Pending |
+| ANN-03 | Phase 15 | Pending |
+| ANN-04 | Phase 15 | Pending |
+| ANN-05 | Phase 14 | Pending |
+| TGT-01 | Phase 16 | Pending |
+| TGT-02 | Phase 16 | Pending |
+| TGT-03 | Phase 16 | Pending |
+| TGT-04 | Phase 16 | Pending |
+| OBS-01 | Phase 17 | Pending |
+| COMPAT-01 | Phase 16 | Pending |
+| COMPAT-02 | Phase 16 | Pending |
+| COMPAT-03 | Phase 15 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 (pending roadmap creation)
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-03*
-*Last updated: 2026-04-03 after initial definition*
+*Last updated: 2026-04-03 after roadmap creation*
