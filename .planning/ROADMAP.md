@@ -120,7 +120,7 @@ Plans:
 | 13. BLS Registration UX and Type Cleanup | v1.2 | 1/1 | Complete | 2026-03-24 |
 | 14. Subscription Data Structures | v1.3 | 1/1 | Complete    | 2026-04-03 |
 | 15. Subscription Protocol | v1.3 | 2/2 | Complete    | 2026-04-03 |
-| 16. Targeted Delivery | v1.3 | 2/2 | Complete   | 2026-04-03 |
+| 16. Targeted Delivery | v1.3 | 2/2 | Complete    | 2026-04-03 |
 | 17. Subscription Observability | v1.3 | 0/? | Not started | - |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
