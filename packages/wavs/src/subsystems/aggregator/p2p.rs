@@ -453,6 +453,16 @@ impl PeerSubscriptionMap {
             _ => Recipients::All,
         }
     }
+
+    /// Returns per-service peer counts for observability (OBS-01).
+    /// Keys are hex-encoded service_id bytes, values are the number of peers
+    /// subscribed to that service.
+    pub fn peer_subscription_counts(&self) -> HashMap<String, usize> {
+        self.service_to_peers
+            .iter()
+            .map(|(service_id, peers)| (const_hex::encode(service_id), peers.len()))
+            .collect()
+    }
 }
 
 // ============================================================================
