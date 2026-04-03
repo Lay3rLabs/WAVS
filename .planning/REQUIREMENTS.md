@@ -17,7 +17,7 @@ Requirements for per-service P2P targeting. Each maps to roadmap phases.
 
 - [ ] **ANN-01**: When an operator adds a service, a subscription announcement is broadcast to all connected peers
 - [ ] **ANN-02**: When an operator removes a service, an unsubscribe announcement is broadcast to all connected peers
-- [ ] **ANN-03**: Subscription state is piggybacked on periodic heartbeats for self-healing eventual consistency
+- [x] **ANN-03**: Subscription state is piggybacked on periodic heartbeats for self-healing eventual consistency
 - [ ] **ANN-04**: When a new peer connects, the node sends its full subscription set as a hello message
 - [x] **ANN-05**: Subscription announcements use a sentinel service_id to multiplex on the existing direct channel (no new channels required)
 
@@ -36,7 +36,7 @@ Requirements for per-service P2P targeting. Each maps to roadmap phases.
 
 - [ ] **COMPAT-01**: Existing secp256k1 e2e tests pass unchanged
 - [ ] **COMPAT-02**: Existing BLS e2e tests pass unchanged
-- [ ] **COMPAT-03**: Nodes without v1.3 targeting are treated as subscribed-to-all (backward compatible during rolling updates)
+- [x] **COMPAT-03**: Nodes without v1.3 targeting are treated as subscribed-to-all (backward compatible during rolling updates)
 
 ## Future Requirements
 
@@ -75,7 +75,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SUB-03 | Phase 14 | Complete |
 | ANN-01 | Phase 15 | Pending |
 | ANN-02 | Phase 15 | Pending |
-| ANN-03 | Phase 15 | Pending |
+| ANN-03 | Phase 15 | Complete |
 | ANN-04 | Phase 15 | Pending |
 | ANN-05 | Phase 14 | Complete |
 | TGT-01 | Phase 16 | Pending |
@@ -85,7 +85,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OBS-01 | Phase 17 | Pending |
 | COMPAT-01 | Phase 16 | Pending |
 | COMPAT-02 | Phase 16 | Pending |
-| COMPAT-03 | Phase 15 | Pending |
+| COMPAT-03 | Phase 15 | Complete |
 
 **Coverage:**
 - v1.3 requirements: 16 total

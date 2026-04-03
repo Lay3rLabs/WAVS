@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Per-Service P2P Targeting
-status: completed
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-04-03T14:12:32.294Z"
+status: executing
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-04-03T14:54:53.780Z"
 last_activity: 2026-04-03
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  total_plans: 3
+  completed_plans: 2
 ---
 
 # Project State
@@ -20,13 +20,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 15: Subscription Protocol (next)
+**Current focus:** Phase 15 — subscription-protocol
 
 ## Current Position
 
-Phase: 15 of 17 (subscription protocol)
-Plan: Not started
-Status: Phase 14 complete, ready for Phase 15
+Phase: 15 (subscription-protocol) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-04-03
 
 Progress (v1.3): [##........] 25% (1/4 phases)
@@ -54,6 +54,9 @@ Recent decisions affecting current work:
 - [Phase 14]: HashMap/HashSet for PeerSubscriptionMap (bridge loop is single-threaded)
 - [Phase 14]: serde_json for SubscriptionAnnouncement encoding (matches existing P2pMessage payload pattern)
 - [Phase 14]: get_recipients() returns Recipients::All as defensive fallback for empty subscriber sets
+- [Phase 15]: serde(default) on full_state ensures backward compat with Phase 14 announcements
+- [Phase 15]: set_peer_subscriptions uses remove_peer + reinsert for clean replace-not-merge semantics
+- [Phase 15]: has_announced checks peer_to_services.contains_key for COMPAT-03 tracking
 
 ### Pending Todos
 
@@ -65,6 +68,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-03
-Stopped at: Completed 14-01-PLAN.md
+Last session: 2026-04-03T14:54:53.778Z
+Stopped at: Completed 15-01-PLAN.md
 Resume file: None
