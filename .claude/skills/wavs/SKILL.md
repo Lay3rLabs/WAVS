@@ -51,7 +51,7 @@ npx @wavs/mcp@latest
 
 > **Execution tools** (`wavs_exec_*`) require `--exec-enabled`. Tier 2 (`signed_result`) also needs `--signing-mnemonic`. Tier 3 (`on_chain`) also needs `--mcp-chain-credential` and `exec_enabled: true` in the service definition. See [`flows/execution.md`](flows/execution.md).
 
-> **Local tools** (`scaffold_component`, `build_component`, `get_wit_interface`, `get_service_schema`) work without MCP — useful for component development without a running node.
+> **Local tools** (`scaffold_component`, `build_component`, `validate_component`, `get_wit_interface`, `get_service_schema`) work without MCP — useful for component development without a running node.
 
 ---
 
@@ -76,7 +76,7 @@ When in doubt, start with **component-dev** — it ends with a deployment step.
 | **Write** | `deploy_service`, `delete_service` | `--token` |
 | **Dev** | `upload_component`, `save_service`, `simulate_trigger`, `deploy_dev_service`, `query_kv`, `query_logs`, `query_component_logs` | Dev endpoints enabled |
 | **Chain-write** | `set_service_uri`, `deploy_service_manager`, `deploy_poa_service_manager`, `register_operator`, `deploy_and_register` | `WAVS_MCP_CHAIN_CREDENTIAL` env var |
-| **Local** | `get_service_schema`, `get_wit_interface`, `scaffold_component`, `build_component` | None |
+| **Local** | `get_service_schema`, `get_wit_interface`, `scaffold_component`, `build_component`, `validate_component` | None |
 | **Execution** | `wavs_exec_*` (dynamic, one per deployed workflow) | `--exec-enabled`; Tier 2 needs `--signing-mnemonic`; Tier 3 needs `--mcp-chain-credential` + `exec_enabled: true` |
 
 Full tool reference: [`reference/mcp-tools.md`](reference/mcp-tools.md)

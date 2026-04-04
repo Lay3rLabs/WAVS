@@ -191,6 +191,10 @@ pub struct ScaffoldComponentParams {
     pub name: String,
     /// Trigger type: evm_contract_event | cosmos_contract_event | block_interval | cron | manual
     pub trigger_type: String,
+    /// Directory to create the project in. The component directory `{dir}/{name}/` will be created.
+    /// If omitted, returns the file contents as text instead of writing to disk.
+    /// Example: "/tmp" creates "/tmp/price-feed/"
+    pub dir: Option<String>,
     /// Optional description of what this component does
     pub description: Option<String>,
 }
@@ -239,6 +243,12 @@ pub struct BuildComponentParams {
     pub dir: String,
     /// Build in release mode (default: true)
     pub release: Option<bool>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct ValidateComponentParams {
+    /// Path to the compiled .wasm component file
+    pub wasm_path: String,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -863,11 +873,25 @@ impl WavsMcpServer {
         args: Option<serde_json::Map<String, serde_json::Value>>,
     ) -> Result<CallToolResult, McpError> {
         let p: ScaffoldComponentParams = parse_args(args)?;
-        ok(scaffold::scaffold_component(
-            &p.name,
-            &p.trigger_type,
-            p.description.as_deref(),
-        ))
+        if let Some(dir) = &p.dir {
+            // Write files to disk
+            match scaffold::scaffold_component_to_disk(
+                &p.name,
+                &p.trigger_type,
+                dir,
+                p.description.as_deref(),
+            ) {
+                Ok(summary) => ok(summary),
+                Err(e) => err(format!("Failed to scaffold component: {e}")),
+            }
+        } else {
+            // Return file contents as text
+            ok(scaffold::scaffold_component_text(
+                &p.name,
+                &p.trigger_type,
+                p.description.as_deref(),
+            ))
+        }
     }
 
     async fn tool_build_component(
@@ -877,8 +901,29 @@ impl WavsMcpServer {
         let p: BuildComponentParams = parse_args(args)?;
         let release = p.release.unwrap_or(true);
 
+        // Detect standalone vs workspace project.
+        // Standalone projects have a local `wit/` directory and no `[package.metadata.component]`
+        // with `package = "component:..."` that cargo-component uses.
+        // For standalone, use `cargo build --target wasm32-wasip2`.
+        // For workspace, use `cargo component build`.
+        let dir_path = std::path::Path::new(&p.dir);
+        let has_local_wit = dir_path.join("wit").is_dir();
+        let cargo_toml_path = dir_path.join("Cargo.toml");
+        let has_component_metadata = std::fs::read_to_string(&cargo_toml_path)
+            .map(|s| s.contains("[package.metadata.component]"))
+            .unwrap_or(false);
+
+        // Use standalone build (wasm32-wasip2) when:
+        // - Project has local wit/ directory AND no component metadata, OR
+        // - Project has local wit/ directory AND is not in a cargo workspace
+        let use_standalone = has_local_wit && !has_component_metadata;
+
         let mut cmd = tokio::process::Command::new("cargo");
-        cmd.arg("component").arg("build");
+        if use_standalone {
+            cmd.arg("build").arg("--target").arg("wasm32-wasip2");
+        } else {
+            cmd.arg("component").arg("build");
+        }
         if release {
             cmd.arg("--release");
         }
@@ -886,38 +931,171 @@ impl WavsMcpServer {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
 
+        let build_cmd_str = if use_standalone {
+            "cargo build --target wasm32-wasip2"
+        } else {
+            "cargo component build"
+        };
+
         let output = match cmd.output().await {
             Ok(o) => o,
-            Err(e) => return err(format!("Failed to run `cargo component build`: {e:#}")),
+            Err(e) => return err(format!("Failed to run `{build_cmd_str}`: {e:#}")),
         };
 
         let mut result = format!(
-            "Exit code: {}\n\nstdout:\n{}\n\nstderr:\n{}",
+            "Build command: {build_cmd_str}{release_flag}\nExit code: {}\n\nstdout:\n{}\n\nstderr:\n{}",
             output.status.code().unwrap_or(-1),
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
+            release_flag = if release { " --release" } else { "" },
         );
 
         if output.status.success() {
             // Scan for output .wasm files so callers can pass the path directly to wavs_upload_component.
-            let wasm_dir = std::path::Path::new(&p.dir).join("target/wasm32-wasip1/release");
-            if let Ok(entries) = std::fs::read_dir(&wasm_dir) {
-                let mut wasm_files: Vec<String> = entries
-                    .filter_map(|e| e.ok())
-                    .map(|e| e.path())
-                    .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("wasm"))
-                    .filter_map(|p| p.to_str().map(|s| s.to_owned()))
-                    .collect();
-                wasm_files.sort();
-                if !wasm_files.is_empty() {
-                    result.push_str("\n\nOutput WASM files:");
-                    for f in &wasm_files {
-                        result.push_str(&format!("\n  {f}"));
+            // Check both wasip1 (cargo component) and wasip2 (standalone) output dirs.
+            for target_dir in &["target/wasm32-wasip1/release", "target/wasm32-wasip2/release"] {
+                let wasm_dir = dir_path.join(target_dir);
+                if let Ok(entries) = std::fs::read_dir(&wasm_dir) {
+                    let mut wasm_files: Vec<String> = entries
+                        .filter_map(|e| e.ok())
+                        .map(|e| e.path())
+                        .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("wasm"))
+                        .filter_map(|p| p.to_str().map(|s| s.to_owned()))
+                        .collect();
+                    wasm_files.sort();
+                    if !wasm_files.is_empty() {
+                        result.push_str("\n\nOutput WASM files:");
+                        for f in &wasm_files {
+                            result.push_str(&format!("\n  {f}"));
+                        }
                     }
                 }
             }
             ok(result)
         } else {
+            // Enhance error messages for common issues
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("failed to create a target world") || stderr.contains("package not found") {
+                result.push_str("\n\n💡 Hint: WIT interface files may be missing or incomplete. \
+                    For standalone projects, ensure all wit/deps/*/package.wit files are present. \
+                    Re-run wavs_scaffold_component to get the complete file list.");
+            }
+            if stderr.contains("no export") && stderr.contains("run") {
+                result.push_str("\n\n💡 Hint: Component doesn't export the required 'run' function. \
+                    Ensure the `export!()` macro (standalone) or `export_layer_trigger_world!()` macro (workspace) \
+                    is present, and that `impl Guest for Component` is correct.");
+            }
+            err(result)
+        }
+    }
+
+    async fn tool_validate_component(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
+        let p: ValidateComponentParams = parse_args(args)?;
+        let wasm_path = std::path::Path::new(&p.wasm_path);
+
+        if !wasm_path.exists() {
+            return err(format!("File not found: {}", p.wasm_path));
+        }
+
+        // Use wasm-tools to inspect the component
+        let output = match tokio::process::Command::new("wasm-tools")
+            .args(["component", "wit"])
+            .arg(&p.wasm_path)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .await
+        {
+            Ok(o) => o,
+            Err(e) => {
+                return err(format!(
+                    "Failed to run `wasm-tools component wit`: {e:#}\n\n\
+                     Install with: cargo install wasm-tools"
+                ))
+            }
+        };
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return err(format!(
+                "❌ Not a valid WASI component.\n\n\
+                 The file may be a core WebAssembly module (not a component).\n\
+                 - If using standalone build, ensure you built with: `cargo build --target wasm32-wasip2 --release`\n\
+                 - If using workspace build, ensure you used: `cargo component build --release`\n\n\
+                 wasm-tools error:\n{stderr}"
+            ));
+        }
+
+        let wit_output = String::from_utf8_lossy(&output.stdout);
+
+        // Check for the required export
+        let has_run_export = wit_output.contains("export run: func(trigger-action: trigger-action) -> result<list<wasm-response>, string>");
+
+        // Check for key imports
+        let has_operator_input = wit_output.contains("wavs:operator/input");
+        let has_operator_output = wit_output.contains("wavs:operator/output");
+        let has_types = wit_output.contains("wavs:types/");
+
+        let mut issues: Vec<String> = Vec::new();
+        let mut info: Vec<String> = Vec::new();
+
+        if !has_run_export {
+            issues.push(
+                "Missing `export run` function. Ensure the export macro is present:\n  \
+                 - Standalone: `bindings::export!(Component with_types_in bindings);`\n  \
+                 - Workspace: `export_layer_trigger_world!(Component);`\n  \
+                 And that `impl Guest for Component` has the correct signature."
+                    .to_string(),
+            );
+        } else {
+            info.push("✅ Exports `run` function with correct signature".to_string());
+        }
+
+        if !has_operator_input || !has_operator_output {
+            issues.push(
+                "Missing wavs:operator imports. The WIT files may be incomplete or corrupted."
+                    .to_string(),
+            );
+        } else {
+            info.push("✅ Imports wavs:operator input/output interfaces".to_string());
+        }
+
+        if !has_types {
+            issues.push(
+                "Missing wavs:types imports. Ensure wavs-types WIT dep is present.".to_string(),
+            );
+        } else {
+            info.push("✅ Imports wavs:types definitions".to_string());
+        }
+
+        // File size info
+        if let Ok(metadata) = std::fs::metadata(&p.wasm_path) {
+            let size_kb = metadata.len() / 1024;
+            info.push(format!("📦 Component size: {} KB", size_kb));
+        }
+
+        let mut result = String::new();
+        if issues.is_empty() {
+            result.push_str("# ✅ Component Validation Passed\n\n");
+            result.push_str(&format!("File: `{}`\n\n", p.wasm_path));
+            for line in &info {
+                result.push_str(&format!("{line}\n"));
+            }
+            result.push_str("\nThe component is ready for upload with `wavs_upload_component`.");
+            ok(result)
+        } else {
+            result.push_str("# ❌ Component Validation Failed\n\n");
+            result.push_str(&format!("File: `{}`\n\n", p.wasm_path));
+            for line in &info {
+                result.push_str(&format!("{line}\n"));
+            }
+            result.push_str("\n## Issues\n\n");
+            for issue in &issues {
+                result.push_str(&format!("- {issue}\n\n"));
+            }
             err(result)
         }
     }
@@ -1076,7 +1254,7 @@ impl ServerHandler for WavsMcpServer {
              Chain-write tools (need WAVS_MCP_CHAIN_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
              Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator, wavs_deploy_and_register, wavs_get_signing_address\n\
              Node-read tools (need --token): wavs_get_service_signer\n\
-             Local tools: wavs_get_service_schema, wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component",
+             Local tools: wavs_get_service_schema, wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component, wavs_validate_component",
         );
         if self.exec_enabled {
             instructions.push_str(
@@ -1287,15 +1465,32 @@ impl ServerHandler for WavsMcpServer {
                      empty.clone()),
                 Tool {
                     name: "wavs_scaffold_component".into(),
-                    description: "Generate a ready-to-build WAVS WASM component scaffold (Cargo.toml + lib.rs). \
+                    description: "Create a complete, ready-to-build WAVS WASM component project. \
+                        If `dir` is provided, writes all files to disk at `{dir}/{name}/` (recommended). \
+                        If `dir` is omitted, returns file contents as text for manual creation. \
+                        Includes Cargo.toml, src/lib.rs, src/bindings.rs, and the full WIT interface directory. \
+                        The generated project is self-contained and builds with `cargo build --target wasm32-wasip2 --release`. \
+                        After scaffolding, customize src/lib.rs then use wavs_build_component to compile. \
                         Trigger types: evm_contract_event | cosmos_contract_event | block_interval | cron | manual".into(),
                     input_schema: schema_for_type::<ScaffoldComponentParams>().into(),
                 },
                 Tool {
                     name: "wavs_build_component".into(),
-                    description: "Build a WAVS WASM component using `cargo component build`. \
-                        Returns full build output.".into(),
+                    description: "Build a WAVS WASM component. \
+                        Auto-detects build mode: uses `cargo build --target wasm32-wasip2` for standalone projects \
+                        (with local wit/ directory) or `cargo component build` for workspace projects. \
+                        Returns full build output and output .wasm file paths.".into(),
                     input_schema: schema_for_type::<BuildComponentParams>().into(),
+                },
+                Tool {
+                    name: "wavs_validate_component".into(),
+                    description: "Validate a compiled .wasm component before uploading. \
+                        Checks that the file is a valid WASI component (not a core module), \
+                        exports the required `run` function with the correct signature, \
+                        and imports the expected WAVS interfaces. \
+                        Requires `wasm-tools` to be installed. \
+                        Run this after wavs_build_component and before wavs_upload_component.".into(),
+                    input_schema: schema_for_type::<ValidateComponentParams>().into(),
                 },
             ];
 
@@ -1350,6 +1545,7 @@ impl ServerHandler for WavsMcpServer {
             "wavs_get_wit_interface" => self.tool_get_wit_interface().await,
             "wavs_scaffold_component" => self.tool_scaffold_component(args).await,
             "wavs_build_component" => self.tool_build_component(args).await,
+            "wavs_validate_component" => self.tool_validate_component(args).await,
             name if name.starts_with("wavs_exec_") => {
                 if !self.exec_enabled {
                     return Err(ErrorData {

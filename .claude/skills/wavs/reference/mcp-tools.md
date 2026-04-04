@@ -31,7 +31,8 @@ All tools are exposed by the `wavs` MCP server. Prefix with `wavs:` when calling
 | `wavs_get_service_schema` | — | — | — | Returns minimal valid Service JSON examples for every trigger type (local) |
 | `wavs_get_wit_interface` | — | — | — | Returns full WIT interface definitions (local, no network) |
 | `wavs_scaffold_component` | — | — | — | Generates Cargo.toml + src/lib.rs skeleton (local) |
-| `wavs_build_component` | — | — | — | Runs `cargo component build`; returns build output (local) |
+| `wavs_build_component` | — | — | — | Builds component; auto-detects standalone (`wasm32-wasip2`) vs workspace (`cargo component`) mode (local) |
+| `wavs_validate_component` | — | — | — | Validates .wasm exports correct `run` function; checks WAVS interface compatibility (local, requires `wasm-tools`) |
 | `wavs_exec_*` | — | Tier 2–3 | ✓ | Dynamic, one per deployed service workflow. Requires `--exec-enabled`. Auth depends on trust tier. |
 
 **Legend:**
@@ -134,13 +135,23 @@ key:        key within the bucket
 dir:     directory containing the component's Cargo.toml
 release: optional bool (default: true)
 ```
+Auto-detects build mode: standalone projects (with local `wit/` dir) use `cargo build --target wasm32-wasip2`, workspace projects use `cargo component build`.
+
+### wavs_validate_component
+```
+wasm_path: path to compiled .wasm file
+```
+Validates the component is a proper WASI component with the correct `run` export. Run after build, before upload. Requires `wasm-tools` installed.
 
 ### wavs_scaffold_component
 ```
 name:         lowercase-with-hyphens component name
 trigger_type: evm_contract_event | cosmos_contract_event | block_interval | cron | manual
+dir:          optional — parent directory to create project in (e.g. "/tmp"). If provided, writes all files to {dir}/{name}/.
+              If omitted, returns file contents as text.
 description:  optional string
 ```
+When `dir` is provided, creates a complete self-contained project with Cargo.toml, src/lib.rs, src/bindings.rs, and the full wit/ directory. Builds with `cargo build --target wasm32-wasip2 --release`.
 
 ### wavs_query_logs
 ```
