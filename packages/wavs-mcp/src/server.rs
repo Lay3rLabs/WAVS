@@ -735,6 +735,27 @@ impl WavsMcpServer {
                     String::new()
                 };
 
+                // Extract chain and address for the ui_open_service hint
+                let nav_hint = service_value
+                    .pointer("/manager/evm")
+                    .and_then(|evm| {
+                        let chain = evm.get("chain")?.as_str()?;
+                        let addr = evm.get("address")?.as_str()?;
+                        Some(format!(
+                            "\n\n💡 To view in the UI: ui_open_service(chain=\"{chain}\", address=\"{addr}\")"
+                        ))
+                    })
+                    .or_else(|| {
+                        service_value.pointer("/manager/cosmos").and_then(|cosmos| {
+                            let chain = cosmos.get("chain")?.as_str()?;
+                            let addr = cosmos.get("address")?.as_str()?;
+                            Some(format!(
+                                "\n\n💡 To view in the UI: ui_open_service(chain=\"{chain}\", address=\"{addr}\")"
+                            ))
+                        })
+                    })
+                    .unwrap_or_default();
+
                 self.notify_tools_changed().await;
                 ok(format!(
                     "✅ Service deployed successfully.\n\
@@ -742,7 +763,8 @@ impl WavsMcpServer {
                      {service_id_info}\
                      {manager_info}\
                      {workflow_info}\
-                     {signer_info}"
+                     {signer_info}\
+                     {nav_hint}"
                 ))
             }
             Err(e) => err(format!("Failed to deploy dev service: {e:#}")),
