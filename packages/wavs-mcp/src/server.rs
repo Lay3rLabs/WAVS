@@ -735,14 +735,14 @@ impl WavsMcpServer {
                     String::new()
                 };
 
-                // Extract chain and address for the ui_open_service hint
+                // Extract chain and address for the ui_navigate hint
                 let nav_hint = service_value
                     .pointer("/manager/evm")
                     .and_then(|evm| {
                         let chain = evm.get("chain")?.as_str()?;
                         let addr = evm.get("address")?.as_str()?;
                         Some(format!(
-                            "\n\n💡 To view in the UI: ui_open_service(chain=\"{chain}\", address=\"{addr}\")"
+                            "\n\n💡 To view in the UI: ui_navigate(path=\"/services/{chain}/{addr}\")"
                         ))
                     })
                     .or_else(|| {
@@ -750,7 +750,7 @@ impl WavsMcpServer {
                             let chain = cosmos.get("chain")?.as_str()?;
                             let addr = cosmos.get("address")?.as_str()?;
                             Some(format!(
-                                "\n\n💡 To view in the UI: ui_open_service(chain=\"{chain}\", address=\"{addr}\")"
+                                "\n\n💡 To view in the UI: ui_navigate(path=\"/services/{chain}/{addr}\")"
                             ))
                         })
                     })

@@ -26,11 +26,20 @@ export default function uiControl(pi: ExtensionAPI) {
     name: "ui_navigate",
     label: "Navigate UI",
     description:
-      "Navigate the WAVS desktop app to a specific page. " +
-      "Examples: '/services', '/logs', '/health', '/settings', " +
-      "'/services/evm:31337/0xABC...' for a specific service.",
+      "Navigate the WAVS desktop app to a specific page.\n" +
+      "Available routes:\n" +
+      "  /services                              — Service list\n" +
+      "  /services/{chain}/{address}             — Service detail (e.g. /services/evm:31337/0xABC...)\n" +
+      "  /services/{chain}/{address}/edit         — Edit a service\n" +
+      "  /services/new                           — Create new service\n" +
+      "  /components                             — Uploaded components\n" +
+      "  /activity                               — Triggers & submissions activity\n" +
+      "  /logs                                   — Node logs\n" +
+      "  /health                                 — Node health\n" +
+      "  /settings                               — App settings\n" +
+      "To open a specific service, use /services/{chain}/{address} where chain and address come from the service's manager field.",
     parameters: Type.Object({
-      path: Type.String({ description: "The route path to navigate to (e.g. '/services', '/logs')" }),
+      path: Type.String({ description: "The route path to navigate to" }),
     }),
 
     async execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -87,26 +96,5 @@ export default function uiControl(pi: ExtensionAPI) {
     },
   });
 
-  // --- ui_open_service ---
-  pi.registerTool({
-    name: "ui_open_service",
-    label: "Open Service",
-    description:
-      "Navigate to a specific service's detail page in the WAVS desktop app. " +
-      "Convenience shortcut that constructs the service URL from chain and address.",
-    parameters: Type.Object({
-      chain: Type.String({ description: "Chain identifier (e.g. 'evm:31337', 'cosmos:layertest-1')" }),
-      address: Type.String({ description: "Service manager contract address" }),
-    }),
 
-    async execute(toolCallId, params, signal, onUpdate, ctx) {
-      const servicePath = `/services/${params.chain}/${params.address}`;
-      sendUiControl(ctx, { action: "navigate", path: servicePath });
-
-      return {
-        content: [{ type: "text", text: `Opened service at ${servicePath}` }],
-        details: { action: "open_service", chain: params.chain, address: params.address, path: servicePath },
-      };
-    },
-  });
 }
