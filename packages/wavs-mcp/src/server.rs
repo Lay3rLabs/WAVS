@@ -109,7 +109,9 @@ pub struct UploadComponentParams {
 
 #[derive(Deserialize, schemars::JsonSchema)]
 pub struct SimulateTriggerParams {
-    /// Service ID — 64-char hex string derived from the ServiceManager
+    /// Service ID — 64-char hex string derived from the ServiceManager.
+    /// This is returned by wavs_deploy_dev_service as `service_id`.
+    /// NOT the deploy_hash — the service_id is a different value.
     pub service_id: String,
     /// Workflow ID — lowercase alphanumeric, 3–36 chars (e.g. "default")
     pub workflow_id: String,
@@ -319,6 +321,52 @@ fn coerce_string_values(map: &mut serde_json::Map<String, serde_json::Value>) {
             }
         }
     }
+}
+
+/// Detect placeholder/example addresses that agents copy verbatim from schema examples.
+/// Matches patterns like 0x1234567890..., 0xAbCdEf..., 0xServiceManagerAddress, etc.
+fn is_placeholder_address(addr: &str) -> bool {
+    let lower = addr.to_lowercase();
+    // Non-hex characters in the address part → clearly a placeholder like "0xServiceManagerAddress"
+    if let Some(hex_part) = lower.strip_prefix("0x") {
+        if hex_part.chars().any(|c| !c.is_ascii_hexdigit()) {
+            return true;
+        }
+    }
+    // Common sequential/repeating patterns agents generate
+    let patterns = [
+        "0x1234567890",
+        "0xabcdef1234",
+        "0x0000000000",
+        "0xaaaaaaaaaa",
+        "0x1111111111",
+    ];
+    for p in patterns {
+        if lower.starts_with(p) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Generate a unique hex string of the given length for use as a dev manager address.
+/// Uses timestamp + process ID + counter for uniqueness (no `rand` crate needed).
+fn random_hex(len: usize) -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64;
+    let pid = std::process::id() as u64;
+    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
+
+    // Hash the values together to produce enough hex chars
+    let mut s = format!("{:016x}{:08x}{:016x}", nanos, pid, count);
+    s.truncate(len);
+    s
 }
 
 fn no_params() -> Arc<serde_json::Map<String, serde_json::Value>> {
@@ -600,27 +648,102 @@ impl WavsMcpServer {
         args: Option<serde_json::Map<String, serde_json::Value>>,
     ) -> Result<CallToolResult, McpError> {
         let p: DeployDevServiceParams = parse_args(args)?;
-        let manager: Option<wavs_types::ServiceManager> =
-            serde_json::from_str::<serde_json::Value>(&p.service_json)
-                .ok()
-                .and_then(|v| serde_json::from_value(v.get("manager")?.clone()).ok());
-        match self.client.deploy_dev_service(&p.service_json).await {
+
+        // Parse the service JSON
+        let mut service_value: serde_json::Value =
+            serde_json::from_str(&p.service_json).map_err(|e| ErrorData {
+                code: ErrorCode::INVALID_PARAMS,
+                message: format!("Invalid service JSON: {e}").into(),
+                data: None,
+            })?;
+
+        // For dev services: replace placeholder manager addresses with unique random ones.
+        // This prevents "already registered" errors when agents copy example addresses verbatim.
+        let manager_replaced = if let Some(addr) = service_value
+            .pointer("/manager/evm/address")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+        {
+            if is_placeholder_address(&addr) {
+                let random_addr = format!("0x{}", random_hex(40));
+                service_value["manager"]["evm"]["address"] =
+                    serde_json::Value::String(random_addr);
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        let service_json = serde_json::to_string(&service_value).unwrap();
+
+        let manager: Option<wavs_types::ServiceManager> = service_value
+            .get("manager")
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+
+        // Extract workflow IDs for the summary
+        let workflow_ids: Vec<String> = service_value
+            .get("workflows")
+            .and_then(|v| v.as_object())
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default();
+
+        match self.client.deploy_dev_service(&service_json).await {
             Ok(hash) => {
+                // Compute the service_id from the ServiceManager
+                let service_id_info = if let Some(ref mgr) = manager {
+                    let sid = wavs_types::ServiceId::from(mgr);
+                    format!(
+                        "\nservice_id: {sid}  ← use this for wavs_simulate_trigger and wavs_query_component_logs"
+                    )
+                } else {
+                    String::new()
+                };
+
+                let manager_info = if manager_replaced {
+                    let addr = service_value["manager"]["evm"]["address"]
+                        .as_str()
+                        .unwrap_or("unknown");
+                    format!("\nmanager_address: {addr}  (placeholder was replaced with unique address)")
+                } else {
+                    String::new()
+                };
+
+                let workflow_info = if !workflow_ids.is_empty() {
+                    format!(
+                        "\nworkflow_id(s): {}",
+                        workflow_ids
+                            .iter()
+                            .map(|w| format!("\"{}\"", w))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                } else {
+                    String::new()
+                };
+
                 let signer_info = if let Some(mgr) = manager {
                     match self.client.get_service_signer(mgr).await {
                         Ok(wavs_types::SignerResponse::Secp256k1 {
                             hd_index,
                             evm_address,
-                        }) => {
-                            format!("\nSigning key: HD index {hd_index} ({evm_address})")
-                        }
+                        }) => format!("\nsigning_key: HD index {hd_index} ({evm_address})"),
                         Err(_) => String::new(),
                     }
                 } else {
                     String::new()
                 };
+
                 self.notify_tools_changed().await;
-                ok(format!("Service registered.\nHash: {hash}{signer_info}"))
+                ok(format!(
+                    "✅ Service deployed successfully.\n\
+                     deploy_hash: {hash}\
+                     {service_id_info}\
+                     {manager_info}\
+                     {workflow_info}\
+                     {signer_info}"
+                ))
             }
             Err(e) => err(format!("Failed to deploy dev service: {e:#}")),
         }
@@ -1136,6 +1259,12 @@ Use this as a reference when calling wavs_save_service or wavs_deploy_dev_servic
 Raw 64-character hex string returned by wavs_upload_component. NO "sha256:" prefix.
 Example: f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420
 
+### Manager address
+The `manager` field uniquely identifies the service.
+- For real deployments: use the actual on-chain ServiceManager contract address.
+- For dev/testing (wavs_deploy_dev_service): use any placeholder (e.g. `0x1234...`). 
+  The tool automatically replaces placeholder addresses with unique random ones to avoid collisions.
+
 ---
 
 ### Manual trigger (fires only via wavs_simulate_trigger)
@@ -1143,7 +1272,7 @@ Example: f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420
 {
   "name": "my-service",
   "status": "active",
-  "manager": {"evm": {"chain": "evm:31337", "address": "0xServiceManagerAddress"}},
+  "manager": {"evm": {"chain": "evm:31337", "address": "0x1234567890abcdef1234567890abcdef12345678"}},
   "workflows": {
     "default": {
       "trigger": "manual",
@@ -1166,7 +1295,7 @@ Example: f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420
 {
   "name": "my-cron-service",
   "status": "active",
-  "manager": {"evm": {"chain": "evm:31337", "address": "0xServiceManagerAddress"}},
+  "manager": {"evm": {"chain": "evm:31337", "address": "0x1234567890abcdef1234567890abcdef12345678"}},
   "workflows": {
     "default": {
       "trigger": {"cron": {"schedule": "0 * * * * * *", "start_time": null, "end_time": null}},
@@ -1440,13 +1569,20 @@ impl ServerHandler for WavsMcpServer {
                 Tool {
                     name: "wavs_simulate_trigger".into(),
                     description: "Simulate a trigger against a deployed service. \
+                        The service_id parameter is the 64-char hex ID returned by wavs_deploy_dev_service \
+                        (labeled as `service_id`, NOT the `deploy_hash`). \
+                        The trigger_json and data_json must match the trigger type configured in the service. \
+                        Use wavs_get_service_schema for examples of trigger/data JSON formats. \
                         Requires dev endpoints enabled in wavs.toml.".into(),
                     input_schema: schema_for_type::<SimulateTriggerParams>().into(),
                 },
                 Tool {
                     name: "wavs_deploy_dev_service".into(),
                     description: "Register a service directly without an on-chain contract (dev/testing only). \
-                        Pass the full Service JSON. Handles the two-step save+register flow internally. \
+                        Pass the full Service JSON. Placeholder manager addresses (like 0x1234...) are \
+                        automatically replaced with unique random addresses to prevent collisions. \
+                        Returns the service_id (needed for wavs_simulate_trigger) and other details. \
+                        Handles the two-step save+register flow internally. \
                         Requires dev endpoints enabled in wavs.toml and --token. \
                         Call wavs_get_service_schema first to see a minimal valid example. \
                         Use this for local dev. For production with a real ServiceManager contract, \
