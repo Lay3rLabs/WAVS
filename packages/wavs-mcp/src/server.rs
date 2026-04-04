@@ -286,12 +286,39 @@ fn err(text: impl Into<String>) -> Result<CallToolResult, McpError> {
 fn parse_args<T: serde::de::DeserializeOwned>(
     args: Option<serde_json::Map<String, serde_json::Value>>,
 ) -> Result<T, McpError> {
-    let value = serde_json::Value::Object(args.unwrap_or_default());
+    let mut map = args.unwrap_or_default();
+    // MCP clients (especially Claude) often send bools and numbers as strings.
+    // Coerce string values that look like bools/numbers to their native JSON types.
+    coerce_string_values(&mut map);
+    let value = serde_json::Value::Object(map);
     serde_json::from_value(value).map_err(|e| ErrorData {
         code: ErrorCode::INVALID_PARAMS,
         message: format!("Invalid parameters: {e}").into(),
         data: None,
     })
+}
+
+/// Coerce string values that look like bools or numbers to native JSON types.
+/// Handles: "true"/"false" → bool, "123" → number, "1.5" → number.
+/// Only applies to top-level string values (not nested objects/arrays).
+fn coerce_string_values(map: &mut serde_json::Map<String, serde_json::Value>) {
+    for value in map.values_mut() {
+        if let serde_json::Value::String(s) = value {
+            match s.as_str() {
+                "true" => *value = serde_json::Value::Bool(true),
+                "false" => *value = serde_json::Value::Bool(false),
+                other => {
+                    if let Ok(n) = other.parse::<u64>() {
+                        *value = serde_json::Value::Number(n.into());
+                    } else if let Ok(n) = other.parse::<f64>() {
+                        if let Some(n) = serde_json::Number::from_f64(n) {
+                            *value = serde_json::Value::Number(n);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn no_params() -> Arc<serde_json::Map<String, serde_json::Value>> {
