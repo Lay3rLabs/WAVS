@@ -843,6 +843,9 @@ async fn run_lookup_network(
     let mut peer_subscriptions = PeerSubscriptionMap::new();
     // Track peers we have received any message from (for hello on first contact, ANN-04)
     let mut known_peers: HashSet<ed25519::PublicKey> = HashSet::new();
+    // COMPAT-03: Connected peer set (PublicKey form) for backward-compat recipient resolution.
+    // Updated from heartbeat and broadcast ack results.
+    let mut connected_peer_set: HashSet<ed25519::PublicKey> = HashSet::new();
 
     // Connected peer tracking for OBS-01.
     // Updated from broadcast acknowledgment results and inbound message senders.
@@ -869,7 +872,7 @@ async fn run_lookup_network(
 
                                 // Channel 1: targeted delivery to subscribed peers only (TGT-01)
                                 // get_recipients() returns Recipients::All as fallback when set is empty (TGT-02)
-                                let direct_recipients = peer_subscriptions.get_recipients(&service_id.inner(), &HashSet::new());
+                                let direct_recipients = peer_subscriptions.get_recipients(&service_id.inner(), &connected_peer_set);
                                 let encoded_bytes = Encode::encode(&msg);
                                 if let Err(e) = direct_sender.send(direct_recipients, encoded_bytes, false).await {
                                     tracing::warn!("Direct channel send failed: {:?}", e);
@@ -888,6 +891,7 @@ async fn run_lookup_network(
                                             .map(|pk| const_hex::encode(pk.as_ref()))
                                             .collect();
                                         *connected_peers_tracker.write().unwrap() = peer_hexes;
+                                        connected_peer_set = recipients.iter().cloned().collect();
 
                                         tracing::debug!("Broadcast delivered to {} peers", recipients.len());
                                         // Flush retry queue since peers are available
@@ -896,7 +900,7 @@ async fn run_lookup_network(
                                             for queued_msg in queued {
                                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
                                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
-                                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &HashSet::new());
+                                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &connected_peer_set);
                                                 let queued_bytes = Encode::encode(&queued_msg);
                                                 if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                                     tracing::warn!("Direct channel retry send failed: {:?}", e);
@@ -1113,12 +1117,28 @@ async fn run_lookup_network(
                             .collect();
                         *connected_peers_tracker.write().unwrap() = peer_hexes;
                         tracing::debug!("Heartbeat: {} peers connected", recipients.len());
+
+                        // Update connected peer set for COMPAT-03 recipient resolution
+                        connected_peer_set = recipients.iter().cloned().collect();
+
+                        // SUB-03: Prune subscription entries for departed peers.
+                        // Heartbeat ack recipients are the authoritative connected peer set.
+                        let tracked = peer_subscriptions.tracked_peers();
+                        for departed in tracked.difference(&connected_peer_set) {
+                            peer_subscriptions.remove_peer(departed);
+                            known_peers.remove(departed);
+                            tracing::debug!(
+                                "Pruned departed peer from subscriptions: {}",
+                                const_hex::encode(departed.as_ref()),
+                            );
+                        }
+
                         if !retry_queue.is_empty() {
                             let queued = retry_queue.drain_all();
                             for queued_msg in queued {
                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
-                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &HashSet::new());
+                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &connected_peer_set);
                                 let queued_bytes = Encode::encode(&queued_msg);
                                 if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                     tracing::warn!("Retry send failed: {:?}", e);
@@ -1328,6 +1348,9 @@ async fn run_discovery_network(
     let mut peer_subscriptions = PeerSubscriptionMap::new();
     // Track peers we have received any message from (for hello on first contact, ANN-04)
     let mut known_peers: HashSet<ed25519::PublicKey> = HashSet::new();
+    // COMPAT-03: Connected peer set (PublicKey form) for backward-compat recipient resolution.
+    // Updated from heartbeat and broadcast ack results.
+    let mut connected_peer_set: HashSet<ed25519::PublicKey> = HashSet::new();
 
     // Connected peer tracking for OBS-01.
     // Updated from broadcast acknowledgment results and inbound message senders.
@@ -1352,7 +1375,7 @@ async fn run_discovery_network(
                                 let ack_rx = mailbox.broadcast(Recipients::All, msg.clone()).await;
                                 // Channel 1: targeted delivery to subscribed peers only (TGT-01)
                                 // get_recipients() returns Recipients::All as fallback when set is empty (TGT-02)
-                                let direct_recipients = peer_subscriptions.get_recipients(&service_id.inner(), &HashSet::new());
+                                let direct_recipients = peer_subscriptions.get_recipients(&service_id.inner(), &connected_peer_set);
                                 let encoded_bytes = Encode::encode(&msg);
                                 if let Err(e) = direct_sender.send(direct_recipients, encoded_bytes, false).await {
                                     tracing::warn!("Discovery direct channel send failed: {:?}", e);
@@ -1369,6 +1392,7 @@ async fn run_discovery_network(
                                             .map(|pk| const_hex::encode(pk.as_ref()))
                                             .collect();
                                         *connected_peers_tracker.write().unwrap() = peer_hexes;
+                                        connected_peer_set = recipients.iter().cloned().collect();
 
                                         tracing::debug!("Broadcast delivered to {} peers", recipients.len());
                                         if !retry_queue.is_empty() {
@@ -1376,7 +1400,7 @@ async fn run_discovery_network(
                                             for queued_msg in queued {
                                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
                                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
-                                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &HashSet::new());
+                                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &connected_peer_set);
                                                 let queued_bytes = Encode::encode(&queued_msg);
                                                 if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                                     tracing::warn!("Discovery direct channel retry send failed: {:?}", e);
@@ -1591,12 +1615,28 @@ async fn run_discovery_network(
                             .collect();
                         *connected_peers_tracker.write().unwrap() = peer_hexes;
                         tracing::debug!("Heartbeat: {} peers connected", recipients.len());
+
+                        // Update connected peer set for COMPAT-03 recipient resolution
+                        connected_peer_set = recipients.iter().cloned().collect();
+
+                        // SUB-03: Prune subscription entries for departed peers.
+                        // Heartbeat ack recipients are the authoritative connected peer set.
+                        let tracked = peer_subscriptions.tracked_peers();
+                        for departed in tracked.difference(&connected_peer_set) {
+                            peer_subscriptions.remove_peer(departed);
+                            known_peers.remove(departed);
+                            tracing::debug!(
+                                "Pruned departed peer from subscriptions: {}",
+                                const_hex::encode(departed.as_ref()),
+                            );
+                        }
+
                         if !retry_queue.is_empty() {
                             let queued = retry_queue.drain_all();
                             for queued_msg in queued {
                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
-                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &HashSet::new());
+                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &connected_peer_set);
                                 let queued_bytes = Encode::encode(&queued_msg);
                                 if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                     tracing::warn!("Retry send failed: {:?}", e);
