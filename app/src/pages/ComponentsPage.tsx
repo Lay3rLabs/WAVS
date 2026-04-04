@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { AddressDisplay } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
+import { useServicePolling } from '../hooks/useServicePolling';
 import { getServiceAddress, getServiceChain } from '../types';
 import type { Component, ComponentSource } from '../types';
 
@@ -25,6 +26,7 @@ interface ComponentUsage {
 }
 
 export function ComponentsPage() {
+  useServicePolling();
   const navigate = useNavigate();
   const services = useAppStore((state) => state.services);
 
