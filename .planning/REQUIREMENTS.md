@@ -11,7 +11,7 @@ Requirements for per-service P2P targeting. Each maps to roadmap phases.
 
 - [x] **SUB-01**: Node maintains a per-service peer subscription map (`service_id → Set<PeerPubkey>`) updated from announcement messages
 - [x] **SUB-02**: Node maintains a reverse index (`PeerPubkey → Set<service_id>`) for efficient cleanup on peer disconnect
-- [ ] **SUB-03**: When a peer disconnects, all its subscription entries are removed from both maps
+- [x] **SUB-03**: When a peer disconnects, all its subscription entries are removed from both maps
 
 ### Announcement Protocol
 
@@ -36,7 +36,7 @@ Requirements for per-service P2P targeting. Each maps to roadmap phases.
 
 - [x] **COMPAT-01**: Existing secp256k1 e2e tests pass unchanged
 - [x] **COMPAT-02**: Existing BLS e2e tests pass unchanged
-- [ ] **COMPAT-03**: Nodes without v1.3 targeting are treated as subscribed-to-all (backward compatible during rolling updates)
+- [x] **COMPAT-03**: Nodes without v1.3 targeting are treated as subscribed-to-all (backward compatible during rolling updates)
 
 ## Future Requirements
 
@@ -72,7 +72,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | SUB-01 | Phase 14 | Complete |
 | SUB-02 | Phase 14 | Complete |
-| SUB-03 | Phase 18 | Pending |
+| SUB-03 | Phase 18 | Complete |
 | ANN-01 | Phase 15 | Complete |
 | ANN-02 | Phase 15 | Complete |
 | ANN-03 | Phase 15 | Complete |
@@ -85,7 +85,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OBS-01 | Phase 17 | Complete |
 | COMPAT-01 | Phase 16 | Complete |
 | COMPAT-02 | Phase 16 | Complete |
-| COMPAT-03 | Phase 18 | Pending |
+| COMPAT-03 | Phase 18 | Complete |
 
 **Coverage:**
 - v1.3 requirements: 16 total
