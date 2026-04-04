@@ -4,13 +4,14 @@ milestone: v1.3
 milestone_name: Per-Service P2P Targeting
 status: executing
 stopped_at: Completed 16-02-PLAN.md
-last_updated: "2026-04-03T16:46:39.496Z"
-last_activity: 2026-04-03
+last_updated: "2026-04-04T16:23:54.227Z"
+last_activity: 2026-04-04
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
+  total_phases: 5
+  completed_phases: 5
+  total_plans: 7
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
@@ -20,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** Multi-operator signature aggregation over P2P must work reliably -- operators broadcast signed submissions, reach quorum, and submit on-chain
-**Current focus:** Phase 17 — subscription-observability
+**Current focus:** Phase 18 — peer-state-correctness
 
 ## Current Position
 
-Phase: 17
+Phase: 18
 Plan: Not started
-Status: Executing Phase 17
-Last activity: 2026-04-03
+Status: Executing Phase 18
+Last activity: 2026-04-04
 
 Progress (v1.3): [##........] 25% (1/4 phases)
 

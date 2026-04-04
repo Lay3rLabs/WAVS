@@ -46,7 +46,7 @@
 - [x] **Phase 15: Subscription Protocol** - Announce/receive lifecycle wired into bridge loops with heartbeat sync and backward compat (completed 2026-04-03)
 - [x] **Phase 16: Targeted Delivery** - Replace Recipients::All with Recipients::Some on direct channel with fallback and retry re-resolution (completed 2026-04-03)
 - [x] **Phase 17: Subscription Observability** - Per-service peer counts in /p2p/status endpoint (completed 2026-04-03)
-- [ ] **Phase 18: Peer State Correctness** - Disconnect cleanup and per-peer backward compat fallback (gap closure)
+- [x] **Phase 18: Peer State Correctness** - Disconnect cleanup and per-peer backward compat fallback (gap closure) (completed 2026-04-04)
 
 ## Phase Details
 
@@ -114,9 +114,9 @@ Plans:
   2. `get_recipients()` includes un-announced peers (pre-v1.3 nodes) in the recipient set even when v1.3 peers have subscribed to the same service
   3. `has_announced()` is called in production code (no longer dead_code)
   4. All existing unit tests and e2e tests pass unchanged
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 18-01-PLAN.md -- Update PeerSubscriptionMap API (tracked_peers, COMPAT-03 get_recipients) and wire heartbeat prune + connected_peer_set into both bridge loops
+- [x] 18-01-PLAN.md -- Update PeerSubscriptionMap API (tracked_peers, COMPAT-03 get_recipients) and wire heartbeat prune + connected_peer_set into both bridge loops
 
 ## Progress
 
@@ -139,7 +139,7 @@ Plans:
 | 15. Subscription Protocol | v1.3 | 2/2 | Complete    | 2026-04-03 |
 | 16. Targeted Delivery | v1.3 | 2/2 | Complete    | 2026-04-03 |
 | 17. Subscription Observability | v1.3 | 1/1 | Complete    | 2026-04-03 |
-| 18. Peer State Correctness | v1.3 | 0/1 | Planning  | - |
+| 18. Peer State Correctness | v1.3 | 1/1 | Complete    | 2026-04-04 |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
 See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) for v1.1 phase details.
