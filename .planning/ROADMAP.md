@@ -5,7 +5,7 @@
 - ✅ **v1.0 Commonware P2P Migration** -- Phases 1-4 (shipped 2026-03-18)
 - ✅ **v1.1 BLS Signatures** -- Phases 5-8 (shipped 2026-03-23)
 - ✅ **v1.2 Tauri App** -- Phases 9-13 (shipped 2026-03-25)
-- **v1.3 Per-Service P2P Targeting** -- Phases 14-17 (in progress)
+- **v1.3 Per-Service P2P Targeting** -- Phases 14-18 (in progress)
 
 ## Phases
 
@@ -46,6 +46,7 @@
 - [x] **Phase 15: Subscription Protocol** - Announce/receive lifecycle wired into bridge loops with heartbeat sync and backward compat (completed 2026-04-03)
 - [x] **Phase 16: Targeted Delivery** - Replace Recipients::All with Recipients::Some on direct channel with fallback and retry re-resolution (completed 2026-04-03)
 - [x] **Phase 17: Subscription Observability** - Per-service peer counts in /p2p/status endpoint (completed 2026-04-03)
+- [ ] **Phase 18: Peer State Correctness** - Disconnect cleanup and per-peer backward compat fallback (gap closure)
 
 ## Phase Details
 
@@ -103,6 +104,18 @@ Plans:
 Plans:
 - [x] 17-01-PLAN.md -- Add peer_subscription_counts() to PeerSubscriptionMap, wire into P2pStatus and both GetStatus handlers
 
+### Phase 18: Peer State Correctness
+**Goal**: Peer subscription cleanup and backward-compatible targeting are correct — departed peers are pruned and pre-v1.3 peers are included in targeted delivery
+**Depends on**: Phase 16
+**Requirements**: SUB-03, COMPAT-03
+**Gap Closure**: Closes gaps identified in v1.3-MILESTONE-AUDIT.md
+**Success Criteria** (what must be TRUE):
+  1. When a peer departs (no longer in connected_peers_tracker), its subscription entries are removed from PeerSubscriptionMap within one heartbeat cycle
+  2. `get_recipients()` includes un-announced peers (pre-v1.3 nodes) in the recipient set even when v1.3 peers have subscribed to the same service
+  3. `has_announced()` is called in production code (no longer dead_code)
+  4. All existing unit tests and e2e tests pass unchanged
+**Plans:** 0/0 plans
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -124,6 +137,7 @@ Plans:
 | 15. Subscription Protocol | v1.3 | 2/2 | Complete    | 2026-04-03 |
 | 16. Targeted Delivery | v1.3 | 2/2 | Complete    | 2026-04-03 |
 | 17. Subscription Observability | v1.3 | 1/1 | Complete    | 2026-04-03 |
+| 18. Peer State Correctness | v1.3 | 0/0 | Not started | - |
 
 See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for v1.0 phase details.
 See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md) for v1.1 phase details.
