@@ -58,6 +58,8 @@ Multi-operator signature aggregation over P2P must work reliably — operators b
 - ✓ Subscription protocol — peers announce/withdraw subscribed services via P2P; `PeerSubscriptionMap` tracks service→peers — v1.3
 - ✓ Targeted delivery — `run_lookup_network` and `run_discovery_network` use `get_recipients()` for direct channel submission sends; Engine channel stays `Recipients::All` (TGT-03) — v1.3
 - ✓ `/p2p/status` includes `peer_subscriptions: HashMap<String, usize>` (hex service_id → peer count) via `peer_subscription_counts()` on `PeerSubscriptionMap` — v1.3 (OBS-01) — Validated in Phase 17: subscription-observability
+- ✓ Departed peers pruned from `PeerSubscriptionMap` within one heartbeat cycle via `tracked_peers().difference()` — v1.3 (SUB-03) — Validated in Phase 18: peer-state-correctness
+- ✓ Pre-v1.3 (un-announced) connected peers included in `get_recipients()` for backward-compatible delivery — v1.3 (COMPAT-03) — Validated in Phase 18: peer-state-correctness
 
 ### Active
 
@@ -138,4 +140,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-03 after v1.3 milestone start*
+*Last updated: 2026-04-04 after Phase 18 completion — peer state correctness (SUB-03, COMPAT-03)*
