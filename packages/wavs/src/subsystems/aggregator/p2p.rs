@@ -423,6 +423,12 @@ impl PeerSubscriptionMap {
         self.peer_to_services.contains_key(peer)
     }
 
+    /// Returns the set of peers that have subscription entries in this map.
+    /// Used by heartbeat pruning to compare against connected peers (SUB-03).
+    pub fn tracked_peers(&self) -> HashSet<ed25519::PublicKey> {
+        self.peer_to_services.keys().cloned().collect()
+    }
+
     /// Replace all subscriptions for a peer with the given set.
     /// Uses replace-not-merge semantics for heartbeat/hello full state sync.
     pub fn set_peer_subscriptions(
@@ -446,11 +452,33 @@ impl PeerSubscriptionMap {
     }
 
     /// Get the recipient set for targeted delivery.
-    /// Returns Recipients::Some(peers) if peers are known, or Recipients::All as fallback (TGT-02 prep).
-    pub fn get_recipients(&self, service_id: &[u8; 32]) -> Recipients<ed25519::PublicKey> {
-        match self.service_to_peers.get(service_id) {
-            Some(peers) if !peers.is_empty() => Recipients::Some(peers.iter().cloned().collect()),
-            _ => Recipients::All,
+    /// Includes un-announced connected peers for backward compatibility (COMPAT-03).
+    /// Returns Recipients::Some(peers) if any peers are resolved, or Recipients::All as fallback.
+    pub fn get_recipients(
+        &self,
+        service_id: &[u8; 32],
+        connected_peers: &HashSet<ed25519::PublicKey>,
+    ) -> Recipients<ed25519::PublicKey> {
+        let mut result: HashSet<ed25519::PublicKey> = HashSet::new();
+
+        // Add peers subscribed to this specific service
+        if let Some(peers) = self.service_to_peers.get(service_id) {
+            result.extend(peers.iter().cloned());
+        }
+
+        // COMPAT-03: Include connected peers that have never announced.
+        // Pre-v1.3 nodes never send subscription announcements, so they must be
+        // included unconditionally to maintain backward-compatible delivery.
+        for peer in connected_peers {
+            if !self.has_announced(peer) {
+                result.insert(peer.clone());
+            }
+        }
+
+        if result.is_empty() {
+            Recipients::All
+        } else {
+            Recipients::Some(result.into_iter().collect())
         }
     }
 
@@ -841,7 +869,7 @@ async fn run_lookup_network(
 
                                 // Channel 1: targeted delivery to subscribed peers only (TGT-01)
                                 // get_recipients() returns Recipients::All as fallback when set is empty (TGT-02)
-                                let direct_recipients = peer_subscriptions.get_recipients(&service_id.inner());
+                                let direct_recipients = peer_subscriptions.get_recipients(&service_id.inner(), &HashSet::new());
                                 let encoded_bytes = Encode::encode(&msg);
                                 if let Err(e) = direct_sender.send(direct_recipients, encoded_bytes, false).await {
                                     tracing::warn!("Direct channel send failed: {:?}", e);
@@ -868,7 +896,7 @@ async fn run_lookup_network(
                                             for queued_msg in queued {
                                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
                                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
-                                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes);
+                                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &HashSet::new());
                                                 let queued_bytes = Encode::encode(&queued_msg);
                                                 if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                                     tracing::warn!("Direct channel retry send failed: {:?}", e);
@@ -1090,7 +1118,7 @@ async fn run_lookup_network(
                             for queued_msg in queued {
                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
-                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes);
+                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &HashSet::new());
                                 let queued_bytes = Encode::encode(&queued_msg);
                                 if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                     tracing::warn!("Retry send failed: {:?}", e);
@@ -1324,7 +1352,7 @@ async fn run_discovery_network(
                                 let ack_rx = mailbox.broadcast(Recipients::All, msg.clone()).await;
                                 // Channel 1: targeted delivery to subscribed peers only (TGT-01)
                                 // get_recipients() returns Recipients::All as fallback when set is empty (TGT-02)
-                                let direct_recipients = peer_subscriptions.get_recipients(&service_id.inner());
+                                let direct_recipients = peer_subscriptions.get_recipients(&service_id.inner(), &HashSet::new());
                                 let encoded_bytes = Encode::encode(&msg);
                                 if let Err(e) = direct_sender.send(direct_recipients, encoded_bytes, false).await {
                                     tracing::warn!("Discovery direct channel send failed: {:?}", e);
@@ -1348,7 +1376,7 @@ async fn run_discovery_network(
                                             for queued_msg in queued {
                                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
                                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
-                                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes);
+                                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &HashSet::new());
                                                 let queued_bytes = Encode::encode(&queued_msg);
                                                 if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                                     tracing::warn!("Discovery direct channel retry send failed: {:?}", e);
@@ -1568,7 +1596,7 @@ async fn run_discovery_network(
                             for queued_msg in queued {
                                 let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
-                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes);
+                                let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &HashSet::new());
                                 let queued_bytes = Encode::encode(&queued_msg);
                                 if let Err(e) = direct_sender.send(retry_recipients, queued_bytes, false).await {
                                     tracing::warn!("Retry send failed: {:?}", e);
@@ -2087,14 +2115,15 @@ mod p2p_broadcast_tests {
         map.handle_announcement(&peer_a, &announcement);
 
         // Forward index: both services should map to peer_a
-        match map.get_recipients(&svc_a) {
+        let empty_connected = HashSet::new();
+        match map.get_recipients(&svc_a, &empty_connected) {
             Recipients::Some(peers) => {
                 assert_eq!(peers.len(), 1);
                 assert!(peers.contains(&peer_a));
             }
             other => panic!("Expected Recipients::Some for svc_a, got {:?}", other),
         }
-        match map.get_recipients(&svc_b) {
+        match map.get_recipients(&svc_b, &empty_connected) {
             Recipients::Some(peers) => {
                 assert_eq!(peers.len(), 1);
                 assert!(peers.contains(&peer_a));
@@ -2119,14 +2148,24 @@ mod p2p_broadcast_tests {
         map.handle_announcement(&peer_a, &announcement);
 
         // Verify peer is subscribed
-        assert!(matches!(map.get_recipients(&svc_a), Recipients::Some(_)));
+        let empty_connected = HashSet::new();
+        assert!(matches!(
+            map.get_recipients(&svc_a, &empty_connected),
+            Recipients::Some(_)
+        ));
 
         // Remove peer
         map.remove_peer(&peer_a);
 
         // Both services should now fallback to Recipients::All
-        assert!(matches!(map.get_recipients(&svc_a), Recipients::All));
-        assert!(matches!(map.get_recipients(&svc_b), Recipients::All));
+        assert!(matches!(
+            map.get_recipients(&svc_a, &empty_connected),
+            Recipients::All
+        ));
+        assert!(matches!(
+            map.get_recipients(&svc_b, &empty_connected),
+            Recipients::All
+        ));
     }
 
     #[test]
@@ -2231,10 +2270,14 @@ mod p2p_broadcast_tests {
         // SUB-01 fallback: get_recipients returns Recipients::All when no peers subscribed
         let map = PeerSubscriptionMap::new();
         let unknown_svc = [0xDD; 32];
+        let empty_connected = HashSet::new();
 
         // Unknown service -> Recipients::All
         assert!(
-            matches!(map.get_recipients(&unknown_svc), Recipients::All),
+            matches!(
+                map.get_recipients(&unknown_svc, &empty_connected),
+                Recipients::All
+            ),
             "Unknown service must fallback to All"
         );
 
@@ -2259,7 +2302,10 @@ mod p2p_broadcast_tests {
             },
         );
         assert!(
-            matches!(map2.get_recipients(&svc_a), Recipients::All),
+            matches!(
+                map2.get_recipients(&svc_a, &empty_connected),
+                Recipients::All
+            ),
             "Empty set after unsubscribe must fallback to All"
         );
     }
@@ -2279,7 +2325,8 @@ mod p2p_broadcast_tests {
         map.handle_announcement(&peer_a, &announcement);
         map.handle_announcement(&peer_a, &announcement); // duplicate
 
-        match map.get_recipients(&svc_a) {
+        let empty_connected = HashSet::new();
+        match map.get_recipients(&svc_a, &empty_connected) {
             Recipients::Some(peers) => assert_eq!(
                 peers.len(),
                 1,
@@ -2314,7 +2361,8 @@ mod p2p_broadcast_tests {
             },
         );
 
-        match map.get_recipients(&svc_a) {
+        let empty_connected = HashSet::new();
+        match map.get_recipients(&svc_a, &empty_connected) {
             Recipients::Some(peers) => {
                 assert_eq!(peers.len(), 2, "Both peers should be in recipient set");
                 assert!(peers.contains(&peer_a));
@@ -2325,7 +2373,7 @@ mod p2p_broadcast_tests {
 
         // Remove one peer, other remains
         map.remove_peer(&peer_a);
-        match map.get_recipients(&svc_a) {
+        match map.get_recipients(&svc_a, &empty_connected) {
             Recipients::Some(peers) => {
                 assert_eq!(peers.len(), 1, "Only peer_b should remain");
                 assert!(peers.contains(&peer_b));
@@ -2415,23 +2463,36 @@ mod p2p_broadcast_tests {
                 full_state: false,
             },
         );
-        assert!(matches!(map.get_recipients(&svc_a), Recipients::Some(_)));
-        assert!(matches!(map.get_recipients(&svc_b), Recipients::Some(_)));
+        let empty_connected = HashSet::new();
+        assert!(matches!(
+            map.get_recipients(&svc_a, &empty_connected),
+            Recipients::Some(_)
+        ));
+        assert!(matches!(
+            map.get_recipients(&svc_b, &empty_connected),
+            Recipients::Some(_)
+        ));
 
         // Now replace with only C
         map.set_peer_subscriptions(&peer_a, vec![svc_c]);
 
         // A and B should be gone (fallback to All)
         assert!(
-            matches!(map.get_recipients(&svc_a), Recipients::All),
+            matches!(
+                map.get_recipients(&svc_a, &empty_connected),
+                Recipients::All
+            ),
             "svc_a should fallback to All after replace"
         );
         assert!(
-            matches!(map.get_recipients(&svc_b), Recipients::All),
+            matches!(
+                map.get_recipients(&svc_b, &empty_connected),
+                Recipients::All
+            ),
             "svc_b should fallback to All after replace"
         );
         // C should be present
-        match map.get_recipients(&svc_c) {
+        match map.get_recipients(&svc_c, &empty_connected) {
             Recipients::Some(peers) => {
                 assert_eq!(peers.len(), 1);
                 assert!(peers.contains(&peer_a));
@@ -2447,8 +2508,12 @@ mod p2p_broadcast_tests {
         let svc_a = [0xAA; 32];
 
         let mut map = PeerSubscriptionMap::new();
+        let empty_connected = HashSet::new();
         map.set_peer_subscriptions(&peer_a, vec![svc_a]);
-        assert!(matches!(map.get_recipients(&svc_a), Recipients::Some(_)));
+        assert!(matches!(
+            map.get_recipients(&svc_a, &empty_connected),
+            Recipients::Some(_)
+        ));
 
         // Set to empty -> peer removed
         map.set_peer_subscriptions(&peer_a, vec![]);
@@ -2524,6 +2589,7 @@ mod p2p_broadcast_tests {
         let svc_c = [0xCC; 32];
 
         let mut map = PeerSubscriptionMap::new();
+        let empty_connected = HashSet::new();
 
         // Subscribe peer to svc_a via handle_announcement (incremental)
         map.handle_announcement(
@@ -2534,7 +2600,10 @@ mod p2p_broadcast_tests {
                 full_state: false,
             },
         );
-        assert!(matches!(map.get_recipients(&svc_a), Recipients::Some(_)));
+        assert!(matches!(
+            map.get_recipients(&svc_a, &empty_connected),
+            Recipients::Some(_)
+        ));
 
         // Simulate full_state=true: replace with svc_b only
         // Bridge loop would call set_peer_subscriptions for full_state=true
@@ -2542,10 +2611,13 @@ mod p2p_broadcast_tests {
 
         // svc_a should be gone, svc_b should be present
         assert!(
-            matches!(map.get_recipients(&svc_a), Recipients::All),
+            matches!(
+                map.get_recipients(&svc_a, &empty_connected),
+                Recipients::All
+            ),
             "svc_a should be gone after full_state replace"
         );
-        match map.get_recipients(&svc_b) {
+        match map.get_recipients(&svc_b, &empty_connected) {
             Recipients::Some(peers) => assert!(peers.contains(&peer_a)),
             other => panic!("Expected Recipients::Some for svc_b, got {:?}", other),
         }
@@ -2562,14 +2634,14 @@ mod p2p_broadcast_tests {
         );
 
         // Both svc_b and svc_c should be present (incremental merge)
-        match map.get_recipients(&svc_b) {
+        match map.get_recipients(&svc_b, &empty_connected) {
             Recipients::Some(peers) => assert!(peers.contains(&peer_a)),
             other => panic!(
                 "Expected Recipients::Some for svc_b after incremental, got {:?}",
                 other
             ),
         }
-        match map.get_recipients(&svc_c) {
+        match map.get_recipients(&svc_c, &empty_connected) {
             Recipients::Some(peers) => assert!(peers.contains(&peer_a)),
             other => panic!(
                 "Expected Recipients::Some for svc_c after incremental, got {:?}",
@@ -2690,11 +2762,15 @@ mod p2p_broadcast_tests {
         let svc_a = [0xAA; 32];
 
         let mut map = PeerSubscriptionMap::new();
+        let empty_connected = HashSet::new();
 
         // Before any subscription state: get_recipients returns Recipients::All
         // This is what a message queued at startup would see if it cached recipients
         assert!(
-            matches!(map.get_recipients(&svc_a), Recipients::All),
+            matches!(
+                map.get_recipients(&svc_a, &empty_connected),
+                Recipients::All
+            ),
             "Before subscription state, must return Recipients::All"
         );
 
@@ -2703,7 +2779,7 @@ mod p2p_broadcast_tests {
 
         // After subscription state: get_recipients returns Recipients::Some with peer_a
         // This proves re-resolution at drain time sees different results than cached All
-        match map.get_recipients(&svc_a) {
+        match map.get_recipients(&svc_a, &empty_connected) {
             Recipients::Some(peers) => {
                 assert!(
                     peers.contains(&peer_a),
@@ -2743,5 +2819,281 @@ mod p2p_broadcast_tests {
         let counts = map.peer_subscription_counts();
         assert_eq!(*counts.get(&const_hex::encode(svc_a)).unwrap(), 1);
         assert_eq!(*counts.get(&const_hex::encode(svc_b)).unwrap(), 1);
+    }
+
+    // ---- Phase 18: SUB-03 tracked_peers and heartbeat prune tests ----
+
+    #[test]
+    fn test_tracked_peers_empty() {
+        // tracked_peers() on a new map returns empty HashSet
+        let map = PeerSubscriptionMap::new();
+        assert!(
+            map.tracked_peers().is_empty(),
+            "New map should have no tracked peers"
+        );
+    }
+
+    #[test]
+    fn test_tracked_peers_returns_announced_peers() {
+        // After handle_announcement for peer_a and peer_b, tracked_peers() returns both
+        let peer_a = test_pubkey(1);
+        let peer_b = test_pubkey(2);
+        let svc_a = [0xAA; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        map.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+        map.handle_announcement(
+            &peer_b,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+
+        let tracked = map.tracked_peers();
+        assert_eq!(tracked.len(), 2, "Both peers should be tracked");
+        assert!(tracked.contains(&peer_a));
+        assert!(tracked.contains(&peer_b));
+    }
+
+    #[test]
+    fn test_tracked_peers_after_remove() {
+        // After handle_announcement then remove_peer, tracked_peers() no longer contains removed peer
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        map.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+        assert!(map.tracked_peers().contains(&peer_a));
+
+        map.remove_peer(&peer_a);
+        assert!(
+            !map.tracked_peers().contains(&peer_a),
+            "Removed peer should not be tracked"
+        );
+        assert!(map.tracked_peers().is_empty());
+    }
+
+    #[test]
+    fn test_heartbeat_prune_departed_peer() {
+        // SUB-03: Simulates heartbeat-driven pruning of departed peers
+        let peer_a = test_pubkey(1);
+        let peer_b = test_pubkey(2);
+        let svc_a = [0xAA; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        map.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+        map.handle_announcement(
+            &peer_b,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+
+        // Both peers subscribed
+        let empty_connected = HashSet::new();
+        match map.get_recipients(&svc_a, &empty_connected) {
+            Recipients::Some(peers) => assert_eq!(peers.len(), 2),
+            other => panic!("Expected 2 peers, got {:?}", other),
+        }
+
+        // Heartbeat ack only returns peer_a -- peer_b departed
+        let connected: HashSet<ed25519::PublicKey> = [peer_a.clone()].into_iter().collect();
+        let tracked = map.tracked_peers();
+        for departed in tracked.difference(&connected) {
+            map.remove_peer(departed);
+        }
+
+        // After prune: only peer_a remains for svc_a
+        match map.get_recipients(&svc_a, &connected) {
+            Recipients::Some(peers) => {
+                assert_eq!(peers.len(), 1);
+                assert!(peers.contains(&peer_a));
+            }
+            other => panic!("Expected 1 peer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_prune_noop_all_connected() {
+        // Prune is a no-op when all tracked peers are still connected
+        let peer_a = test_pubkey(1);
+        let peer_b = test_pubkey(2);
+        let svc_a = [0xAA; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        map.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+        map.handle_announcement(
+            &peer_b,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+
+        // Both peers still connected
+        let connected: HashSet<ed25519::PublicKey> =
+            [peer_a.clone(), peer_b.clone()].into_iter().collect();
+        let tracked = map.tracked_peers();
+        for departed in tracked.difference(&connected) {
+            map.remove_peer(departed);
+        }
+
+        // tracked_peers unchanged
+        let tracked_after = map.tracked_peers();
+        assert_eq!(tracked_after.len(), 2);
+        assert!(tracked_after.contains(&peer_a));
+        assert!(tracked_after.contains(&peer_b));
+    }
+
+    // ---- Phase 18: COMPAT-03 get_recipients with connected peers tests ----
+
+    #[test]
+    fn test_get_recipients_includes_unannounced_connected_peers() {
+        // COMPAT-03: Un-announced connected peers are included in recipient set
+        let peer_v13 = test_pubkey(1); // v1.3 peer (has announced)
+        let peer_legacy = test_pubkey(2); // pre-v1.3 peer (never announced)
+        let svc_a = [0xAA; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+
+        // peer_v13 subscribes to svc_a
+        map.handle_announcement(
+            &peer_v13,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+
+        // Both peers are connected
+        let connected: HashSet<ed25519::PublicKey> =
+            [peer_v13.clone(), peer_legacy.clone()].into_iter().collect();
+
+        match map.get_recipients(&svc_a, &connected) {
+            Recipients::Some(peers) => {
+                assert!(peers.contains(&peer_v13), "v1.3 peer must be included");
+                assert!(
+                    peers.contains(&peer_legacy),
+                    "Legacy peer must be included (COMPAT-03)"
+                );
+                assert_eq!(peers.len(), 2);
+            }
+            other => panic!("Expected Recipients::Some with 2 peers, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_get_recipients_all_announced_no_legacy() {
+        // When all connected peers have announced, only subscribed peers are included
+        let peer_a = test_pubkey(1);
+        let peer_b = test_pubkey(2);
+        let svc_a = [0xAA; 32];
+        let svc_b = [0xBB; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+
+        // peer_a subscribes to svc_a, peer_b subscribes to svc_b
+        map.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+        map.handle_announcement(
+            &peer_b,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_b],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+
+        // Both peers are connected and have announced
+        let connected: HashSet<ed25519::PublicKey> =
+            [peer_a.clone(), peer_b.clone()].into_iter().collect();
+
+        match map.get_recipients(&svc_a, &connected) {
+            Recipients::Some(peers) => {
+                assert_eq!(peers.len(), 1, "Only peer_a subscribes to svc_a");
+                assert!(peers.contains(&peer_a));
+            }
+            other => panic!("Expected Recipients::Some with 1 peer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_get_recipients_empty_connected_set_preserves_old_behavior() {
+        // get_recipients with empty connected set behaves exactly like old signature
+        let peer_a = test_pubkey(1);
+        let svc_a = [0xAA; 32];
+        let unknown_svc = [0xDD; 32];
+
+        let mut map = PeerSubscriptionMap::new();
+        let empty_connected = HashSet::new();
+
+        // No subscriptions -> Recipients::All
+        assert!(matches!(
+            map.get_recipients(&unknown_svc, &empty_connected),
+            Recipients::All
+        ));
+
+        // With subscription -> Recipients::Some with subscribed peer only
+        map.handle_announcement(
+            &peer_a,
+            &SubscriptionAnnouncement {
+                subscribe: vec![svc_a],
+                unsubscribe: vec![],
+                full_state: false,
+            },
+        );
+        match map.get_recipients(&svc_a, &empty_connected) {
+            Recipients::Some(peers) => {
+                assert_eq!(peers.len(), 1);
+                assert!(peers.contains(&peer_a));
+            }
+            other => panic!("Expected Recipients::Some, got {:?}", other),
+        }
+
+        // Unknown service still falls back to All
+        assert!(matches!(
+            map.get_recipients(&unknown_svc, &empty_connected),
+            Recipients::All
+        ));
     }
 }
