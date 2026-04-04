@@ -532,6 +532,21 @@ impl WavsMcpServer {
                 Ok(m) => m,
                 Err(e) => return err(format!("Invalid service_manager_json: {e}")),
             };
+        let nav_directive = match &manager {
+            wavs_types::ServiceManager::Evm { chain, address } => {
+                format!(
+                    "\n\n⚡ ACTION REQUIRED: If you have the ui_navigate tool, call it NOW with path=\"/services/{chain}/{address}\" \
+                     to show the user their new service. Do this BEFORE any other step."
+                )
+            }
+            wavs_types::ServiceManager::Cosmos { chain, address } => {
+                format!(
+                    "\n\n⚡ ACTION REQUIRED: If you have the ui_navigate tool, call it NOW with path=\"/services/{chain}/{address}\" \
+                     to show the user their new service. Do this BEFORE any other step."
+                )
+            }
+        };
+
         match self.client.deploy_service(manager.clone()).await {
             Ok(v) if v.is_null() => {
                 let signer_info = match self.client.get_service_signer(manager).await {
@@ -544,7 +559,7 @@ impl WavsMcpServer {
                     Err(_) => String::new(),
                 };
                 self.notify_tools_changed().await;
-                ok(format!("Service registered successfully.{signer_info}"))
+                ok(format!("Service registered successfully.{nav_directive}{signer_info}"))
             }
             Ok(v) => {
                 self.notify_tools_changed().await;
@@ -735,36 +750,40 @@ impl WavsMcpServer {
                     String::new()
                 };
 
-                // Extract chain and address for the ui_navigate hint
-                let nav_hint = service_value
+                // Build the ui_navigate action directive
+                let nav_action = service_value
                     .pointer("/manager/evm")
                     .and_then(|evm| {
                         let chain = evm.get("chain")?.as_str()?;
                         let addr = evm.get("address")?.as_str()?;
-                        Some(format!(
-                            "\n\n💡 To view in the UI: ui_navigate(path=\"/services/{chain}/{addr}\")"
-                        ))
+                        Some(format!("/services/{chain}/{addr}"))
                     })
                     .or_else(|| {
                         service_value.pointer("/manager/cosmos").and_then(|cosmos| {
                             let chain = cosmos.get("chain")?.as_str()?;
                             let addr = cosmos.get("address")?.as_str()?;
-                            Some(format!(
-                                "\n\n💡 To view in the UI: ui_navigate(path=\"/services/{chain}/{addr}\")"
-                            ))
+                            Some(format!("/services/{chain}/{addr}"))
                         })
-                    })
-                    .unwrap_or_default();
+                    });
+
+                let nav_directive = if let Some(path) = nav_action {
+                    format!(
+                        "\n\n⚡ ACTION REQUIRED: If you have the ui_navigate tool, call it NOW with path=\"{path}\" \
+                         to show the user their new service. Do this BEFORE simulate_trigger or any other step."
+                    )
+                } else {
+                    String::new()
+                };
 
                 self.notify_tools_changed().await;
                 ok(format!(
-                    "✅ Service deployed successfully.\n\
+                    "✅ Service deployed successfully.\
+                     {nav_directive}\n\n\
                      deploy_hash: {hash}\
                      {service_id_info}\
                      {manager_info}\
                      {workflow_info}\
-                     {signer_info}\
-                     {nav_hint}"
+                     {signer_info}"
                 ))
             }
             Err(e) => err(format!("Failed to deploy dev service: {e:#}")),

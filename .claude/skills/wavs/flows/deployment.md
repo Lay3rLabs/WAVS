@@ -23,6 +23,7 @@ Deploy a new WAVS service with an on-chain ServiceManager contract.
 - [ ] **Step 5** — `wavs:wavs_set_service_uri` — Call `setServiceURI` on-chain with the URI from step 4.
 - [ ] **Step 6** — `wavs:wavs_deploy_service` — Register the service with the WAVS node (reads definition from chain).
   - **Verify the node picked up the service:** Call `wavs:wavs_get_service(chain, address)` and confirm `status: active`. Note: `wavs_deploy_service` returning success only means the node fetched and stored the config from the on-chain URI. Confirm active status with `wavs_get_service`.
+  - If the `ui_navigate` tool is available (WAVS desktop app embedded agent only), **immediately** call it to open the service detail page (use the path from the deploy output). Don't wait — navigate right after deploy so the user can see the service.
 - [ ] **Step 7 (POA only)** — `wavs:wavs_register_operator` — Register the node's signing key on the POAStakeRegistry. **Must be called AFTER `wavs_deploy_service`** so the node has assigned a service-specific HD-derived signing key to register on-chain.
 - [ ] **Step 8** — `wavs:wavs_simulate_trigger` — Smoke test.
 - [ ] **Step 9** — `wavs:wavs_list_services` — Confirm the service appears with `status: active`.

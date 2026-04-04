@@ -13,7 +13,8 @@ Build, test, and deploy a new WAVS WASM component from scratch.
 - [ ] **Step 5** — `wavs:wavs_upload_component` — Upload `.wasm`; save the returned digest (raw 64-char hex, no `sha256:` prefix).
   - **OCI alternative:** If the component is published to an OCI registry (e.g. ghcr.io), you can skip upload and use an OCI source in the service definition instead: `"source": {"oci": {"uri": "oci://ghcr.io/org/component:v1.0"}}`. See [`reference/service-json.md`](../reference/service-json.md#oci-pull-from-registry-at-deploy-time) for details.
 - [ ] **Step 6** — `wavs:wavs_deploy_dev_service` (no on-chain contract) **or** follow [`deployment.md`](deployment.md) for a real deployment.
-- [ ] **Step 7** — `wavs:wavs_simulate_trigger` — Verify output.
+- [ ] **Step 7** — If the `ui_navigate` tool is available (WAVS desktop app embedded agent only), **immediately** call it to open the service detail page (path from deploy output). Don't wait — navigate right after deploy so the user can see the service.
+- [ ] **Step 8** — `wavs:wavs_simulate_trigger` — Verify output.
 
 > **Tip:** Call `wavs:wavs_get_wit_interface` if you need to understand the full WIT API (HTTP, KV, host functions, etc.) before writing custom logic.
 > **Tip:** Omit the `dir` parameter from `wavs_scaffold_component` to get file contents as text instead of writing to disk (useful when integrating into existing projects).
