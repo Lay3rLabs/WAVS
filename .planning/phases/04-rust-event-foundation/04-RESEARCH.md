@@ -319,7 +319,7 @@ unlistenFns.push(unlistenSubmissionFailed);
 | A2 | `SubmissionManager` already holds `subsystem_to_dispatcher_tx` sender, making it straightforward to send `SubmissionFailed` from error arms | Architecture Patterns | Low — field is confirmed on `SubmissionManager` struct at line 35 of submission.rs [VERIFIED: codebase read] |
 | A3 | The P2P-distributed trigger path (if triggers are re-broadcast over libp2p) preserves `TriggerAction` fields intact including `correlation_id` | Architecture Patterns | Medium — if P2P deserializes `TriggerAction` and the remote side is on an older binary without `correlation_id`, bincode deserialization will fail. In practice, single-operator dev mode is the target for this phase. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **P2P / multi-operator bincode compatibility**
    - What we know: `TriggerAction` derives `bincode::Decode + bincode::Encode` and is likely sent over the wire in multi-operator P2P mode
