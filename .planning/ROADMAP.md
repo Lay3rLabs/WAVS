@@ -106,8 +106,8 @@ Plans:
   5. The unified event model (nested submissions, pending states, error badges) is present on both the standalone Activity page and the per-service activity tab
 **Plans**: 2 plans
 Plans:
-- [ ] 06-01-PLAN.md — Data layer: GroupedActivityEvent type, useGroupedActivity hook, appStore eviction guard, status filter types
-- [ ] 06-02-PLAN.md — UI layer: GroupedActivityCard component, ActivityFeed refactor with status tabs and grouped virtualizer
+- [x] 06-01-PLAN.md — Data layer: GroupedActivityEvent type, useGroupedActivity hook, appStore eviction guard, status filter types
+- [x] 06-02-PLAN.md — UI layer: GroupedActivityCard component, ActivityFeed refactor with status tabs and grouped virtualizer
 **UI hint**: yes
 
 ## Progress
