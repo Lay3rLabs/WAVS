@@ -108,6 +108,14 @@ export interface SubmissionEvent {
   service_id: ServiceId;
   workflow_id: WorkflowId;
   trigger_data: TriggerData;
+  correlation_id: string;
+}
+
+export interface SubmissionFailedEvent {
+  service_id: ServiceId;
+  workflow_id: WorkflowId;
+  correlation_id: string;
+  error: string;
 }
 
 export type ServiceAction = 'added' | 'removed' | 'paused' | 'resumed';
@@ -183,6 +191,7 @@ export interface TriggerConfig {
 export interface TriggerAction {
   config: TriggerConfig;
   data: TriggerData;
+  correlation_id: string;
 }
 
 export type TriggerData =
@@ -292,7 +301,7 @@ export interface FsEntry {
 }
 
 // Activity types (unified triggers + submissions)
-export type ActivityKind = 'trigger' | 'submission';
+export type ActivityKind = 'trigger' | 'submission' | 'submission_failed';
 
 export interface ActivityItem {
   id: number;
@@ -300,8 +309,10 @@ export interface ActivityItem {
   kind: ActivityKind;
   serviceId: ServiceId;
   workflowId: WorkflowId;
-  triggerData: TriggerData;
+  triggerData?: TriggerData;
   triggerConfig?: TriggerConfig;
+  correlationId?: string;
+  error?: string;
 }
 
 // Helper to get a human-readable service key from manager (for display/fallback only)

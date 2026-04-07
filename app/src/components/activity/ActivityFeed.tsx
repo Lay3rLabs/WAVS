@@ -99,7 +99,7 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
       items = items.filter((i) => {
         const svcName = getServiceLabel(i.serviceId).toLowerCase();
         const wfId = i.workflowId.toLowerCase();
-        const trigLabel = getTriggerDataLabel(i.triggerData).toLowerCase();
+        const trigLabel = i.triggerData ? getTriggerDataLabel(i.triggerData).toLowerCase() : 'failed';
         return svcName.includes(q) || wfId.includes(q) || trigLabel.includes(q);
       });
     }

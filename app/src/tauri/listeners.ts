@@ -1,7 +1,7 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { useAppStore, nextActivityId } from '../stores/appStore';
 import { useAgentStore } from '../stores/agentStore';
-import { buildServiceMap, type SettingsEvent, type LogEvent, type TriggerEvent, type SubmissionEvent, type ServiceEvent, type LogLevel } from '../types';
+import { buildServiceMap, type SettingsEvent, type LogEvent, type TriggerEvent, type SubmissionEvent, type ServiceEvent, type LogLevel, type SubmissionFailedEvent } from '../types';
 import { getServices } from './commands';
 import { Toast } from '../components/atoms/Toast';
 
@@ -11,6 +11,7 @@ const EVENTS = {
   LOG: 'log',
   TRIGGER: 'trigger',
   SUBMISSION: 'submission',
+  SUBMISSION_FAILED: 'submission_failed',
   SERVICE: 'service',
 } as const;
 
@@ -50,6 +51,7 @@ export async function startListeners(): Promise<void> {
       workflowId: action.config.workflow_id,
       triggerData: action.data,
       triggerConfig: action.config,
+      correlationId: action.correlation_id,
     });
   });
   unlistenFns.push(unlistenTrigger);
@@ -64,9 +66,25 @@ export async function startListeners(): Promise<void> {
       serviceId: payload.service_id,
       workflowId: payload.workflow_id,
       triggerData: payload.trigger_data,
+      correlationId: payload.correlation_id,
     });
   });
   unlistenFns.push(unlistenSubmission);
+
+  // Submission failed listener -> ActivityItem
+  const unlistenSubmissionFailed = await listen<SubmissionFailedEvent>(EVENTS.SUBMISSION_FAILED, (event) => {
+    const payload = event.payload;
+    store.addActivity({
+      id: nextActivityId(),
+      ts: Date.now(),
+      kind: 'submission_failed',
+      serviceId: payload.service_id,
+      workflowId: payload.workflow_id,
+      correlationId: payload.correlation_id,
+      error: payload.error,
+    });
+  });
+  unlistenFns.push(unlistenSubmissionFailed);
 
   // Service listener -> re-fetch service list
   const unlistenService = await listen<ServiceEvent>(EVENTS.SERVICE, async (_event) => {

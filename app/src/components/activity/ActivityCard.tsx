@@ -176,9 +176,9 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
   const getServiceLabel = useAppStore((state) => state.getServiceLabel);
 
   const serviceName = getServiceLabel(item.serviceId);
-  const triggerLabel = getTriggerDataLabel(item.triggerData);
+  const triggerLabel = item.triggerData ? getTriggerDataLabel(item.triggerData) : 'Failed';
   const isTrigger = item.kind === 'trigger';
-  const accent = getTriggerAccent(item.triggerData);
+  const accent = item.triggerData ? getTriggerAccent(item.triggerData) : { border: 'border-l-red-600', pill: 'bg-red-900/50 text-red-300' };
 
   return (
     <div
@@ -193,10 +193,10 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
         <span
           className={clsx(
             'shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide',
-            isTrigger ? 'bg-green-900/40 text-green-400' : 'bg-blue-900/40 text-blue-400',
+            isTrigger ? 'bg-green-900/40 text-green-400' : item.kind === 'submission_failed' ? 'bg-red-900/40 text-red-400' : 'bg-blue-900/40 text-blue-400',
           )}
         >
-          {isTrigger ? 'Trigger' : 'Submit'}
+          {isTrigger ? 'Trigger' : item.kind === 'submission_failed' ? 'Failed' : 'Submit'}
         </span>
 
         <span className={clsx('shrink-0 px-2 py-0.5 rounded text-xs font-medium', accent.pill)}>
@@ -215,7 +215,12 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
         </div>
       )}
 
-      <DetailRows data={item.triggerData} config={item.triggerConfig} />
+      {item.triggerData && <DetailRows data={item.triggerData} config={item.triggerConfig} />}
+      {item.error && (
+        <div className="mt-1 text-xs text-red-400 truncate">
+          Error: {item.error}
+        </div>
+      )}
 
       <button
         type="button"
@@ -228,9 +233,16 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
       {expanded && (
         <div className="mt-2 p-3 rounded bg-charcoal-darkest text-beige-light/90 font-mono text-xs leading-relaxed overflow-x-auto max-h-80 overflow-y-auto">
           <pre className="whitespace-pre-wrap">
-            {`// Trigger Data\n${JSON.stringify(item.triggerData, null, 2)}`}
+            {item.triggerData
+              ? `// Trigger Data\n${JSON.stringify(item.triggerData, null, 2)}`
+              : item.error
+                ? `// Error\n${item.error}`
+                : '// No data'}
             {item.triggerConfig
               ? `\n\n// Trigger Config\n${JSON.stringify(item.triggerConfig.trigger, null, 2)}`
+              : ''}
+            {item.correlationId
+              ? `\n\n// Correlation ID\n${item.correlationId}`
               : ''}
           </pre>
         </div>
