@@ -57,10 +57,24 @@ pub struct SubmissionEvent {
     pub service_id: ServiceId,
     pub workflow_id: WorkflowId,
     pub trigger_data: TriggerData,
+    pub correlation_id: String,
 }
 
 impl TauriEventExt for SubmissionEvent {
     const NAME: &'static str = "submission";
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SubmissionFailedEvent {
+    pub service_id: ServiceId,
+    pub workflow_id: WorkflowId,
+    pub correlation_id: String,
+    pub error: String,
+}
+
+impl TauriEventExt for SubmissionFailedEvent {
+    const NAME: &'static str = "submission_failed";
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

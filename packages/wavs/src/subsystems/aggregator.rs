@@ -639,6 +639,7 @@ impl Aggregator {
                             service_id: submission.service_id().clone(),
                             workflow_id: submission.workflow_id().clone(),
                             trigger_data: submission.trigger_action.data.clone(),
+                            correlation_id: submission.trigger_action.correlation_id.clone(),
                         })
                 {
                     tracing::error!("Error sending SubmissionConfirmed to dispatcher: {:?}", e);
