@@ -3,7 +3,7 @@ import type { ActivityItem, TriggerData, TriggerConfig } from '../../types';
 import { getTriggerDataLabel } from '../../types';
 import { useAppStore } from '../../stores/appStore';
 
-function formatTimestamp(ts: number): string {
+export function formatTimestamp(ts: number): string {
   const date = new Date(ts);
   const hours = date.getHours().toString().padStart(2, '0');
   const mins = date.getMinutes().toString().padStart(2, '0');
@@ -16,7 +16,7 @@ function formatBlockNumber(n: number): string {
   return `#${n.toLocaleString()}`;
 }
 
-function getTriggerAccent(data: TriggerData): { border: string; pill: string } {
+export function getTriggerAccent(data: TriggerData): { border: string; pill: string } {
   if ('EvmContractEvent' in data) {
     return { border: 'border-l-indigo-500', pill: 'bg-indigo-900/50 text-indigo-300' };
   }
@@ -38,7 +38,7 @@ function getTriggerAccent(data: TriggerData): { border: string; pill: string } {
   return { border: 'border-l-charcoal-light', pill: 'bg-charcoal-medium text-tan-muted' };
 }
 
-function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+export function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex gap-3 text-xs">
       <span className="text-tan-muted w-20 shrink-0">{label}</span>
@@ -47,7 +47,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
-function DetailRows({ data, config }: { data: TriggerData; config?: TriggerConfig }) {
+export function DetailRows({ data, config }: { data: TriggerData; config?: TriggerConfig }) {
   if ('EvmContractEvent' in data) {
     const d = data.EvmContractEvent;
     return (
