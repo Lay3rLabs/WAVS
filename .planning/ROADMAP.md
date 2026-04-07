@@ -74,7 +74,7 @@ Plans:
   2. When a submission fails (signing error or dispatch error), a SubmissionFailedEvent reaches the GUI with an error message and correlation_id
 **Plans**: 1 plans
 Plans:
-- [ ] 04-01-PLAN.md — Add correlation_id to TriggerAction, SubmissionFailed event path, and TypeScript type mirroring
+- [x] 04-01-PLAN.md — Add correlation_id to TriggerAction, SubmissionFailed event path, and TypeScript type mirroring
 
 ## Progress
 
