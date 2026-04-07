@@ -421,3 +421,7 @@ export function getServiceAddress(manager: ServiceManager): string {
   if ('cosmos' in manager) return manager.cosmos.address;
   return 'unknown';
 }
+
+// Grouped activity types (from useGroupedActivity hook)
+export type { GroupedActivityEvent, StatusFilter } from '../hooks/useGroupedActivity';
+export { STATUS_TABS } from '../hooks/useGroupedActivity';
