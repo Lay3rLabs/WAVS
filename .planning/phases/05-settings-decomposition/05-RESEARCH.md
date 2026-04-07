@@ -401,7 +401,7 @@ useEffect(() => {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does `AgentApiKeyField` remain a separate sub-component within AgentSection, or is it inlined?**
    - What we know: It's already encapsulated at lines 80–274 of Settings.tsx
