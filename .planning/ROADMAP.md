@@ -88,7 +88,10 @@ Plans:
   3. The restart / unsaved-changes banner remains visible at all times regardless of which section is selected
   4. An OAuth agent API key flow that spans a redirect-and-callback survives navigating between sidebar sections without losing its listener
   5. Each settings section (Wallet, Node, Env Vars, Agent, MCP, Reset) is an isolated component; no section directly reads another section's local state
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 05-01-PLAN.md — Create SettingsSidebar, extract Wallet/Node/Environment sections, rewrite Settings.tsx shell with sidebar layout
+- [ ] 05-02-PLAN.md — Extract Agent/MCP/Reset sections, finalize Settings.tsx as minimal orchestrating shell
 **UI hint**: yes
 
 ### Phase 6: Unified Activity Frontend
@@ -115,5 +118,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | 2. WIT-to-Schema Tooling | 2/2 | Complete | 2026-03-25 |
 | 3. MCP Execution Interface | 0/3 | In progress | - |
 | 4. Rust Event Foundation | 1/1 | Complete | 2026-04-07 |
-| 5. Settings Decomposition | 0/? | Not started | - |
+| 5. Settings Decomposition | 0/2 | Not started | - |
 | 6. Unified Activity Frontend | 0/? | Not started | - |
