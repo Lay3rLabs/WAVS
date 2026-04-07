@@ -1,7 +1,8 @@
 ---
 phase: 6
 slug: unified-activity-frontend
-status: draft
+status: approved
+reviewed_at: 2026-04-07
 shadcn_initialized: false
 preset: none
 created: 2026-04-07
@@ -43,7 +44,7 @@ Declared values (must be multiples of 4):
 | 3xl | 64px | Page-level layout spacing |
 
 Exceptions:
-- Status dot badge: 6px diameter (w-1.5 h-1.5) — between xs and sm, intentional for inline indicators
+- Status dot badge: 8px diameter (w-2 h-2) — uses standard sm spacing token for inline indicators
 - Touch/click targets on filter tabs: minimum 28px height (py-1.5 + text-xs) — acceptable for dense feed toolbar
 
 ---
@@ -99,7 +100,7 @@ Replaces the flat ActivityCard in the feed. Renders one grouped event (trigger +
 │                                               [expand ▼]         │
 └────────────────────────────────────────────────────────┘
 ```
-- Amber pulsing dot (w-1.5 h-1.5 rounded-full bg-amber-400 animate-glow-amber) sits immediately after the kind pill
+- Amber pulsing dot (w-2 h-2 rounded-full bg-amber-400 animate-glow-amber) sits immediately after the kind pill
 - No child card rendered in collapsed state
 
 **Collapsed state — trigger with failed submission:**
@@ -168,7 +169,7 @@ Replaces the flat ActivityCard in the feed. Renders one grouped event (trigger +
 | Failed | bg-red-400 | animate-glow-red (existing keyframe) | inline-flex, gap-1.5 after kind pill |
 | Complete / no dot | — | — | no element rendered |
 
-Dot size: w-1.5 h-1.5 rounded-full (6px diameter).
+Dot size: w-2 h-2 rounded-full (8px diameter).
 
 ### Expand / Collapse Interaction
 
