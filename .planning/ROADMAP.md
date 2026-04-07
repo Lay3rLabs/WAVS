@@ -15,6 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: OCI Component Pull** - Service definitions accept `oci://` URIs; components are pulled, verified, and cached at deploy time
 - [x] **Phase 2: WIT-to-Schema Tooling** - Developer can inspect any compiled WASM component and get a JSON Schema describing its interface
 - [ ] **Phase 3: MCP Execution Interface** - Deployed service components appear as callable MCP tools with three explicit trust tiers
+- [ ] **Phase 4: Rust Event Foundation** - Correlation IDs on trigger/submission events and submission failure surfacing to the GUI
 
 ## Phase Details
 
@@ -64,6 +65,17 @@ Plans:
 - [ ] 03-02-PLAN.md — Dynamic tool discovery and Tier 1 execution: list_tools merge, call_tool dispatch, timeout, notifications
 - [ ] 03-03-PLAN.md — Tier 2 signed_result signing and Tier 3 on_chain two-step estimate-then-submit
 
+### Phase 4: Rust Event Foundation
+**Goal**: The WAVS backend emits a correlation ID on every trigger and submission event, and surfaces submission failures to the GUI
+**Depends on**: Nothing (independent infrastructure phase)
+**Requirements**: EVT-01, ERR-01
+**Success Criteria** (what must be TRUE):
+  1. Every TriggerEvent and SubmissionEvent reaching the desktop app includes a correlation_id that uniquely identifies the trigger execution and links a trigger to its submission
+  2. When a submission fails (signing error or dispatch error), a SubmissionFailedEvent reaches the GUI with an error message and correlation_id
+**Plans**: 1 plans
+Plans:
+- [ ] 04-01-PLAN.md — Add correlation_id to TriggerAction, SubmissionFailed event path, and TypeScript type mirroring
+
 ## Progress
 
 **Execution Order:**
@@ -74,3 +86,4 @@ Phases execute in numeric order: 1 → 2 → 3
 | 1. OCI Component Pull | 2/2 | Complete | 2026-03-24 |
 | 2. WIT-to-Schema Tooling | 2/2 | Complete | 2026-03-25 |
 | 3. MCP Execution Interface | 0/3 | In progress | - |
+| 4. Rust Event Foundation | 0/1 | Not started | - |
