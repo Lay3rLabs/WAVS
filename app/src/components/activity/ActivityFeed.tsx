@@ -2,11 +2,14 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAppStore } from '../../stores/appStore';
 import { ActivityCard } from './ActivityCard';
+import { GroupedActivityCard } from './GroupedActivityCard';
 import { getTriggerDataLabel } from '../../types';
-import type { ActivityKind, ActivityItem, ServiceId, WorkflowId } from '../../types';
+import type { ActivityItem, ServiceId, WorkflowId } from '../../types';
+import { useGroupedActivity, STATUS_TABS } from '../../hooks/useGroupedActivity';
+import type { StatusFilter, GroupedActivityEvent } from '../../hooks/useGroupedActivity';
 
 type SortOrder = 'newest' | 'oldest';
-type KindFilter = 'all' | ActivityKind;
+type DisplayItem = { type: 'group'; data: GroupedActivityEvent } | { type: 'orphan'; data: ActivityItem };
 
 const ESTIMATED_ITEM_HEIGHT = 90;
 const NEAR_BOTTOM_THRESHOLD = 200;
@@ -25,7 +28,7 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
   const clearActivity = useAppStore((state) => state.clearActivity);
 
   // Filter state
-  const [kindFilter, setKindFilter] = useState<KindFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [serviceFilter, setServiceFilter] = useState<ServiceId | ''>('');
   const [workflowFilter, setWorkflowFilter] = useState<WorkflowId | ''>('');
   const [search, setSearch] = useState('');
@@ -36,7 +39,8 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
   const [snapshot, setSnapshot] = useState<ActivityItem[]>([]);
 
   // Expanded state -- lifted here so it survives virtualizer recycling
-  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
+  // Keyed by string groupKey (correlationId or String(trigger.id)) for groups, String(id) for orphans
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
 
   // Scroll tracking via refs to avoid re-render loops
   const parentRef = useRef<HTMLDivElement>(null);
@@ -45,6 +49,9 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
   const prevLengthRef = useRef(activityList.length);
 
   const sourceList = paused ? snapshot : activityList;
+
+  // Grouping
+  const { groups, orphans } = useGroupedActivity(sourceList);
 
   const togglePause = () => {
     if (paused) {
@@ -56,13 +63,13 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
     }
   };
 
-  const toggleExpanded = useCallback((id: number) => {
+  const toggleExpanded = useCallback((key: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
+      if (next.has(key)) {
+        next.delete(key);
       } else {
-        next.add(id);
+        next.add(key);
       }
       return next;
     });
@@ -76,43 +83,68 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
   }, [services, serviceId]);
 
   // Filter and sort
-  const filtered = useMemo(() => {
-    let items = sourceList;
+  const displayItems = useMemo(() => {
+    let filteredGroups = groups;
+    let filteredOrphans = orphans;
 
-    // Pre-filter by service when scoped
-    if (serviceId) {
-      items = items.filter((i) => i.serviceId === serviceId);
-    } else if (serviceFilter) {
-      items = items.filter((i) => i.serviceId === serviceFilter);
+    // Service filter
+    const svcId = serviceId || serviceFilter || '';
+    if (svcId) {
+      filteredGroups = filteredGroups.filter(g => g.trigger.serviceId === svcId);
+      filteredOrphans = filteredOrphans.filter(o => o.serviceId === svcId);
     }
 
+    // Workflow filter
     if (workflowFilter) {
-      items = items.filter((i) => i.workflowId === workflowFilter);
+      filteredGroups = filteredGroups.filter(g => g.trigger.workflowId === workflowFilter);
+      filteredOrphans = filteredOrphans.filter(o => o.workflowId === workflowFilter);
     }
 
-    if (kindFilter !== 'all') {
-      items = items.filter((i) => i.kind === kindFilter);
+    // Status filter (groups only; orphans bypass per Research pitfall 4)
+    if (statusFilter !== 'all') {
+      filteredGroups = filteredGroups.filter(g => g.status === statusFilter);
     }
 
+    // Search
     if (search) {
       const q = search.toLowerCase();
-      items = items.filter((i) => {
-        const svcName = getServiceLabel(i.serviceId).toLowerCase();
-        const wfId = i.workflowId.toLowerCase();
-        const trigLabel = i.triggerData ? getTriggerDataLabel(i.triggerData).toLowerCase() : 'failed';
+      filteredGroups = filteredGroups.filter(g => {
+        const svcName = getServiceLabel(g.trigger.serviceId).toLowerCase();
+        const wfId = g.trigger.workflowId.toLowerCase();
+        const trigLabel = g.trigger.triggerData ? getTriggerDataLabel(g.trigger.triggerData).toLowerCase() : '';
+        return svcName.includes(q) || wfId.includes(q) || trigLabel.includes(q);
+      });
+      filteredOrphans = filteredOrphans.filter(o => {
+        const svcName = getServiceLabel(o.serviceId).toLowerCase();
+        const wfId = o.workflowId.toLowerCase();
+        const trigLabel = o.triggerData ? getTriggerDataLabel(o.triggerData).toLowerCase() : 'failed';
         return svcName.includes(q) || wfId.includes(q) || trigLabel.includes(q);
       });
     }
 
+    // Merge into display items
+    const items: DisplayItem[] = [
+      ...filteredGroups.map(g => ({ type: 'group' as const, data: g })),
+      ...filteredOrphans.map(o => ({ type: 'orphan' as const, data: o })),
+    ];
+
+    // Sort by timestamp
+    items.sort((a, b) => {
+      const tsA = a.type === 'group' ? a.data.trigger.ts : a.data.ts;
+      const tsB = b.type === 'group' ? b.data.trigger.ts : b.data.ts;
+      return tsA - tsB;
+    });
+
     if (sort === 'newest') {
-      return [...items].reverse();
+      items.reverse();
     }
+
     return items;
-  }, [sourceList, serviceId, serviceFilter, workflowFilter, kindFilter, search, sort, getServiceLabel]);
+  }, [groups, orphans, serviceId, serviceFilter, workflowFilter, statusFilter, search, sort, getServiceLabel]);
 
   // Virtualizer
   const virtualizer = useVirtualizer({
-    count: filtered.length,
+    count: displayItems.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ESTIMATED_ITEM_HEIGHT,
     overscan: 8,
@@ -168,20 +200,20 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
     <div className="flex flex-col h-full">
       {/* Toolbar */}
       <div className="flex items-center gap-2.5 flex-wrap pb-4 border-b border-charcoal-medium mb-4">
-        {/* Kind filter tabs */}
+        {/* Status filter tabs */}
         <div className="flex rounded-md overflow-hidden border border-charcoal-light">
-          {(['all', 'trigger', 'submission'] as KindFilter[]).map((k) => (
+          {STATUS_TABS.map((tab) => (
             <button
-              key={k}
+              key={tab}
               type="button"
               className={`px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                kindFilter === k
+                statusFilter === tab
                   ? 'bg-purple-1 text-cream-light'
                   : 'bg-charcoal-dark text-tan-muted hover:text-beige-warm hover:bg-charcoal-medium'
               }`}
-              onClick={() => setKindFilter(k)}
+              onClick={() => setStatusFilter(tab)}
             >
-              {k === 'all' ? 'All' : k === 'trigger' ? 'Triggers' : 'Submissions'}
+              {tab === 'all' ? 'All' : tab === 'pending' ? 'Pending' : tab === 'failed' ? 'Failed' : 'Complete'}
             </button>
           ))}
         </div>
@@ -258,16 +290,26 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
         )}
 
         <span className="text-tan-muted text-xs ml-auto tabular-nums">
-          {filtered.length} item{filtered.length !== 1 ? 's' : ''}
+          {displayItems.length} item{displayItems.length !== 1 ? 's' : ''}
           {paused && <span className="text-amber-400 ml-2">(paused)</span>}
         </span>
       </div>
 
       {/* List */}
-      {filtered.length === 0 ? (
+      {displayItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center flex-1 gap-2 py-12">
-          <span className="text-tan-muted text-sm">No activity yet</span>
-          <span className="text-tan-muted/60 text-xs">Trigger and submission events will appear here</span>
+          <span className="text-tan-muted text-sm">
+            {statusFilter === 'all' ? 'No activity yet' :
+             statusFilter === 'pending' ? 'No pending events' :
+             statusFilter === 'failed' ? 'No failed events' :
+             'No completed events'}
+          </span>
+          <span className="text-tan-muted/60 text-xs">
+            {statusFilter === 'all' ? 'Trigger and submission events will appear here' :
+             statusFilter === 'pending' ? 'Triggers waiting for a submission will appear here' :
+             statusFilter === 'failed' ? 'Failed submissions will appear here' :
+             'Completed trigger-submission pairs will appear here'}
+          </span>
         </div>
       ) : (
         <div className="relative flex-1 min-h-0">
@@ -281,24 +323,32 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
               style={{ height: virtualizer.getTotalSize() }}
             >
               {virtualizer.getVirtualItems().map((virtualItem) => {
-                const item = filtered[virtualItem.index];
+                const displayItem = displayItems[virtualItem.index];
+                const itemKey = displayItem.type === 'group' ? displayItem.data.groupKey : String(displayItem.data.id);
                 return (
                   <div
-                    key={item.id}
+                    key={itemKey}
                     data-index={virtualItem.index}
                     ref={virtualizer.measureElement}
                     className="absolute top-0 left-0 w-full"
-                    style={{
-                      transform: `translateY(${virtualItem.start}px)`,
-                    }}
+                    style={{ transform: `translateY(${virtualItem.start}px)` }}
                   >
                     <div className="pb-2">
-                      <ActivityCard
-                        item={item}
-                        expanded={expandedIds.has(item.id)}
-                        onToggleExpand={() => toggleExpanded(item.id)}
-                        compact={!!serviceId}
-                      />
+                      {displayItem.type === 'group' ? (
+                        <GroupedActivityCard
+                          group={displayItem.data}
+                          expanded={expandedIds.has(displayItem.data.groupKey)}
+                          onToggleExpand={() => toggleExpanded(displayItem.data.groupKey)}
+                          compact={!!serviceId}
+                        />
+                      ) : (
+                        <ActivityCard
+                          item={displayItem.data}
+                          expanded={expandedIds.has(String(displayItem.data.id))}
+                          onToggleExpand={() => toggleExpanded(String(displayItem.data.id))}
+                          compact={!!serviceId}
+                        />
+                      )}
                     </div>
                   </div>
                 );
