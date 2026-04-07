@@ -419,7 +419,7 @@ const TAB_LABELS: Record<StatusFilter, string> = {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Submission arriving before its trigger (race condition)**
    - What we know: Triggers and submissions are independent Tauri events appended to `activityList` in arrival order. The trigger event fires first in the backend pipeline, but the frontend Tauri event bus provides no ordering guarantee.
