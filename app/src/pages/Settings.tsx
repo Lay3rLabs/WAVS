@@ -1,90 +1,30 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { formatEther, type Address } from 'viem';
-import { mainnet, sepolia, holesky } from 'viem/chains';
-import { AddressDisplay, Button, Toast, TomlEditor } from '../components/atoms';
+import { Button, Toast } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
-import { useWalletStore } from '../stores/walletStore';
-import { setWavsHome, restart, readWavsToml, writeWavsToml, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, getWavsUrl, saveMcpSettings, clearPersistedServices, registerClaudeMcp, saveEnvVars, pickFolder, getSettings } from '../tauri';
+import { restart, startMcpServer, stopMcpServer, getMcpStatus, getMcpBinaryPath, getWavsUrl, saveMcpSettings, clearPersistedServices, registerClaudeMcp, pickFolder } from '../tauri';
 import { usePOAStore } from '../stores/poaStore';
 import { errorMessage } from '../utils/error';
 import type { McpStatus } from '../types';
-import { getPublicClient } from '../hooks/useViemClient';
-import { getChainConfigs } from '../tauri';
-
-const ENV_VAR_SUGGESTIONS = [
-  // Open-source / local AI
-  { label: 'HuggingFace', key: 'WAVS_ENV_HUGGINGFACE_API_KEY'  },
-  { label: 'Ollama URL',  key: 'WAVS_ENV_OLLAMA_BASE_URL'      },
-  { label: 'LM Studio',   key: 'WAVS_ENV_LM_STUDIO_BASE_URL'   },
-  { label: 'Together AI', key: 'WAVS_ENV_TOGETHER_API_KEY'     },
-  { label: 'Groq',        key: 'WAVS_ENV_GROQ_API_KEY'         },
-  { label: 'Mistral',     key: 'WAVS_ENV_MISTRAL_API_KEY'      },
-  { label: 'Replicate',   key: 'WAVS_ENV_REPLICATE_API_TOKEN'  },
-  // Closed-source AI
-  { label: 'OpenAI',      key: 'WAVS_ENV_OPENAI_API_KEY'       },
-  { label: 'Anthropic',   key: 'WAVS_ENV_ANTHROPIC_API_KEY'    },
-  // Decentralized storage
-  { label: 'Pinata',      key: 'WAVS_ENV_PINATA_JWT'           },
-  { label: 'Web3.Storage', key: 'WAVS_ENV_WEB3_STORAGE_TOKEN' },
-  // Blockchain / data
-  { label: 'Etherscan',   key: 'WAVS_ENV_ETHERSCAN_API_KEY'    },
-  { label: 'Alchemy',     key: 'WAVS_ENV_ALCHEMY_API_KEY'      },
-  { label: 'Infura',      key: 'WAVS_ENV_INFURA_API_KEY'       },
-  { label: 'The Graph',   key: 'WAVS_ENV_THEGRAPH_API_KEY'     },
-  { label: 'CoinGecko',   key: 'WAVS_ENV_COINGECKO_API_KEY'    },
-  // General
-  { label: 'GitHub',      key: 'WAVS_ENV_GITHUB_TOKEN'         },
-];
-
-const KNOWN_CHAIN_NAMES: Record<number, string> = {
-  [mainnet.id]: mainnet.name,
-  [sepolia.id]: sepolia.name,
-  [holesky.id]: holesky.name,
-};
-
-function isNumericKey(key: string): boolean {
-  return /^\d+$/.test(key);
-}
-
-interface ChainBalance {
-  chainId: number;
-  name: string;
-  balance: bigint | null;
-  loading: boolean;
-  noEndpoint: boolean;
-}
-
-function BalanceRow({ chain }: { chain: ChainBalance }) {
-  return (
-    <div className="flex items-center justify-between py-1.5 px-2 rounded bg-charcoal-darkest">
-      <span className="text-tan-muted text-xs">{chain.name}</span>
-      <span className="text-beige-warm text-xs font-mono">
-        {chain.noEndpoint ? (
-          <span className="text-charcoal-light">—</span>
-        ) : chain.loading ? (
-          <span className="inline-block w-16 h-3 rounded bg-charcoal-medium animate-pulse" />
-        ) : chain.balance !== null ? (
-          `${parseFloat(formatEther(chain.balance)).toFixed(4)} ETH`
-        ) : (
-          <span className="text-red-3 text-xs">error</span>
-        )}
-      </span>
-    </div>
-  );
-}
+import { SettingsSidebar, type SectionKey } from '../components/settings/SettingsSidebar';
+import { WalletSection } from '../components/settings/WalletSection';
+import { NodeSection } from '../components/settings/NodeSection';
+import { EnvironmentSection } from '../components/settings/EnvironmentSection';
 
 // OAuth providers that support login flow
 const OAUTH_PROVIDERS = new Set(['anthropic', 'google', 'github-copilot', 'openai']);
 
-function AgentApiKeyField({ provider }: { provider: string }) {
+function AgentApiKeyField({ provider, oauthLoading, oauthStatus, onOAuthStart }: {
+  provider: string;
+  oauthLoading: boolean;
+  oauthStatus: string | null;
+  onOAuthStart: () => void;
+}) {
   const [apiKey, setApiKey] = useState('');
   const [maskedKey, setMaskedKey] = useState<string | null>(null);
   const [authType, setAuthType] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState(false);
-  const [oauthStatus, setOauthStatus] = useState<string | null>(null);
 
   const hasOAuth = OAUTH_PROVIDERS.has(provider);
 
@@ -111,38 +51,25 @@ function AgentApiKeyField({ provider }: { provider: string }) {
     return () => { cancelled = true; };
   }, [provider]);
 
-  // Listen for OAuth events
+  // Update maskedKey on OAuth success (detected via oauthLoading going false with no status)
   useEffect(() => {
-    let unlisten: UnlistenFn | null = null;
-    listen<{ type: string; url?: string; message?: string; provider?: string }>(
-      'agent:oauth',
-      (event) => {
-        const data = event.payload;
-        switch (data.type) {
-          case 'open_url':
-            // Browser is opened by the oauth-login script natively
-            setOauthStatus('Waiting for browser authorization…');
-            break;
-          case 'progress':
-            setOauthStatus(data.message ?? 'Working…');
-            break;
-          case 'success':
-            setOauthStatus(null);
-            setOauthLoading(false);
-            setAuthType('oauth');
-            setMaskedKey('OAuth connected');
+    if (!oauthLoading && oauthStatus === null && authType === null) {
+      // Re-check auth status after OAuth completes
+      (async () => {
+        try {
+          const { agentGetAuth } = await import('../tauri/agent');
+          const auth = await agentGetAuth();
+          if (auth[provider]) {
+            setAuthType(auth[provider].type);
+            setMaskedKey(auth[provider].type === 'oauth' ? 'OAuth connected' : (auth[provider].masked_key ?? '(configured)'));
             setEditing(false);
-            break;
-          case 'error':
-            setOauthStatus(null);
-            setOauthLoading(false);
-            Toast.error(data.message ?? 'OAuth login failed');
-            break;
+          }
+        } catch {
+          // ignore
         }
-      }
-    ).then((fn) => { unlisten = fn; });
-    return () => { unlisten?.(); };
-  }, []);
+      })();
+    }
+  }, [oauthLoading, oauthStatus, provider, authType]);
 
   const handleSave = async () => {
     if (!apiKey.trim()) return;
@@ -158,19 +85,6 @@ function AgentApiKeyField({ provider }: { provider: string }) {
       console.error('Failed to save API key:', err);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleOAuthLogin = async () => {
-    setOauthLoading(true);
-    setOauthStatus('Starting login…');
-    try {
-      const { agentOAuthLogin } = await import('../tauri/agent');
-      await agentOAuthLogin(provider);
-    } catch (err) {
-      setOauthLoading(false);
-      setOauthStatus(null);
-      console.error('OAuth login failed:', err);
     }
   };
 
@@ -230,7 +144,7 @@ function AgentApiKeyField({ provider }: { provider: string }) {
               text={`Sign in with ${provider.charAt(0).toUpperCase() + provider.slice(1)}`}
               size="sm"
               color="purple"
-              onClick={handleOAuthLogin}
+              onClick={onOAuthStart}
             />
           )}
         </div>
@@ -275,18 +189,11 @@ function AgentApiKeyField({ provider }: { provider: string }) {
 
 export function Settings() {
   const settings = useAppStore((state) => state.settings);
-  const {
-    hasMnemonic,
-    isLoading,
-    error: walletError,
-    derivedAddresses,
-    getMnemonic,
-    deleteMnemonic,
-    loadAddresses,
-    clearError,
-  } = useWalletStore();
 
-  const [changed, setChanged] = useState(false);
+  const [activeSection, setActiveSection] = useState<SectionKey>('wallet');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const [oauthStatus, setOauthStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // MCP server state
@@ -301,148 +208,36 @@ export function Settings() {
   const [claudeRegisterResult, setClaudeRegisterResult] = useState<string | null>(null);
   const [claudeRegisterLoading, setClaudeRegisterLoading] = useState(false);
   const [claudeRegisterError, setClaudeRegisterError] = useState<string | null>(null);
-  const [showMnemonic, setShowMnemonic] = useState(false);
-  const [exportedMnemonic, setExportedMnemonic] = useState<string | null>(null);
-  const [mnemonicCopied, setMnemonicCopied] = useState(false);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showClearServicesConfirm, setShowClearServicesConfirm] = useState(false);
 
-  // Per-account, per-chain balances: balances[accountIndex][chainIndex]
-  const [balances, setBalances] = useState<ChainBalance[][]>([]);
-
-  // TOML editor state
-  const [tomlContent, setTomlContent] = useState('');
-  const [savedContent, setSavedContent] = useState('');
-  const [tomlLoading, setTomlLoading] = useState(false);
-  const [tomlError, setTomlError] = useState<string | null>(null);
-  const [tomlSaveSuccess, setTomlSaveSuccess] = useState(false);
-  const hasUnsavedChanges = tomlContent !== savedContent;
-
-  // Environment variables state
-  const [envVars, setEnvVars] = useState<Record<string, string>>({});
-  const [newEnvKey, setNewEnvKey] = useState('');
-  const [newEnvValue, setNewEnvValue] = useState('');
-  const [visibleEnvKeys, setVisibleEnvKeys] = useState<Set<string>>(new Set());
-  const [envSaving, setEnvSaving] = useState(false);
-  const [envSaveSuccess, setEnvSaveSuccess] = useState(false);
-  const [envError, setEnvError] = useState<string | null>(null);
-  const newEnvValueRef = useRef<HTMLInputElement>(null);
-
-  // Collect all env_keys from registered services, not yet set in envVars
-  const neededByServices = useMemo(() => {
-    const keys = new Set<string>();
-    for (const service of settings.saved_services ?? []) {
-      for (const workflow of Object.values(service.workflows)) {
-        for (const k of workflow.component.env_keys ?? []) keys.add(k);
-        if (typeof workflow.submit === 'object' && 'aggregator' in workflow.submit) {
-          for (const k of workflow.submit.aggregator.component.env_keys ?? []) keys.add(k);
-        }
-      }
-    }
-    return [...keys].filter((k) => !(k in envVars));
-  }, [settings.saved_services, envVars]);
-
-  // Static suggestions not yet set
-  const staticSuggestions = useMemo(
-    () => ENV_VAR_SUGGESTIONS.filter((s) => !(s.key in envVars)),
-    [envVars]
-  );
-
-  const handleSuggestionClick = (key: string) => {
-    setNewEnvKey(key);
-    newEnvValueRef.current?.focus();
-  };
-
+  // OAuth listener in parent — survives section navigation
   useEffect(() => {
-    if (hasMnemonic) {
-      loadAddresses();
-    }
-  }, [hasMnemonic, loadAddresses]);
-
-  // Fetch balances once addresses are loaded
-  useEffect(() => {
-    if (derivedAddresses.length === 0) return;
-
-    const fetchBalances = async () => {
-      let chains: { chainId: number; name: string; rpcUrl: string | null }[] = [];
-
-      try {
-        const configs = await getChainConfigs();
-
-        if (configs.evm) {
-          for (const [key, config] of Object.entries(configs.evm)) {
-            const chainId = isNumericKey(key) ? parseInt(key, 10) : null;
-            if (chainId == null) continue;
-            chains.push({
-              chainId,
-              name: KNOWN_CHAIN_NAMES[chainId] ?? `Chain ${chainId}`,
-              rpcUrl: config.http_endpoint ?? null,
-            });
-          }
-        }
-
-        if (configs.dev) {
-          for (const [, config] of Object.entries(configs.dev)) {
-            if (config.type === 'evm') {
-              const chainId = isNumericKey(config.chain_id)
-                ? parseInt(config.chain_id, 10)
-                : null;
-              if (chainId == null) continue;
-              chains.push({
-                chainId,
-                name: KNOWN_CHAIN_NAMES[chainId] ?? `Chain ${chainId}`,
-                rpcUrl: config.http_endpoint ?? null,
-              });
-            }
-          }
-        }
-      } catch {
-        // No chain config — balances will show "—"
-      }
-
-      const initialBalances: ChainBalance[][] = derivedAddresses.map(() =>
-        chains.map((c) => ({
-          chainId: c.chainId,
-          name: c.name,
-          balance: null,
-          loading: c.rpcUrl != null,
-          noEndpoint: c.rpcUrl == null,
-        }))
-      );
-      setBalances(initialBalances);
-
-      for (let addrIdx = 0; addrIdx < derivedAddresses.length; addrIdx++) {
-        const address = derivedAddresses[addrIdx] as Address;
-        for (let chainIdx = 0; chainIdx < chains.length; chainIdx++) {
-          const chain = chains[chainIdx];
-          if (!chain.rpcUrl) continue;
-
-          getPublicClient(chain.rpcUrl, chain.chainId)
-            .getBalance({ address })
-            .then((balance) => {
-              setBalances((prev) => {
-                const next = prev.map((row) => [...row]);
-                if (next[addrIdx]?.[chainIdx]) {
-                  next[addrIdx][chainIdx] = { ...next[addrIdx][chainIdx], balance, loading: false };
-                }
-                return next;
-              });
-            })
-            .catch(() => {
-              setBalances((prev) => {
-                const next = prev.map((row) => [...row]);
-                if (next[addrIdx]?.[chainIdx]) {
-                  next[addrIdx][chainIdx] = { ...next[addrIdx][chainIdx], balance: null, loading: false };
-                }
-                return next;
-              });
-            });
+    let unlisten: UnlistenFn | null = null;
+    listen<{ type: string; url?: string; message?: string; provider?: string }>(
+      'agent:oauth',
+      (event) => {
+        const data = event.payload;
+        switch (data.type) {
+          case 'open_url':
+            setOauthStatus('Waiting for browser authorization…');
+            break;
+          case 'progress':
+            setOauthStatus(data.message ?? 'Working…');
+            break;
+          case 'success':
+            setOauthStatus(null);
+            setOauthLoading(false);
+            break;
+          case 'error':
+            setOauthStatus(null);
+            setOauthLoading(false);
+            Toast.error(data.message ?? 'OAuth login failed');
+            break;
         }
       }
-    };
-
-    fetchBalances();
-  }, [derivedAddresses]);
+    ).then((fn) => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  }, []);
 
   // Poll MCP status every 3 seconds; also resolve the binary path once
   useEffect(() => {
@@ -462,6 +257,19 @@ export function Settings() {
     const id = setInterval(poll, 3000);
     return () => { cancelled = true; clearInterval(id); };
   }, []);
+
+  const handleOAuthStart = async (provider: string) => {
+    setOauthLoading(true);
+    setOauthStatus('Starting login…');
+    try {
+      const { agentOAuthLogin } = await import('../tauri/agent');
+      await agentOAuthLogin(provider);
+    } catch (err) {
+      setOauthLoading(false);
+      setOauthStatus(null);
+      console.error('OAuth login failed:', err);
+    }
+  };
 
   const handleMcpToggle = async () => {
     setMcpLoading(true);
@@ -503,155 +311,11 @@ export function Settings() {
     }
   };
 
-  const loadToml = useCallback(async () => {
-    if (!settings.wavs_home) return;
-    setTomlLoading(true);
-    setTomlError(null);
-    setTomlSaveSuccess(false);
-    try {
-      const content = await readWavsToml();
-      setTomlContent(content);
-      setSavedContent(content);
-    } catch (err) {
-      setTomlError(err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err));
-    } finally {
-      setTomlLoading(false);
-    }
-  }, [settings.wavs_home]);
-
-  useEffect(() => {
-    loadToml();
-  }, [loadToml]);
-
-  // Sync env vars from settings store on load
-  useEffect(() => {
-    setEnvVars(settings.env_vars ?? {});
-  }, [settings.env_vars]);
-
-  const handleSaveToml = async () => {
-    setTomlError(null);
-    setTomlSaveSuccess(false);
-    try {
-      await writeWavsToml(tomlContent);
-      setSavedContent(tomlContent);
-      setTomlSaveSuccess(true);
-      setChanged(true);
-    } catch (err) {
-      setTomlError(err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err));
-    }
-  };
-
-  const handleReloadToml = async () => {
-    await loadToml();
-  };
-
-  const handleAddEnvVar = () => {
-    let key = newEnvKey.trim();
-    if (!key) return;
-    if (!key.startsWith('WAVS_ENV_')) {
-      key = `WAVS_ENV_${key}`;
-    }
-    setEnvVars((prev) => ({ ...prev, [key]: newEnvValue }));
-    setNewEnvKey('');
-    setNewEnvValue('');
-  };
-
-  const handleRemoveEnvVar = (key: string) => {
-    setEnvVars((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-    setVisibleEnvKeys((prev) => {
-      const next = new Set(prev);
-      next.delete(key);
-      return next;
-    });
-  };
-
-  const handleToggleEnvVisibility = (key: string) => {
-    setVisibleEnvKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  };
-
-  const handleSaveEnvVars = async () => {
-    setEnvSaving(true);
-    setEnvError(null);
-    setEnvSaveSuccess(false);
-    try {
-      await saveEnvVars(envVars);
-      setEnvSaveSuccess(true);
-    } catch (e) {
-      setEnvError(errorMessage(e));
-    } finally {
-      setEnvSaving(false);
-    }
-  };
-
-  const handleBrowse = async () => {
-    setError(null);
-    try {
-      const path = await setWavsHome();
-      if (path) {
-        console.log('Changed wavs_home to', path);
-        // Re-fetch settings so the UI updates immediately
-        const updated = await getSettings();
-        useAppStore.getState().setSettings(updated);
-        setChanged(true);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : typeof err === "string" ? err : JSON.stringify(err));
-    }
-  };
-
   const handleRestart = async () => {
     try {
       await restart();
     } catch (err) {
       console.error('Failed to restart application:', err);
-    }
-  };
-
-  const handleExportWallet = async () => {
-    setError(null);
-    clearError();
-    try {
-      const mnemonic = await getMnemonic();
-      setExportedMnemonic(mnemonic);
-      setShowMnemonic(true);
-    } catch {
-      setError('Failed to export wallet. Please try again.');
-    }
-  };
-
-  const handleHideMnemonic = () => {
-    setShowMnemonic(false);
-    setExportedMnemonic(null);
-    setMnemonicCopied(false);
-  };
-
-  const handleCopyMnemonic = async () => {
-    if (!exportedMnemonic) return;
-    await navigator.clipboard.writeText(exportedMnemonic);
-    setMnemonicCopied(true);
-    setTimeout(() => setMnemonicCopied(false), 2000);
-  };
-
-  const handleResetWallet = async () => {
-    setError(null);
-    clearError();
-    try {
-      await deleteMnemonic();
-      setShowResetConfirm(false);
-    } catch {
-      setError('Failed to reset wallet. Please try again.');
     }
   };
 
@@ -666,457 +330,184 @@ export function Settings() {
     }
   };
 
-  const displayError = error || walletError;
-
   return (
-    <div className="flex flex-col gap-6 max-h-[calc(100vh-12rem)] overflow-y-auto pr-2">
-      {/* Restart warning */}
-      {changed && (
-        <div className="flex gap-4 mb-4 items-center">
-          <div className="flex-1 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
-            <p className="text-lg text-beige-light">
-              Restart for changes to take effect.
-            </p>
-          </div>
-          <Button
-            text="Restart Application"
-            color="red"
-            onClick={handleRestart}
-          />
+    <div className="flex flex-col gap-0">
+      {/* Restart banner - always visible above sidebar+content split */}
+      {hasUnsavedChanges && (
+        <div className="flex gap-4 mb-4 items-center p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
+          <p className="text-lg text-beige-light flex-1">Restart for changes to take effect.</p>
+          <Button text="Restart Application" color="red" onClick={handleRestart} />
         </div>
       )}
 
-      {/* Wallet Section */}
-      <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
-        <h2 className="text-beige-light text-lg font-semibold">Wallet</h2>
-
-        {/* Accounts with balances */}
-        {hasMnemonic && derivedAddresses.length > 0 && (
-          <div className="flex flex-col gap-3">
-            {derivedAddresses.map((addr, i) => (
-              <div key={i} className="flex flex-col gap-2 p-3 rounded bg-charcoal-dark">
-                <div className="flex items-center gap-2">
-                  <span className="text-tan-muted text-xs w-20 shrink-0">Account {i}</span>
-                  <AddressDisplay address={addr} full />
-                </div>
-                {balances[i] && balances[i].length > 0 && (
-                  <div className="flex flex-col gap-1 ml-[5.5rem]">
-                    {balances[i].map((chain) => (
-                      <BalanceRow key={chain.chainId} chain={chain} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Export/Backup */}
-        {hasMnemonic && !showMnemonic && (
-          <Button
-            text={isLoading ? 'Loading...' : 'Export Recovery Phrase'}
-            variant="outline"
-            onClick={handleExportWallet}
-            disabled={isLoading}
-          />
-        )}
-
-        {/* Show mnemonic */}
-        {showMnemonic && exportedMnemonic && (
-          <div className="flex flex-col gap-3">
-            <div className="p-3 rounded bg-charcoal-darkest border border-charcoal-light">
-              <p className="text-sm text-red-4 mb-2">
-                Keep this recovery phrase safe. Anyone with it can access your wallet.
+      <div className="flex flex-1 gap-0">
+        <SettingsSidebar activeSection={activeSection} onSelect={setActiveSection} />
+        <div className="flex-1 overflow-y-auto px-6 py-4 max-h-[calc(100vh-12rem)]">
+          {activeSection === 'wallet' && (
+            <WalletSection onError={setError} />
+          )}
+          {activeSection === 'node' && (
+            <NodeSection
+              wavsHome={settings.wavs_home}
+              onUnsavedChange={setHasUnsavedChanges}
+              onChanged={() => setHasUnsavedChanges(true)}
+              onError={setError}
+            />
+          )}
+          {activeSection === 'environment' && (
+            <EnvironmentSection settings={{ saved_services: settings.saved_services, env_vars: settings.env_vars }} />
+          )}
+          {activeSection === 'agent' && (
+            <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
+              <h2 className="text-beige-light text-lg font-semibold">AI Agent</h2>
+              <p className="text-tan-muted text-xs">
+                Configure the embedded AI assistant. It can build WASM components, deploy services, and manage the node.
+                Requires Node.js installed.
               </p>
-              <div className="grid grid-cols-4 gap-2">
-                {exportedMnemonic.split(' ').map((word, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-1 p-1 rounded bg-charcoal-medium"
-                  >
-                    <span className="text-tan-muted text-xs w-4">{i + 1}.</span>
-                    <span className="text-beige-warm font-mono text-xs">
-                      {word}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                text={mnemonicCopied ? 'Copied!' : 'Copy Recovery Phrase'}
-                variant="outline"
-                onClick={handleCopyMnemonic}
-              />
-              <Button text="Hide" variant="outline" onClick={handleHideMnemonic} />
-            </div>
-          </div>
-        )}
 
-        {/* Reset Wallet */}
-        {hasMnemonic && !showResetConfirm && (
-          <Button
-            text="Reset Wallet"
-            color="red"
-            variant="outline"
-            onClick={() => setShowResetConfirm(true)}
-          />
-        )}
-
-        {/* Reset confirmation */}
-        {showResetConfirm && (
-          <div className="flex flex-col gap-3 p-3 rounded bg-charcoal-darkest border border-red-2">
-            <p className="text-sm text-red-4">
-              Are you sure you want to reset your wallet? This will delete your recovery phrase from the keychain.
-              Make sure you have backed it up first!
-            </p>
-            <div className="flex gap-3">
-              <Button
-                text="Cancel"
-                variant="outline"
-                onClick={() => setShowResetConfirm(false)}
-              />
-              <Button
-                text={isLoading ? 'Resetting...' : 'Yes, Reset Wallet'}
-                color="red"
-                onClick={handleResetWallet}
-                disabled={isLoading}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* WAVS Home Directory */}
-      <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
-        <h2 className="text-beige-light text-lg font-semibold">
-          WAVS Home Directory
-        </h2>
-        <div className="flex gap-3 items-center">
-          <input
-            type="text"
-            readOnly
-            placeholder="No directory selected"
-            value={settings.wavs_home ?? ''}
-            className="flex-1 px-4 py-3 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
-          />
-          <Button text="Browse..." onClick={handleBrowse} />
-        </div>
-      </div>
-
-      {/* TOML Editor */}
-      {settings.wavs_home && (
-        <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h2 className="text-beige-light text-lg font-semibold">
-                Configuration (wavs.toml)
-              </h2>
-              {hasUnsavedChanges && (
-                <span className="text-tan-muted text-sm italic">
-                  (unsaved changes)
-                </span>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button
-                text="Reload"
-                variant="outline"
-                onClick={handleReloadToml}
-                disabled={tomlLoading}
-              />
-              <Button
-                text={tomlLoading ? 'Saving...' : 'Save'}
-                onClick={handleSaveToml}
-                disabled={tomlLoading || !hasUnsavedChanges}
-              />
-            </div>
-          </div>
-
-          {tomlLoading && !tomlContent ? (
-            <div className="text-tan-muted text-sm p-4">Loading...</div>
-          ) : (
-            <TomlEditor
-              value={tomlContent}
-              onChange={setTomlContent}
-              height="60vh"
-            />
-          )}
-
-          {tomlError && (
-            <p className="text-red-4 text-sm">{tomlError}</p>
-          )}
-          {tomlSaveSuccess && (
-            <p className="text-green-4 text-sm">
-              Configuration saved successfully.
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Environment Variables */}
-      <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
-        <h2 className="text-beige-light text-lg font-semibold">Environment Variables</h2>
-        <p className="text-tan-muted text-xs">
-          <span className="font-mono">WAVS_ENV_*</span> variables are passed to workflow components that declare them in their <span className="font-mono">env_keys</span> list.
-        </p>
-
-        {/* Required by services */}
-        {neededByServices.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-tan-muted text-xs font-medium">Required by your services</span>
-            <div className="flex flex-wrap gap-1.5">
-              {neededByServices.map((key) => (
-                <button
-                  key={key}
-                  className="px-2 py-0.5 rounded text-xs font-mono bg-charcoal-dark border border-charcoal-light text-tan-muted hover:text-beige-warm hover:border-tan-muted transition-colors"
-                  title={key}
-                  onClick={() => handleSuggestionClick(key)}
+              {/* Provider */}
+              <div className="flex flex-col gap-1">
+                <label className="text-tan-muted text-xs">Provider</label>
+                <select
+                  value={settings.agent_model_provider ?? 'anthropic'}
+                  onChange={async (e) => {
+                    try {
+                      const { saveAgentSettings } = await import('../tauri/agent');
+                      await saveAgentSettings({ agent_model_provider: e.target.value });
+                    } catch (err) {
+                      console.error('Failed to save agent provider:', err);
+                    }
+                  }}
+                  className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm text-sm outline-none"
                 >
-                  {key}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+                  <option value="anthropic">Anthropic</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="google">Google</option>
+                </select>
+              </div>
 
-        {/* Common integrations */}
-        {staticSuggestions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-tan-muted text-xs">Suggestions:</span>
-            {staticSuggestions.map((s) => (
-              <button
-                key={s.key}
-                className="px-2 py-0.5 rounded text-xs font-mono bg-charcoal-dark border border-charcoal-light text-tan-muted hover:text-beige-warm hover:border-tan-muted transition-colors"
-                title={s.key}
-                onClick={() => handleSuggestionClick(s.key)}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Existing vars */}
-        {Object.keys(envVars).length > 0 && (
-          <div className="flex flex-col gap-2">
-            {Object.entries(envVars).map(([key, value]) => (
-              <div key={key} className="flex items-center gap-2">
-                <span className="text-beige-warm font-mono text-xs w-48 shrink-0 truncate" title={key}>{key}</span>
+              {/* Model */}
+              <div className="flex flex-col gap-1">
+                <label className="text-tan-muted text-xs">Model</label>
                 <input
-                  type={visibleEnvKeys.has(key) ? 'text' : 'password'}
-                  readOnly
-                  value={value}
-                  className="flex-1 px-3 py-1.5 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-xs outline-none"
-                />
-                <Button
-                  text={visibleEnvKeys.has(key) ? 'Hide' : 'Show'}
-                  variant="outline"
-                  onClick={() => handleToggleEnvVisibility(key)}
-                />
-                <Button
-                  text="Remove"
-                  color="red"
-                  variant="outline"
-                  onClick={() => handleRemoveEnvVar(key)}
+                  type="text"
+                  placeholder="claude-sonnet-4-20250514"
+                  value={settings.agent_model_id ?? ''}
+                  onChange={async (e) => {
+                    try {
+                      const { saveAgentSettings } = await import('../tauri/agent');
+                      await saveAgentSettings({ agent_model_id: e.target.value || null });
+                    } catch (err) {
+                      console.error('Failed to save agent model:', err);
+                    }
+                  }}
+                  className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
                 />
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* Add new var */}
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder="Key (WAVS_ENV_ prefix added if missing)"
-            value={newEnvKey}
-            onChange={(e) => setNewEnvKey(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleAddEnvVar(); }}
-            className="flex-1 px-3 py-1.5 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-xs outline-none"
-          />
-          <input
-            ref={newEnvValueRef}
-            type="text"
-            placeholder="Value"
-            value={newEnvValue}
-            onChange={(e) => setNewEnvValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleAddEnvVar(); }}
-            className="flex-1 px-3 py-1.5 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-xs outline-none"
-          />
-          <Button
-            text="Add"
-            variant="outline"
-            onClick={handleAddEnvVar}
-            disabled={!newEnvKey.trim()}
-          />
-        </div>
+              {/* Thinking level */}
+              <div className="flex flex-col gap-1">
+                <label className="text-tan-muted text-xs">Thinking level</label>
+                <select
+                  value={settings.agent_thinking_level ?? 'low'}
+                  onChange={async (e) => {
+                    try {
+                      const { saveAgentSettings } = await import('../tauri/agent');
+                      await saveAgentSettings({ agent_thinking_level: e.target.value });
+                    } catch (err) {
+                      console.error('Failed to save agent thinking level:', err);
+                    }
+                  }}
+                  className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm text-sm outline-none"
+                >
+                  <option value="off">Off</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
 
-        <div className="flex items-center justify-between">
-          <div>
-            {envSaveSuccess && (
-              <p className="text-green-4 text-sm">Environment variables saved.</p>
-            )}
-            {envError && (
-              <p className="text-red-4 text-sm">{envError}</p>
-            )}
-          </div>
-          <Button
-            text={envSaving ? 'Saving...' : 'Save'}
-            onClick={handleSaveEnvVars}
-            disabled={envSaving}
-          />
-        </div>
-      </div>
+              {/* API Key */}
+              <AgentApiKeyField
+                provider={settings.agent_model_provider ?? 'anthropic'}
+                oauthLoading={oauthLoading}
+                oauthStatus={oauthStatus}
+                onOAuthStart={() => handleOAuthStart(settings.agent_model_provider ?? 'anthropic')}
+              />
+            </div>
+          )}
+          {activeSection === 'mcp' && (
+            <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-beige-light text-lg font-semibold">MCP Server</h2>
+                  {mcpStatus && (
+                    <span className={`text-xs font-mono px-2 py-0.5 rounded ${
+                      mcpStatus.running
+                        ? 'bg-charcoal-dark text-green-4'
+                        : 'bg-charcoal-dark text-tan-muted'
+                    }`}>
+                      {mcpStatus.running ? `Running (pid ${mcpStatus.pid})` : 'Stopped'}
+                    </span>
+                  )}
+                </div>
+                <Button
+                  text={mcpLoading ? '...' : mcpStatus?.running ? 'Stop' : 'Start'}
+                  color={mcpStatus?.running ? 'red' : undefined}
+                  variant="outline"
+                  onClick={handleMcpToggle}
+                  disabled={mcpLoading}
+                />
+              </div>
 
-      {/* AI Agent */}
-      <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
-        <h2 className="text-beige-light text-lg font-semibold">AI Agent</h2>
-        <p className="text-tan-muted text-xs">
-          Configure the embedded AI assistant. It can build WASM components, deploy services, and manage the node.
-          Requires Node.js installed.
-        </p>
+              <p className="text-tan-muted text-xs">
+                Exposes WAVS operations to AI assistants (Claude Desktop, Cursor, VS Code) via the Model Context Protocol.
+              </p>
 
-        {/* Provider */}
-        <div className="flex flex-col gap-1">
-          <label className="text-tan-muted text-xs">Provider</label>
-          <select
-            value={settings.agent_model_provider ?? 'anthropic'}
-            onChange={async (e) => {
-              try {
-                const { saveAgentSettings } = await import('../tauri/agent');
-                await saveAgentSettings({ agent_model_provider: e.target.value });
-              } catch (err) {
-                console.error('Failed to save agent provider:', err);
-              }
-            }}
-            className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm text-sm outline-none"
-          >
-            <option value="anthropic">Anthropic</option>
-            <option value="openai">OpenAI</option>
-            <option value="google">Google</option>
-          </select>
-        </div>
+              {/* Auto-start toggle */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={mcpAutoStart}
+                  onChange={(e) => setMcpAutoStart(e.target.checked)}
+                  className="w-4 h-4 accent-green-4"
+                />
+                <span className="text-beige-warm text-sm">Auto-start when WAVS node starts</span>
+              </label>
 
-        {/* Model */}
-        <div className="flex flex-col gap-1">
-          <label className="text-tan-muted text-xs">Model</label>
-          <input
-            type="text"
-            placeholder="claude-sonnet-4-20250514"
-            value={settings.agent_model_id ?? ''}
-            onChange={async (e) => {
-              try {
-                const { saveAgentSettings } = await import('../tauri/agent');
-                await saveAgentSettings({ agent_model_id: e.target.value || null });
-              } catch (err) {
-                console.error('Failed to save agent model:', err);
-              }
-            }}
-            className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
-          />
-        </div>
+              {/* Bearer token */}
+              <div className="flex flex-col gap-1">
+                <label className="text-tan-muted text-xs">Bearer token (for write operations)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    placeholder="Optional — leave blank for read-only access"
+                    value={mcpToken}
+                    onChange={(e) => setMcpToken(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
+                  />
+                  <Button
+                    text="Generate"
+                    variant="outline"
+                    onClick={() => {
+                      const bytes = new Uint8Array(24);
+                      crypto.getRandomValues(bytes);
+                      setMcpToken(btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, (c) => ({ '+': '-', '/': '_', '=': '' }[c] ?? c)));
+                    }}
+                  />
+                </div>
+              </div>
 
-        {/* Thinking level */}
-        <div className="flex flex-col gap-1">
-          <label className="text-tan-muted text-xs">Thinking level</label>
-          <select
-            value={settings.agent_thinking_level ?? 'low'}
-            onChange={async (e) => {
-              try {
-                const { saveAgentSettings } = await import('../tauri/agent');
-                await saveAgentSettings({ agent_thinking_level: e.target.value });
-              } catch (err) {
-                console.error('Failed to save agent thinking level:', err);
-              }
-            }}
-            className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm text-sm outline-none"
-          >
-            <option value="off">Off</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-        </div>
+              <Button
+                text="Save MCP Settings"
+                variant="outline"
+                onClick={handleMcpSaveSettings}
+              />
 
-        {/* API Key */}
-        <AgentApiKeyField provider={settings.agent_model_provider ?? 'anthropic'} />
-
-
-      </div>
-
-      {/* MCP Server */}
-      <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h2 className="text-beige-light text-lg font-semibold">MCP Server</h2>
-            {mcpStatus && (
-              <span className={`text-xs font-mono px-2 py-0.5 rounded ${
-                mcpStatus.running
-                  ? 'bg-charcoal-dark text-green-4'
-                  : 'bg-charcoal-dark text-tan-muted'
-              }`}>
-                {mcpStatus.running ? `Running (pid ${mcpStatus.pid})` : 'Stopped'}
-              </span>
-            )}
-          </div>
-          <Button
-            text={mcpLoading ? '...' : mcpStatus?.running ? 'Stop' : 'Start'}
-            color={mcpStatus?.running ? 'red' : undefined}
-            variant="outline"
-            onClick={handleMcpToggle}
-            disabled={mcpLoading}
-          />
-        </div>
-
-        <p className="text-tan-muted text-xs">
-          Exposes WAVS operations to AI assistants (Claude Desktop, Cursor, VS Code) via the Model Context Protocol.
-        </p>
-
-        {/* Auto-start toggle */}
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={mcpAutoStart}
-            onChange={(e) => setMcpAutoStart(e.target.checked)}
-            className="w-4 h-4 accent-green-4"
-          />
-          <span className="text-beige-warm text-sm">Auto-start when WAVS node starts</span>
-        </label>
-
-        {/* Bearer token */}
-        <div className="flex flex-col gap-1">
-          <label className="text-tan-muted text-xs">Bearer token (for write operations)</label>
-          <div className="flex gap-2">
-            <input
-              type="password"
-              placeholder="Optional — leave blank for read-only access"
-              value={mcpToken}
-              onChange={(e) => setMcpToken(e.target.value)}
-              className="flex-1 px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
-            />
-            <Button
-              text="Generate"
-              variant="outline"
-              onClick={() => {
-                const bytes = new Uint8Array(24);
-                crypto.getRandomValues(bytes);
-                setMcpToken(btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, (c) => ({ '+': '-', '/': '_', '=': '' }[c] ?? c)));
-              }}
-            />
-          </div>
-        </div>
-
-        <Button
-          text="Save MCP Settings"
-          variant="outline"
-          onClick={handleMcpSaveSettings}
-        />
-
-        {/* Config snippet */}
-        <div className="flex flex-col gap-1">
-          <span className="text-tan-muted text-xs">Claude Desktop / Cursor config snippet:</span>
-          <pre className="text-xs font-mono text-beige-warm bg-charcoal-darkest rounded p-3 overflow-x-auto whitespace-pre-wrap">{
+              {/* Config snippet */}
+              <div className="flex flex-col gap-1">
+                <span className="text-tan-muted text-xs">Claude Desktop / Cursor config snippet:</span>
+                <pre className="text-xs font-mono text-beige-warm bg-charcoal-darkest rounded p-3 overflow-x-auto whitespace-pre-wrap">{
 `{
   "mcpServers": {
     "wavs": {
@@ -1125,97 +516,100 @@ export function Settings() {
     }
   }
 }`
-          }</pre>
-          {!mcpBinaryPath && (
-            <p className="text-tan-muted text-xs mt-1">
-              Binary not found. Build it with: <span className="font-mono">cargo build --release -p wavs-mcp</span>
-            </p>
-          )}
-        </div>
+                }</pre>
+                {!mcpBinaryPath && (
+                  <p className="text-tan-muted text-xs mt-1">
+                    Binary not found. Build it with: <span className="font-mono">cargo build --release -p wavs-mcp</span>
+                  </p>
+                )}
+              </div>
 
-        {/* Register with Claude Code */}
-        <div className="flex flex-col gap-2">
-          <label className="text-tan-muted text-xs font-medium">Register with Claude Code</label>
-          <p className="text-tan-muted text-xs">
-            Add wavs-mcp to a Claude Code project so MCP tools are available there.
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={claudeProjectPath}
-              onChange={(e) => setClaudeProjectPath(e.target.value)}
-              placeholder="/path/to/your-project"
-              className="flex-1 px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
-            />
-            <Button
-              text="Browse..."
-              variant="outline"
-              onClick={async () => {
-                const path = await pickFolder();
-                if (path) setClaudeProjectPath(path);
-              }}
-            />
-            <Button
-              text={claudeRegisterLoading ? '...' : 'Register'}
-              variant="outline"
-              onClick={handleRegisterClaude}
-              disabled={claudeRegisterLoading || !mcpStatus?.running || !claudeProjectPath.trim()}
-            />
-          </div>
-          {claudeRegisterResult && (
-            <p className="text-green-4 text-xs">
-              Registered for {claudeRegisterResult}. Restart Claude Code to pick up the change.
-            </p>
-          )}
-          {claudeRegisterError && (
-            <p className="text-red-4 text-xs">{claudeRegisterError}</p>
-          )}
-        </div>
+              {/* Register with Claude Code */}
+              <div className="flex flex-col gap-2">
+                <label className="text-tan-muted text-xs font-medium">Register with Claude Code</label>
+                <p className="text-tan-muted text-xs">
+                  Add wavs-mcp to a Claude Code project so MCP tools are available there.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={claudeProjectPath}
+                    onChange={(e) => setClaudeProjectPath(e.target.value)}
+                    placeholder="/path/to/your-project"
+                    className="flex-1 px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
+                  />
+                  <Button
+                    text="Browse..."
+                    variant="outline"
+                    onClick={async () => {
+                      const path = await pickFolder();
+                      if (path) setClaudeProjectPath(path);
+                    }}
+                  />
+                  <Button
+                    text={claudeRegisterLoading ? '...' : 'Register'}
+                    variant="outline"
+                    onClick={handleRegisterClaude}
+                    disabled={claudeRegisterLoading || !mcpStatus?.running || !claudeProjectPath.trim()}
+                  />
+                </div>
+                {claudeRegisterResult && (
+                  <p className="text-green-4 text-xs">
+                    Registered for {claudeRegisterResult}. Restart Claude Code to pick up the change.
+                  </p>
+                )}
+                {claudeRegisterError && (
+                  <p className="text-red-4 text-xs">{claudeRegisterError}</p>
+                )}
+              </div>
 
-        {mcpError && <p className="text-red-4 text-sm">{mcpError}</p>}
-      </div>
-
-      {/* Reset App State */}
-      <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
-        <h2 className="text-beige-light text-lg font-semibold">Reset App State</h2>
-        <p className="text-tan-muted text-sm">
-          Remove all registered services and saved registries from the app. Useful when restarting a local chain (e.g. Anvil) where previous contract addresses no longer exist.
-        </p>
-
-        {!showClearServicesConfirm && (
-          <Button
-            text="Clear All Services & Registries"
-            color="red"
-            variant="outline"
-            onClick={() => setShowClearServicesConfirm(true)}
-          />
-        )}
-
-        {showClearServicesConfirm && (
-          <div className="flex flex-col gap-3 p-3 rounded bg-charcoal-darkest border border-red-2">
-            <p className="text-sm text-red-4">
-              This will stop all running services and clear all saved registries. They can be re-added from the Services page.
-            </p>
-            <div className="flex gap-3">
-              <Button
-                text="Cancel"
-                variant="outline"
-                onClick={() => setShowClearServicesConfirm(false)}
-              />
-              <Button
-                text="Yes, Clear Everything"
-                color="red"
-                onClick={handleClearServices}
-              />
+              {mcpError && <p className="text-red-4 text-sm">{mcpError}</p>}
             </div>
-          </div>
-        )}
-      </div>
+          )}
+          {activeSection === 'reset' && (
+            <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
+              <h2 className="text-beige-light text-lg font-semibold">Reset App State</h2>
+              <p className="text-tan-muted text-sm">
+                Remove all registered services and saved registries from the app. Useful when restarting a local chain (e.g. Anvil) where previous contract addresses no longer exist.
+              </p>
 
-      {/* Error display */}
-      {displayError && (
-        <p className="text-red-4 text-base">{displayError}</p>
-      )}
+              {!showClearServicesConfirm && (
+                <Button
+                  text="Clear All Services & Registries"
+                  color="red"
+                  variant="outline"
+                  onClick={() => setShowClearServicesConfirm(true)}
+                />
+              )}
+
+              {showClearServicesConfirm && (
+                <div className="flex flex-col gap-3 p-3 rounded bg-charcoal-darkest border border-red-2">
+                  <p className="text-sm text-red-4">
+                    This will stop all running services and clear all saved registries. They can be re-added from the Services page.
+                  </p>
+                  <div className="flex gap-3">
+                    <Button
+                      text="Keep Services"
+                      variant="outline"
+                      onClick={() => setShowClearServicesConfirm(false)}
+                    />
+                    <Button
+                      text="Confirm Clear"
+                      color="red"
+                      onClick={handleClearServices}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Error display */}
+          {error && (
+            <p className="text-red-4 text-base mt-4">{error}</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
