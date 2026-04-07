@@ -90,8 +90,8 @@ Plans:
   5. Each settings section (Wallet, Node, Env Vars, Agent, MCP, Reset) is an isolated component; no section directly reads another section's local state
 **Plans**: 2 plans
 Plans:
-- [ ] 05-01-PLAN.md — Create SettingsSidebar, extract Wallet/Node/Environment sections, rewrite Settings.tsx shell with sidebar layout
-- [ ] 05-02-PLAN.md — Extract Agent/MCP/Reset sections, finalize Settings.tsx as minimal orchestrating shell
+- [x] 05-01-PLAN.md — Create SettingsSidebar, extract Wallet/Node/Environment sections, rewrite Settings.tsx shell with sidebar layout
+- [x] 05-02-PLAN.md — Extract Agent/MCP/Reset sections, finalize Settings.tsx as minimal orchestrating shell
 **UI hint**: yes
 
 ### Phase 6: Unified Activity Frontend
