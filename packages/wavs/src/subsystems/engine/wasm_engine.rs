@@ -1,3 +1,4 @@
+use uuid::Uuid;
 use std::sync::Arc;
 use std::time::Instant;
 use std::{path::Path, sync::RwLock};
@@ -705,6 +706,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -770,6 +772,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"configvar:foo"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -788,6 +791,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -806,6 +810,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -870,6 +875,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"custom-event-id"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -938,6 +944,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"multi-response"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -962,6 +969,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"multi-response-bad"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1023,6 +1031,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1149,6 +1158,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1188,6 +1198,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1227,6 +1238,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1271,6 +1283,7 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await

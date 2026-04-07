@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
+use uuid::Uuid;
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_engine::worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder};
 use wavs_types::{
@@ -62,6 +63,7 @@ fn create_dummy_input(service: &Service) -> AggregatorInput {
                 trigger: service.workflows.values().next().unwrap().trigger.clone(),
             },
             data: wavs_types::TriggerData::default(),
+            correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
         },
         operator_response: WasmResponse {
             event_id_salt: None,
@@ -279,6 +281,7 @@ mod test {
                     trigger: service.workflows.values().next().unwrap().trigger.clone(),
                 },
                 data: wavs_types::TriggerData::default(),
+                correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
             },
             operator_response: wavs_types::WasmResponse {
                 event_id_salt: None,

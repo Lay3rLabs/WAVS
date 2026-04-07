@@ -8,6 +8,7 @@ use std::num::{NonZeroU32, NonZeroU64};
 use std::str::FromStr;
 use thiserror::Error;
 use utoipa::ToSchema;
+use uuid::Uuid;
 use wasm_pkg_common::package::PackageRef;
 
 #[cfg(feature = "ts-bindings")]
@@ -496,6 +497,9 @@ pub struct TriggerAction {
     #[bincode(with_serde)]
     /// The data that came from the trigger
     pub data: TriggerData,
+
+    /// Unique ID linking this trigger to its eventual submission event
+    pub correlation_id: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]

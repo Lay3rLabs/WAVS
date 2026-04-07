@@ -17,6 +17,7 @@ use crate::{
 use alloy_sol_types::SolEvent;
 use anyhow::Result;
 use error::TriggerError;
+use uuid::Uuid;
 use futures::{stream::SelectAll, StreamExt};
 use iri_string::types::UriString;
 use layer_climb::prelude::*;
@@ -817,6 +818,7 @@ impl TriggerManager {
                                     TriggerAction {
                                         data: trigger_data.clone(),
                                         config: trigger_config.clone(),
+                                        correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                                     },
                                 ));
                             }
@@ -898,6 +900,7 @@ impl TriggerManager {
                                         TriggerAction {
                                             data: trigger_data.clone(),
                                             config: trigger_config.clone(),
+                                            correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                                         },
                                     ));
                                 }
@@ -927,6 +930,7 @@ impl TriggerManager {
                                             trigger_time: hit.scheduled_time,
                                         },
                                         config: trigger_config.clone(),
+                                        correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                                     },
                                 ));
                             }
@@ -1039,6 +1043,7 @@ impl TriggerManager {
                             dispatcher_commands.push(DispatcherCommand::Trigger(TriggerAction {
                                 data: trigger_data.clone(),
                                 config: trigger_config.clone(),
+                                correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                             }));
                         }
 
@@ -1119,6 +1124,7 @@ impl TriggerManager {
                             block_height: block_height.get(),
                         },
                         config: trigger_config,
+                        correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                     })
                 })
                 .collect()
@@ -1162,6 +1168,7 @@ impl TriggerManager {
                 DispatcherCommand::Trigger(TriggerAction {
                     data: trigger_data.clone(),
                     config: trigger_config,
+                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 })
             })
             .collect()
@@ -1266,6 +1273,7 @@ mod tests {
                     trigger: Trigger::Manual,
                 },
                 data: TriggerData::Raw(vec![i as u8]),
+                correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
             };
 
             let result = trigger_manager.add_trigger(action);

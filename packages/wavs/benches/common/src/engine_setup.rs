@@ -1,4 +1,5 @@
 use std::{collections::BTreeMap, sync::Arc};
+use uuid::Uuid;
 
 use tempfile::{tempdir, TempDir};
 use utils::{filesystem::workspace_path, storage::db::WavsDb};
@@ -138,6 +139,7 @@ impl EngineSetup {
                 trigger: wavs_types::Trigger::Manual,
             },
             data: TriggerData::Raw(data),
+            correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
         }
     }
 }
