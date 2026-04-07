@@ -83,7 +83,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => {
       const next = [...state.activityList, item];
       if (next.length > MAX_ACTIVITY_ITEMS) {
-        return { activityList: next.slice(next.length - MAX_ACTIVITY_ITEMS) };
+        // ERR-02: Failed events are never auto-removed from the activity feed.
+        // Evict oldest non-failed items first; failed items are preserved.
+        const evictable: ActivityItem[] = [];
+        const preserved: ActivityItem[] = [];
+        for (const entry of next) {
+          if (entry.kind === 'submission_failed') {
+            preserved.push(entry);
+          } else {
+            evictable.push(entry);
+          }
+        }
+        const trimmed = evictable.length > MAX_ACTIVITY_ITEMS
+          ? evictable.slice(evictable.length - MAX_ACTIVITY_ITEMS)
+          : evictable;
+        // Merge and maintain insertion order by id
+        const merged = [...trimmed, ...preserved].sort((a, b) => a.id - b.id);
+        return { activityList: merged };
       }
       return { activityList: next };
     }),
