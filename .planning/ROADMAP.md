@@ -15,7 +15,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: OCI Component Pull** - Service definitions accept `oci://` URIs; components are pulled, verified, and cached at deploy time
 - [x] **Phase 2: WIT-to-Schema Tooling** - Developer can inspect any compiled WASM component and get a JSON Schema describing its interface
 - [ ] **Phase 3: MCP Execution Interface** - Deployed service components appear as callable MCP tools with three explicit trust tiers
-- [ ] **Phase 4: Rust Event Foundation** - Correlation IDs on trigger/submission events and submission failure surfacing to the GUI
+- [x] **Phase 4: Rust Event Foundation** - Correlation IDs on trigger/submission events and submission failure surfacing to the GUI
+- [ ] **Phase 5: Settings Decomposition** - Settings page restructured into sidebar-navigated layout with isolated section components
+- [ ] **Phase 6: Unified Activity Frontend** - Activity feed displays triggers and submissions as nested parent-child events with error surfacing
 
 ## Phase Details
 
@@ -76,6 +78,32 @@ Plans:
 Plans:
 - [x] 04-01-PLAN.md — Add correlation_id to TriggerAction, SubmissionFailed event path, and TypeScript type mirroring
 
+### Phase 5: Settings Decomposition
+**Goal**: The Settings page is restructured into a sidebar-navigated layout with each section extracted into an isolated component, without breaking OAuth flows or the unsaved-changes banner
+**Depends on**: Phase 3 (independent of Phase 4; can run in parallel)
+**Requirements**: SET-01, SET-02, SET-03, SET-04, SET-05, SET-06
+**Success Criteria** (what must be TRUE):
+  1. The Settings page displays a sidebar with labeled items for all sections; clicking an item shows only that section's content
+  2. The currently active section is visually distinguished in the sidebar
+  3. The restart / unsaved-changes banner remains visible at all times regardless of which section is selected
+  4. An OAuth agent API key flow that spans a redirect-and-callback survives navigating between sidebar sections without losing its listener
+  5. Each settings section (Wallet, Node, Env Vars, Agent, MCP, Reset) is an isolated component; no section directly reads another section's local state
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 6: Unified Activity Frontend
+**Goal**: The activity feed on both the Activity page and the Service detail tab displays triggers and submissions as nested parent-child events, shows inline error messages for failed submissions, and replaces the kind-filter tabs with event-appropriate filtering
+**Depends on**: Phase 4
+**Requirements**: EVT-02, EVT-03, EVT-04, EVT-05, ERR-02, ERR-03, ERR-04
+**Success Criteria** (what must be TRUE):
+  1. A trigger with a completed submission appears as a single expandable card; expanding it reveals the submission result nested underneath
+  2. A trigger whose submission has not yet arrived shows a visible pending/in-flight indicator on its card
+  3. A failed submission shows an error badge on the collapsed card and the full error message when expanded
+  4. Failed events are never automatically removed from the activity feed; successful events follow existing retention behavior
+  5. The unified event model (nested submissions, pending states, error badges) is present on both the standalone Activity page and the per-service activity tab
+**Plans**: TBD
+**UI hint**: yes
+
 ## Progress
 
 **Execution Order:**
@@ -86,4 +114,6 @@ Phases execute in numeric order: 1 → 2 → 3
 | 1. OCI Component Pull | 2/2 | Complete | 2026-03-24 |
 | 2. WIT-to-Schema Tooling | 2/2 | Complete | 2026-03-25 |
 | 3. MCP Execution Interface | 0/3 | In progress | - |
-| 4. Rust Event Foundation | 0/1 | Not started | - |
+| 4. Rust Event Foundation | 1/1 | Complete | 2026-04-07 |
+| 5. Settings Decomposition | 0/? | Not started | - |
+| 6. Unified Activity Frontend | 0/? | Not started | - |
