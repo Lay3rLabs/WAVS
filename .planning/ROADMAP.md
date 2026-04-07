@@ -104,7 +104,10 @@ Plans:
   3. A failed submission shows an error badge on the collapsed card and the full error message when expanded
   4. Failed events are never automatically removed from the activity feed; successful events follow existing retention behavior
   5. The unified event model (nested submissions, pending states, error badges) is present on both the standalone Activity page and the per-service activity tab
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 06-01-PLAN.md — Data layer: GroupedActivityEvent type, useGroupedActivity hook, appStore eviction guard, status filter types
+- [ ] 06-02-PLAN.md — UI layer: GroupedActivityCard component, ActivityFeed refactor with status tabs and grouped virtualizer
 **UI hint**: yes
 
 ## Progress
@@ -119,4 +122,4 @@ Phases execute in numeric order: 1 → 2 → 3
 | 3. MCP Execution Interface | 0/3 | In progress | - |
 | 4. Rust Event Foundation | 1/1 | Complete | 2026-04-07 |
 | 5. Settings Decomposition | 0/2 | Not started | - |
-| 6. Unified Activity Frontend | 0/? | Not started | - |
+| 6. Unified Activity Frontend | 0/2 | Not started | - |
