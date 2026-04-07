@@ -1,7 +1,8 @@
 ---
 phase: 5
 slug: settings-decomposition
-status: draft
+status: approved
+reviewed_at: 2026-04-07
 shadcn_initialized: false
 preset: none
 created: 2026-04-07
@@ -56,12 +57,13 @@ Source: `app/src/pages/Settings.tsx` existing layout (`p-4`, `gap-4`, `gap-6`), 
 | Body | 14px (text-sm) | 400 (regular) | 1.5 |
 | Label | 12px (text-xs) | 400 (regular) | 1.4 |
 | Section Heading | 18px (text-lg) | 600 (semibold) | 1.2 |
-| Sidebar Item | 14px (text-sm) | 500 (medium) | 1.0 |
+| Sidebar Item (inactive) | 14px (text-sm) | 400 (regular) | 1.0 |
+| Sidebar Item (active) | 14px (text-sm) | 600 (semibold) | 1.0 |
 
 Notes:
 - Section headings use `text-beige-light text-lg font-semibold` — matches existing `<h2>` pattern in Settings.tsx at lines 691, 1182
 - Label text uses `text-tan-muted text-xs` — existing pattern for field labels
-- Sidebar item uses `text-sm font-medium` — matches `Tabs.tsx` active/inactive tab pattern
+- Sidebar items use `text-sm font-normal` when inactive, `text-sm font-semibold` when active — 2 weights only (400, 600)
 - No Display-size text needed for this phase
 
 Source: `app/src/pages/Settings.tsx` headings, `app/src/components/atoms/Tabs.tsx`
@@ -166,7 +168,7 @@ Source: CONTEXT.md layout decisions, existing Settings.tsx outer div at line 672
 
 ### Destructive Actions (Reset section)
 - "Clear All Services & Registries": shows inline confirmation panel on first click (matches existing pattern at line 1185-1213)
-- Confirmation panel: `bg-charcoal-darkest border border-red-2` rounded, contains warning text + Confirm/Cancel buttons
+- Confirmation panel: `bg-charcoal-darkest border border-red-2` rounded, contains warning text + "Confirm Clear" / "Keep Services" buttons
 - No modal overlay — inline expansion only (preserves existing UX pattern)
 - Reset section sidebar item: same visual style as other items, no special warning color (CONTEXT.md decision)
 
@@ -183,7 +185,7 @@ Source: CONTEXT.md layout decisions, existing Settings.tsx outer div at line 672
 | Destructive action — clear services | "Clear All Services & Registries" |
 | Destructive confirmation body | "This will stop all running services and clear all saved registries. They can be re-added from the Services page." |
 | Destructive confirmation CTA | "Confirm Clear" |
-| Destructive cancel | "Cancel" |
+| Destructive cancel | "Keep Services" |
 | Error state (section-level) | "{specific action} failed. {reason if available}. Please try again." |
 | Sidebar item labels | Wallet / Node / Environment / Agent / MCP / Reset (CONTEXT.md decision) |
 
