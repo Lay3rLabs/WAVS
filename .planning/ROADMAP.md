@@ -70,7 +70,7 @@ Plans:
   4. OAuth listener and other page-level state survive scrolling and sidebar navigation without unmounting
 **Plans**: 1 plan
 Plans:
-- [ ] 07-01-PLAN.md — Add Groq & OpenRouter providers to UI dropdown and sidecar startup
+- [ ] 09-01-PLAN.md — Single scrollable settings page with IntersectionObserver sidebar tracking
 **UI hint**: yes
 
 ## Progress
