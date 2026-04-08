@@ -16,7 +16,7 @@ interface SettingsSidebarProps {
 
 export function SettingsSidebar({ activeSection, onSelect }: SettingsSidebarProps) {
   return (
-    <div className="flex flex-col w-[200px] shrink-0 border-r border-charcoal-light py-2">
+    <div className="flex flex-col w-[200px] shrink-0 border-r border-charcoal-light py-2 sticky top-0 self-start">
       {SIDEBAR_ITEMS.map((item) => {
         const isActive = item.key === activeSection;
         return (

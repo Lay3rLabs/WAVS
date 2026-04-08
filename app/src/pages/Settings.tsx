@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Button, Toast } from '../components/atoms';
 import { useAppStore } from '../stores/appStore';
@@ -19,6 +19,7 @@ export function Settings() {
   const [oauthLoading, setOauthLoading] = useState(false);
   const [oauthStatus, setOauthStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // OAuth listener in parent — survives section navigation
   useEffect(() => {
@@ -48,6 +49,36 @@ export function Settings() {
     ).then((fn) => { unlisten = fn; });
     return () => { unlisten?.(); };
   }, []);
+
+  // IntersectionObserver — updates sidebar highlight as user scrolls
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const sectionKeys: SectionKey[] = ['wallet', 'node', 'environment', 'agent', 'mcp', 'reset'];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length > 0) {
+          const top = visible.reduce((a, b) => (a.intersectionRatio > b.intersectionRatio ? a : b));
+          const key = top.target.id.replace('section-', '') as SectionKey;
+          setActiveSection(key);
+        }
+      },
+      { root: container, threshold: 0.3 }
+    );
+
+    sectionKeys.forEach((key) => {
+      const el = document.getElementById(`section-${key}`);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const handleSidebarSelect = (key: SectionKey) => {
+    document.getElementById(`section-${key}`)?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const handleOAuthStart = async (provider: string) => {
     setOauthLoading(true);
@@ -81,8 +112,8 @@ export function Settings() {
       )}
 
       <div className="flex flex-1 gap-0">
-        <SettingsSidebar activeSection={activeSection} onSelect={setActiveSection} />
-        <div className="flex-1 overflow-y-auto px-6 py-4 max-h-[calc(100vh-12rem)]">
+        <SettingsSidebar activeSection={activeSection} onSelect={handleSidebarSelect} />
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-6 py-4 max-h-[calc(100vh-12rem)]">
           <div id="section-wallet" className="py-8 border-b border-charcoal-light">
             <h2 className="text-lg font-semibold text-beige-light mb-4">Wallet</h2>
             <WalletSection onError={setError} />
