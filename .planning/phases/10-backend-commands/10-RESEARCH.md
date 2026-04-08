@@ -51,7 +51,7 @@ The critical discovery is that the `Dispatcher` (the primary backend entry point
 
 Both commands share a `SchemaCacheState` (new Tauri managed state wrapping `wit_schema::SchemaCache`), registered in `lib.rs` alongside existing managed states.
 
-**Primary recommendation:** Add `get_component_bytes_and_engine(digest)` to `WasmEngine`, forward via `Dispatcher`, register `SchemaCacheState`, then implement both commands following the established `#[tauri::command(rename_all = "snake_case")]` pattern.
+**Primary recommendation:** Add `get_component_bytes_and_engine` to `WasmEngine`, forward via `Dispatcher`, register `SchemaCacheState`, then implement both commands following the established `#[tauri::command(rename_all = "snake_case")]` pattern.
 
 ## Standard Stack
 
@@ -144,14 +144,16 @@ A new method must be added to `WasmEngine`:
 
 ```rust
 // packages/wavs/src/subsystems/engine/wasm_engine.rs
-pub async fn get_component_bytes(&self, digest: &ComponentDigest)
+pub fn get_component_bytes(&self, digest: &ComponentDigest)
     -> Result<Vec<u8>, EngineError>
 {
     self.engine.storage
         .get_data(&digest.clone().into())
-        .map_err(|e| EngineError::StorageError(format!("Component not found: {}", e)))
+        .map_err(EngineError::Storage)
 }
 ```
+
+NOTE: `EngineError::Storage` uses `#[from] CAStorageError`, so `.map_err(EngineError::Storage)` converts directly. Do NOT use `format!()` — the variant takes `CAStorageError`, not `String`.
 
 And forwarded from `Dispatcher`:
 
@@ -360,17 +362,19 @@ wavs_instance
 | A1 | Adding `get_component_bytes` to `WasmEngine` is the correct approach (rather than adding `wit-schema` dep to `packages/wavs`) | Architecture Patterns | Low — both options work; Option A is cleaner but either is acceptable |
 | A2 | Components with no associated service should return default metadata rather than an error | Common Pitfalls (Pitfall 4) | Medium — if the spec intends "component not found in any service = error", the fallback approach would be wrong |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **WasmEngine exposure approach: Option A vs B**
    - What we know: `WasmEngine.engine` is private; `BaseEngine.storage` is public
    - What's unclear: Whether adding wit-schema as a dep of `packages/wavs` is acceptable (would enable encapsulating schema logic in engine layer)
    - Recommendation: Default to Option A (expose bytes + engine getter from WasmEngine, call wit-schema in Tauri commands layer). If the team prefers no wit-schema in the GUI layer, Option B is a clean alternative.
+   - RESOLVED: Option A chosen. `WasmEngine` exposes `get_component_bytes(digest) -> Vec<u8>` and `wasmtime_engine() -> &wasmtime::Engine`. The wit-schema call stays in the Tauri commands layer, keeping `wit-schema` out of the core engine package.
 
 2. **Metadata for unserviced components**
    - What we know: Component storage and service registry are independent
    - What's unclear: Should `cmd_get_component_metadata` return an error or default values when a digest has no associated service?
    - Recommendation: Return default metadata (all empty/None fields) since the component is valid and uploadable; this matches the success criterion "completes without error for all source types"
+   - RESOLVED: Return default metadata with empty/None fields for components that exist in storage but have no associated service. This aligns with the component lifecycle (uploaded but not yet assigned to a service).
 
 ## Environment Availability
 
@@ -388,6 +392,7 @@ Step 2.6: SKIPPED (no external dependencies beyond existing Rust/Cargo workspace
 - `/workspace/packages/wavs/src/dispatcher.rs` — `Dispatcher` public fields, `engine_manager: EngineManager<S>` verified
 - `/workspace/packages/wavs/src/subsystems/engine.rs` — `EngineManager.engine: Arc<WasmEngine<S>>` verified
 - `/workspace/packages/wavs/src/subsystems/engine/wasm_engine.rs` — `WasmEngine` struct fields (engine private), available public methods verified
+- `/workspace/packages/wavs/src/subsystems/engine/error.rs` — `EngineError::Storage(#[from] CAStorageError)` variant verified (takes CAStorageError, not String)
 - `/workspace/packages/engine/src/common/base_engine.rs` — `BaseEngine.storage` public, `get_data` available, `wasm_engine` public verified
 - `/workspace/packages/types/src/service.rs` — `Component` struct, `ComponentSource` enum, `Permissions` struct all fields verified
 - `/workspace/packages/types/src/id/hash.rs` — `ComponentDigest::from_str`, `ComponentDigest::hash` verified
