@@ -2,7 +2,16 @@
 
 ## What This Is
 
-Developer experience and capability improvements to the WAVS platform. Six features shipped in v1.0: OCI component distribution, WIT-to-schema tooling, MCP execution interface with three trust tiers, event correlation IDs, settings page decomposition, and unified activity feed with error surfacing.
+Developer experience and capability improvements to the WAVS platform. Six features shipped in v1.0: OCI component distribution, WIT-to-schema tooling, MCP execution interface with three trust tiers, event correlation IDs, settings page decomposition, and unified activity feed with error surfacing. v1.1 added open-source AI providers (Groq, OpenRouter, Ollama) and settings scroll refactor.
+
+## Current Milestone: v1.2 Components Explorer
+
+**Goal:** Surface component interfaces, schemas, and metadata through an improved components list and a new component detail page.
+
+**Target features:**
+- New Tauri command to run wit-schema on component bytes and return JSON Schema to the frontend
+- Component detail page showing exported functions, input/output schemas, doc comments, permissions, resource limits, config, and env vars
+- Improved components list page with better cards, search/filter, and richer metadata preview
 
 ## Core Value
 
@@ -37,7 +46,9 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 <!-- Current scope. Building toward these. -->
 
-(Defined in REQUIREMENTS.md for next milestone)
+- [ ] Tauri command exposing wit-schema JSON Schema for components
+- [ ] Component detail page with full interface profile
+- [ ] Improved components list with search/filter and richer cards
 
 ### Out of Scope
 
@@ -48,7 +59,7 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 ## Context
 
-**Current State:** v1.1 shipped with 3 additional phases (3 plans, 6 tasks) on top of v1.0's 6 phases. Platform capabilities include OCI distribution, WIT-to-schema conversion, MCP execution with three trust tiers, and open-source AI provider support (Groq, OpenRouter, Ollama). Desktop app has scrollable single-page settings with IntersectionObserver sidebar tracking, unified activity feed, and configurable agent providers with models.json generation for local models.
+**Current State:** v1.2 starting. v1.1 shipped open-source AI providers; v1.0 shipped OCI distribution, WIT-to-schema, MCP execution with three trust tiers. Desktop app has scrollable settings, unified activity feed, and configurable agent providers. Components page exists but only shows digest, source type, and service usage — no interface/schema information surfaced.
 
 **Tech stack:** Rust (node, CLI, MCP server, types), Tauri 2 + React 19 + Vite 7 (desktop app), Wasmtime (WASI component execution), Zustand (frontend state).
 
@@ -88,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-08 after v1.1 milestone completion*
+*Last updated: 2026-04-08 after v1.2 milestone start*
