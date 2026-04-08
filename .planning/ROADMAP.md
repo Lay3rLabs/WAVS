@@ -56,7 +56,7 @@ Plans:
   4. User can complete a WAVS task (e.g., "list services") using an Ollama-hosted model — tool calling works end-to-end
 **Plans**: 1 plan
 Plans:
-- [ ] 08-01-PLAN.md — Add Ollama provider with base URL field, models.json generation, and ModelRegistry.create() sidecar switch
+- [x] 08-01-PLAN.md — Add Ollama provider with base URL field, models.json generation, and ModelRegistry.create() sidecar switch
 **UI hint**: yes
 
 ### Phase 9: Settings Scroll Refactor
