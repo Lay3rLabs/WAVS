@@ -2,7 +2,6 @@
 phase: 07-groq-openrouter-providers
 plan: 01
 subsystem: desktop-app
-status: checkpoint-pending-human-verify
 tags: [frontend, agent, providers, groq, openrouter, settings]
 dependency_graph:
   requires: []
@@ -21,32 +20,60 @@ decisions:
   - Moved fs imports to top-level to ensure availability before authDir usage
   - Used synchronous readFileSync at startup (not async) for simplicity
   - Kept ModelRegistry.inMemory() — no models.json needed for Groq/OpenRouter
+requirements-completed: [PROV-01, PROV-02, PROV-03]
 metrics:
-  duration: ~25min
-  completed: "2026-04-08T12:24:00Z"
-  tasks_completed: 2
+  duration: ~30min
+  completed: "2026-04-08"
+  tasks_completed: 3
   tasks_total: 3
   files_changed: 2
 ---
 
 # Phase 7 Plan 01: Groq and OpenRouter Providers Summary
 
-**One-liner:** Groq and OpenRouter added as selectable agent providers with dynamic model placeholders and settings-aware sidecar startup via settings.json read at startup.
+**Groq and OpenRouter added as selectable agent providers with dynamic model placeholders and settings-aware sidecar startup via settings.json read at startup.**
 
-## What Was Built
+## Performance
 
-Two file changes implementing Groq/OpenRouter provider support in the WAVS desktop app:
+- **Duration:** ~30 min
+- **Started:** 2026-04-08T12:00:00Z
+- **Completed:** 2026-04-08T12:30:00Z
+- **Tasks:** 3 of 3 (including human-verify checkpoint)
+- **Files modified:** 2
 
-1. **AgentSection.tsx** — Added `DEFAULT_MODELS` constant mapping each provider to its recommended default model ID. Added `groq` and `openrouter` options to the provider dropdown (now 5 options in alphabetical order: Anthropic, Google, Groq, OpenAI, OpenRouter). Replaced static model placeholder with dynamic lookup via `DEFAULT_MODELS[settings.agent_model_provider ?? 'anthropic']`.
+## Accomplishments
+- Provider dropdown now shows 5 providers in alphabetical order: Anthropic, Google, Groq, OpenAI, OpenRouter
+- Dynamic model placeholder updates to provider-appropriate default when user changes selection
+- Agent sidecar reads settings.json at startup and uses saved provider/model (falls back to Anthropic)
+- Human verification checkpoint approved by user confirming UI and flow work correctly
 
-2. **entrypoint.ts** — Moved `mkdirSync, existsSync, readFileSync` imports to top-level. Added settings-aware model resolution: reads `settings.json` from `authDir` at startup, extracts `agent_model_provider` and `agent_model_id`, resolves via `modelRegistry.find()`, falls back to Anthropic claude-sonnet-4 if settings missing, file unreadable, or model not found in registry.
+## Task Commits
 
-## Commits
+Each task was committed atomically:
 
-| Task | Commit | Message |
-|------|--------|---------|
-| Task 1: AgentSection UI | ca2ef451 | feat(07-01): add Groq and OpenRouter to agent provider dropdown |
-| Task 2: Sidecar startup | 3ab2b956 | feat(07-01): read saved provider/model from settings.json at sidecar startup |
+1. **Task 1: Add Groq and OpenRouter to AgentSection UI** - `ca2ef451` (feat)
+2. **Task 2: Read saved settings at sidecar startup** - `3ab2b956` (feat)
+3. **Task 3: Verify provider selection and API key flow** - Human-verified and approved
+
+**Plan metadata:** `48ea9ee6` (docs: complete plan summary)
+
+## Files Created/Modified
+- `app/src/components/settings/AgentSection.tsx` - Added DEFAULT_MODELS constant, Groq/OpenRouter options in dropdown, dynamic model placeholder
+- `app/agent/entrypoint.ts` - Settings-aware model resolution at startup using readFileSync + modelRegistry.find()
+
+## Decisions Made
+- Used DEFAULT_MODELS record for dynamic placeholder resolution instead of switch/if-else (cleaner, extensible)
+- Moved fs imports to top-level to ensure availability before authDir usage at line 49
+- Used synchronous readFileSync at startup (not async) for simplicity — runs once, no blocking concern
+- Kept ModelRegistry.inMemory() — no models.json needed for Groq/OpenRouter (they use API keys, not local model files)
+
+## Deviations from Plan
+
+None - plan executed exactly as written.
+
+## Issues Encountered
+
+None.
 
 ## Verification Results
 
@@ -61,18 +88,17 @@ Two file changes implementing Groq/OpenRouter provider support in the WAVS deskt
 - `?? getModel("anthropic", "claude-sonnet-4-20250514")` fallback: CONFIRMED
 - `ModelRegistry.create` NOT used (stays with inMemory): CONFIRMED
 - `OAUTH_PROVIDERS` does NOT contain 'groq' or 'openrouter': CONFIRMED
+- Human verification (Task 3): APPROVED by user
 
-## Deviations from Plan
+## User Setup Required
 
-None — plan executed exactly as written.
+None - no external service configuration required. Users enter API keys directly in the app Settings UI.
 
-## Checkpoint Pending
+## Next Phase Readiness
 
-**Task 3 (checkpoint:human-verify)** requires human verification of the running app:
-- Launch `just app-dev`
-- Confirm 5 providers in alphabetical order in dropdown
-- Confirm model placeholder updates dynamically when provider changes
-- Confirm API key save/remove works for Groq and OpenRouter
+- Groq and OpenRouter provider UI fully integrated; ready for use
+- Settings persistence (save/load provider + model + API key) is complete
+- Future phases can add additional providers by extending the `DEFAULT_MODELS` record and the `<option>` list in AgentSection.tsx
 
 ## Known Stubs
 
@@ -88,3 +114,7 @@ None — no new network endpoints, auth paths, or schema changes beyond what the
 - app/agent/entrypoint.ts: FOUND
 - commit ca2ef451: FOUND
 - commit 3ab2b956: FOUND
+
+---
+*Phase: 07-groq-openrouter-providers*
+*Completed: 2026-04-08*
