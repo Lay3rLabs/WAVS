@@ -40,7 +40,9 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   2. User can select OpenRouter from the provider dropdown in agent settings
   3. User can enter and save an API key for Groq and OpenRouter; credentials persist across app restarts
   4. After saving and restarting, the agent sidecar uses the selected provider for responses
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 07-01-PLAN.md — Add Groq & OpenRouter providers to UI dropdown and sidecar startup
 **UI hint**: yes
 
 ### Phase 8: Ollama Provider
@@ -52,7 +54,9 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   2. User can set a base URL for Ollama (pre-filled with localhost:11434); the field appears only when Ollama is selected
   3. After saving and restarting, the agent sidecar loads Ollama from models.json and resolves the provider correctly
   4. User can complete a WAVS task (e.g., "list services") using an Ollama-hosted model — tool calling works end-to-end
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 07-01-PLAN.md — Add Groq & OpenRouter providers to UI dropdown and sidecar startup
 **UI hint**: yes
 
 ### Phase 9: Settings Scroll Refactor
@@ -64,7 +68,9 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   2. The sidebar highlights the section currently visible in the viewport as the user scrolls
   3. User can click any sidebar item and the page smoothly scrolls to that section
   4. OAuth listener and other page-level state survive scrolling and sidebar navigation without unmounting
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 07-01-PLAN.md — Add Groq & OpenRouter providers to UI dropdown and sidecar startup
 **UI hint**: yes
 
 ## Progress
@@ -77,6 +83,6 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 | 4. Rust Event Foundation | v1.0 | 1/1 | Complete | 2026-04-07 |
 | 5. Settings Decomposition | v1.0 | 2/2 | Complete | 2026-04-07 |
 | 6. Unified Activity Frontend | v1.0 | 2/2 | Complete | 2026-04-07 |
-| 7. Groq & OpenRouter Providers | v1.1 | 0/? | Not started | - |
+| 7. Groq & OpenRouter Providers | v1.1 | 0/1 | In progress | - |
 | 8. Ollama Provider | v1.1 | 0/? | Not started | - |
 | 9. Settings Scroll Refactor | v1.1 | 0/? | Not started | - |
