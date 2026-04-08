@@ -38,7 +38,7 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 **Milestone Goal:** Surface component interfaces, schemas, and metadata through an improved components list and a new component detail page.
 
 - [x] **Phase 10: Backend Commands** - Tauri commands exposing wit-schema JSON Schema and component metadata to the frontend (completed 2026-04-08)
-- [ ] **Phase 11: Component Detail Page** - New detail page surfacing a component's full interface profile, permissions, limits, and configuration
+- [x] **Phase 11: Component Detail Page** - New detail page surfacing a component's full interface profile, permissions, limits, and configuration (completed 2026-04-08)
 - [ ] **Phase 12: Components List Page** - Improved list page with richer cards, search, filter, and navigation to detail
 
 ## Phase Details
@@ -67,8 +67,8 @@ Plans:
   5. User can see resource limits (fuel limit, time limit) and the config keys and env vars the component expects
 **Plans**: 2 plans
 Plans:
-- [ ] 11-01-PLAN.md — Types, command wrappers, hook, route, and page shell with header card
-- [ ] 11-02-PLAN.md — Interface, Permissions, and Configuration tab content
+- [x] 11-01-PLAN.md — Types, command wrappers, hook, route, and page shell with header card
+- [x] 11-02-PLAN.md — Interface, Permissions, and Configuration tab content
 **UI hint**: yes
 
 ### Phase 12: Components List Page
@@ -97,5 +97,5 @@ Plans:
 | 8. Ollama Provider | v1.1 | 1/1 | Complete | 2026-04-08 |
 | 9. Settings Scroll Refactor | v1.1 | 1/1 | Complete | 2026-04-08 |
 | 10. Backend Commands | v1.2 | 1/1 | Complete    | 2026-04-08 |
-| 11. Component Detail Page | v1.2 | 0/2 | Planned | - |
+| 11. Component Detail Page | v1.2 | 2/2 | Complete    | 2026-04-08 |
 | 12. Components List Page | v1.2 | 0/? | Not started | - |
