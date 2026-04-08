@@ -190,6 +190,18 @@ pub struct LogBufferState {
 }
 
 #[derive(Default)]
+pub struct SchemaCacheState {
+    pub inner: wit_schema::SchemaCache,
+}
+
+impl Default for SchemaCacheState {
+    fn default() -> Self {
+        Self {
+            inner: wit_schema::SchemaCache::default(),
+        }
+    }
+}
+
 pub struct McpServerState {
     inner: std::sync::Mutex<Option<std::process::Child>>,
 }

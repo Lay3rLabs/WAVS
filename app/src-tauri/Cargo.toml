@@ -13,6 +13,7 @@ tauri-build = { workspace = true }
 [dependencies]
 wavs = { workspace = true, features = ["gui"] }
 wavs-types = { workspace = true, features = ["full"] }
+wit-schema = { workspace = true }
 wavs-gui-shared = { workspace = true, features = ["backend"] }
 utils = { workspace = true }
 tauri = { workspace = true }

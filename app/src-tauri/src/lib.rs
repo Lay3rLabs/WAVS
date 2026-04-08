@@ -20,8 +20,8 @@ use crate::commands::{
     cmd_stop_mcp_server, cmd_store_mnemonic, cmd_upload_to_ipfs, cmd_write_wavs_toml,
 };
 use crate::state::{
-    LogBufferState, McpServerState, MnemonicCacheState, SettingsState, WavsConfigState,
-    WavsInstanceState,
+    LogBufferState, McpServerState, MnemonicCacheState, SchemaCacheState, SettingsState,
+    WavsConfigState, WavsInstanceState,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use wavs::log_buffer::{InMemoryLogLayer, LogBufferInner};
@@ -81,6 +81,7 @@ pub fn run() {
             app.manage(WavsInstanceState::default());
             app.manage(MnemonicCacheState::default());
             app.manage(McpServerState::default());
+            app.manage(SchemaCacheState::default());
             app.manage(PiSidecarState::default());
             app.manage(LogBufferState { inner: log_buffer });
 

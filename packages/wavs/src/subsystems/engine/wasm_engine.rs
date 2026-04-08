@@ -96,6 +96,20 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         }
     }
 
+    /// Returns the raw WASM bytes for a component by digest.
+    /// Used by the Tauri schema command to pass bytes to wit-schema.
+    pub fn get_component_bytes(&self, digest: &ComponentDigest) -> Result<Vec<u8>, EngineError> {
+        self.engine.storage
+            .get_data(&digest.clone().into())
+            .map_err(EngineError::Storage)
+    }
+
+    /// Returns a reference to the underlying wasmtime::Engine.
+    /// Used by the Tauri schema command to construct wasmtime::component::Component.
+    pub fn wasmtime_engine(&self) -> &wasmtime::Engine {
+        &self.engine.wasm_engine
+    }
+
     // TODO: paginate this
     #[instrument(skip(self), fields(subsys = "Engine"))]
     pub fn list_digests(&self) -> Result<Vec<ComponentDigest>, EngineError> {
