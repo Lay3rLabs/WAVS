@@ -83,21 +83,25 @@ export function Settings() {
       <div className="flex flex-1 gap-0">
         <SettingsSidebar activeSection={activeSection} onSelect={setActiveSection} />
         <div className="flex-1 overflow-y-auto px-6 py-4 max-h-[calc(100vh-12rem)]">
-          {activeSection === 'wallet' && (
+          <div id="section-wallet" className="py-8 border-b border-charcoal-light">
+            <h2 className="text-lg font-semibold text-beige-light mb-4">Wallet</h2>
             <WalletSection onError={setError} />
-          )}
-          {activeSection === 'node' && (
+          </div>
+          <div id="section-node" className="py-8 border-b border-charcoal-light">
+            <h2 className="text-lg font-semibold text-beige-light mb-4">Node</h2>
             <NodeSection
               wavsHome={settings.wavs_home}
               onUnsavedChange={setHasUnsavedChanges}
               onChanged={() => setHasUnsavedChanges(true)}
               onError={setError}
             />
-          )}
-          {activeSection === 'environment' && (
+          </div>
+          <div id="section-environment" className="py-8 border-b border-charcoal-light">
+            <h2 className="text-lg font-semibold text-beige-light mb-4">Environment</h2>
             <EnvironmentSection settings={{ saved_services: settings.saved_services, env_vars: settings.env_vars }} />
-          )}
-          {activeSection === 'agent' && (
+          </div>
+          <div id="section-agent" className="py-8 border-b border-charcoal-light">
+            <h2 className="text-lg font-semibold text-beige-light mb-4">Agent</h2>
             <AgentSection
               settings={{
                 agent_model_provider: settings.agent_model_provider,
@@ -109,13 +113,15 @@ export function Settings() {
               oauthStatus={oauthStatus}
               onOAuthStart={handleOAuthStart}
             />
-          )}
-          {activeSection === 'mcp' && (
+          </div>
+          <div id="section-mcp" className="py-8 border-b border-charcoal-light">
+            <h2 className="text-lg font-semibold text-beige-light mb-4">MCP</h2>
             <McpSection settings={{ mcp_auto_start: settings.mcp_auto_start, mcp_token: settings.mcp_token }} />
-          )}
-          {activeSection === 'reset' && (
+          </div>
+          <div id="section-reset" className="py-8">
+            <h2 className="text-lg font-semibold text-beige-light mb-4">Reset</h2>
             <ResetSection onError={setError} />
-          )}
+          </div>
 
           {/* Error display */}
           {error && (
