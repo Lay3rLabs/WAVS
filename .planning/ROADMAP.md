@@ -42,7 +42,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   4. After saving and restarting, the agent sidecar uses the selected provider for responses
 **Plans**: 1 plan
 Plans:
-- [ ] 07-01-PLAN.md — Add Groq & OpenRouter providers to UI dropdown and sidecar startup
+- [x] 07-01-PLAN.md — Add Groq & OpenRouter providers to UI dropdown and sidecar startup
 **UI hint**: yes
 
 ### Phase 8: Ollama Provider
@@ -56,7 +56,7 @@ Plans:
   4. User can complete a WAVS task (e.g., "list services") using an Ollama-hosted model — tool calling works end-to-end
 **Plans**: 1 plan
 Plans:
-- [ ] 07-01-PLAN.md — Add Groq & OpenRouter providers to UI dropdown and sidecar startup
+- [x] 07-01-PLAN.md — Add Groq & OpenRouter providers to UI dropdown and sidecar startup
 **UI hint**: yes
 
 ### Phase 9: Settings Scroll Refactor
