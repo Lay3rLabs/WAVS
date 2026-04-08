@@ -46,7 +46,7 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] Tauri command exposing wit-schema JSON Schema for components
+- [x] Tauri command exposing wit-schema JSON Schema for components — Validated in Phase 10
 - [ ] Component detail page with full interface profile
 - [ ] Improved components list with search/filter and richer cards
 
@@ -59,7 +59,7 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 ## Context
 
-**Current State:** v1.2 starting. v1.1 shipped open-source AI providers; v1.0 shipped OCI distribution, WIT-to-schema, MCP execution with three trust tiers. Desktop app has scrollable settings, unified activity feed, and configurable agent providers. Components page exists but only shows digest, source type, and service usage — no interface/schema information surfaced.
+**Current State:** v1.2 in progress. Phase 10 complete — two Tauri commands expose component JSON Schema and metadata to the frontend. v1.1 shipped open-source AI providers; v1.0 shipped OCI distribution, WIT-to-schema, MCP execution with three trust tiers. Desktop app has scrollable settings, unified activity feed, and configurable agent providers. Components page exists but only shows digest, source type, and service usage — schema/metadata now available via backend commands, UI pending Phases 11-12.
 
 **Tech stack:** Rust (node, CLI, MCP server, types), Tauri 2 + React 19 + Vite 7 (desktop app), Wasmtime (WASI component execution), Zustand (frontend state).
 
