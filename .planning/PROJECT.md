@@ -32,7 +32,18 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 ### Active
 
-(None — next milestone requirements TBD via `/gsd-new-milestone`)
+<!-- Current scope. Building toward these. -->
+
+(Defined in REQUIREMENTS.md for current milestone)
+
+## Current Milestone: v1.1 Open Source AI Providers & Settings UX
+
+**Goal:** Let users configure open-source AI models as providers for both the embedded agent and WASM components, and improve the settings page scrollability.
+
+**Target features:**
+- Open-source model providers in agent config (Ollama, Together, Groq, etc.) via OpenAI-compatible API endpoints
+- Improved environment variable UX for AI provider configuration
+- Settings page converted to scrollable single page with sidebar anchor navigation
 
 ### Out of Scope
 
@@ -43,7 +54,7 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 ## Context
 
-**Current State:** v1.0 shipped with 6 phases (12 plans, 23 tasks). Platform capabilities include OCI distribution, WIT-to-schema conversion, and MCP execution with three trust tiers. Desktop app has sidebar-navigated settings and unified activity feed with correlation tracking and error surfacing.
+**Current State:** v1.0 shipped with 6 phases (12 plans, 23 tasks). v1.1 focuses on open-source AI provider support and settings UX. Platform capabilities include OCI distribution, WIT-to-schema conversion, and MCP execution with three trust tiers. Desktop app has sidebar-navigated settings and unified activity feed with correlation tracking and error surfacing.
 
 **Tech stack:** Rust (node, CLI, MCP server, types), Tauri 2 + React 19 + Vite 7 (desktop app), Wasmtime (WASI component execution), Zustand (frontend state).
 
@@ -80,4 +91,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-07 after v1.0 milestone*
+*Last updated: 2026-04-08 after v1.1 milestone start*
