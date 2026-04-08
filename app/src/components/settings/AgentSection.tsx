@@ -8,7 +8,6 @@ const DEFAULT_MODELS: Record<string, string> = {
   anthropic: 'claude-sonnet-4-20250514',
   google: 'gemini-2.0-flash',
   groq: 'llama-3.3-70b-versatile',
-  ollama: 'llama3.1:8b',
   openai: 'gpt-4o',
   openrouter: 'anthropic/claude-sonnet-4-20250514',
 };
@@ -18,7 +17,6 @@ interface AgentSectionProps {
     agent_model_provider: string | null;
     agent_model_id: string | null;
     agent_thinking_level: string | null;
-    agent_base_url: string | null;
   };
   oauthLoading: boolean;
   oauthStatus: string | null;
@@ -225,32 +223,10 @@ export function AgentSection({ settings, oauthLoading, oauthStatus, onOAuthStart
           <option value="anthropic">Anthropic</option>
           <option value="google">Google</option>
           <option value="groq">Groq</option>
-          <option value="ollama">Ollama</option>
           <option value="openai">OpenAI</option>
           <option value="openrouter">OpenRouter</option>
         </select>
       </div>
-
-      {/* Base URL (Ollama only) */}
-      {(settings.agent_model_provider ?? 'anthropic') === 'ollama' && (
-        <div className="flex flex-col gap-1">
-          <label className="text-tan-muted text-xs">Base URL</label>
-          <input
-            type="text"
-            placeholder="http://localhost:11434/v1"
-            value={settings.agent_base_url ?? 'http://localhost:11434/v1'}
-            onChange={async (e) => {
-              try {
-                const { saveAgentSettings } = await import('../../tauri/agent');
-                await saveAgentSettings({ agent_base_url: e.target.value || null });
-              } catch (err) {
-                console.error('Failed to save agent base URL:', err);
-              }
-            }}
-            className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
-          />
-        </div>
-      )}
 
       {/* Model */}
       <div className="flex flex-col gap-1">
@@ -293,15 +269,13 @@ export function AgentSection({ settings, oauthLoading, oauthStatus, onOAuthStart
         </select>
       </div>
 
-      {/* API Key (hidden for Ollama — no key needed) */}
-      {(settings.agent_model_provider ?? 'anthropic') !== 'ollama' && (
-        <AgentApiKeyField
-          provider={settings.agent_model_provider ?? 'anthropic'}
-          oauthLoading={oauthLoading}
-          oauthStatus={oauthStatus}
-          onOAuthStart={() => onOAuthStart(settings.agent_model_provider ?? 'anthropic')}
-        />
-      )}
+      {/* API Key */}
+      <AgentApiKeyField
+        provider={settings.agent_model_provider ?? 'anthropic'}
+        oauthLoading={oauthLoading}
+        oauthStatus={oauthStatus}
+        onOAuthStart={() => onOAuthStart(settings.agent_model_provider ?? 'anthropic')}
+      />
     </div>
   );
 }

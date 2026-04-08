@@ -103,7 +103,6 @@ export function Settings() {
                 agent_model_provider: settings.agent_model_provider,
                 agent_model_id: settings.agent_model_id,
                 agent_thinking_level: settings.agent_thinking_level,
-                agent_base_url: settings.agent_base_url,
               }}
               oauthLoading={oauthLoading}
               oauthStatus={oauthStatus}
