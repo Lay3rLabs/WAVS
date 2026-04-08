@@ -51,7 +51,9 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
   1. Calling the Tauri command with a component digest returns a JSON Schema object covering all exported functions with their input/output types and doc comments
   2. Calling the Tauri command with a component digest returns a metadata object covering permissions, resource limits, config keys, and required env vars
   3. Both commands complete without error for components sourced via Registry, Download, and OCI digest
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 10-01-PLAN.md — Wire wit-schema and component metadata Tauri commands
 
 ### Phase 11: Component Detail Page
 **Goal**: Users can navigate to a per-component detail page and read everything about its interface, permissions, and configuration
@@ -91,6 +93,6 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 | 7. Groq & OpenRouter Providers | v1.1 | 1/1 | Complete | 2026-04-08 |
 | 8. Ollama Provider | v1.1 | 1/1 | Complete | 2026-04-08 |
 | 9. Settings Scroll Refactor | v1.1 | 1/1 | Complete | 2026-04-08 |
-| 10. Backend Commands | v1.2 | 0/? | Not started | - |
+| 10. Backend Commands | v1.2 | 0/1 | Not started | - |
 | 11. Component Detail Page | v1.2 | 0/? | Not started | - |
 | 12. Components List Page | v1.2 | 0/? | Not started | - |
