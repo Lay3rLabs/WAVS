@@ -282,6 +282,29 @@ export interface ComponentDigestResult {
   resolved_version: string;
 }
 
+// Component detail types (Phase 10 backend response shapes)
+// ComponentSourceResult uses serde(tag = "type", rename_all = "snake_case")
+export type ComponentSourceResult =
+  | { type: 'download'; uri: string; digest: string }
+  | { type: 'registry'; digest: string; domain: string | null; package: string }
+  | { type: 'digest'; digest: string }
+  | { type: 'oci'; uri: string; digest: string | null };
+
+export interface ComponentMetadata {
+  permissions: Permissions;
+  fuel_limit: number | null;
+  time_limit_seconds: number | null;
+  config: Record<string, string>;
+  env_keys: string[];
+  source: ComponentSourceResult;
+}
+
+export interface ComponentSchema {
+  world: string;
+  exports: Record<string, { inputSchema: unknown; outputSchema: unknown; description?: string }>;
+  $defs: Record<string, unknown>;
+}
+
 // MCP server types
 export interface McpStatus {
   running: boolean;
