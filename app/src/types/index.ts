@@ -18,6 +18,7 @@ export interface Settings {
   agent_model_provider: string | null;
   agent_model_id: string | null;
   agent_thinking_level: string | null;
+  agent_base_url: string | null;
   agent_auto_start: boolean;
   agent_panel_width: number | null;
 }

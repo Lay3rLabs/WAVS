@@ -1595,6 +1595,9 @@ pub async fn cmd_save_agent_settings(
             if let Some(v) = updates.get("agent_thinking_level") {
                 s.agent_thinking_level = v.as_str().map(String::from);
             }
+            if let Some(v) = updates.get("agent_base_url") {
+                s.agent_base_url = v.as_str().map(String::from);
+            }
             if let Some(v) = updates.get("agent_auto_start") {
                 if let Some(b) = v.as_bool() {
                     s.agent_auto_start = b;
