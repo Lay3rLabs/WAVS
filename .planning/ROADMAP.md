@@ -80,7 +80,9 @@ Plans:
   2. User can type in a search box and the list filters to components matching by name or digest
   3. User can select a source-type filter (Registry / Download / Digest) and see only components of that type
   4. User can click a component card and land on that component's detail page
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 12-01-PLAN.md — Rich cards, search, source-type filter, and detail page navigation
 **UI hint**: yes
 
 ## Progress
@@ -98,4 +100,4 @@ Plans:
 | 9. Settings Scroll Refactor | v1.1 | 1/1 | Complete | 2026-04-08 |
 | 10. Backend Commands | v1.2 | 1/1 | Complete    | 2026-04-08 |
 | 11. Component Detail Page | v1.2 | 2/2 | Complete    | 2026-04-08 |
-| 12. Components List Page | v1.2 | 0/? | Not started | - |
+| 12. Components List Page | v1.2 | 0/1 | Not started | - |
