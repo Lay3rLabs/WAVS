@@ -70,7 +70,7 @@ Plans:
   4. OAuth listener and other page-level state survive scrolling and sidebar navigation without unmounting
 **Plans**: 1 plan
 Plans:
-- [ ] 09-01-PLAN.md — Single scrollable settings page with IntersectionObserver sidebar tracking
+- [x] 09-01-PLAN.md — Single scrollable settings page with IntersectionObserver sidebar tracking
 **UI hint**: yes
 
 ## Progress

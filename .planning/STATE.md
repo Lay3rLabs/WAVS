@@ -4,13 +4,13 @@ milestone: v1.1
 milestone_name: Open Source AI Providers & Settings UX
 status: executing
 stopped_at: Roadmap created — ready to plan Phase 7
-last_updated: "2026-04-08T13:39:48.186Z"
+last_updated: "2026-04-08T14:35:06.669Z"
 last_activity: 2026-04-08
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
   percent: 100
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** AI agent developers can use WAVS components as MCP tools with the same ease as Wassette, but with cryptographic trust guarantees Wassette structurally cannot provide.
-**Current focus:** Phase 08 — Ollama Provider
+**Current focus:** Phase 09 — Settings Scroll Refactor
 
 ## Current Position
 
-Phase: 9
+Phase: 09
 Plan: Not started
-Status: Executing Phase 08
+Status: Executing Phase 09
 Last activity: 2026-04-08
 
 Progress: [░░░░░░░░░░] 0%
