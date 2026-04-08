@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -25,8 +26,8 @@ const KEYCHAIN_ACCOUNT: &str = "mnemonic";
 use wavs::health::HealthStatus;
 
 use crate::state::{
-    LogBufferState, McpServerState, MnemonicCacheState, SettingsState, WavsConfigState,
-    WavsInstance, WavsInstanceState,
+    LogBufferState, McpServerState, MnemonicCacheState, SchemaCacheState, SettingsState,
+    WavsConfigState, WavsInstance, WavsInstanceState,
 };
 
 #[tauri::command(rename_all = "snake_case")]
@@ -1826,4 +1827,134 @@ pub async fn cmd_agent_switch_session(
     agent
         .send_command(&serde_json::to_string(&cmd).unwrap())
         .await
+}
+
+// --- Component Schema and Metadata ---
+
+#[derive(Serialize)]
+pub struct ComponentMetadataResult {
+    pub permissions: wavs_types::Permissions,
+    pub fuel_limit: Option<u64>,
+    pub time_limit_seconds: Option<u64>,
+    pub config: std::collections::BTreeMap<String, String>,
+    pub env_keys: std::collections::BTreeSet<String>,
+    pub source: ComponentSourceResult,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ComponentSourceResult {
+    Download { uri: String, digest: String },
+    Registry { digest: String, domain: Option<String>, package: String },
+    Digest { digest: String },
+    Oci { uri: String, digest: Option<String> },
+}
+
+/// Returns a JSON Schema describing the exported functions of a WASM component.
+/// Uses LRU caching so repeated calls for the same digest skip recompilation.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_component_schema(
+    wavs_instance: State<'_, WavsInstanceState>,
+    schema_cache: State<'_, SchemaCacheState>,
+    digest: String,
+) -> AppResult<serde_json::Value> {
+    let component_digest = wavs_types::ComponentDigest::from_str(&digest)
+        .map_err(|e| AppError::Service(format!("Invalid digest: {}", e)))?;
+
+    let dispatcher = wavs_instance.dispatcher()?;
+    let engine = &dispatcher.engine_manager.engine;
+
+    let bytes = engine.get_component_bytes(&component_digest)
+        .map_err(|e| AppError::Service(format!("Component not found: {}", e)))?;
+
+    let wasm_engine = engine.wasmtime_engine();
+    let component = wasmtime::component::Component::new(wasm_engine, &bytes)
+        .map_err(|e| AppError::Service(format!("Failed to compile component: {}", e)))?;
+
+    let options = wit_schema::SchemaOptions::default();
+    let schema = wit_schema::generate_schema_cached(
+        wasm_engine,
+        &component,
+        &bytes,
+        &options,
+        &schema_cache.inner,
+    )
+    .map_err(|e| AppError::Service(format!("Failed to generate schema: {}", e)))?;
+
+    Ok(schema)
+}
+
+/// Returns permissions, resource limits, config, env keys, and source info for a component.
+/// Scans registered services to find component metadata; returns defaults if component is in
+/// storage but not attached to any service.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_component_metadata(
+    wavs_instance: State<'_, WavsInstanceState>,
+    digest: String,
+) -> AppResult<ComponentMetadataResult> {
+    let component_digest = wavs_types::ComponentDigest::from_str(&digest)
+        .map_err(|e| AppError::Service(format!("Invalid digest: {}", e)))?;
+
+    let dispatcher = wavs_instance.dispatcher()?;
+
+    // Scan services to find component by digest
+    let services = dispatcher
+        .services
+        .list(std::ops::Bound::Unbounded, std::ops::Bound::Unbounded)
+        .map_err(|e| AppError::Service(e.to_string()))?;
+
+    // Search all workflows in all services for matching component digest
+    for service in &services {
+        for (_wf_id, workflow) in &service.workflows {
+            if workflow.component.source.digest() == Some(&component_digest) {
+                let comp = &workflow.component;
+                return Ok(ComponentMetadataResult {
+                    permissions: comp.permissions.clone(),
+                    fuel_limit: comp.fuel_limit,
+                    time_limit_seconds: comp.time_limit_seconds,
+                    config: comp.config.clone(),
+                    env_keys: comp.env_keys.clone(),
+                    source: component_source_to_result(&comp.source),
+                });
+            }
+        }
+    }
+
+    // Component exists in storage but not attached to any service — return defaults
+    let engine = &dispatcher.engine_manager.engine;
+    if engine.get_component_bytes(&component_digest).is_ok() {
+        return Ok(ComponentMetadataResult {
+            permissions: wavs_types::Permissions::default(),
+            fuel_limit: None,
+            time_limit_seconds: None,
+            config: std::collections::BTreeMap::new(),
+            env_keys: std::collections::BTreeSet::new(),
+            source: ComponentSourceResult::Digest {
+                digest: digest.clone(),
+            },
+        });
+    }
+
+    Err(AppError::Service(format!("Component not found: {}", digest)))
+}
+
+fn component_source_to_result(source: &wavs_types::ComponentSource) -> ComponentSourceResult {
+    match source {
+        wavs_types::ComponentSource::Download { uri, digest } => ComponentSourceResult::Download {
+            uri: uri.to_string(),
+            digest: digest.to_string(),
+        },
+        wavs_types::ComponentSource::Registry { registry } => ComponentSourceResult::Registry {
+            digest: registry.digest.to_string(),
+            domain: registry.domain.clone(),
+            package: registry.package.to_string(),
+        },
+        wavs_types::ComponentSource::Digest(d) => ComponentSourceResult::Digest {
+            digest: d.to_string(),
+        },
+        wavs_types::ComponentSource::Oci { uri, digest } => ComponentSourceResult::Oci {
+            uri: uri.clone(),
+            digest: digest.as_ref().map(|d| d.to_string()),
+        },
+    }
 }
