@@ -14,6 +14,7 @@
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdirSync, existsSync, readFileSync } from "node:fs";
 import { getModel } from "@mariozechner/pi-ai";
 import {
   AuthStorage,
@@ -45,8 +46,21 @@ if (!authDir) {
 const authStorage = AuthStorage.create(path.join(authDir, "auth.json"));
 const modelRegistry = ModelRegistry.inMemory(authStorage);
 
-// Default model — can be changed at runtime via RPC `set_model`
-const defaultModel = getModel("anthropic", "claude-sonnet-4-20250514");
+// Default model — read from settings.json if available, fall back to Anthropic
+let savedProvider = "anthropic";
+let savedModelId = "claude-sonnet-4-20250514";
+try {
+  const settingsPath = path.join(authDir, "settings.json");
+  if (existsSync(settingsPath)) {
+    const saved = JSON.parse(readFileSync(settingsPath, "utf-8"));
+    if (saved.agent_model_provider) savedProvider = saved.agent_model_provider;
+    if (saved.agent_model_id) savedModelId = saved.agent_model_id;
+  }
+} catch {
+  // Use defaults on any read/parse error
+}
+const defaultModel = modelRegistry.find(savedProvider, savedModelId)
+  ?? getModel("anthropic", "claude-sonnet-4-20250514");
 
 // --- System Prompt ---
 const systemPrompt = `You are the WAVS Developer Assistant, an expert AI embedded in the WAVS desktop application.
@@ -85,7 +99,6 @@ const extensionPaths = [
 
 // --- Create Runtime ---
 // Ensure workspace exists
-import { mkdirSync, existsSync } from "node:fs";
 if (!existsSync(workspace)) {
   mkdirSync(workspace, { recursive: true });
 }
