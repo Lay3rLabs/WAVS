@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Components Explorer
-status: defining
-stopped_at: Defining requirements
+status: ready_to_plan
+stopped_at: Roadmap created; ready to plan Phase 10
 last_updated: "2026-04-08"
 last_activity: 2026-04-08
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** AI agent developers can use WAVS components as MCP tools with the same ease as Wassette, but with cryptographic trust guarantees Wassette structurally cannot provide.
-**Current focus:** Defining requirements for v1.2
+**Current focus:** Phase 10 — Backend Commands
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-08 — Milestone v1.2 started
+Phase: 10 of 12 (Backend Commands)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-04-08 — v1.2 roadmap created; phases 10-12 defined
+
+Progress: [░░░░░░░░░░] 0% (within v1.2; 9 phases complete from prior milestones)
 
 ## Accumulated Context
 
@@ -37,8 +39,8 @@ Last activity: 2026-04-08 — Milestone v1.2 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Schema first: CustomProviderConfig struct shape is the contract all downstream work depends on — shipped in Phase 7 alongside Groq/OpenRouter UI
-- File-contract pattern: Rust backend owns models.json; TypeScript sidecar reads it at startup; no new RPC commands needed
+- v1.0: WIT-to-schema already ships as a library; BACK-01/BACK-02 wire it into Tauri commands
+- v1.1: IntersectionObserver for scroll tracking — performant, no scroll event spam
 
 ### Pending Todos
 
@@ -51,5 +53,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-04-08
-Stopped at: Defining requirements for v1.2
+Stopped at: Roadmap created for v1.2; ready to plan Phase 10
 Resume file: None

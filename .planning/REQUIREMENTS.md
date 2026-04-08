@@ -52,24 +52,24 @@ Requirements for Components Explorer milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BACK-01 | — | Pending |
-| BACK-02 | — | Pending |
-| DETL-01 | — | Pending |
-| DETL-02 | — | Pending |
-| DETL-03 | — | Pending |
-| DETL-04 | — | Pending |
-| DETL-05 | — | Pending |
-| DETL-06 | — | Pending |
-| LIST-01 | — | Pending |
-| LIST-02 | — | Pending |
-| LIST-03 | — | Pending |
-| LIST-04 | — | Pending |
+| BACK-01 | Phase 10 | Pending |
+| BACK-02 | Phase 10 | Pending |
+| DETL-01 | Phase 11 | Pending |
+| DETL-02 | Phase 11 | Pending |
+| DETL-03 | Phase 11 | Pending |
+| DETL-04 | Phase 11 | Pending |
+| DETL-05 | Phase 11 | Pending |
+| DETL-06 | Phase 11 | Pending |
+| LIST-01 | Phase 12 | Pending |
+| LIST-02 | Phase 12 | Pending |
+| LIST-03 | Phase 12 | Pending |
+| LIST-04 | Phase 12 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-08*
-*Last updated: 2026-04-08 after initial definition*
+*Last updated: 2026-04-08 after roadmap creation*
