@@ -21,7 +21,7 @@ created: 2026-04-08
 | Preset | not applicable |
 | Component library | custom atoms (Button, Tabs, Expander, Breadcrumb, AddressDisplay, Toast, Modal) |
 | Icon library | none — unicode glyphs used inline (▼ ▶) |
-| Font | Montserrat (400, 600, 700) via Google Fonts |
+| Font | Montserrat (400, 600) via Google Fonts |
 
 No shadcn. Project uses a hand-rolled Tailwind component system with a custom warm-dark color palette. All new components must use the same pattern.
 
@@ -54,13 +54,13 @@ Tailwind text scale maps to these concrete sizes. Match the existing codebase us
 | Role | Tailwind Class | Size | Weight | Line Height |
 |------|---------------|------|--------|-------------|
 | Body | `text-sm` | 14px | 400 (regular) | 1.5 (Tailwind default) |
-| Label / meta | `text-xs` | 12px | 500 (medium) | 1.5 |
-| Heading (section) | `text-base` | 16px | 500 (medium) | 1.25 |
+| Label / meta | `text-xs` | 12px | 400 (regular) | 1.5 |
+| Heading (section) | `text-base` | 16px | 400 (regular) | 1.25 |
 | Page title | `text-2xl` | 24px | 600 (semibold) | 1.2 |
 
-Source: derived from `ComponentsPage.tsx` (`text-2xl font-semibold` for h1), `ServiceDetailPage.tsx` (`text-xl font-semibold` for entity names), and pattern throughout codebase for `text-sm`, `text-xs` metadata labels.
+Weights in use: 400 (regular) for body, labels, meta, and section headings; 600 (semibold) for page title only.
 
-Note: The component detail page header uses `text-xl font-semibold` (20px / 600) to match `ServiceDetailPage` — this sits between Heading and Page title roles and is intentional parity with that pattern.
+Source: derived from `ComponentsPage.tsx` (`text-2xl font-semibold` for h1) and pattern throughout codebase for `text-sm`, `text-xs` metadata labels.
 
 ---
 
@@ -114,16 +114,16 @@ Source types get neutral `bg-charcoal-light text-beige-warm` badges — not acce
 ### Header Card Contents (source: CONTEXT.md decisions)
 
 Row 1 (title):
-- Component identifier: short digest as title (`text-xl font-semibold text-beige-light`)
-- Source-type badge: `px-1.5 py-0.5 text-xs font-medium bg-charcoal-light text-beige-warm rounded` — values: "Registry" | "Download" | "Digest"
+- Component identifier: short digest as title (`text-2xl font-semibold text-beige-light`)
+- Source-type badge: `px-1.5 py-0.5 text-xs bg-charcoal-light text-beige-warm rounded` — values: "Registry" | "Download" | "Digest"
 
 Row 2 (info grid — `grid grid-cols-2 gap-3 text-sm`):
-- Digest: label `text-tan-muted text-xs font-medium` + `<AddressDisplay address={digest} full />`
+- Digest: label `text-tan-muted text-xs` + `<AddressDisplay address={digest} full />`
 - Source URI / Package: label + `font-mono text-beige-warm`
 - OCI URI (if applicable): label + monospace value with copy
 
 Row 3 ("Used by" services — `border-t border-charcoal-light pt-3`):
-- Label: `text-tan-muted text-xs font-medium` — "Used by N services"
+- Label: `text-tan-muted text-xs` — "Used by N services"
 - Service links: `px-2 py-1 text-xs bg-charcoal-light hover:bg-charcoal-dark border border-charcoal-light hover:border-purple-1 text-beige-warm rounded transition-colors` — clicking navigates to `/services/:chainId/:address`
 
 ### Three Tabs
@@ -146,7 +146,7 @@ JSON Schema tree display:
 - Background: `bg-charcoal-dark p-3 rounded`
 - Text: `text-beige-light text-xs font-mono whitespace-pre-wrap`
 - Type annotations: `text-tan-muted` — de-emphasized relative to field names
-- Section heading: `text-tan-muted text-xs font-medium mb-2` ("Input Schema" / "Output Schema")
+- Section heading: `text-tan-muted text-xs mb-2` ("Input Schema" / "Output Schema")
 
 ### Permissions Tab — Grid Pattern
 
@@ -173,12 +173,12 @@ HTTP hosts list displayed as comma-separated host strings.
 Two sections with `border-t border-charcoal-light pt-2 mt-1` between them:
 
 Config Keys section:
-- Heading: `text-tan-muted text-xs font-medium mb-2` — "Config Keys"
+- Heading: `text-tan-muted text-xs mb-2` — "Config Keys"
 - Each key: `px-1.5 py-0.5 text-xs bg-charcoal-light text-beige-warm rounded font-mono`
 - Wrapped in `flex flex-wrap gap-1`
 
 Env Vars section:
-- Heading: `text-tan-muted text-xs font-medium mb-2` — "Environment Variables"
+- Heading: `text-tan-muted text-xs mb-2` — "Environment Variables"
 - Each key: same tag style as config keys
 - Wrapped in `flex flex-wrap gap-1`
 
