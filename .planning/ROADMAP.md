@@ -65,7 +65,10 @@ Plans:
   3. User can see all exported functions listed, and can expand each to view its input and output JSON Schema
   4. User can see the component's permission profile — HTTP hosts, file system access, sockets, and DNS resolution settings
   5. User can see resource limits (fuel limit, time limit) and the config keys and env vars the component expects
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 11-01-PLAN.md — Types, command wrappers, hook, route, and page shell with header card
+- [ ] 11-02-PLAN.md — Interface, Permissions, and Configuration tab content
 **UI hint**: yes
 
 ### Phase 12: Components List Page
@@ -94,5 +97,5 @@ Plans:
 | 8. Ollama Provider | v1.1 | 1/1 | Complete | 2026-04-08 |
 | 9. Settings Scroll Refactor | v1.1 | 1/1 | Complete | 2026-04-08 |
 | 10. Backend Commands | v1.2 | 1/1 | Complete    | 2026-04-08 |
-| 11. Component Detail Page | v1.2 | 0/? | Not started | - |
+| 11. Component Detail Page | v1.2 | 0/2 | Planned | - |
 | 12. Components List Page | v1.2 | 0/? | Not started | - |
