@@ -4,6 +4,14 @@ import { Button } from '../atoms';
 // OAuth providers that support login flow
 const OAUTH_PROVIDERS = new Set(['anthropic', 'google', 'github-copilot', 'openai']);
 
+const DEFAULT_MODELS: Record<string, string> = {
+  anthropic: 'claude-sonnet-4-20250514',
+  google: 'gemini-2.0-flash',
+  groq: 'llama-3.3-70b-versatile',
+  openai: 'gpt-4o',
+  openrouter: 'anthropic/claude-sonnet-4-20250514',
+};
+
 interface AgentSectionProps {
   settings: {
     agent_model_provider: string | null;
@@ -213,8 +221,10 @@ export function AgentSection({ settings, oauthLoading, oauthStatus, onOAuthStart
           className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm text-sm outline-none"
         >
           <option value="anthropic">Anthropic</option>
-          <option value="openai">OpenAI</option>
           <option value="google">Google</option>
+          <option value="groq">Groq</option>
+          <option value="openai">OpenAI</option>
+          <option value="openrouter">OpenRouter</option>
         </select>
       </div>
 
@@ -223,7 +233,7 @@ export function AgentSection({ settings, oauthLoading, oauthStatus, onOAuthStart
         <label className="text-tan-muted text-xs">Model</label>
         <input
           type="text"
-          placeholder="claude-sonnet-4-20250514"
+          placeholder={DEFAULT_MODELS[settings.agent_model_provider ?? 'anthropic'] ?? 'enter model id'}
           value={settings.agent_model_id ?? ''}
           onChange={async (e) => {
             try {
