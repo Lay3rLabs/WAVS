@@ -14584,6 +14584,7 @@ dependencies = [
  "utils",
  "utoipa",
  "utoipa-swagger-ui",
+ "uuid",
  "wasm-pkg-common",
  "wavs-benchmark-common",
  "wavs-engine",
@@ -14627,6 +14628,7 @@ version = "2.8.0"
 dependencies = [
  "tempfile",
  "utils",
+ "uuid",
  "wasmtime",
  "wavs-engine",
  "wavs-types",
@@ -14701,6 +14703,7 @@ dependencies = [
  "tokio 1.50.0",
  "tracing",
  "utils",
+ "uuid",
  "wasm-pkg-client",
  "wasmtime",
  "wasmtime-wasi",
@@ -14785,6 +14788,7 @@ dependencies = [
  "tokio 1.50.0",
  "ts-rs",
  "utoipa",
+ "uuid",
  "wasm-pkg-common",
  "zeroize",
 ]
