@@ -41,14 +41,15 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 - ✓ Groq & OpenRouter agent providers — selectable from settings dropdown with API key persistence — v1.1
 - ✓ Ollama agent provider — custom base URL, models.json generation, ModelRegistry.create() for local models — v1.1
 - ✓ Settings scroll refactor — single scrollable page with IntersectionObserver sidebar tracking — v1.1
+- ✓ Tauri commands exposing wit-schema JSON Schema and component metadata — v1.2
+- ✓ Component detail page with full interface profile (functions, permissions, config) — v1.2
+- ✓ Improved components list with search/filter, richer cards, and detail navigation — v1.2
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-- [x] Tauri command exposing wit-schema JSON Schema for components — Validated in Phase 10
-- [x] Component detail page with full interface profile — Validated in Phase 11
-- [x] Improved components list with search/filter and richer cards — Validated in Phase 12
+(None — v1.2 complete, next milestone not yet defined)
 
 ### Out of Scope
 
@@ -63,7 +64,7 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 **Tech stack:** Rust (node, CLI, MCP server, types), Tauri 2 + React 19 + Vite 7 (desktop app), Wasmtime (WASI component execution), Zustand (frontend state).
 
-**Known tech debt:** REQUIREMENTS.md checkboxes incomplete for phases 1-3, phases 2-3 missing VERIFICATION.md (pre-date GSD verification), 6 deferred human visual verification items, ERR-04 partial gap on orphan card path.
+**Known tech debt:** REQUIREMENTS.md checkboxes incomplete for phases 1-3, phases 2-3 missing VERIFICATION.md (pre-date GSD verification), 6 deferred human visual verification items, ERR-04 partial gap on orphan card path, OCI source type silently falls to "Digest" in ComponentsPage filter, redundant #[derive(Default)] on SchemaCacheState.
 
 ## Key Decisions
 

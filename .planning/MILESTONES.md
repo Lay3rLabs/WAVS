@@ -1,5 +1,16 @@
 # Milestones
 
+## v1.2 Components Explorer (Shipped: 2026-04-08)
+
+**Phases completed:** 3 phases, 4 plans, 4 tasks
+
+**Key accomplishments:**
+
+- TypeScript types, Tauri command wrappers, useComponentDetail hook, and ComponentDetailPage shell with breadcrumb, header card, and tab navigation at /components/:digest
+- One-liner:
+
+---
+
 ## v1.1 Open Source AI Providers & Settings UX (Shipped: 2026-04-08)
 
 **Phases completed:** 3 phases, 3 plans, 6 tasks
