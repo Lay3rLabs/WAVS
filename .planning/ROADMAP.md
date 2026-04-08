@@ -56,7 +56,7 @@ Plans:
   4. User can complete a WAVS task (e.g., "list services") using an Ollama-hosted model — tool calling works end-to-end
 **Plans**: 1 plan
 Plans:
-- [x] 07-01-PLAN.md — Add Groq & OpenRouter providers to UI dropdown and sidecar startup
+- [ ] 08-01-PLAN.md — Add Ollama provider with base URL field, models.json generation, and ModelRegistry.create() sidecar switch
 **UI hint**: yes
 
 ### Phase 9: Settings Scroll Refactor
@@ -84,5 +84,5 @@ Plans:
 | 5. Settings Decomposition | v1.0 | 2/2 | Complete | 2026-04-07 |
 | 6. Unified Activity Frontend | v1.0 | 2/2 | Complete | 2026-04-07 |
 | 7. Groq & OpenRouter Providers | v1.1 | 0/1 | In progress | - |
-| 8. Ollama Provider | v1.1 | 0/? | Not started | - |
+| 8. Ollama Provider | v1.1 | 0/1 | Not started | - |
 | 9. Settings Scroll Refactor | v1.1 | 0/? | Not started | - |
