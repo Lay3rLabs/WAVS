@@ -46,6 +46,7 @@ Declared values (must be multiples of 4):
 Exceptions:
 - Filter toggle group: `gap-0` (joined button row, no gap between pills — matches ActivityFeed status filter pattern)
 - Search input horizontal padding: `px-7 py-2.5` — inherits from `TextInput` atom's own Tailwind classes, do not override
+- Badge/chip internal padding: `px-1.5 py-0.5` and `py-1.5` — Tailwind half-step classes for tight inline badge/pill fit; inherits from existing badge pattern in `ComponentsPage.tsx`, do not override
 
 Source: Phase 11 UI-SPEC (inherited); `TextInput.tsx` padding pattern confirmed.
 
@@ -60,11 +61,11 @@ Tailwind text scale maps to these concrete sizes. Match existing codebase exactl
 | Body | `text-sm` | 14px | 400 (regular) | 1.5 (Tailwind default) |
 | Label / meta | `text-xs` | 12px | 400 (regular) | 1.5 |
 | Page title | `text-2xl` | 24px | 600 (semibold) | 1.2 |
-| Card badge | `text-xs` | 12px | 500 (medium) | 1.5 |
+| Card badge | `text-xs` | 12px | 400 (regular) | 1.5 |
 
-Weights in use: 400 (regular) for body, labels, meta; 600 (semibold) for page title only. Badge text uses `font-medium` (500) — matches existing `ComponentsPage.tsx` badge pattern.
+Weights in use: 400 (regular) for body, labels, meta, and badges; 600 (semibold) for page title only. Badges are visually distinguished by their `bg-charcoal-light` chip background — weight 400 is sufficient without requiring a third weight class.
 
-Source: Existing `ComponentsPage.tsx` (`text-2xl font-semibold` for h1; `text-xs font-medium` for badges).
+Source: Existing `ComponentsPage.tsx` (`text-2xl font-semibold` for h1); badge weight reduced to 400 per design contract (maximum 2 weights).
 
 ---
 
@@ -100,6 +101,8 @@ Source: `tailwind.config.js`, existing `ComponentsPage.tsx` badge pattern, `Acti
 
 ## Layout Contract
 
+Primary visual anchor: page title (h1) — largest text element on the page.
+
 ### Page Structure
 
 ```
@@ -126,7 +129,7 @@ Source: `tailwind.config.js`, existing `ComponentsPage.tsx` badge pattern, `Acti
     <!-- Source-type filter pill group -->
     <div class="flex rounded-md overflow-hidden border border-charcoal-light self-start">
       {SOURCE_TYPES.map(type => (
-        <button class="px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer
+        <button class="px-3 py-1.5 text-xs font-normal transition-colors cursor-pointer
           {active ? 'bg-purple-1 text-cream-light' : 'bg-charcoal-dark text-tan-muted hover:text-beige-warm hover:bg-charcoal-medium'}">
           {type}
         </button>
@@ -155,11 +158,11 @@ Each card is a `<Link>` wrapping a `<div>` — entire card surface is clickable:
 
     <!-- Row 1: source badge + digest + function-count badge -->
     <div class="flex items-center gap-2 mb-3">
-      <span class="px-1.5 py-0.5 text-xs font-medium bg-charcoal-light text-beige-warm rounded">
+      <span class="px-1.5 py-0.5 text-xs font-normal bg-charcoal-light text-beige-warm rounded">
         {sourceType}
       </span>
       <AddressDisplay address={digest} />
-      <span class="ml-auto px-1.5 py-0.5 text-xs font-medium bg-charcoal-light text-beige-warm rounded">
+      <span class="ml-auto px-1.5 py-0.5 text-xs font-normal bg-charcoal-light text-beige-warm rounded">
         {functionCount} {functionCount === 1 ? 'function' : 'functions'}
       </span>
     </div>
@@ -182,7 +185,7 @@ Each card is a `<Link>` wrapping a `<div>` — entire card surface is clickable:
 
     <!-- Row 4: used by workflows — existing chip pattern -->
     <div class="border-t border-charcoal-light pt-3">
-      <p class="text-tan-muted text-xs font-medium mb-2">
+      <p class="text-tan-muted text-xs font-normal mb-2">
         Used by {usages.length} {usages.length === 1 ? 'workflow' : 'workflows'}
       </p>
       <div class="flex flex-wrap gap-2">
@@ -261,11 +264,11 @@ No full-page skeleton for the list page. Data is already available from Zustand 
 
 ### No Components (zero state)
 
-When `componentMap` is empty (no services registered):
+When `componentMap` is empty (no components deployed):
 
 ```
 <p class="text-tan-muted italic">
-  No services registered yet.{' '}
+  No components deployed yet.{' '}
   <button class="text-purple-1 hover:underline" onClick={() => navigate('/services')}>
     Add a service
   </button>{' '}
@@ -273,7 +276,7 @@ When `componentMap` is empty (no services registered):
 </p>
 ```
 
-This is the existing empty state from `ComponentsPage.tsx` — preserve it exactly.
+Source: CONTEXT.md locked decision — empty state copy is "No components deployed yet."
 
 ### No Search Results
 
@@ -322,7 +325,7 @@ Error toast format: `"Failed to load component data: {reason}"` (single toast pe
 | Permissions: none | "No special permissions" (italic) |
 | Used by label (singular) | "Used by 1 workflow" |
 | Used by label (plural) | "Used by {N} workflows" |
-| No components empty state | "No services registered yet." + "Add a service" (link) + "to see its components." |
+| No components empty state | "No components deployed yet." + "Add a service" (link) + "to see its components." |
 | No search results heading | "No components match your search." |
 | No search results CTA | "Clear filters" |
 
