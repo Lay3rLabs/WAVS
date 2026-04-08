@@ -29,21 +29,15 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 - ✓ Submission failure surfacing — SubmissionFailed events reach GUI with error messages — v1.0
 - ✓ Settings page decomposition — sidebar-navigated layout with isolated section components — v1.0
 - ✓ Unified activity frontend — nested parent-child events with status filtering and error display — v1.0
+- ✓ Groq & OpenRouter agent providers — selectable from settings dropdown with API key persistence — v1.1
+- ✓ Ollama agent provider — custom base URL, models.json generation, ModelRegistry.create() for local models — v1.1
+- ✓ Settings scroll refactor — single scrollable page with IntersectionObserver sidebar tracking — v1.1
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-(Defined in REQUIREMENTS.md for current milestone)
-
-## Current Milestone: v1.1 Open Source AI Providers & Settings UX
-
-**Goal:** Let users configure open-source AI models as providers for both the embedded agent and WASM components, and improve the settings page scrollability.
-
-**Target features:**
-- Open-source model providers in agent config (Ollama, Together, Groq, etc.) via OpenAI-compatible API endpoints
-- Improved environment variable UX for AI provider configuration
-- Settings page converted to scrollable single page with sidebar anchor navigation
+(Defined in REQUIREMENTS.md for next milestone)
 
 ### Out of Scope
 
@@ -54,7 +48,7 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 ## Context
 
-**Current State:** v1.0 shipped with 6 phases (12 plans, 23 tasks). v1.1 focuses on open-source AI provider support and settings UX. Platform capabilities include OCI distribution, WIT-to-schema conversion, and MCP execution with three trust tiers. Desktop app has sidebar-navigated settings and unified activity feed with correlation tracking and error surfacing.
+**Current State:** v1.1 shipped with 3 additional phases (3 plans, 6 tasks) on top of v1.0's 6 phases. Platform capabilities include OCI distribution, WIT-to-schema conversion, MCP execution with three trust tiers, and open-source AI provider support (Groq, OpenRouter, Ollama). Desktop app has scrollable single-page settings with IntersectionObserver sidebar tracking, unified activity feed, and configurable agent providers with models.json generation for local models.
 
 **Tech stack:** Rust (node, CLI, MCP server, types), Tauri 2 + React 19 + Vite 7 (desktop app), Wasmtime (WASI component execution), Zustand (frontend state).
 
@@ -72,6 +66,9 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 | OAuth listener in parent Settings.tsx | Survives section navigation since parent never unmounts | ✓ Good |
 | Client-side correlationId grouping | Simple, no backend changes needed; single-pass useMemo in ActivityFeed | ✓ Good |
 | Status-based filter tabs (All/Pending/Failed/Complete) | More useful than kind-based (trigger/submission) now that events are nested | ✓ Good |
+| Groq/OpenRouter as KnownProviders | Already in pi-ai — zero Rust changes, just UI + settings.json read at startup | ✓ Good |
+| models.json for Ollama (not registerProvider) | Declarative, auto-reloads on /model calls, no extension code | ✓ Good |
+| IntersectionObserver for scroll tracking | Native, performant, no scroll event spam — sidebar highlight stays in sync | ✓ Good |
 
 ## Evolution
 
@@ -91,4 +88,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-08 after v1.1 milestone start*
+*Last updated: 2026-04-08 after v1.1 milestone completion*

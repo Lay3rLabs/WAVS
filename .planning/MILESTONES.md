@@ -1,5 +1,16 @@
 # Milestones
 
+## v1.1 Open Source AI Providers & Settings UX (Shipped: 2026-04-08)
+
+**Phases completed:** 3 phases, 3 plans, 6 tasks
+
+**Key accomplishments:**
+
+- Groq and OpenRouter added as selectable agent providers with dynamic model placeholders and settings-aware sidecar startup via settings.json read at startup.
+- Ollama added as selectable agent provider with conditional base URL field, models.json generation from Rust backend, and ModelRegistry.create() sidecar switch for OpenAI-compatible local model support
+
+---
+
 ## v1.0 WAVS Improvements (Shipped: 2026-04-07)
 
 **Phases completed:** 6 phases, 12 plans, 23 tasks
