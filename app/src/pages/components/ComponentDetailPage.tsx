@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Breadcrumb, Tabs, AddressDisplay, Button } from '../../components/atoms';
+import { Breadcrumb, Tabs, AddressDisplay, Button, Expander } from '../../components/atoms';
 import { useComponentDetail } from '../../hooks/useComponentDetail';
 import { useAppStore } from '../../stores/appStore';
 import { getServiceAddress, getServiceChain } from '../../types';
-import type { ComponentSource, ComponentSourceResult } from '../../types';
+import type { ComponentSource, ComponentSourceResult, ComponentSchema, ComponentMetadata, AllowedHostPermission } from '../../types';
 
 function getDigest(source: ComponentSource): string {
   if ('download' in source) return source.download.digest;
@@ -33,10 +33,132 @@ const DETAIL_TABS = [
   { key: 'configuration', label: 'Configuration' },
 ];
 
+function InterfaceTab({ schema, schemaError }: { schema: ComponentSchema | null; schemaError: string | null }) {
+  if (schemaError && !schema) {
+    return <p className="text-tan-muted italic text-sm">Failed to load interface data.</p>;
+  }
+  if (!schema) {
+    return null;
+  }
+  if (Object.keys(schema.exports).length === 0) {
+    return <p className="text-tan-muted italic text-sm">No exported functions found for this component.</p>;
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {Object.entries(schema.exports).map(([funcName, funcData]) => (
+        <Expander
+          key={funcName}
+          label={
+            <span className="flex items-center gap-2">
+              <span className="font-mono text-beige-warm">{funcName}</span>
+              {funcData.description && <span className="text-tan-muted text-xs">{funcData.description}</span>}
+            </span>
+          }
+          defaultExpanded={false}
+        >
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="text-tan-muted text-xs mb-2">Input Schema</p>
+              <pre className="bg-charcoal-dark p-3 rounded text-beige-light text-xs font-mono whitespace-pre-wrap">
+                {JSON.stringify(funcData.inputSchema, null, 2)}
+              </pre>
+            </div>
+            <div>
+              <p className="text-tan-muted text-xs mb-2">Output Schema</p>
+              <pre className="bg-charcoal-dark p-3 rounded text-beige-light text-xs font-mono whitespace-pre-wrap">
+                {JSON.stringify(funcData.outputSchema, null, 2)}
+              </pre>
+            </div>
+          </div>
+        </Expander>
+      ))}
+    </div>
+  );
+}
+
+function formatHttpHosts(hosts: AllowedHostPermission): string {
+  if (hosts === 'all') return 'all (unrestricted)';
+  if (hosts === 'none') return 'none';
+  if (typeof hosts === 'object' && 'only' in hosts) return hosts.only.join(', ');
+  return 'none';
+}
+
+function PermRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-tan-muted">{label}:</span>
+      <span className="text-beige-warm">{value}</span>
+    </div>
+  );
+}
+
+function PermissionsTab({ metadata, metadataError }: { metadata: ComponentMetadata | null; metadataError: string | null }) {
+  if (metadataError && !metadata) {
+    return <p className="text-tan-muted italic text-sm">Failed to load permissions data.</p>;
+  }
+  if (!metadata) {
+    return null;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2">
+        <PermRow label="HTTP Hosts" value={formatHttpHosts(metadata.permissions.allowed_http_hosts)} />
+        <PermRow label="DNS Resolution" value={metadata.permissions.dns_resolution ? 'yes' : 'no'} />
+        <PermRow label="Raw Sockets" value={metadata.permissions.raw_sockets ? 'yes' : 'no'} />
+      </div>
+      <div className="border-t border-charcoal-light pt-2 mt-1">
+        <PermRow label="File System" value={metadata.permissions.file_system ? 'yes' : 'no'} />
+      </div>
+      <div className="border-t border-charcoal-light pt-2 mt-1 flex flex-col gap-2">
+        <PermRow label="Fuel Limit" value={metadata.fuel_limit !== null ? metadata.fuel_limit.toLocaleString() : 'none'} />
+        <PermRow label="Time Limit" value={metadata.time_limit_seconds !== null ? `${metadata.time_limit_seconds}s` : 'none'} />
+      </div>
+    </div>
+  );
+}
+
+function ConfigurationTab({ metadata, metadataError }: { metadata: ComponentMetadata | null; metadataError: string | null }) {
+  if (metadataError && !metadata) {
+    return <p className="text-tan-muted italic text-sm">Failed to load configuration data.</p>;
+  }
+  if (!metadata) {
+    return null;
+  }
+  const configKeys = Object.keys(metadata.config);
+  const envKeys = metadata.env_keys;
+  if (configKeys.length === 0 && envKeys.length === 0) {
+    return <p className="text-tan-muted italic text-sm">This component declares no config keys or environment variables.</p>;
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {configKeys.length > 0 && (
+        <div>
+          <p className="text-tan-muted text-xs mb-2">Config Keys</p>
+          <div className="flex flex-wrap gap-1">
+            {configKeys.map(key => (
+              <span key={key} className="px-1.5 py-0.5 text-xs bg-charcoal-light text-beige-warm rounded font-mono">{key}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {envKeys.length > 0 && (
+        <div className={configKeys.length > 0 ? "border-t border-charcoal-light pt-2 mt-1" : ""}>
+          <p className="text-tan-muted text-xs mb-2">Environment Variables</p>
+          <div className="flex flex-wrap gap-1">
+            {envKeys.map(key => (
+              <span key={key} className="px-1.5 py-0.5 text-xs bg-charcoal-light text-beige-warm rounded font-mono">{key}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ComponentDetailPage() {
   const { digest } = useParams<{ digest: string }>();
   const navigate = useNavigate();
-  const { schema, metadata, loading } = useComponentDetail(digest);
+  const { schema, metadata, loading, schemaError, metadataError } = useComponentDetail(digest);
   const services = useAppStore((state) => state.services);
   const [activeTab, setActiveTab] = useState('interface');
 
@@ -172,11 +294,11 @@ export function ComponentDetailPage() {
       {/* Tab bar */}
       <Tabs tabs={DETAIL_TABS} activeTab={activeTab} onChange={setActiveTab} />
 
-      {/* Tab content area (Plan 02 fills in real content) */}
+      {/* Tab content area */}
       <div>
-        {activeTab === 'interface' && <div className="text-tan-muted">Interface content</div>}
-        {activeTab === 'permissions' && <div className="text-tan-muted">Permissions content</div>}
-        {activeTab === 'configuration' && <div className="text-tan-muted">Configuration content</div>}
+        {activeTab === 'interface' && <InterfaceTab schema={schema} schemaError={schemaError} />}
+        {activeTab === 'permissions' && <PermissionsTab metadata={metadata} metadataError={metadataError} />}
+        {activeTab === 'configuration' && <ConfigurationTab metadata={metadata} metadataError={metadataError} />}
       </div>
     </div>
   );
