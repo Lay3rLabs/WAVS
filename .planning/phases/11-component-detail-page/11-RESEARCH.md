@@ -465,12 +465,13 @@ function PermRow({ label, value }: { label: string; value: string }) {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **ComponentsPage clickable cards (Phase 12 dependency)**
    - What we know: CONTEXT.md says "Entry point: clicking a component card on ComponentsPage (Phase 12 wires this up; detail page itself just reads useParams)"
    - What's unclear: Phase 11 creates the detail page, but Phase 12 makes cards clickable. The route and page will exist but be unreachable from the UI until Phase 12.
    - Recommendation: This is intentional per the phase split. No action needed in Phase 11 — just document that direct URL navigation (`/components/<digest>`) is the only way to reach the page until Phase 12. The planner may want a manual test step that navigates directly by URL.
+   - RESOLVED: Intentional phase split — direct URL navigation used in Phase 11 testing via checkpoint task in Plan 11-02.
 
 ---
 
