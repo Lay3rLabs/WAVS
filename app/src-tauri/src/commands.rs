@@ -1248,6 +1248,38 @@ pub async fn cmd_start_agent(
         .to_string_lossy()
         .to_string();
 
+    // Generate or clean up models.json for Ollama provider
+    let models_json_path = std::path::PathBuf::from(&auth_dir).join("models.json");
+    if s.agent_model_provider.as_deref() == Some("ollama") {
+        let base_url = s.agent_base_url
+            .as_deref()
+            .unwrap_or("http://localhost:11434/v1");
+        let model_id = s.agent_model_id
+            .as_deref()
+            .unwrap_or("llama3.1:8b");
+        let models_json = serde_json::json!({
+            "providers": {
+                "ollama": {
+                    "baseUrl": base_url,
+                    "api": "openai-completions",
+                    "apiKey": "ollama",
+                    "compat": {
+                        "supportsDeveloperRole": false,
+                        "supportsReasoningEffort": false
+                    },
+                    "models": [
+                        { "id": model_id }
+                    ]
+                }
+            }
+        });
+        std::fs::write(&models_json_path, serde_json::to_string_pretty(&models_json).unwrap())
+            .map_err(|e| AppError::Agent(format!("Failed to write models.json: {}", e)))?;
+    } else {
+        // Clean up stale models.json when not using Ollama
+        let _ = std::fs::remove_file(&models_json_path);
+    }
+
     let agent_package_dir = resolve_agent_dir(&app)?;
     let entrypoint = agent_package_dir.join("entrypoint.ts").to_string_lossy().to_string();
     let agent_package_dir = agent_package_dir.to_string_lossy().to_string();
@@ -1594,6 +1626,9 @@ pub async fn cmd_save_agent_settings(
             }
             if let Some(v) = updates.get("agent_thinking_level") {
                 s.agent_thinking_level = v.as_str().map(String::from);
+            }
+            if let Some(v) = updates.get("agent_base_url") {
+                s.agent_base_url = v.as_str().map(String::from);
             }
             if let Some(v) = updates.get("agent_auto_start") {
                 if let Some(b) = v.as_bool() {

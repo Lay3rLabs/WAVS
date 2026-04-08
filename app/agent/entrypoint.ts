@@ -44,7 +44,14 @@ if (!authDir) {
 
 // --- Auth & Models ---
 const authStorage = AuthStorage.create(path.join(authDir, "auth.json"));
-const modelRegistry = ModelRegistry.inMemory(authStorage);
+const modelsJsonPath = path.join(authDir, "models.json");
+const modelRegistry = ModelRegistry.create(authStorage, modelsJsonPath);
+
+// Log any models.json load error for debugging
+const registryError = modelRegistry.getError();
+if (registryError) {
+  console.error("[ModelRegistry] Error loading models.json:", registryError);
+}
 
 // Default model — read from settings.json if available, fall back to Anthropic
 let savedProvider = "anthropic";
@@ -134,7 +141,7 @@ const createRuntime: CreateAgentSessionRuntimeFactory = async ({
       sessionManager,
       sessionStartEvent,
       model: defaultModel ?? undefined,
-      thinkingLevel: "low",
+      thinkingLevel: savedProvider === "ollama" ? "off" : "low",
       tools: createCodingTools(runtimeCwd),
     })),
     services,

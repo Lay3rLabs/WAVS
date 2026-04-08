@@ -36,6 +36,8 @@ pub struct Settings {
     #[serde(default)]
     pub agent_thinking_level: Option<String>,
     #[serde(default)]
+    pub agent_base_url: Option<String>,
+    #[serde(default)]
     pub agent_auto_start: bool,
     #[serde(default)]
     pub agent_panel_width: Option<f64>,
