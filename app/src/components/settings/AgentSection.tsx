@@ -199,6 +199,27 @@ function AgentApiKeyField({ provider, oauthLoading, oauthStatus, onOAuthStart }:
 }
 
 export function AgentSection({ settings, oauthLoading, oauthStatus, onOAuthStart }: AgentSectionProps) {
+  // Local state for optimistic UI updates — avoids waiting for IPC round-trip
+  const [provider, setProvider] = useState(settings.agent_model_provider ?? 'anthropic');
+  const [modelId, setModelId] = useState(settings.agent_model_id ?? '');
+  const [thinkingLevel, setThinkingLevel] = useState(settings.agent_thinking_level ?? 'low');
+  const [baseUrl, setBaseUrl] = useState(settings.agent_base_url ?? 'http://localhost:11434/v1');
+
+  // Sync local state when store updates from external sources (e.g., another window)
+  useEffect(() => { setProvider(settings.agent_model_provider ?? 'anthropic'); }, [settings.agent_model_provider]);
+  useEffect(() => { setModelId(settings.agent_model_id ?? ''); }, [settings.agent_model_id]);
+  useEffect(() => { setThinkingLevel(settings.agent_thinking_level ?? 'low'); }, [settings.agent_thinking_level]);
+  useEffect(() => { setBaseUrl(settings.agent_base_url ?? 'http://localhost:11434/v1'); }, [settings.agent_base_url]);
+
+  const save = async (updates: Record<string, string | null>) => {
+    try {
+      const { saveAgentSettings } = await import('../../tauri/agent');
+      await saveAgentSettings(updates);
+    } catch (err) {
+      console.error('Failed to save agent settings:', err);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
       <h2 className="text-beige-light text-lg font-semibold">AI Agent</h2>
@@ -211,14 +232,10 @@ export function AgentSection({ settings, oauthLoading, oauthStatus, onOAuthStart
       <div className="flex flex-col gap-1">
         <label className="text-tan-muted text-xs">Provider</label>
         <select
-          value={settings.agent_model_provider ?? 'anthropic'}
-          onChange={async (e) => {
-            try {
-              const { saveAgentSettings } = await import('../../tauri/agent');
-              await saveAgentSettings({ agent_model_provider: e.target.value });
-            } catch (err) {
-              console.error('Failed to save agent provider:', err);
-            }
+          value={provider}
+          onChange={(e) => {
+            setProvider(e.target.value);
+            save({ agent_model_provider: e.target.value });
           }}
           className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm text-sm outline-none"
         >
@@ -232,20 +249,16 @@ export function AgentSection({ settings, oauthLoading, oauthStatus, onOAuthStart
       </div>
 
       {/* Base URL (Ollama only) */}
-      {(settings.agent_model_provider ?? 'anthropic') === 'ollama' && (
+      {provider === 'ollama' && (
         <div className="flex flex-col gap-1">
           <label className="text-tan-muted text-xs">Base URL</label>
           <input
             type="text"
             placeholder="http://localhost:11434/v1"
-            value={settings.agent_base_url ?? 'http://localhost:11434/v1'}
-            onChange={async (e) => {
-              try {
-                const { saveAgentSettings } = await import('../../tauri/agent');
-                await saveAgentSettings({ agent_base_url: e.target.value || null });
-              } catch (err) {
-                console.error('Failed to save agent base URL:', err);
-              }
+            value={baseUrl}
+            onChange={(e) => {
+              setBaseUrl(e.target.value);
+              save({ agent_base_url: e.target.value || null });
             }}
             className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
           />
@@ -257,15 +270,11 @@ export function AgentSection({ settings, oauthLoading, oauthStatus, onOAuthStart
         <label className="text-tan-muted text-xs">Model</label>
         <input
           type="text"
-          placeholder={DEFAULT_MODELS[settings.agent_model_provider ?? 'anthropic'] ?? 'enter model id'}
-          value={settings.agent_model_id ?? ''}
-          onChange={async (e) => {
-            try {
-              const { saveAgentSettings } = await import('../../tauri/agent');
-              await saveAgentSettings({ agent_model_id: e.target.value || null });
-            } catch (err) {
-              console.error('Failed to save agent model:', err);
-            }
+          placeholder={DEFAULT_MODELS[provider] ?? 'enter model id'}
+          value={modelId}
+          onChange={(e) => {
+            setModelId(e.target.value);
+            save({ agent_model_id: e.target.value || null });
           }}
           className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm font-mono text-sm outline-none"
         />
@@ -275,14 +284,10 @@ export function AgentSection({ settings, oauthLoading, oauthStatus, onOAuthStart
       <div className="flex flex-col gap-1">
         <label className="text-tan-muted text-xs">Thinking level</label>
         <select
-          value={settings.agent_thinking_level ?? 'low'}
-          onChange={async (e) => {
-            try {
-              const { saveAgentSettings } = await import('../../tauri/agent');
-              await saveAgentSettings({ agent_thinking_level: e.target.value });
-            } catch (err) {
-              console.error('Failed to save agent thinking level:', err);
-            }
+          value={thinkingLevel}
+          onChange={(e) => {
+            setThinkingLevel(e.target.value);
+            save({ agent_thinking_level: e.target.value });
           }}
           className="px-3 py-2 rounded-md bg-charcoal-dark border border-charcoal-light text-beige-warm text-sm outline-none"
         >
@@ -294,12 +299,12 @@ export function AgentSection({ settings, oauthLoading, oauthStatus, onOAuthStart
       </div>
 
       {/* API Key (hidden for Ollama — no key needed) */}
-      {(settings.agent_model_provider ?? 'anthropic') !== 'ollama' && (
+      {provider !== 'ollama' && (
         <AgentApiKeyField
-          provider={settings.agent_model_provider ?? 'anthropic'}
+          provider={provider}
           oauthLoading={oauthLoading}
           oauthStatus={oauthStatus}
-          onOAuthStart={() => onOAuthStart(settings.agent_model_provider ?? 'anthropic')}
+          onOAuthStart={() => onOAuthStart(provider)}
         />
       )}
     </div>
