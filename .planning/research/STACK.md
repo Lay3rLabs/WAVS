@@ -1,98 +1,211 @@
 # Stack Research
 
-**Domain:** WAVS platform additions — WIT-to-schema tooling, MCP execution interface, OCI component distribution
-**Researched:** 2026-03-24
-**Confidence:** HIGH (critical claims verified against official sources; crate versions confirmed from crates.io, GitHub, and docs.rs)
+**Domain:** Open-source AI provider configuration + scrollable settings UX (WAVS v1.1)
+**Researched:** 2026-04-08
+**Confidence:** HIGH — primary research is reading installed SDK dist types and existing Rust source, not inference
 
 ## Context
 
-This document covers only the **new** crates and integration points needed for the three active features. It does not repeat the existing validated stack (wasmtime 42.0.1, rmcp 0.1, wasm-pkg-client 0.12, etc. are already in Cargo.toml).
+This is a **subsequent milestone** addendum. The existing v1.0 stack (Tauri 2, React 19, Vite 7, Tailwind 3, Zustand 5, pi-coding-agent 0.65.0) is validated. This document covers only the new capabilities needed for v1.1.
 
-The key discovery: WAVS already pulls components via `wasm-pkg-client` (Warg/OCI through the BytecodeAlliance toolchain), but that client routes by package namespace — not raw `oci://` URIs. The new `oci://` ComponentSource variant needs a direct OCI pull path using `oci-client` + `oci-wasm`, bypassing the wkg namespace resolution layer. Wassette v0.4.0 uses this exact combination (confirmed: `oci-client = "0.16"`, `oci-wasm = "0.4"`).
-
-For WIT-to-schema: the Wassette `component2json` crate (Apache 2.0, on GitHub) uses `wasmparser` (not `wit-parser`) to walk component type exports at the binary level using the Wasmtime type inspection API. This is the correct approach for compiled `.wasm` binaries — `wit-parser` handles `.wit` text files, not compiled binaries. WAVS components are compiled binaries, so the path is: binary → `wasmtime::component::Component::component_type()` or `wit-component::decode()` → WIT Resolve → JSON Schema.
-
-The `component2json` upstreaming issue (#579 on the Wassette repo) is open and unresolved (opened Nov 2025, no decision). Do not wait for upstream; implement locally using the same crates.
+**Key finding:** No new npm packages or Rust crates are needed. All required APIs exist in already-installed dependencies.
 
 ---
 
-## Recommended Stack — New Additions Only
+## Recommended Stack — New Capabilities Only
 
-### WIT-to-Schema Tooling
+### Core Technologies
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `wasmparser` | `0.245.1` | Parse WebAssembly binary component type sections | Same version Wassette's `component2json` uses. Exposes the `component-type` custom sections that encode the WIT world. Lower-level than wit-component but handles the binary format directly. |
-| `wit-component` | `0.245.1` | Decode compiled `.wasm` binary → `wit_parser::Resolve` | Provides `wit_component::decode(&bytes)` which returns `(Resolve, WorldId)` — the authoritative path from binary to structured WIT types. Used by `oci-wasm 0.4.0` internally for the same purpose. **This is the right entry point.** |
-| `wit-parser` | `0.245.1` | Traverse the decoded WIT Resolve to enumerate types | Exposes `Resolve`, `Interface`, `Function`, `TypeDef`, `TypeDefKind`, `Record`, `Variant`, `Enum`, `Option_`, `Result_`, `Tuple`, `List` — the complete type tree needed to generate JSON Schema. |
-| `schemars` | already present | Produce JSON Schema output | Already a transitive dependency through `rmcp`. The schema generation for WIT types is hand-rolled (WIT types do not map 1:1 to Rust types), so `schemars` is used for the wrapper structure, not derivation. |
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| `@mariozechner/pi-coding-agent` | 0.65.0 (already installed) | `ModelRegistry.registerProvider()` for adding OpenAI-compat providers at sidecar startup | Already in use. `registerProvider(name, { baseUrl, api: "openai-completions", models })` is the correct SDK path — verified in `dist/core/model-registry.d.ts`. No new dep needed. |
+| `@mariozechner/pi-ai` | 0.65.0 (already installed) | `openai-completions` api string + `OpenAICompletionsCompat` type covers any OpenAI-compat endpoint | Already in use. `KnownProvider` includes `groq`, `openrouter`, etc. Custom endpoints use `api: "openai-completions"` with a custom `baseUrl`. Verified in `dist/types.d.ts`. |
+| React `useRef` + `IntersectionObserver` | React 19 (already installed) | Scrollspy to track which section is active for sidebar highlight | Native browser API available in Tauri's Chromium WebView. Zero deps. Matches existing codebase style. |
+| Tailwind `scroll-mt-*` | 3.4 (already installed) | Offset scroll target so section headings clear sticky headers | Available since Tailwind 3.1. Already using Tailwind throughout. |
 
-Version note: `wasmparser`, `wit-component`, and `wit-parser` are co-versioned in the `wasm-tools` monorepo. Use the same version for all three to avoid ABI mismatches. 0.245.1 is the current release as of March 2026. The `oci-wasm` crate already pins `wit-component = "0.244.0"` and `wit-parser = "0.244.0"` — if `oci-wasm` is added, align all three to 0.244.x or override in workspace.
+### Supporting Libraries
 
-### OCI Component Distribution
+No new libraries. All capabilities use already-installed code.
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `oci-client` | `0.16` | OCI registry pull/push client implementing OCI Distribution spec | The standard Rust OCI client (ORAS project, formerly `oci-distribution`). Wassette uses this version directly. Already implicitly used via the wasm-pkg-tools chain but not exposed for direct `oci://` URI handling. |
-| `oci-wasm` | `0.4.0` | WASM-specific OCI artifact types on top of `oci-client` | Bytecode Alliance crate. Provides `WasmClient`, `WasmConfig`, and the correct OCI media types (`application/vnd.wasm.config.v0+json`, `application/wasm`). Wassette uses `oci-wasm = "0.4"` for the same use case. Thin wrapper — adds ~200 lines over `oci-client`. |
-
-These two crates are **not** in the current workspace. The existing `wasm-pkg-client` handles the `Registry { package, domain, version, digest }` ComponentSource variant through Warg namespace resolution. The new `oci://` ComponentSource variant (`ComponentSource::Oci { uri, digest }`) requires a direct OCI pull: parse the URI, call `WasmClient::pull()`, verify the digest.
-
-Authentication: `oci-client` uses `RegistryAuth::Anonymous` for public registries (ghcr.io public repos) and `RegistryAuth::Basic` for authenticated pulls. For v1 (pull-only public components), anonymous auth suffices.
-
-### MCP Execution Interface
-
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| `rmcp` | `0.1` (already in workspace) | MCP server SDK for tool registration and execution | Already present. No version change needed. The `ServerHandler` trait's `list_tools()` and `call_tool()` methods are fully dynamic — tools are returned as `Vec<Tool>` at runtime. New execution tools are added to the same `match req.name.as_ref()` dispatch in `server.rs`. |
-
-No new MCP crates are needed. The execution interface is an extension of the existing `wavs-mcp` server. The key design constraint: the `ServerHandler` trait in `rmcp` 0.1 is already dynamic — `list_tools()` returns a `Vec<Tool>` built at call time, and `call_tool()` dispatches by name string. Adding execution tools (one per deployed service+workflow) requires no new infrastructure, only populating these existing handlers with service-derived tools.
-
-The trust tier selection (result-only / result+signature / on-chain) is implemented as a parameter on the execution tool call, not as separate tools. This keeps the tool surface manageable regardless of how many services are deployed.
+| Capability | Mechanism | Notes |
+|------------|-----------|-------|
+| OpenAI-compat endpoint | `modelRegistry.registerProvider(name, { baseUrl, apiKey, api: "openai-completions", models: [...] })` in `app/agent/entrypoint.ts` | Provider name, base URL, and model IDs come from `WAVS_OPENAI_COMPAT_PROVIDERS` env var injected at spawn. API keys resolve from `auth.json` via existing `AuthStorage`. |
+| Ollama (no auth) | Same; `apiKey: "ollama"` as placeholder | Ollama ignores the key. Schema requires non-empty string. Base URL: `http://localhost:11434/v1`. |
+| Groq / Together / LM Studio | Same; real API keys | Different `baseUrl` per provider. Groq: `https://api.groq.com/openai/v1`. Together: `https://api.together.xyz/v1`. LM Studio: `http://localhost:1234/v1`. |
+| Sidebar anchor scroll | `element.scrollIntoView({ behavior: 'smooth', block: 'start' })` | No library. Replaces `setActiveSection` onClick. |
+| Active section tracking | `IntersectionObserver` on section `ref` elements | Standard React `useEffect` pattern with cleanup. Updates `activeSection` to topmost visible section. |
+| Settings persistence | Extend `Settings` struct + `cmd_save_agent_settings` | Existing Rust settings pattern. |
 
 ---
 
-## Supporting Libraries — Version Verification
+## How Custom Providers Are Configured: Architecture
 
-These are already in the workspace but their roles in the new features are noted:
+### Critical SDK Finding
 
-| Library | Current Version | Role in New Features |
-|---------|-----------------|----------------------|
-| `wasmtime` | `42.0.1` | `Component::component_type()` for pre-execution type introspection. No version change needed — the API has been stable since v28. |
-| `wasm-pkg-client` | `0.12.0` | Existing `Registry` ComponentSource variant continues unchanged. OCI URIs go through the new direct path, not wkg. |
-| `serde_json` | `1.0.145` | JSON Schema output for WIT types. Already present. |
-| `rmcp` | `0.1` | `schema_for_type::<T>()` for execution tool parameter schemas. The WIT-derived schemas are constructed manually as `serde_json::Value` and passed as `Arc<serde_json::Value>` to `Tool { input_schema }`. |
+The sidecar creates `ModelRegistry.inMemory(authStorage)` — this passes `undefined` as `modelsJsonPath`, skipping `models.json` loading entirely (verified in `model-registry.js` line 182). Custom providers **cannot** be added by writing a file; they must be registered at startup via `registerProvider()`.
 
----
+The RPC protocol has no `register_provider` command. The full `RpcCommand` union was checked exhaustively in `rpc-types.d.ts` — it contains `set_model`, `get_available_models`, and others, but no provider registration command. Providers must exist in the registry before the agent starts.
 
-## Cargo.toml Changes Required
+### Integration Path (5 steps)
 
-Add to `[workspace.dependencies]`:
+**Step 1 — Settings struct (Rust):** Add to `packages/gui/shared/src/settings.rs`:
 
-```toml
-# WIT-to-schema tooling
-wasmparser = "0.245"
-wit-component = "0.245"
-wit-parser = "0.245"
+```rust
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+pub struct OpenAICompatProvider {
+    pub name: String,         // Display name and provider key
+    pub base_url: String,     // e.g. "http://localhost:11434/v1"
+    pub model_ids: Vec<String>, // e.g. ["llama3.2", "mistral"]
+}
 
-# OCI component distribution
-oci-client = "0.16"
-oci-wasm = "0.4"
+// In Settings struct:
+#[serde(default)]
+pub agent_openai_compat_providers: Vec<OpenAICompatProvider>,
 ```
 
-Add to the relevant package's `[dependencies]` (suggest a new `wavs-wit-schema` crate or extend `wavs-engine`):
+**Step 2 — Sidecar spawn (Rust, `agent.rs`):** Serialize provider list (no keys) and inject as env var:
 
-```toml
-# For WIT-to-schema
-wasmparser = { workspace = true }
-wit-component = { workspace = true }
-wit-parser = { workspace = true }
-serde_json = { workspace = true }
-
-# For OCI pull (add to wavs-engine or a new wavs-oci crate)
-oci-client = { workspace = true }
-oci-wasm = { workspace = true }
+```rust
+let providers_json = serde_json::to_string(&config.openai_compat_providers).unwrap_or_default();
+cmd.env("WAVS_OPENAI_COMPAT_PROVIDERS", providers_json);
 ```
+
+API keys are NOT passed here — they live in `auth.json` which is already accessible to the sidecar via `WAVS_AUTH_DIR`.
+
+**Step 3 — Sidecar startup (TypeScript, `entrypoint.ts`):** Read env var and register providers:
+
+```typescript
+const providersJson = process.env.WAVS_OPENAI_COMPAT_PROVIDERS;
+if (providersJson) {
+  const providers = JSON.parse(providersJson);
+  for (const p of providers) {
+    modelRegistry.registerProvider(p.name, {
+      baseUrl: p.base_url,
+      api: "openai-completions",
+      models: p.model_ids.map(id => ({
+        id,
+        name: id,
+        reasoning: false,
+        input: ["text"] as const,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 131072,
+        maxTokens: 4096,
+      })),
+    });
+  }
+}
+```
+
+**Step 4 — Frontend UI (`AgentSection.tsx`):** New "Custom Providers" subsection:
+- List of configured custom providers with delete buttons
+- "Add Provider" form: name field, base URL field, model IDs field (newline-separated or tag input)
+- Saves via `saveAgentSettings({ agent_openai_compat_providers: [...] })`
+- API key for the custom provider goes through existing `agentSetApiKey(providerName, key)` — no new auth infrastructure
+
+**Step 5 — Provider dropdown:** Custom providers appear in `<select>` below built-in providers (anthropic, openai, google). Built-in OAuth providers remain unchanged. Custom providers use API key auth only (no OAuth flow — `OAUTH_PROVIDERS` set stays as-is).
+
+### `ProviderConfigInput` Schema Reference
+
+From `model-registry.d.ts`:
+
+```typescript
+interface ProviderConfigInput {
+  baseUrl?: string;
+  apiKey?: string;       // Optional — resolved from auth.json if not given
+  api?: Api;             // "openai-completions" for OpenAI-compat endpoints
+  models?: Array<{
+    id: string;
+    name: string;
+    reasoning: boolean;
+    input: ("text" | "image")[];
+    cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+    contextWindow: number;
+    maxTokens: number;
+    compat?: OpenAICompletionsCompat;  // Optional; auto-detected from baseUrl
+  }>;
+}
+```
+
+All model fields have defaults in the schema. The `compat` field auto-detects from `baseUrl` (e.g., Ollama gets `requiresToolResultName: true` automatically).
+
+---
+
+## Scrollable Settings Page: Architecture
+
+### Current Architecture (tab-swap)
+
+`Settings.tsx` renders one section at a time (`{activeSection === 'wallet' && <WalletSection />}`). Clicking a sidebar item calls `setActiveSection`. Only one section is mounted at a time.
+
+### Target Architecture (scroll-spy)
+
+Convert to a single scrollable column with sticky sidebar anchors:
+
+**Remove** all conditional renders in `Settings.tsx`. Render all sections stacked:
+
+```tsx
+<div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4 max-h-[calc(100vh-12rem)]">
+  <div id="section-wallet" ref={walletRef} className="scroll-mt-4"><WalletSection /></div>
+  <div id="section-node" ref={nodeRef} className="scroll-mt-4"><NodeSection /></div>
+  {/* ... rest of sections ... */}
+</div>
+```
+
+**Sidebar becomes anchor nav.** Replace `onSelect={setActiveSection}` with scroll-to:
+
+```tsx
+onClick={() => document.getElementById(`section-${item.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+```
+
+**IntersectionObserver** tracks which section is topmost visible and updates `activeSection` for sidebar highlight:
+
+```tsx
+useEffect(() => {
+  const refs = [walletRef, nodeRef, environmentRef, agentRef, mcpRef, resetRef];
+  const keys: SectionKey[] = ['wallet', 'node', 'environment', 'agent', 'mcp', 'reset'];
+  const observer = new IntersectionObserver(
+    (entries) => {
+      const visible = entries.filter(e => e.isIntersecting);
+      if (visible.length > 0) setActiveSection(/* topmost */ ...);
+    },
+    { threshold: 0, rootMargin: '-10% 0px -80% 0px' }
+  );
+  refs.forEach(r => { if (r.current) observer.observe(r.current); });
+  return () => observer.disconnect();
+}, []);
+```
+
+`rootMargin: '-10% 0px -80% 0px'` means "trigger when the section top enters the top 20% of the scroll container" — produces natural active-section behavior matching common settings UX patterns.
+
+**State change summary:**
+
+| Before | After |
+|--------|-------|
+| `activeSection` controls which section renders | `activeSection` controls sidebar highlight only |
+| `setActiveSection` called on sidebar click | `setActiveSection` called by IntersectionObserver; sidebar click scrolls |
+| One section mounted at a time | All sections always mounted |
+| OAuth listener in parent needed to survive nav | Sections always mounted; OAuth listener still fine in parent |
+
+---
+
+## Files That Change
+
+| File | Change | What |
+|------|--------|------|
+| `packages/gui/shared/src/settings.rs` | Add | `OpenAICompatProvider` struct + `agent_openai_compat_providers` field |
+| `app/src-tauri/src/agent.rs` | Extend | Serialize + inject `WAVS_OPENAI_COMPAT_PROVIDERS` env var at spawn |
+| `app/src-tauri/src/commands.rs` | Extend | Handle `agent_openai_compat_providers` in `cmd_save_agent_settings` |
+| `app/agent/entrypoint.ts` | Extend | Read env var, call `modelRegistry.registerProvider()` per entry at startup |
+| `app/src/tauri/agent.ts` | Extend | Add `agent_openai_compat_providers` to `saveAgentSettings` type |
+| `app/src/components/settings/AgentSection.tsx` | Extend | New "Custom Providers" subsection; extended provider `<select>` |
+| `app/src/pages/Settings.tsx` | Refactor | Remove conditional renders, add `useRef` per section, add IntersectionObserver |
+| `app/src/components/settings/SettingsSidebar.tsx` | Refactor | onClick scrolls to anchor; highlight driven by `activeSection` prop (unchanged interface) |
+
+### Files That Do NOT Change
+
+- `auth.json` format — `agentSetApiKey(providerName, key)` works unchanged for custom providers
+- `AgentApiKeyField` component — accepts any string as `provider`, no changes needed
+- Zustand `appStore` — settings propagate through existing `SettingsEvent` mechanism
+- Vite / Tailwind config — no new config needed
 
 ---
 
@@ -100,11 +213,12 @@ oci-wasm = { workspace = true }
 
 | Recommended | Alternative | Why Not |
 |-------------|-------------|---------|
-| `wit-component::decode()` → JSON Schema | `wit-parser` for `.wit` text files | WAVS operates on compiled `.wasm` binaries, not source `.wit` files. `wit-parser` parses text format. `wit-component` decodes the binary-embedded WIT. |
-| `oci-client` + `oci-wasm` for `oci://` URIs | Extend `wasm-pkg-client` | `wasm-pkg-client` routes by package namespace (e.g. `wasi:http`), not raw registry URIs. The `oci://ghcr.io/user/component:tag` format bypasses namespace resolution entirely. Adding it to wkg would mean overriding their config layer. Direct OCI client is simpler. |
-| Fork/inline Wassette's `component2json` approach | Wait for Bytecode Alliance upstream | Issue #579 opened Nov 2025, no activity. Building on `wasmparser` + `wit-component` directly gives full control and avoids an external dependency. |
-| Extend existing `wavs-mcp` server | New MCP server for execution | New server means new process, new configuration, user friction. The existing `ServerHandler` already supports dynamic tool registration. Extending in-place is the path of least resistance. |
-| `wasmtime::component::Component::component_type()` | `wasmparser` for type walking | Both work. `wit-component::decode()` + `wit-parser::Resolve` gives a higher-level structured representation (named types, interfaces, packages) rather than raw binary section parsing. Prefer the higher-level API for maintainability. `wasmparser` is a fallback if performance becomes an issue. |
+| `registerProvider()` at startup via env var | Write `~/.pi/agent/models.json` | That path is pi's own config dir; WAVS writing there conflicts with user's standalone pi installation. Also `ModelRegistry.inMemory()` skips file loading entirely. |
+| `registerProvider()` at startup | `register_provider` RPC command | Does not exist. Verified by exhaustive check of `RpcCommand` union in `rpc-types.d.ts`. |
+| `IntersectionObserver` native | `react-scroll` npm package | Adds a dep for a pattern that's 15 lines of native code. No benefit in a Tauri Chromium context. |
+| `IntersectionObserver` native | `react-intersection-observer` | Same argument. The wrapper adds no meaningful value for this use case. |
+| Env var for provider config | New Tauri command to call `registerProvider` at runtime | Agent must be restarted to pick up new providers anyway (model registry is built at startup). Env var at spawn is simpler and aligns with existing `WAVS_AUTH_DIR` pattern. |
+| `agent_openai_compat_providers` in settings | Separate file (e.g., `custom-providers.json`) | Keeps all user config in one place (`settings.json`). Avoids a new file to manage/migrate. |
 
 ---
 
@@ -112,80 +226,38 @@ oci-wasm = { workspace = true }
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `wit-bindgen` for schema generation | Generates Rust binding code at compile time, not runtime schema from arbitrary binaries | `wit-component::decode()` + `wit-parser::Resolve` for runtime introspection |
-| `wasm-pkg-client` for `oci://` URI handling | Not designed for raw `oci://` URIs; uses namespace-based routing | `oci-client` + `oci-wasm` directly |
-| Adding separate MCP server binary for execution | Doubles configuration surface for users; fragments the wavs-mcp interface | Extend `wavs-mcp` server with new tools in the existing `ServerHandler` |
-| `jsonschema` crate | Validates existing schemas, does not generate them | Hand-roll schema construction from `wit-parser::TypeDefKind` using `serde_json::json!` macros |
+| `ModelRegistry.create()` with `~/.pi/agent/models.json` | pi's config dir; conflicts with user's own pi install; current code uses `inMemory()` | `registerProvider()` called from entrypoint at startup |
+| `openai` npm SDK on the frontend | Not needed; pi-ai wraps openai SDK internally in the sidecar | Nothing — pi-ai already handles this |
+| Storing `base_url` in `auth.json` | `auth.json` is for credentials only; mixing config there breaks the isolation pattern | `agent_openai_compat_providers` field in `settings.json` via Settings struct |
+| Any scrollspy library (`react-scroll`, `react-scrollspy`, etc.) | Zero benefit over native API in this context; adds a dep | Native `IntersectionObserver` + `scrollIntoView` |
 
 ---
 
 ## Version Compatibility
 
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| `wasmparser 0.245` | `wasmtime 42.0.1` | `wasmtime` 42.x bundles its own copy of `wasmparser`. The workspace `wasmparser` is a separate dep for direct binary parsing in the schema generator — no conflict. |
-| `wit-component 0.245` | `wit-parser 0.245` | Must match exactly — both live in the `wasm-tools` monorepo and share internal types. Mixing minor versions breaks compilation. |
-| `oci-wasm 0.4` | `oci-client 0.16` | `oci-wasm 0.4.0` declares `oci-client = "0.16"` in its Cargo.toml. Workspace must use `oci-client = "0.16"` to avoid duplicate versions. |
-| `oci-wasm 0.4` | `wit-component 0.244` | `oci-wasm 0.4.0` depends on `wit-component = "0.244.0"` and `wit-parser = "0.244.0"` for reading component exports from pulled binaries. If the workspace uses `wit-component 0.245`, Cargo will compile both. Prefer aligning to 0.245 and letting Cargo unify, or pin workspace to 0.244 if oci-wasm conflicts. This needs a `cargo tree` check at implementation time. |
+No new packages introduced. No compatibility concerns.
 
----
-
-## Integration Points
-
-### WIT-to-schema flow
-
-```
-Uploaded/deployed .wasm bytes
-  → wit_component::decode(&bytes) → (Resolve, WorldId)
-  → resolve.worlds[world_id].exports
-  → for each export: TypeDefKind → serde_json::Value (JSON Schema object)
-  → Tool { name: normalized_function_name, input_schema: Arc<json_schema> }
-```
-
-This schema generation runs at service registration time and is cached — not on every MCP tool call. The Wasmtime `Engine` already holds compiled component artifacts; the schema pass reads the raw bytes before or during compilation.
-
-### OCI pull flow
-
-```
-ComponentSource::Oci { uri: "oci://ghcr.io/user/component:tag", digest }
-  → parse URI → (registry, repository, reference)
-  → WasmClient::new(ClientConfig::default())
-  → client.pull(&reference, &RegistryAuth::Anonymous).await
-  → verify sha256 against digest field
-  → store bytes in existing component store (same path as Download/Registry variants)
-```
-
-The `ComponentDigest` type already exists in wavs-types for digest verification.
-
-### MCP execution trust tiers
-
-The three tiers map directly to existing WAVS capabilities:
-
-| Tier | Implementation | Existing Infrastructure Used |
-|------|---------------|-------------------------------|
-| Result only | Execute via engine, return raw bytes as base64/hex | `wavs-engine` execute path |
-| Result + signature | Execute + return operator signature over result hash | `alloy-signer` HD key derivation (already used) |
-| On-chain submission | Execute + sign + submit via existing aggregator/submission | Full existing pipeline |
-
-The trust tier is a parameter (`trust_tier: "result" | "signed" | "onchain"`) on the `wavs_execute_<service_id>_<workflow_id>` tool call.
+| Package | Version | Notes |
+|---------|---------|-------|
+| `@mariozechner/pi-coding-agent` | 0.65.0 | `registerProvider()` verified present in `dist/core/model-registry.d.ts` |
+| `@mariozechner/pi-ai` | 0.65.0 | `openai-completions` api, `KnownProvider` union verified in `dist/types.d.ts` |
+| `react` | 19.1.0 | `useRef`, `useEffect`, `IntersectionObserver` — no issues |
+| `tailwindcss` | 3.4.0 | `scroll-mt-*` utility available since Tailwind 3.1 |
 
 ---
 
 ## Sources
 
-- [Wassette Cargo.toml workspace deps](https://github.com/microsoft/wassette/blob/main/Cargo.toml) — confirmed oci-client 0.16, oci-wasm 0.4, rmcp 0.9.1, wasmtime 36.0.5
-- [Wassette component2json Cargo.toml](https://github.com/microsoft/wassette/blob/main/crates/component2json/Cargo.toml) — confirmed wasmparser 0.245 as the parsing substrate
-- [component2json upstreaming issue #579](https://github.com/microsoft/wassette/issues/579) — open since Nov 2025, no resolution
-- [wit-component docs.rs](https://docs.rs/wit-component/latest/wit_component/) — version 0.245.1, `decode()` function confirmed
-- [wit-parser docs.rs](https://docs.rs/wit-parser/latest/wit_parser/) — version 0.245.1 (latest), struct inventory confirmed
-- [oci-wasm GitHub Cargo.toml](https://github.com/bytecodealliance/rust-oci-wasm/blob/main/Cargo.toml) — version 0.4.0, oci-client 0.16, wit-component 0.244.0 confirmed
-- [oci-client docs.rs](https://docs.rs/oci-client/latest/oci_client/struct.Client.html) — pull methods and RegistryAuth confirmed, v0.16.1 (March 2026)
-- [wasm-pkg-client docs.rs](https://docs.rs/wasm-pkg-client/latest/wasm_pkg_client/) — version 0.15.0, read-only registry client confirmed
-- [wasmtime Component API](https://docs.wasmtime.dev/api/wasmtime/component/struct.Component.html) — `component_type()` pre-instantiation introspection confirmed
-- [Microsoft OCI + WASM blog](https://opensource.microsoft.com/blog/2024/09/25/distributing-webassembly-components-using-oci-registries/) — media types `application/vnd.wasm.config.v0+json` and `application/wasm` confirmed
-- Existing codebase: `/Users/jacobhartnell/Dev/projects/Layer/wavs-app-2/packages/utils/src/wkg.rs` — confirmed existing wasm-pkg-client usage pattern and why it does not cover raw OCI URIs
-- Existing codebase: `/Users/jacobhartnell/Dev/projects/Layer/wavs-app-2/packages/types/src/service.rs` — confirmed `ComponentSource` variants and `Registry` struct
+- `/workspace/app/agent/node_modules/@mariozechner/pi-coding-agent/dist/core/model-registry.d.ts` — `registerProvider()`, `ProviderConfigInput`, `ModelRegistry.inMemory()` — HIGH confidence (dist types, source of truth)
+- `/workspace/app/agent/node_modules/@mariozechner/pi-coding-agent/dist/core/model-registry.js` lines 182, 208 — confirmed `inMemory()` passes `undefined` path, skipping models.json — HIGH confidence
+- `/workspace/app/agent/node_modules/@mariozechner/pi-coding-agent/dist/modes/rpc/rpc-types.d.ts` — full `RpcCommand` union exhaustively checked: no `register_provider` command exists — HIGH confidence
+- `/workspace/app/agent/node_modules/@mariozechner/pi-ai/dist/types.d.ts` — `KnownProvider` union (includes `groq`, `openrouter`), `Model.baseUrl`, `OpenAICompletionsCompat` — HIGH confidence
+- `/workspace/app/agent/entrypoint.ts` — confirmed `ModelRegistry.inMemory(authStorage)` in use — HIGH confidence
+- `/workspace/app/src-tauri/src/agent.rs` — `PiSidecarConfig`, env var injection pattern (`WAVS_AUTH_DIR` etc.) — HIGH confidence
+- `/workspace/packages/gui/shared/src/settings.rs` — current `Settings` struct fields — HIGH confidence
+- `/workspace/app/src-tauri/src/commands.rs` — `cmd_save_agent_settings` pattern — HIGH confidence
+- [Ollama OpenAI compatibility docs](https://docs.ollama.com/api/openai-compatibility) — `http://localhost:11434/v1` base URL pattern, placeholder apiKey requirement — MEDIUM confidence (web source)
 
 ---
-*Stack research for: WAVS WIT-to-schema, MCP execution interface, OCI component distribution*
-*Researched: 2026-03-24*
+*Stack research for: WAVS v1.1 open-source AI provider support + settings UX*
+*Researched: 2026-04-08*
