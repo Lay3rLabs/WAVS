@@ -37,7 +37,7 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 
 **Milestone Goal:** Surface component interfaces, schemas, and metadata through an improved components list and a new component detail page.
 
-- [ ] **Phase 10: Backend Commands** - Tauri commands exposing wit-schema JSON Schema and component metadata to the frontend
+- [x] **Phase 10: Backend Commands** - Tauri commands exposing wit-schema JSON Schema and component metadata to the frontend (completed 2026-04-08)
 - [ ] **Phase 11: Component Detail Page** - New detail page surfacing a component's full interface profile, permissions, limits, and configuration
 - [ ] **Phase 12: Components List Page** - Improved list page with richer cards, search, filter, and navigation to detail
 
@@ -53,7 +53,7 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
   3. Both commands complete without error for components sourced via Registry, Download, and OCI digest
 **Plans**: 1 plan
 Plans:
-- [ ] 10-01-PLAN.md — Wire wit-schema and component metadata Tauri commands
+- [x] 10-01-PLAN.md — Wire wit-schema and component metadata Tauri commands
 
 ### Phase 11: Component Detail Page
 **Goal**: Users can navigate to a per-component detail page and read everything about its interface, permissions, and configuration
@@ -93,6 +93,6 @@ Plans:
 | 7. Groq & OpenRouter Providers | v1.1 | 1/1 | Complete | 2026-04-08 |
 | 8. Ollama Provider | v1.1 | 1/1 | Complete | 2026-04-08 |
 | 9. Settings Scroll Refactor | v1.1 | 1/1 | Complete | 2026-04-08 |
-| 10. Backend Commands | v1.2 | 0/1 | Not started | - |
+| 10. Backend Commands | v1.2 | 1/1 | Complete    | 2026-04-08 |
 | 11. Component Detail Page | v1.2 | 0/? | Not started | - |
 | 12. Components List Page | v1.2 | 0/? | Not started | - |
