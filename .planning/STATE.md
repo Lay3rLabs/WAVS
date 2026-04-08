@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Open Source AI Providers & Settings UX
-status: defining
+status: ready_to_plan
 stopped_at: null
 last_updated: "2026-04-08T00:00:00.000Z"
 last_activity: 2026-04-08
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-08)
 
 **Core value:** AI agent developers can use WAVS components as MCP tools with the same ease as Wassette, but with cryptographic trust guarantees Wassette structurally cannot provide.
-**Current focus:** Defining requirements for v1.1
+**Current focus:** Phase 7 — Groq & OpenRouter Providers
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 7 of 9 (Groq & OpenRouter Providers)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-04-08 — Milestone v1.1 started
+Status: Ready to plan
+Last activity: 2026-04-08 — Roadmap created for v1.1; 3 phases derived from 10 requirements
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 
@@ -37,9 +39,11 @@ Last activity: 2026-04-08 — Milestone v1.1 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Open-source providers use OpenAI-compatible API format for agent sidecar
-- Settings page will use scrollable single-page layout with sidebar anchor navigation
-- Both agent config and WASM component env vars need open-source provider support
+- Schema first: CustomProviderConfig struct shape is the contract all downstream work depends on — shipped in Phase 7 alongside Groq/OpenRouter UI
+- File-contract pattern: Rust backend owns models.json; TypeScript sidecar reads it at startup; no new RPC commands needed
+- Groq/OpenRouter in Phase 7: already KnownProviders in pi-ai — quick win, low risk, validates the persistence pipeline
+- Ollama in separate Phase 8: tool calling must be acceptance-tested (not just basic completion) before shipping
+- Phase 9 is independent: settings scroll refactor touches only Settings.tsx + SettingsSidebar.tsx; no shared files with provider work
 
 ### Pending Todos
 
@@ -47,10 +51,11 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet.
+- [Research] models.json exact schema needs validation against loadCustomModels() in model-registry.js before Phase 8 implementation
+- [Research] Ollama tool calling reliability with streaming compat layer — test with "list services" task, not just basic completion
 
 ## Session Continuity
 
 Last session: 2026-04-08
-Stopped at: Milestone v1.1 started — defining requirements
+Stopped at: Roadmap created — ready to plan Phase 7
 Resume file: None

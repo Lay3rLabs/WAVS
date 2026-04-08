@@ -52,22 +52,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROV-01 | TBD | Pending |
-| PROV-02 | TBD | Pending |
-| PROV-03 | TBD | Pending |
-| PROV-04 | TBD | Pending |
-| PROV-05 | TBD | Pending |
-| PROV-06 | TBD | Pending |
-| PROV-07 | TBD | Pending |
-| UX-01 | TBD | Pending |
-| UX-02 | TBD | Pending |
-| UX-03 | TBD | Pending |
+| PROV-01 | Phase 7 | Pending |
+| PROV-02 | Phase 7 | Pending |
+| PROV-03 | Phase 7 | Pending |
+| PROV-04 | Phase 8 | Pending |
+| PROV-05 | Phase 8 | Pending |
+| PROV-06 | Phase 8 | Pending |
+| PROV-07 | Phase 8 | Pending |
+| UX-01 | Phase 9 | Pending |
+| UX-02 | Phase 9 | Pending |
+| UX-03 | Phase 9 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10
+- Mapped to phases: 10
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-08*
-*Last updated: 2026-04-08 after initial definition*
+*Last updated: 2026-04-08 after roadmap creation*
