@@ -50,6 +50,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     agent_model_provider: null,
     agent_model_id: null,
     agent_thinking_level: null,
+    agent_base_url: null,
     agent_auto_start: false,
     agent_panel_width: null,
   },
