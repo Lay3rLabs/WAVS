@@ -39,7 +39,7 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 
 - [x] **Phase 10: Backend Commands** - Tauri commands exposing wit-schema JSON Schema and component metadata to the frontend (completed 2026-04-08)
 - [x] **Phase 11: Component Detail Page** - New detail page surfacing a component's full interface profile, permissions, limits, and configuration (completed 2026-04-08)
-- [ ] **Phase 12: Components List Page** - Improved list page with richer cards, search, filter, and navigation to detail
+- [x] **Phase 12: Components List Page** - Improved list page with richer cards, search, filter, and navigation to detail (completed 2026-04-08)
 
 ## Phase Details
 
@@ -82,7 +82,7 @@ Plans:
   4. User can click a component card and land on that component's detail page
 **Plans**: 1 plan
 Plans:
-- [ ] 12-01-PLAN.md — Rich cards, search, source-type filter, and detail page navigation
+- [x] 12-01-PLAN.md — Rich cards, search, source-type filter, and detail page navigation
 **UI hint**: yes
 
 ## Progress
@@ -100,4 +100,4 @@ Plans:
 | 9. Settings Scroll Refactor | v1.1 | 1/1 | Complete | 2026-04-08 |
 | 10. Backend Commands | v1.2 | 1/1 | Complete    | 2026-04-08 |
 | 11. Component Detail Page | v1.2 | 2/2 | Complete    | 2026-04-08 |
-| 12. Components List Page | v1.2 | 0/1 | Not started | - |
+| 12. Components List Page | v1.2 | 1/1 | Complete    | 2026-04-08 |
