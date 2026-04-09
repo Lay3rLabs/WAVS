@@ -1,5 +1,16 @@
 # Milestones
 
+## v1.3 Activity UX & Bug Fixes (Shipped: 2026-04-09)
+
+**Phases completed:** 4 phases, 4 plans, 2 tasks
+
+**Key accomplishments:**
+
+- One-liner:
+- 1. [Rule 1 - Bug] Fixed pre-existing missing exec_enabled field in block_interval test
+
+---
+
 ## v1.2 Components Explorer (Shipped: 2026-04-08)
 
 **Phases completed:** 3 phases, 4 plans, 4 tasks

@@ -45,15 +45,16 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 - ✓ Tauri commands exposing wit-schema JSON Schema and component metadata — v1.2
 - ✓ Component detail page with full interface profile (functions, permissions, config) — v1.2
 - ✓ Improved components list with search/filter, richer cards, and detail navigation — v1.2
+- ✓ Richer activity cards with trigger, result summary, and submission info visible without expanding — v1.3
+- ✓ Smart result decoding for activity feed (UTF-8 → JSON → hex) — v1.3
+- ✓ Service restart reliability fix — v1.3
+- ✓ Wallet settings kebab dropdown for uncommon actions — v1.3
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] Richer activity cards with trigger, result summary, and submission info visible without expanding
-- [ ] Smart result decoding for activity feed (UTF-8 → JSON → hex)
-- [ ] Service restart reliability fix
-- [ ] Wallet settings kebab dropdown for uncommon actions
+(No active requirements — define next milestone with /gsd-new-milestone)
 
 ### Out of Scope
 
@@ -85,6 +86,10 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 | Groq/OpenRouter as KnownProviders | Already in pi-ai — zero Rust changes, just UI + settings.json read at startup | ✓ Good |
 | models.json for Ollama (not registerProvider) | Declarative, auto-reloads on /model calls, no extension code | ✓ Good |
 | IntersectionObserver for scroll tracking | Native, performant, no scroll event spam — sidebar highlight stays in sync | ✓ Good |
+| result_payload as Option<String> pre-encoded hex | serde_helpers module is private; pre-encode in aggregator avoids cross-crate dep | ✓ Good |
+| 4KB cap on result_payload at aggregator | Prevents 100MB hex blowup in Tauri IPC; enforced before channel send | ✓ Good |
+| Pending subscription queue for EVM triggers | Standard async ordering fix; queues commands before controller ready, drains after | ✓ Good |
+| Kebab menu for uncommon wallet actions | Reduces vertical space; groups rare destructive actions behind disclosure | ✓ Good |
 
 ## Evolution
 
