@@ -49,7 +49,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 
 **Milestone Goal:** Richer activity cards with inline submission data, smart result decoding, service restart reliability, and wallet settings kebab menu.
 
-- [ ] **Phase 13: Activity Backend Pipeline** — Forward tx_hash and result_payload through the Rust submission event pipeline
+- [x] **Phase 13: Activity Backend Pipeline** — Forward tx_hash and result_payload through the Rust submission event pipeline (completed 2026-04-09)
 - [ ] **Phase 14: Activity Frontend UX** — Inline submission cards and smart result decoding in the UI
 - [ ] **Phase 15: Service Restart Reliability** — Fix trigger re-subscription race condition after process restart
 - [ ] **Phase 16: Wallet Kebab Menu** — Move uncommon wallet actions behind a kebab dropdown
@@ -64,9 +64,9 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
   1. A submission event received by the frontend includes a non-empty tx_hash field when a transaction was submitted
   2. A submission event received by the frontend includes the execution result payload (capped at 4 KB) for each confirmed submission
   3. The Rust SubmissionEvent struct, DispatcherCommand, and aggregator send site all carry tx_hash and result_payload with no compile errors
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 13-01-PLAN.md — Add tx_hash and result_payload to Rust pipeline and TypeScript types
+- [x] 13-01-PLAN.md — Add tx_hash and result_payload to Rust pipeline and TypeScript types
 
 ### Phase 14: Activity Frontend UX
 **Goal**: Users can see submission status, tx hash, and decoded result inline on activity cards without expanding
@@ -116,7 +116,7 @@ Plans:
 | 10. Backend Commands | v1.2 | 1/1 | Complete | 2026-04-08 |
 | 11. Component Detail Page | v1.2 | 2/2 | Complete | 2026-04-08 |
 | 12. Components List Page | v1.2 | 1/1 | Complete | 2026-04-08 |
-| 13. Activity Backend Pipeline | v1.3 | 0/1 | Not started | - |
+| 13. Activity Backend Pipeline | v1.3 | 1/1 | Complete    | 2026-04-09 |
 | 14. Activity Frontend UX | v1.3 | 0/? | Not started | - |
 | 15. Service Restart Reliability | v1.3 | 0/? | Not started | - |
 | 16. Wallet Kebab Menu | v1.3 | 0/? | Not started | - |
