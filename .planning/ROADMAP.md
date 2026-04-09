@@ -64,7 +64,9 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
   1. A submission event received by the frontend includes a non-empty tx_hash field when a transaction was submitted
   2. A submission event received by the frontend includes the execution result payload (capped at 4 KB) for each confirmed submission
   3. The Rust SubmissionEvent struct, DispatcherCommand, and aggregator send site all carry tx_hash and result_payload with no compile errors
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 13-01-PLAN.md — Add tx_hash and result_payload to Rust pipeline and TypeScript types
 
 ### Phase 14: Activity Frontend UX
 **Goal**: Users can see submission status, tx hash, and decoded result inline on activity cards without expanding
@@ -114,7 +116,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 | 10. Backend Commands | v1.2 | 1/1 | Complete | 2026-04-08 |
 | 11. Component Detail Page | v1.2 | 2/2 | Complete | 2026-04-08 |
 | 12. Components List Page | v1.2 | 1/1 | Complete | 2026-04-08 |
-| 13. Activity Backend Pipeline | v1.3 | 0/? | Not started | - |
+| 13. Activity Backend Pipeline | v1.3 | 0/1 | Not started | - |
 | 14. Activity Frontend UX | v1.3 | 0/? | Not started | - |
 | 15. Service Restart Reliability | v1.3 | 0/? | Not started | - |
 | 16. Wallet Kebab Menu | v1.3 | 0/? | Not started | - |
