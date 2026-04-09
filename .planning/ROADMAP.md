@@ -100,8 +100,9 @@ Plans:
   1. The wallet settings section shows a kebab (three-dot) menu icon instead of inline Reset Wallet and Reveal Seed Phrase buttons
   2. Clicking the kebab menu reveals Reset Wallet and Reveal Seed Phrase as dropdown options
   3. The existing reset and reveal behaviors function identically after the menu change
-**Plans**: TBD
-**UI hint**: yes
+**Plans:** 1 plan
+Plans:
+- [ ] 16-01-PLAN.md — Add kebab dropdown menu to wallet card header
 
 ## Progress
 
@@ -122,4 +123,4 @@ Plans:
 | 13. Activity Backend Pipeline | v1.3 | 1/1 | Complete    | 2026-04-09 |
 | 14. Activity Frontend UX | v1.3 | 1/1 | Complete    | 2026-04-09 |
 | 15. Service Restart Reliability | v1.3 | 1/1 | Complete    | 2026-04-09 |
-| 16. Wallet Kebab Menu | v1.3 | 0/? | Not started | - |
+| 16. Wallet Kebab Menu | v1.3 | 0/1 | Not started | - |
