@@ -14586,6 +14586,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "wasm-pkg-common",
+ "wasmtime",
  "wavs-benchmark-common",
  "wavs-engine",
  "wavs-gui-shared",
@@ -14617,9 +14618,11 @@ dependencies = [
  "tracing-subscriber",
  "utils",
  "wasm-pkg-client",
+ "wasmtime",
  "wavs",
  "wavs-gui-shared",
  "wavs-types",
+ "wit-schema",
 ]
 
 [[package]]
