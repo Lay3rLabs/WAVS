@@ -3,8 +3,9 @@ use std::num::NonZero;
 
 use wavs::{config::Config, dispatcher::DispatcherCommand, subsystems::trigger::TriggerManager};
 use wavs_types::{
-    ChainKey, Component, ComponentDigest, ComponentSource, Service, ServiceId, ServiceManager,
-    ServiceStatus, SignatureKind, Submit, Timestamp, Trigger, TriggerConfig, Workflow, WorkflowId,
+    ByteArray, ChainKey, Component, ComponentDigest, ComponentSource, Service, ServiceId,
+    ServiceManager, ServiceStatus, SignatureKind, Submit, Timestamp, Trigger, TriggerConfig,
+    Workflow, WorkflowId,
 };
 
 use layer_climb::prelude::*;
@@ -190,6 +191,7 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
         )]
         .into(),
         status: ServiceStatus::Active,
+        exec_enabled: None,
         manager: ServiceManager::Evm {
             chain: chain.clone(),
             address: rand_address_evm(),
@@ -280,6 +282,166 @@ async fn block_interval_trigger_is_removed_when_config_is_gone() {
             .len(),
         0
     );
+}
+
+/// Test that add_service correctly populates lookup maps for an EVM-triggered service.
+///
+/// The pending_evm_subscriptions queue in start_watcher ensures that WatchEvmContractEvents
+/// commands sent by add_service are not silently dropped if they arrive before StartListeningChain
+/// completes. See trigger.rs pending_evm_subscriptions.
+#[test]
+fn pending_subscription_ordering_evm_service() {
+    let config = Config::default();
+    let services = wavs::services::Services::new(WavsDb::new().unwrap());
+    let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
+    let manager = TriggerManager::new(
+        &config,
+        TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
+        services.clone(),
+        trigger_to_dispatcher_tx,
+    )
+    .unwrap();
+
+    let workflow_id = WorkflowId::new("workflow-1").unwrap();
+    let chain = ChainKey::new("evm:anvil").unwrap();
+    let task_queue_addr = rand_address_evm();
+    let event_hash = rand_event_evm();
+
+    let service = Service {
+        name: "Test EVM Service".to_string(),
+        workflows: [(
+            workflow_id.clone(),
+            Workflow {
+                component: Component::new(ComponentSource::Digest(ComponentDigest::hash([0; 32]))),
+                trigger: Trigger::EvmContractEvent {
+                    chain: chain.clone(),
+                    address: task_queue_addr,
+                    event_hash,
+                },
+                submit: Submit::Aggregator {
+                    component: Box::new(Component::new(ComponentSource::Digest(
+                        ComponentDigest::hash([1, 2, 3]),
+                    ))),
+                    signature_kind: SignatureKind::evm_default(),
+                },
+            },
+        )]
+        .into(),
+        status: ServiceStatus::Active,
+        exec_enabled: None,
+        manager: ServiceManager::Evm {
+            chain: chain.clone(),
+            address: rand_address_evm(),
+        },
+    };
+    services.save(&service).unwrap();
+
+    // add_service sends StartListeningChain + WatchEvmContractEvents (for manager) +
+    // another WatchEvmContractEvents (for the workflow trigger) via command channel.
+    // The lookup maps are updated synchronously.
+    manager.add_service(&service).unwrap();
+
+    // Verify the service's trigger appears in the lookup maps
+    let trigger_configs = manager
+        .get_lookup_maps()
+        .configs_for_service(service.id())
+        .unwrap();
+
+    assert_eq!(trigger_configs.len(), 1);
+    assert_eq!(trigger_configs[0].service_id, service.id());
+    assert_eq!(trigger_configs[0].workflow_id, workflow_id);
+
+    match &trigger_configs[0].trigger {
+        Trigger::EvmContractEvent {
+            chain: tchain,
+            address,
+            ..
+        } => {
+            assert_eq!(tchain, &chain);
+            assert_eq!(*address, task_queue_addr);
+        }
+        other => panic!("unexpected trigger type: {:?}", other),
+    }
+}
+
+/// Test that two services sharing the same EVM chain both have their triggers registered.
+///
+/// When two services share a chain, the second StartListeningChain is a no-op (Connected state).
+/// The pending_evm_subscriptions queue handles the case where both WatchEvmContractEvents commands
+/// arrive before the chain connects.
+#[test]
+fn add_service_multiple_services_same_chain() {
+    let config = Config::default();
+    let services = wavs::services::Services::new(WavsDb::new().unwrap());
+    let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
+    let manager = TriggerManager::new(
+        &config,
+        TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
+        services.clone(),
+        trigger_to_dispatcher_tx,
+    )
+    .unwrap();
+
+    let workflow_id = WorkflowId::new("workflow-1").unwrap();
+    let chain = ChainKey::new("evm:anvil").unwrap();
+
+    let addr_1 = rand_address_evm();
+    let addr_2 = rand_address_evm();
+    let event_1 = rand_event_evm();
+    let event_2 = rand_event_evm();
+
+    let make_evm_service = |addr: alloy_primitives::Address, event: ByteArray<32>, name: &str| Service {
+        name: name.to_string(),
+        workflows: [(
+            workflow_id.clone(),
+            Workflow {
+                component: Component::new(ComponentSource::Digest(ComponentDigest::hash([0; 32]))),
+                trigger: Trigger::EvmContractEvent {
+                    chain: chain.clone(),
+                    address: addr,
+                    event_hash: event,
+                },
+                submit: Submit::Aggregator {
+                    component: Box::new(Component::new(ComponentSource::Digest(
+                        ComponentDigest::hash([1, 2, 3]),
+                    ))),
+                    signature_kind: SignatureKind::evm_default(),
+                },
+            },
+        )]
+        .into(),
+        status: ServiceStatus::Active,
+        exec_enabled: None,
+        manager: ServiceManager::Evm {
+            chain: chain.clone(),
+            address: rand_address_evm(),
+        },
+    };
+
+    let service_1 = make_evm_service(addr_1, event_1, "service-1");
+    let service_2 = make_evm_service(addr_2, event_2, "service-2");
+
+    services.save(&service_1).unwrap();
+    services.save(&service_2).unwrap();
+
+    manager.add_service(&service_1).unwrap();
+    manager.add_service(&service_2).unwrap();
+
+    // Both services should have their triggers in lookup maps
+    let triggers_1 = manager
+        .get_lookup_maps()
+        .configs_for_service(service_1.id())
+        .unwrap();
+    let triggers_2 = manager
+        .get_lookup_maps()
+        .configs_for_service(service_2.id())
+        .unwrap();
+
+    assert_eq!(triggers_1.len(), 1, "service_1 should have 1 trigger");
+    assert_eq!(triggers_2.len(), 1, "service_2 should have 1 trigger");
+
+    assert_eq!(triggers_1[0].service_id, service_1.id());
+    assert_eq!(triggers_2[0].service_id, service_2.id());
 }
 
 #[tokio::test]
