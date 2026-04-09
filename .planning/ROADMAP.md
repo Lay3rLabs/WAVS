@@ -51,7 +51,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 
 - [x] **Phase 13: Activity Backend Pipeline** — Forward tx_hash and result_payload through the Rust submission event pipeline (completed 2026-04-09)
 - [x] **Phase 14: Activity Frontend UX** — Inline submission cards and smart result decoding in the UI (completed 2026-04-09)
-- [ ] **Phase 15: Service Restart Reliability** — Fix trigger re-subscription race condition after process restart
+- [x] **Phase 15: Service Restart Reliability** — Fix trigger re-subscription race condition after process restart (completed 2026-04-09)
 - [ ] **Phase 16: Wallet Kebab Menu** — Move uncommon wallet actions behind a kebab dropdown
 
 ## Phase Details
@@ -88,9 +88,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. After a WAVS process restart, all previously registered services resume receiving trigger events without manual intervention
   2. No trigger events are silently dropped during the re-subscription window after restart
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 15-01-PLAN.md — Add pending EVM subscription queue to fix trigger re-subscription race condition
+- [x] 15-01-PLAN.md — Add pending EVM subscription queue to fix trigger re-subscription race condition
 
 ### Phase 16: Wallet Kebab Menu
 **Goal**: Uncommon wallet actions are accessible via a kebab dropdown rather than inline buttons
@@ -121,5 +121,5 @@ Plans:
 | 12. Components List Page | v1.2 | 1/1 | Complete | 2026-04-08 |
 | 13. Activity Backend Pipeline | v1.3 | 1/1 | Complete    | 2026-04-09 |
 | 14. Activity Frontend UX | v1.3 | 1/1 | Complete    | 2026-04-09 |
-| 15. Service Restart Reliability | v1.3 | 0/1 | Planned | - |
+| 15. Service Restart Reliability | v1.3 | 1/1 | Complete    | 2026-04-09 |
 | 16. Wallet Kebab Menu | v1.3 | 0/? | Not started | - |
