@@ -50,7 +50,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 **Milestone Goal:** Richer activity cards with inline submission data, smart result decoding, service restart reliability, and wallet settings kebab menu.
 
 - [x] **Phase 13: Activity Backend Pipeline** — Forward tx_hash and result_payload through the Rust submission event pipeline (completed 2026-04-09)
-- [ ] **Phase 14: Activity Frontend UX** — Inline submission cards and smart result decoding in the UI
+- [x] **Phase 14: Activity Frontend UX** — Inline submission cards and smart result decoding in the UI (completed 2026-04-09)
 - [ ] **Phase 15: Service Restart Reliability** — Fix trigger re-subscription race condition after process restart
 - [ ] **Phase 16: Wallet Kebab Menu** — Move uncommon wallet actions behind a kebab dropdown
 
@@ -77,9 +77,9 @@ Plans:
   2. Result payloads displayed as readable UTF-8 text when the bytes decode cleanly
   3. Result payloads displayed as pretty-printed JSON when the UTF-8 content is valid JSON
   4. Result payloads fall back to hex display when UTF-8 decoding fails
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 14-01-PLAN.md — Add decodeResultPayload utility, SubmissionRows to activity cards, update virtualizer height
+- [x] 14-01-PLAN.md — Add decodeResultPayload utility, SubmissionRows to activity cards, update virtualizer height
 
 ### Phase 15: Service Restart Reliability
 **Goal**: Services reliably restore trigger subscriptions after the WAVS process restarts
@@ -118,6 +118,6 @@ Plans:
 | 11. Component Detail Page | v1.2 | 2/2 | Complete | 2026-04-08 |
 | 12. Components List Page | v1.2 | 1/1 | Complete | 2026-04-08 |
 | 13. Activity Backend Pipeline | v1.3 | 1/1 | Complete    | 2026-04-09 |
-| 14. Activity Frontend UX | v1.3 | 0/1 | Not started | - |
+| 14. Activity Frontend UX | v1.3 | 1/1 | Complete    | 2026-04-09 |
 | 15. Service Restart Reliability | v1.3 | 0/? | Not started | - |
 | 16. Wallet Kebab Menu | v1.3 | 0/? | Not started | - |
