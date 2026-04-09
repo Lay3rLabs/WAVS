@@ -21,7 +21,7 @@ created: 2026-04-09
 | Preset | not applicable |
 | Component library | none (hand-rolled atoms in `app/src/components/atoms/`) |
 | Icon library | Unicode glyphs inline (clipboard 📋, triangles ▲▼) — no external icon lib |
-| Font | Montserrat (400, 600, 700) via Google Fonts |
+| Font | Montserrat (400, 700) via Google Fonts |
 
 Source: `app/tailwind.config.js`, `app/src/index.css`
 
@@ -55,7 +55,7 @@ Source: Extracted from `ActivityCard.tsx` and `GroupedActivityCard.tsx` existing
 | Role | Size | Weight | Line Height |
 |------|------|--------|-------------|
 | Body | 12px (text-xs) | 400 (regular) | 1.5 |
-| Label / Meta | 12px (text-xs) | 600 (semibold) via `font-bold` or `font-medium` | 1.4 |
+| Label / Meta | 12px (text-xs) | 700 (bold) via `font-bold` | 1.4 |
 | Micro badge | 10px (text-[10px]) | 700 (bold), uppercase, tracking-wide | 1.0 |
 | Monospace value | 12px (text-xs font-mono) | 400 (regular) | 1.5 (leading-relaxed in expanded sections) |
 
@@ -64,6 +64,7 @@ Notes:
 - Format indicator badges ([JSON], [Text], [Hex]) use micro badge role: `text-[10px] font-bold uppercase tracking-wide`
 - Result payload preview uses `font-mono text-xs` consistent with existing DetailRow value style
 - "Copied!" transient feedback uses `text-xs text-success-600`
+- Two weights only: 400 (regular) for body and monospace values; 700 (bold) for labels, meta, and micro badges
 
 Source: Existing `DetailRow` pattern in `ActivityCard.tsx`; `index.css` base font.
 
@@ -98,6 +99,8 @@ Additional semantic colors (pre-existing, must remain consistent):
 - [JSON]: `bg-primary-600/20 text-primary-500` — purple tint signals parsed/structured data
 - [Text]: `bg-charcoal-medium text-tan-warm` — neutral, plain text
 - [Hex]: `bg-charcoal-light text-tan-muted` — muted, raw fallback
+
+**Primary focal point:** The status pill in the card header is the primary visual anchor of each activity card — its color (amber/blue/red/green glow dot + pill label) communicates the most critical state at a glance before any other content is read.
 
 Source: `app/tailwind.config.js` color tokens; `ActivityCard.tsx`, `GroupedActivityCard.tsx`.
 
