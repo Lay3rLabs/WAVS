@@ -110,6 +110,8 @@ export interface SubmissionEvent {
   workflow_id: WorkflowId;
   trigger_data: TriggerData;
   correlation_id: string;
+  tx_hash: string;
+  result_payload: string | null;
 }
 
 export interface SubmissionFailedEvent {
@@ -337,6 +339,8 @@ export interface ActivityItem {
   triggerConfig?: TriggerConfig;
   correlationId?: string;
   error?: string;
+  txHash?: string;
+  resultPayload?: string | null;
 }
 
 // Helper to get a human-readable service key from manager (for display/fallback only)

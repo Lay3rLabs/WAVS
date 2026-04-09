@@ -67,6 +67,8 @@ export async function startListeners(): Promise<void> {
       workflowId: payload.workflow_id,
       triggerData: payload.trigger_data,
       correlationId: payload.correlation_id,
+      txHash: payload.tx_hash,
+      resultPayload: payload.result_payload,
     });
   });
   unlistenFns.push(unlistenSubmission);
