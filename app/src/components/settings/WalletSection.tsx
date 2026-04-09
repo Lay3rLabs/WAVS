@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { formatEther, type Address } from 'viem';
 import { mainnet, sepolia, holesky } from 'viem/chains';
 import { AddressDisplay, Button } from '../atoms';
@@ -64,6 +64,8 @@ export function WalletSection({ onError }: WalletSectionProps) {
   const [mnemonicCopied, setMnemonicCopied] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [balances, setBalances] = useState<ChainBalance[][]>([]);
+  const [kebabOpen, setKebabOpen] = useState(false);
+  const kebabRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (hasMnemonic) {
@@ -199,9 +201,54 @@ export function WalletSection({ onError }: WalletSectionProps) {
     }
   }, [walletError, onError]);
 
+  // Close kebab dropdown when clicking outside
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (kebabRef.current && !kebabRef.current.contains(e.target as Node)) {
+        setKebabOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, []);
+
   return (
     <div className="flex flex-col gap-4 p-4 rounded-lg bg-charcoal-medium border border-charcoal-light">
-      <h2 className="text-beige-light text-lg font-semibold">Wallet</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-beige-light text-lg font-semibold">Wallet</h2>
+        {hasMnemonic && !showMnemonic && !showResetConfirm && (
+          <div className="relative" ref={kebabRef}>
+            <button
+              onClick={() => setKebabOpen((prev) => !prev)}
+              className="text-tan-muted hover:text-beige-warm p-1 rounded hover:bg-charcoal-dark transition-colors"
+              aria-label="Wallet actions"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <circle cx="8" cy="3" r="1.5" />
+                <circle cx="8" cy="8" r="1.5" />
+                <circle cx="8" cy="13" r="1.5" />
+              </svg>
+            </button>
+            {kebabOpen && (
+              <div className="absolute right-0 top-full mt-1 w-48 rounded border border-charcoal-light bg-charcoal-darkest shadow-lg z-10">
+                <button
+                  className="w-full text-left px-3 py-2 text-sm text-beige-warm hover:bg-charcoal-dark transition-colors rounded-t"
+                  onClick={() => { setKebabOpen(false); handleExportWallet(); }}
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Loading...' : 'Export Recovery Phrase'}
+                </button>
+                <button
+                  className="w-full text-left px-3 py-2 text-sm text-red-4 hover:bg-charcoal-dark transition-colors rounded-b"
+                  onClick={() => { setKebabOpen(false); setShowResetConfirm(true); }}
+                >
+                  Reset Wallet
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Accounts with balances */}
       {hasMnemonic && derivedAddresses.length > 0 && (
@@ -222,16 +269,6 @@ export function WalletSection({ onError }: WalletSectionProps) {
             </div>
           ))}
         </div>
-      )}
-
-      {/* Export/Backup */}
-      {hasMnemonic && !showMnemonic && (
-        <Button
-          text={isLoading ? 'Loading...' : 'Export Recovery Phrase'}
-          variant="outline"
-          onClick={handleExportWallet}
-          disabled={isLoading}
-        />
       )}
 
       {/* Show mnemonic */}
@@ -264,16 +301,6 @@ export function WalletSection({ onError }: WalletSectionProps) {
             <Button text="Hide" variant="outline" onClick={handleHideMnemonic} />
           </div>
         </div>
-      )}
-
-      {/* Reset Wallet */}
-      {hasMnemonic && !showResetConfirm && (
-        <Button
-          text="Reset Wallet"
-          color="red"
-          variant="outline"
-          onClick={() => setShowResetConfirm(true)}
-        />
       )}
 
       {/* Reset confirmation */}
