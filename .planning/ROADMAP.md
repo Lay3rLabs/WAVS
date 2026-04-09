@@ -88,7 +88,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. After a WAVS process restart, all previously registered services resume receiving trigger events without manual intervention
   2. No trigger events are silently dropped during the re-subscription window after restart
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 15-01-PLAN.md — Add pending EVM subscription queue to fix trigger re-subscription race condition
 
 ### Phase 16: Wallet Kebab Menu
 **Goal**: Uncommon wallet actions are accessible via a kebab dropdown rather than inline buttons
@@ -119,5 +121,5 @@ Plans:
 | 12. Components List Page | v1.2 | 1/1 | Complete | 2026-04-08 |
 | 13. Activity Backend Pipeline | v1.3 | 1/1 | Complete    | 2026-04-09 |
 | 14. Activity Frontend UX | v1.3 | 1/1 | Complete    | 2026-04-09 |
-| 15. Service Restart Reliability | v1.3 | 0/? | Not started | - |
+| 15. Service Restart Reliability | v1.3 | 0/1 | Planned | - |
 | 16. Wallet Kebab Menu | v1.3 | 0/? | Not started | - |
