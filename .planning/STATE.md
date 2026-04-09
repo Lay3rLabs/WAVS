@@ -4,13 +4,13 @@ milestone: v1.3
 milestone_name: Activity UX & Bug Fixes
 status: executing
 stopped_at: Roadmap created for v1.3; ready to plan Phase 13
-last_updated: "2026-04-09T16:21:57.267Z"
+last_updated: "2026-04-09T16:31:32.318Z"
 last_activity: 2026-04-09
 progress:
   total_phases: 4
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 4
+  total_plans: 4
+  completed_plans: 4
   percent: 100
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-09)
 
 **Core value:** AI agent developers can use WAVS components as MCP tools with the same ease as Wassette, but with cryptographic trust guarantees Wassette structurally cannot provide.
-**Current focus:** Phase 15 — Service Restart Reliability
+**Current focus:** Phase 16 — Wallet Kebab Menu
 
 ## Current Position
 
 Phase: 16
 Plan: Not started
-Status: Executing Phase 15
+Status: Executing Phase 16
 Last activity: 2026-04-09
 
 Progress: [░░░░░░░░░░] 0%
@@ -36,7 +36,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 3 (v1.3)
+- Total plans completed: 4 (v1.3)
 - Average duration: —
 - Total execution time: —
 
@@ -47,6 +47,7 @@ Progress: [░░░░░░░░░░] 0%
 | 13 | 1 | - | - |
 | 14 | 1 | - | - |
 | 15 | 1 | - | - |
+| 16 | 1 | - | - |
 
 **Recent Trend:**
 

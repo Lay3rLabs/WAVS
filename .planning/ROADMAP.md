@@ -52,7 +52,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 - [x] **Phase 13: Activity Backend Pipeline** — Forward tx_hash and result_payload through the Rust submission event pipeline (completed 2026-04-09)
 - [x] **Phase 14: Activity Frontend UX** — Inline submission cards and smart result decoding in the UI (completed 2026-04-09)
 - [x] **Phase 15: Service Restart Reliability** — Fix trigger re-subscription race condition after process restart (completed 2026-04-09)
-- [ ] **Phase 16: Wallet Kebab Menu** — Move uncommon wallet actions behind a kebab dropdown
+- [x] **Phase 16: Wallet Kebab Menu** — Move uncommon wallet actions behind a kebab dropdown (completed 2026-04-09)
 
 ## Phase Details
 
@@ -100,9 +100,9 @@ Plans:
   1. The wallet settings section shows a kebab (three-dot) menu icon instead of inline Reset Wallet and Reveal Seed Phrase buttons
   2. Clicking the kebab menu reveals Reset Wallet and Reveal Seed Phrase as dropdown options
   3. The existing reset and reveal behaviors function identically after the menu change
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 16-01-PLAN.md — Add kebab dropdown menu to wallet card header
+- [x] 16-01-PLAN.md — Add kebab dropdown menu to wallet card header
 
 ## Progress
 
@@ -123,4 +123,4 @@ Plans:
 | 13. Activity Backend Pipeline | v1.3 | 1/1 | Complete    | 2026-04-09 |
 | 14. Activity Frontend UX | v1.3 | 1/1 | Complete    | 2026-04-09 |
 | 15. Service Restart Reliability | v1.3 | 1/1 | Complete    | 2026-04-09 |
-| 16. Wallet Kebab Menu | v1.3 | 0/1 | Not started | - |
+| 16. Wallet Kebab Menu | v1.3 | 1/1 | Complete    | 2026-04-09 |
