@@ -7,6 +7,7 @@ import {
   formatTimestamp,
   getTriggerAccent,
   DetailRows,
+  SubmissionRows,
 } from './ActivityCard';
 
 interface GroupedActivityCardProps {
@@ -151,6 +152,12 @@ export function GroupedActivityCard({
                   Error: {group.submission.error}
                 </div>
               )}
+
+              <SubmissionRows
+                txHash={group.submission.txHash}
+                resultPayload={group.submission.resultPayload}
+                bgColor="bg-charcoal-darkest"
+              />
 
               {/* Child raw JSON toggle */}
               <button

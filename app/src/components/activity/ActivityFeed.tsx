@@ -11,7 +11,7 @@ import type { StatusFilter, GroupedActivityEvent } from '../../hooks/useGroupedA
 type SortOrder = 'newest' | 'oldest';
 type DisplayItem = { type: 'group'; data: GroupedActivityEvent } | { type: 'orphan'; data: ActivityItem };
 
-const ESTIMATED_ITEM_HEIGHT = 90;
+const ESTIMATED_ITEM_HEIGHT = 130;
 const NEAR_BOTTOM_THRESHOLD = 200;
 
 interface ActivityFeedProps {

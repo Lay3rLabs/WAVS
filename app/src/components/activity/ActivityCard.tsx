@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { clsx } from 'clsx';
 import type { ActivityItem, TriggerData, TriggerConfig } from '../../types';
 import { getTriggerDataLabel } from '../../types';
 import { useAppStore } from '../../stores/appStore';
+import { decodeResultPayload } from '../../utils/decodeResultPayload';
 
 export function formatTimestamp(ts: number): string {
   const date = new Date(ts);
@@ -165,6 +167,93 @@ export function DetailRows({ data, config }: { data: TriggerData; config?: Trigg
   return null;
 }
 
+function TxHashDisplay({ hash }: { hash: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card expand toggle
+    try {
+      await navigator.clipboard.writeText(hash);
+    } catch {
+      // Clipboard API may be restricted in some WebView contexts
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const truncated = `${hash.slice(0, 6)}\u2026${hash.slice(-4)}`;
+
+  return (
+    <span className="inline-flex items-center gap-1 font-mono text-xs text-beige-warm">
+      <span title={hash}>{truncated}</span>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="ml-1 text-tan-muted hover:text-beige-warm cursor-pointer text-[11px]"
+      >
+        {copied ? 'Copied!' : '\uD83D\uDCCB'}
+      </button>
+    </span>
+  );
+}
+
+function ResultPreview({ payload }: { payload: string | null | undefined }) {
+  const result = decodeResultPayload(payload);
+
+  if (!payload) return null;
+
+  const badgeClass = result.kind === 'json'
+    ? 'bg-primary-600/20 text-primary-500'
+    : result.kind === 'text'
+      ? 'bg-charcoal-medium text-tan-warm'
+      : 'bg-charcoal-light text-tan-muted';
+
+  return (
+    <span className="inline-flex items-start gap-1 min-w-0">
+      <span className={clsx('shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide', badgeClass)}>
+        {result.kind === 'json' ? 'JSON' : result.kind === 'text' ? 'Text' : 'Hex'}
+      </span>
+      {result.kind === 'json' ? (
+        <pre className="whitespace-pre-wrap font-mono text-xs text-beige-warm/90 max-h-[3.6em] overflow-hidden">
+          {result.display}
+        </pre>
+      ) : result.kind === 'text' ? (
+        <span className="font-mono text-xs text-beige-warm break-all">{result.display}</span>
+      ) : (
+        <span className="font-mono text-xs text-tan-muted">{result.display}</span>
+      )}
+    </span>
+  );
+}
+
+export function SubmissionRows({ txHash, resultPayload, bgColor = 'bg-charcoal-dark' }: {
+  txHash?: string;
+  resultPayload?: string | null;
+  bgColor?: string;
+}) {
+  if (!txHash && !resultPayload) return null;
+
+  return (
+    <>
+      <div className="relative my-2">
+        <div className="border-t border-charcoal-light" />
+        <span className={clsx('absolute left-1/2 -translate-x-1/2 -translate-y-1/2 top-0 px-2 text-[10px] text-tan-muted tracking-widest', bgColor)}>
+          submission
+        </span>
+      </div>
+      <div className="flex flex-col gap-1">
+        {txHash && <DetailRow label="tx" value={<TxHashDisplay hash={txHash} />} />}
+        {resultPayload && (
+          <div className="flex gap-3 text-xs">
+            <span className="text-tan-muted w-20 shrink-0">result</span>
+            <ResultPreview payload={resultPayload} />
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 interface ActivityCardProps {
   item: ActivityItem;
   expanded: boolean;
@@ -220,6 +309,10 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
         <div className="mt-1 text-xs text-red-400 truncate">
           Error: {item.error}
         </div>
+      )}
+
+      {item.kind === 'submission' && (
+        <SubmissionRows txHash={item.txHash} resultPayload={item.resultPayload} />
       )}
 
       <button
