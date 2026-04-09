@@ -133,6 +133,8 @@ pub enum DispatcherCommand {
         workflow_id: WorkflowId,
         trigger_data: TriggerData,
         correlation_id: String,
+        tx_hash: String,
+        result_payload: Option<String>,
     },
     SubmissionFailed {
         service_id: ServiceId,
@@ -464,6 +466,8 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             workflow_id,
                             trigger_data,
                             correlation_id,
+                            tx_hash,
+                            result_payload,
                         } => {
                             if let Err(err) = _self.tauri_handle.emit_ext(
                                 wavs_gui_shared::event::SubmissionEvent {
@@ -471,6 +475,8 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                     workflow_id,
                                     trigger_data,
                                     correlation_id,
+                                    tx_hash,
+                                    result_payload,
                                 },
                             ) {
                                 tracing::error!(

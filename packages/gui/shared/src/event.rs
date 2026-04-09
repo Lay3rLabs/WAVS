@@ -58,6 +58,8 @@ pub struct SubmissionEvent {
     pub workflow_id: WorkflowId,
     pub trigger_data: TriggerData,
     pub correlation_id: String,
+    pub tx_hash: String,
+    pub result_payload: Option<String>,
 }
 
 impl TauriEventExt for SubmissionEvent {
