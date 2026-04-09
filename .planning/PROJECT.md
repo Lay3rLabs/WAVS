@@ -64,7 +64,7 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 ## Context
 
-**Current State:** v1.3 in progress. Phase 13 complete (ACT-01, ACT-02 — backend pipeline). Phase 14 complete (ACT-03, ACT-04 — inline submission display with tx hash + decoded result on activity cards). Service restart fix (Phase 15) and wallet kebab menu (Phase 16) remain.
+**Current State:** v1.3 in progress. Phases 13-15 complete (ACT-01/02 backend pipeline, ACT-03/04 inline submission display, SVC-01 restart reliability fix). Wallet kebab menu (Phase 16) remains.
 
 **Tech stack:** Rust (node, CLI, MCP server, types), Tauri 2 + React 19 + Vite 7 (desktop app), Wasmtime (WASI component execution), Zustand (frontend state).
 
