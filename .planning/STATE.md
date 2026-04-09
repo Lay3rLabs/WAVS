@@ -1,36 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Components Explorer
-status: executing
-stopped_at: Roadmap created for v1.2; ready to plan Phase 10
-last_updated: "2026-04-08T23:30:03.415Z"
-last_activity: 2026-04-08
+milestone: v1.3
+milestone_name: Activity UX & Bug Fixes
+status: planning
+stopped_at: Milestone v1.3 started — defining requirements
+last_updated: "2026-04-09"
+last_activity: 2026-04-09
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-08)
+See: .planning/PROJECT.md (updated 2026-04-09)
 
 **Core value:** AI agent developers can use WAVS components as MCP tools with the same ease as Wassette, but with cryptographic trust guarantees Wassette structurally cannot provide.
-**Current focus:** Phase 12 — Components List Page
+**Current focus:** Defining requirements for v1.3
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
-Status: Executing Phase 12
-Last activity: 2026-04-08
-
-Progress: [░░░░░░░░░░] 0% (within v1.2; 9 phases complete from prior milestones)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-09 — Milestone v1.3 started
 
 ## Accumulated Context
 

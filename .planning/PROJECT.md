@@ -2,16 +2,17 @@
 
 ## What This Is
 
-Developer experience and capability improvements to the WAVS platform. Six features shipped in v1.0: OCI component distribution, WIT-to-schema tooling, MCP execution interface with three trust tiers, event correlation IDs, settings page decomposition, and unified activity feed with error surfacing. v1.1 added open-source AI providers (Groq, OpenRouter, Ollama) and settings scroll refactor.
+Developer experience and capability improvements to the WAVS platform. Six features shipped in v1.0: OCI component distribution, WIT-to-schema tooling, MCP execution interface with three trust tiers, event correlation IDs, settings page decomposition, and unified activity feed with error surfacing. v1.1 added open-source AI providers (Groq, OpenRouter, Ollama) and settings scroll refactor. v1.2 added component detail pages with interface/schema/permissions exploration and enhanced components list.
 
-## Current Milestone: v1.2 Components Explorer
+## Current Milestone: v1.3 Activity UX & Bug Fixes
 
-**Goal:** Surface component interfaces, schemas, and metadata through an improved components list and a new component detail page.
+**Goal:** Improve activity feed usability with richer cards, smarter result decoding, fix service restart reliability, and streamline wallet settings.
 
 **Target features:**
-- New Tauri command to run wit-schema on component bytes and return JSON Schema to the frontend
-- Component detail page showing exported functions, input/output schemas, doc comments, permissions, resource limits, config, and env vars
-- Improved components list page with better cards, search/filter, and richer metadata preview
+- Richer activity cards showing trigger + result + submission info (incl. tx hash) without expanding
+- Smart result decoding (UTF-8 → JSON pretty-print → hex fallback) for byte vec payloads
+- Fix service restart: services not restoring correctly on WAVS process restart
+- Wallet settings kebab menu for uncommon actions (reset wallet, reveal seed)
 
 ## Core Value
 
@@ -49,7 +50,10 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 <!-- Current scope. Building toward these. -->
 
-(None — v1.2 complete, next milestone not yet defined)
+- [ ] Richer activity cards with trigger, result summary, and submission info visible without expanding
+- [ ] Smart result decoding for activity feed (UTF-8 → JSON → hex)
+- [ ] Service restart reliability fix
+- [ ] Wallet settings kebab dropdown for uncommon actions
 
 ### Out of Scope
 
@@ -60,7 +64,7 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 ## Context
 
-**Current State:** v1.2 complete. All three phases shipped: backend commands (schema + metadata Tauri commands), component detail page (`/components/:digest` with interface/permissions/config tabs), and enhanced components list page (rich cards, search, source-type filtering, click-to-detail navigation). v1.1 shipped open-source AI providers; v1.0 shipped OCI distribution, WIT-to-schema, MCP execution with three trust tiers.
+**Current State:** v1.3 starting. v1.2 shipped component detail pages and enhanced components list. Activity feed needs richer event data (tx_hash, execution results not currently forwarded from aggregator to GUI). Service restart has race conditions in trigger stream re-subscription. Wallet settings buttons take excess vertical space.
 
 **Tech stack:** Rust (node, CLI, MCP server, types), Tauri 2 + React 19 + Vite 7 (desktop app), Wasmtime (WASI component execution), Zustand (frontend state).
 
@@ -100,4 +104,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-08 after v1.2 milestone start*
+*Last updated: 2026-04-09 after v1.3 milestone start*
