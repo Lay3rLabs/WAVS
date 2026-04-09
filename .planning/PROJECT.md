@@ -64,7 +64,7 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 ## Context
 
-**Current State:** v1.3 starting. v1.2 shipped component detail pages and enhanced components list. Activity feed needs richer event data (tx_hash, execution results not currently forwarded from aggregator to GUI). Service restart has race conditions in trigger stream re-subscription. Wallet settings buttons take excess vertical space.
+**Current State:** v1.3 in progress. Phase 13 complete — tx_hash and result_payload now flow from aggregator through Rust pipeline to frontend (ACT-01, ACT-02). Activity feed frontend UX (Phase 14), service restart fix (Phase 15), and wallet kebab menu (Phase 16) remain.
 
 **Tech stack:** Rust (node, CLI, MCP server, types), Tauri 2 + React 19 + Vite 7 (desktop app), Wasmtime (WASI component execution), Zustand (frontend state).
 
