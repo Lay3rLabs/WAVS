@@ -45,18 +45,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ACT-01 | — | Pending |
-| ACT-02 | — | Pending |
-| ACT-03 | — | Pending |
-| ACT-04 | — | Pending |
-| SVC-01 | — | Pending |
-| SET-01 | — | Pending |
+| ACT-01 | Phase 13 | Pending |
+| ACT-02 | Phase 13 | Pending |
+| ACT-03 | Phase 14 | Pending |
+| ACT-04 | Phase 14 | Pending |
+| SVC-01 | Phase 15 | Pending |
+| SET-01 | Phase 16 | Pending |
 
 **Coverage:**
 - v1.3 requirements: 6 total
-- Mapped to phases: 0
-- Unmapped: 6
+- Mapped to phases: 6
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-09*
-*Last updated: 2026-04-09 after initial definition*
+*Last updated: 2026-04-09 after roadmap creation*
