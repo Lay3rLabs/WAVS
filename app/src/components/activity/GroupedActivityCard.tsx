@@ -86,80 +86,51 @@ export function GroupedActivityCard({
         </div>
       )}
 
-      {/* Expanded content */}
-      {expanded && (
-        <>
-          {/* Trigger detail rows */}
-          {group.trigger.triggerData && (
-            <DetailRows
-              data={group.trigger.triggerData}
-              config={group.trigger.triggerConfig}
-            />
-          )}
+      {/* Trigger detail rows — always visible */}
+      {group.trigger.triggerData && (
+        <DetailRows
+          data={group.trigger.triggerData}
+          config={group.trigger.triggerConfig}
+        />
+      )}
 
-          {/* Parent raw JSON toggle */}
-          <button
-            type="button"
-            className="mt-2 text-xs text-tan-muted hover:text-beige-warm cursor-pointer select-none"
-            onClick={(e) => {
-              e.stopPropagation();
-              setRawExpanded((prev) => !prev);
-            }}
-          >
-            Raw {rawExpanded ? '\u25B2' : '\u25BC'}
-          </button>
+      {/* Child card (submission) — always visible */}
+      {group.submission && (
+        <div className="ml-2 mt-2 border border-charcoal-light bg-charcoal-darkest rounded-md pl-3 pr-3 pt-3 pb-3">
+          {/* Child header row */}
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={clsx(
+                'shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide',
+                group.submission.kind === 'submission_failed'
+                  ? 'bg-red-900/40 text-red-400'
+                  : 'bg-blue-900/40 text-blue-400',
+              )}
+            >
+              {group.submission.kind === 'submission_failed' ? 'Failed' : 'Submit'}
+            </span>
 
-          {rawExpanded && (
-            <div className="mt-2 p-3 rounded bg-charcoal-darkest text-beige-light/90 font-mono text-xs leading-relaxed overflow-x-auto max-h-80 overflow-y-auto">
-              <pre className="whitespace-pre-wrap">
-                {group.trigger.triggerData
-                  ? `// Trigger Data\n${JSON.stringify(group.trigger.triggerData, null, 2)}`
-                  : '// No data'}
-                {group.trigger.triggerConfig
-                  ? `\n\n// Trigger Config\n${JSON.stringify(group.trigger.triggerConfig.trigger, null, 2)}`
-                  : ''}
-                {group.trigger.correlationId
-                  ? `\n\n// Correlation ID\n${group.trigger.correlationId}`
-                  : ''}
-              </pre>
+            <span className="shrink-0 text-tan-muted text-xs ml-auto font-mono">
+              {formatTimestamp(group.submission.ts)}
+            </span>
+          </div>
+
+          {/* Error text — no truncate (ERR-03, ERR-04) */}
+          {group.submission.error && (
+            <div className="mt-1 text-xs text-red-400">
+              Error: {group.submission.error}
             </div>
           )}
 
-          {/* Child card (submission) */}
-          {group.submission && (
-            <div className="ml-2 mt-2 border border-charcoal-light bg-charcoal-darkest rounded-md pl-3 pr-3 pt-3 pb-3">
-              {/* Child header row */}
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className={clsx(
-                    'shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide',
-                    group.submission.kind === 'submission_failed'
-                      ? 'bg-red-900/40 text-red-400'
-                      : 'bg-blue-900/40 text-blue-400',
-                  )}
-                >
-                  {group.submission.kind === 'submission_failed' ? 'Failed' : 'Submit'}
-                </span>
+          <SubmissionRows
+            txHash={group.submission.txHash}
+            resultPayload={group.submission.resultPayload}
+            bgColor="bg-charcoal-darkest"
+          />
 
-                <span className="shrink-0 text-tan-muted text-xs ml-auto font-mono">
-                  {formatTimestamp(group.submission.ts)}
-                </span>
-              </div>
-
-              {/* Error text — no truncate (ERR-03, ERR-04) */}
-              {group.submission.error && (
-                <div className="mt-1 text-xs text-red-400">
-                  Error: {group.submission.error}
-                </div>
-              )}
-
-              <SubmissionRows
-                txHash={group.submission.txHash}
-                resultPayload={group.submission.resultPayload}
-                bgColor="bg-charcoal-darkest"
-              />
-
-              {/* Child raw JSON toggle */}
+          {/* Child raw JSON toggle — only when expanded */}
+          {expanded && (
+            <>
               <button
                 type="button"
                 className="mt-2 text-xs text-tan-muted hover:text-beige-warm cursor-pointer select-none"
@@ -185,6 +156,38 @@ export function GroupedActivityCard({
                   </pre>
                 </div>
               )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Parent raw JSON toggle — only when expanded */}
+      {expanded && (
+        <>
+          <button
+            type="button"
+            className="mt-2 text-xs text-tan-muted hover:text-beige-warm cursor-pointer select-none"
+            onClick={(e) => {
+              e.stopPropagation();
+              setRawExpanded((prev) => !prev);
+            }}
+          >
+            Raw {rawExpanded ? '\u25B2' : '\u25BC'}
+          </button>
+
+          {rawExpanded && (
+            <div className="mt-2 p-3 rounded bg-charcoal-darkest text-beige-light/90 font-mono text-xs leading-relaxed overflow-x-auto max-h-80 overflow-y-auto">
+              <pre className="whitespace-pre-wrap">
+                {group.trigger.triggerData
+                  ? `// Trigger Data\n${JSON.stringify(group.trigger.triggerData, null, 2)}`
+                  : '// No data'}
+                {group.trigger.triggerConfig
+                  ? `\n\n// Trigger Config\n${JSON.stringify(group.trigger.triggerConfig.trigger, null, 2)}`
+                  : ''}
+                {group.trigger.correlationId
+                  ? `\n\n// Correlation ID\n${group.trigger.correlationId}`
+                  : ''}
+              </pre>
             </div>
           )}
         </>

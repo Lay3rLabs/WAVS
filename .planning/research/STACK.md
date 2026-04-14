@@ -1,263 +1,216 @@
 # Stack Research
 
-**Domain:** Open-source AI provider configuration + scrollable settings UX (WAVS v1.1)
-**Researched:** 2026-04-08
-**Confidence:** HIGH — primary research is reading installed SDK dist types and existing Rust source, not inference
-
-## Context
-
-This is a **subsequent milestone** addendum. The existing v1.0 stack (Tauri 2, React 19, Vite 7, Tailwind 3, Zustand 5, pi-coding-agent 0.65.0) is validated. This document covers only the new capabilities needed for v1.1.
-
-**Key finding:** No new npm packages or Rust crates are needed. All required APIs exist in already-installed dependencies.
+**Domain:** Tauri 2 + React 19 desktop app — activity UX, result decoding, backend bug fixes, dropdown menus
+**Researched:** 2026-04-09
+**Confidence:** HIGH — all findings are from direct codebase inspection; no new external dependencies required
 
 ---
 
-## Recommended Stack — New Capabilities Only
+## Executive Summary
 
-### Core Technologies
+All four v1.3 features are implementable with zero new dependencies. The codebase already contains every primitive needed:
+
+1. **tx_hash forwarding** — Pure Rust struct change: add `tx_hash: Option<String>` to `SubmissionConfirmed` in `DispatcherCommand` and mirror it in `SubmissionEvent` in `packages/gui/shared/src/event.rs`. The hash is already computed in `aggregator/submit.rs` via `AnyTransactionReceipt::tx_hash()` and passed to `DispatcherCommand::AggregatorExecute` as `AnyTxHash`. The `DispatcherCommand::SubmissionConfirmed` path already receives the `Submission` struct which holds `operator_response: WasmResponse` (the `payload` Vec<u8> field). Both tx_hash and the result payload need to flow through to the `SubmissionConfirmed` variant and into `SubmissionEvent`.
+
+2. **Smart result decoding** — Pure TypeScript: `TextDecoder` (built into browsers/WebViews), `JSON.parse`, and hex formatting with `Array.from` are all zero-dependency. No library needed. Decode priority: UTF-8 → JSON pretty-print → hex fallback.
+
+3. **Service restart race fix** — Pure Rust: the `StreamStartState` state machine in `trigger.rs` uses a `HashMap<ChainKey, StreamStartState>` that is local to `start_watcher`. When services are restored from the registry on startup, `add_service` sends `StartListeningChain` followed immediately by `WatchEvmContractEvents` in a loop. If `StartListeningChain` is still async-connecting, the subsequent `WatchEvmContractEvents` command arrives when `evm_controllers` has no entry for that chain, causing the subscription to be silently dropped. Fix is ordering-only with a local pending queue — no new crates.
+
+4. **Wallet settings kebab menu** — `DropdownMenu` atom already exists at `app/src/components/atoms/DropdownMenu.tsx` with full click-outside handling and a `danger` variant. A `KebabMenu` wrapper requires only a Unicode character (U+22EE `⋮`) or an `iconTrigger` prop on the existing atom. No icon library needed.
+
+---
+
+## Recommended Stack
+
+### Core Technologies (unchanged)
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| `@mariozechner/pi-coding-agent` | 0.65.0 (already installed) | `ModelRegistry.registerProvider()` for adding OpenAI-compat providers at sidecar startup | Already in use. `registerProvider(name, { baseUrl, api: "openai-completions", models })` is the correct SDK path — verified in `dist/core/model-registry.d.ts`. No new dep needed. |
-| `@mariozechner/pi-ai` | 0.65.0 (already installed) | `openai-completions` api string + `OpenAICompletionsCompat` type covers any OpenAI-compat endpoint | Already in use. `KnownProvider` includes `groq`, `openrouter`, etc. Custom endpoints use `api: "openai-completions"` with a custom `baseUrl`. Verified in `dist/types.d.ts`. |
-| React `useRef` + `IntersectionObserver` | React 19 (already installed) | Scrollspy to track which section is active for sidebar highlight | Native browser API available in Tauri's Chromium WebView. Zero deps. Matches existing codebase style. |
-| Tailwind `scroll-mt-*` | 3.4 (already installed) | Offset scroll target so section headings clear sticky headers | Available since Tailwind 3.1. Already using Tailwind throughout. |
+| Rust (wavs_types, wavs_gui_shared) | existing | Backend event types, Tauri command contracts | Struct changes propagate to frontend via serde + TS types |
+| Tauri 2 | ^2.x | Desktop shell, IPC | Already in use; `emit_ext` pattern is established |
+| React 19 | ^19.1.0 | Frontend UI | Already in use |
+| Zustand 5 | ^5.0.0 | Frontend state | Already in use; `ActivityItem` already stores all activity |
+| TypeScript 5.8 | ~5.8.3 | Frontend type safety | Already in use; types/index.ts mirrors Rust event structs |
+| clsx | ^2.1.0 | Conditional class names | Already in use in all components |
 
-### Supporting Libraries
+### Supporting Libraries (unchanged — nothing new)
 
-No new libraries. All capabilities use already-installed code.
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| TextDecoder (Web API) | built-in | UTF-8 byte decoding | Decoding WasmResponse.payload in result display |
+| JSON.parse (built-in) | built-in | JSON detection | Second pass in decode chain after UTF-8 succeeds |
+| Array.from + toString(16) (built-in) | built-in | Hex fallback | Third pass when payload is not valid UTF-8 |
 
-| Capability | Mechanism | Notes |
-|------------|-----------|-------|
-| OpenAI-compat endpoint | `modelRegistry.registerProvider(name, { baseUrl, apiKey, api: "openai-completions", models: [...] })` in `app/agent/entrypoint.ts` | Provider name, base URL, and model IDs come from `WAVS_OPENAI_COMPAT_PROVIDERS` env var injected at spawn. API keys resolve from `auth.json` via existing `AuthStorage`. |
-| Ollama (no auth) | Same; `apiKey: "ollama"` as placeholder | Ollama ignores the key. Schema requires non-empty string. Base URL: `http://localhost:11434/v1`. |
-| Groq / Together / LM Studio | Same; real API keys | Different `baseUrl` per provider. Groq: `https://api.groq.com/openai/v1`. Together: `https://api.together.xyz/v1`. LM Studio: `http://localhost:1234/v1`. |
-| Sidebar anchor scroll | `element.scrollIntoView({ behavior: 'smooth', block: 'start' })` | No library. Replaces `setActiveSection` onClick. |
-| Active section tracking | `IntersectionObserver` on section `ref` elements | Standard React `useEffect` pattern with cleanup. Updates `activeSection` to topmost visible section. |
-| Settings persistence | Extend `Settings` struct + `cmd_save_agent_settings` | Existing Rust settings pattern. |
+No npm installs required.
 
 ---
 
-## How Custom Providers Are Configured: Architecture
+## Integration Points by Feature
 
-### Critical SDK Finding
+### Feature 1: tx_hash + execution result forwarding (Rust to GUI)
 
-The sidecar creates `ModelRegistry.inMemory(authStorage)` — this passes `undefined` as `modelsJsonPath`, skipping `models.json` loading entirely (verified in `model-registry.js` line 182). Custom providers **cannot** be added by writing a file; they must be registered at startup via `registerProvider()`.
-
-The RPC protocol has no `register_provider` command. The full `RpcCommand` union was checked exhaustively in `rpc-types.d.ts` — it contains `set_model`, `get_available_models`, and others, but no provider registration command. Providers must exist in the registry before the agent starts.
-
-### Integration Path (5 steps)
-
-**Step 1 — Settings struct (Rust):** Add to `packages/gui/shared/src/settings.rs`:
-
-```rust
-#[derive(Default, Serialize, Deserialize, Clone, Debug)]
-pub struct OpenAICompatProvider {
-    pub name: String,         // Display name and provider key
-    pub base_url: String,     // e.g. "http://localhost:11434/v1"
-    pub model_ids: Vec<String>, // e.g. ["llama3.2", "mistral"]
-}
-
-// In Settings struct:
-#[serde(default)]
-pub agent_openai_compat_providers: Vec<OpenAICompatProvider>,
+**Data path today:**
+```
+aggregator/submit.rs
+  -> AnyTransactionReceipt::tx_hash()          // String available here
+  -> DispatcherCommand::SubmissionConfirmed { service_id, workflow_id, trigger_data, correlation_id }
+  -> dispatcher.rs emit_ext(SubmissionEvent { service_id, workflow_id, trigger_data, correlation_id })
 ```
 
-**Step 2 — Sidecar spawn (Rust, `agent.rs`):** Serialize provider list (no keys) and inject as env var:
+**Gap:** `tx_hash` and `operator_response.payload` are never forwarded into `SubmissionConfirmed`. They exist in scope — `tx_resp.tx_hash()` is logged at line 632 of aggregator.rs, and `submission.operator_response.payload` is in the `Submission` struct — but are dropped before the `SubmissionConfirmed` send.
 
-```rust
-let providers_json = serde_json::to_string(&config.openai_compat_providers).unwrap_or_default();
-cmd.env("WAVS_OPENAI_COMPAT_PROVIDERS", providers_json);
-```
+**Change surfaces:**
 
-API keys are NOT passed here — they live in `auth.json` which is already accessible to the sidecar via `WAVS_AUTH_DIR`.
+- `packages/wavs/src/dispatcher.rs` — `DispatcherCommand::SubmissionConfirmed` variant: add `tx_hash: Option<String>` and `result_payload: Vec<u8>`
+- `packages/wavs/src/subsystems/aggregator.rs` — where `SubmissionConfirmed` is constructed (around line 636): pass `Some(tx_resp.tx_hash())` and `submission.operator_response.payload.clone()`
+- `packages/gui/shared/src/event.rs` — `SubmissionEvent`: add `tx_hash: Option<String>` and `result_payload: String` (hex-encoded for readability)
+- `app/src/types/index.ts` — `SubmissionEvent` interface: add `tx_hash: string | null` and `result_payload: string`
+- `app/src/stores/appStore.ts` or activity listener — `ActivityItem`: add `txHash?: string` and `resultPayload?: string` when consuming `SubmissionEvent`
 
-**Step 3 — Sidecar startup (TypeScript, `entrypoint.ts`):** Read env var and register providers:
+**Payload encoding choice:** Carry `result_payload` as a hex `String` (matching the `const_hex` serde annotation already on `WasmResponse.payload`) to avoid a JSON array-of-numbers in the Tauri IPC payload. Frontend receives a hex string and decodes via the existing `hexToBytes` helper in `types/index.ts`.
 
+### Feature 2: Smart result decoding (TypeScript)
+
+**Algorithm (zero dependencies):**
 ```typescript
-const providersJson = process.env.WAVS_OPENAI_COMPAT_PROVIDERS;
-if (providersJson) {
-  const providers = JSON.parse(providersJson);
-  for (const p of providers) {
-    modelRegistry.registerProvider(p.name, {
-      baseUrl: p.base_url,
-      api: "openai-completions",
-      models: p.model_ids.map(id => ({
-        id,
-        name: id,
-        reasoning: false,
-        input: ["text"] as const,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 131072,
-        maxTokens: 4096,
-      })),
-    });
+// Proposed location: app/src/utils/decodeResult.ts
+// Reuses hexToBytes / bytesToHex from app/src/types/index.ts (extract to utils/bytes.ts first)
+
+export function decodeResultPayload(hex: string): string {
+  const bytes = hexToBytes(hex);
+
+  // 1. Try valid UTF-8
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    // Not valid UTF-8 -- return hex
+    return '0x' + bytesToHex(bytes);
+  }
+
+  // 2. Try JSON pretty-print
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    // Valid UTF-8 but not JSON -- return as plain string
+    return text;
   }
 }
 ```
 
-**Step 4 — Frontend UI (`AgentSection.tsx`):** New "Custom Providers" subsection:
-- List of configured custom providers with delete buttons
-- "Add Provider" form: name field, base URL field, model IDs field (newline-separated or tag input)
-- Saves via `saveAgentSettings({ agent_openai_compat_providers: [...] })`
-- API key for the custom provider goes through existing `agentSetApiKey(providerName, key)` — no new auth infrastructure
+`TextDecoder` with `{ fatal: true }` throws on invalid UTF-8 sequences rather than replacing with U+FFFD, enabling clean fallback to hex. This is available in all modern WebViews including Tauri's WebKit/WebView2.
 
-**Step 5 — Provider dropdown:** Custom providers appear in `<select>` below built-in providers (anthropic, openai, google). Built-in OAuth providers remain unchanged. Custom providers use API key auth only (no OAuth flow — `OAUTH_PROVIDERS` set stays as-is).
+**Usage:** Call in `GroupedActivityCard.tsx` when rendering the submission child card's result summary. The `hexToBytes` and `bytesToHex` helpers currently in `app/src/types/index.ts` should be moved to `app/src/utils/bytes.ts` to be shared between the types module and the new decode utility.
 
-### `ProviderConfigInput` Schema Reference
+### Feature 3: Service restart race fix (Rust)
 
-From `model-registry.d.ts`:
+**The problem (confirmed by code inspection):**
 
-```typescript
-interface ProviderConfigInput {
-  baseUrl?: string;
-  apiKey?: string;       // Optional — resolved from auth.json if not given
-  api?: Api;             // "openai-completions" for OpenAI-compat endpoints
-  models?: Array<{
-    id: string;
-    name: string;
-    reasoning: boolean;
-    input: ("text" | "image")[];
-    cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
-    contextWindow: number;
-    maxTokens: number;
-    compat?: OpenAICompletionsCompat;  // Optional; auto-detected from baseUrl
-  }>;
+`TriggerCommand::WatchEvmContractEvents` (trigger.rs ~line 577) looks up `evm_controllers.read().get(&chain)` and calls `enable_logs`. This works when the chain is `Connected`. But `TriggerManager::add_service` sends `StartListeningChain` followed immediately by `WatchEvmContractEvents` via the same `UnboundedSender` — both messages are queued synchronously. In `start_watcher`, `StartListeningChain` sets state to `Connecting` and then `await`s the EVM stream connection. The next iteration of the loop picks up `WatchEvmContractEvents` — but `evm_controllers` has no entry yet because the stream is still connecting. The controller insert only happens after the `await` resolves. Result: the log filter subscription is dropped with "No EVM controller found for chain" and never retried.
+
+**Fix approach (no new crates):**
+
+Add a pending subscriptions buffer local to `start_watcher`:
+
+```rust
+// In start_watcher, alongside listening_chain_states:
+let mut pending_log_subs: HashMap<ChainKey, Vec<(Vec<Address>, Vec<B256>)>> = HashMap::new();
+```
+
+In the `WatchEvmContractEvents` arm:
+```rust
+// If not yet Connected, buffer for later
+if listening_chain_states.get(&chain) != Some(&StreamStartState::Connected) {
+    pending_log_subs.entry(chain).or_default().push((addresses, event_hashes));
+    continue;
+}
+// Otherwise apply immediately via controller
+```
+
+In the `Connected` transition path (after inserting into `evm_controllers`):
+```rust
+// Drain pending log subscriptions for this chain
+if let Some(pending) = pending_log_subs.remove(&chain) {
+    for (addrs, hashes) in pending {
+        controller.subscriptions.enable_logs(addrs, hashes);
+    }
 }
 ```
 
-All model fields have defaults in the schema. The `compat` field auto-detects from `baseUrl` (e.g., Ollama gets `requiresToolResultName: true` automatically).
+Same pattern applies to `WatchEvmBlocks` buffering if needed.
+
+**Change surfaces:**
+- `packages/wavs/src/subsystems/trigger.rs` — `start_watcher` loop only. No API changes, no new public types.
+
+### Feature 4: Wallet settings kebab menu (React)
+
+**Existing capability:** `DropdownMenu` atom (`app/src/components/atoms/DropdownMenu.tsx`) already has:
+- Click-outside close via `useRef` + `addEventListener`
+- `danger` variant styling (red text)
+- Array of `MenuOption` items with `label`, `onClick`, `variant`
+
+**Recommended change:** Add `iconTrigger?: boolean` prop to `DropdownMenu`. When true, the button renders `⋮` (U+22EE VERTICAL ELLIPSIS) instead of `{label} {arrow}`. No new component file needed.
+
+```tsx
+// In DropdownMenu.tsx, change button content:
+{iconTrigger
+  ? <span className="text-tan-muted text-base leading-none px-1">⋮</span>
+  : <>{label} {isOpen ? '▲' : '▼'}</>
+}
+```
+
+**Usage in WalletSection.tsx:** Replace the standalone `Button` rows for `Export Recovery Phrase` and `Reset Wallet` with a single `DropdownMenu iconTrigger` in the section header. Existing state (`showMnemonic`, `showResetConfirm`) drives the same handlers — kebab just triggers those setters.
 
 ---
 
-## Scrollable Settings Page: Architecture
+## What NOT to Add
 
-### Current Architecture (tab-swap)
-
-`Settings.tsx` renders one section at a time (`{activeSection === 'wallet' && <WalletSection />}`). Clicking a sidebar item calls `setActiveSection`. Only one section is mounted at a time.
-
-### Target Architecture (scroll-spy)
-
-Convert to a single scrollable column with sticky sidebar anchors:
-
-**Remove** all conditional renders in `Settings.tsx`. Render all sections stacked:
-
-```tsx
-<div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4 max-h-[calc(100vh-12rem)]">
-  <div id="section-wallet" ref={walletRef} className="scroll-mt-4"><WalletSection /></div>
-  <div id="section-node" ref={nodeRef} className="scroll-mt-4"><NodeSection /></div>
-  {/* ... rest of sections ... */}
-</div>
-```
-
-**Sidebar becomes anchor nav.** Replace `onSelect={setActiveSection}` with scroll-to:
-
-```tsx
-onClick={() => document.getElementById(`section-${item.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-```
-
-**IntersectionObserver** tracks which section is topmost visible and updates `activeSection` for sidebar highlight:
-
-```tsx
-useEffect(() => {
-  const refs = [walletRef, nodeRef, environmentRef, agentRef, mcpRef, resetRef];
-  const keys: SectionKey[] = ['wallet', 'node', 'environment', 'agent', 'mcp', 'reset'];
-  const observer = new IntersectionObserver(
-    (entries) => {
-      const visible = entries.filter(e => e.isIntersecting);
-      if (visible.length > 0) setActiveSection(/* topmost */ ...);
-    },
-    { threshold: 0, rootMargin: '-10% 0px -80% 0px' }
-  );
-  refs.forEach(r => { if (r.current) observer.observe(r.current); });
-  return () => observer.disconnect();
-}, []);
-```
-
-`rootMargin: '-10% 0px -80% 0px'` means "trigger when the section top enters the top 20% of the scroll container" — produces natural active-section behavior matching common settings UX patterns.
-
-**State change summary:**
-
-| Before | After |
-|--------|-------|
-| `activeSection` controls which section renders | `activeSection` controls sidebar highlight only |
-| `setActiveSection` called on sidebar click | `setActiveSection` called by IntersectionObserver; sidebar click scrolls |
-| One section mounted at a time | All sections always mounted |
-| OAuth listener in parent needed to survive nav | Sections always mounted; OAuth listener still fine in parent |
-
----
-
-## Files That Change
-
-| File | Change | What |
-|------|--------|------|
-| `packages/gui/shared/src/settings.rs` | Add | `OpenAICompatProvider` struct + `agent_openai_compat_providers` field |
-| `app/src-tauri/src/agent.rs` | Extend | Serialize + inject `WAVS_OPENAI_COMPAT_PROVIDERS` env var at spawn |
-| `app/src-tauri/src/commands.rs` | Extend | Handle `agent_openai_compat_providers` in `cmd_save_agent_settings` |
-| `app/agent/entrypoint.ts` | Extend | Read env var, call `modelRegistry.registerProvider()` per entry at startup |
-| `app/src/tauri/agent.ts` | Extend | Add `agent_openai_compat_providers` to `saveAgentSettings` type |
-| `app/src/components/settings/AgentSection.tsx` | Extend | New "Custom Providers" subsection; extended provider `<select>` |
-| `app/src/pages/Settings.tsx` | Refactor | Remove conditional renders, add `useRef` per section, add IntersectionObserver |
-| `app/src/components/settings/SettingsSidebar.tsx` | Refactor | onClick scrolls to anchor; highlight driven by `activeSection` prop (unchanged interface) |
-
-### Files That Do NOT Change
-
-- `auth.json` format — `agentSetApiKey(providerName, key)` works unchanged for custom providers
-- `AgentApiKeyField` component — accepts any string as `provider`, no changes needed
-- Zustand `appStore` — settings propagate through existing `SettingsEvent` mechanism
-- Vite / Tailwind config — no new config needed
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| `@radix-ui/react-dropdown-menu` or Headless UI | Zero new capability vs existing DropdownMenu atom; adds 40+ kB and new import patterns | Extend DropdownMenu with `iconTrigger` prop |
+| `iconv-lite` or `encoding` npm packages | TextDecoder (WHATWG Encoding API) is built into all modern WebViews including Tauri | `new TextDecoder('utf-8', { fatal: true })` |
+| `hex-to-bytes` or `@noble/hashes` npm packages | `hexToBytes` and `bytesToHex` already exist in `app/src/types/index.ts` | Extract to `app/src/utils/bytes.ts` and reuse |
+| `tokio::sync::Mutex` for pending log queue | The trigger watcher is single-threaded (one async task owns the loop) | Plain `HashMap<ChainKey, Vec<...>>` local variable |
+| New Rust channel or new TriggerCommand variant | The existing `UnboundedSender<TriggerCommand>` is sufficient; pending subscriptions are watcher-local state | Local HashMap in `start_watcher` |
+| Result decoding on the Rust side | Frontend already receives byte payloads; decoding is display logic that belongs in UI | `decodeResultPayload` utility in TypeScript |
 
 ---
 
 ## Alternatives Considered
 
-| Recommended | Alternative | Why Not |
-|-------------|-------------|---------|
-| `registerProvider()` at startup via env var | Write `~/.pi/agent/models.json` | That path is pi's own config dir; WAVS writing there conflicts with user's standalone pi installation. Also `ModelRegistry.inMemory()` skips file loading entirely. |
-| `registerProvider()` at startup | `register_provider` RPC command | Does not exist. Verified by exhaustive check of `RpcCommand` union in `rpc-types.d.ts`. |
-| `IntersectionObserver` native | `react-scroll` npm package | Adds a dep for a pattern that's 15 lines of native code. No benefit in a Tauri Chromium context. |
-| `IntersectionObserver` native | `react-intersection-observer` | Same argument. The wrapper adds no meaningful value for this use case. |
-| Env var for provider config | New Tauri command to call `registerProvider` at runtime | Agent must be restarted to pick up new providers anyway (model registry is built at startup). Env var at spawn is simpler and aligns with existing `WAVS_AUTH_DIR` pattern. |
-| `agent_openai_compat_providers` in settings | Separate file (e.g., `custom-providers.json`) | Keeps all user config in one place (`settings.json`). Avoids a new file to manage/migrate. |
-
----
-
-## What NOT to Use
-
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| `ModelRegistry.create()` with `~/.pi/agent/models.json` | pi's config dir; conflicts with user's own pi install; current code uses `inMemory()` | `registerProvider()` called from entrypoint at startup |
-| `openai` npm SDK on the frontend | Not needed; pi-ai wraps openai SDK internally in the sidecar | Nothing — pi-ai already handles this |
-| Storing `base_url` in `auth.json` | `auth.json` is for credentials only; mixing config there breaks the isolation pattern | `agent_openai_compat_providers` field in `settings.json` via Settings struct |
-| Any scrollspy library (`react-scroll`, `react-scrollspy`, etc.) | Zero benefit over native API in this context; adds a dep | Native `IntersectionObserver` + `scrollIntoView` |
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| `Option<String>` for tx_hash in SubmissionEvent | Always-present String with empty sentinel `""` | Never — `None` is semantically correct for services with `Submit::None` that never go on-chain |
+| Hex string for result_payload in SubmissionEvent | `Vec<u8>` serialized as JSON number array | Number array is acceptable if payload size matters; hex string is more readable in DevTools and consistent with WasmResponse's existing `const_hex` serde |
+| Local `HashMap` pending queue in `start_watcher` | New `TriggerCommand::DeferredWatchEvmContractEvents` variant | Acceptable but adds API surface; local state is zero-API-change and easier to reason about |
+| `iconTrigger` prop on existing `DropdownMenu` | New `KebabMenu` wrapper component | New component if `KebabMenu` needs substantially different styling (different border, size, positioning) |
 
 ---
 
 ## Version Compatibility
 
-No new packages introduced. No compatibility concerns.
+All changes are internal struct/type extensions — no version upgrades or new packages. Additive field additions to `SubmissionEvent` are backward-compatible with any consumers that don't yet read those fields.
 
 | Package | Version | Notes |
 |---------|---------|-------|
-| `@mariozechner/pi-coding-agent` | 0.65.0 | `registerProvider()` verified present in `dist/core/model-registry.d.ts` |
-| `@mariozechner/pi-ai` | 0.65.0 | `openai-completions` api, `KnownProvider` union verified in `dist/types.d.ts` |
-| `react` | 19.1.0 | `useRef`, `useEffect`, `IntersectionObserver` — no issues |
-| `tailwindcss` | 3.4.0 | `scroll-mt-*` utility available since Tailwind 3.1 |
+| `@tauri-apps/api` | ^2.10.1 | SubmissionEvent shape change is additive — existing listeners that don't destructure new fields are unaffected |
+| `zustand` | ^5.0.0 | ActivityItem type extension is additive |
+| `react` | ^19.1.0 | No new hooks patterns beyond what's already used |
+| `wavs_gui_shared` | internal | SubmissionEvent field addition — all consumers (dispatcher.rs, app listeners.ts) updated together |
 
 ---
 
 ## Sources
 
-- `/workspace/app/agent/node_modules/@mariozechner/pi-coding-agent/dist/core/model-registry.d.ts` — `registerProvider()`, `ProviderConfigInput`, `ModelRegistry.inMemory()` — HIGH confidence (dist types, source of truth)
-- `/workspace/app/agent/node_modules/@mariozechner/pi-coding-agent/dist/core/model-registry.js` lines 182, 208 — confirmed `inMemory()` passes `undefined` path, skipping models.json — HIGH confidence
-- `/workspace/app/agent/node_modules/@mariozechner/pi-coding-agent/dist/modes/rpc/rpc-types.d.ts` — full `RpcCommand` union exhaustively checked: no `register_provider` command exists — HIGH confidence
-- `/workspace/app/agent/node_modules/@mariozechner/pi-ai/dist/types.d.ts` — `KnownProvider` union (includes `groq`, `openrouter`), `Model.baseUrl`, `OpenAICompletionsCompat` — HIGH confidence
-- `/workspace/app/agent/entrypoint.ts` — confirmed `ModelRegistry.inMemory(authStorage)` in use — HIGH confidence
-- `/workspace/app/src-tauri/src/agent.rs` — `PiSidecarConfig`, env var injection pattern (`WAVS_AUTH_DIR` etc.) — HIGH confidence
-- `/workspace/packages/gui/shared/src/settings.rs` — current `Settings` struct fields — HIGH confidence
-- `/workspace/app/src-tauri/src/commands.rs` — `cmd_save_agent_settings` pattern — HIGH confidence
-- [Ollama OpenAI compatibility docs](https://docs.ollama.com/api/openai-compatibility) — `http://localhost:11434/v1` base URL pattern, placeholder apiKey requirement — MEDIUM confidence (web source)
+- Direct inspection of `/workspace/packages/gui/shared/src/event.rs` — SubmissionEvent current fields (HIGH confidence)
+- Direct inspection of `/workspace/packages/wavs/src/subsystems/aggregator.rs` lines 628–694 — tx_hash availability and SubmissionConfirmed construction path (HIGH confidence)
+- Direct inspection of `/workspace/packages/wavs/src/dispatcher.rs` lines 118–143 and 462–480 — DispatcherCommand variants and emit_ext callsite (HIGH confidence)
+- Direct inspection of `/workspace/packages/types/src/service.rs` lines 657–666 — WasmResponse.payload field type and serde annotation (HIGH confidence)
+- Direct inspection of `/workspace/packages/wavs/src/subsystems/trigger.rs` lines 421–594 — StreamStartState machine and WatchEvmContractEvents ordering gap (HIGH confidence)
+- Direct inspection of `/workspace/app/src/components/atoms/DropdownMenu.tsx` — existing kebab-compatible primitive (HIGH confidence)
+- Direct inspection of `/workspace/app/src/types/index.ts` — hexToBytes/bytesToHex helpers and ActivityItem shape (HIGH confidence)
+- WHATWG Encoding API specification — TextDecoder `fatal` mode available in all Chromium/WebKit/Gecko since 2015, present in Tauri WebViews (HIGH confidence)
 
 ---
-*Stack research for: WAVS v1.1 open-source AI provider support + settings UX*
-*Researched: 2026-04-08*
+*Stack research for: WAVS v1.3 — activity UX, result decoding, restart fix, kebab menu*
+*Researched: 2026-04-09*

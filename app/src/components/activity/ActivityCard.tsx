@@ -181,11 +181,9 @@ function TxHashDisplay({ hash }: { hash: string }) {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const truncated = `${hash.slice(0, 6)}\u2026${hash.slice(-4)}`;
-
   return (
     <span className="inline-flex items-center gap-1 font-mono text-xs text-beige-warm">
-      <span title={hash}>{truncated}</span>
+      <span className="break-all">{hash}</span>
       <button
         type="button"
         onClick={handleCopy}

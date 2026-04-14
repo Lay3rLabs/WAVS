@@ -37,12 +37,19 @@ MVP Requirements:
 - [ ] Get MCP working with claude desktop
 - [ ] Improve skills and MCP installation DX. gsd shows how to install things globally.
 
+Let's work on some small bug fixes and UX improvements:
+- Improve the UX for activity cards. I shouldn't have to expand to see submission info. For onchain submissions, it would be nice to showcase tx hash if possible. Activity should showcase events which have triggers, results, and submission info
+- In the activity feed, it would be nice to be smarter about decoding results. Right now, every result just shows as a vec which is not human readable.
+- Bug: Services often don't restart correctly when reloading WAVS.
+- UX nit, in the settings, for the wallet actions (reset, reveal seed) the should behind a kabab menu and open as a dropdown, they are uncommon actions so require less verticle space.
+
+
+
 Clean up:
 - wavs.toml has unnecessary things in it, maybe those should be there and documented but commented out?
 
 Post MVP:
 - Stats (CPU, Memory, etc.)
-- Merge Trigger / Submissions into just "events" (which have triggers and sometimes submissions)
 - LLM Config (makes those LLMs available to WASM components)?
 - P2P Page
 - WAVS Service Registry

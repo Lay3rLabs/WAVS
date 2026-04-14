@@ -1,531 +1,533 @@
 # Architecture Research
 
-**Domain:** Open-source AI provider integration + Settings page UX refactor
-**Researched:** 2026-04-08
-**Confidence:** HIGH — all findings from direct codebase inspection
+**Domain:** WAVS v1.3 — Activity UX & Bug Fixes
+**Researched:** 2026-04-09
+**Confidence:** HIGH (all findings from direct source inspection)
+
+## Standard Architecture
+
+### System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                       Tauri Backend (Rust)                       │
+│                                                                   │
+│  ┌──────────────┐  Crossbeam  ┌──────────┐  ┌──────────────┐    │
+│  │   Trigger    │────────────▶│Dispatcher│──▶│    Engine    │    │
+│  │   Manager    │             │  (loop)  │  │   Manager    │    │
+│  └──────────────┘             │          │  └──────────────┘    │
+│  ┌──────────────┐             │          │  ┌──────────────┐    │
+│  │  Submission  │────────────▶│          │──▶│  Aggregator  │    │
+│  │   Manager    │             │          │  └──────────────┘    │
+│  └──────────────┘             └────┬─────┘                      │
+│                                    │ tauri::Emitter              │
+├────────────────────────────────────┼────────────────────────────┤
+│                 IPC boundary       │                             │
+├────────────────────────────────────┼────────────────────────────┤
+│                   Tauri Frontend   ▼                             │
+│  ┌──────────────────────────────────────────────┐               │
+│  │              listeners.ts                     │               │
+│  │  'trigger' | 'submission' | 'submission_failed'│              │
+│  └──────────────────────┬───────────────────────┘               │
+│                         │ store.addActivity()                    │
+│  ┌──────────────────────▼───────────────────────┐               │
+│  │   appStore (Zustand) — ActivityItem[]         │               │
+│  └──────────────────────┬───────────────────────┘               │
+│                         │ useGroupedActivity hook                │
+│  ┌──────────────────────▼───────────────────────┐               │
+│  │  GroupedActivityCard / ActivityFeed           │               │
+│  └──────────────────────────────────────────────┘               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Component Responsibilities
+
+| Component | Responsibility | Location |
+|-----------|----------------|----------|
+| Dispatcher | Routes DispatcherCommand variants to correct subsystem; emits Tauri events | `packages/wavs/src/dispatcher.rs` |
+| Aggregator | Quorum accumulation, on-chain submission, yields `AnyTransactionReceipt` | `packages/wavs/src/subsystems/aggregator.rs` |
+| Engine (SubmitCallback) | Post-submission callback component execution | `packages/wavs/src/subsystems/engine.rs` |
+| TriggerManager | Manages `MultiplexedStream` of EVM/Cosmos/Cron streams; calls `add_service` via channel | `packages/wavs/src/subsystems/trigger.rs` |
+| `wavs_gui_shared::event` | Shared event structs implementing `TauriEventExt`; the serialization contract | `packages/gui/shared/src/event.rs` |
+| `listeners.ts` | Tauri event subscribers; maps raw payloads to `ActivityItem` and calls `store.addActivity()` | `app/src/tauri/listeners.ts` |
+| `appStore` | Zustand store holding `ActivityItem[]`; `addActivity()` is the entry point for all feed items | `app/src/stores/appStore.ts` |
+| `GroupedActivityCard` | Renders one trigger + optional child submission card; reads `group.submission` | `app/src/components/activity/GroupedActivityCard.tsx` |
+| `WalletSection` | Shows addresses, balances, Export and Reset Wallet buttons inline | `app/src/components/settings/WalletSection.tsx` |
 
 ---
 
-## System Overview
+## Feature 1: tx_hash in SubmissionConfirmed
+
+### Data Flow (Current)
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Tauri Desktop App                               │
-│                                                                     │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                   React Frontend                             │   │
-│  │                                                              │   │
-│  │  Settings.tsx (page)                                         │   │
-│  │  ┌───────────────────┐  ┌───────────────────────────────┐   │   │
-│  │  │  SettingsSidebar  │  │  Content area (tab-switched)  │   │   │
-│  │  │  (activeSection   │  │  AgentSection                 │   │   │
-│  │  │   state drives    │  │  EnvironmentSection           │   │   │
-│  │  │   conditional     │  │  WalletSection, etc.          │   │   │
-│  │  │   rendering)      │  │                               │   │   │
-│  │  └───────────────────┘  └───────────────────────────────┘   │   │
-│  │                                                              │   │
-│  │  tauri/agent.ts (invoke bridge)                              │   │
-│  │   agentSetModel(provider, modelId)                           │   │
-│  │   agentSetApiKey(provider, apiKey)                           │   │
-│  │   saveAgentSettings({ agent_model_provider, ... })           │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                          │ Tauri IPC                                │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │               Rust Backend (commands.rs)                     │   │
-│  │                                                              │   │
-│  │  cmd_agent_set_model → JSON-RPC to sidecar stdin             │   │
-│  │  cmd_agent_set_api_key → write to auth.json (0600)           │   │
-│  │  cmd_save_agent_settings → SettingsState → settings.json     │   │
-│  │                                                              │   │
-│  │  PiSidecarState (agent.rs)                                   │   │
-│  │   spawn: npx tsx entrypoint.ts                               │   │
-│  │   stdin/stdout JSON-line RPC channel                         │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                          │ process stdio                            │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │               Pi Sidecar (agent/entrypoint.ts)               │   │
-│  │                                                              │   │
-│  │  AuthStorage.create(auth.json)                               │   │
-│  │  ModelRegistry.inMemory(authStorage)  <- KEY: no models.json  │   │
-│  │                                                              │   │
-│  │  runRpcMode(runtime)                                         │   │
-│  │   handles: set_model, set_thinking_level, prompt, etc.       │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-│  Persistent storage (app config dir)                                │
-│   auth.json  — provider credentials (api_key / oauth)              │
-│   settings.json — agent_model_provider, agent_model_id, etc.       │
-└─────────────────────────────────────────────────────────────────────┘
+aggregator.rs:632
+  tx_resp.tx_hash()            // AnyTransactionReceipt -> String, logged but NOT forwarded
+       |
+       v
+DispatcherCommand::SubmissionConfirmed {
+  service_id, workflow_id, trigger_data, correlation_id    // tx_hash ABSENT
+}
+       |
+       v
+dispatcher.rs:462
+  emit_ext(SubmissionEvent { ... })       // tx_hash ABSENT in struct
+       |
+       v
+listeners.ts:60
+  store.addActivity({ kind: 'submission', ... })    // no tx_hash field
+       |
+       v
+ActivityItem { ... }                     // no tx_hash field
+       |
+       v
+GroupedActivityCard                      // nothing to render
 ```
 
----
+### Required Changes
 
-## Integration Point 1: Open-Source AI Providers in the Pi Sidecar
+**1. `DispatcherCommand::SubmissionConfirmed` — add `tx_hash: String`**
 
-### What pi-ai supports natively (HIGH confidence)
+File: `packages/wavs/src/dispatcher.rs` (the enum definition, lines ~131-136)
 
-From `@mariozechner/pi-ai` v0.65.x `types.d.ts`, the `KnownProvider` union includes:
-
+```rust
+SubmissionConfirmed {
+    service_id: ServiceId,
+    workflow_id: WorkflowId,
+    trigger_data: TriggerData,
+    correlation_id: String,
+    tx_hash: String,          // NEW
+},
 ```
-"groq" | "openrouter" | "huggingface" | "mistral" | "cerebras" | "xai"
+
+**2. Aggregator send site — pass tx_hash**
+
+File: `packages/wavs/src/subsystems/aggregator.rs` (the `Ok(tx_resp)` arm, lines ~634-647)
+
+`tx_resp.tx_hash()` is already computed and logged on line 632. Pass it into the command at the same call site.
+
+**3. `SubmissionEvent` GUI struct — add `tx_hash`**
+
+File: `packages/gui/shared/src/event.rs` (lines ~56-65)
+
+```rust
+pub struct SubmissionEvent {
+    pub service_id: ServiceId,
+    pub workflow_id: WorkflowId,
+    pub trigger_data: TriggerData,
+    pub correlation_id: String,
+    pub tx_hash: String,       // NEW
+}
 ```
 
-**Groq** and **OpenRouter** are built-in with pre-configured `baseUrl` values and model definitions in `models.generated.d.ts`. Groq uses `api: "openai-completions"`. These work today without any extra sidecar config — just an API key in `auth.json` under the `"groq"` key.
+**4. Dispatcher emit site — forward tx_hash**
 
-**Together AI** is NOT a `KnownProvider` — it is not in the generated models list. Together AI would need to be added as a custom provider via `registerProvider()`.
+File: `packages/wavs/src/dispatcher.rs` (the `SubmissionConfirmed` match arm, lines ~462-481)
 
-**Ollama** is NOT in `KnownProvider`. Ollama requires a custom provider registration with a local `baseUrl`.
+Destructure `tx_hash` from the command variant and include it in `SubmissionEvent`.
 
-### The `ModelRegistry.inMemory()` gap
+**5. Frontend types — add `tx_hash` to `SubmissionEvent`**
 
-The entrypoint uses `ModelRegistry.inMemory(authStorage)` which bypasses disk-based `models.json` loading entirely. The `ModelRegistry.create(authStorage, modelsJsonPath)` variant supports a `models.json` file that can declare custom providers.
-
-Two approaches to add open-source providers:
-
-**Option A — Switch to `ModelRegistry.create` with a disk-based `models.json`** (MEDIUM complexity)
-
-The sidecar's `authDir` is already `WAVS_AUTH_DIR` (app config dir). Change the entrypoint to:
+File: `app/src/types/index.ts` (lines ~108-113)
 
 ```typescript
-const modelRegistry = ModelRegistry.create(
-  authStorage,
-  path.join(authDir, "models.json")
-);
+export interface SubmissionEvent {
+  service_id: ServiceId;
+  workflow_id: WorkflowId;
+  trigger_data: TriggerData;
+  correlation_id: string;
+  tx_hash: string;           // NEW
+}
 ```
 
-The `models.json` file format (loaded by `loadCustomModels`) is managed by the pi-ai ecosystem. The app could write this file when users configure custom providers. The schema from `ProviderConfigInput` is:
+**6. `ActivityItem` — add optional `txHash`**
 
-```json
-{
-  "providers": {
-    "ollama": {
-      "baseUrl": "http://localhost:11434/v1",
-      "api": "openai-completions",
-      "models": [
-        {
-          "id": "llama3.2:3b",
-          "name": "Llama 3.2 3B",
-          "reasoning": false,
-          "input": ["text"],
-          "contextWindow": 131072,
-          "maxTokens": 8192,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
-        }
-      ]
+File: `app/src/types/index.ts` (lines ~330-340)
+
+```typescript
+export interface ActivityItem {
+  ...
+  txHash?: string;           // NEW
+}
+```
+
+**7. `listeners.ts` — map `tx_hash` to `txHash`**
+
+File: `app/src/tauri/listeners.ts` (lines ~60-72)
+
+Pass `txHash: payload.tx_hash` when constructing the submission `ActivityItem`.
+
+**8. `GroupedActivityCard` — render tx_hash in child card**
+
+File: `app/src/components/activity/GroupedActivityCard.tsx`
+
+In the child submission card section (lines ~128-182), add a line or link showing `group.submission.txHash` when present. A shortened hex with copy-to-clipboard is appropriate UX.
+
+### Modification Boundary Summary
+
+| File | Change Type | What Changes |
+|------|-------------|--------------|
+| `dispatcher.rs` (enum) | Modify | Add `tx_hash: String` field to `SubmissionConfirmed` variant |
+| `aggregator.rs` | Modify | Pass `tx_hash: tx_resp.tx_hash()` into the send call |
+| `gui/shared/src/event.rs` | Modify | Add `tx_hash: String` field to `SubmissionEvent` |
+| `dispatcher.rs` (match arm) | Modify | Destructure and forward `tx_hash` into `emit_ext` call |
+| `app/src/types/index.ts` | Modify | Add `tx_hash` to `SubmissionEvent`, `txHash?` to `ActivityItem` |
+| `app/src/tauri/listeners.ts` | Modify | Map `payload.tx_hash` to `txHash` in addActivity call |
+| `app/src/components/activity/GroupedActivityCard.tsx` | Modify | Render `txHash` in submission child card |
+
+---
+
+## Feature 2: WasmResponse.payload in Activity Feed
+
+### Current State
+
+`Submission.operator_response: WasmResponse` is in scope at the aggregator call site. The payload (`Vec<u8>`) is the raw bytes returned by the WASM component. It is not currently forwarded to the GUI.
+
+The `SubmissionEvent` only carries `trigger_data` (the incoming trigger bytes), not the execution result bytes.
+
+### Where Payload Lives
+
+At the aggregator success path (`packages/wavs/src/subsystems/aggregator.rs`), the `submission` variable (type `Submission`) is in scope. `submission.operator_response.payload` is the bytes.
+
+The `SubmissionConfirmed` dispatch call already has access to `submission` at that point — `submission.trigger_action.data` and `submission.trigger_action.correlation_id` are already being pulled from it.
+
+### Required Changes
+
+**1. `DispatcherCommand::SubmissionConfirmed` — add `result_payload: Vec<u8>`**
+
+At the aggregator send site, add `result_payload: submission.operator_response.payload.clone()`.
+
+**2. `SubmissionEvent` GUI struct — add `result_payload: Vec<u8>`**
+
+Serialize as hex (the existing pattern for `WasmResponse.payload` uses `#[serde(with = "const_hex")]`). Apply the same attribute so the frontend receives a hex string.
+
+**3. `SubmissionEvent` frontend type — add `result_payload: string`**
+
+The hex string arrives as-is. Frontend decodes for display.
+
+**4. `ActivityItem` — add optional `resultPayload?: string`**
+
+Store the hex string in the activity item.
+
+**5. Smart decoding utility (new)**
+
+Add a pure function (suggested location: `app/src/utils/decode.ts`) that implements:
+```
+decodePayload(hex: string): { mode: 'json' | 'utf8' | 'hex', display: string }
+  1. Strip 0x prefix, decode hex to bytes
+  2. Try UTF-8 decode
+  3. If valid UTF-8, try JSON.parse
+  4. If valid JSON, return { mode: 'json', display: JSON.stringify(parsed, null, 2) }
+  5. If valid UTF-8 (not JSON), return { mode: 'utf8', display: utf8string }
+  6. Otherwise, return { mode: 'hex', display: originalHex }
+```
+
+**6. `GroupedActivityCard` — render decoded result**
+
+In the submission child card, show the decoded result using `decodePayload(group.submission.resultPayload)`. Label by mode (JSON / UTF-8 / Hex). Keep below tx_hash.
+
+### Modification Boundary Summary
+
+| File | Change Type | What Changes |
+|------|-------------|--------------|
+| `dispatcher.rs` (enum) | Modify | Add `result_payload: Vec<u8>` to `SubmissionConfirmed` |
+| `aggregator.rs` | Modify | Pass `submission.operator_response.payload.clone()` |
+| `gui/shared/src/event.rs` | Modify | Add `result_payload` with `const_hex` serde |
+| `dispatcher.rs` (match arm) | Modify | Forward `result_payload` into `SubmissionEvent` |
+| `app/src/types/index.ts` | Modify | Add `result_payload: string` to `SubmissionEvent`, `resultPayload?` to `ActivityItem` |
+| `app/src/tauri/listeners.ts` | Modify | Map `payload.result_payload` to `resultPayload` |
+| `app/src/utils/decode.ts` | New | `decodePayload` function |
+| `app/src/components/activity/GroupedActivityCard.tsx` | Modify | Call `decodePayload`, render with mode label |
+
+**Note on batching:** Features 1 and 2 both touch the same four Rust files and the same three frontend files. Implement them together to avoid editing `DispatcherCommand`, `SubmissionEvent`, `ActivityItem`, `listeners.ts`, and `GroupedActivityCard` twice.
+
+---
+
+## Feature 3: Service Restart Race Condition Fix
+
+### Root Cause
+
+`Dispatcher::start()` (dispatcher.rs lines ~241-315) spawns all subsystem threads simultaneously, including `trigger_manager.start()`. That call runs `start_watcher()`, which is the async loop that processes `TriggerCommand`s.
+
+Service restore runs synchronously via `ctx.rt.block_on()` (dispatcher.rs lines ~518-620) and calls `add_service_to_managers()`, which calls `trigger_manager.add_service()`. That method sends `TriggerCommand::StartListeningChain` and `TriggerCommand::WatchEvmContractEvents` through the `command_sender` channel.
+
+`WatchEvmContractEvents` in `start_watcher` does:
+```rust
+match self.evm_controllers.read().unwrap().get(&chain) {
+    Some(evm_controller) => { evm_controller.subscriptions.enable_logs(...); }
+    None => {
+        tracing::error!("No EVM controller found for chain, cannot watch contract event");
+        continue;       // silently drops the subscription
     }
-  }
 }
 ```
 
-**Option B — Add a `register_provider` RPC command** (LOW complexity, more targeted)
+The `evm_controllers` map is populated only when `StartListeningChain` is processed AND the EVM websocket connection succeeds. If `WatchEvmContractEvents` arrives before `StartListeningChain` completes (before the WebSocket connects and the controller is inserted), the subscription is silently dropped. On restart, the trigger stream never fires for that service.
 
-The pi-coding-agent's `ModelRegistry` has `registerProvider(providerName, config: ProviderConfigInput)`. The sidecar could expose this via a new RPC command type. The Rust side would send:
+### Why Ordering Cannot Be Guaranteed
 
-```json
-{
-  "type": "register_provider",
-  "provider": "ollama",
-  "baseUrl": "http://localhost:11434/v1",
-  "api": "openai-completions"
-}
-```
+`start()` spawns `trigger_manager.start(ctx)` in a separate OS thread. That thread calls `ctx.rt.block_on(self.start_watcher(...))`. There is no synchronization point between the `start_watcher` loop processing `TriggerCommand`s and the main thread calling `add_service_to_managers()`. In practice, `WatchEvmContractEvents` can arrive before `StartListeningChain` completes its async WebSocket connection.
 
-However, `register_provider` is not in `RpcCommand` today — it would need to be added to the sidecar entrypoint with a custom pre-processing step before `runRpcMode`.
+### Fix Options
 
-**Recommendation: Option A** (disk-based `models.json`). It aligns with how pi-coding-agent is designed to be extended, requires one line change in `entrypoint.ts` (swapping `inMemory` for `create`), and lets the Rust backend manage provider config by writing `models.json`. No new RPC protocol needed.
+**Option A (recommended): Retry buffer in `start_watcher`**
 
-### Auth key routing for custom providers
+When `WatchEvmContractEvents` arrives and no controller exists, push to a local `pending_watches: HashMap<ChainKey, Vec<(Vec<Address>, Vec<B256>)>>`. When `StartListeningChain` succeeds and inserts a controller, immediately apply all pending watches for that chain.
 
-`AuthStorage` resolves API keys with this priority:
-1. Runtime override (`setRuntimeApiKey`)
-2. `auth.json` entry for provider name
-3. OAuth token
-4. Environment variable
-5. Fallback resolver
+This is self-healing and handles both startup and runtime add-service scenarios without requiring synchronization.
 
-For Ollama (no API key needed), the ModelRegistry will send requests without auth — the `openai-completions` provider does not require an auth header if `authHeader: false` is set in the `ProviderConfigInput`. This needs to be set in the `models.json` provider config.
+**Option B: Signal readiness before restore**
 
-For Together AI (using OpenAI-compatible API), the provider name in `auth.json` must match the key used in `models.json`. If registered as `"together"`, the API key is stored as `auth.json["together"]["key"]`.
+Add a `oneshot` channel from `start_watcher` to the main thread, sent after the first loop iteration begins. Block `add_service_to_managers()` calls on receiving this signal. Does not eliminate the actual async gap (WebSocket connection is I/O-bound, not tick-bound).
 
-### Settings persistence for custom providers
+**Option C: Two-phase startup**
 
-The current `settings.rs` `Settings` struct stores:
-- `agent_model_provider: Option<String>` — provider name string
-- `agent_model_id: Option<String>` — model ID string
-- `agent_thinking_level: Option<String>`
+Send all `StartListeningChain` commands, wait for all controllers to be ready, then send `WatchEvmContractEvents`. Requires a protocol change across `add_service` and the trigger loop.
 
-For open-source providers, two additional fields are needed:
+**Recommended: Option A** — local to `start_watcher`, no cross-thread protocol changes, also fixes the runtime case.
 
-```rust
-pub agent_custom_providers: Vec<CustomProviderConfig>,  // NEW
-```
+### Modification Boundary
 
-Where `CustomProviderConfig` is a new struct:
+| File | Change Type | What Changes |
+|------|-------------|--------------|
+| `packages/wavs/src/subsystems/trigger.rs` | Modify | `start_watcher` function: add `pending_watches` map, apply on controller insertion |
 
-```rust
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CustomProviderConfig {
-    pub name: String,        // e.g. "ollama", "together"
-    pub base_url: String,    // e.g. "http://localhost:11434/v1"
-    pub api: String,         // e.g. "openai-completions"
-    pub requires_api_key: bool,
-    pub models: Vec<CustomModelConfig>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CustomModelConfig {
-    pub id: String,
-    pub name: String,
-    pub context_window: u64,
-    pub max_tokens: u64,
-}
-```
-
-The Rust backend writes this to `models.json` in the auth dir when providers are saved. The sidecar picks it up on startup (or via a `reload_models` RPC if hot-reload is needed).
-
-### RPC set_model with custom provider
-
-The existing `set_model` RPC is:
-```json
-{ "type": "set_model", "provider": "groq", "modelId": "llama-3.3-70b-versatile" }
-```
-
-No change needed here — `set_model` takes a provider string and modelId string. Once the provider is registered in ModelRegistry (via `models.json`), `find(provider, modelId)` returns the model and the agent switches to it.
+No changes needed to `dispatcher.rs`, `add_service`, or any other subsystem.
 
 ---
 
-## Integration Point 2: Settings Page — Tab-Switch to Scroll+Anchor
+## Feature 4: Wallet Kebab Menu
 
-### Current architecture (HIGH confidence)
+### Current State
 
-`Settings.tsx` manages:
-- `activeSection: SectionKey` state — drives which section component renders
-- The sidebar calls `setActiveSection` on click
-- Content area: `max-h-[calc(100vh-12rem)] overflow-y-auto` with conditional rendering
+`WalletSection` (lines ~202-303) renders two action buttons inline in the main content flow:
+- "Export Recovery Phrase" (`Button variant="outline"`)
+- "Reset Wallet" (`Button color="red" variant="outline"`) with an inline confirmation card
+
+Both buttons are permanently visible, placing a dangerous action prominently next to a normal one.
+
+### Target State
+
+Collapse the uncommon actions into a kebab menu (`...`) in the wallet card header. The main section body shows only accounts and balances.
+
+### Component Design
+
+**New component: `KebabMenu`**
+
+Location: `app/src/components/atoms/KebabMenu.tsx`
+
+```
+Props:
+  items: Array<{
+    label: string,
+    onClick: () => void,
+    variant?: 'default' | 'danger',
+    disabled?: boolean,
+  }>
+```
+
+Renders a three-dot button. On click, toggles an absolute-positioned dropdown. Closes on outside-click via `useEffect` + `document.addEventListener('mousedown', ...)`.
+
+**Modified: `WalletSection`**
+
+The header row (`<h2>Wallet</h2>`) becomes a flex container with the heading on the left and `<KebabMenu>` on the right. Items:
+- "Export Recovery Phrase" triggers existing `handleExportWallet` logic
+- "Reset Wallet" triggers existing `setShowResetConfirm(true)` logic
+
+The mnemonic display and confirmation card stay in the body — they are feedback UI, not launchers.
+
+### Component Tree Location
 
 ```
 Settings.tsx
-+-- SettingsSidebar (activeSection, onSelect) -- tab nav
-+-- div.overflow-y-auto
-    +-- {activeSection === 'wallet' && <WalletSection />}
-        {activeSection === 'node' && <NodeSection />}
-        ... (one section rendered at a time, others unmount)
+  └── WalletSection          (modified: adds KebabMenu to header)
+        └── KebabMenu        (new atom component)
 ```
 
-The key architectural decision in v1.0: the OAuth listener lives in `Settings.tsx` (parent) so it survives section navigation. This constraint must be preserved in the refactor.
+`KebabMenu` belongs in atoms because it is a generic UI primitive reusable across the app. `OwnerActionsMenu.tsx` in `components/poa/` already shows a similar dropdown pattern; `KebabMenu` can be a cleaner generalization for future reuse.
 
-### Target architecture: Single scrollable page with anchor links
+### Modification Boundary
 
-All sections render simultaneously in a vertical scroll container. The sidebar highlights the section currently in the viewport (scroll-spy).
-
-```
-Settings.tsx
-+-- SettingsSidebar (activeSection, onAnchorClick) -- anchor nav, scroll-spy highlight
-+-- div#settings-scroll-container.overflow-y-auto
-    +-- section#wallet  <WalletSection />
-    +-- section#node    <NodeSection />
-    +-- section#environment  <EnvironmentSection />
-    +-- section#agent   <AgentSection />
-    +-- section#mcp     <McpSection />
-    +-- section#reset   <ResetSection />
-```
-
-### Scroll-spy implementation pattern
-
-Use `IntersectionObserver` in `Settings.tsx` to watch each section ref. When a section enters the viewport, update `activeSection` state. Sidebar reads `activeSection` for highlight (same as today) but instead of calling `setActiveSection`, sidebar clicks call `scrollIntoView`.
-
-```typescript
-// In Settings.tsx
-const sectionRefs = useRef<Record<SectionKey, HTMLElement | null>>({
-  wallet: null, node: null, environment: null, agent: null, mcp: null, reset: null
-});
-
-useEffect(() => {
-  const observer = new IntersectionObserver(
-    (entries) => {
-      // Set activeSection to the first intersecting section
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          setActiveSection(entry.target.id as SectionKey);
-          break;
-        }
-      }
-    },
-    { threshold: 0.3, root: scrollContainerRef.current }
-  );
-  Object.values(sectionRefs.current).forEach(el => el && observer.observe(el));
-  return () => observer.disconnect();
-}, []);
-
-const handleAnchorClick = (key: SectionKey) => {
-  sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth' });
-};
-```
-
-### SettingsSidebar interface change
-
-The `onSelect` prop changes semantics but not signature:
-
-```typescript
-// Before: onSelect triggers conditional render
-// After: onSelect triggers scrollIntoView
-interface SettingsSidebarProps {
-  activeSection: SectionKey;
-  onSelect: (key: SectionKey) => void;  // same prop name, new behavior
-}
-```
-
-The sidebar component itself does not change — it still receives `activeSection` for highlighting and calls `onSelect` on click. The parent changes what `onSelect` does.
-
-### OAuth listener preservation
-
-The OAuth listener in `Settings.tsx` is in a `useEffect` at the page level. Since `Settings.tsx` itself is not unmounted during the refactor (only the per-section conditional rendering is removed), the OAuth listener continues to work without changes.
-
----
-
-## Component Boundaries
-
-### New vs. Modified Components
-
-| Component | Status | Change |
-|-----------|--------|--------|
-| `Settings.tsx` | Modified | Remove activeSection-driven conditional rendering; add scroll container, IntersectionObserver, scrollIntoView handler |
-| `SettingsSidebar.tsx` | Modified | Export type remains `SectionKey`; sidebar may need a new section for "Providers" or the Agent section expands |
-| `AgentSection.tsx` | Modified | Add provider dropdown options (Groq, OpenRouter, Ollama, custom); add base URL field when provider requires it |
-| `EnvironmentSection.tsx` | Optional minor | May add AI provider suggestions more prominently |
-| `settings.rs` | Modified | Add `agent_custom_providers: Vec<CustomProviderConfig>` field |
-| `commands.rs` | Modified | Add `cmd_save_custom_providers` or extend `cmd_save_agent_settings` to handle provider configs; add `cmd_write_models_json` |
-| `agent/entrypoint.ts` | Modified | Switch `ModelRegistry.inMemory(authStorage)` to `ModelRegistry.create(authStorage, path.join(authDir, 'models.json'))` |
-| `tauri/agent.ts` | Modified | Add `saveCustomProviders()` invoke wrapper |
-
-**New components (if needed):**
-
-| Component | Purpose |
-|-----------|---------|
-| `settings/CustomProviderForm.tsx` | Form for adding Ollama/custom provider: name, baseUrl, model list |
-| `settings/ProviderSection.tsx` | Standalone section if provider config grows beyond AgentSection scope |
-
----
-
-## Data Flow
-
-### Provider Configuration Save Flow
-
-```
-User fills CustomProviderForm
-  |
-saveCustomProviders([{name, baseUrl, api, models}])   [tauri/agent.ts]
-  |
-cmd_save_custom_providers                              [commands.rs]
-  | (1) Write models.json to auth_dir/models.json
-  | (2) Update Settings.agent_custom_providers and persist settings.json
-  | (3) If agent is running: restart sidecar so it re-reads models.json
-        (use existing cmd_stop_agent + cmd_start_agent flow)
-
-Sidecar startup:
-  ModelRegistry.create(authStorage, ".../models.json")
-  -> loadCustomModels() reads models.json
-  -> mergeCustomModels() merges into built-in model list
-  -> set_model RPC now resolves custom provider
-```
-
-### Model Selection Flow (unchanged from today)
-
-```
-User selects provider + model in AgentSection
-  |
-saveAgentSettings({ agent_model_provider, agent_model_id })   [tauri/agent.ts]
-  |
-cmd_save_agent_settings -> Settings persisted                  [commands.rs]
-  |
-agentSetModel(provider, modelId)                              [tauri/agent.ts]
-  |
-cmd_agent_set_model -> {"type":"set_model","provider":...}     [commands.rs -> sidecar stdin]
-  |
-runRpcMode handles set_model
-  -> modelRegistry.find(provider, modelId)
-  -> session.setModel(model)
-```
-
-### Scroll Navigation Flow (new)
-
-```
-User clicks sidebar item (e.g., "Agent")
-  |
-handleAnchorClick("agent")                                    [Settings.tsx]
-  |
-sectionRefs.current["agent"].scrollIntoView({behavior:'smooth'})
-  |
-IntersectionObserver fires as section enters viewport
-  |
-setActiveSection("agent")
-  |
-SettingsSidebar re-renders with activeSection="agent" highlighted
-```
-
----
-
-## Recommended Project Structure (changes only)
-
-```
-app/
-+-- agent/
-|   +-- entrypoint.ts          # change ModelRegistry.inMemory -> .create
-+-- src/
-|   +-- components/settings/
-|   |   +-- AgentSection.tsx   # extend provider dropdown + conditional baseUrl field
-|   |   +-- SettingsSidebar.tsx # no interface change; possibly new section entry
-|   |   +-- CustomProviderForm.tsx  # NEW: Ollama / custom provider config UI
-|   |   +-- ProviderSection.tsx    # NEW (optional): if provider config is large
-|   +-- pages/
-|       +-- Settings.tsx       # scroll refactor: remove conditional render, add refs + observer
-+-- src-tauri/src/
-|   +-- commands.rs            # extend cmd_save_agent_settings or add cmd_write_models_json
-+-- packages/gui/shared/src/
-    +-- settings.rs            # add CustomProviderConfig structs + Vec field
-```
+| File | Change Type | What Changes |
+|------|-------------|--------------|
+| `app/src/components/atoms/KebabMenu.tsx` | New | Generic kebab dropdown atom |
+| `app/src/components/atoms/index.ts` | Modify | Re-export `KebabMenu` |
+| `app/src/components/settings/WalletSection.tsx` | Modify | Add `KebabMenu` to header, remove inline buttons from body |
 
 ---
 
 ## Architectural Patterns
 
-### Pattern 1: Scroll-Spy with IntersectionObserver
+### Pattern 1: Extend DispatcherCommand, Not New Events
 
-**What:** All sections render at once in a scrollable container. IntersectionObserver watches section elements; active section highlight follows scroll position.
+**What:** Add data to existing event flows by extending the `DispatcherCommand` enum variant, `TauriEventExt` struct, frontend type, and listener in lockstep — never adding a parallel event for data that belongs to an existing lifecycle moment.
 
-**When to use:** Settings pages with 5+ sections, where users want to scan all settings, not tab between isolated views.
+**When to use:** Any time new data is available at an existing event origin (e.g., tx_hash at SubmissionConfirmed, payload at the same point).
 
-**Trade-offs:**
-- Pro: All settings visible on one page; natural browser scroll behavior
-- Pro: Anchor links (shareable URLs with `#agent` hash) possible as a future extension
-- Con: All sections mount simultaneously (more DOM); section components must not have expensive mount effects
-- Con: IntersectionObserver thresholds need tuning to feel right — `threshold: 0.3` with `root` set to the scroll container is a good starting point
+**Trade-offs:** All four layers must change together. This is correct — they form one serialization boundary.
 
-### Pattern 2: models.json as the Provider Config Contract
+### Pattern 2: Retry-Buffer for Async Command Ordering
 
-**What:** The pi-coding-agent's disk-based `models.json` is the single source of truth for custom providers. The Rust backend writes it; the TypeScript sidecar reads it on startup.
+**What:** When a command depends on async infrastructure that a prior command creates, buffer the dependent command locally and replay it when the dependency arrives — instead of introducing synchronization across thread boundaries.
 
-**When to use:** When extending a third-party library (pi-coding-agent) that already has a file-based extension mechanism.
+**When to use:** Any command handler where a dependency may not be ready due to async I/O, without wanting to block the caller.
 
-**Trade-offs:**
-- Pro: No changes to the RPC protocol; no new RPC commands
-- Pro: Aligns with how pi-coding-agent itself expects to be configured by users
-- Con: Configuration changes require sidecar restart (or a `reload_models` RPC if pi-coding-agent exposes one)
-- Con: The `models.json` schema is determined by pi-coding-agent, not this project
+**Trade-offs:** Small amount of local state in `start_watcher`. Self-healing; handles both startup and runtime cases.
 
-### Pattern 3: Provider-Specific UI Branching in AgentSection
+### Pattern 3: Atoms for Shared Interaction Primitives
 
-**What:** The AgentSection renders a `baseUrl` field only when the selected provider requires it (Ollama, custom). Known providers (Groq, OpenRouter, Anthropic) do not show it.
+**What:** Pure UI interaction components (KebabMenu, Button, AddressDisplay) live in `components/atoms/` and are composed into feature sections. Feature logic stays in the section component.
 
-```typescript
-const needsBaseUrl = (provider: string) =>
-  provider === 'ollama' || provider === 'custom';
+**When to use:** Any interaction widget with no domain logic that could plausibly be reused in two or more sections.
+
+---
+
+## Data Flow
+
+### End-to-End: Trigger to Submission with tx_hash + payload (after v1.3)
+
+```
+1. On-chain event fires
+       |
+2. TriggerManager -> DispatcherCommand::Trigger(action)
+       |
+3. Dispatcher -> EngineCommand::ExecuteOperator
+       |
+4. Engine executes WASM -> WasmResponse { payload: Vec<u8> }
+       |
+5. EngineResponse::Operator(SubmissionRequest) -> Dispatcher
+       |
+6. Dispatcher -> SubmissionCommand -> SubmissionManager
+       |
+7. SubmissionManager -> DispatcherCommand::SubmissionResponse(Submission)
+       |
+8. Dispatcher -> AggregatorCommand::Execute(Submission)
+       |
+9. Aggregator accumulates quorum -> submits on-chain
+       |
+10. AnyTransactionReceipt -> tx_hash: String
+    submission.operator_response.payload: Vec<u8>  <- both originate here
+       |
+11. DispatcherCommand::SubmissionConfirmed { tx_hash, result_payload, ... }
+       |
+12. Dispatcher emits SubmissionEvent { tx_hash, result_payload (hex), ... }
+       |
+13. listeners.ts -> store.addActivity({ txHash, resultPayload })
+       |
+14. GroupedActivityCard renders tx_hash + decodePayload(resultPayload)
 ```
 
-**When to use:** Form fields that only apply to certain selections.
+### Service Restart Data Flow (after fix)
 
-**Trade-offs:**
-- Pro: Keeps the UI uncluttered for the common case
-- Con: Logic for "which providers need a base URL" must be kept in sync between frontend and backend
+```
+Dispatcher::start()
+  |-- thread: trigger_manager.start() -> start_watcher() loop begins
+  |     |-- processes TriggerCommand::StartListeningChain
+  |     |     |-- (async) WebSocket connects -> evm_controllers.insert(chain, controller)
+  |     |         |-- apply pending_watches[chain] immediately
+  |     |-- processes TriggerCommand::WatchEvmContractEvents
+  |           |-- controller ready -> enable_logs() SUCCESS
+  |           |-- controller missing -> push to pending_watches[chain]
+  |
+  |-- (main) ctx.rt.block_on(restore services)
+        |-- add_service_to_managers() sends StartListeningChain + WatchEvmContractEvents
+              (ordering no longer matters due to pending_watches buffer)
+```
+
+---
+
+## Integration Points
+
+### Internal Boundaries
+
+| Boundary | Communication | Notes for v1.3 |
+|----------|---------------|----------------|
+| Aggregator to Dispatcher | `crossbeam::channel::Sender<DispatcherCommand>` | Add `tx_hash` and `result_payload` to `SubmissionConfirmed` variant |
+| Dispatcher to Frontend | `tauri::Emitter::emit()` via `TauriEventExt` | Add fields to `SubmissionEvent` struct |
+| Frontend IPC to Store | `listen<SubmissionEvent>()` in `listeners.ts` | Map new fields to `ActivityItem` |
+| `start_watcher` internal | Local `pending_watches` HashMap | New local state, no cross-thread boundary |
+| `WalletSection` to Atoms | Component import | New `KebabMenu` atom |
+
+### New vs Modified Summary
+
+**New files:**
+- `app/src/utils/decode.ts` — payload decoding utility (`decodePayload`)
+- `app/src/components/atoms/KebabMenu.tsx` — kebab dropdown atom
+
+**Modified backend files:**
+- `packages/wavs/src/dispatcher.rs` — `DispatcherCommand` enum + match arm
+- `packages/wavs/src/subsystems/aggregator.rs` — `SubmissionConfirmed` send site
+- `packages/gui/shared/src/event.rs` — `SubmissionEvent` struct
+- `packages/wavs/src/subsystems/trigger.rs` — `start_watcher` retry buffer
+
+**Modified frontend files:**
+- `app/src/types/index.ts` — `SubmissionEvent`, `ActivityItem`
+- `app/src/tauri/listeners.ts` — submission listener mapping
+- `app/src/components/activity/GroupedActivityCard.tsx` — render tx_hash + decoded result
+- `app/src/components/settings/WalletSection.tsx` — kebab menu integration
+- `app/src/components/atoms/index.ts` — re-export `KebabMenu`
+
+---
+
+## Recommended Build Order
+
+Features 1 and 2 share all four Rust touch points and all three frontend touch points. Build them together.
+
+1. **Backend (features 1+2 combined):** Extend `DispatcherCommand::SubmissionConfirmed` with `tx_hash` and `result_payload`, update aggregator send site, extend `SubmissionEvent`, update dispatcher match arm. One compile pass.
+
+2. **Frontend (features 1+2 combined):** Extend `SubmissionEvent` and `ActivityItem` types, update `listeners.ts`, add `decode.ts`, update `GroupedActivityCard`.
+
+3. **Trigger restart fix:** Edit `start_watcher` in `trigger.rs` to add `pending_watches` buffer. Fully isolated — no dependency on features 1/2.
+
+4. **Wallet kebab menu:** New `KebabMenu` atom, modify `WalletSection`. Pure frontend, no backend changes, no dependency on any other feature.
 
 ---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Storing base_url in auth.json
+### Anti-Pattern 1: Separate Tauri Event for tx_hash
 
-**What people do:** Shove the provider base URL into `auth.json` alongside the API key because that file is already there.
+**What people do:** Emit a new `"submission_hash"` event alongside `"submission"` rather than extending the existing struct.
 
-**Why it's wrong:** `auth.json` is credential storage (API keys, OAuth tokens). Base URLs are configuration, not credentials. Mixing them makes the file semantically confusing and harder to reason about.
+**Why it's wrong:** The frontend must correlate two events by `correlation_id` to display a single card row. The existing grouping already handles this; a third event type adds complexity.
 
-**Do this instead:** Store base URL in `settings.json` (via `Settings.agent_custom_providers`) and write `models.json` separately for the sidecar to consume.
+**Do this instead:** Add `tx_hash` directly to `SubmissionEvent`. One event, one card update.
 
-### Anti-Pattern 2: Hardcoding the provider list in the frontend
+### Anti-Pattern 2: Decode payload in the Rust backend
 
-**What people do:** Hardcode `['anthropic', 'openai', 'google', 'groq', 'ollama', ...]` in the React component, duplicating what pi-ai's `KnownProvider` union already defines.
+**What people do:** Convert `Vec<u8>` to a string (JSON, UTF-8, hex) in Rust before sending to the GUI.
 
-**Why it's wrong:** The list diverges from reality as pi-ai updates. Users on a newer pi-ai version may be confused when providers they configured do not appear.
+**Why it's wrong:** The decoding choice (JSON vs UTF-8 vs hex) belongs with the display. Raw bytes in hex carry all information. Decoding in Rust forces an irreversible choice at the wrong layer.
 
-**Do this instead:** For built-in providers (Groq, OpenRouter, etc.), expose a `get_available_providers` command that reads from the sidecar's `get_available_models` RPC. For custom providers, merge from `settings.agent_custom_providers`. The UI shows the union.
+**Do this instead:** Serialize as hex string (consistent with existing `const_hex` pattern on `WasmResponse.payload`). Decode in `app/src/utils/decode.ts` at render time.
 
-### Anti-Pattern 3: Keeping conditional rendering for the scroll refactor
+### Anti-Pattern 3: Synchronization barrier at start_watcher entry
 
-**What people do:** Keep the tab-switch pattern (conditional rendering) but animate between sections to simulate scrolling.
+**What people do:** Add a `tokio::sync::Barrier` or `oneshot` channel so `add_service_to_managers()` waits for `start_watcher` to be "ready" before sending commands.
 
-**Why it's wrong:** Sections still mount/unmount (losing ephemeral state like unsaved form data), and the animation adds complexity without the natural scanability of a real scroll page.
+**Why it's wrong:** "Ready" only means the loop started, not that `StartListeningChain` has completed its async WebSocket connection. The race remains because stream connection is I/O-bound.
 
-**Do this instead:** Render all sections simultaneously. Accept that all section components mount at page load. Use `React.memo` if any section has expensive initialization.
-
-### Anti-Pattern 4: Writing models.json on every keypress
-
-**What people do:** Eagerly write the models.json file as the user types in the base URL field.
-
-**Why it's wrong:** File I/O on every keystroke causes flicker and race conditions if the sidecar reads the file between writes.
-
-**Do this instead:** Write models.json only when the user clicks "Save". Keep intermediate edits in React state.
-
----
-
-## Integration Points Summary
-
-### What Already Works (no changes needed)
-
-| Integration | Notes |
-|-------------|-------|
-| Groq API key -> auth.json["groq"] | Groq is a KnownProvider with built-in models |
-| OpenRouter API key -> auth.json["openrouter"] | KnownProvider with many hosted models |
-| `set_model` RPC with known providers | No changes to RPC protocol needed |
-| OAuth flow for Anthropic/OpenAI/Google | Must be preserved |
-| Settings.tsx OAuth listener | Survives the scroll refactor since Settings.tsx itself stays mounted |
-
-### What Needs to Be Built
-
-| Integration | Complexity | Where |
-|-------------|------------|-------|
-| `models.json` write on provider save | Low | `commands.rs` new function |
-| Switch entrypoint to `ModelRegistry.create` | Trivial | `agent/entrypoint.ts` (1 line) |
-| `CustomProviderConfig` struct in settings | Low | `packages/gui/shared/src/settings.rs` |
-| AgentSection provider dropdown expansion | Low | `AgentSection.tsx` (add options + conditional baseUrl) |
-| Custom provider form UI | Medium | New `CustomProviderForm.tsx` |
-| Settings page scroll refactor | Medium | `Settings.tsx` + `SettingsSidebar.tsx` |
-| Sidecar restart on provider config change | Low | Existing `cmd_stop_agent` + `cmd_start_agent` |
-
----
-
-## Build Order
-
-Dependencies determine sequencing:
-
-1. **`settings.rs` schema** — Add `CustomProviderConfig` structs. Everything else depends on the shape of persisted config. (Rust compile only, no frontend changes yet.)
-
-2. **`commands.rs` backend** — Implement `cmd_save_custom_providers` (or extend `cmd_save_agent_settings`). Writes `models.json` to auth dir. Blocked by step 1.
-
-3. **`agent/entrypoint.ts` — ModelRegistry switch** — One-line change from `inMemory` to `create`. Can be done independently of the frontend; test by manually creating `models.json` in auth dir.
-
-4. **`tauri/agent.ts` bridge** — Add `saveCustomProviders()` invoke wrapper. Blocked by step 2.
-
-5. **`AgentSection.tsx` — provider dropdown expansion** — Add Groq, OpenRouter, and "Ollama (local)" to the provider select. Show `baseUrl` field conditionally. Blocked by step 4 for persistence.
-
-6. **`CustomProviderForm.tsx`** — Full custom provider UI. Blocked by steps 4-5.
-
-7. **Settings page scroll refactor** — Independent of steps 1-6. Can be built in parallel. Only touches `Settings.tsx` and `SettingsSidebar.tsx`.
+**Do this instead:** Buffer `WatchEvmContractEvents` in `start_watcher` and apply when the controller is inserted. Fix is at the point of failure, not at a barrier that does not eliminate the actual async gap.
 
 ---
 
 ## Sources
 
-- Direct inspection: `/workspace/app/agent/entrypoint.ts`
-- Direct inspection: `/workspace/app/agent/node_modules/@mariozechner/pi-coding-agent/dist/core/model-registry.d.ts`
-- Direct inspection: `/workspace/app/agent/node_modules/@mariozechner/pi-coding-agent/dist/core/auth-storage.d.ts`
-- Direct inspection: `/workspace/app/agent/node_modules/@mariozechner/pi-coding-agent/dist/modes/rpc/rpc-types.d.ts`
-- Direct inspection: `/workspace/app/agent/node_modules/@mariozechner/pi-ai/dist/types.d.ts` (KnownProvider list)
-- Direct inspection: `/workspace/app/agent/node_modules/@mariozechner/pi-ai/dist/models.generated.d.ts` (groq, openrouter, huggingface present; together/ollama absent)
-- Direct inspection: `/workspace/app/src/components/settings/AgentSection.tsx`
-- Direct inspection: `/workspace/app/src/pages/Settings.tsx`
-- Direct inspection: `/workspace/app/src-tauri/src/commands.rs` (lines 1326-1608)
-- Direct inspection: `/workspace/packages/gui/shared/src/settings.rs`
+All findings from direct source inspection (HIGH confidence):
+
+- `packages/wavs/src/dispatcher.rs` — `DispatcherCommand` enum, `start()`, `SubmissionConfirmed` match arm
+- `packages/wavs/src/subsystems/aggregator.rs` — lines 628-650, 680-695 (tx_hash origin, SubmissionConfirmed send)
+- `packages/wavs/src/subsystems/aggregator/submit.rs` — `AnyTransactionReceipt::tx_hash()`
+- `packages/wavs/src/subsystems/engine.rs` — `AggregatorExecuteKind`, `EngineResponse`
+- `packages/wavs/src/subsystems/trigger.rs` — `add_service()`, `start_watcher()`, `WatchEvmContractEvents` handling
+- `packages/gui/shared/src/event.rs` — `SubmissionEvent`, `TauriEventExt` trait
+- `packages/types/src/submission.rs` — `Submission` struct with `operator_response: WasmResponse`
+- `packages/types/src/service.rs` — `WasmResponse` struct with `payload: Vec<u8>`
+- `app/src/types/index.ts` — `ActivityItem`, `SubmissionEvent`, `TriggerData`
+- `app/src/tauri/listeners.ts` — all event listener mappings
+- `app/src/components/activity/GroupedActivityCard.tsx` — submission child card structure
+- `app/src/components/settings/WalletSection.tsx` — current button layout
 
 ---
-
-*Architecture research for: WAVS v1.1 Open-Source AI Providers + Settings UX*
-*Researched: 2026-04-08*
+*Architecture research for: WAVS v1.3 Activity UX & Bug Fixes*
+*Researched: 2026-04-09*
