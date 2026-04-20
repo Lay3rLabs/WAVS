@@ -64,7 +64,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 
 - [x] **Phase 17: rig-wasi Fork** — Patch rig-core 0.35.0 to compile cleanly to wasm32-wasip2; this is the compile gate for all downstream work (completed 2026-04-20)
 - [x] **Phase 18: wavs-rig Integration Crate** — Bridge library providing HTTP transport, typed built-in WAVS tools, KV-backed memory, and async entry point shim (completed 2026-04-20)
-- [ ] **Phase 19: Example Agent & E2E Validation** — Full agent loop end-to-end on a live WAVS node with sandboxed LLM access
+- [x] **Phase 19: Example Agent & E2E Validation** — Full agent loop end-to-end on a live WAVS node with sandboxed LLM access (completed 2026-04-20)
 
 ## Phase Details
 
@@ -107,10 +107,10 @@ Plans:
   1. The example agent component contains ~30 lines of domain logic (excluding imports and boilerplate), demonstrating trigger ingestion, LLM reasoning call, at least one tool use, and a typed structured result
   2. A developer can deploy the example using `wavs-mcp` or the CLI, send a trigger, and observe a reasoned structured result returned from the WAVS node with no manual intervention
   3. The example `service.json` uses `AllowedHostPermission::Only(["api.anthropic.com"])` and the agent successfully calls the LLM while the WAVS node blocks any outbound request to a non-listed host
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 19-01-PLAN.md — Create agent-example crate with WavsAgent implementation (compiles to wasm32-wasip2)
-- [ ] 19-02-PLAN.md — Build WASM, create service.json, E2E validation on live WAVS node
+- [x] 19-01-PLAN.md — Create agent-example crate with WavsAgent implementation (compiles to wasm32-wasip2)
+- [x] 19-02-PLAN.md — Build WASM, create service.json, E2E validation on live WAVS node
 
 ## Progress
 
@@ -136,4 +136,4 @@ Plans:
 | 16. Wallet Kebab Menu | v1.3 | 1/1 | Complete | 2026-04-09 |
 | 17. rig-wasi Fork | v2.0 | 2/2 | Complete    | 2026-04-20 |
 | 18. wavs-rig Integration Crate | v2.0 | 3/3 | Complete    | 2026-04-20 |
-| 19. Example Agent & E2E Validation | v2.0 | 0/2 | Not started | - |
+| 19. Example Agent & E2E Validation | v2.0 | 2/2 | Complete    | 2026-04-20 |
