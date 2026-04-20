@@ -6,7 +6,7 @@
 - ✅ **v1.1 Open Source AI Providers & Settings UX** — Phases 7-9 (shipped 2026-04-08)
 - ✅ **v1.2 Components Explorer** — Phases 10-12 (shipped 2026-04-08)
 - ✅ **v1.3 Activity UX & Bug Fixes** — Phases 13-16 (shipped 2026-04-09)
-- 🚧 **v2.0 Agent Runtime** — Phases 17-19 (in progress)
+- ��� **v2.0 Agent Runtime** — Phases 17-19 (in progress)
 
 ## Phases
 
@@ -14,7 +14,7 @@
 <summary>✅ v1.0 WAVS Improvements (Phases 1-6) — SHIPPED 2026-04-07</summary>
 
 - [x] Phase 1: OCI Component Pull (2/2 plans) — completed 2026-03-24
-- [x] Phase 2: WIT-to-Schema Tooling (2/2 plans) — completed 2026-03-25
+- [x] Phase 2: WIT-to-Schema Tooling (2/2 plans) �� completed 2026-03-25
 - [x] Phase 3: MCP Execution Interface (3/3 plans) — completed 2026-03-25
 - [x] Phase 4: Rust Event Foundation (1/1 plan) — completed 2026-04-07
 - [x] Phase 5: Settings Decomposition (2/2 plans) — completed 2026-04-07
@@ -39,7 +39,7 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 <summary>✅ v1.2 Components Explorer (Phases 10-12) — SHIPPED 2026-04-08</summary>
 
 - [x] Phase 10: Backend Commands (1/1 plan) — completed 2026-04-08
-- [x] Phase 11: Component Detail Page (2/2 plans) — completed 2026-04-08
+- [x] Phase 11: Component Detail Page (2/2 plans) �� completed 2026-04-08
 - [x] Phase 12: Components List Page (1/1 plan) — completed 2026-04-08
 
 Full details: `.planning/milestones/v1.2-ROADMAP.md`
@@ -93,10 +93,14 @@ Plans:
   3. `WavsMemory` appends messages to KV, retrieves full conversation history, and truncates oldest entries when the conversation exceeds the configured token budget — conversation does not grow unboundedly across invocations
   4. A component implementing `WavsAgent` and calling `run_agent` compiles to wasm32-wasip2 and the full rig agent loop executes correctly inside a single `wstd::runtime::block_on` without nested executor deadlock
   5. A component deployed with `AllowedHostPermission::None` returns a clear human-readable startup error (e.g., "WAVS agent requires HTTP access — set AllowedHostPermission to All or Only") instead of silently trapping
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 18-01-PLAN.md — Create wavs-rig crate scaffold and WasiHttpClient HTTP transport
+- [ ] 18-02-PLAN.md — Implement five built-in WAVS tools (KvGet, KvSet, HttpFetch, EvmQuery, Log)
+- [ ] 18-03-PLAN.md — WavsMemory conversation store, WavsAgent trait + run_agent shim, permission check
 
 ### Phase 19: Example Agent & E2E Validation
-**Goal**: A working example agent component demonstrates the full trigger → LLM reasoning → tool use → structured result loop on a live WAVS node, with `AllowedHostPermission::Only` enforcing that the agent can only reach the configured LLM provider
+**Goal**: A working example agent component demonstrates the full trigger → LLM reasoning → tool use ��� structured result loop on a live WAVS node, with `AllowedHostPermission::Only` enforcing that the agent can only reach the configured LLM provider
 **Depends on**: Phase 18
 **Requirements**: E2E-01, E2E-02, E2E-03
 **Success Criteria** (what must be TRUE):
@@ -128,5 +132,5 @@ Plans:
 | 15. Service Restart Reliability | v1.3 | 1/1 | Complete | 2026-04-09 |
 | 16. Wallet Kebab Menu | v1.3 | 1/1 | Complete | 2026-04-09 |
 | 17. rig-wasi Fork | v2.0 | 2/2 | Complete    | 2026-04-20 |
-| 18. wavs-rig Integration Crate | v2.0 | 0/TBD | Not started | - |
+| 18. wavs-rig Integration Crate | v2.0 | 0/3 | Planning | - |
 | 19. Example Agent & E2E Validation | v2.0 | 0/TBD | Not started | - |
