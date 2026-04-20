@@ -10,16 +10,8 @@ use rig::tool::Tool;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-// Generate wasi:keyvalue bindings scoped to this module.
-// The `imports` world in the keyvalue WIT exposes `store`, `atomics`, and `batch`.
-// We only need `store` for basic get/set operations.
-wit_bindgen::generate!({
-    world: "imports",
-    path: "../../wit-definitions/operator/wit/deps/wasi-keyvalue-0.2.0-draft2/package.wit",
-    generate_all,
-});
-
-use wasi::keyvalue::store;
+// Use the shared KV bindings from kv_bindings module (wasi:keyvalue via wit-bindgen).
+use crate::kv_bindings::wasi::keyvalue::store;
 
 // ─── Error type ───────────────────────────────────────────────────────────────
 

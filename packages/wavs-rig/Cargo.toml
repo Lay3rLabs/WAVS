@@ -15,6 +15,7 @@ crate-type = ["rlib"]
 rig-wasi = { path = "../rig-wasi" }
 wstd = { workspace = true }
 wasip2 = { workspace = true }
+wit-bindgen = { workspace = true }
 wavs-wasi-utils = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -27,7 +28,6 @@ alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true, optional = true }
 alloy-network = { workspace = true, optional = true }
 http = { workspace = true }
-wit-bindgen = { workspace = true }
 
 [features]
 default = []
