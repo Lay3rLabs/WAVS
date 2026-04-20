@@ -24,6 +24,7 @@ members = [
     "examples/components/_helpers",
     "examples/components/_types",
     "examples/components/kv-store",
+    "examples/components/agent-example",
     "examples/components/simple-aggregator",
     "examples/components/timer-aggregator",
     "examples/contracts/cosmwasm/trigger/api",
@@ -294,6 +295,7 @@ wavs-types = { path = "packages/types" }
 wavs-cli = { path = "packages/cli" }
 wavs-benchmark-common = { path = "packages/wavs/benches/common" }
 wavs-rig = { path = "packages/wavs-rig" }
+rig-wasi = { path = "packages/rig-wasi" }
 example-helpers = { path = "examples/components/_helpers" }
 example-types = { path = "examples/components/_types" }
 cw-wavs-mock-api = { path = "examples/contracts/cosmwasm/mock/api" }
