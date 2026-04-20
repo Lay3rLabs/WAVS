@@ -4,17 +4,19 @@
 
 WAVS is a platform for running sandboxed WebAssembly services with cryptographic trust guarantees. v1.0–v1.3 shipped developer experience improvements: OCI distribution, WIT-to-schema, MCP execution with three trust tiers, open-source AI providers, component explorer, activity feed UX, and service reliability fixes. v2.0 makes WAVS a first-class agent runtime — developers write rig-based agents in ~30 lines of Rust that autonomously reason and act inside the WASM sandbox.
 
-## Current Milestone: v2.0 Agent Runtime
+## Current State: v2.0 Agent Runtime — SHIPPED
 
-**Goal:** Make WAVS a first-class agent runtime by integrating rig-core into the WASI sandbox, so developers can build autonomous LLM agents that reason and act on triggers with full sandbox guarantees.
+WAVS is now a first-class agent runtime. Developers can write rig-based LLM agents in ~30 lines of Rust, compile to WASM, and deploy as sandboxed services with full trust guarantees.
 
-**Target features:**
-- WASI-compatible rig fork (reqwest optional, tokio optional, cfg detection fixes)
-- `wavs-rig` integration crate with 4 bridges (HTTP transport, tools, async shim, memory)
-- Built-in WAVS host function tools (KV get/set, EVM query, HTTP fetch, structured logging)
-- KV-backed conversation memory with token budget management
-- Example agent component demonstrating full agent loop (trigger → LLM reasoning → tool use → result)
-- End-to-end deployment and execution on WAVS node
+**Shipped in v2.0:**
+- `packages/rig-wasi/` — forked rig-core 0.35.0 compiling on wasm32-wasip2 (reqwest optional, tokio rt removed, cfg unified, SSE gated)
+- `packages/wavs-rig/` — integration library: WasiHttpClient, 5 typed tools, KV-backed memory, WavsAgent trait, permission validation
+- `examples/components/agent-example/` — reference agent demonstrating full trigger → LLM → tool → result loop
+- P7 rig-wasi patch un-gating Anthropic provider on WASM target
+
+**Known gaps (from audit):**
+- E2E-02/E2E-03: Live WAVS node testing deferred to human verification
+- Engine FIXME: `AllowedHostPermission::Only` declared but not host-enforced at WASI linker level
 
 ## Core Value
 
@@ -52,16 +54,20 @@ Developers can write an autonomous LLM agent in ~30 lines of Rust, compile it to
 - ✓ Service restart reliability fix — v1.3
 - ✓ Wallet settings kebab dropdown for uncommon actions — v1.3
 
+- ✓ WASI-compatible rig fork (reqwest/tokio optional, cfg unified) — v2.0
+- ✓ `wavs-rig` integration crate bridging rig into WASI sandbox — v2.0
+- ✓ WAVS host functions exposed as typed rig tools (5 tools) — v2.0
+- ✓ KV-backed conversation memory with token budget truncation — v2.0
+- ✓ Example agent component with full LLM reasoning loop — v2.0
+- ✓ Agent deployment with AllowedHostPermission::Only sandbox — v2.0 (partial — engine enforcement pending)
+
 ### Active
 
-<!-- Current scope. Building toward these. -->
+<!-- Next milestone scope -->
 
-- [ ] WASI-compatible rig fork with reqwest/tokio optional and cfg fixes
-- [ ] `wavs-rig` integration crate bridging rig into WASI sandbox
-- [ ] WAVS host functions exposed as typed rig tools
-- [ ] KV-backed conversation memory for agent state persistence
-- [ ] Example agent component with full LLM reasoning loop
-- [ ] End-to-end agent deployment and execution on WAVS node
+- [ ] Engine enforcement of AllowedHostPermission::Only at WASI linker level
+- [ ] Agent continuation mode (multi-step agents exceeding single invocation)
+- [ ] Service-to-service calls for inter-component composition
 
 ### Out of Scope
 
@@ -72,7 +78,7 @@ Developers can write an autonomous LLM agent in ~30 lines of Rust, compile it to
 
 ## Context
 
-**Current State:** v1.3 complete. App polish cycle done (v1.0–v1.3). Now pivoting to runtime-level agent support.
+**Current State:** v2.0 complete. Agent runtime shipped (rig-wasi fork, wavs-rig integration, example agent). App polish cycle done (v1.0–v1.3).
 
 **Tech stack:** Rust (node, CLI, MCP server, types), Tauri 2 + React 19 + Vite 7 (desktop app), Wasmtime (WASI component execution), Zustand (frontend state). New for v2.0: rig-core (Rust agent framework), wasm32-wasip2 target.
 
@@ -102,9 +108,12 @@ Developers can write an autonomous LLM agent in ~30 lines of Rust, compile it to
 | 4KB cap on result_payload at aggregator | Prevents 100MB hex blowup in Tauri IPC; enforced before channel send | ✓ Good |
 | Pending subscription queue for EVM triggers | Standard async ordering fix; queues commands before controller ready, drains after | ✓ Good |
 | Kebab menu for uncommon wallet actions | Reduces vertical space; groups rare destructive actions behind disclosure | ✓ Good |
-| Fork rig-core rather than build from scratch | Rig has 20+ LLM providers, typed tools, WASM-compat traits. Reimplementing = months of work. Fork ~300-500 lines of platform patches. | — Pending |
-| Option B (thin fork) for MVP, upstream later | Move fast, patches are isolated to platform layer. If upstream accepts, drop the fork. | — Pending |
-| Sequential tool execution for WASI MVP | Single-threaded sandbox; concurrent tool calls add complexity without benefit | — Pending |
+| Fork rig-core rather than build from scratch | Rig has 20+ LLM providers, typed tools, WASM-compat traits. Reimplementing = months of work. Fork ~300-500 lines of platform patches. | ✓ Good — 7 patches, all isolated |
+| Option B (thin fork) for MVP, upstream later | Move fast, patches are isolated to platform layer. If upstream accepts, drop the fork. | ✓ Good — FORK_BASIS.md tracks divergence |
+| Sequential tool execution for WASI MVP | Single-threaded sandbox; concurrent tool calls add complexity without benefit | ✓ Good |
+| AtomicBool stub for PauseControl | Streaming not used in WASI; full channel replacement is unnecessary | ✓ Good |
+| WavsMemory char/4 token heuristic | No tokenizer dep in WASM; approximation is sufficient for budget enforcement | ⚠️ Revisit when accuracy matters |
+| P7 anthropic provider un-gate | Only un-gates anthropic (streaming stubbed); other 19 providers stay native-only | ✓ Good for MVP |
 
 ## Evolution
 
@@ -124,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-20 after v2.0 milestone start*
+*Last updated: 2026-04-20 after v2.0 milestone completion*

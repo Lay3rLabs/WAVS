@@ -1,5 +1,21 @@
 # Milestones
 
+## v2.0 Agent Runtime (Shipped: 2026-04-20)
+
+**Phases completed:** 3 phases, 7 plans, 1 tasks
+
+**Key accomplishments:**
+
+- One-liner:
+- One-liner:
+- One-liner:
+- One-liner:
+- One-liner:
+- One-liner:
+- service.json with AllowedHostPermission::Only(["api.anthropic.com"]) and env_keys wired to WAVS_ENV_ANTHROPIC_API_KEY; agent_example.wasm built at 1.3MB via cargo-component
+
+---
+
 ## v1.3 Activity UX & Bug Fixes (Shipped: 2026-04-09)
 
 **Phases completed:** 4 phases, 4 plans, 2 tasks
