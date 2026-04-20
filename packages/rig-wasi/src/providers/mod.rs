@@ -45,23 +45,47 @@
 //! ```
 //! Note: The example above uses the OpenAI provider client, but the same pattern can
 //! be used with the Cohere provider client.
+// Anthropic is available on all targets including wasm32-wasip2.
+// P7: streaming.rs is gated within anthropic/mod.rs; non-streaming completions work on WASM.
 pub mod anthropic;
+
+// All other providers use SSE/streaming which requires non-WASM platform features.
+// Gate them out on WASM; only anthropic is needed for WASI agent components.
+#[cfg(not(target_family = "wasm"))]
 pub mod azure;
+#[cfg(not(target_family = "wasm"))]
 pub mod cohere;
+#[cfg(not(target_family = "wasm"))]
 pub mod deepseek;
+#[cfg(not(target_family = "wasm"))]
 pub mod galadriel;
+#[cfg(not(target_family = "wasm"))]
 pub mod gemini;
+#[cfg(not(target_family = "wasm"))]
 pub mod groq;
+#[cfg(not(target_family = "wasm"))]
 pub mod huggingface;
+#[cfg(not(target_family = "wasm"))]
 pub mod hyperbolic;
+#[cfg(not(target_family = "wasm"))]
 pub mod llamafile;
+#[cfg(not(target_family = "wasm"))]
 pub mod mira;
+#[cfg(not(target_family = "wasm"))]
 pub mod mistral;
+#[cfg(not(target_family = "wasm"))]
 pub mod moonshot;
+#[cfg(not(target_family = "wasm"))]
 pub mod ollama;
+#[cfg(not(target_family = "wasm"))]
 pub mod openai;
+#[cfg(not(target_family = "wasm"))]
 pub mod openrouter;
+#[cfg(not(target_family = "wasm"))]
 pub mod perplexity;
+#[cfg(not(target_family = "wasm"))]
 pub mod together;
+#[cfg(not(target_family = "wasm"))]
 pub mod voyageai;
+#[cfg(not(target_family = "wasm"))]
 pub mod xai;

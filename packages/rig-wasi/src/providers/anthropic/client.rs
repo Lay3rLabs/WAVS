@@ -62,8 +62,19 @@ impl ApiKey for AnthropicKey {
     }
 }
 
+// P7: reqwest::Client is unavailable on WASM and also requires the "reqwest" feature on native.
+// Use () as the default H when reqwest is not available; callers must specify
+// .http_client(WasiHttpClient::default()) on WASM or reqwest::Client explicitly on native.
+#[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
 pub type Client<H = reqwest::Client> = client::Client<AnthropicExt, H>;
+#[cfg(not(all(not(target_family = "wasm"), feature = "reqwest")))]
+pub type Client<H = ()> = client::Client<AnthropicExt, H>;
+
+#[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
 pub type ClientBuilder<H = reqwest::Client> =
+    client::ClientBuilder<AnthropicBuilder, AnthropicKey, H>;
+#[cfg(not(all(not(target_family = "wasm"), feature = "reqwest")))]
+pub type ClientBuilder<H = ()> =
     client::ClientBuilder<AnthropicBuilder, AnthropicKey, H>;
 
 impl Default for AnthropicBuilder {
@@ -115,6 +126,9 @@ impl ProviderBuilder for AnthropicBuilder {
 
 impl DebugExt for AnthropicExt {}
 
+// P7: ProviderClient for Client uses Self::builder() which requires reqwest feature (P1).
+// Gate this impl: only available on native with reqwest feature.
+#[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
 impl ProviderClient for Client {
     type Input = String;
 

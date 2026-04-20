@@ -28,8 +28,15 @@ impl From<ListModelEntry> for Model {
 /// [`ModelLister`] implementation for the Anthropic API (`GET /v1/models`).
 ///
 /// Automatically paginates through all pages using cursor-based pagination.
+// P7: Gate reqwest::Client default — requires "reqwest" feature on native, unavailable on WASM.
+#[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
 #[derive(Clone)]
 pub struct AnthropicModelLister<H = reqwest::Client> {
+    client: Client<H>,
+}
+#[cfg(not(all(not(target_family = "wasm"), feature = "reqwest")))]
+#[derive(Clone)]
+pub struct AnthropicModelLister<H = ()> {
     client: Client<H>,
 }
 

@@ -8,6 +8,7 @@ pub mod tools;
 pub mod memory;
 pub mod agent;
 pub mod permissions;
+pub mod anthropic;
 
 // Re-export key types for convenience
 pub use http::WasiHttpClient;

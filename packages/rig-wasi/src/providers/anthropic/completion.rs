@@ -13,6 +13,8 @@ use std::{convert::Infallible, str::FromStr};
 
 use super::client::Client;
 use crate::completion::CompletionRequest;
+// P7: Streaming is gated out on WASM and requires reqwest feature — gate the streaming import.
+#[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
 use crate::providers::anthropic::streaming::StreamingCompletionResponse;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -824,8 +826,30 @@ impl TryFrom<Message> for message::Message {
     }
 }
 
+// P7: Gate reqwest::Client default — requires "reqwest" feature on native, unavailable on WASM.
+// Both variants have identical fields; only the type parameter default differs.
+#[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
 #[derive(Clone)]
 pub struct CompletionModel<T = reqwest::Client> {
+    pub(crate) client: Client<T>,
+    pub model: String,
+    pub default_max_tokens: Option<u64>,
+    /// Enable automatic prompt caching (adds cache_control breakpoints to system prompt and messages)
+    pub prompt_caching: bool,
+    /// Enable Anthropic's automatic prompt caching (adds a top-level `cache_control` field to the
+    /// request). The API automatically places the breakpoint on the last cacheable block and moves
+    /// it forward as the conversation grows. No beta header is required.
+    pub automatic_caching: bool,
+    /// TTL for automatic caching. `None` uses the API default (5 minutes).
+    /// Set to `Some(CacheTtl::OneHour)` for a 1-hour TTL (requires the
+    /// `extended-cache-ttl-2025-04-11` beta header).
+    pub automatic_caching_ttl: Option<CacheTtl>,
+}
+// Without reqwest feature (WASM or native without reqwest), use () as the placeholder default.
+// Callers must specify the H type explicitly (e.g. WasiHttpClient).
+#[cfg(not(all(not(target_family = "wasm"), feature = "reqwest")))]
+#[derive(Clone)]
+pub struct CompletionModel<T = ()> {
     pub(crate) client: Client<T>,
     pub model: String,
     pub default_max_tokens: Option<u64>,
@@ -1318,12 +1342,30 @@ fn extract_tools_from_additional_params(
     Ok(Vec::new())
 }
 
+// P7: Stub streaming response for when streaming is unavailable (WASM or native without reqwest).
+// The CompletionModel trait requires an associated StreamingResponse type;
+// this stub satisfies all bounds (Clone, Unpin, Serialize, DeserializeOwned, GetTokenUsage).
+#[cfg(not(all(not(target_family = "wasm"), feature = "reqwest")))]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct WasmNoStreamingResponse;
+
+#[cfg(not(all(not(target_family = "wasm"), feature = "reqwest")))]
+impl crate::completion::GetTokenUsage for WasmNoStreamingResponse {
+    fn token_usage(&self) -> Option<crate::completion::Usage> {
+        None
+    }
+}
+
 impl<T> completion::CompletionModel for CompletionModel<T>
 where
     T: HttpClientExt + Clone + Default + WasmCompatSend + WasmCompatSync + 'static,
 {
     type Response = CompletionResponse;
+    // P7: Use real StreamingCompletionResponse on native with reqwest; stub otherwise (WASM or no-reqwest).
+    #[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
     type StreamingResponse = StreamingCompletionResponse;
+    #[cfg(not(all(not(target_family = "wasm"), feature = "reqwest")))]
+    type StreamingResponse = WasmNoStreamingResponse;
     type Client = Client<T>;
 
     fn make(client: &Self::Client, model: impl Into<String>) -> Self {
@@ -1440,6 +1482,10 @@ where
         .await
     }
 
+    // P7: Streaming is gated out on WASM (SSE requires non-WASM features).
+    // Return an error on WASM to satisfy the trait bound without importing streaming types.
+    // Also gate on reqwest feature: streaming uses SSE which requires the reqwest feature.
+    #[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
     async fn stream(
         &self,
         request: CompletionRequest,
@@ -1448,6 +1494,19 @@ where
         CompletionError,
     > {
         CompletionModel::stream(self, request).await
+    }
+
+    #[cfg(not(all(not(target_family = "wasm"), feature = "reqwest")))]
+    async fn stream(
+        &self,
+        _request: CompletionRequest,
+    ) -> Result<
+        crate::streaming::StreamingCompletionResponse<Self::StreamingResponse>,
+        CompletionError,
+    > {
+        Err(CompletionError::RequestError(
+            "Streaming completions are not available on this target/configuration".into(),
+        ))
     }
 }
 

@@ -17,6 +17,7 @@
 | P4 | http_client/sse.rs, lib.rs, vector_store/mod.rs, client/builder.rs | SSE module gated behind #![cfg(not(target_family = "wasm"))]; BoxedStream moved to http_client/mod.rs; providers tree gated; client/builder gated | ~18 |
 | P5 | [no source changes] | futures-timer IS in dep tree (v3.0.3) but compiles cleanly on wasip2 without wasm-bindgen feature; SSE module (only user of futures_timer::Delay) is gated out via P4; no code changes needed | 0 |
 | P6 | Cargo.toml | getrandom wasm_js feature removed (dep was already optional upstream; js feature not included) | ~3 |
+| P7 | providers/mod.rs, providers/anthropic/{mod,client,completion,model_listing}.rs, lib.rs | Un-gate providers tree; gate non-anthropic providers with cfg(not(wasm)); gate anthropic streaming behind cfg(all(not(wasm), feature="reqwest")); add WasmNoStreamingResponse stub; add cfg-gated type aliases with () default instead of reqwest::Client | ~60 |
 | P-edition | Cargo.toml | Override workspace edition to "2024" — rig-core uses let-chains (Rust 2024 feature) | 1 |
 
 ## Compile Verification (FORK-05)
