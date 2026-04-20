@@ -63,7 +63,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 **Milestone Goal:** Make WAVS a first-class agent runtime. Developers write rig-based agents in ~30 lines of Rust that autonomously reason and act inside the WASM sandbox with full cryptographic trust guarantees.
 
 - [x] **Phase 17: rig-wasi Fork** — Patch rig-core 0.35.0 to compile cleanly to wasm32-wasip2; this is the compile gate for all downstream work (completed 2026-04-20)
-- [ ] **Phase 18: wavs-rig Integration Crate** — Bridge library providing HTTP transport, typed built-in WAVS tools, KV-backed memory, and async entry point shim
+- [x] **Phase 18: wavs-rig Integration Crate** — Bridge library providing HTTP transport, typed built-in WAVS tools, KV-backed memory, and async entry point shim (completed 2026-04-20)
 - [ ] **Phase 19: Example Agent & E2E Validation** — Full agent loop end-to-end on a live WAVS node with sandboxed LLM access
 
 ## Phase Details
@@ -93,11 +93,11 @@ Plans:
   3. `WavsMemory` appends messages to KV, retrieves full conversation history, and truncates oldest entries when the conversation exceeds the configured token budget — conversation does not grow unboundedly across invocations
   4. A component implementing `WavsAgent` and calling `run_agent` compiles to wasm32-wasip2 and the full rig agent loop executes correctly inside a single `wstd::runtime::block_on` without nested executor deadlock
   5. A component deployed with `AllowedHostPermission::None` returns a clear human-readable startup error (e.g., "WAVS agent requires HTTP access — set AllowedHostPermission to All or Only") instead of silently trapping
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 Plans:
-- [ ] 18-01-PLAN.md — Create wavs-rig crate scaffold and WasiHttpClient HTTP transport
-- [ ] 18-02-PLAN.md — Implement five built-in WAVS tools (KvGet, KvSet, HttpFetch, EvmQuery, Log)
-- [ ] 18-03-PLAN.md — WavsMemory conversation store, WavsAgent trait + run_agent shim, permission check
+- [x] 18-01-PLAN.md — Create wavs-rig crate scaffold and WasiHttpClient HTTP transport
+- [x] 18-02-PLAN.md — Implement five built-in WAVS tools (KvGet, KvSet, HttpFetch, EvmQuery, Log)
+- [x] 18-03-PLAN.md — WavsMemory conversation store, WavsAgent trait + run_agent shim, permission check
 
 ### Phase 19: Example Agent & E2E Validation
 **Goal**: A working example agent component demonstrates the full trigger → LLM reasoning → tool use ��� structured result loop on a live WAVS node, with `AllowedHostPermission::Only` enforcing that the agent can only reach the configured LLM provider
@@ -132,5 +132,5 @@ Plans:
 | 15. Service Restart Reliability | v1.3 | 1/1 | Complete | 2026-04-09 |
 | 16. Wallet Kebab Menu | v1.3 | 1/1 | Complete | 2026-04-09 |
 | 17. rig-wasi Fork | v2.0 | 2/2 | Complete    | 2026-04-20 |
-| 18. wavs-rig Integration Crate | v2.0 | 0/3 | Planning | - |
+| 18. wavs-rig Integration Crate | v2.0 | 3/3 | Complete    | 2026-04-20 |
 | 19. Example Agent & E2E Validation | v2.0 | 0/TBD | Not started | - |
