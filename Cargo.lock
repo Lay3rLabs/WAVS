@@ -15424,6 +15424,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "wavs-rig"
+version = "2.8.0"
+dependencies = [
+ "alloy-network",
+ "alloy-primitives",
+ "alloy-provider",
+ "anyhow",
+ "bytes 1.11.1",
+ "futures",
+ "http",
+ "rig-wasi",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "wasip2",
+ "wavs-wasi-utils",
+ "wstd",
+]
+
+[[package]]
 name = "wavs-types"
 version = "2.8.0"
 dependencies = [
