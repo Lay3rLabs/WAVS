@@ -65,25 +65,25 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FORK-01 | — | Pending |
-| FORK-02 | — | Pending |
-| FORK-03 | — | Pending |
-| FORK-04 | — | Pending |
-| FORK-05 | — | Pending |
-| RIG-01 | — | Pending |
-| RIG-02 | — | Pending |
-| RIG-03 | — | Pending |
-| RIG-04 | — | Pending |
-| RIG-05 | — | Pending |
-| E2E-01 | — | Pending |
-| E2E-02 | — | Pending |
-| E2E-03 | — | Pending |
+| FORK-01 | Phase 17 | Pending |
+| FORK-02 | Phase 17 | Pending |
+| FORK-03 | Phase 17 | Pending |
+| FORK-04 | Phase 17 | Pending |
+| FORK-05 | Phase 17 | Pending |
+| RIG-01 | Phase 18 | Pending |
+| RIG-02 | Phase 18 | Pending |
+| RIG-03 | Phase 18 | Pending |
+| RIG-04 | Phase 18 | Pending |
+| RIG-05 | Phase 18 | Pending |
+| E2E-01 | Phase 19 | Pending |
+| E2E-02 | Phase 19 | Pending |
+| E2E-03 | Phase 19 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 13 total
-- Mapped to phases: 0
-- Unmapped: 13 ⚠️
+- Mapped to phases: 13
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-20*
-*Last updated: 2026-04-20 after initial definition*
+*Last updated: 2026-04-20 — traceability filled after roadmap creation*
