@@ -1,22 +1,24 @@
-# WAVS Improvements
+# WAVS Agent Runtime
 
 ## What This Is
 
-Developer experience and capability improvements to the WAVS platform. Six features shipped in v1.0: OCI component distribution, WIT-to-schema tooling, MCP execution interface with three trust tiers, event correlation IDs, settings page decomposition, and unified activity feed with error surfacing. v1.1 added open-source AI providers (Groq, OpenRouter, Ollama) and settings scroll refactor. v1.2 added component detail pages with interface/schema/permissions exploration and enhanced components list.
+WAVS is a platform for running sandboxed WebAssembly services with cryptographic trust guarantees. v1.0–v1.3 shipped developer experience improvements: OCI distribution, WIT-to-schema, MCP execution with three trust tiers, open-source AI providers, component explorer, activity feed UX, and service reliability fixes. v2.0 makes WAVS a first-class agent runtime — developers write rig-based agents in ~30 lines of Rust that autonomously reason and act inside the WASM sandbox.
 
-## Current Milestone: v1.3 Activity UX & Bug Fixes
+## Current Milestone: v2.0 Agent Runtime
 
-**Goal:** Improve activity feed usability with richer cards, smarter result decoding, fix service restart reliability, and streamline wallet settings.
+**Goal:** Make WAVS a first-class agent runtime by integrating rig-core into the WASI sandbox, so developers can build autonomous LLM agents that reason and act on triggers with full sandbox guarantees.
 
 **Target features:**
-- Richer activity cards showing trigger + result + submission info (incl. tx hash) without expanding
-- Smart result decoding (UTF-8 → JSON pretty-print → hex fallback) for byte vec payloads
-- Fix service restart: services not restoring correctly on WAVS process restart
-- Wallet settings kebab menu for uncommon actions (reset wallet, reveal seed)
+- WASI-compatible rig fork (reqwest optional, tokio optional, cfg detection fixes)
+- `wavs-rig` integration crate with 4 bridges (HTTP transport, tools, async shim, memory)
+- Built-in WAVS host function tools (KV get/set, EVM query, HTTP fetch, structured logging)
+- KV-backed conversation memory with token budget management
+- Example agent component demonstrating full agent loop (trigger → LLM reasoning → tool use → result)
+- End-to-end deployment and execution on WAVS node
 
 ## Core Value
 
-AI agent developers can use WAVS components as MCP tools with the same ease as Wassette, but with cryptographic trust guarantees Wassette structurally cannot provide.
+Developers can write an autonomous LLM agent in ~30 lines of Rust, compile it to WASM, deploy it as a WAVS service, and have it reason + act on triggers with the same sandbox and cryptographic trust guarantees as any other WAVS component.
 
 ## Requirements
 
@@ -54,7 +56,12 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 <!-- Current scope. Building toward these. -->
 
-(No active requirements — define next milestone with /gsd-new-milestone)
+- [ ] WASI-compatible rig fork with reqwest/tokio optional and cfg fixes
+- [ ] `wavs-rig` integration crate bridging rig into WASI sandbox
+- [ ] WAVS host functions exposed as typed rig tools
+- [ ] KV-backed conversation memory for agent state persistence
+- [ ] Example agent component with full LLM reasoning loop
+- [ ] End-to-end agent deployment and execution on WAVS node
 
 ### Out of Scope
 
@@ -65,11 +72,16 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 
 ## Context
 
-**Current State:** v1.3 complete. All 4 phases delivered: ACT-01/02 backend pipeline, ACT-03/04 inline submission display, SVC-01 restart reliability fix, SET-01 wallet kebab menu.
+**Current State:** v1.3 complete. App polish cycle done (v1.0–v1.3). Now pivoting to runtime-level agent support.
 
-**Tech stack:** Rust (node, CLI, MCP server, types), Tauri 2 + React 19 + Vite 7 (desktop app), Wasmtime (WASI component execution), Zustand (frontend state).
+**Tech stack:** Rust (node, CLI, MCP server, types), Tauri 2 + React 19 + Vite 7 (desktop app), Wasmtime (WASI component execution), Zustand (frontend state). New for v2.0: rig-core (Rust agent framework), wasm32-wasip2 target.
 
-**Known tech debt:** REQUIREMENTS.md checkboxes incomplete for phases 1-3, phases 2-3 missing VERIFICATION.md (pre-date GSD verification), 6 deferred human visual verification items, ERR-04 partial gap on orphan card path, OCI source type silently falls to "Digest" in ComponentsPage filter, redundant #[derive(Default)] on SchemaCacheState.
+**Key context for v2.0:**
+- rig-core has WASM-compatible traits (`WasmCompatSend`/`WasmCompatSync`, `HttpClientExt`) but hard blockers: unconditional reqwest, tokio rt feature, cfg inconsistencies. ~300-500 line fork needed.
+- WAVS already has `wasi:http/outgoing-handler` and `wasi:keyvalue` host functions — these become the rig bridges.
+- `AllowedHostPermission` (`All`/`Only`/`None`) enforces network policy on LLM API calls at the Wasmtime level.
+- Sequential tool execution is fine for MVP (WASI is single-threaded). Configure rig concurrency to 1.
+- Existing components use `wstd::runtime::block_on` for async — rig's agent loop needs to work within this.
 
 ## Key Decisions
 
@@ -90,23 +102,26 @@ AI agent developers can use WAVS components as MCP tools with the same ease as W
 | 4KB cap on result_payload at aggregator | Prevents 100MB hex blowup in Tauri IPC; enforced before channel send | ✓ Good |
 | Pending subscription queue for EVM triggers | Standard async ordering fix; queues commands before controller ready, drains after | ✓ Good |
 | Kebab menu for uncommon wallet actions | Reduces vertical space; groups rare destructive actions behind disclosure | ✓ Good |
+| Fork rig-core rather than build from scratch | Rig has 20+ LLM providers, typed tools, WASM-compat traits. Reimplementing = months of work. Fork ~300-500 lines of platform patches. | — Pending |
+| Option B (thin fork) for MVP, upstream later | Move fast, patches are isolated to platform layer. If upstream accepts, drop the fork. | — Pending |
+| Sequential tool execution for WASI MVP | Single-threaded sandbox; concurrent tool calls add complexity without benefit | — Pending |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `/gsd:transition`):
+**After each phase transition** (via `/gsd-transition`):
 1. Requirements invalidated? → Move to Out of Scope with reason
 2. Requirements validated? → Move to Validated with phase reference
 3. New requirements emerged? → Add to Active
 4. Decisions to log? → Add to Key Decisions
 5. "What This Is" still accurate? → Update if drifted
 
-**After each milestone** (via `/gsd:complete-milestone`):
+**After each milestone** (via `/gsd-complete-milestone`):
 1. Full review of all sections
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-09 after v1.3 milestone start*
+*Last updated: 2026-04-20 after v2.0 milestone start*

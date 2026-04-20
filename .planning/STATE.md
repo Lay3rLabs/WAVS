@@ -1,60 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.3
-milestone_name: Activity UX & Bug Fixes
-status: executing
-stopped_at: Roadmap created for v1.3; ready to plan Phase 13
-last_updated: "2026-04-09T16:35:41.481Z"
-last_activity: 2026-04-09
+milestone: v2.0
+milestone_name: Agent Runtime
+status: defining_requirements
+stopped_at: Milestone v2.0 started; defining requirements
+last_updated: "2026-04-20"
+last_activity: 2026-04-20
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-09)
+See: .planning/PROJECT.md (updated 2026-04-20)
 
-**Core value:** AI agent developers can use WAVS components as MCP tools with the same ease as Wassette, but with cryptographic trust guarantees Wassette structurally cannot provide.
-**Current focus:** Phase 16 — Wallet Kebab Menu
+**Core value:** Developers can write an autonomous LLM agent in ~30 lines of Rust, compile it to WASM, deploy it as a WAVS service, and have it reason + act on triggers with the same sandbox and cryptographic trust guarantees as any other WAVS component.
+**Current focus:** Defining requirements for v2.0 Agent Runtime
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
-Status: Executing Phase 16
-Last activity: 2026-04-09
-
-Progress: [░░░░░░░░░░] 0%
-
-## Performance Metrics
-
-**Velocity:**
-
-- Total plans completed: 4 (v1.3)
-- Average duration: —
-- Total execution time: —
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 13 | 1 | - | - |
-| 14 | 1 | - | - |
-| 15 | 1 | - | - |
-| 16 | 1 | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: —
-- Trend: —
-
-*Updated after each plan completion*
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-20 — Milestone v2.0 started
 
 ## Accumulated Context
 
@@ -63,9 +37,9 @@ Progress: [░░░░░░░░░░] 0%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- v1.3: ACT-01 and ACT-02 share all 4 Rust touch points — implement together in Phase 13
-- v1.3: result_payload capped at 4 KB in Rust before IPC to avoid 100 MB hex blowup
-- v1.3: Phases 15 and 16 are fully independent of the activity pipeline; can execute in any order
+- v2.0: Fork rig-core (Option B — thin fork) rather than build agent framework from scratch
+- v2.0: Sequential tool execution for WASI MVP (single-threaded sandbox)
+- v2.0: Runtime-level changes (Continue/checkpoint, service-to-service RPC) deferred to post-MVP
 
 ### Pending Todos
 
@@ -73,11 +47,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Cross-layer serialization drift risk: Rust struct + TypeScript interface + listeners.ts must change atomically (no compile-time link) — address in Phase 13 plan
-- ESTIMATED_ITEM_HEIGHT = 90 in virtualizer may be too small for always-visible submission rows — address in Phase 14 plan
+- rig-core has hard WASI blockers: unconditional reqwest, tokio rt, cfg inconsistencies. Fork required (~300-500 lines).
+- Async runtime shim: rig uses tokio internally, WASI uses wstd::runtime::block_on. Compatibility TBD.
+- LLM API latency: 10-turn agent loop may take 30-60s. Need to verify WAVS timeout/fuel limits are sufficient.
 
 ## Session Continuity
 
-Last session: 2026-04-09
-Stopped at: Roadmap created for v1.3; ready to plan Phase 13
+Last session: 2026-04-20
+Stopped at: Milestone v2.0 started; defining requirements
 Resume file: None
