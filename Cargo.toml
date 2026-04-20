@@ -12,6 +12,7 @@ members = [
     "packages/wavs",
     "packages/wit-schema",
     "packages/rig-wasi",
+    "packages/rig-wasi/tests/compile-probe",
     "examples/components/cosmos-query",
     "examples/components/chain-trigger-lookup",
     "examples/components/echo-data",
