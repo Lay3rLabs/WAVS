@@ -11,6 +11,7 @@ members = [
     "packages/version-pins",
     "packages/wavs",
     "packages/wit-schema",
+    "packages/rig-wasi",
     "examples/components/cosmos-query",
     "examples/components/chain-trigger-lookup",
     "examples/components/echo-data",
