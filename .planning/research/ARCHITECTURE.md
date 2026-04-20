@@ -1,513 +1,494 @@
 # Architecture Research
 
-**Domain:** WAVS v1.3 — Activity UX & Bug Fixes
-**Researched:** 2026-04-09
-**Confidence:** HIGH (all findings from direct source inspection)
+**Domain:** WAVS v2.0 — rig-core Agent Runtime Integration
+**Researched:** 2026-04-20
+**Confidence:** HIGH (all findings from direct source inspection of WAVS codebase + WAVS_AGENT_IMPROVEMENTS.md spec)
 
-## Standard Architecture
+## System Overview
 
-### System Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                       Tauri Backend (Rust)                       │
-│                                                                   │
-│  ┌──────────────┐  Crossbeam  ┌──────────┐  ┌──────────────┐    │
-│  │   Trigger    │────────────▶│Dispatcher│──▶│    Engine    │    │
-│  │   Manager    │             │  (loop)  │  │   Manager    │    │
-│  └──────────────┘             │          │  └──────────────┘    │
-│  ┌──────────────┐             │          │  ┌──────────────┐    │
-│  │  Submission  │────────────▶│          │──▶│  Aggregator  │    │
-│  │   Manager    │             │          │  └──────────────┘    │
-│  └──────────────┘             └────┬─────┘                      │
-│                                    │ tauri::Emitter              │
-├────────────────────────────────────┼────────────────────────────┤
-│                 IPC boundary       │                             │
-├────────────────────────────────────┼────────────────────────────┤
-│                   Tauri Frontend   ▼                             │
-│  ┌──────────────────────────────────────────────┐               │
-│  │              listeners.ts                     │               │
-│  │  'trigger' | 'submission' | 'submission_failed'│              │
-│  └──────────────────────┬───────────────────────┘               │
-│                         │ store.addActivity()                    │
-│  ┌──────────────────────▼───────────────────────┐               │
-│  │   appStore (Zustand) — ActivityItem[]         │               │
-│  └──────────────────────┬───────────────────────┘               │
-│                         │ useGroupedActivity hook                │
-│  ┌──────────────────────▼───────────────────────┐               │
-│  │  GroupedActivityCard / ActivityFeed           │               │
-│  └──────────────────────────────────────────────┘               │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Component Responsibilities
-
-| Component | Responsibility | Location |
-|-----------|----------------|----------|
-| Dispatcher | Routes DispatcherCommand variants to correct subsystem; emits Tauri events | `packages/wavs/src/dispatcher.rs` |
-| Aggregator | Quorum accumulation, on-chain submission, yields `AnyTransactionReceipt` | `packages/wavs/src/subsystems/aggregator.rs` |
-| Engine (SubmitCallback) | Post-submission callback component execution | `packages/wavs/src/subsystems/engine.rs` |
-| TriggerManager | Manages `MultiplexedStream` of EVM/Cosmos/Cron streams; calls `add_service` via channel | `packages/wavs/src/subsystems/trigger.rs` |
-| `wavs_gui_shared::event` | Shared event structs implementing `TauriEventExt`; the serialization contract | `packages/gui/shared/src/event.rs` |
-| `listeners.ts` | Tauri event subscribers; maps raw payloads to `ActivityItem` and calls `store.addActivity()` | `app/src/tauri/listeners.ts` |
-| `appStore` | Zustand store holding `ActivityItem[]`; `addActivity()` is the entry point for all feed items | `app/src/stores/appStore.ts` |
-| `GroupedActivityCard` | Renders one trigger + optional child submission card; reads `group.submission` | `app/src/components/activity/GroupedActivityCard.tsx` |
-| `WalletSection` | Shows addresses, balances, Export and Reset Wallet buttons inline | `app/src/components/settings/WalletSection.tsx` |
-
----
-
-## Feature 1: tx_hash in SubmissionConfirmed
-
-### Data Flow (Current)
+The integration adds a new library crate (`packages/wavs-rig/`) that bridges rig-core's agent abstractions into the WASI sandbox. No existing packages are modified during the MVP. The bridge sits entirely on the component side (inside WASM), not on the node side.
 
 ```
-aggregator.rs:632
-  tx_resp.tx_hash()            // AnyTransactionReceipt -> String, logged but NOT forwarded
-       |
-       v
-DispatcherCommand::SubmissionConfirmed {
-  service_id, workflow_id, trigger_data, correlation_id    // tx_hash ABSENT
-}
-       |
-       v
-dispatcher.rs:462
-  emit_ext(SubmissionEvent { ... })       // tx_hash ABSENT in struct
-       |
-       v
-listeners.ts:60
-  store.addActivity({ kind: 'submission', ... })    // no tx_hash field
-       |
-       v
-ActivityItem { ... }                     // no tx_hash field
-       |
-       v
-GroupedActivityCard                      // nothing to render
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          WAVS Node (Tokio / Rust)                        │
+│                                                                           │
+│  ┌──────────────┐  Crossbeam  ┌──────────────┐  ┌────────────────────┐  │
+│  │   Trigger    │────────────▶│  Dispatcher  │──▶│  Engine Manager   │  │
+│  │   Manager    │             │  (loop)      │  │  (packages/engine) │  │
+│  └──────────────┘             └──────────────┘  └────────┬───────────┘  │
+│                                                           │              │
+│                                         Wasmtime WASI sandbox per invoke │
+│  ┌────────────────────────────────────────────────────────▼───────────┐  │
+│  │   WavsWorld instance (operator)                                     │  │
+│  │                                                                      │  │
+│  │   Host functions exposed via WIT (operator.wit):                    │  │
+│  │     wasi:http/outgoing-handler    (AllowedHostPermission enforced)  │  │
+│  │     wasi:keyvalue/store|atomics|batch                               │  │
+│  │     host::log, host::config-var                                     │  │
+│  │     host::get-evm-chain-config, host::get-cosmos-chain-config       │  │
+│  │                                                                      │  │
+│  │   ┌─────────────────────────────────────────────────────────────┐   │  │
+│  │   │   Agent Component (wasm32-wasip2 cdylib)                     │   │  │
+│  │   │                                                               │   │  │
+│  │   │   fn run(trigger: TriggerAction) -> Result<Vec<WasmResponse>> │   │  │
+│  │   │     │                                                          │   │  │
+│  │   │     ▼  wstd::runtime::block_on(async { ... })                 │   │  │
+│  │   │                                                               │   │  │
+│  │   │   ┌─────────────────────────────────────────────────────┐    │   │  │
+│  │   │   │   wavs-rig (packages/wavs-rig/ — NEW CRATE)          │    │   │  │
+│  │   │   │                                                       │    │   │  │
+│  │   │   │   WasiHttpClient (impl HttpClientExt)                 │    │   │  │
+│  │   │   │     └── wasi:http/outgoing-handler                    │    │   │  │
+│  │   │   │                                                       │    │   │  │
+│  │   │   │   rig-wasi fork (git dep or local path)               │    │   │  │
+│  │   │   │     ├── Agent<M, T> loop (prompt → tools → response)  │    │   │  │
+│  │   │   │     ├── CompletionModel trait (20+ providers)         │    │   │  │
+│  │   │   │     └── Tool trait + ToolDefinition (JSON Schema)     │    │   │  │
+│  │   │   │                                                       │    │   │  │
+│  │   │   │   Built-in Tools:                                      │    │   │  │
+│  │   │   │     KvGetTool / KvSetTool  → wasi:keyvalue            │    │   │  │
+│  │   │   │     HttpFetchTool          → wasi:http                │    │   │  │
+│  │   │   │     EvmQueryTool           → host::get-evm-chain-config│    │   │  │
+│  │   │   │     CosmosQueryTool        → host::get-cosmos-chain-config│  │   │  │
+│  │   │   │     LogTool                → host::log                │    │   │  │
+│  │   │   │                                                       │    │   │  │
+│  │   │   │   WavsMemory               → wasi:keyvalue            │    │   │  │
+│  │   │   │   WavsAgent trait (developer-facing)                  │    │   │  │
+│  │   │   │   run_agent() shim         → wstd::runtime::block_on  │    │   │  │
+│  │   │   └─────────────────────────────────────────────────────┘    │   │  │
+│  │   └─────────────────────────────────────────────────────────────┘   │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Required Changes
+## Component Boundaries
 
-**1. `DispatcherCommand::SubmissionConfirmed` — add `tx_hash: String`**
+### Existing Components — Unchanged for MVP
 
-File: `packages/wavs/src/dispatcher.rs` (the enum definition, lines ~131-136)
+| Component | Location | Role in Agent Flow |
+|-----------|----------|--------------------|
+| `packages/engine` | `packages/engine/` | Instantiates WASM, injects host functions, enforces fuel+time limits. No changes — the agent component is just another `run()` export. |
+| `packages/types` | `packages/types/src/service.rs` | `Component.permissions.allowed_http_hosts` (`AllowedHostPermission::All/Only/None`) is how the operator constrains which LLM API the agent may call. No changes needed. |
+| `packages/wasi-utils` | `packages/wasi-utils/` | Existing HTTP helpers (`wstd::http::Client`) are the underlying call path for `WasiHttpClient`. Not modified; `wavs-rig` wraps them. |
+| `examples/components/_helpers` | `examples/components/_helpers/` | The WIT bindings generation pattern (`wit_bindgen::generate!`, `export_layer_trigger_world!`) is directly reused for the agent example component. Not modified. |
+| `wit-definitions/operator/wit/operator.wit` | `wit-definitions/operator/wit/` | Defines the host surface the agent component uses. All required host functions already exist: `wasi:http`, `wasi:keyvalue`, `host::log`, `host::config-var`, chain configs. No WIT changes needed for MVP. |
+
+### New Components
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `packages/wavs-rig` | `packages/wavs-rig/` | Bridge library: `WasiHttpClient`, built-in tools, `WavsMemory`, `WavsAgent` trait, `run_agent()` shim. Compiled to `wasm32-wasip2`. |
+| `rig-wasi` fork | Git dependency or `packages/rig-wasi/` | Thin fork of rig-core (~300-500 line patch). Makes `reqwest` optional, drops `tokio::rt`, unifies `cfg` detection for wasip2. |
+| `examples/components/agent-defi-monitor` | `examples/components/agent-defi-monitor/` | Example agent component demonstrating the full loop. ~30 lines of domain logic using `WavsAgent` trait. |
+
+### Workspace Registration
+
+The two new Cargo workspace members must be added to `WAVS/Cargo.toml`:
+
+```toml
+[workspace]
+members = [
+    # ... existing members ...
+    "packages/wavs-rig",
+    "examples/components/agent-defi-monitor",
+]
+```
+
+`rig-wasi` is a dependency of `wavs-rig`, not a workspace member. It is referenced via a git path dep in `packages/wavs-rig/Cargo.toml`.
+
+## Data Flow: Trigger to Agent Reasoning to Result
+
+```
+1. On-chain event fires (EVM log / cron / block interval)
+       │
+       ▼
+2. TriggerManager captures TriggerData → sends DispatcherCommand::Trigger(TriggerAction)
+       │
+       ▼
+3. Dispatcher → EngineCommand::ExecuteOperator { trigger_action, component, ... }
+       │
+       ▼
+4. Engine creates InstanceDeps:
+     - OperatorHostComponent { service, workflow_id, permissions, keyvalue_ctx, http_ctx }
+     - Linker populated with wasi:http (if AllowedHostPermission != None), wasi:keyvalue, host functions
+     │
+       ▼
+5. Engine calls component export: run(trigger_action) → tokio::time::timeout wraps the call
+       │
+       ▼ (inside WASM sandbox)
+6. Agent component fn run():
+     a. Deserialize trigger_action.data to extract prompt context
+     b. Call wavs_rig::run_agent(agent, trigger) which calls wstd::runtime::block_on(async { ... })
+     c. Inside block_on:
+          i.   Build rig Agent<M, T> via WavsAgent::build_rig_agent()
+          ii.  Load conversation history from WavsMemory (wasi:keyvalue bucket)
+          iii. Convert trigger data to prompt string via WavsAgent::trigger_to_prompt()
+          iv.  Call rig_agent.chat(prompt, history).await
+               │
+               ▼
+               rig agent loop (multi-turn):
+                 - send messages to LLM via WasiHttpClient.send_request()
+                   → wasi:http/outgoing-handler → WAVS AllowedHostPermission check
+                 - LLM responds with tool_use or text
+                 - if tool_use: dispatch to registered rig Tool impl
+                   → KvGetTool/KvSetTool: wasi:keyvalue host function
+                   → HttpFetchTool: wasi:http host function
+                   → EvmQueryTool: host::get-evm-chain-config + HTTP call
+                   → LogTool: host::log host function
+                 - append tool result to history
+                 - loop continues until text response or max_turns reached
+          v.   Append new messages to WavsMemory (persists for next invocation)
+          vi.  Convert rig response to Vec<WasmResponse> via WavsAgent::response_to_wasm()
+     d. Return Ok(Vec<WasmResponse>)
+       │
+       ▼ (back on host)
+7. Engine validates response sizes (DEFAULT_MAX_PAYLOAD_SIZE = 50MB)
+       │
+       ▼
+8. EngineResponse::Operator(SubmissionRequest { responses }) → Dispatcher
+       │
+       ▼
+9. Dispatcher → Aggregator → on-chain submission (existing flow, unchanged)
+```
+
+## The Four Bridges — Implementation Detail
+
+### Bridge 1: HTTP Transport (WasiHttpClient)
+
+rig-core's `HttpClientExt` trait is the single seam for swapping the HTTP backend. The implementation routes all LLM API traffic through WAVS's existing `wasi:http/outgoing-handler`:
 
 ```rust
-SubmissionConfirmed {
-    service_id: ServiceId,
-    workflow_id: WorkflowId,
-    trigger_data: TriggerData,
-    correlation_id: String,
-    tx_hash: String,          // NEW
-},
-```
+// packages/wavs-rig/src/http.rs
+struct WasiHttpClient;
 
-**2. Aggregator send site — pass tx_hash**
-
-File: `packages/wavs/src/subsystems/aggregator.rs` (the `Ok(tx_resp)` arm, lines ~634-647)
-
-`tx_resp.tx_hash()` is already computed and logged on line 632. Pass it into the command at the same call site.
-
-**3. `SubmissionEvent` GUI struct — add `tx_hash`**
-
-File: `packages/gui/shared/src/event.rs` (lines ~56-65)
-
-```rust
-pub struct SubmissionEvent {
-    pub service_id: ServiceId,
-    pub workflow_id: WorkflowId,
-    pub trigger_data: TriggerData,
-    pub correlation_id: String,
-    pub tx_hash: String,       // NEW
-}
-```
-
-**4. Dispatcher emit site — forward tx_hash**
-
-File: `packages/wavs/src/dispatcher.rs` (the `SubmissionConfirmed` match arm, lines ~462-481)
-
-Destructure `tx_hash` from the command variant and include it in `SubmissionEvent`.
-
-**5. Frontend types — add `tx_hash` to `SubmissionEvent`**
-
-File: `app/src/types/index.ts` (lines ~108-113)
-
-```typescript
-export interface SubmissionEvent {
-  service_id: ServiceId;
-  workflow_id: WorkflowId;
-  trigger_data: TriggerData;
-  correlation_id: string;
-  tx_hash: string;           // NEW
-}
-```
-
-**6. `ActivityItem` — add optional `txHash`**
-
-File: `app/src/types/index.ts` (lines ~330-340)
-
-```typescript
-export interface ActivityItem {
-  ...
-  txHash?: string;           // NEW
-}
-```
-
-**7. `listeners.ts` — map `tx_hash` to `txHash`**
-
-File: `app/src/tauri/listeners.ts` (lines ~60-72)
-
-Pass `txHash: payload.tx_hash` when constructing the submission `ActivityItem`.
-
-**8. `GroupedActivityCard` — render tx_hash in child card**
-
-File: `app/src/components/activity/GroupedActivityCard.tsx`
-
-In the child submission card section (lines ~128-182), add a line or link showing `group.submission.txHash` when present. A shortened hex with copy-to-clipboard is appropriate UX.
-
-### Modification Boundary Summary
-
-| File | Change Type | What Changes |
-|------|-------------|--------------|
-| `dispatcher.rs` (enum) | Modify | Add `tx_hash: String` field to `SubmissionConfirmed` variant |
-| `aggregator.rs` | Modify | Pass `tx_hash: tx_resp.tx_hash()` into the send call |
-| `gui/shared/src/event.rs` | Modify | Add `tx_hash: String` field to `SubmissionEvent` |
-| `dispatcher.rs` (match arm) | Modify | Destructure and forward `tx_hash` into `emit_ext` call |
-| `app/src/types/index.ts` | Modify | Add `tx_hash` to `SubmissionEvent`, `txHash?` to `ActivityItem` |
-| `app/src/tauri/listeners.ts` | Modify | Map `payload.tx_hash` to `txHash` in addActivity call |
-| `app/src/components/activity/GroupedActivityCard.tsx` | Modify | Render `txHash` in submission child card |
-
----
-
-## Feature 2: WasmResponse.payload in Activity Feed
-
-### Current State
-
-`Submission.operator_response: WasmResponse` is in scope at the aggregator call site. The payload (`Vec<u8>`) is the raw bytes returned by the WASM component. It is not currently forwarded to the GUI.
-
-The `SubmissionEvent` only carries `trigger_data` (the incoming trigger bytes), not the execution result bytes.
-
-### Where Payload Lives
-
-At the aggregator success path (`packages/wavs/src/subsystems/aggregator.rs`), the `submission` variable (type `Submission`) is in scope. `submission.operator_response.payload` is the bytes.
-
-The `SubmissionConfirmed` dispatch call already has access to `submission` at that point — `submission.trigger_action.data` and `submission.trigger_action.correlation_id` are already being pulled from it.
-
-### Required Changes
-
-**1. `DispatcherCommand::SubmissionConfirmed` — add `result_payload: Vec<u8>`**
-
-At the aggregator send site, add `result_payload: submission.operator_response.payload.clone()`.
-
-**2. `SubmissionEvent` GUI struct — add `result_payload: Vec<u8>`**
-
-Serialize as hex (the existing pattern for `WasmResponse.payload` uses `#[serde(with = "const_hex")]`). Apply the same attribute so the frontend receives a hex string.
-
-**3. `SubmissionEvent` frontend type — add `result_payload: string`**
-
-The hex string arrives as-is. Frontend decodes for display.
-
-**4. `ActivityItem` — add optional `resultPayload?: string`**
-
-Store the hex string in the activity item.
-
-**5. Smart decoding utility (new)**
-
-Add a pure function (suggested location: `app/src/utils/decode.ts`) that implements:
-```
-decodePayload(hex: string): { mode: 'json' | 'utf8' | 'hex', display: string }
-  1. Strip 0x prefix, decode hex to bytes
-  2. Try UTF-8 decode
-  3. If valid UTF-8, try JSON.parse
-  4. If valid JSON, return { mode: 'json', display: JSON.stringify(parsed, null, 2) }
-  5. If valid UTF-8 (not JSON), return { mode: 'utf8', display: utf8string }
-  6. Otherwise, return { mode: 'hex', display: originalHex }
-```
-
-**6. `GroupedActivityCard` — render decoded result**
-
-In the submission child card, show the decoded result using `decodePayload(group.submission.resultPayload)`. Label by mode (JSON / UTF-8 / Hex). Keep below tx_hash.
-
-### Modification Boundary Summary
-
-| File | Change Type | What Changes |
-|------|-------------|--------------|
-| `dispatcher.rs` (enum) | Modify | Add `result_payload: Vec<u8>` to `SubmissionConfirmed` |
-| `aggregator.rs` | Modify | Pass `submission.operator_response.payload.clone()` |
-| `gui/shared/src/event.rs` | Modify | Add `result_payload` with `const_hex` serde |
-| `dispatcher.rs` (match arm) | Modify | Forward `result_payload` into `SubmissionEvent` |
-| `app/src/types/index.ts` | Modify | Add `result_payload: string` to `SubmissionEvent`, `resultPayload?` to `ActivityItem` |
-| `app/src/tauri/listeners.ts` | Modify | Map `payload.result_payload` to `resultPayload` |
-| `app/src/utils/decode.ts` | New | `decodePayload` function |
-| `app/src/components/activity/GroupedActivityCard.tsx` | Modify | Call `decodePayload`, render with mode label |
-
-**Note on batching:** Features 1 and 2 both touch the same four Rust files and the same three frontend files. Implement them together to avoid editing `DispatcherCommand`, `SubmissionEvent`, `ActivityItem`, `listeners.ts`, and `GroupedActivityCard` twice.
-
----
-
-## Feature 3: Service Restart Race Condition Fix
-
-### Root Cause
-
-`Dispatcher::start()` (dispatcher.rs lines ~241-315) spawns all subsystem threads simultaneously, including `trigger_manager.start()`. That call runs `start_watcher()`, which is the async loop that processes `TriggerCommand`s.
-
-Service restore runs synchronously via `ctx.rt.block_on()` (dispatcher.rs lines ~518-620) and calls `add_service_to_managers()`, which calls `trigger_manager.add_service()`. That method sends `TriggerCommand::StartListeningChain` and `TriggerCommand::WatchEvmContractEvents` through the `command_sender` channel.
-
-`WatchEvmContractEvents` in `start_watcher` does:
-```rust
-match self.evm_controllers.read().unwrap().get(&chain) {
-    Some(evm_controller) => { evm_controller.subscriptions.enable_logs(...); }
-    None => {
-        tracing::error!("No EVM controller found for chain, cannot watch contract event");
-        continue;       // silently drops the subscription
+impl HttpClientExt for WasiHttpClient {
+    async fn send_request(&self, req: HttpRequest) -> Result<HttpResponse, HttpError> {
+        // Uses wstd::http::Client under the hood — same as existing wavs-wasi-utils
+        let wstd_req = convert_to_wstd_request(req)?;
+        let mut resp = wstd::http::Client::new().send(wstd_req).await
+            .map_err(|e| HttpError::Send(e.to_string()))?;
+        convert_from_wstd_response(&mut resp).await
     }
 }
 ```
 
-The `evm_controllers` map is populated only when `StartListeningChain` is processed AND the EVM websocket connection succeeds. If `WatchEvmContractEvents` arrives before `StartListeningChain` completes (before the WebSocket connects and the controller is inserted), the subscription is silently dropped. On restart, the trigger stream never fires for that service.
+The critical property: `AllowedHostPermission` is enforced at the Wasmtime linker level in `configure_linker()` (`packages/engine/src/worlds/instance.rs`). If `permissions.allowed_http_hosts == AllowedHostPermission::None`, `wasmtime_wasi_http::add_only_http_to_linker_async` is NOT called, and any attempt to call `wasi:http` traps. An agent component with `Only(["api.anthropic.com"])` can only reach Claude, enforced by the sandbox.
 
-### Why Ordering Cannot Be Guaranteed
+### Bridge 2: WAVS Host Functions as Rig Tools
 
-`start()` spawns `trigger_manager.start(ctx)` in a separate OS thread. That thread calls `ctx.rt.block_on(self.start_watcher(...))`. There is no synchronization point between the `start_watcher` loop processing `TriggerCommand`s and the main thread calling `add_service_to_managers()`. In practice, `WatchEvmContractEvents` can arrive before `StartListeningChain` completes its async WebSocket connection.
+Each tool wraps a WASI host function call. The rig `Tool` trait requires `NAME: &'static str`, associated `Args`/`Output`/`Error` types with JSON Schema, `definition()`, and `call()`. The JSON Schema is auto-derived via `schemars::JsonSchema` on the `Args` struct.
 
-### Fix Options
-
-**Option A (recommended): Retry buffer in `start_watcher`**
-
-When `WatchEvmContractEvents` arrives and no controller exists, push to a local `pending_watches: HashMap<ChainKey, Vec<(Vec<Address>, Vec<B256>)>>`. When `StartListeningChain` succeeds and inserts a controller, immediately apply all pending watches for that chain.
-
-This is self-healing and handles both startup and runtime add-service scenarios without requiring synchronization.
-
-**Option B: Signal readiness before restore**
-
-Add a `oneshot` channel from `start_watcher` to the main thread, sent after the first loop iteration begins. Block `add_service_to_managers()` calls on receiving this signal. Does not eliminate the actual async gap (WebSocket connection is I/O-bound, not tick-bound).
-
-**Option C: Two-phase startup**
-
-Send all `StartListeningChain` commands, wait for all controllers to be ready, then send `WatchEvmContractEvents`. Requires a protocol change across `add_service` and the trigger loop.
-
-**Recommended: Option A** — local to `start_watcher`, no cross-thread protocol changes, also fixes the runtime case.
-
-### Modification Boundary
-
-| File | Change Type | What Changes |
-|------|-------------|--------------|
-| `packages/wavs/src/subsystems/trigger.rs` | Modify | `start_watcher` function: add `pending_watches` map, apply on controller insertion |
-
-No changes needed to `dispatcher.rs`, `add_service`, or any other subsystem.
-
----
-
-## Feature 4: Wallet Kebab Menu
-
-### Current State
-
-`WalletSection` (lines ~202-303) renders two action buttons inline in the main content flow:
-- "Export Recovery Phrase" (`Button variant="outline"`)
-- "Reset Wallet" (`Button color="red" variant="outline"`) with an inline confirmation card
-
-Both buttons are permanently visible, placing a dangerous action prominently next to a normal one.
-
-### Target State
-
-Collapse the uncommon actions into a kebab menu (`...`) in the wallet card header. The main section body shows only accounts and balances.
-
-### Component Design
-
-**New component: `KebabMenu`**
-
-Location: `app/src/components/atoms/KebabMenu.tsx`
+Location for all built-in tools: `packages/wavs-rig/src/tools/`
 
 ```
-Props:
-  items: Array<{
-    label: string,
-    onClick: () => void,
-    variant?: 'default' | 'danger',
-    disabled?: boolean,
-  }>
+tools/
+├── mod.rs         (re-exports all tools)
+├── kv.rs          (KvGetTool, KvSetTool)
+├── http.rs        (HttpFetchTool)
+├── evm.rs         (EvmQueryTool)
+├── cosmos.rs      (CosmosQueryTool)
+└── log.rs         (LogTool)
 ```
 
-Renders a three-dot button. On click, toggles an absolute-positioned dropdown. Closes on outside-click via `useEffect` + `document.addEventListener('mousedown', ...)`.
+### Bridge 3: Async Runtime Shim
 
-**Modified: `WalletSection`**
+WASM components use `wstd::runtime::block_on` as their async executor. The shim is the `run_agent()` function that wraps the entire agent loop inside one `block_on` call:
 
-The header row (`<h2>Wallet</h2>`) becomes a flex container with the heading on the left and `<KebabMenu>` on the right. Items:
-- "Export Recovery Phrase" triggers existing `handleExportWallet` logic
-- "Reset Wallet" triggers existing `setShowResetConfirm(true)` logic
+```rust
+// packages/wavs-rig/src/agent.rs
+pub fn run_agent<A: WavsAgent>(
+    agent: A,
+    trigger: TriggerAction,
+) -> Result<Vec<WasmResponse>, String> {
+    wstd::runtime::block_on(async {
+        let config = agent.build(trigger.clone())?;
+        let rig_agent = build_rig_agent_from_config(config)?;
+        let prompt = agent.trigger_to_prompt(trigger)?;
+        let response = rig_agent.prompt(&prompt).await
+            .map_err(|e| e.to_string())?;
+        agent.response_to_wasm(response)
+    })
+}
+```
 
-The mnemonic display and confirmation card stay in the body — they are feedback UI, not launchers.
+The rig agent loop itself is pure async with `futures::StreamExt` — it does not require the tokio runtime. The tokio `rt` feature is removed in the rig-wasi fork. Sequential tool execution (rig concurrency = 1) avoids `futures::stream::buffer_unordered` which would require a multi-task executor.
 
-### Component Tree Location
+### Bridge 4: KV-Backed Conversation Memory
+
+`WavsMemory` persists multi-turn conversation history across invocations using `wasi:keyvalue`:
+
+```rust
+// packages/wavs-rig/src/memory.rs
+pub struct WavsMemory {
+    bucket_id: String,
+    max_tokens: usize,
+}
+```
+
+History is serialized as JSON into a single KV key per agent instance. `trim_to_budget()` keeps the system message and the N most recent messages fitting within `max_tokens`. This is stateless across the agent object — the entire persistence is in the KV store, which is per-service in the engine's `KeyValueCtx`.
+
+## New Crate: packages/wavs-rig
+
+### Cargo.toml Dependencies
+
+```toml
+[package]
+name = "wavs-rig"
+# ...workspace fields...
+
+[dependencies]
+# The rig-wasi fork — thin fork of rig-core for wasip2 compatibility
+rig-core = { git = "https://github.com/[fork]/rig", rev = "[pin]", default-features = false }
+
+# WASI runtime (no tokio)
+wstd = { workspace = true }
+wasip2 = { workspace = true }
+
+# WIT bindings (same as other components)
+wit-bindgen = { workspace = true }
+
+# WAVS types for WasmResponse, TriggerAction
+wavs-wasi-utils = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = "0.8"   # for Tool JSON Schema derivation
+
+[lib]
+crate-type = ["rlib"]   # Library only — not a cdylib itself
+```
+
+Note: `wavs-rig` is compiled as `rlib`, not `cdylib`. The agent example component is the `cdylib` that depends on `wavs-rig`. This mirrors the existing `example-helpers` pattern.
+
+### Module Structure
 
 ```
-Settings.tsx
-  └── WalletSection          (modified: adds KebabMenu to header)
-        └── KebabMenu        (new atom component)
+packages/wavs-rig/src/
+├── lib.rs          (pub use, crate-level exports)
+├── agent.rs        (WavsAgent trait, AgentConfig, run_agent())
+├── http.rs         (WasiHttpClient: impl HttpClientExt)
+├── memory.rs       (WavsMemory: KV-backed conversation history)
+└── tools/
+    ├── mod.rs
+    ├── kv.rs
+    ├── http.rs
+    ├── evm.rs
+    ├── cosmos.rs
+    └── log.rs
 ```
 
-`KebabMenu` belongs in atoms because it is a generic UI primitive reusable across the app. `OwnerActionsMenu.tsx` in `components/poa/` already shows a similar dropdown pattern; `KebabMenu` can be a cleaner generalization for future reuse.
+## Example Agent Component: examples/components/agent-defi-monitor
 
-### Modification Boundary
+This is the MVP example demonstrating the complete loop. It follows exactly the same structure as existing example components:
 
-| File | Change Type | What Changes |
-|------|-------------|--------------|
-| `app/src/components/atoms/KebabMenu.tsx` | New | Generic kebab dropdown atom |
-| `app/src/components/atoms/index.ts` | Modify | Re-export `KebabMenu` |
-| `app/src/components/settings/WalletSection.tsx` | Modify | Add `KebabMenu` to header, remove inline buttons from body |
+```
+examples/components/agent-defi-monitor/
+├── Cargo.toml           (depends on wavs-rig, example-helpers)
+└── src/
+    └── lib.rs           (~30 lines of domain logic)
+```
 
----
+`Cargo.toml` structure mirrors `kv-store`:
+
+```toml
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[package.metadata.component]
+package = "wavs:agent-defi-monitor"
+```
+
+The component uses `export_layer_trigger_world!(Component)` from `example-helpers/src/bindings/world.rs`, exactly as all existing examples do. The WIT world (`wavs-world`) is unchanged — agents export the same `run(trigger-action) -> result<list<wasm-response>, string>` interface.
+
+## rig-wasi Fork: Required Changes
+
+The fork patches rig-core to compile on `wasm32-wasip2`. All changes are in the platform/compat layer:
+
+| File | Change | Effort |
+|------|--------|--------|
+| `Cargo.toml` | `reqwest = { ..., optional = true }`, drop `tokio = { features = ["rt"] }` | Trivial |
+| `http_client.rs` | Gate `reqwest::Client` default behind `#[cfg(feature = "reqwest")]` | Small |
+| `client/mod.rs` | `ClientBuilderError` must not reference `reqwest::Error` unconditionally | Small |
+| `streaming.rs` | Replace `tokio::sync::watch` in `PauseControl` with `futures::channel::watch` or remove | Small |
+| `wasm_compat.rs` | Unify `WasmBoxedFuture` and `WasmCompatSend` cfg gates to use `target_family = "wasm"` | Small |
+| `sse.rs` | Add wasip2 dead-zone cfg branch (neither `wasm32` nor `wasm feature` fires on wasip2) | Small |
+| `Cargo.toml` | Add `getrandom` with `wasi` feature for `wasm32-wasip2` target | Trivial |
+
+Total: ~300-500 lines across 6-7 files. No changes to the agent loop, tool dispatch, or provider implementations.
 
 ## Architectural Patterns
 
-### Pattern 1: Extend DispatcherCommand, Not New Events
+### Pattern 1: WIT World is the Sandbox Boundary
 
-**What:** Add data to existing event flows by extending the `DispatcherCommand` enum variant, `TauriEventExt` struct, frontend type, and listener in lockstep — never adding a parallel event for data that belongs to an existing lifecycle moment.
+**What:** The `wavs-world` WIT definition (operator.wit) is the contract between the host and the component. Everything an agent can do is expressed as a WIT host import. The agent loop inside WASM calls these imports; the Wasmtime linker provides their implementations.
 
-**When to use:** Any time new data is available at an existing event origin (e.g., tx_hash at SubmissionConfirmed, payload at the same point).
+**When to use:** Any new capability for agents (e.g., `call-service` for inter-component RPC in post-MVP) must be added as a WIT host import, not as Rust code in the component crate.
 
-**Trade-offs:** All four layers must change together. This is correct — they form one serialization boundary.
+**Trade-offs:** Discipline required — no "reaching out" from the component outside the WIT surface. This is the guarantee that makes agents trustworthy.
 
-### Pattern 2: Retry-Buffer for Async Command Ordering
+### Pattern 2: rlib + cdylib Split
 
-**What:** When a command depends on async infrastructure that a prior command creates, buffer the dependent command locally and replay it when the dependency arrives — instead of introducing synchronization across thread boundaries.
+**What:** Shared logic (`wavs-rig`, `example-helpers`) is compiled as `rlib`. Only the final component that exports the WIT world is `cdylib`. The `wavs-rig` crate is an rlib — the agent component crate is the cdylib.
 
-**When to use:** Any command handler where a dependency may not be ready due to async I/O, without wanting to block the caller.
+**When to use:** Always. Matches the existing pattern for all example components.
 
-**Trade-offs:** Small amount of local state in `start_watcher`. Self-healing; handles both startup and runtime cases.
+**Trade-offs:** Requires two crates per agent (the library and the component). The convention is clear and already established.
 
-### Pattern 3: Atoms for Shared Interaction Primitives
+### Pattern 3: Component Config for API Keys
 
-**What:** Pure UI interaction components (KebabMenu, Button, AddressDisplay) live in `components/atoms/` and are composed into feature sections. Feature logic stays in the section component.
+**What:** LLM provider API keys are injected via `Component.env_keys` (system env vars prefixed `WAVS_ENV_`) and `Component.config` (key-value pairs in service.json). Inside WASM, retrieved via `host::config-var(key)`. The agent reads `WAVS_ENV_ANTHROPIC_API_KEY` at runtime.
 
-**When to use:** Any interaction widget with no domain logic that could plausibly be reused in two or more sections.
+**When to use:** All secrets and provider configuration. Never hardcode API keys in WASM bytes.
 
----
+**Trade-offs:** Requires operator to set env vars. Future work (post-MVP P2): first-class API key management in the Tauri app UI.
 
-## Data Flow
+### Pattern 4: Sequential Tool Execution for MVP
 
-### End-to-End: Trigger to Submission with tx_hash + payload (after v1.3)
+**What:** Configure rig's concurrency to 1 (sequential tool calls). Rig supports `buffer_unordered` for parallel tool calls, but this requires multi-task executor semantics. WASI is single-threaded; `wstd::runtime::block_on` drives a single-task async executor.
 
-```
-1. On-chain event fires
-       |
-2. TriggerManager -> DispatcherCommand::Trigger(action)
-       |
-3. Dispatcher -> EngineCommand::ExecuteOperator
-       |
-4. Engine executes WASM -> WasmResponse { payload: Vec<u8> }
-       |
-5. EngineResponse::Operator(SubmissionRequest) -> Dispatcher
-       |
-6. Dispatcher -> SubmissionCommand -> SubmissionManager
-       |
-7. SubmissionManager -> DispatcherCommand::SubmissionResponse(Submission)
-       |
-8. Dispatcher -> AggregatorCommand::Execute(Submission)
-       |
-9. Aggregator accumulates quorum -> submits on-chain
-       |
-10. AnyTransactionReceipt -> tx_hash: String
-    submission.operator_response.payload: Vec<u8>  <- both originate here
-       |
-11. DispatcherCommand::SubmissionConfirmed { tx_hash, result_payload, ... }
-       |
-12. Dispatcher emits SubmissionEvent { tx_hash, result_payload (hex), ... }
-       |
-13. listeners.ts -> store.addActivity({ txHash, resultPayload })
-       |
-14. GroupedActivityCard renders tx_hash + decodePayload(resultPayload)
-```
+**When to use:** MVP. Sequential is correct for the common case (most agent tool chains are sequential by nature).
 
-### Service Restart Data Flow (after fix)
-
-```
-Dispatcher::start()
-  |-- thread: trigger_manager.start() -> start_watcher() loop begins
-  |     |-- processes TriggerCommand::StartListeningChain
-  |     |     |-- (async) WebSocket connects -> evm_controllers.insert(chain, controller)
-  |     |         |-- apply pending_watches[chain] immediately
-  |     |-- processes TriggerCommand::WatchEvmContractEvents
-  |           |-- controller ready -> enable_logs() SUCCESS
-  |           |-- controller missing -> push to pending_watches[chain]
-  |
-  |-- (main) ctx.rt.block_on(restore services)
-        |-- add_service_to_managers() sends StartListeningChain + WatchEvmContractEvents
-              (ordering no longer matters due to pending_watches buffer)
-```
-
----
-
-## Integration Points
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes for v1.3 |
-|----------|---------------|----------------|
-| Aggregator to Dispatcher | `crossbeam::channel::Sender<DispatcherCommand>` | Add `tx_hash` and `result_payload` to `SubmissionConfirmed` variant |
-| Dispatcher to Frontend | `tauri::Emitter::emit()` via `TauriEventExt` | Add fields to `SubmissionEvent` struct |
-| Frontend IPC to Store | `listen<SubmissionEvent>()` in `listeners.ts` | Map new fields to `ActivityItem` |
-| `start_watcher` internal | Local `pending_watches` HashMap | New local state, no cross-thread boundary |
-| `WalletSection` to Atoms | Component import | New `KebabMenu` atom |
-
-### New vs Modified Summary
-
-**New files:**
-- `app/src/utils/decode.ts` — payload decoding utility (`decodePayload`)
-- `app/src/components/atoms/KebabMenu.tsx` — kebab dropdown atom
-
-**Modified backend files:**
-- `packages/wavs/src/dispatcher.rs` — `DispatcherCommand` enum + match arm
-- `packages/wavs/src/subsystems/aggregator.rs` — `SubmissionConfirmed` send site
-- `packages/gui/shared/src/event.rs` — `SubmissionEvent` struct
-- `packages/wavs/src/subsystems/trigger.rs` — `start_watcher` retry buffer
-
-**Modified frontend files:**
-- `app/src/types/index.ts` — `SubmissionEvent`, `ActivityItem`
-- `app/src/tauri/listeners.ts` — submission listener mapping
-- `app/src/components/activity/GroupedActivityCard.tsx` — render tx_hash + decoded result
-- `app/src/components/settings/WalletSection.tsx` — kebab menu integration
-- `app/src/components/atoms/index.ts` — re-export `KebabMenu`
-
----
-
-## Recommended Build Order
-
-Features 1 and 2 share all four Rust touch points and all three frontend touch points. Build them together.
-
-1. **Backend (features 1+2 combined):** Extend `DispatcherCommand::SubmissionConfirmed` with `tx_hash` and `result_payload`, update aggregator send site, extend `SubmissionEvent`, update dispatcher match arm. One compile pass.
-
-2. **Frontend (features 1+2 combined):** Extend `SubmissionEvent` and `ActivityItem` types, update `listeners.ts`, add `decode.ts`, update `GroupedActivityCard`.
-
-3. **Trigger restart fix:** Edit `start_watcher` in `trigger.rs` to add `pending_watches` buffer. Fully isolated — no dependency on features 1/2.
-
-4. **Wallet kebab menu:** New `KebabMenu` atom, modify `WalletSection`. Pure frontend, no backend changes, no dependency on any other feature.
-
----
+**Trade-offs:** Parallel tool execution is deferred. For post-MVP, the engine-level `Continue/Checkpoint` variant (from `WAVS_AGENT_IMPROVEMENTS.md` post-MVP section) can provide external parallelism.
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Separate Tauri Event for tx_hash
+### Anti-Pattern 1: Modifying the Engine for Agent Support
 
-**What people do:** Emit a new `"submission_hash"` event alongside `"submission"` rather than extending the existing struct.
+**What:** Adding agent-specific logic to `packages/engine`, `packages/wavs`, or the WAVS node to "support" agents as a special execution mode.
 
-**Why it's wrong:** The frontend must correlate two events by `correlation_id` to display a single card row. The existing grouping already handles this; a third event type adds complexity.
+**Why it's wrong:** Agents are just WASM components that export `run()`. The engine doesn't know or care that the component inside is running an LLM loop. The entire rig integration lives inside the WASM boundary. Adding engine changes for MVP breaks this clean separation.
 
-**Do this instead:** Add `tx_hash` directly to `SubmissionEvent`. One event, one card update.
+**Do this instead:** Put all agent logic in `packages/wavs-rig` (inside the WASM side). The engine sees the agent component identically to any other component.
 
-### Anti-Pattern 2: Decode payload in the Rust backend
+### Anti-Pattern 2: Rebuilding the Rig Agent Loop
 
-**What people do:** Convert `Vec<u8>` to a string (JSON, UTF-8, hex) in Rust before sending to the GUI.
+**What:** Writing a custom LLM dispatch loop inside `wavs-rig` instead of using rig's existing `Agent<M, T>`.
 
-**Why it's wrong:** The decoding choice (JSON vs UTF-8 vs hex) belongs with the display. Raw bytes in hex carry all information. Decoding in Rust forces an irreversible choice at the wrong layer.
+**Why it's wrong:** Rig already has multi-turn loops, tool dispatch, provider implementations for 20+ LLMs, structured output, and prompt hooks. Option C (minimal extraction) from the spec estimates this as "higher upfront effort" with "no fork maintenance burden" — but months of work to reach parity.
 
-**Do this instead:** Serialize as hex string (consistent with existing `const_hex` pattern on `WasmResponse.payload`). Decode in `app/src/utils/decode.ts` at render time.
+**Do this instead:** Fork rig-core (Option B). ~300-500 lines of platform patches. Upstream later if accepted.
 
-### Anti-Pattern 3: Synchronization barrier at start_watcher entry
+### Anti-Pattern 3: Using tokio::rt in the WASI Component
 
-**What people do:** Add a `tokio::sync::Barrier` or `oneshot` channel so `add_service_to_managers()` waits for `start_watcher` to be "ready" before sending commands.
+**What:** Including `tokio = { features = ["rt"] }` in the agent component or `wavs-rig` dependencies, then using `tokio::runtime::Runtime::new().block_on(...)`.
 
-**Why it's wrong:** "Ready" only means the loop started, not that `StartListeningChain` has completed its async WebSocket connection. The race remains because stream connection is I/O-bound.
+**Why it's wrong:** The tokio `rt` feature requires `std::thread` primitives that don't exist on `wasm32-wasip2`. This is one of the hard blockers documented in the rig investigation.
 
-**Do this instead:** Buffer `WatchEvmContractEvents` in `start_watcher` and apply when the controller is inserted. Fix is at the point of failure, not at a barrier that does not eliminate the actual async gap.
+**Do this instead:** Use `wstd::runtime::block_on` exclusively. The rig agent loop is pure async and does not require tokio's runtime internals.
+
+### Anti-Pattern 4: Separate Crate for Each Agent
+
+**What:** Creating a new workspace crate per agent type (e.g., `packages/wavs-rig-defi`, `packages/wavs-rig-oracle`).
+
+**Why it's wrong:** The library (`wavs-rig`) provides all the infrastructure. Each agent is a thin `cdylib` component in `examples/components/`. Adding them as workspace members inflates the workspace root.
+
+**Do this instead:** Follow the established pattern — one `rlib` library crate, many lightweight `cdylib` example components that depend on it.
+
+## Integration Points with Existing Code
+
+### What wavs-rig Calls (Direct WASI host imports)
+
+| Host Function | WIT Location | wavs-rig Uses It For |
+|--------------|-------------|----------------------|
+| `wasi:http/outgoing-handler` | operator.wit | `WasiHttpClient` (LLM API calls, `HttpFetchTool`) |
+| `wasi:keyvalue/store` | operator.wit (via include wasi:keyvalue) | `KvGetTool`, `KvSetTool`, `WavsMemory` |
+| `wasi:keyvalue/atomics` | operator.wit | Optional atomic ops in tools |
+| `host::log` | operator.wit (inline interface) | `LogTool` |
+| `host::config-var` | operator.wit (inline interface) | Reading API keys, model names from service config |
+| `host::get-evm-chain-config` | operator.wit (inline interface) | `EvmQueryTool` — gets RPC URL for EVM chain |
+| `host::get-cosmos-chain-config` | operator.wit (inline interface) | `CosmosQueryTool` |
+
+All of these host functions are already implemented in `packages/engine/src/bindings/operator/host.rs` and `packages/engine/src/backend/wasi_keyvalue/`. No engine changes needed.
+
+### What the Agent Component Exports (Unchanged WIT Contract)
+
+```wit
+export run: func(trigger-action: trigger-action) -> result<list<wasm-response>, string>;
+```
+
+This is identical to all existing WAVS components. The engine calls `call_run()` on the instantiated component. The agent is just a component.
+
+### Permission Model: AllowedHostPermission Controls LLM Access
+
+`Permissions.allowed_http_hosts` in `service.json` governs what the agent component can call over HTTP:
+
+```json
+{
+  "permissions": {
+    "allowed_http_hosts": { "only": ["api.anthropic.com"] }
+  }
+}
+```
+
+This is enforced in `configure_linker()` at `packages/engine/src/worlds/instance.rs:350-355`. If `AllowedHostPermission::None`, `wasi:http` is not linked into the component's sandbox — HTTP calls trap. If `Only(["api.anthropic.com"])`, the check is currently a coarse gate (the FIXME on line 352 notes that per-host allowlisting requires WAT-level inspection). For MVP, `All` or `Only` enables HTTP; `None` disables it entirely.
+
+### Component Fuel and Time Limits
+
+An agent making 10 LLM API calls (each 5-10 seconds) may need 50-100 seconds of wall time. The default `Workflow::DEFAULT_TIME_LIMIT_SECONDS` is `u64::MAX` — no limit unless explicitly set. The `fuel_limit` is `Workflow::DEFAULT_FUEL_LIMIT = u64::MAX`. For agent components, the service.json `time_limit_seconds` should be explicitly set (e.g., 120-300 seconds) to prevent runaway loops.
+
+## Recommended Build Order
+
+The correct build order follows the dependency chain:
+
+1. **rig-wasi fork** — The foundational dependency. Apply the ~300-500 line patches (reqwest optional, tokio::rt dropped, cfg unification). Verify it compiles for `wasm32-wasip2`. No WAVS changes needed.
+
+2. **packages/wavs-rig** — The bridge library. Implement the four bridges (WasiHttpClient, built-in tools, run_agent shim, WavsMemory). Compile target: `wasm32-wasip2`. Depends on: rig-wasi fork.
+
+3. **examples/components/agent-defi-monitor** — The example component. Demonstrates the full loop: trigger → WavsAgent::build → prompt → rig agent loop → tool calls → WasmResponse. Depends on: wavs-rig, example-helpers (existing). Build with `just wasi-build-native agent-defi-monitor`.
+
+4. **Workspace Cargo.toml** — Add the two new workspace members after both crates exist and compile.
+
+5. **End-to-end test** — Deploy the agent component via existing `dev-tool deploy-service`, send a trigger, observe LLM reasoning in the activity feed logs.
+
+### Dependencies Between Steps
+
+```
+rig-wasi fork
+    │
+    ▼
+packages/wavs-rig (rlib, wasm32-wasip2)
+    │
+    ▼
+examples/components/agent-defi-monitor (cdylib, wasm32-wasip2)
+    │
+    ▼
+service.json (AllowedHostPermission: Only([LLM provider URL]))
+    │
+    ▼
+WAVS node execution (no node changes needed)
+```
+
+Steps 1-3 have strict ordering. Step 5 can only run after all prior steps succeed.
+
+## Modified vs New Components Summary
+
+### New Files
+
+| File | Type | Purpose |
+|------|------|---------|
+| `packages/wavs-rig/Cargo.toml` | New | Crate manifest |
+| `packages/wavs-rig/src/lib.rs` | New | Public API surface |
+| `packages/wavs-rig/src/agent.rs` | New | `WavsAgent` trait, `AgentConfig`, `run_agent()` |
+| `packages/wavs-rig/src/http.rs` | New | `WasiHttpClient: impl HttpClientExt` |
+| `packages/wavs-rig/src/memory.rs` | New | `WavsMemory` KV-backed history |
+| `packages/wavs-rig/src/tools/mod.rs` | New | Tool module root |
+| `packages/wavs-rig/src/tools/kv.rs` | New | `KvGetTool`, `KvSetTool` |
+| `packages/wavs-rig/src/tools/http.rs` | New | `HttpFetchTool` |
+| `packages/wavs-rig/src/tools/evm.rs` | New | `EvmQueryTool` |
+| `packages/wavs-rig/src/tools/cosmos.rs` | New | `CosmosQueryTool` |
+| `packages/wavs-rig/src/tools/log.rs` | New | `LogTool` |
+| `examples/components/agent-defi-monitor/Cargo.toml` | New | Example component manifest |
+| `examples/components/agent-defi-monitor/src/lib.rs` | New | ~30 lines of agent domain logic |
+| `rig-wasi/` (fork) | New repo or git dep | Patched rig-core for wasip2 |
+
+### Modified Files
+
+| File | Change | Why |
+|------|--------|-----|
+| `WAVS/Cargo.toml` | Add `packages/wavs-rig` and `examples/components/agent-defi-monitor` to `[workspace.members]` | Register new crates |
+
+**All other existing files are unchanged for MVP.** The engine, dispatcher, aggregator, submission, trigger manager, WIT definitions, and Tauri app require no modifications.
 
 ---
 
@@ -515,19 +496,21 @@ Features 1 and 2 share all four Rust touch points and all three frontend touch p
 
 All findings from direct source inspection (HIGH confidence):
 
-- `packages/wavs/src/dispatcher.rs` — `DispatcherCommand` enum, `start()`, `SubmissionConfirmed` match arm
-- `packages/wavs/src/subsystems/aggregator.rs` — lines 628-650, 680-695 (tx_hash origin, SubmissionConfirmed send)
-- `packages/wavs/src/subsystems/aggregator/submit.rs` — `AnyTransactionReceipt::tx_hash()`
-- `packages/wavs/src/subsystems/engine.rs` — `AggregatorExecuteKind`, `EngineResponse`
-- `packages/wavs/src/subsystems/trigger.rs` — `add_service()`, `start_watcher()`, `WatchEvmContractEvents` handling
-- `packages/gui/shared/src/event.rs` — `SubmissionEvent`, `TauriEventExt` trait
-- `packages/types/src/submission.rs` — `Submission` struct with `operator_response: WasmResponse`
-- `packages/types/src/service.rs` — `WasmResponse` struct with `payload: Vec<u8>`
-- `app/src/types/index.ts` — `ActivityItem`, `SubmissionEvent`, `TriggerData`
-- `app/src/tauri/listeners.ts` — all event listener mappings
-- `app/src/components/activity/GroupedActivityCard.tsx` — submission child card structure
-- `app/src/components/settings/WalletSection.tsx` — current button layout
+- `/workspace/WAVS/packages/engine/src/worlds/instance.rs` — `configure_linker()`, `InstanceDepsBuilder::build()`, permission enforcement
+- `/workspace/WAVS/packages/engine/src/bindings/operator/host.rs` — all host function implementations
+- `/workspace/WAVS/packages/engine/src/worlds/operator/execute.rs` — component invocation, timeout handling
+- `/workspace/WAVS/packages/engine/src/worlds/operator/component.rs` — `OperatorHostComponent` with all WASI contexts
+- `/workspace/WAVS/packages/engine/src/common/base_engine.rs` — component loading, fuel/time limit defaults
+- `/workspace/WAVS/packages/types/src/service.rs` — `AllowedHostPermission`, `Component`, `Workflow::DEFAULT_FUEL_LIMIT`
+- `/workspace/WAVS/wit-definitions/operator/wit/operator.wit` — WIT world surface, all host imports
+- `/workspace/WAVS/packages/wasi-utils/src/http.rs` — existing HTTP helper pattern (`wstd::http::Client`)
+- `/workspace/WAVS/examples/components/_helpers/src/bindings/world.rs` — WIT bindings generation pattern
+- `/workspace/WAVS/examples/components/_helpers/src/trigger.rs` — trigger decode/encode pattern
+- `/workspace/WAVS/examples/components/kv-store/src/lib.rs` — reference component structure
+- `/workspace/WAVS/examples/components/kv-store/Cargo.toml` — reference component manifest
+- `/workspace/WAVS/Cargo.toml` — workspace structure, existing deps
+- `/workspace/WAVS_AGENT_IMPROVEMENTS.md` — detailed architecture spec for all four bridges, rig fork analysis, sequencing
 
 ---
-*Architecture research for: WAVS v1.3 Activity UX & Bug Fixes*
-*Researched: 2026-04-09*
+*Architecture research for: WAVS v2.0 — rig-core Agent Runtime Integration*
+*Researched: 2026-04-20*

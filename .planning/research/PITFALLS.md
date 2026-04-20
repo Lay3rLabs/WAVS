@@ -1,127 +1,176 @@
 # Pitfalls Research
 
-**Domain:** WAVS v1.3 — Activity UX improvements, result decoding, service restart fix, wallet kebab menu
-**Researched:** 2026-04-09
-**Confidence:** HIGH — analysis based on direct code inspection of all affected files
+**Domain:** rig-core integration into WAVS WASI sandbox (v2.0 Agent Runtime)
+**Researched:** 2026-04-20
+**Confidence:** HIGH — based on direct codebase inspection, rig-core source review, and verified ecosystem findings
 
 ## Critical Pitfalls
 
-### Pitfall 1: DispatcherCommand enum break on new fields
+### Pitfall 1: Unconditional tokio::rt Feature Causes Linker Errors in WASI Target
 
 **What goes wrong:**
-`DispatcherCommand` is a non-exhaustive enum matched in `dispatcher.rs` `start()` via a `while let Ok(command) = ...recv()` + `match command { ... }`. Adding a new variant (e.g., a `SubmissionConfirmedWithResult` carrying tx_hash and payload bytes) compiles fine but any other match site that uses a wildcard `_` arm silently swallows the new variant. Alternatively, if the approach chosen is to add fields directly to the existing `SubmissionConfirmed` variant (struct-style destructuring), every match site must be updated or it will not compile at all — which is the safer outcome. The dangerous path is adding a new variant and missing a match arm somewhere.
+rig-core's default feature set enables `tokio/rt` (the Tokio thread-based runtime). The `wasm32-wasip2` target has no OS thread model and Wasmtime provides no Tokio runtime. Linking fails with `__wasi_thread_spawn` or similar unresolved symbol errors at WASM component link time, not at `cargo build`. The error is not a Rust compile error — it surfaces only when `wasm-tools component new` or `cargo component build` assembles the binary, making it look like a toolchain issue rather than a dependency problem.
 
 **Why it happens:**
-There are two subsystems that currently read from `subsystem_to_dispatcher_rx`: the main dispatcher loop and the kill/shutdown handler. Adding a new enum variant without auditing every `match` on `DispatcherCommand` causes silent no-ops.
+Developers assume that because `cargo build --target wasm32-wasip2` succeeds, the component is usable. The actual WASI component assembly step runs the linker separately, which is when thread-related symbols are resolved. rig-core pulls in `tokio` with the `rt` feature unconditionally because its async trait bounds require a Tokio executor. The fork must patch this before any integration work can be tested end-to-end.
 
 **How to avoid:**
-Prefer adding fields to the existing `SubmissionConfirmed { ... }` variant (struct-style) rather than adding a new variant. This makes it a compile error at every existing match site, forcing an explicit audit. The aggregator's `handle_submit_action` already has `tx_resp.tx_hash()` available at the `SubmissionConfirmed` send site — the new `tx_hash: String` and `execution_result: Vec<u8>` fields can be threaded directly through there without new variants.
+In the rig-core fork, gate `tokio/rt` behind a non-default feature like `tokio-rt`. Add `#[cfg(not(target_arch = "wasm32"))]` guards on any `tokio::spawn` or `Runtime::new()` calls. The WAVS sandbox uses `wstd::runtime::block_on` as the only executor — no Tokio runtime is created inside the component. Confirm the fork compiles and produces a valid component with `cargo component build --target wasm32-wasip2` before touching any rig API surface.
 
 **Warning signs:**
-- A new `DispatcherCommand` variant compiles cleanly despite no frontend change — suspect a silent wildcard arm somewhere.
-- The activity feed shows no tx_hash even after the Rust side purportedly emits it — check if the event struct was updated in `event.rs` but not the matching `SubmissionEvent` TypeScript interface.
+- `cargo build --target wasm32-wasip2` succeeds but `cargo component build` fails with linker errors
+- Any mention of `__wasi_thread_spawn`, `pthread`, or `mmap` in link errors from the WASI component
+- `wasm-tools validate` passes the raw `.wasm` but `wasm-tools component new` fails
 
 **Phase to address:**
-Phase that adds richer activity data (v1.3 Phase 1).
+Phase 1 (rig-core fork) — this is the first blocker. Nothing downstream can be verified until this is resolved.
 
 ---
 
-### Pitfall 2: Rust event struct addition without matching TypeScript interface update
+### Pitfall 2: Nested `block_on` Panics — rig Agent Loop Inside Existing Executor
 
 **What goes wrong:**
-The Tauri event pipeline is: Rust `SubmissionEvent` struct (in `packages/gui/shared/src/event.rs`) serialized to JSON via `#[serde(rename_all = "snake_case")]`, emitted to the frontend, and deserialized by the TypeScript `SubmissionEvent` interface in `app/src/types/index.ts`. The frontend listener in `app/src/tauri/listeners.ts` maps the payload to `ActivityItem`. Adding `tx_hash: String` and `execution_result: Vec<u8>` (hex-serialized by serde) in Rust is silent on the frontend side — TypeScript will simply ignore the unknown fields. If the `ActivityItem` type and its creation in `listeners.ts` is not updated in the same commit, the new data is serialized and emitted but never stored, never displayed.
+Existing WAVS components call `wstd::runtime::block_on(async { ... })` as their top-level async entry point. If the rig agent loop internally calls `block_on` a second time (e.g., to drive an inner async request), the program panics with "cannot call `block_on` from within an async context" or produces undefined behavior in the wstd single-threaded executor. This is WASM-specific: unlike Tokio where `block_in_place` or `spawn_blocking` provide escape hatches, wstd has no such mechanism. The nested call starves the outer executor.
 
 **Why it happens:**
-There is no compile-time link between the Rust serde shape and the TypeScript interface. The gap is invisible until you open the activity feed and notice tx_hash is missing.
+rig's `Agent::prompt()` method is `async fn` throughout. When a developer wraps the rig agent call in a closure inside `block_on`, they are calling async code from inside an async context — correct. But if any rig-internal code (e.g., retry logic, tool dispatch, provider client internals) calls `block_on` recursively, the single-threaded WASI executor deadlocks or panics. The rig Cloudflare Worker compatibility feature (PR #175) added synchronous wrappers for this exact reason in a different constrained environment.
 
 **How to avoid:**
-Update Rust struct, TypeScript interface, and the `addActivity(...)` call in `listeners.ts` in the same diff. The `WasmResponse.payload` field uses `#[serde(with = "const_hex")]` so on the wire it is a hex string, not a `number[]`. The TypeScript interface should declare `execution_result: string` (hex), not `number[]`. Do not invent a separate byte-array encoding.
+The entire agent execution — from trigger receipt through tool calls to final LLM response — must run inside a single `block_on` at the component entry point. The rig fork must ensure that no internal code path calls a blocking executor. Search the forked rig-core for any use of `tokio::runtime::Handle::current().block_on(...)`, `futures::executor::block_on(...)`, or `wstd::runtime::block_on(...)` in non-entry-point positions. The integration crate's async shim must use `wstd` primitives only, never create inner executors.
 
 **Warning signs:**
-- TypeScript console shows the Tauri event payload has `tx_hash` but `ActivityItem` in the Zustand store does not.
-- The activity card renders "—" for tx_hash even when the aggregator log shows a successful on-chain submission.
+- Component panics with "already in async context" or deadlocks indefinitely on first LLM call
+- Removing the outer `block_on` and making the entry point a plain `async fn` fixes the panic — this confirms nested `block_on` is the cause
+- Wasmtime engine reports `Trap::Interrupt` but fuel is not exhausted — the component is stuck, not out of budget
 
 **Phase to address:**
-Same phase as adding richer activity cards. Must be one atomic change across Rust + TypeScript.
+Phase 1 (rig-core fork) — validate with a minimal async probe before building the HTTP bridge.
 
 ---
 
-### Pitfall 3: Service restart — triggers firing before service is in DB
+### Pitfall 3: reqwest HTTP Transport Not Available in WASI; `wasi:http` Bridge Required
 
 **What goes wrong:**
-`change_service_inner` (the code path used on WAVS process restart to update stale service definitions) calls `add_service_to_managers` after `self.services.save(&service)`, which looks correct. However, `add_service_to_managers` immediately sends `TriggerCommand` variants onto `trigger_manager.command_sender`. The trigger manager processes these in a separate thread. If a cron or block-interval trigger fires in the nanoseconds between `add_service_to_managers` returning and any subsequent initialization, the `DispatcherCommand::Trigger` arrives before the dispatcher has finished iterating over all registry entries. At that moment the dispatcher's `services.get()` call will find the service (it was saved first), but the engine manager may not yet have stored the WASM component bytes for that service, causing a silent drop.
-
-The reported service restart bug is more specifically: services registered via `register_and_add_service` during startup may fail to re-register triggers because the `already_in_memory` fast-path in `start()` skips `add_service_to_managers` for services loaded from the settings cache before the HTTP server came up. Those services have their DB records but no active trigger streams after a WAVS process restart.
+rig-core's HTTP client trait (`HttpClientExt`) defaults to a reqwest backend. reqwest requires platform socket APIs (`connect`, `send`, `recv`) that do not exist in WASI p2. Compiling with the reqwest feature enabled causes linker errors on WASI even after the tokio patch. Even the reqwest WASM browser target (`wasm32-unknown-unknown`) cannot be used — that target uses browser `fetch`, not `wasi:http/outgoing-handler`. The two WASM targets are not interchangeable.
 
 **Why it happens:**
-The startup path in `dispatcher.rs::start()` has two load paths: (A) fast-load from settings cache which calls `self.services.save()` but potentially skips `add_service_to_managers`, and (B) the service registry restore loop which does call `add_service_to_managers`. If Path A runs before Path B for the same service, the `already_in_memory` check fires true in Path B and the manager registration is skipped.
+Developers see "reqwest has WASM support" and assume WASI p2 is covered. The reqwest WASM support is for `wasm32-unknown-unknown` (browser JS environment) only — it uses `wasm-bindgen` to call `window.fetch`. WASI p2 has no JavaScript bridge. The correct transport is the `wasi:http/outgoing-handler` host function, which Wasmtime provides via `wasmtime-wasi-http`. WAVS already links this host function (`configure_linker` in `packages/engine/src/worlds/instance.rs` enables HTTP based on `AllowedHostPermission`).
 
 **How to avoid:**
-Audit the `already_in_memory` branch. The comment says "skip manager setup" when the service was already loaded from settings cache — but this means trigger streams are never set up for those services after restart. Either: (1) remove the `already_in_memory` skip so manager setup always runs from the authoritative on-chain version, or (2) ensure Path A itself calls `add_service_to_managers`. Add a tracing log at each skip point so it is visible in Jaeger after restart.
+In the rig-core fork, gate reqwest behind a `#[cfg(not(target_arch = "wasm32"))]` feature and add a `WasiHttpTransport` implementation behind `#[cfg(target_arch = "wasm32")]`. The `wavs-rig` integration crate must implement rig's HTTP transport trait using the WIT-generated `wasi::http::outgoing_handler::handle()` bindings, not any OS socket API. The existing `wasmtime_wasi_http::WasiHttpCtx` host implementation in WAVS can be used for verification — if the component can call `wasi:http` successfully, the bridge is wired correctly.
 
 **Warning signs:**
-- WAVS restarts cleanly (no errors) but a service that was active before restart never fires triggers after restart.
-- `trigger_manager.command_sender` receives zero `StartListeningCron` commands at startup in traces, but services exist in DB.
-- The Jaeger trace shows `Dispatcher received trigger action` for some services but not others after restart.
+- Linker error mentioning `__wasi_sock_connect` or TLS symbol from `rustls/ring` — reqwest native is still linked
+- LLM API calls succeed in Wasmtime simulation but fail when deployed on a WAVS node with `AllowedHostPermission::None` — the HTTP permission policy is not being respected
+- The test component uses `reqwest::Client::new()` rather than the WIT-generated outgoing-handler — this will compile locally but fail at WASI validation
 
 **Phase to address:**
-Dedicated service restart fix phase.
+Phase 2 (wavs-rig integration crate, HTTP transport bridge) — after fork compiles, before any real LLM calls.
 
 ---
 
-### Pitfall 4: UTF-8 / JSON decode of Vec<u8> payload edge cases
+### Pitfall 4: Fork Divergence — Upstream rig Releases Break the Fork Silently
 
 **What goes wrong:**
-The proposed decode chain is: try UTF-8 → try JSON pretty-print → fall back to hex. Four edge cases break this naively:
-
-1. **`const_hex` wire encoding.** `WasmResponse.payload` is serialized with `#[serde(with = "const_hex")]`. On the wire it is a hex string like `"48656c6c6f"`, not `[72, 101, 108, 108, 111]`. The TypeScript decode chain must hex-decode this string to `Uint8Array` first, then attempt UTF-8 decode, then JSON. If the field is incorrectly treated as a number array (copying the `TriggerData.Raw` pattern which is `number[]`), `TextDecoder.decode` receives a string and fails silently producing garbage.
-
-2. **Large payloads over Tauri IPC.** `WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE` is 50 MB. A 50 MB payload hex-serialized is 100 MB of string sent over the Tauri IPC boundary. The IPC has no enforced size limit; 100 MB in a single Tauri event freezes the WebView. The backend should truncate `execution_result` to a display-safe size (e.g., 4 KB) before emitting the Tauri event.
-
-3. **Valid UTF-8 that is not JSON but looks like it.** A payload of `{malformed` passes the UTF-8 check, fails `JSON.parse`, and should fall through to showing the raw UTF-8 string — not hex. The try/catch around `JSON.parse` must preserve the UTF-8 string when JSON parse fails.
-
-4. **Null bytes in otherwise valid UTF-8.** A `Vec<u8>` that is valid UTF-8 but contains `\0` bytes will decode without error but render incorrectly in some React text nodes. Use `TextDecoder` with `fatal: false` and strip null bytes from display output.
+The rig-core fork starts as a ~300-500 line diff. Over time, upstream rig ships new LLM providers, breaking API changes (e.g., rig v0.31 changed `CompletionResponse` to add `message_id`, removed `AgentBuilderSimple`, changed `StreamingChat` traits), and dependency bumps. The fork does not receive these changes automatically. Developer agents using the fork miss new providers. Worse: if the fork's Cargo.toml specifies a version range that overlaps with the upstream crate name, `cargo update` may silently switch between the fork and upstream depending on lock file state.
 
 **Why it happens:**
-Developers copy the `TriggerData.Raw` TypeScript type (which is `number[]`) and assume `WasmResponse.payload` uses the same serialization. It does not — `const_hex` produces a hex string, not an array.
+`[patch]` entries in Cargo.toml override the upstream crate only in the workspace that declares the patch. If a downstream demo project adds rig as a dependency without inheriting the workspace patch, it pulls unpatched upstream rig. Cargo does not warn about this. The lock file difference is the only signal, and only if the developer compares lock files.
 
 **How to avoid:**
-Define one utility function `decodePayload(hexStr: string): string` that: hex-decodes to `Uint8Array`, attempts `TextDecoder.decode` with `fatal: true`, on failure returns hex string with `0x` prefix; if UTF-8 succeeded, attempts `JSON.parse`, on success returns `JSON.stringify(parsed, null, 2)`, on failure returns the UTF-8 string. Apply a `MAX_DISPLAY_BYTES = 4096` truncation before hex-decoding and show a "truncated — N bytes total" notice if exceeded. Apply the size cap in the Rust Tauri event emission, not just in the display layer.
+Publish the fork to a private or public git repository and pin to an explicit commit SHA in `Cargo.toml` (`git = "...", rev = "abc1234"`). Document the upstream rig version the fork is based on in a `FORK_BASIS.md` at the fork root. Create a tracking issue for upstream rig WASM support (the stated goal is to upstream these patches). Before each WAVS release, diff the fork against the corresponding upstream tag and selectively backport provider additions. Never use `version = "..."` for the fork dependency — always `git + rev`.
 
 **Warning signs:**
-- Activity card shows garbled characters for a service that returns ASCII text.
-- UI freezes or becomes unresponsive when a high-throughput service produces large payloads.
-- The decode chain always falls through to hex for known UTF-8 outputs.
+- `cargo tree -p rig-core` shows two different rig versions in the dependency graph — upstream leaked in through a transitive dep
+- A new LLM provider available in upstream rig cannot be used without manual backport
+- CI passes locally (with workspace `[patch]`) but fails in a demo project that does not inherit the workspace
 
 **Phase to address:**
-Phase adding smart result decoding to the activity feed.
+Phase 1 (fork setup) — establish the pinning strategy before any integration code is written.
 
 ---
 
-### Pitfall 5: Wallet kebab menu — confirmation state and modal ownership
+### Pitfall 5: KV State Serialization Format Lock-In — History Grows Unboundedly
 
 **What goes wrong:**
-The existing `WalletSection.tsx` manages its own `showResetConfirm` boolean state. The proposed kebab menu moves "Reset Wallet" and "Export Recovery Phrase" behind a three-dot trigger. Two sub-pitfalls:
-
-1. **Dropdown auto-closes before handlers run.** The existing `DropdownMenu` component calls `setIsOpen(false)` inside the `onClick` wrapper before invoking the user's `onClick` handler. This means any state managed inside the dropdown is lost. The confirmation step must live in `WalletSection` parent state, not inside a dropdown option handler.
-
-2. **Confirmation dialog ownership.** If a `Modal.open(...)` imperative pattern is used (as in `OwnerActionsMenu`), the modal does not tie into `WalletSection` React state — `showResetConfirm` state becomes stale and `handleResetWallet` may close over incorrect values. Choose one pattern: inline confirm panel (existing `WalletSection` pattern) or modal (`OwnerActionsMenu` pattern). Do not mix.
-
-3. **Danger variant styling.** The `DropdownMenu` component supports `variant: 'danger'` on `MenuOption` which applies `text-red-3`. "Reset Wallet" must use `variant: 'danger'`. Forgetting this makes a destructive action look identical to a non-destructive one.
+Agent conversation history is serialized to JSON and stored in the WAVS KV store (one key per service instance, e.g., `"conversation:{service_id}"`). As the agent runs over many invocations, the history array grows without bound. At some invocation, the deserialized history exceeds the LLM's context window, causing an `invalid_request_error: context_length_exceeded` from the provider API. The agent cannot recover because it cannot write new state if history read + LLM call fails mid-invocation. The KV store key is now "poisoned" — every future invocation fails immediately.
 
 **Why it happens:**
-The `DropdownMenu.tsx` auto-close is an intentional UX pattern for action menus but is invisible unless you read the component source. Developers expect the dropdown to stay open during a confirmation step.
+Developers implement history persistence as a simple append-only JSON array. There is no eviction policy, no token count check, and no trimming. The first 20-50 invocations work fine, then failure appears seemingly at random. Because WAVS components are stateless between invocations, there is no in-memory recovery path — the bad state lives in the KV store indefinitely.
 
 **How to avoid:**
-Keep all multi-step state (`showMnemonic`, `showResetConfirm`) in `WalletSection` component state. Kebab menu options are pure action triggers that set parent state booleans (`onClick: () => setShowResetConfirm(true)`). Confirm and execute actions happen in the `WalletSection` render tree, outside the dropdown. Use `variant: 'danger'` for the reset option.
+The KV memory module in `wavs-rig` must enforce a token budget at write time, not read time. Before appending a new exchange, measure the token count of the existing history plus the new messages. If the sum exceeds a configurable `max_history_tokens` threshold (default: 75% of the model's context window), trim the oldest messages from the front of the array until the budget is met. Store a `version` field in the serialized state so future format changes can migrate gracefully. Test with a history that is exactly at the token limit, exactly one token over, and exactly two exchanges over.
 
 **Warning signs:**
-- Clicking "Reset Wallet" in the kebab menu immediately resets without confirmation.
-- The seed phrase panel renders inside the dropdown and disappears when the dropdown closes.
-- The reset confirm panel appears but the "Yes, Reset Wallet" button does nothing.
+- Agent works correctly for the first N invocations, then always returns an error containing "context_length_exceeded" or "max_tokens"
+- The KV key for the service still has the old (failing) value after a deployment — clear the KV namespace to confirm the fix is in the write path, not read
+- History serialized to KV exceeds 1 MB for a single service instance
 
 **Phase to address:**
-Phase adding wallet kebab menu.
+Phase 3 (KV-backed conversation memory) — token budget management is not optional for production use.
+
+---
+
+### Pitfall 6: Fuel Exhaustion vs. Epoch Interruption — Agent Loop Has No Budget for Long Reasoning
+
+**What goes wrong:**
+WAVS uses both fuel metering (instruction count budget) and epoch interruption (wall-clock timeout) in combination, as visible in `packages/engine/src/worlds/instance.rs` and `packages/engine/src/worlds/operator/execute.rs`. An LLM agent with multi-step tool use (e.g., 5 LLM calls + 5 tool executions) consumes far more WASI instructions than a simple echo component. If the default fuel limit is configured for simple services, the agent runs out of fuel after 1-2 LLM round trips and returns `EngineError::OutOfFuel`. This is not a timeout — refactoring to be faster does not help. The fuel budget must be explicitly raised for agent workflows.
+
+**Why it happens:**
+The fuel setting in WAVS operator configuration is a single value applied to all service types. There is no per-service-type fuel policy. Developers see `OutOfFuel` and assume the component is in an infinite loop; they add timeout instrumentation that reveals the component finished quickly — confusing because `OutOfFuel` is a fuel trap, not a time trap. The existing error types `EngineError::OutOfFuel` and `EngineError::OutOfTime` are correct, but the distinction is not obvious to developers new to the engine.
+
+**How to avoid:**
+Document that agent components require a higher fuel budget than simple query components. The `service.json` or operator config for an agent service should set fuel to at least 10x the default (exact multiple depends on the number of tool call rounds). Add a log line at the start of each agent invocation showing current fuel remaining. The `InstanceDeps.store.get_fuel()` method is available at the host side — expose remaining fuel in the activity feed for agent services so operators can tune the limit empirically.
+
+**Warning signs:**
+- Agent returns `OutOfFuel` on first real LLM call, not after many rounds — the fuel limit is too low for even a single HTTP request through `wasi:http`
+- Increasing the epoch timeout does not change the error — this is fuel, not wall-clock time
+- Simple echo components work fine but any HTTP-making component fails with `OutOfFuel`
+
+**Phase to address:**
+Phase 2 (wavs-rig integration crate) — validate fuel budget requirements before example agent is built.
+
+---
+
+### Pitfall 7: AllowedHostPermission Not Validated Before Agent Deployment — Silent Network Failures
+
+**What goes wrong:**
+WAVS enforces network policy via `AllowedHostPermission` (`All` / `Only` / `None`) at the Wasmtime linker level. A component deployed with `AllowedHostPermission::None` attempting to call `wasi:http/outgoing-handler` traps immediately. The error is not surfaced as an LLM API error — it is a WASM trap (`EngineError::ComponentError`) that looks identical to any other component crash. The agent error message contains no hint that the network policy blocked the call.
+
+**Why it happens:**
+Developers configure `AllowedHostPermission` correctly in the service definition but forget to update it when changing the LLM provider endpoint (e.g., from OpenAI to a private Ollama instance). An Ollama instance running at `http://localhost:11434` is not reachable from a sandboxed component even with `AllowedHostPermission::All` — the sandbox has no loopback to the host machine. The permission system enforces host allowlists, but the developer mental model assumes it works like a network firewall rule, not a complete isolation boundary.
+
+**How to avoid:**
+The `wavs-rig` integration crate should validate the HTTP permission configuration at startup (first agent invocation) and return a structured error if `AllowedHostPermission::None` is set. Add an example agent `service.json` that shows the correct `allowed_hosts` configuration for each supported LLM provider (OpenAI, Anthropic, Groq, OpenRouter). Document clearly that Ollama cannot be used from inside a WASI component unless the WAVS node proxies requests to the local Ollama endpoint and exposes it as an allowed external URL.
+
+**Warning signs:**
+- `EngineError::ComponentError` with no inner LLM error message — the HTTP call never reached the network
+- The agent works in simulation (`wavs simulate`) but fails when deployed — simulation may bypass permission checks
+- Changing `AllowedHostPermission` from `None` to `All` in the service definition fixes the error
+
+**Phase to address:**
+Phase 3 (example agent component) — validate end-to-end with the correct network policy before any documentation.
+
+---
+
+### Pitfall 8: cfg Flag Inconsistencies in rig-core Fork — Silent Dead Code on WASI Target
+
+**What goes wrong:**
+rig-core's existing WASM compatibility traits (`WasmCompatSend`, `WasmCompatSync`) gate on `#[cfg(target_arch = "wasm32")]`. The `wasm32-wasip2` target reports `target_arch = "wasm32"` AND `target_os = "wasi"`. Some rig internal conditions check only `target_arch`, others check `target_family = "wasm"`, and some check `not(target_os = "wasi")`. On the fork, patches applied for WASI p2 may be gated incorrectly: a patch guarded by `#[cfg(target_arch = "wasm32")]` also activates on browser WASM targets, potentially breaking those. A patch guarded by `#[cfg(target_os = "wasi")]` does not activate on the `wasm32-wasip1` target (which reports `target_os = "wasi"` differently across Rust versions). The upstream rig Cloudflare Worker feature flag does not distinguish between `wasm32-wasip2` and `wasm32-unknown-unknown`.
+
+**Why it happens:**
+The Rust target triple system is not intuitive for WASM: `wasm32-unknown-unknown` (browser), `wasm32-wasip1` (WASI preview 1), and `wasm32-wasip2` (WASI preview 2) all have `target_arch = "wasm32"` but different `target_os`. Most library authors only test browser WASM. The recommended cfg for WASI p2 is `#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]`, but the narrower check `#[cfg(all(target_arch = "wasm32", not(target_family = "wasm")))]` silently activates no code on any WASM target.
+
+**How to avoid:**
+Establish a single canonical cfg alias at the fork root: `#[cfg(wavs_wasi_target)]` using `build.rs` to set `cargo:rustc-cfg=wavs_wasi_target` when `CARGO_CFG_TARGET_ARCH == "wasm32" && CARGO_CFG_TARGET_OS == "wasi"`. Use this alias exclusively in the fork's platform-shim code. This avoids per-file inconsistencies and is testable. Run `cargo check --target wasm32-unknown-unknown` on the fork to verify browser WASM compatibility is not broken by the WASI patches.
+
+**Warning signs:**
+- Platform-specific code in the fork does not activate on `wasm32-wasip2` despite the `#[cfg(target_arch = "wasm32")]` guard — check target_os
+- The fork compiles on `wasm32-wasip2` but produces a component that traps immediately, before any user code runs — a cfg-gated shim is activating on the wrong target
+- `cargo check --target wasm32-unknown-unknown` after applying the fork patches shows unexpected compilation failures in rig's browser-WASM path
+
+**Phase to address:**
+Phase 1 (rig-core fork) — establish the cfg alias as the first commit in the fork before any other patches.
 
 ---
 
@@ -129,88 +178,99 @@ Phase adding wallet kebab menu.
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Adding `tx_hash` as `Option<String>` in event struct | Avoids breaking existing consumers that don't care about tx_hash | Optional fields accumulate; struct shape becomes hard to reason about | Acceptable here — tx_hash is genuinely absent for non-aggregated (Submit::None) workflows |
-| Truncating payload display to 4 KB client-side | Avoids IPC freeze with minimal code | User cannot see full result without an additional "copy full payload" affordance | Acceptable — add a "copy full payload" Tauri command alongside display truncation |
-| Reusing existing `DropdownMenu` for the kebab trigger | Zero new component | `DropdownMenu` requires a text `label` prop; three-dot kebab icon requires a workaround (pass `"⋮"` as label) | Acceptable for v1.3; add an `icon` prop variant to `DropdownMenu` later |
-| Not serializing `DispatcherCommand` via bincode | Simpler change | Not a concern — `DispatcherCommand` is a crossbeam-local in-process channel, never serialized to disk or network | Always fine |
+| Hardcode the LLM API base URL in the integration crate | Faster initial test | Cannot switch providers or route through a proxy | Never — use a config var from the WAVS service config at runtime |
+| Use `serde_json::Value` for conversation history serialization | Simple, no schema | Format changes corrupt existing KV history; no migration path | Only for initial prototype; add a `version` field before shipping |
+| Set fuel limit to `u64::MAX` for agent services | Eliminates OutOfFuel errors during development | Infinite loop in agent reasoning exhausts the host machine | Never in production; set a high but finite limit and test the fuel trap |
+| Sequential tool calls with `block_on` inside the agent loop | Works on single-threaded WASI | rig concurrency setting of 1 is already the correct approach — this is fine | Always acceptable for MVP; concurrent tool calls are not needed |
+| `[patch]` workspace override without pinning to git rev | Faster iteration during development | Lock file drift; demo projects outside the workspace pull upstream rig | Only acceptable during active fork development; pin before any deployment |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| `WasmResponse.payload` wire format | Treating the hex string as `number[]` (copying `TriggerData::Raw` pattern) | `TriggerData::Raw` is `number[]` on the wire; `WasmResponse.payload` uses `const_hex` and is a hex string — hex-decode first |
-| Tauri event payload field names | Using camelCase TypeScript field names that don't match Rust `snake_case` serde output | Rust `#[serde(rename_all = "snake_case")]` on event structs means TypeScript fields must use `snake_case` names exactly |
-| `DispatcherCommand::SubmissionConfirmed` struct variant | Adding a new enum variant instead of extending the existing one, relying on wildcard `_` arms | Add fields to existing `SubmissionConfirmed` variant so the compiler flags every stale destructuring match |
-| Aggregator `tx_hash` availability | Assuming tx_hash is a `String` — it is actually a `TxHash` (alloy `FixedBytes<32>`) requiring `.to_string()` or hex formatting | Call `tx_resp.tx_hash().to_string()` or use `alloy_primitives::hex::encode` at the send site |
+| rig `Agent::prompt()` | Calling from inside a second `block_on` | Drive the entire agent loop from a single top-level `block_on` at the WASM component entry point |
+| `wasi:http/outgoing-handler` | Using reqwest native or the browser `fetch` target | Implement rig's HTTP transport trait using WIT-generated `wasi::http` bindings |
+| KV bucket naming | Using a hardcoded bucket name like `"history"` | Namespace by service ID: `format!("agent:{service_id}")` to isolate per-service history |
+| `AllowedHostPermission` | Deploying agent with `None` permission assuming it only controls untrusted external calls | `None` blocks ALL outgoing HTTP including LLM API calls; use `All` or a specific `Only` allowlist |
+| Token budget check | Checking token count after writing to KV | Check and trim BEFORE writing; a failed LLM call after a write leaves the KV in a state with no new messages to recover from |
+| Fuel metering | Assuming fuel applies uniformly | Each `wasi:http` outgoing call consumes orders of magnitude more fuel than pure computation; calibrate with realistic LLM round trips |
+| rig fork version pinning | Using `version = "0.x"` in Cargo.toml | Use `git = "...", rev = "abc1234"` to prevent accidental upstream upgrades |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Large `execution_result` over Tauri IPC | WebView freezes; UI becomes unresponsive | Cap payload at 4 KB in the Rust Tauri event emission before it reaches IPC | Any payload > ~1 MB hex-encoded (~512 KB raw bytes) |
-| `useMemo` in `useGroupedActivity` recomputes on every `addActivity` | Activity feed re-renders entire group list on each new event | Acceptable at hundreds of events; add virtualization if list grows to thousands | >5000 activity items in the store |
-| `JSON.parse` on every render of payload display | Redundant parse work on re-renders | Memoize decoded result per `ActivityItem.id` | High-frequency trigger services; >100 items visible simultaneously |
+| Unbounded conversation history in KV | Every invocation gets slower; eventually hits context limit error | Token budget with trim-from-front eviction at write time | At ~20-50 invocations for GPT-4-class models (128k context window) |
+| Deserializing full history on every invocation | Read latency grows linearly with history length | Implement sliding window: store only last N exchanges, not full history | At >100 historical messages in the KV store |
+| JSON serialization of large binary tool results | Component result payload explodes in size (hex encoding doubles size) | Apply the existing 4 KB cap from the aggregator to tool result storage in KV | Any tool result > 2 KB stored as hex in KV |
+| LLM retries without backoff inside WASI | Rapid-fire retries exhaust fuel budget before epoch timeout fires | Implement exponential backoff with a max retry count of 2-3; the epoch interruption is the outer guard | On any provider rate-limit response (HTTP 429) |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Logging `execution_result` payload bytes at INFO level | Execution results may contain sensitive application data | Log at DEBUG level for payload content; INFO only for tx_hash and service/workflow identifiers |
-| Seed phrase rendered in DOM without unmount cleanup | Phrase stays in DOM if user navigates away mid-reveal | Existing `handleHideMnemonic` clears state; also add it to `useEffect` cleanup for the section; verify kebab option does not bypass this |
+| Storing raw API keys in the agent's KV conversation history | Key visible to anyone with KV read access to the service namespace | Never log or store provider API keys in KV; read them only from WAVS config vars at invocation time |
+| Logging full LLM prompt/response at INFO level | Prompts may contain user PII or sensitive trigger data | Log at DEBUG; emit only token counts and provider name at INFO |
+| Using `AllowedHostPermission::All` for all agents without review | Agent can call arbitrary external URLs including internal network endpoints | Use `AllowedHostPermission::Only` with an explicit provider allowlist for production deployments |
+| Passing raw trigger data directly into LLM prompt without sanitization | Prompt injection via EVM event data | Treat all trigger data as untrusted; wrap in a structured prompt template that limits where trigger data appears |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Showing raw hex for all byte payloads | Unreadable for the majority of services returning UTF-8 text or JSON | Apply UTF-8 → JSON → hex decode chain; default to most human-readable form |
-| Showing full 64-char tx_hash inline in card | Card overflow, especially in narrow sidebar layouts | Truncate to `0x1234...abcd` (first 6 + last 4 chars) with click-to-copy |
-| Placing "Reset Wallet" and "Export Recovery Phrase" at same visual weight | User may accidentally trigger destructive action | `variant: 'danger'` for Reset; place it last in the options array; separator line between safe and destructive options if the component supports it |
-| Showing "pending" status indefinitely for Submit::None workflows | User thinks the service is stuck when it completed correctly | Distinguish Submit::None workflows from stuck ones; "no submission" label instead of pending indicator |
+| OutOfFuel error with no context on why | Developer cannot distinguish "fuel too low" from "infinite loop" | Surface `OutOfFuel` vs `OutOfTime` distinction in the activity feed; show fuel consumed vs budget |
+| Network permission trap looks identical to component crash | Developer spends time debugging component logic, not configuration | Add a startup validation that explicitly checks network permission and emits a structured error before the first LLM call |
+| No indication of which tool call failed in a multi-tool agent loop | Debug requires log inspection, cannot see from the activity feed | Log each tool call and result at WAVS host level before returning to the rig agent |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Richer activity cards:** `tx_hash` added to Rust `SubmissionConfirmed` but not threaded through `SubmissionEvent` TypeScript interface — verify `activityItem.tx_hash` is non-null in Zustand devtools after a real on-chain submission.
-- [ ] **Richer activity cards:** `execution_result` displays as hex string because decode chain was not applied — verify a service returning plain ASCII text shows the text, not hex.
-- [ ] **Service restart fix:** WAVS restarts with no errors but the cron-triggered service never fires again — verify Jaeger shows `StartListeningCron` commands after restart.
-- [ ] **Service restart fix:** The `already_in_memory` skip path still skips `add_service_to_managers` — check that every startup code path that saves a service also registers it with managers.
-- [ ] **Wallet kebab:** Clicking "Reset Wallet" from the menu triggers immediate deletion without confirmation — verify `showResetConfirm` state is set true, not `handleResetWallet` called directly.
-- [ ] **Wallet kebab:** "Export Recovery Phrase" option closes the menu and the phrase panel appears in `WalletSection`, not inside a floating dropdown element — verify DOM structure.
-- [ ] **Result decode:** A payload from a high-output service does not freeze the UI — verify truncation is applied at the Rust IPC emission site, not only at the display layer.
+- [ ] **Fork compiles:** `cargo component build --target wasm32-wasip2` succeeds AND `wasm-tools validate` passes — not just `cargo build`
+- [ ] **No nested executors:** Confirm the integration crate has exactly one `block_on` call (at the WIT `run` entry point) — search for all `block_on` calls in the compiled component's source
+- [ ] **HTTP transport wired:** A minimal agent that makes one LLM API call succeeds when deployed on a WAVS node with `AllowedHostPermission::All` — not just in simulation
+- [ ] **Fuel budget validated:** Run a 5-round tool-use agent and confirm it completes without `OutOfFuel` at the configured fuel limit
+- [ ] **KV token budget enforced:** Run an agent for 100+ invocations and confirm history does not grow unboundedly; confirm the 101st invocation succeeds
+- [ ] **Fork pinned to git rev:** `cargo tree -p rig-core` shows the fork rev, not the upstream crates.io version, in all demo projects
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| DispatcherCommand new variant with silent wildcard arm | MEDIUM | Grep all `match command` sites in the codebase; add explicit arms; no data loss, just missing events |
-| TypeScript interface not updated to match new Rust fields | LOW | Add fields to `SubmissionEvent` and `ActivityItem`; the Tauri event already carries the data — Zustand store starts populating immediately on next event |
-| Service restart loses triggers | HIGH | Audit `already_in_memory` branch; add `add_service_to_managers` call for the settings-cache load path; requires WAVS restart to verify |
-| Payload decode always falls to hex | LOW | Fix `const_hex` handling in `decodePayload` utility; no backend change needed |
-| Wallet kebab bypasses confirmation | LOW | Move confirmation state to parent component; add `showResetConfirm` gate before calling `handleResetWallet` |
+| Tokio rt causes linker errors | LOW | Add `default-features = false` to rig-core fork dependency; add `#[cfg]` guards on tokio spawn sites; rebuild |
+| Nested block_on deadlock | MEDIUM | Audit all async entry points in the integration crate; ensure single top-level block_on; no recovery possible mid-execution — component must be redeployed |
+| KV history poisoned by context overflow | LOW | Delete the KV bucket for the affected service instance (`wasi:keyvalue store::delete`); next invocation creates a fresh history |
+| Fuel exhaustion for agent services | LOW | Increase fuel limit in operator config for the specific service workflow; no code change needed |
+| Fork diverged from upstream | HIGH | Use `git diff` against the upstream tag to identify non-platform patches; manually backport; test on both WASI and native targets |
+| Network permission trap | LOW | Update service definition `allowed_hosts`; redeploy service; no code change to component |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| DispatcherCommand enum break | Phase adding richer activity data (Rust side) | `cargo build` with exhaustive match; search all `match command` sites |
-| Rust/TypeScript struct field mismatch | Same phase as Rust event struct change | Open activity feed after a real submission; confirm `tx_hash` field is populated in Zustand devtools |
-| Service restart trigger loss | Dedicated service restart fix phase | Restart WAVS; confirm cron trigger fires within expected interval; check Jaeger for `StartListeningCron` after restart |
-| Payload `const_hex` decode mishandled | Smart result decoding phase | Test with empty payload, UTF-8 text payload, JSON payload, binary payload, 10 MB payload |
-| Wallet kebab confirmation state | Wallet kebab menu phase | Click "Reset Wallet" from menu; confirm panel appears; confirm cancel works; confirm reset executes after confirmation only |
+| Tokio rt linker errors | Phase 1 (rig-core fork) | `cargo component build --target wasm32-wasip2` with no linker errors |
+| Nested block_on deadlock | Phase 1 (rig-core fork) | Minimal async probe test: one await inside block_on, no inner executors |
+| reqwest not available in WASI | Phase 2 (HTTP transport bridge) | End-to-end LLM call via wasi:http outgoing-handler succeeds on deployed WAVS node |
+| Fork divergence | Phase 1 (fork setup) | Git rev pinned in Cargo.toml; diff tracked in FORK_BASIS.md |
+| KV history unbounded growth | Phase 3 (KV memory module) | 100-invocation soak test; history size stable after trim |
+| Fuel exhaustion for agents | Phase 2 (integration crate) | 5-tool-call agent completes within fuel budget; OutOfFuel only on deliberate infinite loop |
+| AllowedHostPermission silent trap | Phase 3 (example agent) | Startup validation emits structured error for None permission before first LLM call |
+| cfg flag inconsistencies | Phase 1 (rig-core fork) | Single canonical `wavs_wasi_target` cfg alias; `cargo check` on both wasm32-wasip2 and wasm32-unknown-unknown |
 
 ## Sources
 
-- Direct code inspection: `/workspace/packages/wavs/src/dispatcher.rs` — `DispatcherCommand` enum, `start()` main loop, `SubmissionConfirmed` send site, `already_in_memory` branch
-- Direct code inspection: `/workspace/packages/gui/shared/src/event.rs` — Tauri event structs and `TauriEventExt` trait
-- Direct code inspection: `/workspace/packages/types/src/service.rs` — `WasmResponse` with `const_hex` payload encoding
-- Direct code inspection: `/workspace/packages/types/src/submission.rs` — `Submission` struct with `operator_response: WasmResponse`
-- Direct code inspection: `/workspace/packages/wavs/src/subsystems/aggregator.rs` — `SubmissionConfirmed` dispatch at line 638, `tx_resp.tx_hash()` at line 632
-- Direct code inspection: `/workspace/app/src/types/index.ts` — `ActivityItem`, `SubmissionEvent`, `TriggerData` types; note `TriggerData::Raw` is `number[]` vs `WasmResponse.payload` hex string
-- Direct code inspection: `/workspace/app/src/tauri/listeners.ts` — event listener pipeline and `addActivity` call sites
-- Direct code inspection: `/workspace/app/src/hooks/useGroupedActivity.ts` — correlation grouping logic
-- Direct code inspection: `/workspace/app/src/components/atoms/DropdownMenu.tsx` — auto-close behavior on option click (line 56: `setIsOpen(false)` before `option.onClick()`)
-- Direct code inspection: `/workspace/app/src/components/settings/WalletSection.tsx` — existing multi-step wallet state management pattern
-- Direct code inspection: `/workspace/app/src/components/poa/OwnerActionsMenu.tsx` — existing `DropdownMenu` usage with `Modal.open` pattern
+- Direct code inspection: `/workspace/WAVS/packages/engine/src/worlds/operator/execute.rs` — dual fuel + epoch timeout pattern, `EngineError::OutOfFuel` vs `OutOfTime`
+- Direct code inspection: `/workspace/WAVS/packages/engine/src/worlds/instance.rs` — `EPOCH_YIELD_PERIOD_MS`, `AllowedHostPermission` linker configuration, `KeyValueCtx`
+- Direct code inspection: `/workspace/WAVS/packages/engine/src/backend/wasi_keyvalue/context.rs` — per-namespace KV isolation, `KeyValueCtxProvider` trait
+- Direct code inspection: `/workspace/WAVS/examples/components/echo-data/src/lib.rs` — `wstd::runtime::block_on` as sole async entry point pattern
+- Direct code inspection: `/workspace/WAVS/examples/components/kv-store/src/lib.rs` — bucket open/read/write pattern used by components
+- Direct code inspection: `/workspace/WAVS/.planning/PROJECT.md` — confirmed hard blockers: unconditional reqwest, tokio rt feature, cfg inconsistencies; fork size ~300-500 lines
+- rig-core issue #176 (CF worker support): synchronized async wrappers via feature flag for constrained WASM environments — [github.com/0xPlaygrounds/rig/issues/176](https://github.com/0xPlaygrounds/rig/issues/176)
+- rig v0.31 release notes: reqwest upgraded to 0.13 with rustls default; breaking API changes confirm active churn — [github.com/0xPlaygrounds/rig/discussions/1406](https://github.com/0xPlaygrounds/rig/discussions/1406)
+- reqwest wasm32-wasip2 support issue (open, unresolved): [github.com/seanmonstar/reqwest/issues/2979](https://github.com/seanmonstar/reqwest/issues/2979)
+- Wasmtime interrupting wasm (epoch vs fuel): [docs.wasmtime.dev/examples-interrupting-wasm.html](https://docs.wasmtime.dev/examples-interrupting-wasm.html)
+- wstd async model and temporary nature: [github.com/bytecodealliance/wstd](https://github.com/bytecodealliance/wstd)
+- Cargo patch publishing limitation (fork cannot be published to crates.io): [doc.rust-lang.org/cargo/reference/overriding-dependencies.html](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html)
+- Rust target triple cfg for WASM: `wasm32-wasip2` reports `target_arch = "wasm32"` AND `target_os = "wasi"` — [doc.rust-lang.org/rustc/platform-support/wasm32-wasip2.html](https://doc.rust-lang.org/rustc/platform-support/wasm32-wasip2.html)
 
 ---
-*Pitfalls research for: WAVS v1.3 Activity UX & Bug Fixes*
-*Researched: 2026-04-09*
+*Pitfalls research for: rig-core integration into WAVS WASI sandbox*
+*Researched: 2026-04-20*

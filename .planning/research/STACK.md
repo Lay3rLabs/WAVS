@@ -1,165 +1,148 @@
 # Stack Research
 
-**Domain:** Tauri 2 + React 19 desktop app — activity UX, result decoding, backend bug fixes, dropdown menus
-**Researched:** 2026-04-09
-**Confidence:** HIGH — all findings are from direct codebase inspection; no new external dependencies required
+**Domain:** rig-core integration into WASI components — WAVS v2.0 Agent Runtime
+**Researched:** 2026-04-20
+**Confidence:** HIGH — verified via crates.io API (live versions), docs.rs source inspection, and direct codebase inspection of WAVS packages
 
 ---
 
 ## Executive Summary
 
-All four v1.3 features are implementable with zero new dependencies. The codebase already contains every primitive needed:
+Integrating rig-core into wasm32-wasip2 WASI components requires one new crate (`wavs-rig`), one forked crate (`rig-core` → `rig-wasi`), and zero changes to the host-side WAVS node. The existing `wavs-wasi-utils` and `wstd` crates already provide all the host-function primitives (HTTP, KV, EVM) needed by the four bridges. The fork is scoped to ~300-500 lines across five files; the blockers are well-understood and all fixable.
 
-1. **tx_hash forwarding** — Pure Rust struct change: add `tx_hash: Option<String>` to `SubmissionConfirmed` in `DispatcherCommand` and mirror it in `SubmissionEvent` in `packages/gui/shared/src/event.rs`. The hash is already computed in `aggregator/submit.rs` via `AnyTransactionReceipt::tx_hash()` and passed to `DispatcherCommand::AggregatorExecute` as `AnyTxHash`. The `DispatcherCommand::SubmissionConfirmed` path already receives the `Submission` struct which holds `operator_response: WasmResponse` (the `payload` Vec<u8> field). Both tx_hash and the result payload need to flow through to the `SubmissionConfirmed` variant and into `SubmissionEvent`.
-
-2. **Smart result decoding** — Pure TypeScript: `TextDecoder` (built into browsers/WebViews), `JSON.parse`, and hex formatting with `Array.from` are all zero-dependency. No library needed. Decode priority: UTF-8 → JSON pretty-print → hex fallback.
-
-3. **Service restart race fix** — Pure Rust: the `StreamStartState` state machine in `trigger.rs` uses a `HashMap<ChainKey, StreamStartState>` that is local to `start_watcher`. When services are restored from the registry on startup, `add_service` sends `StartListeningChain` followed immediately by `WatchEvmContractEvents` in a loop. If `StartListeningChain` is still async-connecting, the subsequent `WatchEvmContractEvents` command arrives when `evm_controllers` has no entry for that chain, causing the subscription to be silently dropped. Fix is ordering-only with a local pending queue — no new crates.
-
-4. **Wallet settings kebab menu** — `DropdownMenu` atom already exists at `app/src/components/atoms/DropdownMenu.tsx` with full click-outside handling and a `danger` variant. A `KebabMenu` wrapper requires only a Unicode character (U+22EE `⋮`) or an `iconTrigger` prop on the existing atom. No icon library needed.
+**Current rig-core version:** 0.35.0 (released 2026-04-13, crates.io verified)
 
 ---
 
 ## Recommended Stack
 
-### Core Technologies (unchanged)
+### New Crates to Create
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| Rust (wavs_types, wavs_gui_shared) | existing | Backend event types, Tauri command contracts | Struct changes propagate to frontend via serde + TS types |
-| Tauri 2 | ^2.x | Desktop shell, IPC | Already in use; `emit_ext` pattern is established |
-| React 19 | ^19.1.0 | Frontend UI | Already in use |
-| Zustand 5 | ^5.0.0 | Frontend state | Already in use; `ActivityItem` already stores all activity |
-| TypeScript 5.8 | ~5.8.3 | Frontend type safety | Already in use; types/index.ts mirrors Rust event structs |
-| clsx | ^2.1.0 | Conditional class names | Already in use in all components |
+| Crate | Location | Purpose | Why |
+|-------|----------|---------|-----|
+| `wavs-rig` | `packages/wavs-rig/` | Integration layer: 4 bridges between rig and WASI sandbox | Keeps rig-specific code isolated; developers import one crate |
+| `rig-wasi` fork | git dependency | rig-core with WASI blockers patched | rig-core 0.35.0 has hard blockers on wasm32-wasip2; ~300-500 line fork is the only viable path |
 
-### Supporting Libraries (unchanged — nothing new)
+### Core Dependencies for `wavs-rig`
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| TextDecoder (Web API) | built-in | UTF-8 byte decoding | Decoding WasmResponse.payload in result display |
-| JSON.parse (built-in) | built-in | JSON detection | Second pass in decode chain after UTF-8 succeeds |
-| Array.from + toString(16) (built-in) | built-in | Hex fallback | Third pass when payload is not valid UTF-8 |
+| Library | Version | Purpose | Why |
+|---------|---------|---------|-----|
+| `rig-core` (forked) | 0.35.0 fork | Agent loop, Tool trait, CompletionModel, 20+ LLM providers | Rig provides the complete agent framework; building from scratch = months of work |
+| `wstd` | 0.6.6 (latest) | Async executor (`block_on`), WASI HTTP client, WASI clock | Already in workspace; provides `wstd::runtime::block_on` used by all existing components |
+| `wasip2` | 1.0.3+wasi-0.2.9 (latest) | WASIp2 raw bindings including `wasi:keyvalue` | Already in workspace as `wasip2 = "1.0.1"` — upgrade to 1.0.3 |
+| `wavs-wasi-utils` | workspace | HTTP helpers, EVM provider helpers | Already provides `fetch_json`, `http_request_post_json` over `wasi:http` |
+| `serde` + `serde_json` | workspace | JSON serialization for tool args/outputs, LLM request bodies | Required by rig Tool trait (JSON Schema) |
+| `schemars` | ~0.8 or 1.0 | JSON Schema generation for `ToolDefinition` | rig-core uses this for typed tool parameters |
+| `anyhow` | workspace | Error propagation across bridge layers | Consistent with rest of WAVS codebase |
 
-No npm installs required.
+### Fork: `rig-core` → `rig-wasi`
 
----
+**Fork rig-core 0.35.0. Apply five patches. Use as git dependency in `wavs-rig` and the agent example component.**
 
-## Integration Points by Feature
+**Do not attempt to use upstream rig-core 0.35.0 for wasm32-wasip2.** It fails to compile due to three hard blockers:
 
-### Feature 1: tx_hash + execution result forwarding (Rust to GUI)
+#### Patch 1: Make `reqwest` optional (Cargo.toml + http_client.rs + client/mod.rs)
 
-**Data path today:**
-```
-aggregator/submit.rs
-  -> AnyTransactionReceipt::tx_hash()          // String available here
-  -> DispatcherCommand::SubmissionConfirmed { service_id, workflow_id, trigger_data, correlation_id }
-  -> dispatcher.rs emit_ext(SubmissionEvent { service_id, workflow_id, trigger_data, correlation_id })
-```
+reqwest 0.12.x does not support wasm32-wasip2 (GitHub issue #2979, opened March 2026, no merged PR as of April 2026). In rig-core 0.35.0, `reqwest = { features = ["json", "stream", "multipart"] }` is an unconditional dependency — not behind a feature gate.
 
-**Gap:** `tx_hash` and `operator_response.payload` are never forwarded into `SubmissionConfirmed`. They exist in scope — `tx_resp.tx_hash()` is logged at line 632 of aggregator.rs, and `submission.operator_response.payload` is in the `Submission` struct — but are dropped before the `SubmissionConfirmed` send.
+**Required changes:**
+```toml
+# rig-wasi Cargo.toml
+[dependencies]
+reqwest = { version = "0.12", features = ["json", "stream", "multipart"], optional = true }
 
-**Change surfaces:**
-
-- `packages/wavs/src/dispatcher.rs` — `DispatcherCommand::SubmissionConfirmed` variant: add `tx_hash: Option<String>` and `result_payload: Vec<u8>`
-- `packages/wavs/src/subsystems/aggregator.rs` — where `SubmissionConfirmed` is constructed (around line 636): pass `Some(tx_resp.tx_hash())` and `submission.operator_response.payload.clone()`
-- `packages/gui/shared/src/event.rs` — `SubmissionEvent`: add `tx_hash: Option<String>` and `result_payload: String` (hex-encoded for readability)
-- `app/src/types/index.ts` — `SubmissionEvent` interface: add `tx_hash: string | null` and `result_payload: string`
-- `app/src/stores/appStore.ts` or activity listener — `ActivityItem`: add `txHash?: string` and `resultPayload?: string` when consuming `SubmissionEvent`
-
-**Payload encoding choice:** Carry `result_payload` as a hex `String` (matching the `const_hex` serde annotation already on `WasmResponse.payload`) to avoid a JSON array-of-numbers in the Tauri IPC payload. Frontend receives a hex string and decodes via the existing `hexToBytes` helper in `types/index.ts`.
-
-### Feature 2: Smart result decoding (TypeScript)
-
-**Algorithm (zero dependencies):**
-```typescript
-// Proposed location: app/src/utils/decodeResult.ts
-// Reuses hexToBytes / bytesToHex from app/src/types/index.ts (extract to utils/bytes.ts first)
-
-export function decodeResultPayload(hex: string): string {
-  const bytes = hexToBytes(hex);
-
-  // 1. Try valid UTF-8
-  let text: string;
-  try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  } catch {
-    // Not valid UTF-8 -- return hex
-    return '0x' + bytesToHex(bytes);
-  }
-
-  // 2. Try JSON pretty-print
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2);
-  } catch {
-    // Valid UTF-8 but not JSON -- return as plain string
-    return text;
-  }
-}
+[features]
+default = ["rustls"]  # remove "reqwest" from default
+reqwest = ["dep:reqwest"]
 ```
 
-`TextDecoder` with `{ fatal: true }` throws on invalid UTF-8 sequences rather than replacing with U+FFFD, enabling clean fallback to hex. This is available in all modern WebViews including Tauri's WebKit/WebView2.
+In `client/mod.rs`: make `H` default type conditional on `reqwest` feature. In `http_client.rs`: gate the reqwest `Client` impl behind `#[cfg(feature = "reqwest")]`.
 
-**Usage:** Call in `GroupedActivityCard.tsx` when rendering the submission child card's result summary. The `hexToBytes` and `bytesToHex` helpers currently in `app/src/types/index.ts` should be moved to `app/src/utils/bytes.ts` to be shared between the types module and the new decode utility.
+#### Patch 2: Remove `tokio` `rt` feature, replace `watch` channel in streaming.rs
 
-### Feature 3: Service restart race fix (Rust)
+`tokio = { features = ["rt", "sync"] }` — the `rt` feature requires `std::thread`, unavailable on wasip2. The agent loop itself does not use tokio's runtime (it is pure async with `futures::StreamExt`), but `streaming.rs` imports `tokio::sync::watch` for `PauseControl`.
 
-**The problem (confirmed by code inspection):**
-
-`TriggerCommand::WatchEvmContractEvents` (trigger.rs ~line 577) looks up `evm_controllers.read().get(&chain)` and calls `enable_logs`. This works when the chain is `Connected`. But `TriggerManager::add_service` sends `StartListeningChain` followed immediately by `WatchEvmContractEvents` via the same `UnboundedSender` — both messages are queued synchronously. In `start_watcher`, `StartListeningChain` sets state to `Connecting` and then `await`s the EVM stream connection. The next iteration of the loop picks up `WatchEvmContractEvents` — but `evm_controllers` has no entry yet because the stream is still connecting. The controller insert only happens after the `await` resolves. Result: the log filter subscription is dropped with "No EVM controller found for chain" and never retried.
-
-**Fix approach (no new crates):**
-
-Add a pending subscriptions buffer local to `start_watcher`:
-
-```rust
-// In start_watcher, alongside listening_chain_states:
-let mut pending_log_subs: HashMap<ChainKey, Vec<(Vec<Address>, Vec<B256>)>> = HashMap::new();
+**Required changes:**
+```toml
+# rig-wasi Cargo.toml
+tokio = { version = "1", features = ["sync"], default-features = false }  # drop "rt"
 ```
 
-In the `WatchEvmContractEvents` arm:
-```rust
-// If not yet Connected, buffer for later
-if listening_chain_states.get(&chain) != Some(&StreamStartState::Connected) {
-    pending_log_subs.entry(chain).or_default().push((addresses, event_hashes));
-    continue;
-}
-// Otherwise apply immediately via controller
+In `streaming.rs`: replace `tokio::sync::watch` with `futures::channel::oneshot` or a simple `std::sync::atomic::AtomicBool` (PauseControl is streaming-only infrastructure; for WASI MVP with sequential execution, stub it as a no-op pause controller).
+
+#### Patch 3: Unify cfg detection in wasm_compat.rs
+
+Current inconsistency: `WasmBoxedFuture` uses `#[cfg(target_family = "wasm")]` (fires on wasip2), but `WasmCompatSend`/`WasmCompatSync` use `#[cfg(all(feature = "wasm", target_arch = "wasm32"))]` (does NOT fire on wasip2 without the `wasm` cargo feature). This creates a type mismatch: futures drop `Send` but traits still require it.
+
+**Required change:** Unify to `#[cfg(target_family = "wasm")]` everywhere in `wasm_compat.rs`. This fires correctly on both wasm32-unknown-unknown and wasm32-wasip2 without needing a separate cargo feature flag for the wasip2 case.
+
+#### Patch 4: Fix SSE dead zones for wasip2 (sse.rs)
+
+The SSE module has branches for `#[cfg(not(target_arch = "wasm32"))]` (native) and `#[cfg(all(feature = "wasm", target_arch = "wasm32"))]` (browser). On wasip2 without `feature = "wasm"`, neither branch compiles. Either add a third branch for `#[cfg(all(not(feature = "wasm"), target_arch = "wasm32"))]` or gate the entire SSE module behind `#[cfg(not(target_family = "wasm"))]` (streaming responses via SSE are not used in the WASI bridge; rig's agent loop uses the non-streaming completion path).
+
+#### Patch 5: Handle `futures-timer` (if transitively required)
+
+`futures-timer` internally uses `std::thread::sleep` on non-WASM platforms. For wasip2, it needs clock-based delay via `wstd::time` or `wasi::monotonic_clock`. If `futures-timer` is in the dependency tree of the fork, either patch it to use `wstd` timers or replace its usage with `wstd::time::Duration` + `wstd::runtime` primitives directly.
+
+#### Patch 6: Verify `getrandom` feature (trivial)
+
+rig-core uses `getrandom = { features = ["js"] }` for randomness (used in nanoid generation). On wasm32-wasip2, getrandom natively supports wasip2 via `wasi:random/random.get-random-u64` — no feature flag required. The `wasm_js` feature (for browser) should be removed in the fork since it bloats Cargo.lock and can cause build issues on non-browser WASM.
+
+```toml
+# rig-wasi Cargo.toml — getrandom does NOT need wasm_js for wasip2
+getrandom = { version = "0.3", default-features = true }
+# wasip2 target gets random natively via wasi:random
 ```
 
-In the `Connected` transition path (after inserting into `evm_controllers`):
-```rust
-// Drain pending log subscriptions for this chain
-if let Some(pending) = pending_log_subs.remove(&chain) {
-    for (addrs, hashes) in pending {
-        controller.subscriptions.enable_logs(addrs, hashes);
-    }
-}
+### Cargo Configuration
+
+**In `wavs-rig/Cargo.toml` (new crate in workspace):**
+```toml
+[package]
+name = "wavs-rig"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rig-core = { git = "https://github.com/[org]/rig-wasi.git", rev = "[commit]", default-features = false }
+wstd = { workspace = true }
+wavs-wasi-utils = { path = "../wasi-utils" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
 ```
 
-Same pattern applies to `WatchEvmBlocks` buffering if needed.
-
-**Change surfaces:**
-- `packages/wavs/src/subsystems/trigger.rs` — `start_watcher` loop only. No API changes, no new public types.
-
-### Feature 4: Wallet settings kebab menu (React)
-
-**Existing capability:** `DropdownMenu` atom (`app/src/components/atoms/DropdownMenu.tsx`) already has:
-- Click-outside close via `useRef` + `addEventListener`
-- `danger` variant styling (red text)
-- Array of `MenuOption` items with `label`, `onClick`, `variant`
-
-**Recommended change:** Add `iconTrigger?: boolean` prop to `DropdownMenu`. When true, the button renders `⋮` (U+22EE VERTICAL ELLIPSIS) instead of `{label} {arrow}`. No new component file needed.
-
-```tsx
-// In DropdownMenu.tsx, change button content:
-{iconTrigger
-  ? <span className="text-tan-muted text-base leading-none px-1">⋮</span>
-  : <>{label} {isOpen ? '▲' : '▼'}</>
-}
+**In workspace `Cargo.toml` — add `wavs-rig` to members:**
+```toml
+[workspace]
+members = [
+    # ... existing members ...
+    "packages/wavs-rig",
+]
 ```
 
-**Usage in WalletSection.tsx:** Replace the standalone `Button` rows for `Export Recovery Phrase` and `Reset Wallet` with a single `DropdownMenu iconTrigger` in the section header. Existing state (`showMnemonic`, `showResetConfirm`) drives the same handlers — kebab just triggers those setters.
+**In workspace `Cargo.toml` — patch entry for rig-core (overrides transitive deps too):**
+```toml
+[patch.crates-io]
+rig-core = { git = "https://github.com/[org]/rig-wasi.git", rev = "[commit]" }
+```
+
+### WASI Component Example: `examples/components/rig-agent`
+
+New example following the existing pattern (like `kv-store`, `cosmos-query`):
+
+```toml
+# examples/components/rig-agent/Cargo.toml
+[dependencies]
+wavs-rig = { path = "../../../packages/wavs-rig" }
+example-helpers = { workspace = true }
+wstd = { workspace = true }
+serde_json = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
+```
 
 ---
 
@@ -167,50 +150,94 @@ Same pattern applies to `WatchEvmBlocks` buffering if needed.
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `@radix-ui/react-dropdown-menu` or Headless UI | Zero new capability vs existing DropdownMenu atom; adds 40+ kB and new import patterns | Extend DropdownMenu with `iconTrigger` prop |
-| `iconv-lite` or `encoding` npm packages | TextDecoder (WHATWG Encoding API) is built into all modern WebViews including Tauri | `new TextDecoder('utf-8', { fatal: true })` |
-| `hex-to-bytes` or `@noble/hashes` npm packages | `hexToBytes` and `bytesToHex` already exist in `app/src/types/index.ts` | Extract to `app/src/utils/bytes.ts` and reuse |
-| `tokio::sync::Mutex` for pending log queue | The trigger watcher is single-threaded (one async task owns the loop) | Plain `HashMap<ChainKey, Vec<...>>` local variable |
-| New Rust channel or new TriggerCommand variant | The existing `UnboundedSender<TriggerCommand>` is sufficient; pending subscriptions are watcher-local state | Local HashMap in `start_watcher` |
-| Result decoding on the Rust side | Frontend already receives byte payloads; decoding is display logic that belongs in UI | `decodeResultPayload` utility in TypeScript |
+| Upstream `rig-core = "0.35.0"` from crates.io | reqwest + tokio rt + cfg inconsistencies = compile failure on wasm32-wasip2 | Fork with 5 targeted patches |
+| `reqwest` in `wavs-rig` directly | reqwest 0.12 does not support wasm32-wasip2 (issue #2979 open, no merge) | `wstd::http::Client` via `wavs-wasi-utils::http` |
+| `tokio` in `wavs-rig` or agent components | tokio `rt` feature requires `std::thread`; wasip2 is single-threaded, single-process | `wstd::runtime::block_on` is the correct async executor |
+| `tokio-wasm` or `tokio_with_wasm` crates | These target wasm32-unknown-unknown (browser); wasip2 is a different target with different primitives | `wstd` 0.6.6 by Bytecode Alliance, designed specifically for wasip2 |
+| `wasm-bindgen` or `js-sys` in agent components | These are browser-WASM primitives; wasip2 components run in Wasmtime, not a browser | `wasip2` crate bindings for WASI APIs |
+| `getrandom` with `wasm_js` feature | Breaks non-browser WASM builds; wasip2 has native getrandom support | Default getrandom — wasip2 support is built-in |
+| New host-side (node) changes for v2.0 MVP | All four bridges operate inside the WASM sandbox using existing host functions | Existing `wasi:http`, `wasi:keyvalue`, `host::log` — zero node changes needed |
+| Streaming/SSE responses for agent loop | SSE adds complexity with no benefit in WASI; sequential completion calls are sufficient | Use rig's non-streaming `prompt()` path |
+| Concurrent tool execution (`buffer_unordered`) | wasip2 is single-threaded; concurrent futures require a multi-task executor that doesn't exist | Set rig's tool concurrency to 1; sequential tool calls work fine |
 
 ---
 
 ## Alternatives Considered
 
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| `Option<String>` for tx_hash in SubmissionEvent | Always-present String with empty sentinel `""` | Never — `None` is semantically correct for services with `Submit::None` that never go on-chain |
-| Hex string for result_payload in SubmissionEvent | `Vec<u8>` serialized as JSON number array | Number array is acceptable if payload size matters; hex string is more readable in DevTools and consistent with WasmResponse's existing `const_hex` serde |
-| Local `HashMap` pending queue in `start_watcher` | New `TriggerCommand::DeferredWatchEvmContractEvents` variant | Acceptable but adds API surface; local state is zero-API-change and easier to reason about |
-| `iconTrigger` prop on existing `DropdownMenu` | New `KebabMenu` wrapper component | New component if `KebabMenu` needs substantially different styling (different border, size, positioning) |
+| Recommended | Alternative | Why Not |
+|-------------|-------------|---------|
+| Fork rig-core (Option B) | Build agent SDK from scratch (Option C) | Rig has 20+ LLM providers, typed Tool trait, WASM-compat traits. Reimplementing = months of work. Fork is ~300-500 lines. |
+| Fork rig-core (Option B) | Upstream PR to rig-core (Option A) | Option A is correct long-term but review/merge timeline is unknown. Fork moves fast; Option A pursued in parallel. |
+| `wstd::runtime::block_on` | Custom async executor | wstd is maintained by Bytecode Alliance specifically for wasip2. It already works in existing WAVS components. |
+| `wstd::http::Client` for HTTP bridge | `wasi-http-client` crate | wavs-wasi-utils already wraps wstd HTTP; `fetch_json` / `http_request_post_json` are the established patterns in this codebase. |
+| Simple `AtomicBool` for PauseControl stub | Full `futures::channel` watch replacement | PauseControl is streaming infrastructure; WASI MVP uses non-streaming completions. Stub is sufficient and avoids pulling in channels with thread requirements. |
+| `[patch.crates-io]` for rig-core | Separate fork workspace | `[patch.crates-io]` in workspace root automatically patches all transitive dependencies. Clean, no duplication. |
+
+---
+
+## Async Runtime: Why `wstd::runtime::block_on`
+
+All existing WAVS WASI components use this pattern:
+
+```rust
+impl Guest for Component {
+    fn run(trigger_action: TriggerAction) -> Result<Vec<WasmResponse>, String> {
+        wstd::runtime::block_on(async {
+            // async code here
+        })
+    }
+}
+```
+
+wasip2 is single-threaded. `block_on` drives the future to completion cooperatively with the WASI reactor (which handles I/O events like HTTP responses and KV operations). Rig's agent loop — `agent.prompt(&prompt).await` — is a standard async chain with no thread-spawning. It works inside `block_on` as long as:
+
+1. HTTP calls use `wstd::http::Client` (not reqwest)
+2. No `tokio::spawn` is called (rig's agent loop doesn't spawn — it is sequential)
+3. Tool calls are sequential (set concurrency = 1 in rig config)
 
 ---
 
 ## Version Compatibility
 
-All changes are internal struct/type extensions — no version upgrades or new packages. Additive field additions to `SubmissionEvent` are backward-compatible with any consumers that don't yet read those fields.
+| Package | Version | Status | Notes |
+|---------|---------|--------|-------|
+| `rig-core` | 0.35.0 | Fork required | Latest as of 2026-04-13; fork at this version |
+| `wstd` | 0.6.6 | Upgrade from 0.6.5 | Workspace currently has 0.6.5; 0.6.6 (2026-03-12) is latest |
+| `wasip2` | 1.0.3+wasi-0.2.9 | Upgrade from 1.0.1 | Workspace currently has 1.0.1; 1.0.3 (2026-04-17) is latest |
+| `reqwest` | 0.12.x | Do NOT use in agent components | No wasm32-wasip2 support; issue open, no PR merged |
+| `tokio` (in fork) | 1.x sync-only | Drop `rt` feature in fork | `sync` feature (for `Mutex`, `RwLock`) may still be needed; `rt` must be removed |
+| `getrandom` | 0.3.x | No `wasm_js` flag | wasip2 has native random support; `wasm_js` is browser-only |
+| `schemars` | workspace-compatible | Verify in fork | rig uses schemars for ToolDefinition JSON Schema generation; wasip2-compatible |
 
-| Package | Version | Notes |
-|---------|---------|-------|
-| `@tauri-apps/api` | ^2.10.1 | SubmissionEvent shape change is additive — existing listeners that don't destructure new fields are unaffected |
-| `zustand` | ^5.0.0 | ActivityItem type extension is additive |
-| `react` | ^19.1.0 | No new hooks patterns beyond what's already used |
-| `wavs_gui_shared` | internal | SubmissionEvent field addition — all consumers (dispatcher.rs, app listeners.ts) updated together |
+---
+
+## Integration Points with Existing WAVS Structure
+
+| `wavs-rig` Feature | Bridges To | Existing Code |
+|--------------------|------------|---------------|
+| HTTP transport (LLM API calls) | `wstd::http::Client` | `packages/wasi-utils/src/http.rs` — `fetch_json`, `http_request_post_json` |
+| KV memory (conversation history) | `wasi:keyvalue::store` | `examples/components/kv-store/src/lib.rs` — `store::open`, `bucket.get/set` |
+| EVM query tool | `wavs-wasi-utils::evm` | `packages/wasi-utils/src/evm/` — `get_evm_chain_config`, provider helpers |
+| Logging | `host::log` | `example_helpers::bindings::world::host::log` |
+| Entry point | `wstd::runtime::block_on` | All existing components use this pattern |
+| Component type | `cdylib` + WIT bindings | Same as all examples; `export_layer_trigger_world!(Component)` |
 
 ---
 
 ## Sources
 
-- Direct inspection of `/workspace/packages/gui/shared/src/event.rs` — SubmissionEvent current fields (HIGH confidence)
-- Direct inspection of `/workspace/packages/wavs/src/subsystems/aggregator.rs` lines 628–694 — tx_hash availability and SubmissionConfirmed construction path (HIGH confidence)
-- Direct inspection of `/workspace/packages/wavs/src/dispatcher.rs` lines 118–143 and 462–480 — DispatcherCommand variants and emit_ext callsite (HIGH confidence)
-- Direct inspection of `/workspace/packages/types/src/service.rs` lines 657–666 — WasmResponse.payload field type and serde annotation (HIGH confidence)
-- Direct inspection of `/workspace/packages/wavs/src/subsystems/trigger.rs` lines 421–594 — StreamStartState machine and WatchEvmContractEvents ordering gap (HIGH confidence)
-- Direct inspection of `/workspace/app/src/components/atoms/DropdownMenu.tsx` — existing kebab-compatible primitive (HIGH confidence)
-- Direct inspection of `/workspace/app/src/types/index.ts` — hexToBytes/bytesToHex helpers and ActivityItem shape (HIGH confidence)
-- WHATWG Encoding API specification — TextDecoder `fatal` mode available in all Chromium/WebKit/Gecko since 2015, present in Tauri WebViews (HIGH confidence)
+- `crates.io/api/v1/crates/rig-core` — verified latest version 0.35.0 (released 2026-04-13) (HIGH confidence)
+- `docs.rs/crate/rig-core/latest/source/Cargo.toml.orig` — reqwest features, tokio features, optional deps (HIGH confidence)
+- `docs.rs/rig-core/latest/src/rig/streaming.rs.html` — `use tokio::sync::watch` at line 31 confirmed (HIGH confidence)
+- `docs.rs/rig-core/latest/src/rig/wasm_compat.rs.html` — cfg inconsistency between `WasmCompatSend` and `WasmBoxedFuture` confirmed (HIGH confidence)
+- `github.com/seanmonstar/reqwest/issues/2979` — wasip2 support open issue, no merged PR as of April 2026 (HIGH confidence)
+- `crates.io/api/v1/crates/wstd` — version 0.6.6 (2026-03-12), maintained by Bytecode Alliance (HIGH confidence)
+- `crates.io/api/v1/crates/wasip2` — version 1.0.3+wasi-0.2.9 (2026-04-17) (HIGH confidence)
+- Direct inspection of `/workspace/WAVS/packages/wasi-utils/src/http.rs` — `wstd::http::Client` used for all HTTP in WASI components (HIGH confidence)
+- Direct inspection of `/workspace/WAVS/packages/wasi-utils/Cargo.toml` — no reqwest, uses wstd (HIGH confidence)
+- Direct inspection of `/workspace/WAVS/Cargo.toml` — current workspace versions for wstd (0.6.5), wasip2 (1.0.1), getrandom config (HIGH confidence)
+- `/workspace/WAVS_AGENT_IMPROVEMENTS.md` — April 2026 investigation: confirmed hard blockers, fork strategy, file-level change breakdown (HIGH confidence)
 
 ---
-*Stack research for: WAVS v1.3 — activity UX, result decoding, restart fix, kebab menu*
-*Researched: 2026-04-09*
+*Stack research for: WAVS v2.0 — rig-core WASI integration*
+*Researched: 2026-04-20*
