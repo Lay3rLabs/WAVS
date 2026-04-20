@@ -4,14 +4,14 @@ milestone: v2.0
 milestone_name: Agent Runtime
 status: planning
 stopped_at: Phase 17 context gathered
-last_updated: "2026-04-20T15:18:05.696Z"
-last_activity: 2026-04-20 — Roadmap created for v2.0 Agent Runtime
+last_updated: "2026-04-20T16:30:05.342Z"
+last_activity: 2026-04-20
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 2
+  completed_plans: 2
+  percent: 100
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-20)
 
 ## Current Position
 
-Phase: 17 of 19 (rig-wasi Fork)
+Phase: 18 of 19 (wavs rig integration crate)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-04-20 — Roadmap created for v2.0 Agent Runtime
+Last activity: 2026-04-20
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -36,7 +36,7 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 
-- Total plans completed: 0 (v2.0)
+- Total plans completed: 2 (v2.0)
 - Average duration: —
 - Total execution time: —
 
@@ -44,7 +44,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 17 | 2 | - | - |
 
 *Updated after each plan completion*
 

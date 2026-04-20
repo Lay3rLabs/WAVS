@@ -62,7 +62,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 
 **Milestone Goal:** Make WAVS a first-class agent runtime. Developers write rig-based agents in ~30 lines of Rust that autonomously reason and act inside the WASM sandbox with full cryptographic trust guarantees.
 
-- [ ] **Phase 17: rig-wasi Fork** — Patch rig-core 0.35.0 to compile cleanly to wasm32-wasip2; this is the compile gate for all downstream work
+- [x] **Phase 17: rig-wasi Fork** — Patch rig-core 0.35.0 to compile cleanly to wasm32-wasip2; this is the compile gate for all downstream work (completed 2026-04-20)
 - [ ] **Phase 18: wavs-rig Integration Crate** — Bridge library providing HTTP transport, typed built-in WAVS tools, KV-backed memory, and async entry point shim
 - [ ] **Phase 19: Example Agent & E2E Validation** — Full agent loop end-to-end on a live WAVS node with sandboxed LLM access
 
@@ -78,10 +78,10 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
   3. tokio `rt` feature is absent from the fork; all tokio::sync::watch usages are replaced with futures::channel equivalents that compile on wasm32
   4. `WasmCompatSend`, `WasmBoxedFuture`, and SSE module cfg guards all use `target_family = "wasm"` uniformly — both cfg branches fire correctly with no dead zones
   5. A `FORK_BASIS.md` file in the fork repo pins the exact upstream git rev and documents each patch so divergence is trackable when rig releases updates
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 17-01-PLAN.md — Copy rig-core 0.35.0 source, create fork crate with corrected Cargo.toml feature gates, FORK_BASIS.md
-- [ ] 17-02-PLAN.md — Apply source-level patches (reqwest, tokio, cfg, SSE) and verify with wasm32-wasip2 compile probe
+- [x] 17-01-PLAN.md — Copy rig-core 0.35.0 source, create fork crate with corrected Cargo.toml feature gates, FORK_BASIS.md
+- [x] 17-02-PLAN.md — Apply source-level patches (reqwest, tokio, cfg, SSE) and verify with wasm32-wasip2 compile probe
 
 ### Phase 18: wavs-rig Integration Crate
 **Goal**: `packages/wavs-rig` is a library crate that bridges rig into the WASI component sandbox — providing an HTTP transport over wasi:http, five typed built-in tool implementations, KV-backed conversation memory, and the `run_agent` async shim
@@ -127,6 +127,6 @@ Plans:
 | 14. Activity Frontend UX | v1.3 | 1/1 | Complete | 2026-04-09 |
 | 15. Service Restart Reliability | v1.3 | 1/1 | Complete | 2026-04-09 |
 | 16. Wallet Kebab Menu | v1.3 | 1/1 | Complete | 2026-04-09 |
-| 17. rig-wasi Fork | v2.0 | 0/2 | Not started | - |
+| 17. rig-wasi Fork | v2.0 | 2/2 | Complete    | 2026-04-20 |
 | 18. wavs-rig Integration Crate | v2.0 | 0/TBD | Not started | - |
 | 19. Example Agent & E2E Validation | v2.0 | 0/TBD | Not started | - |
