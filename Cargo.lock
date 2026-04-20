@@ -15441,6 +15441,7 @@ dependencies = [
  "thiserror 2.0.18",
  "wasip2",
  "wavs-wasi-utils",
+ "wit-bindgen 0.53.1",
  "wstd",
 ]
 
