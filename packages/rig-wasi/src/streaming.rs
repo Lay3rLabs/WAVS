@@ -26,35 +26,32 @@ use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
-use tokio::sync::watch;
 
-/// Control for pausing and resuming a streaming response
-pub struct PauseControl {
-    pub(crate) paused_tx: watch::Sender<bool>,
-    pub(crate) paused_rx: watch::Receiver<bool>,
-}
+/// Control for pausing and resuming a streaming response.
+/// P2: Replaced tokio::sync::watch-based implementation with an AtomicBool stub.
+/// WASI-compatible no-op stub — streaming completions are not used in the WASI execution model.
+/// The rig agent loop uses non-streaming completions (prompt()) on this target.
+#[derive(Clone)]
+pub struct PauseControl(Arc<AtomicBool>);
 
 impl PauseControl {
     pub fn new() -> Self {
-        let (paused_tx, paused_rx) = watch::channel(false);
-        Self {
-            paused_tx,
-            paused_rx,
-        }
+        PauseControl(Arc::new(AtomicBool::new(false)))
     }
 
     pub fn pause(&self) {
-        self.paused_tx.send(true).unwrap();
+        self.0.store(true, Ordering::SeqCst);
     }
 
     pub fn resume(&self) {
-        self.paused_tx.send(false).unwrap();
+        self.0.store(false, Ordering::SeqCst);
     }
 
     pub fn is_paused(&self) -> bool {
-        *self.paused_rx.borrow()
+        self.0.load(Ordering::SeqCst)
     }
 }
 
@@ -185,11 +182,12 @@ impl From<RawStreamingToolCall> for ToolCall {
     }
 }
 
-#[cfg(not(all(feature = "wasm", target_arch = "wasm32")))]
+// P3 (streaming.rs): cfg unified to target_family = "wasm"
+#[cfg(not(target_family = "wasm"))]
 pub type StreamingResult<R> =
     Pin<Box<dyn Stream<Item = Result<RawStreamingChoice<R>, CompletionError>> + Send>>;
 
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+#[cfg(target_family = "wasm")]
 pub type StreamingResult<R> =
     Pin<Box<dyn Stream<Item = Result<RawStreamingChoice<R>, CompletionError>>>>;
 
@@ -678,7 +676,7 @@ mod tests {
         }
     }
 
-    #[cfg(not(all(feature = "wasm", target_arch = "wasm32")))]
+    #[cfg(not(target_family = "wasm"))]
     fn to_stream_result(
         stream: impl futures::Stream<Item = Result<RawStreamingChoice<MockResponse>, CompletionError>>
         + Send
@@ -687,7 +685,7 @@ mod tests {
         Box::pin(stream)
     }
 
-    #[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+    #[cfg(target_family = "wasm")]
     fn to_stream_result(
         stream: impl futures::Stream<Item = Result<RawStreamingChoice<MockResponse>, CompletionError>>
         + 'static,

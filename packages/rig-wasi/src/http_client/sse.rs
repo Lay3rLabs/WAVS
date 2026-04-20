@@ -1,3 +1,10 @@
+// P4: Gate entire SSE module behind cfg(not(target_family = "wasm")).
+// SSE streaming is not available in WASI p2. The rig agent loop uses
+// non-streaming completions exclusively on this target.
+// Both upstream cfg branches (native vs browser-wasm) are excluded;
+// gating the whole file is cleaner than adding a third empty branch.
+#![cfg(not(target_family = "wasm"))]
+
 //! An SSE implementation that leverages [`crate::http_client::HttpClientExt`] to allow streaming with automatic retry handling for any implementor of HttpClientExt.
 //!
 //! Primarily intended for internal usage. However if you also wish to implement generic HTTP streaming for your custom completion model,

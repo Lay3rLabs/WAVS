@@ -1,7 +1,9 @@
 [package]
 name = "rig-wasi"
 version.workspace = true
-edition.workspace = true
+# P-edition: rig-core 0.35.0 uses let-chains which require Rust 2024 edition.
+# Override workspace "2021" for this crate only.
+edition = "2024"
 rust-version.workspace = true
 license = "MIT"
 description = "rig-core 0.35.0 fork patched to compile on wasm32-wasip2. See FORK_BASIS.md."

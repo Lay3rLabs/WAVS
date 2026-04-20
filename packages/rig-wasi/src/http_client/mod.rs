@@ -1,15 +1,26 @@
-use crate::http_client::sse::BoxedStream;
 use bytes::Bytes;
+use std::future::Future;
 pub use http::{HeaderMap, HeaderValue, Method, Request, Response, Uri, request::Builder};
 use http::{HeaderName, StatusCode};
-use reqwest::Body;
 pub mod multipart;
 pub mod retry;
+// P4: SSE module gated — not available on WASM targets
+#[cfg(not(target_family = "wasm"))]
 pub mod sse;
 use crate::wasm_compat::*;
-pub use multipart::MultipartForm;
-pub use reqwest::Client as ReqwestClient;
 use std::pin::Pin;
+
+// P4: BoxedStream moved here from sse.rs so it remains accessible on all targets.
+// On WASM this is the unit type placeholder; on native it is the real streaming type.
+#[cfg(not(target_family = "wasm"))]
+pub type BoxedStream = Pin<Box<dyn WasmCompatSendStream<InnerItem = crate::http_client::Result<Bytes>>>>;
+#[cfg(target_family = "wasm")]
+pub type BoxedStream = Pin<Box<dyn WasmCompatSendStream<InnerItem = crate::http_client::Result<Bytes>>>>;
+
+pub use multipart::MultipartForm;
+// P1: reqwest::Client re-export gated behind reqwest feature
+#[cfg(feature = "reqwest")]
+pub use reqwest::Client as ReqwestClient;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -62,7 +73,9 @@ impl From<NoBody> for Bytes {
     }
 }
 
-impl From<NoBody> for Body {
+// P1: reqwest::Body usage gated behind reqwest feature
+#[cfg(feature = "reqwest")]
+impl From<NoBody> for reqwest::Body {
     fn from(_: NoBody) -> Self {
         reqwest::Body::default()
     }
@@ -125,6 +138,8 @@ pub trait HttpClientExt: WasmCompatSend + WasmCompatSync {
         T: Into<Bytes>;
 }
 
+// P1: reqwest::Client impl gated behind reqwest feature
+#[cfg(feature = "reqwest")]
 impl HttpClientExt for reqwest::Client {
     fn send<T, U>(
         &self,
@@ -466,7 +481,7 @@ pub(crate) mod mock {
             let sse_bytes = self.sse_bytes.clone();
             async move {
                 let byte_stream = futures::stream::iter(vec![Ok::<Bytes, Error>(sse_bytes)]);
-                let boxed_stream: sse::BoxedStream = Box::pin(byte_stream);
+                let boxed_stream: BoxedStream = Box::pin(byte_stream);
 
                 Response::builder()
                     .status(http::StatusCode::OK)

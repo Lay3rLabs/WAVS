@@ -3,6 +3,8 @@
 //! Dyn-compatible traits have been provided to allow for more provider-agnostic code.
 
 pub mod audio_generation;
+// P1: builder.rs uses providers (which are gated on non-WASM) — gate builder too
+#[cfg(not(target_family = "wasm"))]
 pub mod builder;
 pub mod completion;
 pub mod embeddings;
@@ -42,6 +44,8 @@ use crate::{
     wasm_compat::{WasmCompatSend, WasmCompatSync},
 };
 
+// P1: ClientBuilderError gated — reqwest::Error only available when reqwest feature is enabled
+#[cfg(feature = "reqwest")]
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ClientBuilderError {
@@ -51,6 +55,14 @@ pub enum ClientBuilderError {
         #[source]
         reqwest::Error,
     ),
+    #[error("invalid property: {0}")]
+    InvalidProperty(&'static str),
+}
+
+#[cfg(not(feature = "reqwest"))]
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ClientBuilderError {
     #[error("invalid property: {0}")]
     InvalidProperty(&'static str),
 }
@@ -124,8 +136,15 @@ impl TryFrom<String> for Nothing {
     }
 }
 
+// P1: Default H type parameter is conditional on reqwest feature.
+// When reqwest is disabled (WASI target), consumers must provide their own H.
+#[cfg(feature = "reqwest")]
+pub type DefaultHttpClient = reqwest::Client;
+#[cfg(not(feature = "reqwest"))]
+pub type DefaultHttpClient = (); // placeholder — consumers provide their own H on WASI
+
 #[derive(Clone)]
-pub struct Client<Ext = Nothing, H = reqwest::Client> {
+pub struct Client<Ext = Nothing, H = DefaultHttpClient> {
     base_url: Arc<str>,
     headers: Arc<HeaderMap>,
     http_client: H,
@@ -219,7 +238,7 @@ impl Capability for Nothing {
 }
 
 /// The capabilities of a given provider, i.e. embeddings, audio transcriptions, text completion
-pub trait Capabilities<H = reqwest::Client> {
+pub trait Capabilities<H = DefaultHttpClient> {
     type Completion: Capability;
     type Embeddings: Capability;
     type Transcription: Capability;
@@ -259,6 +278,8 @@ pub trait ProviderBuilder: Sized + Default + Clone {
     }
 }
 
+// P1: reqwest::Client default impl gated — only available when reqwest feature is enabled
+#[cfg(feature = "reqwest")]
 impl<Ext> Client<Ext, reqwest::Client>
 where
     Ext: Provider,
@@ -343,6 +364,8 @@ where
     }
 }
 
+// P1: reqwest::Client builder impl gated — only available when reqwest feature is enabled
+#[cfg(feature = "reqwest")]
 impl<Ext> Client<Ext, reqwest::Client>
 where
     Ext: Provider,
@@ -449,7 +472,7 @@ where
 
         match response.status() {
             StatusCode::OK => Ok(()),
-            StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN => {
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
                 Err(VerifyError::InvalidAuthentication)
             }
             StatusCode::INTERNAL_SERVER_ERROR => {
@@ -481,7 +504,7 @@ pub struct NeedsApiKey;
 
 // ApiKey is generic because Anthropic uses custom auth header, local models like Ollama use none
 #[derive(Clone)]
-pub struct ClientBuilder<Ext, ApiKey = NeedsApiKey, H = reqwest::Client> {
+pub struct ClientBuilder<Ext, ApiKey = NeedsApiKey, H = DefaultHttpClient> {
     base_url: String,
     api_key: ApiKey,
     headers: HeaderMap,
@@ -718,7 +741,8 @@ where
     }
 }
 
-#[cfg(test)]
+// P1: Test gated — uses reqwest::Client and providers which are not available on WASM
+#[cfg(all(test, feature = "reqwest", not(target_family = "wasm")))]
 mod tests {
     use crate::providers::anthropic;
 

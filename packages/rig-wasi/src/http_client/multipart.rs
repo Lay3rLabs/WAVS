@@ -183,6 +183,8 @@ impl MultipartForm {
     }
 }
 
+// P1: reqwest multipart conversion gated — only available when reqwest feature is enabled
+#[cfg(feature = "reqwest")]
 impl From<MultipartForm> for reqwest::multipart::Form {
     fn from(value: MultipartForm) -> Self {
         let mut form = reqwest::multipart::Form::new();

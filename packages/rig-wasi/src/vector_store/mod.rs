@@ -11,7 +11,11 @@
 //! Types implementing [`VectorStoreIndex`] automatically implement [`Tool`].
 
 pub use request::VectorSearchRequest;
+// P1: reqwest::StatusCode only available when reqwest feature is enabled
+#[cfg(feature = "reqwest")]
 use reqwest::StatusCode;
+#[cfg(not(feature = "reqwest"))]
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -52,6 +56,8 @@ pub enum VectorStoreError {
     #[error("Missing Id: {0}")]
     MissingIdError(String),
 
+    // P1: reqwest::Error only available when reqwest feature is enabled
+    #[cfg(feature = "reqwest")]
     #[error("HTTP request error: {0}")]
     ReqwestError(#[from] reqwest::Error),
 

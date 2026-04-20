@@ -108,7 +108,8 @@ pub trait ModelListingClient {
 ///     }
 /// }
 /// ```
-pub trait ModelLister<H = reqwest::Client>: WasmCompatSend + WasmCompatSync {
+// P1: Default H type parameter uses DefaultHttpClient to avoid reqwest dependency on WASM
+pub trait ModelLister<H = crate::client::DefaultHttpClient>: WasmCompatSend + WasmCompatSync {
     /// The client type associated with this lister
     type Client;
 

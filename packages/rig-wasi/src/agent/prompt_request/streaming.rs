@@ -23,11 +23,12 @@ use crate::{
     tool::ToolSetError,
 };
 
-#[cfg(not(all(feature = "wasm", target_arch = "wasm32")))]
+// P3 (agent/prompt_request/streaming.rs): cfg unified to target_family = "wasm"
+#[cfg(not(target_family = "wasm"))]
 pub type StreamingResult<R> =
     Pin<Box<dyn Stream<Item = Result<MultiTurnStreamItem<R>, StreamingError>> + Send>>;
 
-#[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+#[cfg(target_family = "wasm")]
 pub type StreamingResult<R> =
     Pin<Box<dyn Stream<Item = Result<MultiTurnStreamItem<R>, StreamingError>>>>;
 

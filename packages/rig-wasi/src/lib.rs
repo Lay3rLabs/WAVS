@@ -129,6 +129,11 @@ pub mod model;
 pub mod one_or_many;
 pub mod pipeline;
 pub mod prelude;
+// P4 (lib.rs): Providers use SSE/streaming which is gated out on WASM.
+// All provider streaming implementations depend on sse::GenericEventSource
+// which is unavailable on wasm32-wasip2. Gate the entire providers tree out;
+// WASI consumers create provider clients directly with their own HttpClientExt impl.
+#[cfg(not(target_family = "wasm"))]
 pub mod providers;
 
 pub mod streaming;
