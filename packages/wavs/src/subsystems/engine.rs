@@ -1,9 +1,11 @@
 pub mod error;
+pub mod rpc_caller;
 pub mod wasm_engine;
 
 use std::sync::Arc;
 
 use error::EngineError;
+use rpc_caller::RpcCallerImpl;
 use tracing::instrument;
 use utils::storage::CAStorage;
 use wavs_engine::bindings::aggregator::world::AnyTxHash;
@@ -208,9 +210,21 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
             workflow.component.source.digest().to_string()
         );
 
+        // Construct an RpcCallerImpl so call_service can dispatch to other services.
+        // RpcCallerImpl has access to both the engine and the services registry.
+        let rpc_caller = Arc::new(RpcCallerImpl {
+            engine: self.engine.clone(),
+            services: self.services.clone(),
+        });
+
         let mut wasm_responses = self
             .engine
-            .execute_operator_component(service.clone(), action.clone())
+            .execute_operator_component_with_rpc(
+                service.clone(),
+                action.clone(),
+                Some(rpc_caller),
+                vec![],
+            )
             .await?;
 
         let mut submission_datas = Vec::new();
