@@ -74,7 +74,7 @@ Full details: `.planning/milestones/v2.0-ROADMAP.md`
 
 **Milestone Goal:** Agents can reason across multiple invocations and call other deployed services, enabling multi-step autonomous workflows and composable service architectures.
 
-- [ ] **Phase 20: WIT Interface & Types** — Establish the `run-agent`/`call-service` interface contract; all engine, SDK, and binding work depends on this compiling first
+- [x] **Phase 20: WIT Interface & Types** — Establish the `run-agent`/`call-service` interface contract; all engine, SDK, and binding work depends on this compiling first (completed 2026-04-22)
 - [ ] **Phase 21: Agent Continuation Engine** — Re-invocation loop with KV-backed state persistence, step limit enforcement, and component LRU pinning
 - [ ] **Phase 22: Service-to-Service RPC** — `call-service` host function with permission enforcement, cycle detection, and bilateral caller/callee access control
 - [ ] **Phase 23: Integration & Validation** — End-to-end examples and tests wiring continuation + RPC together, verifying permission enforcement
@@ -91,10 +91,10 @@ Full details: `.planning/milestones/v2.0-ROADMAP.md`
   3. A `service.json` with `allowed_service_calls: "None"` (or no field at all) deserializes correctly via serde default — existing service configs require zero changes to load on the new runtime
   4. `max_continuation_steps` field appears in the component config schema and defaults to 10 when absent from a service config
   5. `AllowedCallers` field appears in service config with serde default `None` — callee services can declare which callers are permitted without breaking existing configs
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 20-01-PLAN.md — WIT interface: step-result variant, agent export, call-service host import
-- [ ] 20-02-PLAN.md — Rust service config types: AllowedServiceCalls, AllowedCallers, max_continuation_steps
+- [x] 20-01-PLAN.md — WIT interface: step-result variant, agent export, call-service host import
+- [x] 20-02-PLAN.md — Rust service config types: AllowedServiceCalls, AllowedCallers, max_continuation_steps
 
 ### Phase 21: Agent Continuation Engine
 **Goal**: An agent component returning `Continue` is automatically re-invoked by the engine, with conversation and tool results persisted to KV between steps under the `wavs_agent_step:` key prefix, and a hard step limit that terminates runaway agents with a clear error
@@ -154,7 +154,7 @@ Plans:
 | 17. rig-wasi Fork | v2.0 | 2/2 | Complete | 2026-04-20 |
 | 18. wavs-rig Integration Crate | v2.0 | 3/3 | Complete | 2026-04-20 |
 | 19. Example Agent & E2E Validation | v2.0 | 2/2 | Complete | 2026-04-20 |
-| 20. WIT Interface & Types | v3.0 | 0/2 | Not started | - |
+| 20. WIT Interface & Types | v3.0 | 2/2 | Complete    | 2026-04-22 |
 | 21. Agent Continuation Engine | v3.0 | 0/TBD | Not started | - |
 | 22. Service-to-Service RPC | v3.0 | 0/TBD | Not started | - |
 | 23. Integration & Validation | v3.0 | 0/TBD | Not started | - |
