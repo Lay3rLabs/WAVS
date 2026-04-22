@@ -1,4 +1,3 @@
-use uuid::Uuid;
 use std::sync::Arc;
 use std::time::Instant;
 use std::{path::Path, sync::RwLock};
@@ -72,17 +71,14 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         &self,
         source: &ComponentSource,
     ) -> Result<ComponentDigest, EngineError> {
-        // If we have a known digest, check cache first
-        if let Some(digest) = source.digest() {
-            if self.engine.storage.data_exists(&digest.clone().into())? {
-                return Ok(digest.clone());
-            }
+        // Check cache first using the source's digest
+        let digest = source.digest();
+        if self.engine.storage.data_exists(&digest.clone().into())? {
+            return Ok(digest.clone());
         }
 
         match source {
-            ComponentSource::Download { .. }
-            | ComponentSource::Registry { .. }
-            | ComponentSource::Oci { .. } => {
+            ComponentSource::Download { .. } | ComponentSource::Registry { .. } => {
                 let (_component, digest) = self.engine.load_component_from_source(source).await?;
                 Ok(digest)
             }
@@ -705,7 +701,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -720,7 +715,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -770,7 +764,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -786,7 +779,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"configvar:foo"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -805,7 +797,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -824,7 +815,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -874,7 +864,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -889,7 +878,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"custom-event-id"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -943,7 +931,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -958,7 +945,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"multi-response"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -983,7 +969,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"multi-response-bad"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1029,7 +1014,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1045,7 +1029,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1157,7 +1140,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1172,7 +1154,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1197,7 +1178,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1212,7 +1192,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1237,7 +1216,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1252,7 +1230,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1282,7 +1259,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1297,7 +1273,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await

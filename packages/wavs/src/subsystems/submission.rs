@@ -116,7 +116,7 @@ impl SubmissionManager {
                                     DispatcherCommand::SubmissionFailed {
                                         service_id: req.service_id().clone(),
                                         workflow_id: req.workflow_id().clone(),
-                                        correlation_id: req.trigger_action.correlation_id.clone(),
+                                        correlation_id: String::new(),
                                         error: format!("Signing error: {}", e),
                                     },
                                 );
@@ -140,7 +140,7 @@ impl SubmissionManager {
                                     DispatcherCommand::SubmissionFailed {
                                         service_id: req.service_id().clone(),
                                         workflow_id: req.workflow_id().clone(),
-                                        correlation_id: req.trigger_action.correlation_id.clone(),
+                                        correlation_id: String::new(),
                                         error: format!("Dispatch error: {}", e),
                                     },
                                 );

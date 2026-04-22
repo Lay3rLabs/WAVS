@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::Deserialize;
 use utoipa::ToSchema;
-use uuid::Uuid;
+
 use wavs_types::{
     ByteArray, ChainKey, DevTriggerStreamInfo, DevTriggerStreamSubscriptionKind,
     DevTriggerStreamsInfo, ServiceId, SimulatedTriggerRequest, Trigger, TriggerAction,
@@ -54,7 +54,6 @@ async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> 
                 trigger: req.trigger.clone(),
             },
             data: req.data.clone(),
-            correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
         };
 
         state
@@ -212,7 +211,6 @@ async fn dev_execute_inner(
             trigger: req.trigger,
         },
         data: req.data,
-        correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
     };
 
     // 4. Execute directly on the engine (bypasses aggregator/submission)

@@ -72,6 +72,10 @@ pub async fn execute(
 }
 
 /// Legacy single-shot execution path for non-agent components.
+///
+/// Uses `WavsLegacyWorld` (bindings for `wavs-legacy-world`) which only requires the `run`
+/// export. This allows executing components compiled before the `export agent` was added to
+/// the `wavs-world` WIT definition.
 async fn execute_legacy(
     deps: &mut InstanceDeps,
     input: &crate::bindings::operator::world::wavs::operator::input::TriggerAction,
@@ -85,7 +89,7 @@ async fn execute_legacy(
         let service_id = service_id.clone();
         let workflow_id = workflow_id.clone();
         async move {
-            crate::bindings::operator::world::WavsWorld::instantiate_async(
+            crate::bindings::operator::world::legacy::WavsLegacyWorld::instantiate_async(
                 deps.store.as_operator_mut(),
                 &deps.component,
                 deps.linker.as_operator_ref(),

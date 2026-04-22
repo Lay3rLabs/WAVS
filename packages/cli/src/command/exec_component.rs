@@ -2,7 +2,6 @@ use std::{
     collections::BTreeMap,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
-use uuid::Uuid;
 
 use alloy_primitives::FixedBytes;
 use anyhow::{Context, Result};
@@ -13,9 +12,9 @@ use wavs_engine::{
     worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder},
 };
 use wavs_types::{
-    AllowedHostPermission, ChainKey, ComponentDigest, ComponentSource, Permissions, ServiceId,
-    Submit, Timestamp, Trigger, TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow,
-    WorkflowId,
+    AllowedHostPermission, AllowedServiceCalls, ChainKey, ComponentDigest, ComponentSource,
+    Permissions, ServiceId, Submit, Timestamp, Trigger, TriggerAction, TriggerConfig, TriggerData,
+    WasmResponse, Workflow, WorkflowId,
 };
 
 use crate::{
@@ -131,11 +130,14 @@ impl ExecComponent {
                     file_system: true,
                     raw_sockets: true,
                     dns_resolution: true,
+                    allowed_service_calls: Default::default(),
                 },
                 fuel_limit,
                 time_limit_seconds: time_limit,
                 config,
                 env_keys,
+                allowed_callers: None,
+                max_continuation_steps: None,
             },
             submit: Submit::None,
         };
@@ -149,7 +151,6 @@ impl ExecComponent {
                 chain: chain.clone(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let data = match simulates_trigger {
@@ -200,7 +201,6 @@ impl ExecComponent {
                 trigger: Trigger::Manual,
             },
             data,
-            correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
         };
 
         let mut instance_deps = InstanceDepsBuilder {
