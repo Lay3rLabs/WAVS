@@ -71,14 +71,7 @@ impl SystemSetup {
             .unwrap();
 
         // just a sanity check to ensure the digest matches
-        if digest
-            != *engine_setup
-                .workflow()
-                .component
-                .source
-                .digest()
-                .expect("benchmark service must have digest")
-        {
+        if digest != *engine_setup.workflow().component.source.digest() {
             panic!("Component digest mismatch");
         }
 

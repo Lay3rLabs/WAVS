@@ -132,15 +132,6 @@ pub enum DispatcherCommand {
         service_id: ServiceId,
         workflow_id: WorkflowId,
         trigger_data: TriggerData,
-        correlation_id: String,
-        tx_hash: String,
-        result_payload: Option<String>,
-    },
-    SubmissionFailed {
-        service_id: ServiceId,
-        workflow_id: WorkflowId,
-        correlation_id: String,
-        error: String,
     },
 }
 
@@ -465,46 +456,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             service_id,
                             workflow_id,
                             trigger_data,
-                            correlation_id,
-                            tx_hash,
-                            result_payload,
                         } => {
                             if let Err(err) = _self.tauri_handle.emit_ext(
                                 wavs_gui_shared::event::SubmissionEvent {
                                     service_id,
                                     workflow_id,
                                     trigger_data,
-                                    correlation_id,
-                                    tx_hash,
-                                    result_payload,
                                 },
                             ) {
                                 tracing::error!(
                                     "Error emitting submission event to GUI: {:?}",
-                                    err
-                                );
-                            }
-                        }
-                        DispatcherCommand::SubmissionFailed {
-                            service_id,
-                            workflow_id,
-                            correlation_id,
-                            error,
-                        } => {
-                            tracing::error!(
-                                "Submission failed for service {}: {}",
-                                service_id, error
-                            );
-                            if let Err(err) = _self.tauri_handle.emit_ext(
-                                wavs_gui_shared::event::SubmissionFailedEvent {
-                                    service_id,
-                                    workflow_id,
-                                    correlation_id,
-                                    error,
-                                },
-                            ) {
-                                tracing::error!(
-                                    "Error emitting submission failed event to GUI: {:?}",
                                     err
                                 );
                             }

@@ -9,7 +9,6 @@ pub mod evm_client;
 pub mod filesystem;
 pub mod health;
 pub mod http;
-pub mod oci;
 pub mod serde;
 pub mod service;
 pub mod storage;

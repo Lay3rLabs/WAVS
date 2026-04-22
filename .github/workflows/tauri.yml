@@ -26,6 +26,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -35,6 +37,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
+          package_json_file: app/package.json
           run_install: false
 
       - name: Install frontend dependencies
@@ -45,9 +48,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: "./app"
-          tagName: wavs-app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
-          releaseName: "WAVS v__VERSION__"
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ github.ref_name }}
           releaseBody: "See the assets to download this version and install."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Rename release assets to strip version
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+
+          gh api "repos/${REPO}/releases/tags/${TAG}" --jq '.assets[] | "\(.id) \(.name)"' | while read -r id name; do
+            renamed=$(echo "$name" | sed 's/-0\.0\.1-1/_/' | sed 's/[_-]0\.0\.1//' | sed 's/__/_/g; s/_\./\./')
+            if [ "$renamed" != "$name" ]; then
+              echo "Renaming: $name -> $renamed"
+              gh api --method PATCH "repos/${REPO}/releases/assets/${id}" -f name="$renamed" --silent
+            fi
+          done

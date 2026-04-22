@@ -39,4 +39,3 @@ tempfile = { workspace = true }
 alloy-sol-types = { workspace = true }
 example-types = { workspace = true }
 crossbeam = { workspace = true }
-uuid = { workspace = true }

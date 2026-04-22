@@ -32,6 +32,5 @@ pub fn mock_service() -> Service {
         )]
         .into_iter()
         .collect(),
-        exec_enabled: None,
     }
 }

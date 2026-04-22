@@ -3,7 +3,6 @@ mod helpers;
 use std::collections::BTreeMap;
 
 use crate::helpers::{aggregator_exec::execute_aggregator_component, service::make_service};
-use uuid::Uuid;
 use alloy_primitives::Address;
 use utils::init_tracing_tests;
 use wavs_engine::bindings::aggregator::world::wavs::aggregator::output::AggregatorAction;
@@ -35,7 +34,6 @@ async fn basic_aggregator_execution() {
                 trigger: service.workflows.iter().next().unwrap().1.trigger.clone(),
             },
             data: wavs_types::TriggerData::default(),
-            correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
         },
         operator_response: WasmResponse {
             event_id_salt: None,

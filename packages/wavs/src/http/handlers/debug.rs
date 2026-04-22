@@ -1,19 +1,12 @@
 use std::collections::HashMap;
 
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use serde::Deserialize;
-use utoipa::ToSchema;
-use uuid::Uuid;
 use wavs_types::{
     ByteArray, ChainKey, DevTriggerStreamInfo, DevTriggerStreamSubscriptionKind,
-    DevTriggerStreamsInfo, ServiceId, SimulatedTriggerRequest, Trigger, TriggerAction,
-    TriggerConfig, TriggerData, WasmResponse, WorkflowId,
+    DevTriggerStreamsInfo, SimulatedTriggerRequest, TriggerAction, TriggerConfig,
 };
 
-use crate::http::{
-    error::{HttpError, HttpResult},
-    state::HttpState,
-};
+use crate::http::{error::HttpResult, state::HttpState};
 
 #[utoipa::path(
     post,
@@ -54,7 +47,6 @@ async fn debug_trigger_inner(state: HttpState, req: SimulatedTriggerRequest) -> 
                 trigger: req.trigger.clone(),
             },
             data: req.data.clone(),
-            correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
         };
 
         state
@@ -146,83 +138,4 @@ pub async fn handle_dev_trigger_streams_info(State(state): State<HttpState>) -> 
     let hypercore = state.dispatcher.trigger_manager.hypercore_streams_info();
 
     Json(DevTriggerStreamsInfo { chains, hypercore }).into_response()
-}
-
-// ── POST /dev/execute — synchronous component execution ──────────────────
-
-/// Request body for the synchronous component execution endpoint.
-#[derive(Deserialize, ToSchema)]
-pub struct ExecuteRequest {
-    /// Service ID (64-char hex hash of the ServiceManager)
-    pub service_id: ServiceId,
-    /// Workflow ID within the service
-    pub workflow_id: WorkflowId,
-    /// Trigger definition (determines TriggerConfig)
-    pub trigger: Trigger,
-    /// Trigger data passed to the component
-    pub data: TriggerData,
-}
-
-#[utoipa::path(
-    post,
-    path = "/dev/execute",
-    request_body = ExecuteRequest,
-    responses(
-        (status = 200, description = "Component executed successfully", body = Vec<WasmResponse>),
-        (status = 400, description = "Invalid request"),
-        (status = 404, description = "Service or workflow not found"),
-        (status = 500, description = "Execution failed")
-    ),
-    description = "Synchronously execute a component and return the WasmResponse results. \
-                   This bypasses the full trigger/aggregator/submission pipeline and calls \
-                   the engine directly, returning the raw component output."
-)]
-pub async fn handle_dev_execute(
-    State(state): State<HttpState>,
-    Json(req): Json<ExecuteRequest>,
-) -> impl IntoResponse {
-    match dev_execute_inner(state, req).await {
-        Ok(responses) => (StatusCode::OK, Json(responses)).into_response(),
-        Err(e) => e.into_response(),
-    }
-}
-
-async fn dev_execute_inner(
-    state: HttpState,
-    req: ExecuteRequest,
-) -> HttpResult<Vec<WasmResponse>> {
-    // 1. Look up the service by ID
-    let service = state
-        .dispatcher
-        .services
-        .try_get(&req.service_id)
-        .map_err(|e| anyhow::anyhow!("service lookup failed: {e}"))?
-        .ok_or(HttpError::NotFound)?;
-
-    // 2. Verify the workflow exists in the service
-    if !service.workflows.contains_key(&req.workflow_id) {
-        return Err(HttpError::NotFound.into());
-    }
-
-    // 3. Build the TriggerAction
-    let trigger_action = TriggerAction {
-        config: TriggerConfig {
-            service_id: req.service_id,
-            workflow_id: req.workflow_id,
-            trigger: req.trigger,
-        },
-        data: req.data,
-        correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
-    };
-
-    // 4. Execute directly on the engine (bypasses aggregator/submission)
-    let responses = state
-        .dispatcher
-        .engine_manager
-        .engine
-        .execute_operator_component(service, trigger_action)
-        .await
-        .map_err(|e| anyhow::anyhow!("component execution failed: {e}"))?;
-
-    Ok(responses)
 }

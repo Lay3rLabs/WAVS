@@ -1,11 +1,9 @@
-import { useState } from 'react';
 import { clsx } from 'clsx';
 import type { ActivityItem, TriggerData, TriggerConfig } from '../../types';
 import { getTriggerDataLabel } from '../../types';
 import { useAppStore } from '../../stores/appStore';
-import { decodeResultPayload } from '../../utils/decodeResultPayload';
 
-export function formatTimestamp(ts: number): string {
+function formatTimestamp(ts: number): string {
   const date = new Date(ts);
   const hours = date.getHours().toString().padStart(2, '0');
   const mins = date.getMinutes().toString().padStart(2, '0');
@@ -18,7 +16,7 @@ function formatBlockNumber(n: number): string {
   return `#${n.toLocaleString()}`;
 }
 
-export function getTriggerAccent(data: TriggerData): { border: string; pill: string } {
+function getTriggerAccent(data: TriggerData): { border: string; pill: string } {
   if ('EvmContractEvent' in data) {
     return { border: 'border-l-indigo-500', pill: 'bg-indigo-900/50 text-indigo-300' };
   }
@@ -40,7 +38,7 @@ export function getTriggerAccent(data: TriggerData): { border: string; pill: str
   return { border: 'border-l-charcoal-light', pill: 'bg-charcoal-medium text-tan-muted' };
 }
 
-export function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex gap-3 text-xs">
       <span className="text-tan-muted w-20 shrink-0">{label}</span>
@@ -49,7 +47,7 @@ export function DetailRow({ label, value }: { label: string; value: React.ReactN
   );
 }
 
-export function DetailRows({ data, config }: { data: TriggerData; config?: TriggerConfig }) {
+function DetailRows({ data, config }: { data: TriggerData; config?: TriggerConfig }) {
   if ('EvmContractEvent' in data) {
     const d = data.EvmContractEvent;
     return (
@@ -167,91 +165,6 @@ export function DetailRows({ data, config }: { data: TriggerData; config?: Trigg
   return null;
 }
 
-function TxHashDisplay({ hash }: { hash: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card expand toggle
-    try {
-      await navigator.clipboard.writeText(hash);
-    } catch {
-      // Clipboard API may be restricted in some WebView contexts
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
-  return (
-    <span className="inline-flex items-center gap-1 font-mono text-xs text-beige-warm">
-      <span className="break-all">{hash}</span>
-      <button
-        type="button"
-        onClick={handleCopy}
-        className="ml-1 text-tan-muted hover:text-beige-warm cursor-pointer text-[11px]"
-      >
-        {copied ? 'Copied!' : '\uD83D\uDCCB'}
-      </button>
-    </span>
-  );
-}
-
-function ResultPreview({ payload }: { payload: string | null | undefined }) {
-  const result = decodeResultPayload(payload);
-
-  if (!payload) return null;
-
-  const badgeClass = result.kind === 'json'
-    ? 'bg-primary-600/20 text-primary-500'
-    : result.kind === 'text'
-      ? 'bg-charcoal-medium text-tan-warm'
-      : 'bg-charcoal-light text-tan-muted';
-
-  return (
-    <span className="inline-flex items-start gap-1 min-w-0">
-      <span className={clsx('shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide', badgeClass)}>
-        {result.kind === 'json' ? 'JSON' : result.kind === 'text' ? 'Text' : 'Hex'}
-      </span>
-      {result.kind === 'json' ? (
-        <pre className="whitespace-pre-wrap font-mono text-xs text-beige-warm/90 max-h-[3.6em] overflow-hidden">
-          {result.display}
-        </pre>
-      ) : result.kind === 'text' ? (
-        <span className="font-mono text-xs text-beige-warm break-all">{result.display}</span>
-      ) : (
-        <span className="font-mono text-xs text-tan-muted">{result.display}</span>
-      )}
-    </span>
-  );
-}
-
-export function SubmissionRows({ txHash, resultPayload, bgColor = 'bg-charcoal-dark' }: {
-  txHash?: string;
-  resultPayload?: string | null;
-  bgColor?: string;
-}) {
-  if (!txHash && !resultPayload) return null;
-
-  return (
-    <>
-      <div className="relative my-2">
-        <div className="border-t border-charcoal-light" />
-        <span className={clsx('absolute left-1/2 -translate-x-1/2 -translate-y-1/2 top-0 px-2 text-[10px] text-tan-muted tracking-widest', bgColor)}>
-          submission
-        </span>
-      </div>
-      <div className="flex flex-col gap-1">
-        {txHash && <DetailRow label="tx" value={<TxHashDisplay hash={txHash} />} />}
-        {resultPayload && (
-          <div className="flex gap-3 text-xs">
-            <span className="text-tan-muted w-20 shrink-0">result</span>
-            <ResultPreview payload={resultPayload} />
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
 interface ActivityCardProps {
   item: ActivityItem;
   expanded: boolean;
@@ -263,9 +176,9 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
   const getServiceLabel = useAppStore((state) => state.getServiceLabel);
 
   const serviceName = getServiceLabel(item.serviceId);
-  const triggerLabel = item.triggerData ? getTriggerDataLabel(item.triggerData) : 'Failed';
+  const triggerLabel = getTriggerDataLabel(item.triggerData);
   const isTrigger = item.kind === 'trigger';
-  const accent = item.triggerData ? getTriggerAccent(item.triggerData) : { border: 'border-l-red-600', pill: 'bg-red-900/50 text-red-300' };
+  const accent = getTriggerAccent(item.triggerData);
 
   return (
     <div
@@ -280,10 +193,10 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
         <span
           className={clsx(
             'shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide',
-            isTrigger ? 'bg-green-900/40 text-green-400' : item.kind === 'submission_failed' ? 'bg-red-900/40 text-red-400' : 'bg-blue-900/40 text-blue-400',
+            isTrigger ? 'bg-green-900/40 text-green-400' : 'bg-blue-900/40 text-blue-400',
           )}
         >
-          {isTrigger ? 'Trigger' : item.kind === 'submission_failed' ? 'Failed' : 'Submit'}
+          {isTrigger ? 'Trigger' : 'Submit'}
         </span>
 
         <span className={clsx('shrink-0 px-2 py-0.5 rounded text-xs font-medium', accent.pill)}>
@@ -302,16 +215,7 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
         </div>
       )}
 
-      {item.triggerData && <DetailRows data={item.triggerData} config={item.triggerConfig} />}
-      {item.error && (
-        <div className="mt-1 text-xs text-red-400 truncate">
-          Error: {item.error}
-        </div>
-      )}
-
-      {item.kind === 'submission' && (
-        <SubmissionRows txHash={item.txHash} resultPayload={item.resultPayload} />
-      )}
+      <DetailRows data={item.triggerData} config={item.triggerConfig} />
 
       <button
         type="button"
@@ -324,16 +228,9 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
       {expanded && (
         <div className="mt-2 p-3 rounded bg-charcoal-darkest text-beige-light/90 font-mono text-xs leading-relaxed overflow-x-auto max-h-80 overflow-y-auto">
           <pre className="whitespace-pre-wrap">
-            {item.triggerData
-              ? `// Trigger Data\n${JSON.stringify(item.triggerData, null, 2)}`
-              : item.error
-                ? `// Error\n${item.error}`
-                : '// No data'}
+            {`// Trigger Data\n${JSON.stringify(item.triggerData, null, 2)}`}
             {item.triggerConfig
               ? `\n\n// Trigger Config\n${JSON.stringify(item.triggerConfig.trigger, null, 2)}`
-              : ''}
-            {item.correlationId
-              ? `\n\n// Correlation ID\n${item.correlationId}`
               : ''}
           </pre>
         </div>

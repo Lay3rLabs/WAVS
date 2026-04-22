@@ -8,7 +8,6 @@ use std::num::{NonZeroU32, NonZeroU64};
 use std::str::FromStr;
 use thiserror::Error;
 use utoipa::ToSchema;
-use uuid::Uuid;
 use wasm_pkg_common::package::PackageRef;
 
 #[cfg(feature = "ts-bindings")]
@@ -82,12 +81,6 @@ pub struct Service {
     pub status: ServiceStatus,
 
     pub manager: ServiceManager,
-
-    /// Per-service flag to enable execution via MCP tools (per D-10).
-    /// When None or Some(false), Tier 3 (on_chain) is disabled for this service.
-    /// Defaults to None for backward compatibility with existing service.json files.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub exec_enabled: Option<bool>,
 }
 
 impl Service {
@@ -180,7 +173,6 @@ impl Service {
             workflows,
             status: ServiceStatus::Active,
             manager,
-            exec_enabled: None,
         }
     }
 }
@@ -210,6 +202,17 @@ pub struct Component {
     /// External env variable keys to be read from the system host on execute (i.e. API keys).
     /// Must be prefixed with `WAVS_ENV_`.
     pub env_keys: BTreeSet<String>,
+
+    /// Which services may call this component via call-service (callee-side permission).
+    /// None means no callers accepted. Absence in JSON defaults to Option::None.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_callers: Option<AllowedCallers>,
+
+    /// Maximum number of continuation steps before the engine terminates the agent.
+    /// Engine reads as: self.max_continuation_steps.unwrap_or(10)
+    /// Absence in JSON defaults to Option::None (engine uses default of 10).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_continuation_steps: Option<u32>,
 }
 
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
@@ -233,16 +236,6 @@ pub enum ComponentSource {
     /// An already deployed component
     #[cfg_attr(feature = "ts-bindings", ts(type = "string"))]
     Digest(ComponentDigest),
-    /// The wasm bytecode pulled from an OCI registry (e.g. ghcr.io)
-    #[cfg_attr(feature = "ts-bindings", ts(type = "{ uri: string, digest?: string }"))]
-    Oci {
-        /// Full OCI URI, e.g. "oci://ghcr.io/org/component:v1.0"
-        uri: String,
-        /// Digest for content verification. Parsed from @sha256: suffix in URI or provided explicitly.
-        /// If None, the component is pulled by tag only (a warning is emitted at deploy time).
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        digest: Option<ComponentDigest>,
-    },
 }
 
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
@@ -265,12 +258,11 @@ pub struct Registry {
 }
 
 impl ComponentSource {
-    pub fn digest(&self) -> Option<&ComponentDigest> {
+    pub fn digest(&self) -> &ComponentDigest {
         match self {
-            ComponentSource::Download { digest, .. } => Some(digest),
-            ComponentSource::Registry { registry } => Some(&registry.digest),
-            ComponentSource::Digest(digest) => Some(digest),
-            ComponentSource::Oci { digest, .. } => digest.as_ref(),
+            ComponentSource::Download { digest, .. } => digest,
+            ComponentSource::Registry { registry } => &registry.digest,
+            ComponentSource::Digest(digest) => digest,
         }
     }
 }
@@ -497,9 +489,6 @@ pub struct TriggerAction {
     #[bincode(with_serde)]
     /// The data that came from the trigger
     pub data: TriggerData,
-
-    /// Unique ID linking this trigger to its eventual submission event
-    pub correlation_id: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
@@ -626,6 +615,9 @@ pub struct Permissions {
     pub raw_sockets: bool,
     /// If it can perform DNS resolution (not needed for http)
     pub dns_resolution: bool,
+    /// Which services this component is allowed to call via call-service.
+    /// Defaults to None (no service calls allowed).
+    pub allowed_service_calls: AllowedServiceCalls,
 }
 
 #[test]
@@ -639,6 +631,63 @@ fn permission_defaults() {
         AllowedHostPermission::None
     );
     assert!(!permissions_default.file_system);
+    assert_eq!(
+        permissions_default.allowed_service_calls,
+        AllowedServiceCalls::None
+    );
+}
+
+#[test]
+fn component_new_fields_backward_compat() {
+    // Minimal valid Component JSON — no allowed_callers or max_continuation_steps
+    // ComponentDigest serializes/deserializes as plain 64-char hex (no "sha256:" prefix)
+    let json = serde_json::json!({
+        "source": { "digest": "0000000000000000000000000000000000000000000000000000000000000000" },
+        "permissions": {},
+        "fuel_limit": null,
+        "time_limit_seconds": null,
+        "config": {},
+        "env_keys": []
+    });
+    let component: Component = serde_json::from_value(json).unwrap();
+    assert_eq!(component.allowed_callers, Option::None);
+    assert_eq!(component.max_continuation_steps, Option::None);
+    // Engine default behavior
+    assert_eq!(component.max_continuation_steps.unwrap_or(10), 10);
+}
+
+#[test]
+fn component_allowed_callers_variants() {
+    let json = serde_json::json!({
+        "source": { "digest": "0000000000000000000000000000000000000000000000000000000000000000" },
+        "permissions": {},
+        "config": {},
+        "env_keys": [],
+        "allowed_callers": "all",
+        "max_continuation_steps": 5
+    });
+    let component: Component = serde_json::from_value(json).unwrap();
+    assert_eq!(component.allowed_callers, Some(AllowedCallers::All));
+    assert_eq!(component.max_continuation_steps, Some(5));
+    assert_eq!(component.max_continuation_steps.unwrap_or(10), 5);
+}
+
+#[test]
+fn allowed_service_calls_variants() {
+    // Test All
+    let json_all = serde_json::json!("all");
+    let asc: AllowedServiceCalls = serde_json::from_value(json_all).unwrap();
+    assert_eq!(asc, AllowedServiceCalls::All);
+
+    // Test Only
+    let json_only = serde_json::json!({"only": ["svc-1", "svc-2"]});
+    let asc: AllowedServiceCalls = serde_json::from_value(json_only).unwrap();
+    assert_eq!(asc, AllowedServiceCalls::Only(vec!["svc-1".into(), "svc-2".into()]));
+
+    // Test None
+    let json_none = serde_json::json!("none");
+    let asc: AllowedServiceCalls = serde_json::from_value(json_none).unwrap();
+    assert_eq!(asc, AllowedServiceCalls::None);
 }
 
 // TODO: remove / change defaults?
@@ -650,6 +699,38 @@ fn permission_defaults() {
 pub enum AllowedHostPermission {
     All,
     Only(Vec<String>),
+    #[default]
+    None,
+}
+
+/// Permission controlling which services a component may call via call-service.
+/// Modeled on AllowedHostPermission. Default is None (no service calls allowed).
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AllowedServiceCalls {
+    /// Component may call any deployed service
+    All,
+    /// Component may only call the listed service IDs
+    Only(Vec<String>),
+    /// Component may not call any service (default)
+    #[default]
+    None,
+}
+
+/// Permission controlling which services may call this service via call-service.
+/// Callee-side access control. Default is None (no callers accepted).
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AllowedCallers {
+    /// Any service may call this service
+    All,
+    /// Only the listed service IDs may call this service
+    Only(Vec<String>),
+    /// No service may call this service (default)
     #[default]
     None,
 }
@@ -726,6 +807,8 @@ mod test_ext {
                 time_limit_seconds: None,
                 config: BTreeMap::new(),
                 env_keys: BTreeSet::new(),
+                allowed_callers: None,
+                max_continuation_steps: None,
             }
         }
     }

@@ -11,13 +11,6 @@ COSMWASM_OPTIMIZER_VERSION := env_var_or_default("COSMWASM_OPTIMIZER_VERSION", "
 help:
   just --list
 
-# WAVS MCP
-wavs-mcp-build:
-    cargo build -p wavs-mcp
-
-wavs-mcp-build-release:
-    cargo build --release -p wavs-mcp
-
 # WAVS Desktop App (React/TypeScript frontend)
 app-dev:
     cd app && pnpm tauri dev

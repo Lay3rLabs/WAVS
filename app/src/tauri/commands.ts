@@ -12,8 +12,6 @@ import type {
   McpStatus,
   KvEntry,
   FsEntry,
-  ComponentSchema,
-  ComponentMetadata,
 } from '../types';
 
 export async function setWavsHome(): Promise<string | null> {
@@ -176,12 +174,4 @@ export async function listFsEntries(serviceId: string, path: string): Promise<Fs
 
 export async function readFsFile(serviceId: string, path: string): Promise<number[]> {
   return invoke<number[]>('cmd_read_fs_file', { service_id: serviceId, path });
-}
-
-export async function getComponentSchema(digest: string): Promise<ComponentSchema> {
-  return invoke<ComponentSchema>('cmd_get_component_schema', { digest });
-}
-
-export async function getComponentMetadata(digest: string): Promise<ComponentMetadata> {
-  return invoke<ComponentMetadata>('cmd_get_component_metadata', { digest });
 }

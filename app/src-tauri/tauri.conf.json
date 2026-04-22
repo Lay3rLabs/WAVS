@@ -43,13 +43,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": {
-      "../agent/entrypoint.ts": "agent/entrypoint.ts",
-      "../agent/oauth-login.ts": "agent/oauth-login.ts",
-      "../agent/extensions/": "agent/extensions/",
-      "../agent/package.json": "agent/package.json",
-      "../agent/tsconfig.json": "agent/tsconfig.json",
-      "../agent/node_modules/": "agent/node_modules/"
-    }
+    "resources": {}
   }
 }

@@ -7,7 +7,6 @@ import { WorkflowViewer } from '../../components/service/WorkflowViewer';
 import { ServiceActivity } from '../../components/service/ServiceActivity';
 import { useAppStore } from '../../stores/appStore';
 import { usePOAStore, persistRegistries } from '../../stores/poaStore';
-import { useServicePolling } from '../../hooks/useServicePolling';
 import {
   getServices,
   removeService as removeServiceCmd,
@@ -488,7 +487,6 @@ function ConfirmModal({
 }
 
 export function ServiceDetailPage() {
-  useServicePolling();
   const { chainId, address } = useParams<{ chainId: string; address: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('workflows');

@@ -123,20 +123,6 @@ pub enum Command {
         args: CliArgs,
     },
 
-    /// Generate JSON Schema from a compiled WASM component's WIT interface
-    WitSchema {
-        /// Path to the compiled WASI component (.wasm file)
-        #[clap(long)]
-        component: String,
-
-        /// Optional path to WIT source directory for doc comment enrichment
-        #[clap(long)]
-        wit_path: Option<PathBuf>,
-
-        #[clap(flatten)]
-        args: CliArgs,
-    },
-
     /// Execute aggregator components directly
     ExecAggregator {
         #[clap(flatten)]
@@ -433,7 +419,6 @@ impl Command {
             Self::UploadComponent { args, .. } => args,
             Self::Exec { args, .. } => args,
             Self::Service { args, .. } => args,
-            Self::WitSchema { args, .. } => args,
             Self::ExecAggregator { args, .. } => args,
         };
 

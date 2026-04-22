@@ -5,7 +5,6 @@
 
 use alloy_primitives::LogData;
 use example_types::SquareRequest;
-use uuid::Uuid;
 use utils::{
     context::AppContext,
     test_utils::{
@@ -292,7 +291,6 @@ fn mock_e2e_same_tx_different_block_hash() {
             block_timestamp: None,
             tx_index: 0,
         },
-        correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
     };
 
     let trigger_action_1 = make_action(block_hash_1);

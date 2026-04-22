@@ -1,5 +1,4 @@
 use std::{collections::BTreeMap, sync::Arc};
-use uuid::Uuid;
 
 use tempfile::{tempdir, TempDir};
 use utils::{filesystem::workspace_path, storage::db::WavsDb};
@@ -77,7 +76,6 @@ impl EngineSetup {
                 chain: "evm:exec".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let chain_configs = ChainConfigs::default();
@@ -139,7 +137,6 @@ impl EngineSetup {
                 trigger: wavs_types::Trigger::Manual,
             },
             data: TriggerData::Raw(data),
-            correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
         }
     }
 }
