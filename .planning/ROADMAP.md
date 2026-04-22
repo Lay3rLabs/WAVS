@@ -70,7 +70,7 @@ Full details: `.planning/milestones/v2.0-ROADMAP.md`
 
 </details>
 
-### 📋 v3.0 Agent Composition (Planned)
+### v3.0 Agent Composition (Planned)
 
 **Milestone Goal:** Agents can reason across multiple invocations and call other deployed services, enabling multi-step autonomous workflows and composable service architectures.
 
@@ -106,17 +106,20 @@ Plans:
   3. When an agent exceeds `max_continuation_steps`, the engine terminates it and surfaces a clear error (e.g., `ContinuationLimit: exceeded 10 steps`) — the trigger is not left pending indefinitely
   4. A developer-defined multi-step workflow using named `continue("step_name")` handoffs routes to the correct handler function on each re-invocation — the step name is recoverable from KV state
   5. The compiled WASM module for an active continuation chain is not evicted from the LRU cache between steps — re-instantiation does not occur mid-chain
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 21-01-PLAN.md — Core engine: ContinuationLimit error, agent detection, continuation loop with KV persistence and LRU pinning
+- [ ] 21-02-PLAN.md — Caller updates and continuation integration tests
 
 ### Phase 22: Service-to-Service RPC
-**Goal**: An agent or component can synchronously call another deployed service via `call-service`, with both the caller's `AllowedServiceCalls` and the callee's `AllowedCallers` checked before dispatch, cycle detection preventing A→B→A deadlocks, and a depth cap stopping unbounded nesting
+**Goal**: An agent or component can synchronously call another deployed service via `call-service`, with both the caller's `AllowedServiceCalls` and the callee's `AllowedCallers` checked before dispatch, cycle detection preventing A->B->A deadlocks, and a depth cap stopping unbounded nesting
 **Depends on**: Phase 20
 **Requirements**: RPC-01, RPC-02, RPC-03, RPC-04
 **Success Criteria** (what must be TRUE):
   1. A component calling `call_service(target_id, payload)` receives the target service's response bytes synchronously within the same trigger execution — no additional trigger event is required
   2. A component with `allowed_service_calls: None` that attempts `call_service()` receives a clear permission error and the call does not reach the target — the caller's `AllowedServiceCalls` is enforced before dispatch
   3. A callee service with `allowed_callers: None` rejects an inbound `call-service` invocation with a clear error — the callee's `AllowedCallers` is enforced independently of the caller's permission
-  4. A call chain A → B → A is detected and rejected with a cycle error before infinite recursion occurs — the engine tracks the in-flight call stack and refuses to re-enter a service already in the chain
+  4. A call chain A -> B -> A is detected and rejected with a cycle error before infinite recursion occurs — the engine tracks the in-flight call stack and refuses to re-enter a service already in the chain
 **Plans**: TBD
 
 ### Phase 23: Integration & Validation
@@ -131,7 +134,7 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 20 → 21 → 22 → 23 (WIT first is non-negotiable; Phase 21 and 22 depend on Phase 20 and can be developed in parallel, but Phase 23 requires both)
+**Execution Order:** 20 -> 21 -> 22 -> 23 (WIT first is non-negotiable; Phase 21 and 22 depend on Phase 20 and can be developed in parallel, but Phase 23 requires both)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -155,6 +158,6 @@ Plans:
 | 18. wavs-rig Integration Crate | v2.0 | 3/3 | Complete | 2026-04-20 |
 | 19. Example Agent & E2E Validation | v2.0 | 2/2 | Complete | 2026-04-20 |
 | 20. WIT Interface & Types | v3.0 | 2/2 | Complete    | 2026-04-22 |
-| 21. Agent Continuation Engine | v3.0 | 0/TBD | Not started | - |
+| 21. Agent Continuation Engine | v3.0 | 0/2 | Not started | - |
 | 22. Service-to-Service RPC | v3.0 | 0/TBD | Not started | - |
 | 23. Integration & Validation | v3.0 | 0/TBD | Not started | - |
