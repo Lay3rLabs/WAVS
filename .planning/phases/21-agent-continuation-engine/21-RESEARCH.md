@@ -425,27 +425,19 @@ let correlation_id = EventId::new(
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does `export agent;` in wavs-world break existing (legacy) component loading?**
-   - What we know: `WavsWorldIndices::new` "may fail if the component does not have the required exports" — and `export agent;` is unconditional in the current WIT
-   - What's unclear: Whether wasmtime's component model enforces this strictly or allows partial worlds
-   - Recommendation: The plan MUST include a test that loads a legacy component (e.g., `echo` example) after Phase 21 changes to verify it still works. If it breaks, add a fallback path.
+   - RESOLVED: Plan 21-01 adds `has_agent_export()` detection to probe component exports before instantiation. Legacy components route to existing `execute()` path. Backward compat test included.
 
 2. **Should the continuation loop rebuild InstanceDeps OR reset the Store in-place?**
-   - What we know: Wasmtime Stores are stateful; the existing pattern creates a new Store per invocation via `InstanceDepsBuilder::build()`
-   - What's unclear: Whether `Store` can be reset or if full `InstanceDeps` rebuild is required
-   - Recommendation: Rebuild full `InstanceDeps` for each step — matches existing patterns, no risk of state leakage
+   - RESOLVED: Plan 21-01 chooses Store reuse with fuel reset between steps — simpler than full InstanceDeps rebuild, avoids re-linking overhead while resetting execution state.
 
 3. **Per-step timeout or total timeout for continuation loop?**
-   - What we know: Current `execute()` wraps single call in `tokio::time::timeout(time_limit_seconds)`
-   - What's unclear: Whether `time_limit_seconds` should apply per-step or to the whole chain
-   - Recommendation: Per-step timeout is more predictable and consistent with non-agent behavior
+   - RESOLVED: Plan 21-01 chooses per-step timeout — each step gets `time_limit_seconds`, consistent with non-agent behavior and more predictable.
 
 4. **Exact KV key path for host-written state**
-   - What we know: `db.kv_store.insert(key, value)` writes a flat string key; component reads via `namespace/bucket_id/key` namespacing
-   - What's unclear: The exact key format needed so that a component calling `bucket.open("wavs_agent_step").get("...")` reads the host-written value
-   - Recommendation: Write a unit test that writes a key from host then reads it via the component KV API path to confirm format
+   - RESOLVED: Plan 21-01 specifies `{namespace}/wavs_agent_step/{correlation_id}:step:{N}` format, written via `db.kv_store.insert()`. Unit test in Plan 21-02 verifies readability.
 
 ---
 
