@@ -75,7 +75,7 @@ Full details: `.planning/milestones/v2.0-ROADMAP.md`
 **Milestone Goal:** Agents can reason across multiple invocations and call other deployed services, enabling multi-step autonomous workflows and composable service architectures.
 
 - [x] **Phase 20: WIT Interface & Types** — Establish the `run-agent`/`call-service` interface contract; all engine, SDK, and binding work depends on this compiling first (completed 2026-04-22)
-- [ ] **Phase 21: Agent Continuation Engine** — Re-invocation loop with KV-backed state persistence, step limit enforcement, and component LRU pinning
+- [x] **Phase 21: Agent Continuation Engine** — Re-invocation loop with KV-backed state persistence, step limit enforcement, and component LRU pinning (completed 2026-04-22)
 - [ ] **Phase 22: Service-to-Service RPC** — `call-service` host function with permission enforcement, cycle detection, and bilateral caller/callee access control
 - [ ] **Phase 23: Integration & Validation** — End-to-end examples and tests wiring continuation + RPC together, verifying permission enforcement
 
@@ -106,10 +106,10 @@ Plans:
   3. When an agent exceeds `max_continuation_steps`, the engine terminates it and surfaces a clear error (e.g., `ContinuationLimit: exceeded 10 steps`) — the trigger is not left pending indefinitely
   4. A developer-defined multi-step workflow using named `continue("step_name")` handoffs routes to the correct handler function on each re-invocation — the step name is recoverable from KV state
   5. The compiled WASM module for an active continuation chain is not evicted from the LRU cache between steps — re-instantiation does not occur mid-chain
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 21-01-PLAN.md — Core engine: ContinuationLimit error, agent detection, continuation loop with KV persistence and LRU pinning
-- [ ] 21-02-PLAN.md — Caller updates and continuation integration tests
+- [x] 21-01-PLAN.md — Core engine: ContinuationLimit error, agent detection, continuation loop with KV persistence and LRU pinning
+- [x] 21-02-PLAN.md — Caller updates and continuation integration tests
 
 ### Phase 22: Service-to-Service RPC
 **Goal**: An agent or component can synchronously call another deployed service via `call-service`, with both the caller's `AllowedServiceCalls` and the callee's `AllowedCallers` checked before dispatch, cycle detection preventing A->B->A deadlocks, and a depth cap stopping unbounded nesting
@@ -158,6 +158,6 @@ Plans:
 | 18. wavs-rig Integration Crate | v2.0 | 3/3 | Complete | 2026-04-20 |
 | 19. Example Agent & E2E Validation | v2.0 | 2/2 | Complete | 2026-04-20 |
 | 20. WIT Interface & Types | v3.0 | 2/2 | Complete    | 2026-04-22 |
-| 21. Agent Continuation Engine | v3.0 | 0/2 | Not started | - |
+| 21. Agent Continuation Engine | v3.0 | 2/2 | Complete    | 2026-04-22 |
 | 22. Service-to-Service RPC | v3.0 | 0/TBD | Not started | - |
 | 23. Integration & Validation | v3.0 | 0/TBD | Not started | - |
