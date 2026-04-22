@@ -133,7 +133,10 @@ Plans:
   1. A deployable multi-step agent example exists that triggers, runs 3+ continuation steps with KV-persisted state, and returns a final result — a developer can deploy it and observe each step's KV checkpoint
   2. A deployable service composition example exists where agent A calls utility service B via `call-service` and incorporates B's response into its final result — both services deploy from standard service.json configs
   3. Running a permission enforcement test produces two clear failures: one for a caller missing `AllowedServiceCalls`, one for a callee missing `AllowedCallers` — both rejections include human-readable error messages
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 23-01-PLAN.md — Fix _helpers export macros + multi-step-agent component + continuation E2E test
+- [ ] 23-02-PLAN.md — Utility-service + composition-agent components + RPC E2E + permission enforcement tests
 
 ## Progress
 
@@ -163,4 +166,4 @@ Plans:
 | 20. WIT Interface & Types | v3.0 | 2/2 | Complete    | 2026-04-22 |
 | 21. Agent Continuation Engine | v3.0 | 2/2 | Complete    | 2026-04-22 |
 | 22. Service-to-Service RPC | v3.0 | 2/2 | Complete    | 2026-04-22 |
-| 23. Integration & Validation | v3.0 | 0/TBD | Not started | - |
+| 23. Integration & Validation | v3.0 | 0/2 | Not started | - |
