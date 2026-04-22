@@ -202,6 +202,17 @@ pub struct Component {
     /// External env variable keys to be read from the system host on execute (i.e. API keys).
     /// Must be prefixed with `WAVS_ENV_`.
     pub env_keys: BTreeSet<String>,
+
+    /// Which services may call this component via call-service (callee-side permission).
+    /// None means no callers accepted. Absence in JSON defaults to Option::None.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_callers: Option<AllowedCallers>,
+
+    /// Maximum number of continuation steps before the engine terminates the agent.
+    /// Engine reads as: self.max_continuation_steps.unwrap_or(10)
+    /// Absence in JSON defaults to Option::None (engine uses default of 10).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_continuation_steps: Option<u32>,
 }
 
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
@@ -626,6 +637,59 @@ fn permission_defaults() {
     );
 }
 
+#[test]
+fn component_new_fields_backward_compat() {
+    // Minimal valid Component JSON — no allowed_callers or max_continuation_steps
+    // ComponentDigest serializes/deserializes as plain 64-char hex (no "sha256:" prefix)
+    let json = serde_json::json!({
+        "source": { "digest": "0000000000000000000000000000000000000000000000000000000000000000" },
+        "permissions": {},
+        "fuel_limit": null,
+        "time_limit_seconds": null,
+        "config": {},
+        "env_keys": []
+    });
+    let component: Component = serde_json::from_value(json).unwrap();
+    assert_eq!(component.allowed_callers, Option::None);
+    assert_eq!(component.max_continuation_steps, Option::None);
+    // Engine default behavior
+    assert_eq!(component.max_continuation_steps.unwrap_or(10), 10);
+}
+
+#[test]
+fn component_allowed_callers_variants() {
+    let json = serde_json::json!({
+        "source": { "digest": "0000000000000000000000000000000000000000000000000000000000000000" },
+        "permissions": {},
+        "config": {},
+        "env_keys": [],
+        "allowed_callers": "all",
+        "max_continuation_steps": 5
+    });
+    let component: Component = serde_json::from_value(json).unwrap();
+    assert_eq!(component.allowed_callers, Some(AllowedCallers::All));
+    assert_eq!(component.max_continuation_steps, Some(5));
+    assert_eq!(component.max_continuation_steps.unwrap_or(10), 5);
+}
+
+#[test]
+fn allowed_service_calls_variants() {
+    // Test All
+    let json_all = serde_json::json!("all");
+    let asc: AllowedServiceCalls = serde_json::from_value(json_all).unwrap();
+    assert_eq!(asc, AllowedServiceCalls::All);
+
+    // Test Only
+    let json_only = serde_json::json!({"only": ["svc-1", "svc-2"]});
+    let asc: AllowedServiceCalls = serde_json::from_value(json_only).unwrap();
+    assert_eq!(asc, AllowedServiceCalls::Only(vec!["svc-1".into(), "svc-2".into()]));
+
+    // Test None
+    let json_none = serde_json::json!("none");
+    let asc: AllowedServiceCalls = serde_json::from_value(json_none).unwrap();
+    assert_eq!(asc, AllowedServiceCalls::None);
+}
+
 // TODO: remove / change defaults?
 
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
@@ -743,6 +807,8 @@ mod test_ext {
                 time_limit_seconds: None,
                 config: BTreeMap::new(),
                 env_keys: BTreeSet::new(),
+                allowed_callers: None,
+                max_continuation_steps: None,
             }
         }
     }
