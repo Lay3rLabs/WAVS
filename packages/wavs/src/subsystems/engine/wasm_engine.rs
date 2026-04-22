@@ -1,4 +1,3 @@
-use uuid::Uuid;
 use std::sync::Arc;
 use std::time::Instant;
 use std::{path::Path, sync::RwLock};
@@ -72,42 +71,22 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         &self,
         source: &ComponentSource,
     ) -> Result<ComponentDigest, EngineError> {
-        // If we have a known digest, check cache first
-        if let Some(digest) = source.digest() {
-            if self.engine.storage.data_exists(&digest.clone().into())? {
-                return Ok(digest.clone());
-            }
-        }
-
-        match source {
-            ComponentSource::Download { .. }
-            | ComponentSource::Registry { .. }
-            | ComponentSource::Oci { .. } => {
-                let (_component, digest) = self.engine.load_component_from_source(source).await?;
-                Ok(digest)
-            }
-            ComponentSource::Digest(digest) => {
-                if !self.engine.storage.data_exists(&digest.clone().into())? {
-                    self.metrics.increment_total_errors("unknown digest");
-                    return Err(EngineError::UnknownDigest(digest.clone()));
+        let digest = source.digest().clone();
+        if self.engine.storage.data_exists(&digest.clone().into())? {
+            Ok(digest)
+        } else {
+            match source {
+                ComponentSource::Download { .. } | ComponentSource::Registry { .. } => {
+                    // Fetches component, validates it has the expected digest, and stores it in the lookup
+                    self.engine.load_component_from_source(source).await?;
+                    Ok(digest)
                 }
-                Ok(digest.clone())
+                ComponentSource::Digest(_) => {
+                    self.metrics.increment_total_errors("unknown digest");
+                    Err(EngineError::UnknownDigest(digest))
+                }
             }
         }
-    }
-
-    /// Returns the raw WASM bytes for a component by digest.
-    /// Used by the Tauri schema command to pass bytes to wit-schema.
-    pub fn get_component_bytes(&self, digest: &ComponentDigest) -> Result<Vec<u8>, EngineError> {
-        self.engine.storage
-            .get_data(&digest.clone().into())
-            .map_err(EngineError::Storage)
-    }
-
-    /// Returns a reference to the underlying wasmtime::Engine.
-    /// Used by the Tauri schema command to construct wasmtime::component::Component.
-    pub fn wasmtime_engine(&self) -> &wasmtime::Engine {
-        &self.engine.wasm_engine
     }
 
     // TODO: paginate this
@@ -148,11 +127,10 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 )
             })?;
 
-        let (component, _digest) = self
-            .engine
-            .load_component_from_source(&workflow.component.source)
-            .await?;
+        let digest = workflow.component.source.digest().clone();
         let chain_configs = self.engine.get_chain_configs()?;
+
+        let component = self.engine.load_component(&digest).await?;
 
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
@@ -437,19 +415,17 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 )
             })?;
 
-        let aggregator_source = match &workflow.submit {
-            wavs_types::Submit::Aggregator { component, .. } => &component.source,
+        let digest = match &workflow.submit {
+            wavs_types::Submit::Aggregator { component, .. } => component.source.digest().clone(),
             wavs_types::Submit::None => {
                 tracing::info!("Submit is None for service_id: {}", service.id(),);
                 return Ok(None);
             }
         };
 
-        let (component, _digest) = self
-            .engine
-            .load_component_from_source(aggregator_source)
-            .await?;
         let chain_configs = self.engine.get_chain_configs()?;
+
+        let component = self.engine.load_component(&digest).await?;
 
         let instance_deps = InstanceDepsBuilder {
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
@@ -705,7 +681,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -720,7 +695,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -770,7 +744,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -786,7 +759,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"configvar:foo"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -805,7 +777,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -824,7 +795,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"envvar:WAVS_ENV_TEST_NOT_ALLOWED"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -874,7 +844,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -889,7 +858,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"custom-event-id"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -943,7 +911,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -958,7 +925,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"multi-response"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -983,7 +949,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"multi-response-bad"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1029,7 +994,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1045,7 +1009,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"{"x":12}"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1157,7 +1120,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1172,7 +1134,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1197,7 +1158,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1212,7 +1172,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1237,7 +1196,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1252,7 +1210,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await
@@ -1282,7 +1239,6 @@ pub mod tests {
                 chain: "evm:anvil".parse().unwrap(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let service_id = service.id();
@@ -1297,7 +1253,6 @@ pub mod tests {
                         trigger: Trigger::Manual,
                     },
                     data: TriggerData::new_raw(br#"hello world"#),
-                    correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
                 },
             )
             .await

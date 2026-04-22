@@ -202,15 +202,10 @@ impl<S: CAStorage + Send + Sync + 'static> EngineManager<S> {
         let trigger_config = action.config.clone();
 
         tracing::debug!(
-            "Executing component: service_id={}, workflow_id={}, component_digest={}",
+            "Executing component: service_id={}, workflow_id={}, component_digest={:?}",
             trigger_config.service_id,
             trigger_config.workflow_id,
-            workflow
-                .component
-                .source
-                .digest()
-                .map(|d| d.to_string())
-                .unwrap_or_else(|| "unresolved".to_string())
+            workflow.component.source.digest()
         );
 
         let mut wasm_responses = self

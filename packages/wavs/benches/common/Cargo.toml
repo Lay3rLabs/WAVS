@@ -15,4 +15,3 @@ utils = { workspace = true }
 wasmtime = { workspace = true }
 wavs-engine = { workspace = true }
 wavs-types = { workspace = true }
-uuid = { workspace = true }

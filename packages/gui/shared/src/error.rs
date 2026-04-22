@@ -40,7 +40,4 @@ pub enum AppError {
 
     #[error("Keychain: {0}")]
     Keychain(String),
-
-    #[error("Agent: {0}")]
-    Agent(String),
 }

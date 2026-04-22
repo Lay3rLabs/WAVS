@@ -3,7 +3,7 @@ use crate::{
     dispatcher::Dispatcher,
     health::SharedHealthStatus,
     http::handlers::{
-        debug::{handle_dev_execute, handle_dev_trigger_streams_info},
+        debug::handle_dev_trigger_streams_info,
         logs::{handle_logs, handle_logs_stream},
         service::{add::handle_add_service_direct, get::handle_get_service_by_hash},
     },
@@ -142,7 +142,6 @@ pub async fn make_router(
 
         protected = protected
             .route("/dev/triggers", post(handle_debug_trigger))
-            .route("/dev/execute", post(handle_dev_execute))
             .route("/dev/components", post(handle_upload_component))
             .route("/dev/services", post(handle_save_service))
             .route(

@@ -78,10 +78,11 @@ impl super::world::host::Host for OperatorHostComponent {
     }
 
     fn log(&mut self, level: LogLevel, message: String) {
-        let workflow = self
+        let digest = self
             .service
             .workflows
             .get(&self.workflow_id)
+            .map(|workflow| workflow.component.source.digest())
             .unwrap_or_else(|| {
                 panic!(
                     "Workflow with ID {} not found in service {}",
@@ -89,12 +90,6 @@ impl super::world::host::Host for OperatorHostComponent {
                     self.service.id()
                 )
             });
-
-        let digest = workflow
-            .component
-            .source
-            .digest()
-            .expect("operator component must have a digest for logging");
 
         (self.inner_log)(
             &self.service.id(),

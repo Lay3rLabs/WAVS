@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use uuid::Uuid;
 use wavs_types::{
     AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, Service, SignatureKind,
     Submit, Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowId,
@@ -19,7 +18,6 @@ pub fn make_trigger_action(
             trigger: service.workflows.values().next().unwrap().trigger.clone(),
         },
         data: TriggerData::Raw(input_data),
-        correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
     }
 }
 
@@ -55,6 +53,5 @@ pub fn make_service(wasm_digest: ComponentDigest, config: BTreeMap<String, Strin
             chain: "evm:noop".parse().unwrap(),
             address: Default::default(),
         },
-        exec_enabled: None,
     }
 }

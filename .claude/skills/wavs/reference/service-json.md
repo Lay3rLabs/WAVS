@@ -70,9 +70,8 @@ Used by: `wavs_save_service`, `wavs_deploy_dev_service`
 - `status`: `"active"` or `"paused"`
 - `manager`: ServiceManager contract (EVM or Cosmos)
 - `workflows`: map of `workflow_id` → workflow definition; `workflow_id` is lowercase alphanumeric 3–36 chars
-- `component.source`: see [Component Source Types](#component-source-types) below
+- `component.source.digest`: raw 64-char hex string returned by `wavs_upload_component` (no `sha256:` prefix)
 - `submit`: `"none"` to discard results, or `{"aggregator": {...}}` for on-chain submission
-- `exec_enabled`: optional bool — when `true`, enables Tier 3 (`on_chain`) execution via `wavs_exec_*` tools. Omit or set to `false`/`null` to disable. Only relevant when using execution tools with `--exec-enabled`.
 
 Multiple workflows in one service:
 ```json
@@ -83,51 +82,6 @@ Multiple workflows in one service:
   }
 }
 ```
-
----
-
-## Component Source Types
-
-The `component.source` field specifies where the WASM binary lives. Three variants are supported:
-
-### Digest (uploaded component)
-```json
-"source": {
-  "digest": "f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420"
-}
-```
-Raw 64-char hex string returned by `wavs_upload_component` (no `sha256:` prefix). The component must already be uploaded to the node.
-
-### OCI (pull from registry at deploy time)
-```json
-"source": {
-  "oci": {
-    "uri": "oci://ghcr.io/layerlabs/echo-data:v1.0",
-    "digest": "f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420"
-  }
-}
-```
-The WAVS node pulls the component from an OCI-compliant registry (ghcr.io, Docker Hub, etc.) when the service is deployed. The `digest` field is optional — when provided, the pulled bytes are verified against it. When omitted, the component is pulled by tag only (a warning is emitted).
-
-**URI formats:**
-- `oci://ghcr.io/org/component:tag` — pull by tag (mutable, may change)
-- `oci://ghcr.io/org/component@sha256:abc123...` — pin to manifest digest
-- `oci://ghcr.io/org/component:tag@sha256:abc123...` — tag + manifest pin
-
-**Auth:** For private registries, set `WAVS_OCI_USERNAME` and `WAVS_OCI_PASSWORD` env vars on the WAVS node. Both must be set for Basic auth; otherwise falls back to anonymous.
-
-**No upload needed:** When using OCI source, skip the `wavs_upload_component` step — the node pulls directly from the registry.
-
-### Download (fixed URL)
-```json
-"source": {
-  "download": {
-    "uri": "https://example.com/my-component.wasm",
-    "digest": "f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420"
-  }
-}
-```
-Downloads the component from a fixed URL at deploy time. The `digest` is required and verified after download.
 
 ---
 

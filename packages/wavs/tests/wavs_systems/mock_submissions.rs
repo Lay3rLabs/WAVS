@@ -6,7 +6,6 @@ use std::{
 use alloy_primitives::FixedBytes;
 use thiserror::Error;
 use utils::{context::AppContext, telemetry::Metrics};
-use uuid::Uuid;
 use wavs_types::{EventId, EventOrder, Service, TriggerAction, WasmResponse};
 
 use wavs::{
@@ -62,7 +61,6 @@ pub fn mock_submission_request(service: &Service, payload: &str) -> SubmissionRe
                 trigger: service.workflows.values().next().unwrap().trigger.clone(),
             },
             data: wavs_types::TriggerData::default(),
-            correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
         },
         operator_response: WasmResponse {
             payload: payload.as_bytes().to_vec(),

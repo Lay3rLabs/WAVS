@@ -15,12 +15,6 @@ export interface Settings {
   mcp_auto_start: boolean;
   mcp_token: string | null;
   env_vars: Record<string, string>;
-  agent_model_provider: string | null;
-  agent_model_id: string | null;
-  agent_thinking_level: string | null;
-  agent_base_url: string | null;
-  agent_auto_start: boolean;
-  agent_panel_width: number | null;
 }
 
 // Health types
@@ -109,16 +103,6 @@ export interface SubmissionEvent {
   service_id: ServiceId;
   workflow_id: WorkflowId;
   trigger_data: TriggerData;
-  correlation_id: string;
-  tx_hash: string;
-  result_payload: string | null;
-}
-
-export interface SubmissionFailedEvent {
-  service_id: ServiceId;
-  workflow_id: WorkflowId;
-  correlation_id: string;
-  error: string;
 }
 
 export type ServiceAction = 'added' | 'removed' | 'paused' | 'resumed';
@@ -194,7 +178,6 @@ export interface TriggerConfig {
 export interface TriggerAction {
   config: TriggerConfig;
   data: TriggerData;
-  correlation_id: string;
 }
 
 export type TriggerData =
@@ -284,29 +267,6 @@ export interface ComponentDigestResult {
   resolved_version: string;
 }
 
-// Component detail types (Phase 10 backend response shapes)
-// ComponentSourceResult uses serde(tag = "type", rename_all = "snake_case")
-export type ComponentSourceResult =
-  | { type: 'download'; uri: string; digest: string }
-  | { type: 'registry'; digest: string; domain: string | null; package: string }
-  | { type: 'digest'; digest: string }
-  | { type: 'oci'; uri: string; digest: string | null };
-
-export interface ComponentMetadata {
-  permissions: Permissions;
-  fuel_limit: number | null;
-  time_limit_seconds: number | null;
-  config: Record<string, string>;
-  env_keys: string[];
-  source: ComponentSourceResult;
-}
-
-export interface ComponentSchema {
-  world: string;
-  exports: Record<string, { inputSchema: unknown; outputSchema: unknown; description?: string }>;
-  $defs: Record<string, unknown>;
-}
-
 // MCP server types
 export interface McpStatus {
   running: boolean;
@@ -327,7 +287,7 @@ export interface FsEntry {
 }
 
 // Activity types (unified triggers + submissions)
-export type ActivityKind = 'trigger' | 'submission' | 'submission_failed';
+export type ActivityKind = 'trigger' | 'submission';
 
 export interface ActivityItem {
   id: number;
@@ -335,12 +295,8 @@ export interface ActivityItem {
   kind: ActivityKind;
   serviceId: ServiceId;
   workflowId: WorkflowId;
-  triggerData?: TriggerData;
+  triggerData: TriggerData;
   triggerConfig?: TriggerConfig;
-  correlationId?: string;
-  error?: string;
-  txHash?: string;
-  resultPayload?: string | null;
 }
 
 // Helper to get a human-readable service key from manager (for display/fallback only)
@@ -449,7 +405,3 @@ export function getServiceAddress(manager: ServiceManager): string {
   if ('cosmos' in manager) return manager.cosmos.address;
   return 'unknown';
 }
-
-// Grouped activity types (from useGroupedActivity hook)
-export type { GroupedActivityEvent, StatusFilter } from '../hooks/useGroupedActivity';
-export { STATUS_TABS } from '../hooks/useGroupedActivity';

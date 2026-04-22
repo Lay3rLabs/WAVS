@@ -2,7 +2,6 @@ use std::{
     collections::BTreeMap,
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
-use uuid::Uuid;
 
 use alloy_primitives::FixedBytes;
 use anyhow::{Context, Result};
@@ -149,7 +148,6 @@ impl ExecComponent {
                 chain: chain.clone(),
                 address: Default::default(),
             },
-            exec_enabled: None,
         };
 
         let data = match simulates_trigger {
@@ -200,7 +198,6 @@ impl ExecComponent {
                 trigger: Trigger::Manual,
             },
             data,
-            correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
         };
 
         let mut instance_deps = InstanceDepsBuilder {

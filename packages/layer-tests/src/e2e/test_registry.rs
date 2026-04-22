@@ -1421,7 +1421,6 @@ impl ExpectedOutputCallback for PermissionsCallback {
             .get(&ComponentName::Operator(OperatorComponent::Permissions))
             .ok_or_else(|| anyhow::anyhow!("Failed to get digest for Permissions component"))?
             .digest()
-            .expect("test source must have a digest")
             .to_string();
 
         anyhow::ensure!(

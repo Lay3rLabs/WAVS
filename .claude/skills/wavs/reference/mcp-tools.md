@@ -26,14 +26,9 @@ All tools are exposed by the `wavs` MCP server. Prefix with `wavs:` when calling
 | `wavs_simulate_trigger` | — | — | ✓ | Fires a test trigger against a deployed service |
 | `wavs_deploy_dev_service` | — | — | ✓ | Registers service directly without on-chain contract |
 | `wavs_query_kv` | — | — | ✓ | Reads a value from a service's KV store |
-| `wavs_query_logs` | — | — | ✓ | Query structured log entries from WAVS node ring buffer |
-| `wavs_query_component_logs` | — | — | ✓ | Query WASM component execution logs (filterable by service_id, workflow_id, digest) |
-| `wavs_get_service_schema` | — | — | — | Returns minimal valid Service JSON examples for every trigger type (local) |
 | `wavs_get_wit_interface` | — | — | — | Returns full WIT interface definitions (local, no network) |
 | `wavs_scaffold_component` | — | — | — | Generates Cargo.toml + src/lib.rs skeleton (local) |
-| `wavs_build_component` | — | — | — | Builds component; auto-detects standalone (`wasm32-wasip2`) vs workspace (`cargo component`) mode (local) |
-| `wavs_validate_component` | — | — | — | Validates .wasm exports correct `run` function; checks WAVS interface compatibility (local, requires `wasm-tools`) |
-| `wavs_exec_*` | — | Tier 2–3 | ✓ | Dynamic, one per deployed service workflow. Requires `--exec-enabled`. Auth depends on trust tier. |
+| `wavs_build_component` | — | — | — | Runs `cargo component build`; returns build output (local) |
 
 **Legend:**
 - Token: MCP server must be started with `--token <value>`; pass token in requests
@@ -135,57 +130,13 @@ key:        key within the bucket
 dir:     directory containing the component's Cargo.toml
 release: optional bool (default: true)
 ```
-Auto-detects build mode: standalone projects (with local `wit/` dir) use `cargo build --target wasm32-wasip2`, workspace projects use `cargo component build`.
-
-### wavs_validate_component
-```
-wasm_path: path to compiled .wasm file
-```
-Validates the component is a proper WASI component with the correct `run` export. Run after build, before upload. Requires `wasm-tools` installed.
 
 ### wavs_scaffold_component
 ```
 name:         lowercase-with-hyphens component name
 trigger_type: evm_contract_event | cosmos_contract_event | block_interval | cron | manual
-dir:          optional — parent directory to create project in (e.g. "/tmp"). If provided, writes all files to {dir}/{name}/.
-              If omitted, returns file contents as text.
 description:  optional string
 ```
-When `dir` is provided, creates a complete self-contained project with Cargo.toml, src/lib.rs, src/bindings.rs, and the full wit/ directory. Builds with `cargo build --target wasm32-wasip2 --release`.
-
-### wavs_query_logs
-```
-since_id: optional u64 — return entries with id >= this value; pass `next_id` from previous response to page forward (default: 0)
-limit:    optional usize — max entries to return (default: 100, max: 1000)
-level:    optional string — minimum log level: trace | debug | info | warn | error (returns this level and above)
-target:   optional string — filter by target prefix, e.g. "wavs" or "wavs::subsystems::engine"
-```
-Returns: `{ "entries": [...], "next_id": <u64> }`. Pass `next_id` as `since_id` on the next call to page forward.
-
-### wavs_query_component_logs
-```
-since_id:    optional u64 — page forward from this ID (default: 0)
-limit:       optional usize — max entries (default: 100, max: 1000)
-level:       optional string — minimum log level: trace | debug | info | warn | error
-service_id:  optional string — filter to a specific service (64-char hex)
-workflow_id: optional string — filter to a specific workflow, e.g. "default"
-digest:      optional string — filter to a specific component digest (sha256 hex)
-```
-Returns same shape as `wavs_query_logs`. Automatically scoped to `wavs::subsystems::engine::wasm_engine` logs. Entries contain component `host::log()` output plus service_id, workflow_id, and digest in the `fields` string.
-
-### wavs_get_service_schema
-No parameters. Returns minimal valid Service JSON examples for every trigger type (manual, cron, block_interval, evm_contract_event, cosmos_contract_event), submit options, and `data_json` formats for `wavs_simulate_trigger`.
-
-### wavs_exec_* (dynamic execution tools)
-One tool is generated per deployed service workflow, named `wavs_exec_{service_name}_{workflow_id}`. These tools only appear when the MCP server is started with `--exec-enabled`.
-
-```
-input:      optional object — data to pass to the component (structure depends on component's WIT interface)
-trust_tier: required string — "result_only" | "signed_result" | "on_chain"
-timeout_ms: optional integer — per-call timeout in ms (default: 25000, max: 25000)
-confirm:    optional string — for on_chain tier: pass the nonce from the gas estimate to confirm submission
-```
-See [`flows/execution.md`](../flows/execution.md) for the full execution lifecycle and trust tier guide.
 
 ---
 
@@ -197,9 +148,6 @@ The MCP server binary is `wavs-mcp`. Key CLI args:
 |-----|-------------|
 | `--wavs-url <url>` | WAVS node HTTP API URL (e.g. `http://localhost:8000`) |
 | `--token <token>` | Auth token (enables write tools) |
-| `--exec-enabled` | Enable dynamic `wavs_exec_*` execution tools for deployed services |
-| `--signing-mnemonic <mnemonic>` | Operator signing mnemonic (required for Tier 2 `signed_result`). Falls back to `WAVS_SIGNING_MNEMONIC` env var or `signing_mnemonic` in `~/.wavs/wavs.toml`. |
-| `--mcp-chain-credential <key>` | Chain credential private key (required for Tier 3 `on_chain`). Falls back to `WAVS_MCP_CHAIN_CREDENTIAL` env var or `mcp_chain_credential` in `~/.wavs/wavs.toml`. |
 
 The WAVS node URL and token can also be found by inspecting the running `wavs-mcp` process:
 ```bash
@@ -211,4 +159,3 @@ Environment variables:
 - `WAVS_TOKEN` — auth token
 - `WAVS_MCP_CHAIN_CREDENTIAL` — credential for on-chain ops (falls back to `mcp_chain_credential` in `~/.wavs/wavs.toml`)
 - `WAVS_SIGNING_MNEMONIC` — signing mnemonic (falls back to `signing_mnemonic` in `~/.wavs/wavs.toml`)
-- `WAVS_EXEC_ENABLED` — set to `true` to enable execution tools (equivalent to `--exec-enabled`)

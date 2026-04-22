@@ -1,7 +1,6 @@
 #![allow(clippy::result_large_err)]
 use std::sync::RwLock;
 use std::time::Duration;
-use uuid::Uuid;
 
 use utils::test_utils::address::{
     rand_address_cosmos, rand_address_evm, rand_event_cosmos, rand_event_evm,
@@ -48,7 +47,6 @@ pub fn mock_real_trigger_action(
                     block_timestamp: None,
                     tx_index: 0,
                 },
-                correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
             }
         }
         layer_climb::prelude::Address::Cosmos(contract_address) => {
@@ -72,7 +70,6 @@ pub fn mock_real_trigger_action(
                     block_height: 1,
                     event_index: 0,
                 },
-                correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
             }
         }
     }
@@ -266,12 +263,10 @@ mod tests {
             TriggerAction {
                 config: mock_evm_event_trigger_config(ServiceId::hash("service1"), "workflow1"),
                 data: TriggerData::new_raw(b"foobar"),
-                correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
             },
             TriggerAction {
                 config: mock_evm_event_trigger_config(ServiceId::hash("service2"), "workflow2"),
                 data: TriggerData::new_raw(b"zoomba"),
-                correlation_id: Uuid::now_v7().as_hyphenated().to_string(),
             },
         ];
         let triggers = MockTriggerManagerVec::new().with_actions(actions.clone());

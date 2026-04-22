@@ -57,26 +57,10 @@ pub struct SubmissionEvent {
     pub service_id: ServiceId,
     pub workflow_id: WorkflowId,
     pub trigger_data: TriggerData,
-    pub correlation_id: String,
-    pub tx_hash: String,
-    pub result_payload: Option<String>,
 }
 
 impl TauriEventExt for SubmissionEvent {
     const NAME: &'static str = "submission";
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct SubmissionFailedEvent {
-    pub service_id: ServiceId,
-    pub workflow_id: WorkflowId,
-    pub correlation_id: String,
-    pub error: String,
-}
-
-impl TauriEventExt for SubmissionFailedEvent {
-    const NAME: &'static str = "submission_failed";
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -95,33 +79,4 @@ pub enum ServiceAction {
 
 impl TauriEventExt for ServiceEvent {
     const NAME: &'static str = "service";
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AgentStatusEvent {
-    pub status: String,
-    pub error: Option<String>,
-}
-
-impl TauriEventExt for AgentStatusEvent {
-    const NAME: &'static str = "agent:status";
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AgentRpcEvent {
-    pub event: serde_json::Value,
-}
-
-impl TauriEventExt for AgentRpcEvent {
-    const NAME: &'static str = "agent:event";
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AgentUiControlEvent {
-    pub action: String,
-    pub payload: serde_json::Value,
-}
-
-impl TauriEventExt for AgentUiControlEvent {
-    const NAME: &'static str = "agent:ui_control";
 }
