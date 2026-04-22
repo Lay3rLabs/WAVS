@@ -71,29 +71,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WIT-01 | TBD | Pending |
-| WIT-02 | TBD | Pending |
-| WIT-03 | TBD | Pending |
-| WIT-04 | TBD | Pending |
-| WIT-05 | TBD | Pending |
-| CONT-01 | TBD | Pending |
-| CONT-02 | TBD | Pending |
-| CONT-03 | TBD | Pending |
-| CONT-04 | TBD | Pending |
-| CONT-05 | TBD | Pending |
-| RPC-01 | TBD | Pending |
-| RPC-02 | TBD | Pending |
-| RPC-03 | TBD | Pending |
-| RPC-04 | TBD | Pending |
-| E2E-04 | TBD | Pending |
-| E2E-05 | TBD | Pending |
-| E2E-06 | TBD | Pending |
+| WIT-01 | Phase 20 | Pending |
+| WIT-02 | Phase 20 | Pending |
+| WIT-03 | Phase 20 | Pending |
+| WIT-04 | Phase 20 | Pending |
+| WIT-05 | Phase 20 | Pending |
+| CONT-01 | Phase 21 | Pending |
+| CONT-02 | Phase 21 | Pending |
+| CONT-03 | Phase 21 | Pending |
+| CONT-04 | Phase 21 | Pending |
+| CONT-05 | Phase 21 | Pending |
+| RPC-01 | Phase 22 | Pending |
+| RPC-02 | Phase 22 | Pending |
+| RPC-03 | Phase 22 | Pending |
+| RPC-04 | Phase 22 | Pending |
+| E2E-04 | Phase 23 | Pending |
+| E2E-05 | Phase 23 | Pending |
+| E2E-06 | Phase 23 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17 (awaiting roadmap)
+- Mapped to phases: 17
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-22*
-*Last updated: 2026-04-22 after initial definition*
+*Last updated: 2026-04-22 after roadmap creation*

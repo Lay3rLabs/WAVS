@@ -6,7 +6,8 @@
 - ✅ **v1.1 Open Source AI Providers & Settings UX** — Phases 7-9 (shipped 2026-04-08)
 - ✅ **v1.2 Components Explorer** — Phases 10-12 (shipped 2026-04-08)
 - ✅ **v1.3 Activity UX & Bug Fixes** — Phases 13-16 (shipped 2026-04-09)
-- ��� **v2.0 Agent Runtime** — Phases 17-19 (in progress)
+- ✅ **v2.0 Agent Runtime** — Phases 17-19 (shipped 2026-04-20)
+- 📋 **v3.0 Agent Composition** — Phases 20-23 (planned)
 
 ## Phases
 
@@ -14,7 +15,7 @@
 <summary>✅ v1.0 WAVS Improvements (Phases 1-6) — SHIPPED 2026-04-07</summary>
 
 - [x] Phase 1: OCI Component Pull (2/2 plans) — completed 2026-03-24
-- [x] Phase 2: WIT-to-Schema Tooling (2/2 plans) �� completed 2026-03-25
+- [x] Phase 2: WIT-to-Schema Tooling (2/2 plans) — completed 2026-03-25
 - [x] Phase 3: MCP Execution Interface (3/3 plans) — completed 2026-03-25
 - [x] Phase 4: Rust Event Foundation (1/1 plan) — completed 2026-04-07
 - [x] Phase 5: Settings Decomposition (2/2 plans) — completed 2026-04-07
@@ -39,7 +40,7 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 <summary>✅ v1.2 Components Explorer (Phases 10-12) — SHIPPED 2026-04-08</summary>
 
 - [x] Phase 10: Backend Commands (1/1 plan) — completed 2026-04-08
-- [x] Phase 11: Component Detail Page (2/2 plans) �� completed 2026-04-08
+- [x] Phase 11: Component Detail Page (2/2 plans) — completed 2026-04-08
 - [x] Phase 12: Components List Page (1/1 plan) — completed 2026-04-08
 
 Full details: `.planning/milestones/v1.2-ROADMAP.md`
@@ -58,63 +59,76 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 
 </details>
 
-### v2.0 Agent Runtime (In Progress)
+<details>
+<summary>✅ v2.0 Agent Runtime (Phases 17-19) — SHIPPED 2026-04-20</summary>
 
-**Milestone Goal:** Make WAVS a first-class agent runtime. Developers write rig-based agents in ~30 lines of Rust that autonomously reason and act inside the WASM sandbox with full cryptographic trust guarantees.
+- [x] Phase 17: rig-wasi Fork (2/2 plans) — completed 2026-04-20
+- [x] Phase 18: wavs-rig Integration Crate (3/3 plans) — completed 2026-04-20
+- [x] Phase 19: Example Agent & E2E Validation (2/2 plans) — completed 2026-04-20
 
-- [x] **Phase 17: rig-wasi Fork** — Patch rig-core 0.35.0 to compile cleanly to wasm32-wasip2; this is the compile gate for all downstream work (completed 2026-04-20)
-- [x] **Phase 18: wavs-rig Integration Crate** — Bridge library providing HTTP transport, typed built-in WAVS tools, KV-backed memory, and async entry point shim (completed 2026-04-20)
-- [x] **Phase 19: Example Agent & E2E Validation** — Full agent loop end-to-end on a live WAVS node with sandboxed LLM access (completed 2026-04-20)
+Full details: `.planning/milestones/v2.0-ROADMAP.md`
+
+</details>
+
+### 📋 v3.0 Agent Composition (Planned)
+
+**Milestone Goal:** Agents can reason across multiple invocations and call other deployed services, enabling multi-step autonomous workflows and composable service architectures.
+
+- [ ] **Phase 20: WIT Interface & Types** — Establish the `run-agent`/`call-service` interface contract; all engine, SDK, and binding work depends on this compiling first
+- [ ] **Phase 21: Agent Continuation Engine** — Re-invocation loop with KV-backed state persistence, step limit enforcement, and component LRU pinning
+- [ ] **Phase 22: Service-to-Service RPC** — `call-service` host function with permission enforcement, cycle detection, and bilateral caller/callee access control
+- [ ] **Phase 23: Integration & Validation** — End-to-end examples and tests wiring continuation + RPC together, verifying permission enforcement
 
 ## Phase Details
 
-### Phase 17: rig-wasi Fork
-**Goal**: A patched fork of rig-core 0.35.0 compiles cleanly to wasm32-wasip2, removing all hard WASI blockers: unconditional reqwest, tokio rt feature dependency, cfg inconsistencies across modules, and SSE dead zones
-**Depends on**: Nothing (first phase of v2.0)
-**Requirements**: FORK-01, FORK-02, FORK-03, FORK-04, FORK-05
+### Phase 20: WIT Interface & Types
+**Goal**: The interface contract for agent composition is locked in — `operator.wit` has the additive `run-agent` export returning `Continue`/`Done` variants, the `call-service` host import is declared, and all new permission/config fields exist in `service.json` types with correct serde defaults
+**Depends on**: Phase 19
+**Requirements**: WIT-01, WIT-02, WIT-03, WIT-04, WIT-05
 **Success Criteria** (what must be TRUE):
-  1. `cargo build --target wasm32-wasip2` succeeds on a minimal test component that imports rig-core from the fork with no errors or dead-code warnings from cfg issues
-  2. reqwest is optional behind a feature flag and the fork builds without it on wasm32-wasip2 (reqwest not present in the wasm dependency tree)
-  3. tokio `rt` feature is absent from the fork; all tokio::sync::watch usages are replaced with futures::channel equivalents that compile on wasm32
-  4. `WasmCompatSend`, `WasmBoxedFuture`, and SSE module cfg guards all use `target_family = "wasm"` uniformly — both cfg branches fire correctly with no dead zones
-  5. A `FORK_BASIS.md` file in the fork repo pins the exact upstream git rev and documents each patch so divergence is trackable when rig releases updates
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 17-01-PLAN.md — Copy rig-core 0.35.0 source, create fork crate with corrected Cargo.toml feature gates, FORK_BASIS.md
-- [x] 17-02-PLAN.md — Apply source-level patches (reqwest, tokio, cfg, SSE) and verify with wasm32-wasip2 compile probe
+  1. A WASM component compiled against the updated `operator.wit` can export both the legacy `run` function and the new `run-agent` function simultaneously — existing components continue to load without modification
+  2. The WIT `call-service` host import is declared in the operator world and `wit-bindgen` regenerates bindings without errors — downstream Rust code can reference `call_service()` as a typed function
+  3. A `service.json` with `allowed_service_calls: "None"` (or no field at all) deserializes correctly via serde default — existing service configs require zero changes to load on the new runtime
+  4. `max_continuation_steps` field appears in the component config schema and defaults to 10 when absent from a service config
+  5. `AllowedCallers` field appears in service config with serde default `None` — callee services can declare which callers are permitted without breaking existing configs
+**Plans**: TBD
 
-### Phase 18: wavs-rig Integration Crate
-**Goal**: `packages/wavs-rig` is a library crate that bridges rig into the WASI component sandbox — providing an HTTP transport over wasi:http, five typed built-in tool implementations, KV-backed conversation memory, and the `run_agent` async shim
-**Depends on**: Phase 17
-**Requirements**: RIG-01, RIG-02, RIG-03, RIG-04, RIG-05
+### Phase 21: Agent Continuation Engine
+**Goal**: An agent component returning `Continue` is automatically re-invoked by the engine, with conversation and tool results persisted to KV between steps under the `wavs_agent_step:` key prefix, and a hard step limit that terminates runaway agents with a clear error
+**Depends on**: Phase 20
+**Requirements**: CONT-01, CONT-02, CONT-03, CONT-04, CONT-05
 **Success Criteria** (what must be TRUE):
-  1. `WasiHttpClient` routes all LLM API calls through `wasi:http/outgoing-handler` implementing rig's `HttpClientExt` trait — a component using it can reach an LLM provider API without any native reqwest
-  2. All five built-in tools (KvGetTool, KvSetTool, HttpFetchTool, EvmQueryTool, LogTool) compile to wasm32-wasip2, have typed args/output structs, and produce valid JSON Schema definitions discoverable by rig's tool registry
-  3. `WavsMemory` appends messages to KV, retrieves full conversation history, and truncates oldest entries when the conversation exceeds the configured token budget — conversation does not grow unboundedly across invocations
-  4. A component implementing `WavsAgent` and calling `run_agent` compiles to wasm32-wasip2 and the full rig agent loop executes correctly inside a single `wstd::runtime::block_on` without nested executor deadlock
-  5. A component deployed with `AllowedHostPermission::None` returns a clear human-readable startup error (e.g., "WAVS agent requires HTTP access — set AllowedHostPermission to All or Only") instead of silently trapping
-**Plans:** 3/3 plans complete
-Plans:
-- [x] 18-01-PLAN.md — Create wavs-rig crate scaffold and WasiHttpClient HTTP transport
-- [x] 18-02-PLAN.md — Implement five built-in WAVS tools (KvGet, KvSet, HttpFetch, EvmQuery, Log)
-- [x] 18-03-PLAN.md — WavsMemory conversation store, WavsAgent trait + run_agent shim, permission check
+  1. An agent component that returns `Continue` three times then `Done` is invoked four times total by the engine within a single trigger execution — the final `Done` result is what reaches the aggregator
+  2. Between each continuation step, the agent's conversation history and tool results are readable from KV under the `wavs_agent_step:<service_id>:<correlation_id>:step:N` key — a component can resume from exactly where it left off
+  3. When an agent exceeds `max_continuation_steps`, the engine terminates it and surfaces a clear error (e.g., `ContinuationLimit: exceeded 10 steps`) — the trigger is not left pending indefinitely
+  4. A developer-defined multi-step workflow using named `continue("step_name")` handoffs routes to the correct handler function on each re-invocation — the step name is recoverable from KV state
+  5. The compiled WASM module for an active continuation chain is not evicted from the LRU cache between steps — re-instantiation does not occur mid-chain
+**Plans**: TBD
 
-### Phase 19: Example Agent & E2E Validation
-**Goal**: A working example agent component demonstrates the full trigger → LLM reasoning → tool use ��� structured result loop on a live WAVS node, with `AllowedHostPermission::Only` enforcing that the agent can only reach the configured LLM provider
-**Depends on**: Phase 18
-**Requirements**: E2E-01, E2E-02, E2E-03
+### Phase 22: Service-to-Service RPC
+**Goal**: An agent or component can synchronously call another deployed service via `call-service`, with both the caller's `AllowedServiceCalls` and the callee's `AllowedCallers` checked before dispatch, cycle detection preventing A→B→A deadlocks, and a depth cap stopping unbounded nesting
+**Depends on**: Phase 20
+**Requirements**: RPC-01, RPC-02, RPC-03, RPC-04
 **Success Criteria** (what must be TRUE):
-  1. The example agent component contains ~30 lines of domain logic (excluding imports and boilerplate), demonstrating trigger ingestion, LLM reasoning call, at least one tool use, and a typed structured result
-  2. A developer can deploy the example using `wavs-mcp` or the CLI, send a trigger, and observe a reasoned structured result returned from the WAVS node with no manual intervention
-  3. The example `service.json` uses `AllowedHostPermission::Only(["api.anthropic.com"])` and the agent successfully calls the LLM while the WAVS node blocks any outbound request to a non-listed host
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 19-01-PLAN.md — Create agent-example crate with WavsAgent implementation (compiles to wasm32-wasip2)
-- [x] 19-02-PLAN.md — Build WASM, create service.json, E2E validation on live WAVS node
+  1. A component calling `call_service(target_id, payload)` receives the target service's response bytes synchronously within the same trigger execution — no additional trigger event is required
+  2. A component with `allowed_service_calls: None` that attempts `call_service()` receives a clear permission error and the call does not reach the target — the caller's `AllowedServiceCalls` is enforced before dispatch
+  3. A callee service with `allowed_callers: None` rejects an inbound `call-service` invocation with a clear error — the callee's `AllowedCallers` is enforced independently of the caller's permission
+  4. A call chain A → B → A is detected and rejected with a cycle error before infinite recursion occurs — the engine tracks the in-flight call stack and refuses to re-enter a service already in the chain
+**Plans**: TBD
+
+### Phase 23: Integration & Validation
+**Goal**: The full agent composition surface is exercised end-to-end — a multi-step continuation agent, a service-composition agent that calls a utility service, and a permission enforcement test that proves both `AllowedServiceCalls` and `AllowedCallers` reject unauthorized calls
+**Depends on**: Phase 21, Phase 22
+**Requirements**: E2E-04, E2E-05, E2E-06
+**Success Criteria** (what must be TRUE):
+  1. A deployable multi-step agent example exists that triggers, runs 3+ continuation steps with KV-persisted state, and returns a final result — a developer can deploy it and observe each step's KV checkpoint
+  2. A deployable service composition example exists where agent A calls utility service B via `call-service` and incorporates B's response into its final result — both services deploy from standard service.json configs
+  3. Running a permission enforcement test produces two clear failures: one for a caller missing `AllowedServiceCalls`, one for a callee missing `AllowedCallers` — both rejections include human-readable error messages
+**Plans**: TBD
 
 ## Progress
 
-**Execution Order:** 17 → 18 → 19 (strict sequential — each phase is a compile-time prerequisite for the next)
+**Execution Order:** 20 → 21 → 22 → 23 (WIT first is non-negotiable; Phase 21 and 22 depend on Phase 20 and can be developed in parallel, but Phase 23 requires both)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -134,6 +148,10 @@ Plans:
 | 14. Activity Frontend UX | v1.3 | 1/1 | Complete | 2026-04-09 |
 | 15. Service Restart Reliability | v1.3 | 1/1 | Complete | 2026-04-09 |
 | 16. Wallet Kebab Menu | v1.3 | 1/1 | Complete | 2026-04-09 |
-| 17. rig-wasi Fork | v2.0 | 2/2 | Complete    | 2026-04-20 |
-| 18. wavs-rig Integration Crate | v2.0 | 3/3 | Complete    | 2026-04-20 |
-| 19. Example Agent & E2E Validation | v2.0 | 2/2 | Complete    | 2026-04-20 |
+| 17. rig-wasi Fork | v2.0 | 2/2 | Complete | 2026-04-20 |
+| 18. wavs-rig Integration Crate | v2.0 | 3/3 | Complete | 2026-04-20 |
+| 19. Example Agent & E2E Validation | v2.0 | 2/2 | Complete | 2026-04-20 |
+| 20. WIT Interface & Types | v3.0 | 0/TBD | Not started | - |
+| 21. Agent Continuation Engine | v3.0 | 0/TBD | Not started | - |
+| 22. Service-to-Service RPC | v3.0 | 0/TBD | Not started | - |
+| 23. Integration & Validation | v3.0 | 0/TBD | Not started | - |
