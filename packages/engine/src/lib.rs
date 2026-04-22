@@ -4,5 +4,6 @@
 pub mod backend;
 pub mod bindings;
 pub mod common;
+pub mod rpc;
 pub mod utils;
 pub mod worlds;

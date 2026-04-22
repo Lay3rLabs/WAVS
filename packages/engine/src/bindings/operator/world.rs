@@ -12,6 +12,9 @@ bindgen!({
     exports: {
         default: async,
     },
+    imports: {
+        "host.call-service": async,
+    },
 });
 
 /// Bindings for the legacy world (components that only export `run`, without the agent interface).
@@ -34,6 +37,9 @@ pub mod legacy {
         },
         exports: {
             default: async,
+        },
+        imports: {
+            "host.call-service": async,
         },
     });
 }

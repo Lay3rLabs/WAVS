@@ -72,4 +72,23 @@ pub enum EngineError {
         data: &'static str,
         logger: &'static str,
     },
+
+    #[error("call-service permission denied: caller '{caller_id}' cannot call '{callee_id}': {reason}")]
+    RpcPermissionDenied {
+        caller_id: String,
+        callee_id: String,
+        reason: String,
+    },
+
+    #[error("call-service cycle detected: '{callee_id}' already in call chain {call_chain:?}")]
+    RpcCycleDetected {
+        callee_id: String,
+        call_chain: Vec<String>,
+    },
+
+    #[error("call-service depth limit ({limit}) exceeded: call chain {call_chain:?}")]
+    RpcDepthExceeded {
+        limit: usize,
+        call_chain: Vec<String>,
+    },
 }

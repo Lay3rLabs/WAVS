@@ -175,6 +175,7 @@ wasm-pkg-common = "0.12.0"
 oci-client = "0.16"
 oci-wasm = "0.4"
 wasmtime = { version = "42.0.1", features = [
+    "async",
     "cache",
     "component-model",
     "runtime",
