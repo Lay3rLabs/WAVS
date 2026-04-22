@@ -1,63 +1,69 @@
-# Requirements: WAVS Agent Runtime
+# Requirements: WAVS Agent Composition
 
-**Defined:** 2026-04-20
+**Defined:** 2026-04-22
 **Core Value:** Developers can write an autonomous LLM agent in ~30 lines of Rust, compile it to WASM, deploy it as a WAVS service, and have it reason + act on triggers with full sandbox and cryptographic trust guarantees.
-
-## v2.0 Requirements
-
-Requirements for agent runtime milestone. Each maps to roadmap phases.
-
-### WASI Compatibility (rig-core fork)
-
-- [ ] **FORK-01**: rig-core compiles to wasm32-wasip2 with reqwest made optional behind a feature flag
-- [ ] **FORK-02**: tokio `rt` feature removed; `tokio::sync::watch` replaced with `futures::channel` equivalent
-- [ ] **FORK-03**: cfg detection unified — `WasmCompatSend`/`WasmBoxedFuture` use `target_family = "wasm"` consistently across all modules
-- [ ] **FORK-04**: SSE module dead zones on wasip2 fixed (both cfg branches fire correctly)
-- [ ] **FORK-05**: Fork compiles cleanly with `cargo build --target wasm32-wasip2` on a minimal test component
-
-### Integration Library (wavs-rig crate)
-
-- [ ] **RIG-01**: `WasiHttpClient` implements rig's `HttpClientExt` trait over `wasi:http/outgoing-handler`, routing all LLM API calls through the WASM sandbox
-- [ ] **RIG-02**: Built-in WAVS tools implement rig's `Tool` trait: KvGetTool, KvSetTool, HttpFetchTool, EvmQueryTool, LogTool — each with typed args/output and JSON Schema definitions
-- [ ] **RIG-03**: `WavsMemory` provides KV-backed conversation history with append, retrieve, and token budget truncation
-- [ ] **RIG-04**: `WavsAgent` trait with `run_agent` shim bridges rig's agent loop to WASI component entry point via `wstd::runtime::block_on`
-- [ ] **RIG-05**: Startup validation detects `AllowedHostPermission::None` and returns a clear error instead of silent HTTP trap failure
-
-### Example & End-to-End
-
-- [ ] **E2E-01**: Example agent component (~30 lines of domain logic) demonstrates full agent loop: trigger → LLM reasoning → tool use → structured result
-- [ ] **E2E-02**: Agent deployed and executed end-to-end on a live WAVS node (trigger fires, agent reasons, result returned)
-- [ ] **E2E-03**: `service.json` uses `AllowedHostPermission::Only(["api.anthropic.com"])` demonstrating sandboxed LLM access
 
 ## v3.0 Requirements
 
-Deferred to future milestones. Tracked but not in current roadmap.
+Requirements for agent composition milestone. Each maps to roadmap phases.
 
-### Runtime Extensions
+### WIT Interface & Types (Foundation)
 
-- **CONT-01**: Agent execution mode — `Continue` variant in WIT return type for multi-step agents that exceed single-invocation limits
-- **RPC-01**: Service-to-service calls — `call-service` host function for inter-component composition
-- **TOOL-01**: Structured tool abstraction in WIT with JSON Schema discovery
+- [ ] **WIT-01**: `operator.wit` exports a new `run-agent` function returning `result<step-result, string>` where `step-result` is a variant with `done(list<wasm-response>)` and `continue(string)` — backward-compatible with existing `run` export
+- [ ] **WIT-02**: `call-service` host import added to operator world — takes service ID + payload bytes, returns result bytes synchronously
+- [ ] **WIT-03**: `AllowedServiceCalls` type (All/Only/None) added to `Permissions` in service config with serde default `None`
+- [ ] **WIT-04**: `AllowedCallers` type added to service config — callee declares which services may call it (default `None`)
+- [ ] **WIT-05**: `max_continuation_steps` field added to component config with default of 10
 
-### App Integration
+### Agent Continuation
 
-- **APP-01**: Agent-first workflow builder with template gallery and intent-driven config
-- **APP-02**: Agent observability — reasoning timeline, live execution view, cost tracking
+- [ ] **CONT-01**: Engine re-invocation loop in `run_trigger` — calls `execute_operator_step()`, checks Continue/Done, repeats until Done or max steps
+- [ ] **CONT-02**: Auto-persist agent state to KV between steps using `continuation:<service_id>:<correlation_id>:step:N` key pattern — developer can override via opt-out
+- [ ] **CONT-03**: Step limit enforcement — engine terminates agent with clear error when `max_continuation_steps` exceeded
+- [ ] **CONT-04**: Developer-defined multi-step workflows — named step sequences with explicit `continue("step_name")` handoffs
+- [ ] **CONT-05**: Component LRU pinning between continuation steps — compiled module stays cached across re-invocations
 
-### Advanced Memory
+### Service-to-Service RPC
 
-- **MEM-01**: Fact store — key-value with metadata (source, confidence, timestamp, expiry)
-- **MEM-02**: Embedding index — vector storage via KV, nearest-neighbor via external API
+- [ ] **RPC-01**: `call-service` host function using `func_wrap_async` — re-entrant `Arc<WasmEngine>` calls `execute_operator_component` directly
+- [ ] **RPC-02**: `AllowedServiceCalls` permission enforcement — engine checks caller's permission before dispatching call
+- [ ] **RPC-03**: `AllowedCallers` callee-side enforcement — engine checks callee accepts calls from the caller service
+- [ ] **RPC-04**: Call depth limit (default 5) with cycle detection — prevents A→B→A deadlocks and unbounded nesting
+
+### Integration & Validation
+
+- [ ] **E2E-04**: Multi-step agent example demonstrating Continue/Done loop with KV-persisted state across steps
+- [ ] **E2E-05**: Service composition example — agent calls a utility service via `call-service` and uses the result
+- [ ] **E2E-06**: Permission enforcement test — caller without AllowedServiceCalls gets clear error; callee without AllowedCallers rejects call
+
+## Future Requirements
+
+Deferred to v3.x or later milestones.
+
+### Async & Parallel
+
+- **ASYNC-01**: Async message-passing between services (fire-and-forget, result via trigger)
+- **ASYNC-02**: Parallel tool execution within agent steps (requires WASI Preview 3 async)
+
+### Advanced Composition
+
+- **COMP-01**: Composable trust-tier calls — call sub-service at on-chain submission tier
+- **COMP-02**: Service discovery — components can query available services at runtime
+
+### Observability
+
+- **OBS-01**: Continuation step timeline in Tauri activity feed
+- **OBS-02**: Call graph visualization for service-to-service chains
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Streaming LLM responses | WASI is single-threaded; no SSE consumer support |
-| Concurrent tool execution | Requires threading unavailable in WASI sandbox |
-| Multi-provider in single component | One provider per deployment via AllowedHostPermission is the security model |
-| Agent-to-agent communication | Requires service-to-service RPC (v3.0) |
-| Custom tool marketplace | Premature; establish patterns first |
+| Async service-to-service | WASI Preview 3 async not stable (April 2026); sync-first strategy |
+| Parallel tool execution | Single-threaded WASM sandbox; requires ecosystem maturation |
+| Agent-to-agent negotiation | Requires higher-level protocol; establish RPC primitive first |
+| Streaming continuation | SSE not available in WASI; poll-based continuation is sufficient |
+| Cross-node service calls | v3.0 is intra-node; cross-node requires P2P service discovery |
 
 ## Traceability
 
@@ -65,25 +71,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FORK-01 | Phase 17 | Pending |
-| FORK-02 | Phase 17 | Pending |
-| FORK-03 | Phase 17 | Pending |
-| FORK-04 | Phase 17 | Pending |
-| FORK-05 | Phase 17 | Pending |
-| RIG-01 | Phase 18 | Pending |
-| RIG-02 | Phase 18 | Pending |
-| RIG-03 | Phase 18 | Pending |
-| RIG-04 | Phase 18 | Pending |
-| RIG-05 | Phase 18 | Pending |
-| E2E-01 | Phase 19 | Pending |
-| E2E-02 | Phase 19 | Pending |
-| E2E-03 | Phase 19 | Pending |
+| WIT-01 | TBD | Pending |
+| WIT-02 | TBD | Pending |
+| WIT-03 | TBD | Pending |
+| WIT-04 | TBD | Pending |
+| WIT-05 | TBD | Pending |
+| CONT-01 | TBD | Pending |
+| CONT-02 | TBD | Pending |
+| CONT-03 | TBD | Pending |
+| CONT-04 | TBD | Pending |
+| CONT-05 | TBD | Pending |
+| RPC-01 | TBD | Pending |
+| RPC-02 | TBD | Pending |
+| RPC-03 | TBD | Pending |
+| RPC-04 | TBD | Pending |
+| E2E-04 | TBD | Pending |
+| E2E-05 | TBD | Pending |
+| E2E-06 | TBD | Pending |
 
 **Coverage:**
-- v2.0 requirements: 13 total
-- Mapped to phases: 13
-- Unmapped: 0 ✓
+- v3.0 requirements: 17 total
+- Mapped to phases: 0
+- Unmapped: 17 (awaiting roadmap)
 
 ---
-*Requirements defined: 2026-04-20*
-*Last updated: 2026-04-20 — traceability filled after roadmap creation*
+*Requirements defined: 2026-04-22*
+*Last updated: 2026-04-22 after initial definition*
