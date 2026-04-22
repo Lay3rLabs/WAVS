@@ -1,191 +1,181 @@
 # Feature Research
 
-**Domain:** WASM Agent SDK — rig-core integration into WAVS WASI sandbox (v2.0)
+**Domain:** WASM Agent Runtime — Agent Continuation Mode + Service-to-Service RPC (WAVS v3.0)
 **Researched:** 2026-04-20
-**Confidence:** MEDIUM (rig internals from official docs + crate docs; WASM blocker details from upstream GitHub issues and PROJECT.md; ecosystem patterns from community research)
+**Confidence:** MEDIUM-HIGH (patterns from Cloudflare Workflows, LangGraph, wasmCloud wRPC, and Temporal informed the analysis; WAVS-specific implementation paths drawn from reading the actual codebase; source links below)
 
 ## Feature Landscape
 
 ### Table Stakes (Users Expect These)
 
-Features developers expect from any LLM agent SDK integration. Missing these = the SDK is unusable or the developer writes all the boilerplate themselves anyway.
+Features developers expect from any multi-step agent or composable service runtime. Missing these = the system feels like a prototype, not a platform.
 
 | Feature | Why Expected | Complexity | WAVS Dependency | Notes |
 |---------|--------------|------------|-----------------|-------|
-| WASI-compatible rig fork | rig-core unconditionally depends on reqwest (no wasm32-wasip2 support; reqwest issue #2979 open upstream) and tokio rt-multi-thread feature; neither compiles to wasm32-wasip2 as-is | HIGH | None — this is the hard pre-condition for everything else | ~300-500 line fork: make reqwest optional, make tokio rt-multi-thread optional, fix cfg inconsistencies. Ring/aws-lc use assembly that doesn't link with wasip2 — TLS must be disabled inside the component (TLS is handled by WAVS host at the network boundary). Without this, nothing compiles. |
-| HTTP transport bridge for LLM API calls | Agents call LLM APIs over HTTP; WASI uses `wasi:http/outgoing-handler`, not reqwest; developers expect this to just work | HIGH | Existing `wasi:http` host function | Replace rig's reqwest transport with a thin wrapper over WAVS's `wasi:http` host function. This is the most critical bridge — without it no LLM call is possible from inside the sandbox. |
-| Async execution shim | rig's agent loop is async; WASI components use `wstd::runtime::block_on` (single-threaded); developers expect async to work | MEDIUM | Existing `wstd` async model in WAVS components | rig assumes tokio multi-thread runtime; WASI is single-threaded. Must configure rig concurrency to 1 and ensure agent loop works within `block_on`. Existing WAVS components (e.g. kv-store, permissions) already demonstrate the `block_on` pattern. |
-| Provider-agnostic LLM client | Developers expect to swap providers (OpenAI, Anthropic, Groq, Ollama) via config without code changes; rig provides this via `CompletionModel` trait | LOW | WAVS settings/API key storage | rig-core already abstracts 20+ providers behind a unified trait. The fork preserves this. Developers pick provider via configuration. |
-| Tool trait implementation in WASM | Developers expect to define tools as typed Rust structs with `call()` method — rig's `Tool` trait (NAME, Args, Output, async `call()`) and `#[rig_tool]` proc-macro are the established ergonomic | LOW | None | Should work inside WASM once the transport issues are resolved. Tools don't make HTTP calls themselves; they call WAVS host functions or manipulate in-memory state. |
-| Structured LLM output | Developers expect typed responses from LLM calls, not raw string parsing | LOW | None | rig's `extractor` module handles this via JSON Schema + typed deserialization. Inherits from rig-core once fork compiles. |
-| System prompt + preamble | Every agent needs a system prompt defining its role and behavior | LOW | None | rig `AgentBuilder.preamble()` is the standard. Table stakes for any agent SDK. |
-| Compile to wasm32-wasip2 and deploy | The deliverable is a `.wasm` component that runs on the WAVS node, not a native binary | HIGH | Existing `just wasi-build-*` pipeline and WAVS service deployment | All transitive dependencies must compile to wasm32-wasip2. Existing WAVS components demonstrate the full build → deploy → execute path; wavs-rig follows the same pipeline. |
+| Multi-step agent loop (Continue/Done) | Every real-world agent workflow has more than one reasoning step — research, plan, execute, verify. A single-invocation loop is not enough for non-trivial tasks. LangGraph, Temporal, Cloudflare Workflows, and OpenAI Agents SDK all treat continuation as the default model. | HIGH | Engine re-invocation loop; KV-backed WavsMemory (existing) | New `AgentStep` WIT return type with `Continue { state }` and `Done { result }` variants. Engine detects `Continue`, persists state to KV, re-invokes the same component with the continuation payload. A max-step limit is mandatory to prevent infinite loops — this is table stakes in every framework (LangGraph `recursion_limit`, Temporal workflow timeouts). |
+| Auto-persist state between steps | If the developer has to manually checkpoint to KV on every Continue, they will forget it and lose state on crashes. The runtime should handle this automatically. Cloudflare Workflows persists step results automatically; LangGraph checkpoints every node by default. | MEDIUM | Existing `wasi:keyvalue` host; existing `WavsMemory` (conversation history) | On `Continue`, engine serializes the continuation payload + current conversation snapshot to a well-known KV key (keyed by service+event). On next invocation, the component reads from that key. Developer can override by writing to KV directly before returning `Continue`. |
+| Synchronous service-to-service call | Agents calling other deployed services is the baseline for composition. wasmCloud, Spin, and Cloudflare Workers all provide synchronous component-to-component call as a first-class primitive. Without it, the only composition model is trigger chaining (fire-and-forget), which is too loose for most real use cases. | HIGH | Engine inter-service dispatch; service registry (existing); existing `execute_operator_component` | New `call-service` host function exposed in the WIT world. Component calls it synchronously (blocks inside WASM), engine dispatches to the target service's component and returns the result. Target executes in the same process (no network hop for local calls). |
+| Permission-based service calling | Developers expect that a deployed service cannot arbitrarily call any other service. Permission prompts and allowlists are industry standard for agent security. OpenAI Codex agent approvals, Cloudflare Workers bindings, and NVIDIA's sandboxing guidance all treat default-deny + explicit allowlist as the baseline. | MEDIUM | Existing `AllowedHostPermission` pattern in service.json and engine | New `AllowedServiceCalls` field in `service.json` (mirrors existing `AllowedHostPermission`). Engine checks caller's allowlist before dispatching `call-service`. Attempting to call an unlisted service returns an error, not a panic. |
+| Developer-controlled step sequencing | Developers who know their workflow in advance should be able to express it as a deterministic sequence (not LLM-decided). This is the "script" mode vs. "autonomous" mode. Cloudflare Workflows and Temporal both distinguish between deterministic steps and agent-decided steps. | MEDIUM | Agent continuation loop (above) | In `run()`, developer returns `Continue { next_step: "step_name", state }` with explicit step routing. The re-invoked component reads the step name from state and dispatches to the right handler. No new engine machinery needed — it is a convention inside the component. Agent-decided mode: LLM picks the next action; developer-defined mode: Rust match on step name. |
+| Step count and fuel limits | Without hard limits on continuation steps, a buggy or adversarial agent burns operator resources indefinitely. Every production agent framework has this: LangGraph `recursion_limit`, Temporal workflow timeouts, Cloudflare Workflows step limits. | LOW | Existing Wasmtime fuel/timeout limits (per-invocation) | Add a `max_continuation_steps` field to `service.json` (default: sensible cap like 10). Engine tracks invocation count across continuation steps for the same event and hard-stops at the limit, returning an error to the caller. Per-step fuel limits already exist in WAVS and apply to each re-invocation. |
 
 ### Differentiators (Competitive Advantage)
 
-Features that make wavs-rig meaningfully different from running rig natively or on any other infrastructure.
+Features that make WAVS's agent composition meaningfully different from other frameworks.
 
 | Feature | Value Proposition | Complexity | WAVS Dependency | Notes |
 |---------|-------------------|------------|-----------------|-------|
-| WAVS host functions as typed rig tools | Developers get KV get/set, EVM query, HTTP fetch, and structured logging as first-class rig `Tool` impls — no bridge code to write | MEDIUM | Existing `wasi:keyvalue`, `wasi:http`, `host::log` host functions | Each host function becomes a typed `Tool` struct (e.g. `KvGetTool`, `KvSetTool`, `EvmQueryTool`, `HttpFetchTool`, `LogTool`). Add with `.tool(KvGetTool)` on the agent builder. This is the "batteries included" story — agents call on-chain data without extra plumbing. |
-| KV-backed conversation memory with token budget | Persistent conversation history across triggers, auto-truncated to token limit — without this every trigger starts cold and the agent has no context | MEDIUM | Existing `wasi:keyvalue` host function | Implement `ConversationStore` backed by KV: append messages, retrieve recent N messages, enforce token budget cap. Cross-trigger state persistence is what separates stateful agents from stateless components. Pattern mirrors OpenAI Agents SDK session memory, implemented via WAVS's existing KV primitive. |
-| `AllowedHostPermission` LLM API network policy | Per-component network policy enforced at Wasmtime level — agents can only call LLM APIs explicitly listed in `service.json`, enforced at the host, not the component | LOW | Existing `AllowedHostPermission` (`All`/`Only`/`None`) in the WAVS engine | A rig agent deployed with `Only(["api.openai.com", "api.anthropic.com"])` cannot exfiltrate data to arbitrary hosts. This is structural — no other Rust agent framework enforces this at the sandbox level. Key differentiator vs. running rig natively. Already implemented in WAVS; wavs-rig just needs to document and demonstrate it. |
-| Cryptographic result signatures | Agent outputs are signed by operators; any party can verify the result without re-running the computation or trusting anyone | LOW | Existing operator signing in aggregator | Inherits from WAVS — no new code in wavs-rig. The agent returns results normally; the aggregator signs them. Structural advantage over any agent running on a single untrusted process. |
-| Multi-operator agent execution | Run the same agent across N independent operators with configurable quorum — no single point of failure or trust | LOW | Existing multi-operator execution + aggregator | Inherits from WAVS. Particularly valuable for high-stakes agent decisions (DeFi rebalancing, on-chain actions) where a single operator could be compromised. |
-| Event-driven agent triggering | Agents fire on EVM logs, Cosmos events, cron schedules, or HTTP webhooks — not just request/response | LOW | Existing trigger subsystem | Inherits from WAVS. Native event-driven agents vs. polling loops in user code. Genuine differentiator vs. langchain-rust, llm-chain, or running rig natively — all of which are purely request/response. |
-| ~30-line agent component | Developer should be able to build a working end-to-end agent in ~30 lines of Rust | MEDIUM | All wavs-rig pieces working cleanly | This is the "demo magnet" feature. An example component showing trigger → LLM reasoning → tool use → result in minimal code is what developers will share and evaluate the SDK by. Requires all other pieces to land cleanly first. |
+| Cryptographically signed multi-step results | Every step result — intermediate and final — is signed by operators. A 5-step research agent produces a chain of signed outputs, not just a final answer. No other agent framework provides this. | LOW | Existing operator signing (inherits from WAVS) | Agent continuation results route through the existing aggregator and signing pipeline. No new code at the signing layer — the engine just re-enters the existing pipeline with the continuation payload as the new trigger input. |
+| Sandbox enforcement across the call graph | When service A calls service B via `call-service`, service B runs with its own `AllowedHostPermission` and `AllowedServiceCalls` enforcement — not the caller's permissions. Privilege escalation via composition is impossible by construction. wasmCloud achieves this via wRPC capability providers; WAVS achieves it by re-running the target component in its own Wasmtime instance. | MEDIUM | Existing per-component sandbox model | Each `call-service` invocation spins up the target component in a fresh `InstanceDeps` with the target service's permissions. The caller's permission scope does not bleed into the callee. This is structural and is a strong differentiator vs. native multi-agent frameworks where all agents share the same process memory. |
+| Agent-decided vs. developer-defined workflows in the same API | The LLM decides when to continue (autonomous mode) or the developer hard-codes the sequence (scripted mode), and both use the same `Continue`/`Done` return type. The developer picks the model that fits their use case without switching frameworks. Most systems force a choice: Temporal is deterministic-only; open-ended LLM agents are autonomous-only. | LOW | Agent continuation (above) | The distinction is entirely inside the component: `Continue { state: llm_next_action }` vs. `Continue { state: "step_2" }`. The engine does not know or care. |
+| Composable service graph with per-node trust tiers | A caller can invoke a target service at any of the three WAVS trust tiers (result only / signed result / on-chain submission). Composition is not just "call and get a result" — it is "call and get a cryptographically verified result that I can submit on-chain." No agent framework currently offers this. | HIGH | Existing three trust tiers in wavs-mcp and engine | `call-service` accepts a trust tier parameter. For on-chain submission tier, the engine's normal submission path fires for the sub-call. This adds significant complexity but is the feature that makes WAVS agent composition relevant to DeFi and verifiable AI use cases. Defer to v3.x if too complex for initial shipping. |
+| KV state continuity without developer boilerplate | Auto-persisted continuation state means a component can crash mid-execution, be restarted, and resume from the last checkpoint — without the developer writing a single line of checkpoint code. Cloudflare Workflows and Temporal provide this; no Rust WASM framework does. | MEDIUM | Existing `wasi:keyvalue` and `WavsMemory` | Engine writes continuation state to `wavs_continuation:{service_id}:{event_id}` in KV before returning from the current invocation. On re-invocation, the component reads from that key via the existing `KvGetTool` or the new `read_continuation_state()` helper in `wavs-rig`. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Concurrent tool execution | Looks like a performance win; rig has concurrency configuration | WASI is single-threaded; concurrent async tasks do not exist in the same way. Attempting this produces confusing panics or silent deadlocks. The performance gain is marginal — agent tool calls are latency-bound on the LLM response, not parallel execution. | Set rig concurrency to 1. Sequential tool execution is correct for WASI MVP. Document this explicitly so developers don't attempt to tune it. |
-| Streaming LLM responses | Developers familiar with OpenAI streaming want it for responsiveness | `wasi:http` response streaming is complex to implement correctly; the WAVS component execution model is batch (trigger → run → result). Partial streaming mid-execution does not map to the result submission model. | Buffer the full completion. For observability, structured traces (WAVS_IMPROVEMENTS.md #10, future milestone) give similar insight into agent progress without streaming complexity. |
-| RAG / vector store integration | rig has 10+ vector store integrations (MongoDB, LanceDB, Qdrant, etc.); developers will ask for them | Vector stores require persistent TCP connections, complex auth, and large dependency trees that almost certainly do not compile to wasm32-wasip2. Wrong level of abstraction for the sandbox. | Use KV-backed conversation memory with a token budget. For embedding-based retrieval, call an external embedding API (via HTTP tool) and implement nearest-neighbor in application code. |
-| Dynamic tool discovery at runtime | rig supports semantic tool retrieval from vector stores | Requires running embedding model and vector store inside the sandbox — infeasible for the same reasons as RAG. Also means the agent toolset is not statically auditable, which undermines the verifiability story. | Define tools statically in the component. The toolset is part of the component's interface and should be explicit and auditable. |
-| Auto-spawning sub-agents inside a component | Multi-agent delegation inside a single component execution | The service-to-service call mechanism (WAVS_IMPROVEMENTS.md #7) is not yet built. Attempting to spawn sub-agents means re-implementing inter-component calls inside the component, bypassing sandbox boundaries and auditing. | Compose via WAVS service-to-service calls when that feature ships (subsequent milestone). For v2.0, single-agent components with a clear tool boundary. |
-| langchain-rust or llm-chain instead of rig | Some developers may prefer other Rust LLM frameworks | langchain-rust has a heavier dependency footprint and is a Python LangChain port — less WASM-focused. llm-chain is less actively maintained. Neither has rig's 20+ provider coverage or WASM-compat traits. | Commit to rig. The WASM-compat traits (`WasmCompatSend`, `WasmCompatSync`, `HttpClientExt`) in rig-core exist precisely for this use case and are maintained upstream. The fork is ~300-500 lines of isolated platform patches, not a rewrite. |
-| Full tokio runtime inside WASM | Some developers want to spawn tokio tasks, use `tokio::select!`, etc. | tokio's `rt-multi-thread` feature does not compile to wasm32-wasip2. The separate `tokio_wasi` crate is limited and not mainline. Attempting full tokio inside WASI leads to linker errors or runtime panics. | Use `wstd::runtime::block_on` as the single async executor. Structure the agent loop to be sequential. Document this constraint with a clear error message so developers don't hit it silently. |
+| Async / parallel service calls | Looks like a performance win — call 3 services in parallel and join results | WASI is single-threaded. There is no runtime to schedule concurrent futures. Attempting `join!` or `select!` across `call-service` host function calls from inside a WASM component produces either a deadlock or a build error. The WASM Component Model async (WASI 0.3 / Preview 3) is not yet stable enough to depend on for production. | Chain sequential service calls. For true parallelism, the orchestrating service emits separate triggers that fire services independently, then aggregates results via KV in a final step. This is the pattern Cloudflare Workflows uses for parallel branches. |
+| Bidirectional / streaming service calls | Service A calls service B, which streams intermediate results back | WAVS components are batch (trigger → result). Streaming into a component is not modeled in the current WIT interface and would require deep engine changes. WASI 0.3 async streams may eventually support this. | Structure as request/response: service A calls service B, waits for completion, gets the full result. For long-running operations, service B returns a job ID and service A polls via a continuation step. |
+| Arbitrary call depth / unbounded recursion | Developers want to build tree-structured agent graphs without depth limits | Unbounded recursion means unbounded fuel and memory consumption. A single adversarial or buggy agent can crash the operator node. Wasmtime's fuel mechanism is per-invocation, not per-call-graph. | Enforce a configurable max call depth in `AllowedServiceCalls` (e.g. `max_depth: 3`). The engine tracks depth on the call stack and hard-stops at the limit. Fail loudly with a clear error message. |
+| Spawning new trigger chains from inside a component | Service A fires a new EVM trigger from inside its execution, starting a new async workflow in the background | This requires the component to have write access to the trigger subsystem — a significant privilege beyond what components should have. It bypasses the signed-result model (the spawned trigger has no causal link to the signing event). | Return multiple `WasmResponse` entries from `run()` (already supported). Each response can encode a subsequent action for the aggregator to pick up. For true async fanout, use the existing cron or webhook trigger mechanisms at the service level. |
+| Global state shared between services | Service A writes to a shared KV namespace that service B reads, as a side-channel for coordination | KV is per-component by default in WAVS (keyed by service ID). Shared namespaces create implicit coupling, make auditing impossible, and open privilege escalation vectors (service B can observe or clobber service A's state). | Explicit `call-service` with structured return types. If two services need to share state, one should own it and the other should read it via the `call-service` RPC. This keeps the data flow explicit and auditable. |
+| Native HTTP calls from callee to caller (callbacks) | Service B wants to call back to service A's HTTP endpoint to signal completion | This requires service B to know service A's address, which breaks the composability model and introduces network-level coupling. In a multi-operator network, the "address" is not well-defined. | Callee returns a result to the caller synchronously via `call-service`. If the caller needs to react to the result, it does so in the next continuation step. Push vs. pull: always pull (caller drives), never push (callee initiates). |
 
 ---
 
 ## Feature Dependencies
 
 ```
-WASI-compatible rig fork  [HARD BLOCKER — must land first]
-    └──enables──> HTTP transport bridge
-    └──enables──> Async execution shim (wstd block_on compatibility)
-    └──enables──> Tool trait implementation in WASM
-    └──enables──> Structured LLM output (rig extractor)
-    └──enables──> Compile to wasm32-wasip2
+Agent Continuation Mode (Continue/Done WIT variants)
+    └──requires──> WIT interface change: new AgentStep return type in operator.wit
+    └──requires──> Engine re-invocation loop (detect Continue, re-invoke same component)
+    └──requires──> KV auto-persistence of continuation state (uses existing wasi:keyvalue)
+    └──requires──> Max-step enforcement (new field in service.json + engine counter)
+    └──enables──> Developer-defined multi-step workflows (convention inside component)
+    └──enables──> LLM-decided autonomous continuation (agent returns Continue with next action)
 
-HTTP transport bridge
-    └──requires──> WASI-compatible rig fork
-    └──requires──> Existing wasi:http host function (already in WAVS)
-    └──enables──> All LLM API calls from inside sandbox
-    └──enables──> Provider-agnostic client (OpenAI, Anthropic, Groq, etc.)
-
-WAVS host functions as typed rig tools
-    └──requires──> Tool trait impl in WASM (via rig fork)
-    └──requires──> Existing wasi:keyvalue, wasi:http, host::log (already in WAVS)
-    └──enables──> KvGetTool, KvSetTool, EvmQueryTool, HttpFetchTool, LogTool
-
-KV-backed conversation memory
+Auto-persist continuation state
     └──requires──> Existing wasi:keyvalue host function (already in WAVS)
-    └──enhances──> Multi-turn agent reasoning across triggers
+    └──requires──> Existing WavsMemory (already in wavs-rig)
+    └──requires──> Agent Continuation Mode (above)
+    └──enables──> Crash-resumable multi-step agents
 
-~30-line example component
-    └──requires──> All of the above working end-to-end
+Service-to-service synchronous RPC (call-service host function)
+    └──requires──> New host function in operator WIT world (call-service)
+    └──requires──> Engine inter-service dispatch (look up target service, execute its component)
+    └──requires──> AllowedServiceCalls permission check (caller's service.json allowlist)
+    └──requires──> Existing execute_operator_component (reused for callee execution)
+    └──enables──> Supervisor/specialist agent patterns
+    └──enables──> Service graph composition
 
-AllowedHostPermission LLM network policy
-    └──requires──> Existing engine AllowedHostPermission (already in WAVS)
-    └──enhances──> HTTP transport bridge (restricts which LLM APIs can be called)
-    └──is documented and demonstrated in example service.json
+AllowedServiceCalls permission (service.json)
+    └──requires──> Service-to-service RPC (above)
+    └──requires──> Existing AllowedHostPermission pattern (mirrors it)
+    └──enables──> Default-deny service call security model
 
-Cryptographic result signatures
-    └──requires──> Existing operator signing (already in WAVS)
-    └──requires──> No new code in wavs-rig
-
-Multi-operator execution
-    └──requires──> Existing aggregator (already in WAVS)
-    └──requires──> No new code in wavs-rig
-
-Event-driven triggering
-    └──requires──> Existing trigger subsystem (already in WAVS)
-    └──requires──> No new code in wavs-rig
+Composable trust-tier service calls (call-service with trust tier param)
+    └──requires──> Service-to-service RPC (above)
+    └──requires──> Existing three trust tiers in wavs-mcp + engine
+    └──complexity──> HIGH — deferred to v3.x
 ```
 
 ### Dependency Notes
 
-- **WASI-compatible rig fork is the single hard blocker.** Everything else depends on it. It is the first thing to build and must be validated before any other work starts.
-- **HTTP transport bridge and async shim are sequential with the fork.** Once rig compiles to wasm32-wasip2, replace the reqwest transport with a wasi:http wrapper. These two steps cannot be parallelized.
-- **KV-backed memory is logically independent.** Can be designed before the fork lands; only requires wasi:keyvalue which already exists in WAVS. Can be developed in parallel.
-- **WAVS host function tools are independent of the fork.** The tool structs call WAVS host functions, not LLM APIs. Can be designed and stubbed in parallel; integration-tested once the fork lands.
-- **Security and trust features (network policy, signing, multi-operator) require zero new code in wavs-rig.** They inherit from WAVS. The work is documentation and example configuration.
+- **WIT interface change is the first hard blocker for continuation.** `operator.wit` must be extended with the `Continue`/`Done` return variants before any engine or SDK work can proceed. This is a versioned interface change (new WIT package version) and affects all downstream bindings.
+- **Engine re-invocation loop is sequential with the WIT change.** Must wait for new WIT to generate correct bindings, then implement the loop in `execute_operator_component`.
+- **`call-service` host function requires a new host function registration in the Wasmtime linker.** The engine must look up the target service's component, build `InstanceDeps` for it, call `execute_operator_component`, and return the result to the caller — all within the caller's execution timeout. This is the highest-complexity item.
+- **AllowedServiceCalls is logically independent of continuation** but should ship together with `call-service` — shipping RPC without permission enforcement is a security regression.
+- **Auto-persist state can be prototyped before continuation** since it only requires wasi:keyvalue, which already exists. But the persistence key schema needs to be decided once the WIT interface shape is known.
+- **Max-step limits must ship with continuation.** Shipping continuation without step limits is unsafe for production operators.
 
 ---
 
 ## MVP Definition
 
-### Launch With (v2.0)
+### Launch With (v3.0)
 
-Minimum to validate the agent runtime concept and give developers something real to build with.
+Minimum to validate multi-step agents and service composition.
 
-- [ ] WASI-compatible rig fork — hard dependency; nothing else works without it
-- [ ] `wavs-rig` integration crate with HTTP transport bridge and async shim — minimum to make LLM calls from inside the WASM sandbox
-- [ ] WAVS host functions as typed rig tools (KV get/set, HTTP fetch, structured logging) — batteries included; without this developers must write all the bridge code themselves
-- [ ] KV-backed conversation memory with token budget — stateless agents that forget everything on each trigger are not useful agents
-- [ ] Example agent component (trigger → LLM reasoning → tool use → result, ~30 lines) — validates the full stack and serves as the "can I build something in an afternoon?" reference
+- [ ] `Continue`/`Done` WIT return variants in `operator.wit` (new WIT package version) — the foundation for everything; no continuation without this
+- [ ] Engine re-invocation loop for `Continue` responses — detect variant, persist state, re-invoke same component with continuation payload as new trigger data
+- [ ] Auto-persist continuation state to KV between steps (using existing `wasi:keyvalue`) — developers must not have to write checkpoint code manually
+- [ ] Max-step enforcement (`max_continuation_steps` in service.json, engine counter, hard error at limit) — table stakes safety guard; without this a buggy agent can loop forever
+- [ ] `call-service` host function in operator WIT world — synchronous RPC to any deployed WAVS service; the composability primitive
+- [ ] `AllowedServiceCalls` in service.json + engine enforcement — default-deny; calling an unlisted service returns a typed error, not a crash
+- [ ] Engine inter-service dispatch reusing `execute_operator_component` — avoids reimplementing execution machinery for callee services
 
-### Add After Validation (v2.x)
+### Add After Validation (v3.x)
 
-- [ ] EVM query tool — after basic agents work, on-chain data access is the next most-requested capability for WAVS's target audience
-- [ ] Structured output via rig's extractor module — once basic completions work; typed responses improve reliability for production agents
-- [ ] Agent observability in the Tauri app (reasoning chain display) — significant UX improvement once developers have agents to observe; see WAVS_IMPROVEMENTS.md #10
+Features to add once multi-step and RPC are stable and in use.
 
-### Future Consideration (v3+)
+- [ ] `call-service` with trust tier parameter (result only / signed / on-chain) — enables verifiable composition; complex but high value for DeFi use cases
+- [ ] `read_continuation_state()` helper in `wavs-rig` — ergonomic shorthand for the common pattern of reading persisted state at step start
+- [ ] Activity feed UI: multi-step trace (show step N of M, state at each step, intermediate results) — observability for continuation chains; requires Tauri frontend work
+- [ ] `call-service` call depth enforcement (`max_depth` in AllowedServiceCalls) — prevents unbounded recursion in service graphs
 
-- [ ] Service-to-service calls (inter-component RPC) — WAVS_IMPROVEMENTS.md #7 is the prerequisite; enables supervisor/specialist agent patterns
-- [ ] `Continue` execution mode for multi-step agents — WAVS_IMPROVEMENTS.md #5; requires WIT interface changes and engine changes; significant runtime work beyond this milestone
-- [ ] App-level agent workflow builder (template gallery, intent-driven config) — WAVS_IMPROVEMENTS.md #9; high UX value but requires the agent runtime to be stable first
-- [ ] Cost tracking (LLM API token usage per execution) — valuable for production operators; requires structured trace format first
+### Future Consideration (v4+)
+
+Defer until the composition model is validated in production.
+
+- [ ] Async parallel service calls (requires WASI 0.3 async / Preview 3 stabilization — not stable as of 2026)
+- [ ] Shared KV namespaces between services (high complexity, auditing concerns, requires explicit governance model)
+- [ ] Service graph visualizer in the Tauri app (meaningful only once users have built multi-service graphs worth visualizing)
 
 ---
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Implementation Cost | Priority | WAVS Dependency |
-|---------|------------|---------------------|----------|-----------------|
-| WASI-compatible rig fork | HIGH (blocker) | HIGH | P1 | None |
-| HTTP transport bridge | HIGH (blocker) | HIGH | P1 | Existing wasi:http |
-| Async execution shim | HIGH (blocker) | MEDIUM | P1 | Existing wstd |
-| WAVS host functions as typed tools | HIGH | MEDIUM | P1 | Existing host functions |
-| KV-backed conversation memory | HIGH | MEDIUM | P1 | Existing wasi:keyvalue |
-| ~30-line example component | HIGH | LOW (once above land) | P1 | All of above |
-| AllowedHostPermission LLM policy (doc + demo) | MEDIUM | LOW (already exists) | P1 | Already in engine |
-| Cryptographic signatures (doc) | MEDIUM | LOW (already exists) | P1 | Already in aggregator |
-| EVM query tool | MEDIUM | LOW | P2 | Existing EVM host access |
-| Structured output extractor | MEDIUM | LOW | P2 | rig-core extractor module |
-| Agent observability in app | MEDIUM | HIGH | P2 | Agent SDK + Tauri |
-| Service-to-service calls | HIGH | HIGH | P3 | Not yet built |
-| Multi-step Continue execution mode | HIGH | HIGH | P3 | Not yet built |
-
-**Priority key:**
-- P1: Must have for v2.0 launch
-- P2: Add in v2.x after core validated
-- P3: Future milestone — requires prerequisite features not in this milestone
+| Feature | User Value | Implementation Cost | Priority | Requires |
+|---------|------------|---------------------|----------|---------|
+| `Continue`/`Done` WIT variants | HIGH (blocker) | MEDIUM | P1 | WIT versioning |
+| Engine re-invocation loop | HIGH (blocker) | HIGH | P1 | WIT variants above |
+| Auto-persist continuation state | HIGH | MEDIUM | P1 | wasi:keyvalue (existing) |
+| Max-step enforcement | HIGH (safety) | LOW | P1 | Engine loop above |
+| `call-service` host function | HIGH | HIGH | P1 | WIT world extension |
+| `AllowedServiceCalls` permission | HIGH (safety) | MEDIUM | P1 | call-service above |
+| Engine inter-service dispatch | HIGH (blocker) | HIGH | P1 | call-service above |
+| Developer-defined step sequencing | MEDIUM | LOW | P1 | Continuation (convention, not engine) |
+| `read_continuation_state()` helper | MEDIUM | LOW | P2 | Continuation shipped |
+| `call-service` trust tier param | HIGH | HIGH | P2 | call-service + trust tier infra |
+| Activity feed multi-step UI | MEDIUM | HIGH | P2 | Continuation + Tauri |
+| Call depth enforcement | MEDIUM | LOW | P2 | call-service shipped |
+| Parallel service calls (WASI 0.3) | HIGH | HIGH | P3 | WASI Preview 3 stabilized |
 
 ---
 
-## Competitor Feature Analysis
+## Competitor / Analogous System Analysis
 
-| Feature | rig-core (native) | langchain-rust | wavs-rig approach |
-|---------|-------------------|----------------|-------------------|
-| LLM provider coverage | 20+ via unified `CompletionModel` trait | Limited, Python LangChain port | Inherits rig's 20+ providers |
-| WASM/WASI support | Partial (wasm32-unknown-unknown for browser); wasm32-wasip2 blocked by reqwest | None documented | Fork for wasm32-wasip2 specifically; the target no other framework addresses |
-| Tool calling | `Tool` trait + `#[rig_tool]` proc-macro; fluent `.tool()` builder | LangChain-style tools | Inherits rig's pattern + adds WAVS host function tools pre-built |
-| Memory/state | Conversation module (in-process) | Various | KV-backed persistent memory across trigger invocations |
-| Security sandbox | None (process-level only) | None | Wasmtime sandbox + `AllowedHostPermission` network policy |
-| Cryptographic trust | None | None | Operator signatures + configurable multi-operator quorum |
-| Event-driven triggers | None (request/response only) | None | EVM, Cosmos, cron, HTTP triggers via WAVS |
-| On-chain interaction | None | None | EVM/Cosmos host functions as typed rig tools |
-| Dev experience | `AgentBuilder` fluent API; ~30-50 lines for basic agent | More verbose; less ergonomic | `wavs-rig` wraps rig's AgentBuilder with WAVS context; same ~30-line target |
+| Feature | LangGraph | Temporal | Cloudflare Workflows | wasmCloud | WAVS v3.0 |
+|---------|-----------|----------|---------------------|-----------|-----------|
+| Multi-step continuation | State machine + graph edges | Workflow functions (durable replay) | Step-based with auto-persist | Actor messages | Continue/Done variants in WIT |
+| State persistence | Thread-level checkpoints (every node) | Event sourced replay | Automatic per-step | Actor in-memory + KV | KV auto-persist per Continue |
+| Step limits | `recursion_limit` config | Workflow timeouts + activity retries | Step count limit | None explicit | `max_continuation_steps` in service.json |
+| Service-to-service call | Agent tool calls external API | Activity calls other workflows | Workers RPC stubs (wRPC) | wRPC over NATS | `call-service` host function (synchronous) |
+| Permission model | None (process-level) | Activity permissions (role-based) | Worker bindings (explicit) | Capability provider allowlist | AllowedServiceCalls allowlist in service.json |
+| Sandbox | None | JVM process | V8 isolate | Wasmtime | Wasmtime (per-component) |
+| Cryptographic trust | None | None | None | None | Operator signing (inherits from WAVS) |
+| On-chain integration | None | None | None | None | EVM/Cosmos via host functions |
+
+**Key takeaway:** The continuation + RPC pattern is well-established in Temporal, Cloudflare, and LangGraph. WAVS's differentiator is applying this pattern inside a cryptographically-verified, sandboxed WASM runtime with on-chain integration. The implementation patterns (KV checkpoints, step limits, explicit allowlists) are drawn from these established systems and are therefore low-risk choices.
 
 ---
 
 ## Sources
 
-- [Rig documentation — Agents concept](https://docs.rig.rs/docs/concepts/agent) — MEDIUM confidence (official docs)
-- [Rig documentation — Tools concept](https://docs.rig.rs/docs/concepts/tools) — MEDIUM confidence (official docs)
-- [Rig quickstart — Tools](https://docs.rig.rs/docs/quickstart/tools) — MEDIUM confidence (official docs)
-- [rig-core on docs.rs](https://docs.rs/rig-core/latest/rig/) — MEDIUM confidence (crate docs; wasm_compat module and if_wasm/if_not_wasm macros confirmed)
-- [reqwest issue #2979 — wasm32-wasip2 support open](https://github.com/seanmonstar/reqwest/issues/2979) — HIGH confidence (upstream issue, confirms blocker)
-- [reqwest issue #891 — blocking not available with wasm32](https://github.com/seanmonstar/reqwest/issues/891) — HIGH confidence (upstream confirmed, long-standing)
-- [tokio issue #4827 — stabilize WASI support](https://github.com/tokio-rs/tokio/issues/4827) — HIGH confidence (upstream tracker)
-- [WAVS PROJECT.md](../PROJECT.md) — HIGH confidence (project spec; primary source for WAVS capabilities, v2.0 scope, and fork size estimate)
-- [WAVS_IMPROVEMENTS.md](../../WAVS_IMPROVEMENTS.md) — HIGH confidence (detailed agent feature spec with sequencing)
+- [Cloudflare Workflows — durable execution GA](https://blog.cloudflare.com/workflows-ga-production-ready-durable-execution/) — MEDIUM confidence (official Cloudflare docs; confirms auto-persist, step-based model, agent trigger patterns)
+- [Cloudflare Workflows — rearchitect for agentic era](https://blog.cloudflare.com/workflows-v2/) — MEDIUM confidence (official; confirms shift from human-triggered to agent-triggered workflows)
+- [wasmCloud RPC docs](https://wasmcloud.com/docs/hosts/lattice-protocols/rpc/) — MEDIUM confidence (official wasmCloud docs; confirms wRPC, actor-to-actor call patterns)
+- [LangGraph ReAct agent — recursion limit and max_iterations](https://python.langchain.com/v0.1/docs/modules/agents/how_to/max_iterations/) — MEDIUM confidence (official LangChain docs; confirms step limit is table stakes)
+- [AI Agent Workflow Checkpointing — Zylos Research](https://zylos.ai/research/2026-03-04-ai-agent-workflow-checkpointing-resumability) — LOW confidence (single source; consistent with Cloudflare and Temporal patterns)
+- [NVIDIA practical sandboxing guidance for agentic workflows](https://developer.nvidia.com/blog/practical-security-guidance-for-sandboxing-agentic-workflows-and-managing-execution-risk/) — MEDIUM confidence (official NVIDIA blog; confirms default-deny + allowlist as baseline security)
+- [WASM Component Model async timeline](https://github.com/WebAssembly/component-model/issues/316) — HIGH confidence (upstream GitHub issue; confirms async in WASM is not stable as of 2026; justifies deferring parallel service calls)
+- [WAVS PROJECT.md](../PROJECT.md) — HIGH confidence (project spec; primary source for v3.0 scope and existing infrastructure)
+- [WAVS operator.wit](../../wit-definitions/operator/wit/operator.wit) — HIGH confidence (read directly; current WIT interface; baseline for the continuation variant extension)
+- [WAVS engine execute_operator_component](../../packages/wavs/src/subsystems/engine/wasm_engine.rs) — HIGH confidence (read directly; existing execution path that call-service dispatch will reuse)
+- [rig-wasi PromptHook / HookAction](../../packages/rig-wasi/src/agent/prompt_request/hooks.rs) — HIGH confidence (read directly; existing Continue/Terminate hook pattern in rig-wasi informs the WIT Continue/Done naming)
 
 ---
 
-*Feature research for: wavs-rig agent SDK (WAVS v2.0 milestone)*
+*Feature research for: WAVS v3.0 — agent continuation mode + service-to-service RPC*
 *Researched: 2026-04-20*

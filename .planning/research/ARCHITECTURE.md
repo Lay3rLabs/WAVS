@@ -1,516 +1,437 @@
 # Architecture Research
 
-**Domain:** WAVS v2.0 — rig-core Agent Runtime Integration
+**Domain:** Agent continuation and service-to-service RPC for WAVS (WASM AVS runtime)
 **Researched:** 2026-04-20
-**Confidence:** HIGH (all findings from direct source inspection of WAVS codebase + WAVS_AGENT_IMPROVEMENTS.md spec)
+**Confidence:** HIGH — based on direct codebase inspection of all relevant subsystems
 
-## System Overview
+---
 
-The integration adds a new library crate (`packages/wavs-rig/`) that bridges rig-core's agent abstractions into the WASI sandbox. No existing packages are modified during the MVP. The bridge sits entirely on the component side (inside WASM), not on the node side.
+## Existing Architecture (Baseline)
+
+Understanding the current system precisely is essential because both v3.0 features integrate _into_ it rather than replacing it.
+
+### Current Execution Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          WAVS Node (Tokio / Rust)                        │
-│                                                                           │
-│  ┌──────────────┐  Crossbeam  ┌──────────────┐  ┌────────────────────┐  │
-│  │   Trigger    │────────────▶│  Dispatcher  │──▶│  Engine Manager   │  │
-│  │   Manager    │             │  (loop)      │  │  (packages/engine) │  │
-│  └──────────────┘             └──────────────┘  └────────┬───────────┘  │
-│                                                           │              │
-│                                         Wasmtime WASI sandbox per invoke │
-│  ┌────────────────────────────────────────────────────────▼───────────┐  │
-│  │   WavsWorld instance (operator)                                     │  │
-│  │                                                                      │  │
-│  │   Host functions exposed via WIT (operator.wit):                    │  │
-│  │     wasi:http/outgoing-handler    (AllowedHostPermission enforced)  │  │
-│  │     wasi:keyvalue/store|atomics|batch                               │  │
-│  │     host::log, host::config-var                                     │  │
-│  │     host::get-evm-chain-config, host::get-cosmos-chain-config       │  │
-│  │                                                                      │  │
-│  │   ┌─────────────────────────────────────────────────────────────┐   │  │
-│  │   │   Agent Component (wasm32-wasip2 cdylib)                     │   │  │
-│  │   │                                                               │   │  │
-│  │   │   fn run(trigger: TriggerAction) -> Result<Vec<WasmResponse>> │   │  │
-│  │   │     │                                                          │   │  │
-│  │   │     ▼  wstd::runtime::block_on(async { ... })                 │   │  │
-│  │   │                                                               │   │  │
-│  │   │   ┌─────────────────────────────────────────────────────┐    │   │  │
-│  │   │   │   wavs-rig (packages/wavs-rig/ — NEW CRATE)          │    │   │  │
-│  │   │   │                                                       │    │   │  │
-│  │   │   │   WasiHttpClient (impl HttpClientExt)                 │    │   │  │
-│  │   │   │     └── wasi:http/outgoing-handler                    │    │   │  │
-│  │   │   │                                                       │    │   │  │
-│  │   │   │   rig-wasi fork (git dep or local path)               │    │   │  │
-│  │   │   │     ├── Agent<M, T> loop (prompt → tools → response)  │    │   │  │
-│  │   │   │     ├── CompletionModel trait (20+ providers)         │    │   │  │
-│  │   │   │     └── Tool trait + ToolDefinition (JSON Schema)     │    │   │  │
-│  │   │   │                                                       │    │   │  │
-│  │   │   │   Built-in Tools:                                      │    │   │  │
-│  │   │   │     KvGetTool / KvSetTool  → wasi:keyvalue            │    │   │  │
-│  │   │   │     HttpFetchTool          → wasi:http                │    │   │  │
-│  │   │   │     EvmQueryTool           → host::get-evm-chain-config│    │   │  │
-│  │   │   │     CosmosQueryTool        → host::get-cosmos-chain-config│  │   │  │
-│  │   │   │     LogTool                → host::log                │    │   │  │
-│  │   │   │                                                       │    │   │  │
-│  │   │   │   WavsMemory               → wasi:keyvalue            │    │   │  │
-│  │   │   │   WavsAgent trait (developer-facing)                  │    │   │  │
-│  │   │   │   run_agent() shim         → wstd::runtime::block_on  │    │   │  │
-│  │   │   └─────────────────────────────────────────────────────┘    │   │  │
-│  │   └─────────────────────────────────────────────────────────────┘   │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────┘
+TriggerManager
+    │  crossbeam channel: DispatcherCommand::Trigger(TriggerAction)
+    ▼
+Dispatcher (main loop, packages/wavs/src/dispatcher.rs)
+    │  crossbeam channel: EngineCommand::ExecuteOperator { service, action }
+    ▼
+EngineManager (packages/wavs/src/subsystems/engine.rs)
+    │  ctx.rt.spawn(async) → WasmEngine::execute_operator_component()
+    │  crossbeam channel: DispatcherCommand::EngineResponse(EngineResponse::Operator)
+    ▼
+Dispatcher
+    │  crossbeam channel: SubmissionCommand::Submit(SubmissionRequest)
+    ▼
+SubmissionManager
+    │  crossbeam channel: DispatcherCommand::SubmissionResponse(Submission)
+    ▼
+Dispatcher
+    │  crossbeam channel: AggregatorCommand::Broadcast(Submission)
+    ▼
+Aggregator (P2P quorum)
+    │  crossbeam channel: DispatcherCommand::AggregatorExecute { submission, service, kind }
+    ▼
+Dispatcher
+    │  crossbeam channel: EngineCommand::ExecuteAggregator { submission, service, kind }
+    ▼
+EngineManager → WasmEngine::execute_aggregator_component()
+    │  crossbeam channel: DispatcherCommand::EngineResponse(EngineResponse::Aggregator)
+    ▼
+Dispatcher → AggregatorCommand::Actions → on-chain submission
 ```
+
+### Key Existing Types
+
+| Type | Location | Role |
+|------|----------|------|
+| `EngineCommand` | `subsystems/engine.rs` | Commands sent from Dispatcher to EngineManager. Currently: `Kill`, `ExecuteOperator`, `ExecuteAggregator` |
+| `EngineResponse` | `subsystems/engine.rs` | Responses sent EngineManager to Dispatcher. Currently: `Operator(SubmissionRequest)`, `Aggregator { submission, actions, kind }` |
+| `DispatcherCommand` | `dispatcher.rs` | All subsystem to Dispatcher messages. Currently: `Trigger`, `ChangeServiceUri`, `EngineResponse`, `SubmissionResponse`, `AggregatorExecute`, `SubmissionConfirmed`, `SubmissionFailed` |
+| `OperatorHostComponent` | `engine/src/worlds/operator/component.rs` | Wasmtime `Store` data — host capabilities exposed to WASM. Has: `wasi:http`, `wasi:keyvalue`, chain configs, permissions |
+| `WavsWorld` (WIT) | `wit-definitions/operator/wit/operator.wit` | Guest interface. Entry: `export run: func(trigger-action) -> result<list<wasm-response>, string>` |
+| `Permissions` | `types/src/service.rs` | Per-component capability flags: `allowed_http_hosts: AllowedHostPermission`, `file_system`, `raw_sockets`, `dns_resolution` |
+| `AllowedHostPermission` | `types/src/service.rs` | `All` / `Only(Vec<String>)` / `None` — enforced via `configure_linker()` in `worlds/instance.rs` |
+
+---
+
+## v3.0 Integration Design
+
+### Feature 1: Agent Continuation Mode
+
+**What it is:** The component's `run` function returns `Continue { state: bytes }` or `Done { responses: list<wasm-response> }` instead of a flat list. When `Continue` is returned, the Engine re-invokes the component with the accumulated state, looping until `Done` is returned.
+
+**Where it lives in the existing architecture:**
+
+The continuation loop belongs **inside `EngineManager::run_trigger()`** (or a new `run_trigger_with_continuation()` alongside it). The Dispatcher and all downstream subsystems (Submission, Aggregator) are unaffected — they still receive `SubmissionRequest` exactly as today. The loop is entirely an Engine-internal concern.
+
+```
+Current:  run_trigger() → execute_operator_component() → Vec<WasmResponse>
+v3.0:     run_trigger() → loop { execute_operator_step() → Continue(state) | Done(responses) }
+                          └─ on Done: → Vec<WasmResponse> (same as today)
+```
+
+**Data flow changes:**
+
+1. **WIT interface change** (new return variant) — `operator.wit` gets a new output type:
+   ```wit
+   variant step-result {
+     continue(list<u8>),          // persisted state for next step
+     done(list<wasm-response>),   // terminal, same as today's return
+   }
+   // new export replaces or supplements run:
+   export run: func(trigger-action: trigger-action) -> result<step-result, string>;
+   ```
+   Backward compat: keep old `run` export path working for non-agent components (they never return `Continue`).
+
+2. **State persistence between steps** — `wasi:keyvalue` is already a host capability. The engine auto-persists continuation state under a well-known key (`continuation:<service_id>:<correlation_id>`) between steps. The component can also read/write KV directly for conversation history (wavs-rig already does this for memory).
+
+3. **No new channel messages needed** — the loop runs inside the single `ctx.rt.spawn` task that currently calls `execute_operator_component`. The Dispatcher sees only the final `Done` result, as a normal `EngineResponse::Operator`.
+
+4. **Fuel/time budgeting** — continuation steps each run against the workflow's per-step fuel/time limits. A new `max_continuation_steps: Option<u32>` field in `Workflow` (or `Component`) caps infinite loops. Exceeding it returns an error identical to `EngineError::OutOfFuel`.
+
+**New/modified components:**
+
+| Component | Change Type | What Changes |
+|-----------|------------|--------------|
+| `wit-definitions/operator/wit/operator.wit` | Modified | New `step-result` variant; `run` return type updated |
+| `packages/engine/src/worlds/operator/execute.rs` | Modified | `execute()` becomes a step; new `execute_with_continuation()` loop wrapper |
+| `packages/engine/src/worlds/operator/component.rs` | Minor modify | `OperatorHostComponent` gains continuation state slot (or uses KV directly) |
+| `packages/wavs/src/subsystems/engine.rs` | Minor modify | `run_trigger()` calls new `execute_with_continuation()` instead of `execute_operator_component()` |
+| `packages/types/src/service.rs` | Modified | `Component` or `Workflow` gains `max_continuation_steps: Option<u32>` |
+| `packages/engine/src/bindings/` | Regenerated | WIT bindings regenerated after operator.wit change |
+
+**Dispatcher untouched.** EngineCommand and EngineResponse enum variants stay the same. No new channels.
+
+---
+
+### Feature 2: Service-to-Service Synchronous RPC via `call-service`
+
+**What it is:** A host function exposed to the WASM guest that synchronously executes another deployed service's operator component and returns its `WasmResponse` bytes. The caller specifies a target `service_id` and `workflow_id`; the engine runs that component inline and returns the result.
+
+**Where it lives:** This is a new **host function** added to `OperatorHostComponent`. It runs the target service synchronously within the same `ctx.rt.spawn` task that is executing the calling component. No new Crossbeam channels are needed — the engine already owns `Arc<WasmEngine<S>>` and can call `execute_operator_component()` recursively.
+
+**Data flow:**
+
+```
+Component A's run() call
+    │ calls host: call-service("target_service_id", "workflow_id", input_bytes)
+    ▼
+OperatorHostComponent::call_service() [new host fn impl]
+    │ validates AllowedServiceCalls permission
+    │ looks up target service from Services registry
+    │ calls WasmEngine::execute_operator_component(target_service, synthetic_trigger)
+    │ (this is an async call made synchronous within the WASI context via block_on / executor)
+    ▼
+Returns Vec<u8> (serialized WasmResponse payload) to calling component
+    │
+Component A continues with result
+```
+
+**Synchronization model:** The host function is `async fn call_service(...)` but exposed through wasmtime's host binding mechanism, which handles the async bridge into the sync WASI component execution context. This is the same pattern used by `wasi:http/outgoing-handler` today — the host function is async on the host side, WASI components see it as blocking.
+
+**WIT changes:**
+
+```wit
+// In operator.wit, add to the host interface:
+import host: interface {
+    // ... existing functions ...
+
+    // Synchronously execute another deployed service and return its response payload.
+    // Returns error string if service not found, permission denied, or execution fails.
+    call-service: func(
+        service-id: string,
+        workflow-id: string,
+        input: list<u8>
+    ) -> result<list<u8>, string>;
+}
+```
+
+**Permission check — `AllowedServiceCalls`:**
+
+New field on `Permissions` struct in `types/src/service.rs`:
+
+```rust
+pub struct Permissions {
+    pub allowed_http_hosts: AllowedHostPermission,
+    pub file_system: bool,
+    pub raw_sockets: bool,
+    pub dns_resolution: bool,
+    // NEW:
+    pub allowed_service_calls: AllowedServiceCalls,  // All / Only(Vec<ServiceId>) / None
+}
+
+pub enum AllowedServiceCalls {
+    All,
+    Only(Vec<String>),  // service_id strings
+    #[default]
+    None,
+}
+```
+
+The host function implementation checks this field before executing the target. Deny returns `Err("service call not permitted")` to the component.
+
+**Cycle prevention:** The host function must detect and break call cycles (A calls B calls A). Simplest approach: thread-local or `Store`-data call stack depth counter; reject if depth > N (default: 5). This prevents stack overflow without requiring global state.
+
+**New/modified components:**
+
+| Component | Change Type | What Changes |
+|-----------|------------|--------------|
+| `wit-definitions/operator/wit/operator.wit` | Modified | `call-service` added to `host` interface |
+| `packages/engine/src/worlds/operator/component.rs` | Modified | `OperatorHostComponent` gains `call_service_impl` — needs access to `Arc<WasmEngine<S>>` and `Services` |
+| `packages/engine/src/worlds/operator/` (host impl) | Modified | Implement `call-service` host function in the bindings impl block |
+| `packages/engine/src/worlds/instance.rs` | Modified | `InstanceDepsBuilder` passes `Arc<WasmEngine<S>>` and `Services` into `OperatorHostComponent` |
+| `packages/engine/src/common/base_engine.rs` | Minor | Ensure `WasmEngine` is `Arc`-shareable for re-entrant calls |
+| `packages/types/src/service.rs` | Modified | `Permissions` gains `allowed_service_calls: AllowedServiceCalls` |
+| `packages/engine/src/bindings/` | Regenerated | WIT bindings regenerated |
+
+**Dispatcher untouched.** No new channels. No new `EngineCommand` variants. The engine re-enters itself within the same Tokio task.
+
+---
+
+## Combined System Architecture (v3.0)
+
+```
++------------------------------------------------------------------+
+|                        WAVS Dispatcher                            |
+|  crossbeam channels: Trigger -> Engine -> Submit -> Aggregate    |
++---------------------------+--------------------------------------+
+                            | EngineCommand::ExecuteOperator
+                            v
++------------------------------------------------------------------+
+|                       EngineManager                               |
+|  ctx.rt.spawn -> run_trigger_with_continuation()                  |
+|  +------------------------------------------------------------+  |
+|  |  Continuation Loop [NEW]                                    |  |
+|  |  while step == Continue {                                   |  |
+|  |      execute_operator_step(state) -> Continue | Done        |  |
+|  |      auto-persist state to wasi:keyvalue                    |  |
+|  |  }                                                          |  |
+|  +-------------------------+---------------------------------+  |  |
+|                            | Done(Vec<WasmResponse>)            |
+|                            v                                     |
+|  DispatcherCommand::EngineResponse(Operator) [unchanged]         |
++------------------------------------------------------------------+
+
++------------------------------------------------------------------+
+|              WasmEngine::execute_operator_step()                  |
+|                                                                   |
+|  +------------------------------------------------------------+  |
+|  |  OperatorHostComponent (Wasmtime Store data)                |  |
+|  |  +- wasi:http/outgoing-handler  (existing)                  |  |
+|  |  +- wasi:keyvalue               (existing)                  |  |
+|  |  +- host::config-var            (existing)                  |  |
+|  |  +- host::get-evm-chain-config  (existing)                  |  |
+|  |  +- host::call-service [NEW] ----------------------------+  |  |
+|  |  +- host::log           (existing)                       |  |  |
+|  +------------------------------------------------------------+  |  |
+|                                                              |  |
+|  call-service host fn impl:                                  |  |
+|  +- check AllowedServiceCalls permission                     |  |
+|  +- check call depth (cycle prevention)                      |  |
+|  +- look up target Service from Services registry            |  |
+|  +- build synthetic TriggerAction with input bytes           |  |
+|  +- Arc<WasmEngine>::execute_operator_component(target) <----+  |
++------------------------------------------------------------------+
+```
+
+---
 
 ## Component Boundaries
 
-### Existing Components — Unchanged for MVP
+| Component | Owns | Communicates With | v3.0 Changes |
+|-----------|------|-------------------|--------------|
+| `Dispatcher` | Channel routing, service lifecycle | All subsystems via crossbeam | None |
+| `EngineManager` | Spawn tasks, route results | Dispatcher (in/out), WasmEngine | Adds continuation loop in `run_trigger` |
+| `WasmEngine` | Wasmtime instantiation, execution | EngineManager (called), host functions (calls back) | Adds `execute_operator_step`; `OperatorHostComponent` gains `call-service` |
+| `OperatorHostComponent` | WASI store data, host fn impls | WasmEngine (holds ref), re-enters WasmEngine for `call-service` | Gains `Arc<WasmEngine>`, `Services`, depth counter, `allowed_service_calls` check |
+| `TriggerManager` | Event monitoring, firing | Dispatcher | None |
+| `SubmissionManager` | Signing, submission | Dispatcher | None |
+| `Aggregator` | Quorum, P2P | Dispatcher | None |
+| `packages/types` | Service, Permissions, WasmResponse types | All | Adds `AllowedServiceCalls`, `max_continuation_steps`, possibly `StepResult` type |
 
-| Component | Location | Role in Agent Flow |
-|-----------|----------|--------------------|
-| `packages/engine` | `packages/engine/` | Instantiates WASM, injects host functions, enforces fuel+time limits. No changes — the agent component is just another `run()` export. |
-| `packages/types` | `packages/types/src/service.rs` | `Component.permissions.allowed_http_hosts` (`AllowedHostPermission::All/Only/None`) is how the operator constrains which LLM API the agent may call. No changes needed. |
-| `packages/wasi-utils` | `packages/wasi-utils/` | Existing HTTP helpers (`wstd::http::Client`) are the underlying call path for `WasiHttpClient`. Not modified; `wavs-rig` wraps them. |
-| `examples/components/_helpers` | `examples/components/_helpers/` | The WIT bindings generation pattern (`wit_bindgen::generate!`, `export_layer_trigger_world!`) is directly reused for the agent example component. Not modified. |
-| `wit-definitions/operator/wit/operator.wit` | `wit-definitions/operator/wit/` | Defines the host surface the agent component uses. All required host functions already exist: `wasi:http`, `wasi:keyvalue`, `host::log`, `host::config-var`, chain configs. No WIT changes needed for MVP. |
-
-### New Components
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| `packages/wavs-rig` | `packages/wavs-rig/` | Bridge library: `WasiHttpClient`, built-in tools, `WavsMemory`, `WavsAgent` trait, `run_agent()` shim. Compiled to `wasm32-wasip2`. |
-| `rig-wasi` fork | Git dependency or `packages/rig-wasi/` | Thin fork of rig-core (~300-500 line patch). Makes `reqwest` optional, drops `tokio::rt`, unifies `cfg` detection for wasip2. |
-| `examples/components/agent-defi-monitor` | `examples/components/agent-defi-monitor/` | Example agent component demonstrating the full loop. ~30 lines of domain logic using `WavsAgent` trait. |
-
-### Workspace Registration
-
-The two new Cargo workspace members must be added to `WAVS/Cargo.toml`:
-
-```toml
-[workspace]
-members = [
-    # ... existing members ...
-    "packages/wavs-rig",
-    "examples/components/agent-defi-monitor",
-]
-```
-
-`rig-wasi` is a dependency of `wavs-rig`, not a workspace member. It is referenced via a git path dep in `packages/wavs-rig/Cargo.toml`.
-
-## Data Flow: Trigger to Agent Reasoning to Result
-
-```
-1. On-chain event fires (EVM log / cron / block interval)
-       │
-       ▼
-2. TriggerManager captures TriggerData → sends DispatcherCommand::Trigger(TriggerAction)
-       │
-       ▼
-3. Dispatcher → EngineCommand::ExecuteOperator { trigger_action, component, ... }
-       │
-       ▼
-4. Engine creates InstanceDeps:
-     - OperatorHostComponent { service, workflow_id, permissions, keyvalue_ctx, http_ctx }
-     - Linker populated with wasi:http (if AllowedHostPermission != None), wasi:keyvalue, host functions
-     │
-       ▼
-5. Engine calls component export: run(trigger_action) → tokio::time::timeout wraps the call
-       │
-       ▼ (inside WASM sandbox)
-6. Agent component fn run():
-     a. Deserialize trigger_action.data to extract prompt context
-     b. Call wavs_rig::run_agent(agent, trigger) which calls wstd::runtime::block_on(async { ... })
-     c. Inside block_on:
-          i.   Build rig Agent<M, T> via WavsAgent::build_rig_agent()
-          ii.  Load conversation history from WavsMemory (wasi:keyvalue bucket)
-          iii. Convert trigger data to prompt string via WavsAgent::trigger_to_prompt()
-          iv.  Call rig_agent.chat(prompt, history).await
-               │
-               ▼
-               rig agent loop (multi-turn):
-                 - send messages to LLM via WasiHttpClient.send_request()
-                   → wasi:http/outgoing-handler → WAVS AllowedHostPermission check
-                 - LLM responds with tool_use or text
-                 - if tool_use: dispatch to registered rig Tool impl
-                   → KvGetTool/KvSetTool: wasi:keyvalue host function
-                   → HttpFetchTool: wasi:http host function
-                   → EvmQueryTool: host::get-evm-chain-config + HTTP call
-                   → LogTool: host::log host function
-                 - append tool result to history
-                 - loop continues until text response or max_turns reached
-          v.   Append new messages to WavsMemory (persists for next invocation)
-          vi.  Convert rig response to Vec<WasmResponse> via WavsAgent::response_to_wasm()
-     d. Return Ok(Vec<WasmResponse>)
-       │
-       ▼ (back on host)
-7. Engine validates response sizes (DEFAULT_MAX_PAYLOAD_SIZE = 50MB)
-       │
-       ▼
-8. EngineResponse::Operator(SubmissionRequest { responses }) → Dispatcher
-       │
-       ▼
-9. Dispatcher → Aggregator → on-chain submission (existing flow, unchanged)
-```
-
-## The Four Bridges — Implementation Detail
-
-### Bridge 1: HTTP Transport (WasiHttpClient)
-
-rig-core's `HttpClientExt` trait is the single seam for swapping the HTTP backend. The implementation routes all LLM API traffic through WAVS's existing `wasi:http/outgoing-handler`:
-
-```rust
-// packages/wavs-rig/src/http.rs
-struct WasiHttpClient;
-
-impl HttpClientExt for WasiHttpClient {
-    async fn send_request(&self, req: HttpRequest) -> Result<HttpResponse, HttpError> {
-        // Uses wstd::http::Client under the hood — same as existing wavs-wasi-utils
-        let wstd_req = convert_to_wstd_request(req)?;
-        let mut resp = wstd::http::Client::new().send(wstd_req).await
-            .map_err(|e| HttpError::Send(e.to_string()))?;
-        convert_from_wstd_response(&mut resp).await
-    }
-}
-```
-
-The critical property: `AllowedHostPermission` is enforced at the Wasmtime linker level in `configure_linker()` (`packages/engine/src/worlds/instance.rs`). If `permissions.allowed_http_hosts == AllowedHostPermission::None`, `wasmtime_wasi_http::add_only_http_to_linker_async` is NOT called, and any attempt to call `wasi:http` traps. An agent component with `Only(["api.anthropic.com"])` can only reach Claude, enforced by the sandbox.
-
-### Bridge 2: WAVS Host Functions as Rig Tools
-
-Each tool wraps a WASI host function call. The rig `Tool` trait requires `NAME: &'static str`, associated `Args`/`Output`/`Error` types with JSON Schema, `definition()`, and `call()`. The JSON Schema is auto-derived via `schemars::JsonSchema` on the `Args` struct.
-
-Location for all built-in tools: `packages/wavs-rig/src/tools/`
-
-```
-tools/
-├── mod.rs         (re-exports all tools)
-├── kv.rs          (KvGetTool, KvSetTool)
-├── http.rs        (HttpFetchTool)
-├── evm.rs         (EvmQueryTool)
-├── cosmos.rs      (CosmosQueryTool)
-└── log.rs         (LogTool)
-```
-
-### Bridge 3: Async Runtime Shim
-
-WASM components use `wstd::runtime::block_on` as their async executor. The shim is the `run_agent()` function that wraps the entire agent loop inside one `block_on` call:
-
-```rust
-// packages/wavs-rig/src/agent.rs
-pub fn run_agent<A: WavsAgent>(
-    agent: A,
-    trigger: TriggerAction,
-) -> Result<Vec<WasmResponse>, String> {
-    wstd::runtime::block_on(async {
-        let config = agent.build(trigger.clone())?;
-        let rig_agent = build_rig_agent_from_config(config)?;
-        let prompt = agent.trigger_to_prompt(trigger)?;
-        let response = rig_agent.prompt(&prompt).await
-            .map_err(|e| e.to_string())?;
-        agent.response_to_wasm(response)
-    })
-}
-```
-
-The rig agent loop itself is pure async with `futures::StreamExt` — it does not require the tokio runtime. The tokio `rt` feature is removed in the rig-wasi fork. Sequential tool execution (rig concurrency = 1) avoids `futures::stream::buffer_unordered` which would require a multi-task executor.
-
-### Bridge 4: KV-Backed Conversation Memory
-
-`WavsMemory` persists multi-turn conversation history across invocations using `wasi:keyvalue`:
-
-```rust
-// packages/wavs-rig/src/memory.rs
-pub struct WavsMemory {
-    bucket_id: String,
-    max_tokens: usize,
-}
-```
-
-History is serialized as JSON into a single KV key per agent instance. `trim_to_budget()` keeps the system message and the N most recent messages fitting within `max_tokens`. This is stateless across the agent object — the entire persistence is in the KV store, which is per-service in the engine's `KeyValueCtx`.
-
-## New Crate: packages/wavs-rig
-
-### Cargo.toml Dependencies
-
-```toml
-[package]
-name = "wavs-rig"
-# ...workspace fields...
-
-[dependencies]
-# The rig-wasi fork — thin fork of rig-core for wasip2 compatibility
-rig-core = { git = "https://github.com/[fork]/rig", rev = "[pin]", default-features = false }
-
-# WASI runtime (no tokio)
-wstd = { workspace = true }
-wasip2 = { workspace = true }
-
-# WIT bindings (same as other components)
-wit-bindgen = { workspace = true }
-
-# WAVS types for WasmResponse, TriggerAction
-wavs-wasi-utils = { workspace = true }
-
-# Serialization
-serde = { workspace = true }
-serde_json = { workspace = true }
-schemars = "0.8"   # for Tool JSON Schema derivation
-
-[lib]
-crate-type = ["rlib"]   # Library only — not a cdylib itself
-```
-
-Note: `wavs-rig` is compiled as `rlib`, not `cdylib`. The agent example component is the `cdylib` that depends on `wavs-rig`. This mirrors the existing `example-helpers` pattern.
-
-### Module Structure
-
-```
-packages/wavs-rig/src/
-├── lib.rs          (pub use, crate-level exports)
-├── agent.rs        (WavsAgent trait, AgentConfig, run_agent())
-├── http.rs         (WasiHttpClient: impl HttpClientExt)
-├── memory.rs       (WavsMemory: KV-backed conversation history)
-└── tools/
-    ├── mod.rs
-    ├── kv.rs
-    ├── http.rs
-    ├── evm.rs
-    ├── cosmos.rs
-    └── log.rs
-```
-
-## Example Agent Component: examples/components/agent-defi-monitor
-
-This is the MVP example demonstrating the complete loop. It follows exactly the same structure as existing example components:
-
-```
-examples/components/agent-defi-monitor/
-├── Cargo.toml           (depends on wavs-rig, example-helpers)
-└── src/
-    └── lib.rs           (~30 lines of domain logic)
-```
-
-`Cargo.toml` structure mirrors `kv-store`:
-
-```toml
-[lib]
-crate-type = ["rlib", "cdylib"]
-
-[package.metadata.component]
-package = "wavs:agent-defi-monitor"
-```
-
-The component uses `export_layer_trigger_world!(Component)` from `example-helpers/src/bindings/world.rs`, exactly as all existing examples do. The WIT world (`wavs-world`) is unchanged — agents export the same `run(trigger-action) -> result<list<wasm-response>, string>` interface.
-
-## rig-wasi Fork: Required Changes
-
-The fork patches rig-core to compile on `wasm32-wasip2`. All changes are in the platform/compat layer:
-
-| File | Change | Effort |
-|------|--------|--------|
-| `Cargo.toml` | `reqwest = { ..., optional = true }`, drop `tokio = { features = ["rt"] }` | Trivial |
-| `http_client.rs` | Gate `reqwest::Client` default behind `#[cfg(feature = "reqwest")]` | Small |
-| `client/mod.rs` | `ClientBuilderError` must not reference `reqwest::Error` unconditionally | Small |
-| `streaming.rs` | Replace `tokio::sync::watch` in `PauseControl` with `futures::channel::watch` or remove | Small |
-| `wasm_compat.rs` | Unify `WasmBoxedFuture` and `WasmCompatSend` cfg gates to use `target_family = "wasm"` | Small |
-| `sse.rs` | Add wasip2 dead-zone cfg branch (neither `wasm32` nor `wasm feature` fires on wasip2) | Small |
-| `Cargo.toml` | Add `getrandom` with `wasi` feature for `wasm32-wasip2` target | Trivial |
-
-Total: ~300-500 lines across 6-7 files. No changes to the agent loop, tool dispatch, or provider implementations.
+---
 
 ## Architectural Patterns
 
-### Pattern 1: WIT World is the Sandbox Boundary
+### Pattern 1: In-Task Continuation Loop
 
-**What:** The `wavs-world` WIT definition (operator.wit) is the contract between the host and the component. Everything an agent can do is expressed as a WIT host import. The agent loop inside WASM calls these imports; the Wasmtime linker provides their implementations.
+**What:** The re-invocation loop for continuation lives entirely within the single `ctx.rt.spawn` task that executes the operator component. No new OS threads, no new Tokio tasks, no new channels.
 
-**When to use:** Any new capability for agents (e.g., `call-service` for inter-component RPC in post-MVP) must be added as a WIT host import, not as Rust code in the component crate.
+**When to use:** Always for continuation. Keeps the concurrency model simple — the Dispatcher's view is unchanged; each trigger still produces at most one `EngineResponse::Operator` per workflow invocation.
 
-**Trade-offs:** Discipline required — no "reaching out" from the component outside the WIT surface. This is the guarantee that makes agents trustworthy.
+**Trade-offs:** Pro: zero impact on Dispatcher, Submission, Aggregator. Con: a long-running agent with many continuation steps ties up one Tokio task. Acceptable given that fuel/step limits cap execution time. If concurrency ever matters, the loop can be made interruptible.
 
-### Pattern 2: rlib + cdylib Split
+### Pattern 2: Re-entrant WasmEngine for call-service
 
-**What:** Shared logic (`wavs-rig`, `example-helpers`) is compiled as `rlib`. Only the final component that exports the WIT world is `cdylib`. The `wavs-rig` crate is an rlib — the agent component crate is the cdylib.
+**What:** `call-service` calls `Arc<WasmEngine>::execute_operator_component()` recursively within the same async task. `WasmEngine` is already `Arc`-wrapped and stateless per call (all state lives in `Store`).
 
-**When to use:** Always. Matches the existing pattern for all example components.
+**When to use:** Always for service-to-service RPC. Avoids introducing a new synchronous channel round-trip through the Dispatcher (which would deadlock: the engine is blocked waiting for the channel result while the Dispatcher is blocked waiting for the engine to finish).
 
-**Trade-offs:** Requires two crates per agent (the library and the component). The convention is clear and already established.
+**Trade-offs:** Pro: no deadlock risk, no new channels, minimal latency. Con: re-entrant execution means a misbehaving callee can hold fuel/time from the caller's budget. Mitigate with per-call fuel sub-limits and depth checking.
 
-### Pattern 3: Component Config for API Keys
+**Deadlock note — critical:** Do NOT route `call-service` through the Dispatcher via a new channel. The `EngineManager::start()` loop is a blocking `while let Ok(command) = rx.recv()`. If the engine sends a new command to itself via the Dispatcher while already executing, and the response expects synchronous delivery, you face a classic deadlock. The re-entrant `Arc<WasmEngine>` approach is the correct solution.
 
-**What:** LLM provider API keys are injected via `Component.env_keys` (system env vars prefixed `WAVS_ENV_`) and `Component.config` (key-value pairs in service.json). Inside WASM, retrieved via `host::config-var(key)`. The agent reads `WAVS_ENV_ANTHROPIC_API_KEY` at runtime.
+### Pattern 3: State Persistence via Existing KV
 
-**When to use:** All secrets and provider configuration. Never hardcode API keys in WASM bytes.
+**What:** Continuation state is persisted to `wasi:keyvalue` (already a host capability) under a deterministic key per service/trigger/step. No new storage backend.
 
-**Trade-offs:** Requires operator to set env vars. Future work (post-MVP P2): first-class API key management in the Tauri app UI.
+**When to use:** Default auto-persist for agents. Components can also read/write KV directly for richer state (wavs-rig memory already uses KV for conversation history).
 
-### Pattern 4: Sequential Tool Execution for MVP
+**Trade-offs:** Pro: zero new infrastructure, operators already have KV. Con: KV is local to each operator — state is not shared across operators in a multi-operator deployment. This is acceptable for agent use cases (each operator runs the agent independently and submits independently).
 
-**What:** Configure rig's concurrency to 1 (sequential tool calls). Rig supports `buffer_unordered` for parallel tool calls, but this requires multi-task executor semantics. WASI is single-threaded; `wstd::runtime::block_on` drives a single-task async executor.
+---
 
-**When to use:** MVP. Sequential is correct for the common case (most agent tool chains are sequential by nature).
+## Data Flow: Continuation Mode
 
-**Trade-offs:** Parallel tool execution is deferred. For post-MVP, the engine-level `Continue/Checkpoint` variant (from `WAVS_AGENT_IMPROVEMENTS.md` post-MVP section) can provide external parallelism.
+```
+TriggerAction arrives
+    |
+EngineManager::run_trigger_with_continuation(action, service)
+    |
+step 0: execute_operator_step(trigger_action, state=None)
+    -> Continue(state_bytes)
+    | persist state_bytes to KV["continuation:<svc_id>:<correlation_id>:step:0"]
+step 1: execute_operator_step(trigger_action, state=Some(state_bytes))
+    -> Continue(state_bytes_2)
+    | persist ...
+step N: execute_operator_step(trigger_action, state=Some(state_bytes_N))
+    -> Done(Vec<WasmResponse>)
+    |
+DispatcherCommand::EngineResponse(EngineResponse::Operator(SubmissionRequest))
+    |
+[normal pipeline: Submit -> Aggregate -> On-chain]
+```
+
+## Data Flow: Service-to-Service RPC
+
+```
+ComponentA::run(trigger_action) executing inside WasmEngine
+    |
+calls host function: call-service("service_b_id", "workflow_0", input_bytes)
+    |
+OperatorHostComponent::call_service() [host impl]
+    +- check AllowedServiceCalls::Only(["service_b_id"]) -> OK
+    +- check call_depth <= 5 -> OK; increment depth
+    +- services.get("service_b_id") -> Service B
+    +- build TriggerData::Manual { data: input_bytes }
+    +- Arc<WasmEngine>::execute_operator_component(service_b, synthetic_trigger).await
+            |
+        ComponentB::run(synthetic_trigger) executes
+            -> Done(Vec<WasmResponse>)
+            |
+        returns Vec<WasmResponse>[0].payload as bytes to ComponentA
+    | decrement depth
+returns Ok(result_bytes) to ComponentA
+    |
+ComponentA continues reasoning with result_bytes
+```
+
+---
+
+## Suggested Build Order
+
+The features have clear dependencies. Build in this sequence:
+
+### Phase 1: WIT + Types Foundation (no behavior change)
+1. Extend `Permissions` in `packages/types/src/service.rs` to add `AllowedServiceCalls` enum and field.
+2. Add `max_continuation_steps: Option<u32>` to `Component` in types.
+3. Update `operator.wit` with `step-result` variant and `call-service` host function signature.
+4. Regenerate WIT bindings (`packages/engine/src/bindings/`).
+
+**Rationale:** Everything downstream depends on these types. Do it first so all code compiles against the new interface. No behavior changes yet.
+
+### Phase 2: Continuation Mode — Engine Loop
+5. Add `execute_operator_step()` to `WasmEngine` (single step, returns `StepResult`).
+6. Add `run_trigger_with_continuation()` to `EngineManager` wrapping the loop.
+7. Wire KV auto-persist of continuation state.
+8. Add step limit enforcement (return `EngineError` on exceeded).
+9. Update `EngineManager::run_trigger()` to call the continuation-aware version.
+
+**Rationale:** No changes to Dispatcher, Submission, or Aggregator. Can be tested in isolation by writing a component that returns `Continue` N times then `Done`. No `call-service` needed yet.
+
+### Phase 3: Service-to-Service RPC
+10. Update `InstanceDepsBuilder` to accept `Arc<WasmEngine<S>>` and `Services`.
+11. Add `call_depth: usize` counter to `OperatorHostComponent`.
+12. Implement `call-service` host function in the operator world binding impl.
+13. Add `AllowedServiceCalls` permission check inside the host fn impl.
+14. Write cycle detection (depth limit).
+
+**Rationale:** Depends on Phase 1 (types + WIT) but not on Phase 2 (continuation). Can develop in parallel with Phase 2 if needed, but sequential is simpler.
+
+### Phase 4: Integration + Permissions UI
+15. Expose `AllowedServiceCalls` in service.json schema and documentation.
+16. Add `allowed_service_calls` to Tauri component detail page (if relevant).
+17. E2E test: agent A triggers, calls service B, returns combined result.
+
+**Rationale:** Visible surface — do last so the core is proven before wiring up UI.
+
+---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Modifying the Engine for Agent Support
+### Anti-Pattern 1: Routing call-service Through the Dispatcher
 
-**What:** Adding agent-specific logic to `packages/engine`, `packages/wavs`, or the WAVS node to "support" agents as a special execution mode.
+**What people do:** Add a new `EngineCommand::CallService` and have the host fn send it on the channel then wait for a response channel.
 
-**Why it's wrong:** Agents are just WASM components that export `run()`. The engine doesn't know or care that the component inside is running an LLM loop. The entire rig integration lives inside the WASM boundary. Adding engine changes for MVP breaks this clean separation.
+**Why it's wrong:** Deadlock risk. `EngineManager::start()` is a blocking `while let Ok(command) = rx.recv()` loop. It spawns operator execution as a Tokio task. That task's host fn would need to synchronously receive a response from the Dispatcher, but if the Dispatcher is also waiting for the engine task to finish before processing the next command, you have a cycle. Even if Tokio tasks avoid true deadlock, the synchronization complexity is unnecessary.
 
-**Do this instead:** Put all agent logic in `packages/wavs-rig` (inside the WASM side). The engine sees the agent component identically to any other component.
+**Do this instead:** `Arc<WasmEngine>::execute_operator_component()` called directly inside the host function. No channels involved.
 
-### Anti-Pattern 2: Rebuilding the Rig Agent Loop
+### Anti-Pattern 2: Storing Continuation State in EngineManager Memory
 
-**What:** Writing a custom LLM dispatch loop inside `wavs-rig` instead of using rig's existing `Agent<M, T>`.
+**What people do:** Keep a `HashMap<CorrelationId, StateBytes>` in `EngineManager` to store continuation state between steps.
 
-**Why it's wrong:** Rig already has multi-turn loops, tool dispatch, provider implementations for 20+ LLMs, structured output, and prompt hooks. Option C (minimal extraction) from the spec estimates this as "higher upfront effort" with "no fork maintenance burden" — but months of work to reach parity.
+**Why it's wrong:** The continuation loop runs within a single task — state does not need to persist across tasks. Using in-memory maps adds lifetime complexity and breaks on node restart. KV store is already available, namespaced per service, and persists across restarts.
 
-**Do this instead:** Fork rig-core (Option B). ~300-500 lines of platform patches. Upstream later if accepted.
+**Do this instead:** Use `wasi:keyvalue` with a deterministic key. Auto-persist in the loop, read at step start.
 
-### Anti-Pattern 3: Using tokio::rt in the WASI Component
+### Anti-Pattern 3: New WIT World for Agent Components
 
-**What:** Including `tokio = { features = ["rt"] }` in the agent component or `wavs-rig` dependencies, then using `tokio::runtime::Runtime::new().block_on(...)`.
+**What people do:** Create a separate `agent-world` WIT world with the continuation interface instead of extending `wavs-world`.
 
-**Why it's wrong:** The tokio `rt` feature requires `std::thread` primitives that don't exist on `wasm32-wasip2`. This is one of the hard blockers documented in the rig investigation.
+**Why it's wrong:** Breaks backward compatibility. Operators would need to know which world a component uses before instantiating it. The current dispatch path (`WavsWorld::instantiate_async`) works uniformly on all operator components.
 
-**Do this instead:** Use `wstd::runtime::block_on` exclusively. The rig agent loop is pure async and does not require tokio's runtime internals.
+**Do this instead:** Extend `wavs-world` with the new return variant. Non-agent components never return `Continue` — the engine handles both cases in one instantiation path.
 
-### Anti-Pattern 4: Separate Crate for Each Agent
+### Anti-Pattern 4: Per-Step Full Re-Compilation
 
-**What:** Creating a new workspace crate per agent type (e.g., `packages/wavs-rig-defi`, `packages/wavs-rig-oracle`).
+**What people do:** Call `load_component_from_source()` at every continuation step (loads and compiles WASM).
 
-**Why it's wrong:** The library (`wavs-rig`) provides all the infrastructure. Each agent is a thin `cdylib` component in `examples/components/`. Adding them as workspace members inflates the workspace root.
+**Why it's wrong:** WASM compilation is expensive (100–500ms for large components). A 10-step agent adds 1–5 seconds of overhead.
 
-**Do this instead:** Follow the established pattern — one `rlib` library crate, many lightweight `cdylib` example components that depend on it.
+**Do this instead:** The existing `WasmEngine` already uses an LRU cache keyed by `ComponentDigest`. Ensure the continuation loop passes the same component digest each step. Cache hit = instantiation only (fast), no recompilation.
 
-## Integration Points with Existing Code
+---
 
-### What wavs-rig Calls (Direct WASI host imports)
+## Integration Points Summary
 
-| Host Function | WIT Location | wavs-rig Uses It For |
-|--------------|-------------|----------------------|
-| `wasi:http/outgoing-handler` | operator.wit | `WasiHttpClient` (LLM API calls, `HttpFetchTool`) |
-| `wasi:keyvalue/store` | operator.wit (via include wasi:keyvalue) | `KvGetTool`, `KvSetTool`, `WavsMemory` |
-| `wasi:keyvalue/atomics` | operator.wit | Optional atomic ops in tools |
-| `host::log` | operator.wit (inline interface) | `LogTool` |
-| `host::config-var` | operator.wit (inline interface) | Reading API keys, model names from service config |
-| `host::get-evm-chain-config` | operator.wit (inline interface) | `EvmQueryTool` — gets RPC URL for EVM chain |
-| `host::get-cosmos-chain-config` | operator.wit (inline interface) | `CosmosQueryTool` |
-
-All of these host functions are already implemented in `packages/engine/src/bindings/operator/host.rs` and `packages/engine/src/backend/wasi_keyvalue/`. No engine changes needed.
-
-### What the Agent Component Exports (Unchanged WIT Contract)
-
-```wit
-export run: func(trigger-action: trigger-action) -> result<list<wasm-response>, string>;
-```
-
-This is identical to all existing WAVS components. The engine calls `call_run()` on the instantiated component. The agent is just a component.
-
-### Permission Model: AllowedHostPermission Controls LLM Access
-
-`Permissions.allowed_http_hosts` in `service.json` governs what the agent component can call over HTTP:
-
-```json
-{
-  "permissions": {
-    "allowed_http_hosts": { "only": ["api.anthropic.com"] }
-  }
-}
-```
-
-This is enforced in `configure_linker()` at `packages/engine/src/worlds/instance.rs:350-355`. If `AllowedHostPermission::None`, `wasi:http` is not linked into the component's sandbox — HTTP calls trap. If `Only(["api.anthropic.com"])`, the check is currently a coarse gate (the FIXME on line 352 notes that per-host allowlisting requires WAT-level inspection). For MVP, `All` or `Only` enables HTTP; `None` disables it entirely.
-
-### Component Fuel and Time Limits
-
-An agent making 10 LLM API calls (each 5-10 seconds) may need 50-100 seconds of wall time. The default `Workflow::DEFAULT_TIME_LIMIT_SECONDS` is `u64::MAX` — no limit unless explicitly set. The `fuel_limit` is `Workflow::DEFAULT_FUEL_LIMIT = u64::MAX`. For agent components, the service.json `time_limit_seconds` should be explicitly set (e.g., 120-300 seconds) to prevent runaway loops.
-
-## Recommended Build Order
-
-The correct build order follows the dependency chain:
-
-1. **rig-wasi fork** — The foundational dependency. Apply the ~300-500 line patches (reqwest optional, tokio::rt dropped, cfg unification). Verify it compiles for `wasm32-wasip2`. No WAVS changes needed.
-
-2. **packages/wavs-rig** — The bridge library. Implement the four bridges (WasiHttpClient, built-in tools, run_agent shim, WavsMemory). Compile target: `wasm32-wasip2`. Depends on: rig-wasi fork.
-
-3. **examples/components/agent-defi-monitor** — The example component. Demonstrates the full loop: trigger → WavsAgent::build → prompt → rig agent loop → tool calls → WasmResponse. Depends on: wavs-rig, example-helpers (existing). Build with `just wasi-build-native agent-defi-monitor`.
-
-4. **Workspace Cargo.toml** — Add the two new workspace members after both crates exist and compile.
-
-5. **End-to-end test** — Deploy the agent component via existing `dev-tool deploy-service`, send a trigger, observe LLM reasoning in the activity feed logs.
-
-### Dependencies Between Steps
-
-```
-rig-wasi fork
-    │
-    ▼
-packages/wavs-rig (rlib, wasm32-wasip2)
-    │
-    ▼
-examples/components/agent-defi-monitor (cdylib, wasm32-wasip2)
-    │
-    ▼
-service.json (AllowedHostPermission: Only([LLM provider URL]))
-    │
-    ▼
-WAVS node execution (no node changes needed)
-```
-
-Steps 1-3 have strict ordering. Step 5 can only run after all prior steps succeed.
-
-## Modified vs New Components Summary
-
-### New Files
-
-| File | Type | Purpose |
-|------|------|---------|
-| `packages/wavs-rig/Cargo.toml` | New | Crate manifest |
-| `packages/wavs-rig/src/lib.rs` | New | Public API surface |
-| `packages/wavs-rig/src/agent.rs` | New | `WavsAgent` trait, `AgentConfig`, `run_agent()` |
-| `packages/wavs-rig/src/http.rs` | New | `WasiHttpClient: impl HttpClientExt` |
-| `packages/wavs-rig/src/memory.rs` | New | `WavsMemory` KV-backed history |
-| `packages/wavs-rig/src/tools/mod.rs` | New | Tool module root |
-| `packages/wavs-rig/src/tools/kv.rs` | New | `KvGetTool`, `KvSetTool` |
-| `packages/wavs-rig/src/tools/http.rs` | New | `HttpFetchTool` |
-| `packages/wavs-rig/src/tools/evm.rs` | New | `EvmQueryTool` |
-| `packages/wavs-rig/src/tools/cosmos.rs` | New | `CosmosQueryTool` |
-| `packages/wavs-rig/src/tools/log.rs` | New | `LogTool` |
-| `examples/components/agent-defi-monitor/Cargo.toml` | New | Example component manifest |
-| `examples/components/agent-defi-monitor/src/lib.rs` | New | ~30 lines of agent domain logic |
-| `rig-wasi/` (fork) | New repo or git dep | Patched rig-core for wasip2 |
-
-### Modified Files
-
-| File | Change | Why |
-|------|--------|-----|
-| `WAVS/Cargo.toml` | Add `packages/wavs-rig` and `examples/components/agent-defi-monitor` to `[workspace.members]` | Register new crates |
-
-**All other existing files are unchanged for MVP.** The engine, dispatcher, aggregator, submission, trigger manager, WIT definitions, and Tauri app require no modifications.
+| Boundary | Communication | v3.0 Impact |
+|----------|---------------|-------------|
+| Dispatcher to EngineManager | Crossbeam channels (`EngineCommand` / `DispatcherCommand`) | None — same channel, same variants |
+| EngineManager to WasmEngine | Direct async method calls | New `execute_operator_step()` method; existing `execute_operator_component()` preserved |
+| WasmEngine to OperatorHostComponent | Wasmtime `Store` data | `OperatorHostComponent` gains `Arc<WasmEngine>`, `Services`, `allowed_service_calls`, depth counter |
+| OperatorHostComponent to WasmEngine (call-service) | Re-entrant async call within same task | New re-entrant path; must be through `Arc` not `&mut` |
+| Operator component to host | WIT interface | `step-result` variant added; `call-service` host fn added |
+| `Permissions` / service.json | Serde deserialization | `allowed_service_calls` field added; default `None` preserves backward compat |
 
 ---
 
 ## Sources
 
-All findings from direct source inspection (HIGH confidence):
-
-- `/workspace/WAVS/packages/engine/src/worlds/instance.rs` — `configure_linker()`, `InstanceDepsBuilder::build()`, permission enforcement
-- `/workspace/WAVS/packages/engine/src/bindings/operator/host.rs` — all host function implementations
-- `/workspace/WAVS/packages/engine/src/worlds/operator/execute.rs` — component invocation, timeout handling
-- `/workspace/WAVS/packages/engine/src/worlds/operator/component.rs` — `OperatorHostComponent` with all WASI contexts
-- `/workspace/WAVS/packages/engine/src/common/base_engine.rs` — component loading, fuel/time limit defaults
-- `/workspace/WAVS/packages/types/src/service.rs` — `AllowedHostPermission`, `Component`, `Workflow::DEFAULT_FUEL_LIMIT`
-- `/workspace/WAVS/wit-definitions/operator/wit/operator.wit` — WIT world surface, all host imports
-- `/workspace/WAVS/packages/wasi-utils/src/http.rs` — existing HTTP helper pattern (`wstd::http::Client`)
-- `/workspace/WAVS/examples/components/_helpers/src/bindings/world.rs` — WIT bindings generation pattern
-- `/workspace/WAVS/examples/components/_helpers/src/trigger.rs` — trigger decode/encode pattern
-- `/workspace/WAVS/examples/components/kv-store/src/lib.rs` — reference component structure
-- `/workspace/WAVS/examples/components/kv-store/Cargo.toml` — reference component manifest
-- `/workspace/WAVS/Cargo.toml` — workspace structure, existing deps
-- `/workspace/WAVS_AGENT_IMPROVEMENTS.md` — detailed architecture spec for all four bridges, rig fork analysis, sequencing
+- Direct inspection: `packages/wavs/src/dispatcher.rs` (lines 1–460)
+- Direct inspection: `packages/wavs/src/subsystems/engine.rs` (full)
+- Direct inspection: `packages/engine/src/worlds/operator/execute.rs` (full)
+- Direct inspection: `packages/engine/src/worlds/operator/component.rs` (full)
+- Direct inspection: `packages/engine/src/worlds/instance.rs` (lines 1–260)
+- Direct inspection: `packages/wavs/src/subsystems/engine/wasm_engine.rs` (lines 1–340)
+- Direct inspection: `wit-definitions/operator/wit/operator.wit` (full)
+- Direct inspection: `packages/types/src/service.rs` (lines 600–700, Permissions, AllowedHostPermission)
+- Direct inspection: `.planning/PROJECT.md` (milestone context and requirements)
 
 ---
-*Architecture research for: WAVS v2.0 — rig-core Agent Runtime Integration*
+*Architecture research for: WAVS v3.0 — Agent Continuation and Service-to-Service RPC*
 *Researched: 2026-04-20*

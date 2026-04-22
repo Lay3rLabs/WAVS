@@ -1,176 +1,235 @@
 # Pitfalls Research
 
-**Domain:** rig-core integration into WAVS WASI sandbox (v2.0 Agent Runtime)
+**Domain:** Agent continuation mode and synchronous service-to-service RPC in WASI/Wasmtime runtime (v3.0)
 **Researched:** 2026-04-20
-**Confidence:** HIGH — based on direct codebase inspection, rig-core source review, and verified ecosystem findings
+**Confidence:** HIGH — based on direct codebase inspection of engine, dispatcher, KV store, and WIT interface code, plus verified Wasmtime embedding API behavior
+
+---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Unconditional tokio::rt Feature Causes Linker Errors in WASI Target
+### Pitfall 1: Continuation Loop Runs Inside a Single Wasmtime Invocation — Re-instantiation Is Required, Not Resume
 
 **What goes wrong:**
-rig-core's default feature set enables `tokio/rt` (the Tokio thread-based runtime). The `wasm32-wasip2` target has no OS thread model and Wasmtime provides no Tokio runtime. Linking fails with `__wasi_thread_spawn` or similar unresolved symbol errors at WASM component link time, not at `cargo build`. The error is not a Rust compile error — it surfaces only when `wasm-tools component new` or `cargo component build` assembles the binary, making it look like a toolchain issue rather than a dependency problem.
+Developers assume agent continuation means the component is "paused and resumed" — that the WASM execution stack is preserved across steps. It is not. Every WAVS operator execution (`execute_operator_component`) creates a fresh Wasmtime `Store`, instantiates a new component, calls `call_run`, and then discards the store. There is no mechanism to serialize and restore a live WASM stack. Continuation must be implemented by re-invoking the component from scratch, passing the persisted state as input, not by suspending execution mid-function.
 
 **Why it happens:**
-Developers assume that because `cargo build --target wasm32-wasip2` succeeds, the component is usable. The actual WASI component assembly step runs the linker separately, which is when thread-related symbols are resolved. rig-core pulls in `tokio` with the `rt` feature unconditionally because its async trait bounds require a Tokio executor. The fork must patch this before any integration work can be tested end-to-end.
+The word "continuation" in agent frameworks usually implies coroutine-style suspension (async generators, delimited continuations). In WASM component model p2, the component model has no stack suspension primitive. WASI p3's async streams add this, but WAVS is on p2. Developers who come from Python/asyncio or Rust async backgrounds expect `Continue` to mean "resume from where I left off." In this runtime it means "re-invoke with the same persistent state."
 
 **How to avoid:**
-In the rig-core fork, gate `tokio/rt` behind a non-default feature like `tokio-rt`. Add `#[cfg(not(target_arch = "wasm32"))]` guards on any `tokio::spawn` or `Runtime::new()` calls. The WAVS sandbox uses `wstd::runtime::block_on` as the only executor — no Tokio runtime is created inside the component. Confirm the fork compiles and produces a valid component with `cargo component build --target wasm32-wasip2` before touching any rig API surface.
+The WIT return type for continuation must be a discriminated union — `Continue { state: list<u8> }` / `Done { result: wasm-response }`. The engine re-invocation loop reads the `state` blob from the previous invocation's return value and passes it back as the next invocation's trigger input. The component never preserves execution state; it only serializes application-level state. Design the state format to be self-describing (include a version field and a step counter) so the component can reconstruct its progress from scratch on each entry.
 
 **Warning signs:**
-- `cargo build --target wasm32-wasip2` succeeds but `cargo component build` fails with linker errors
-- Any mention of `__wasi_thread_spawn`, `pthread`, or `mmap` in link errors from the WASI component
-- `wasm-tools validate` passes the raw `.wasm` but `wasm-tools component new` fails
+- Developer writes code that assumes local variables persist across `Continue` returns — this will always produce a reset state
+- Component tries to use `wstd::io` or file system to "pause" across invocations — the file system is preopen-scoped per execution; a new store does not inherit open file handles
+- Tests pass in a loop on the host side but fail when the engine re-invokes with a real new Wasmtime store
 
 **Phase to address:**
-Phase 1 (rig-core fork) — this is the first blocker. Nothing downstream can be verified until this is resolved.
+Phase 1 (WIT interface + engine re-invocation loop) — the fundamental execution model must be clear before any state serialization work begins.
 
 ---
 
-### Pitfall 2: Nested `block_on` Panics — rig Agent Loop Inside Existing Executor
+### Pitfall 2: Multi-Operator Divergence — LLM Temperature Breaks Consensus on Continuation Steps
 
 **What goes wrong:**
-Existing WAVS components call `wstd::runtime::block_on(async { ... })` as their top-level async entry point. If the rig agent loop internally calls `block_on` a second time (e.g., to drive an inner async request), the program panics with "cannot call `block_on` from within an async context" or produces undefined behavior in the wstd single-threaded executor. This is WASM-specific: unlike Tokio where `block_in_place` or `spawn_blocking` provide escape hatches, wstd has no such mechanism. The nested call starves the outer executor.
+In multi-operator deployments, all operators independently execute the same component. If the agent component uses an LLM call at any continuation step, each operator gets a different LLM response (temperature > 0). Operator A returns `Continue { state: A_state }` and operator B returns `Continue { state: B_state }`. The aggregator collects these, but `A_state != B_state`. The existing quorum logic compares `SubmissionRequest` payloads — if they differ, quorum is never reached and the workflow stalls permanently.
 
 **Why it happens:**
-rig's `Agent::prompt()` method is `async fn` throughout. When a developer wraps the rig agent call in a closure inside `block_on`, they are calling async code from inside an async context — correct. But if any rig-internal code (e.g., retry logic, tool dispatch, provider client internals) calls `block_on` recursively, the single-threaded WASI executor deadlocks or panics. The rig Cloudflare Worker compatibility feature (PR #175) added synchronous wrappers for this exact reason in a different constrained environment.
+The existing consensus model is designed for deterministic computation — each operator runs the same WASM, processes the same on-chain input, and should produce the same output. LLM inference is non-deterministic by design. The mismatch is architectural: consensus was built for "compute" not "reason." Developers who worked on single-operator deployments do not notice this until they test multi-operator.
 
 **How to avoid:**
-The entire agent execution — from trigger receipt through tool calls to final LLM response — must run inside a single `block_on` at the component entry point. The rig fork must ensure that no internal code path calls a blocking executor. Search the forked rig-core for any use of `tokio::runtime::Handle::current().block_on(...)`, `futures::executor::block_on(...)`, or `wstd::runtime::block_on(...)` in non-entry-point positions. The integration crate's async shim must use `wstd` primitives only, never create inner executors.
+Two approaches, one must be chosen explicitly:
+
+1. **Designate a lead operator for reasoning steps.** One operator does the LLM call; its `Continue` state is used as the canonical next state; other operators verify the state is valid (schema check, not LLM re-inference). This breaks the current symmetric execution model and requires protocol changes.
+2. **Force temperature=0 for all continuation LLM calls.** Deterministic LLM output allows quorum to reach agreement. Most providers support this. Document it as a requirement for multi-operator agent services. Validate by running the same prompt twice with temp=0 and confirming identical outputs for the specific model/provider.
+
+Option 2 is far simpler. Option 1 is needed if the agent requires creative reasoning. Default to option 2 and document the constraint clearly.
 
 **Warning signs:**
-- Component panics with "already in async context" or deadlocks indefinitely on first LLM call
-- Removing the outer `block_on` and making the entry point a plain `async fn` fixes the panic — this confirms nested `block_on` is the cause
-- Wasmtime engine reports `Trap::Interrupt` but fuel is not exhausted — the component is stuck, not out of budget
+- Multi-operator deployment stalls on the first continuation step; single-operator works fine
+- Quorum queue (keyed by `(EventId, SubmitAction)`) shows entries from all operators but no quorum is reached — payloads differ
+- Log inspection shows different LLM responses across operators for the same trigger
 
 **Phase to address:**
-Phase 1 (rig-core fork) — validate with a minimal async probe before building the HTTP bridge.
+Phase 1 (engine re-invocation loop) — the consensus strategy for continuation must be chosen before any multi-step state is persisted, because state format is not separable from the consensus approach.
 
 ---
 
-### Pitfall 3: reqwest HTTP Transport Not Available in WASI; `wasi:http` Bridge Required
+### Pitfall 3: Synchronous `call-service` Host Function Blocks the Tokio Runtime Thread
 
 **What goes wrong:**
-rig-core's HTTP client trait (`HttpClientExt`) defaults to a reqwest backend. reqwest requires platform socket APIs (`connect`, `send`, `recv`) that do not exist in WASI p2. Compiling with the reqwest feature enabled causes linker errors on WASI even after the tokio patch. Even the reqwest WASM browser target (`wasm32-unknown-unknown`) cannot be used — that target uses browser `fetch`, not `wasi:http/outgoing-handler`. The two WASM targets are not interchangeable.
+The `call-service` host function is invoked synchronously from inside WASM (the component calls it as a regular WIT import). On the host side, executing a service call requires dispatching to the engine, running another Wasmtime component, and returning the result — all async operations. If the host function implementation calls `tokio::runtime::Handle::current().block_on(...)` to bridge sync-to-async, it blocks the Tokio worker thread currently executing the outer component. Under any load, this deadlocks: the outer engine is occupying a thread trying to call the inner engine, which needs a thread from the same pool.
 
 **Why it happens:**
-Developers see "reqwest has WASM support" and assume WASI p2 is covered. The reqwest WASM support is for `wasm32-unknown-unknown` (browser JS environment) only — it uses `wasm-bindgen` to call `window.fetch`. WASI p2 has no JavaScript bridge. The correct transport is the `wasi:http/outgoing-handler` host function, which Wasmtime provides via `wasmtime-wasi-http`. WAVS already links this host function (`configure_linker` in `packages/engine/src/worlds/instance.rs` enables HTTP based on `AllowedHostPermission`).
+The WAVS engine runs component execution as async tasks: `ctx.rt.spawn(async move { ... })` in `engine.rs`. The Tokio runtime has a fixed thread pool. A blocking `block_on` inside an async task blocks that thread. If all threads are blocked waiting on each other, the runtime stalls. This is the classic sync-inside-async deadlock in Rust, amplified by WASM boundaries hiding the async context.
 
 **How to avoid:**
-In the rig-core fork, gate reqwest behind a `#[cfg(not(target_arch = "wasm32"))]` feature and add a `WasiHttpTransport` implementation behind `#[cfg(target_arch = "wasm32")]`. The `wavs-rig` integration crate must implement rig's HTTP transport trait using the WIT-generated `wasi::http::outgoing_handler::handle()` bindings, not any OS socket API. The existing `wasmtime_wasi_http::WasiHttpCtx` host implementation in WAVS can be used for verification — if the component can call `wasi:http` successfully, the bridge is wired correctly.
+The `call-service` host function must be registered via Wasmtime's `func_wrap_async` (async host function variant), not `func_wrap` (sync). In async mode, Wasmtime suspends the component via WASM epoch yields, allowing the Tokio runtime to execute the inner service call on a separate task. The outer component resumes when the inner call completes. This requires `Config::async_support(true)` which is already set in WAVS (async component execution is used throughout). Use `LinkerInstance::func_wrap_async` for the `call-service` host function implementation.
 
 **Warning signs:**
-- Linker error mentioning `__wasi_sock_connect` or TLS symbol from `rustls/ring` — reqwest native is still linked
-- LLM API calls succeed in Wasmtime simulation but fail when deployed on a WAVS node with `AllowedHostPermission::None` — the HTTP permission policy is not being respected
-- The test component uses `reqwest::Client::new()` rather than the WIT-generated outgoing-handler — this will compile locally but fail at WASI validation
+- WAVS node stops processing all requests after the first `call-service` invocation — the runtime is deadlocked
+- `jstack`/`tokio-console` shows all worker threads blocked in `block_on` waiting for another async task
+- Reducing the Tokio thread pool to 1 (via `--worker-threads 1`) reliably deadlocks on the first inter-service call — this is a fast way to reproduce in tests
 
 **Phase to address:**
-Phase 2 (wavs-rig integration crate, HTTP transport bridge) — after fork compiles, before any real LLM calls.
+Phase 2 (call-service host function) — get the async/sync boundary right before any service graph is tested.
 
 ---
 
-### Pitfall 4: Fork Divergence — Upstream rig Releases Break the Fork Silently
+### Pitfall 4: KV Store Scoped to Service ID — Continuation State and RPC Results Are Isolated by Wrong Boundary
 
 **What goes wrong:**
-The rig-core fork starts as a ~300-500 line diff. Over time, upstream rig ships new LLM providers, breaking API changes (e.g., rig v0.31 changed `CompletionResponse` to add `message_id`, removed `AgentBuilderSimple`, changed `StreamingChat` traits), and dependency bumps. The fork does not receive these changes automatically. Developer agents using the fork miss new providers. Worse: if the fork's Cargo.toml specifies a version range that overlaps with the upstream crate name, `cargo update` may silently switch between the fork and upstream depending on lock file state.
+The existing `KeyValueCtx` is namespaced by `service.id().to_string()` (see `wasm_engine.rs` line 161). All KV reads and writes inside a component are prefixed with this service ID. When service A calls service B via `call-service`, service B's execution context uses service B's ID — correct. But if service A tries to read state that service B wrote (expecting a shared KV namespace), it reads nothing, because A's KV namespace is `service_a:` and B's is `service_b:`. Developers who expect inter-service shared state via KV will be silently wrong.
 
 **Why it happens:**
-`[patch]` entries in Cargo.toml override the upstream crate only in the workspace that declares the patch. If a downstream demo project adds rig as a dependency without inheriting the workspace patch, it pulls unpatched upstream rig. Cargo does not warn about this. The lock file difference is the only signal, and only if the developer compares lock files.
+The KV isolation-by-service is a security and isolation feature, not a bug. But when building service-to-service workflows, developers often want to share intermediate results without encoding everything in the RPC response payload. The WAVS KV model does not support cross-service reads. Additionally, the continuation state stored by a component is keyed within its own service namespace — so re-invocations of service A always see service A's state, even if called by service B.
 
 **How to avoid:**
-Publish the fork to a private or public git repository and pin to an explicit commit SHA in `Cargo.toml` (`git = "...", rev = "abc1234"`). Document the upstream rig version the fork is based on in a `FORK_BASIS.md` at the fork root. Create a tracking issue for upstream rig WASM support (the stated goal is to upstream these patches). Before each WAVS release, diff the fork against the corresponding upstream tag and selectively backport provider additions. Never use `version = "..."` for the fork dependency — always `git + rev`.
+Make the data model explicit in documentation and design: `call-service` is synchronous RPC, not shared memory. All inter-service data must be passed through the return value of `call-service`, not via KV side-channels. The continuation state for service A is stored under service A's KV namespace, keyed by the continuation chain ID (e.g., the triggering event ID). When designing the state format, never assume another service's KV is readable.
 
 **Warning signs:**
-- `cargo tree -p rig-core` shows two different rig versions in the dependency graph — upstream leaked in through a transitive dep
-- A new LLM provider available in upstream rig cannot be used without manual backport
-- CI passes locally (with workspace `[patch]`) but fails in a demo project that does not inherit the workspace
+- Service A reads a key immediately after calling service B and expects to see B's write — returns `None`
+- Developer adds a `"shared:"` bucket prefix hoping to escape the namespace — the prefix is still applied on top of the service ID; there is no escape
+- Tests that run A and B in the same Wasmtime store (e.g., a unit test with a shared `WavsDb`) pass but deployed multi-service tests fail — in deployment, each service has its own KV context
 
 **Phase to address:**
-Phase 1 (fork setup) — establish the pinning strategy before any integration code is written.
+Phase 2 (call-service host function) — establish the data-passing contract before any multi-service workflow is built.
 
 ---
 
-### Pitfall 5: KV State Serialization Format Lock-In — History Grows Unboundedly
+### Pitfall 5: Continuation State Grows Across Steps — No Size Cap Means Eventual Payload Rejection
 
 **What goes wrong:**
-Agent conversation history is serialized to JSON and stored in the WAVS KV store (one key per service instance, e.g., `"conversation:{service_id}"`). As the agent runs over many invocations, the history array grows without bound. At some invocation, the deserialized history exceeds the LLM's context window, causing an `invalid_request_error: context_length_exceeded` from the provider API. The agent cannot recover because it cannot write new state if history read + LLM call fails mid-invocation. The KV store key is now "poisoned" — every future invocation fails immediately.
+Each continuation step serializes all agent state (conversation history + tool results + step metadata) into the `Continue { state: list<u8> }` return value. The next invocation receives this blob as input. If each step appends to the state without trimming, the state blob grows with each step. At some point it exceeds `max_wasm_payload_size` (4 KB cap at the aggregator, `config.max_wasm_payload_size` in dispatcher). The engine rejects the continuation response with `ResponseSizeExceeded`. The agent is stuck: it cannot continue because it cannot serialize its state, and it cannot finish because it has not yet reached `Done`.
 
 **Why it happens:**
-Developers implement history persistence as a simple append-only JSON array. There is no eviction policy, no token count check, and no trimming. The first 20-50 invocations work fine, then failure appears seemingly at random. Because WAVS components are stateless between invocations, there is no in-memory recovery path — the bad state lives in the KV store indefinitely.
+The existing 4 KB cap (see `WasmResponseSizeError` and `validate_size` in `execute.rs`) was designed for final submission payloads, not intermediate continuation state. The assumption was that component outputs are small on-chain data (hashes, decisions, small structs). Agent conversation history + tool results can easily reach 50-200 KB after several reasoning steps. The cap was not revisited for the continuation use case.
 
 **How to avoid:**
-The KV memory module in `wavs-rig` must enforce a token budget at write time, not read time. Before appending a new exchange, measure the token count of the existing history plus the new messages. If the sum exceeds a configurable `max_history_tokens` threshold (default: 75% of the model's context window), trim the oldest messages from the front of the array until the budget is met. Store a `version` field in the serialized state so future format changes can migrate gracefully. Test with a history that is exactly at the token limit, exactly one token over, and exactly two exchanges over.
+Two-part mitigation:
+
+1. **KV-backed continuation state.** Do not pass the full state through the WIT return value. Instead, the component writes its state to KV (which has no size enforcement beyond available storage), then returns `Continue { state: <kv_key: bytes> }` — only the KV key, not the state blob itself. The engine re-invocation passes the KV key as input; the next step reads state from KV. The `Continue` payload stays tiny (< 64 bytes).
+
+2. **Token budget enforcement at write time.** Apply the same token-budget trim logic from v2.0 (conversation history trimming) at each continuation step. The state that gets written to KV must not grow without bound.
 
 **Warning signs:**
-- Agent works correctly for the first N invocations, then always returns an error containing "context_length_exceeded" or "max_tokens"
-- The KV key for the service still has the old (failing) value after a deployment — clear the KV namespace to confirm the fix is in the write path, not read
-- History serialized to KV exceeds 1 MB for a single service instance
+- Agent works for 2-3 steps then fails with `ResponseSizeExceeded` — the state crossed the 4 KB threshold
+- Each continuation adds conversation history directly to the WIT return value rather than to KV
+- The `Continue` state serialization does not include a size check before returning
 
 **Phase to address:**
-Phase 3 (KV-backed conversation memory) — token budget management is not optional for production use.
+Phase 1 (WIT interface design) — the decision to use KV-backed state vs. inline state must be made before the WIT interface is finalized. Changing the interface later breaks all existing components.
 
 ---
 
-### Pitfall 6: Fuel Exhaustion vs. Epoch Interruption — Agent Loop Has No Budget for Long Reasoning
+### Pitfall 6: Infinite Continuation Loop — No Step Limit Means Runaway Agent Burns Resources
 
 **What goes wrong:**
-WAVS uses both fuel metering (instruction count budget) and epoch interruption (wall-clock timeout) in combination, as visible in `packages/engine/src/worlds/instance.rs` and `packages/engine/src/worlds/operator/execute.rs`. An LLM agent with multi-step tool use (e.g., 5 LLM calls + 5 tool executions) consumes far more WASI instructions than a simple echo component. If the default fuel limit is configured for simple services, the agent runs out of fuel after 1-2 LLM round trips and returns `EngineError::OutOfFuel`. This is not a timeout — refactoring to be faster does not help. The fuel budget must be explicitly raised for agent workflows.
+An agent component that returns `Continue` unconditionally (e.g., due to a bug in its termination condition, or an LLM that never decides it is "done") re-invokes indefinitely. Each step consumes fuel, epoch time, and KV writes. The engine has no visibility into how many continuation steps a given agent has taken. The operator node processes the agent forever. With multiple services, a runaway agent starves other service executions by holding Tokio tasks.
 
 **Why it happens:**
-The fuel setting in WAVS operator configuration is a single value applied to all service types. There is no per-service-type fuel policy. Developers see `OutOfFuel` and assume the component is in an infinite loop; they add timeout instrumentation that reveals the component finished quickly — confusing because `OutOfFuel` is a fuel trap, not a time trap. The existing error types `EngineError::OutOfFuel` and `EngineError::OutOfTime` are correct, but the distinction is not obvious to developers new to the engine.
+The termination condition is in the component logic, which the engine trusts. The existing epoch timeout and fuel limit apply per step (each new invocation gets a fresh fuel budget and a fresh timeout). They do not apply across all steps of a continuation chain. An agent that returns `Continue` immediately (before doing any real work) can cycle through hundreds of steps within seconds, each step trivially completing within fuel/epoch limits.
 
 **How to avoid:**
-Document that agent components require a higher fuel budget than simple query components. The `service.json` or operator config for an agent service should set fuel to at least 10x the default (exact multiple depends on the number of tool call rounds). Add a log line at the start of each agent invocation showing current fuel remaining. The `InstanceDeps.store.get_fuel()` method is available at the host side — expose remaining fuel in the activity feed for agent services so operators can tune the limit empirically.
+The engine's re-invocation loop must enforce a maximum step count per continuation chain. Store `(event_id, step_count)` in the engine's tracking state. If `step_count > MAX_CONTINUATION_STEPS` (default: 10, configurable per service in service.json), terminate the chain and emit an error. This is analogous to how the existing `QuorumQueue` TTL prevents stale aggregator queues from growing forever. Add `max_continuation_steps` to the service workflow config alongside `fuel_limit` and `time_limit_seconds`.
 
 **Warning signs:**
-- Agent returns `OutOfFuel` on first real LLM call, not after many rounds — the fuel limit is too low for even a single HTTP request through `wasi:http`
-- Increasing the epoch timeout does not change the error — this is fuel, not wall-clock time
-- Simple echo components work fine but any HTTP-making component fails with `OutOfFuel`
+- Activity feed shows a service producing events continuously with no submission
+- KV write count for a service ID grows unboundedly within a short time window
+- CPU usage on the WAVS node spikes after deploying an agent service with a buggy termination condition
 
 **Phase to address:**
-Phase 2 (wavs-rig integration crate) — validate fuel budget requirements before example agent is built.
+Phase 1 (engine re-invocation loop) — the step limit is a safety invariant. It must be built into the loop, not bolted on after.
 
 ---
 
-### Pitfall 7: AllowedHostPermission Not Validated Before Agent Deployment — Silent Network Failures
+### Pitfall 7: Re-instantiation Cost Per Continuation Step — LRU Cache Eviction Breaks Agent Latency
 
 **What goes wrong:**
-WAVS enforces network policy via `AllowedHostPermission` (`All` / `Only` / `None`) at the Wasmtime linker level. A component deployed with `AllowedHostPermission::None` attempting to call `wasi:http/outgoing-handler` traps immediately. The error is not surfaced as an LLM API error — it is a WASM trap (`EngineError::ComponentError`) that looks identical to any other component crash. The agent error message contains no hint that the network policy blocked the call.
+Each continuation step calls `load_component_from_source`, which checks the LRU cache (default size: 20 components). If multiple active agent services cycle through continuation steps concurrently, they can evict each other from the cache. Each eviction forces a re-parse and re-compile of the WASM component (expensive — hundreds of milliseconds for a complex component). A single agent with 10 continuation steps may tolerate this; 10 concurrent agents thrashing the LRU cannot. The symptom is unpredictable latency spikes with no error, invisible from the activity feed.
 
 **Why it happens:**
-Developers configure `AllowedHostPermission` correctly in the service definition but forget to update it when changing the LLM provider endpoint (e.g., from OpenAI to a private Ollama instance). An Ollama instance running at `http://localhost:11434` is not reachable from a sandboxed component even with `AllowedHostPermission::All` — the sandbox has no loopback to the host machine. The permission system enforces host allowlists, but the developer mental model assumes it works like a network firewall rule, not a complete isolation boundary.
+The LRU cache is designed for the steady-state where a set of services runs periodically. For continuation mode, the same component re-executes sequentially — but if the LRU has been evicted by other services between steps, it must recompile. The `wasm_lru_size = 20` default was set for simple services, not for agents that chain 10+ re-invocations in rapid succession.
 
 **How to avoid:**
-The `wavs-rig` integration crate should validate the HTTP permission configuration at startup (first agent invocation) and return a structured error if `AllowedHostPermission::None` is set. Add an example agent `service.json` that shows the correct `allowed_hosts` configuration for each supported LLM provider (OpenAI, Anthropic, Groq, OpenRouter). Document clearly that Ollama cannot be used from inside a WASI component unless the WAVS node proxies requests to the local Ollama endpoint and exposes it as an allowed external URL.
+For agent services in continuation mode, the engine should pin the component in memory for the duration of the continuation chain. This can be implemented with a simple `Arc<Component>` ref held in the continuation-chain tracking state (keyed by event ID). The component is not evicted from the LRU while a continuation chain is active. When the chain reaches `Done` or hits the step limit, the pin is released. This adds minimal memory overhead (a WASM component reference, not a full store).
 
 **Warning signs:**
-- `EngineError::ComponentError` with no inner LLM error message — the HTTP call never reached the network
-- The agent works in simulation (`wavs simulate`) but fails when deployed — simulation may bypass permission checks
-- Changing `AllowedHostPermission` from `None` to `All` in the service definition fixes the error
+- Continuation steps 1-5 are fast; steps 6+ are slow with no code difference — cache eviction between steps
+- `just start-jaeger` traces show `load_component_from_source` taking > 200 ms on later continuation steps when it was < 5 ms earlier
+- Increasing `wasm_lru_size` in the config fixes the latency spike
 
 **Phase to address:**
-Phase 3 (example agent component) — validate end-to-end with the correct network policy before any documentation.
+Phase 1 (engine re-invocation loop) — pin the component ref when entering the loop; unpin on exit.
 
 ---
 
-### Pitfall 8: cfg Flag Inconsistencies in rig-core Fork — Silent Dead Code on WASI Target
+### Pitfall 8: `call-service` Circular Dependency — Service A Calls Service B Calls Service A
 
 **What goes wrong:**
-rig-core's existing WASM compatibility traits (`WasmCompatSend`, `WasmCompatSync`) gate on `#[cfg(target_arch = "wasm32")]`. The `wasm32-wasip2` target reports `target_arch = "wasm32"` AND `target_os = "wasi"`. Some rig internal conditions check only `target_arch`, others check `target_family = "wasm"`, and some check `not(target_os = "wasi")`. On the fork, patches applied for WASI p2 may be gated incorrectly: a patch guarded by `#[cfg(target_arch = "wasm32")]` also activates on browser WASM targets, potentially breaking those. A patch guarded by `#[cfg(target_os = "wasi")]` does not activate on the `wasm32-wasip1` target (which reports `target_os = "wasi"` differently across Rust versions). The upstream rig Cloudflare Worker feature flag does not distinguish between `wasm32-wasip2` and `wasm32-unknown-unknown`.
+Service A's `AllowedServiceCalls` permits calling service B. Service B's `AllowedServiceCalls` permits calling service A. A trigger on service A causes it to call B; B calls A; A calls B again; this cycles indefinitely. Unlike the continuation step limit (which is per-chain), this is a cycle across two different services with no natural termination. Neither service exceeds its step limit — they alternate. The cycle consumes Tokio tasks and KV writes continuously.
 
 **Why it happens:**
-The Rust target triple system is not intuitive for WASM: `wasm32-unknown-unknown` (browser), `wasm32-wasip1` (WASI preview 1), and `wasm32-wasip2` (WASI preview 2) all have `target_arch = "wasm32"` but different `target_os`. Most library authors only test browser WASM. The recommended cfg for WASI p2 is `#[cfg(all(target_arch = "wasm32", target_os = "wasi"))]`, but the narrower check `#[cfg(all(target_arch = "wasm32", not(target_family = "wasm")))]` silently activates no code on any WASM target.
+`AllowedServiceCalls` is a whitelist, not a DAG. The permission system says "A may call B" but does not reason about whether a call graph is acyclic. This is the same class of problem as import cycles in module systems — individually valid imports that create a dependency cycle.
 
 **How to avoid:**
-Establish a single canonical cfg alias at the fork root: `#[cfg(wavs_wasi_target)]` using `build.rs` to set `cargo:rustc-cfg=wavs_wasi_target` when `CARGO_CFG_TARGET_ARCH == "wasm32" && CARGO_CFG_TARGET_OS == "wasi"`. Use this alias exclusively in the fork's platform-shim code. This avoids per-file inconsistencies and is testable. Run `cargo check --target wasm32-unknown-unknown` on the fork to verify browser WASM compatibility is not broken by the WASI patches.
+The engine must track a call chain (list of service IDs currently in the call stack) and pass it through each `call-service` invocation context. Before executing a `call-service` call, check if the target service ID is already in the call chain. If yes, reject with `CircularServiceCall` error rather than executing. This is analogous to call stack overflow detection. The call chain can be passed as a hidden engine-level parameter, not exposed to the component. Maximum call depth (default: 5) also prevents non-circular but deeply nested calls.
 
 **Warning signs:**
-- Platform-specific code in the fork does not activate on `wasm32-wasip2` despite the `#[cfg(target_arch = "wasm32")]` guard — check target_os
-- The fork compiles on `wasm32-wasip2` but produces a component that traps immediately, before any user code runs — a cfg-gated shim is activating on the wrong target
-- `cargo check --target wasm32-unknown-unknown` after applying the fork patches shows unexpected compilation failures in rig's browser-WASM path
+- Two services appear to be executing simultaneously in the activity feed, both consuming Tokio tasks, with no submission events
+- Disabling `AllowedServiceCalls` for one of the two services breaks the cycle — confirms mutual dependency
+- Tokio task count grows monotonically after deploying both services
 
 **Phase to address:**
-Phase 1 (rig-core fork) — establish the cfg alias as the first commit in the fork before any other patches.
+Phase 2 (call-service host function + permission enforcement) — cycle detection must be in the first implementation; retrofitting it later requires changing the host function signature.
+
+---
+
+### Pitfall 9: WIT Interface Versioning — Adding `Continue` Variant Breaks All Existing Operator Components
+
+**What goes wrong:**
+The current operator WIT interface returns `list<wasm-response>` from `call-run`. Adding a `Continue`/`Done` variant changes the return type to a discriminated union. This is a breaking WIT change. All existing operator components — echo, kv-store, aggregator examples, all demo AVS projects — were compiled against the old interface. They cannot be loaded by the new engine without recompilation. The engine cannot distinguish between a component compiled against the old interface and one compiled against the new interface without inspecting the component's WIT export.
+
+**Why it happens:**
+WIT does not have interface versioning in the semver sense. The package version (`wavs:operator@2.7.0`) is a semver string, but Wasmtime's component type checking is structural, not nominal. Changing the return type from `list<wasm-response>` to `variant { continue(state), done(list<wasm-response>) }` changes the exported function signature. Old components have the old signature. The linker will reject them when it attempts to instantiate against the new world.
+
+**How to avoid:**
+Two viable paths:
+
+1. **New world, new version.** Bump to `wavs:operator@3.0.0` and define `WavsContinuationWorld` with the new return type. The engine linker can attempt the new world first, then fall back to the old world for components compiled against `@2.7.0`. This maintains backward compatibility but requires the engine to maintain two linkers.
+
+2. **Additive wrapper.** Keep the `call-run` signature identical; add a separate exported function `call-run-continuation` with the new return type. The engine calls `call-run-continuation` if the component exports it; falls back to `call-run` for legacy components.
+
+Path 2 is lower risk because it requires no change to the world definition for existing components and no dual-linker complexity.
+
+**Warning signs:**
+- Engine fails to instantiate existing demo components after the WIT change with `type mismatch` from Wasmtime
+- `wasm-tools component wit` on an old component shows `@2.7.0` world; new engine expects `@3.0.0`
+- The linker creation (in `instance.rs`) fails for legacy components — this surfaces as `EngineError::Instantiate`
+
+**Phase to address:**
+Phase 1 (WIT interface design) — the versioning strategy must be decided before the interface is published. Changing it after components are deployed is a migration operation, not a patch.
+
+---
+
+### Pitfall 10: `call-service` Permission Declared by Caller — Operator Cannot Audit the Full Call Graph
+
+**What goes wrong:**
+The design says `AllowedServiceCalls` is declared by the caller in their `service.json`. This means service A declares "I am allowed to call service B." Service B's operator has no way to restrict which services are allowed to call it — any service that declares the permission can call B. An operator running service B for one AVS team finds that another AVS team's service A is calling B with arbitrary inputs, consuming B's execution budget and generating submissions that count against B's quota.
+
+**Why it happens:**
+Caller-declared permissions follow the same pattern as `AllowedHostPermission` (caller declares what it can access). This is correct for network access (the operator knows what network the service needs). For service-to-service calls, it creates an asymmetry: the callee has no say. In the existing network policy, the operator can set `AllowedHostPermission::None` to block all outbound calls. The analogous callee-side protection for `call-service` does not exist in the v3.0 design.
+
+**How to avoid:**
+Add a corresponding `AllowedCallers` field to the target service's `service.json`. An empty or absent `AllowedCallers` means the service is callable by any service in the same node (the permissive default for MVP). A non-empty `AllowedCallers` whitelist restricts who can call the service. The engine enforces this at `call-service` invocation time by checking the caller's service ID against the target's `AllowedCallers`. This is a minimal change that prevents unintended cross-AVS service calls.
+
+**Warning signs:**
+- A service receives `call-service` invocations from an unexpected caller (visible in engine logs)
+- KV writes for a service increase unexpectedly — it is being called by another service that has whitelisted it
+- The WAVS node runs services from multiple AVS teams; one team's service behavior is affected by another team's call pattern
+
+**Phase to address:**
+Phase 2 (permission enforcement) — callee-side enforcement should be in the first implementation. Adding it later is a security fix, not a feature.
 
 ---
 
@@ -178,99 +237,108 @@ Phase 1 (rig-core fork) — establish the cfg alias as the first commit in the f
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Hardcode the LLM API base URL in the integration crate | Faster initial test | Cannot switch providers or route through a proxy | Never — use a config var from the WAVS service config at runtime |
-| Use `serde_json::Value` for conversation history serialization | Simple, no schema | Format changes corrupt existing KV history; no migration path | Only for initial prototype; add a `version` field before shipping |
-| Set fuel limit to `u64::MAX` for agent services | Eliminates OutOfFuel errors during development | Infinite loop in agent reasoning exhausts the host machine | Never in production; set a high but finite limit and test the fuel trap |
-| Sequential tool calls with `block_on` inside the agent loop | Works on single-threaded WASI | rig concurrency setting of 1 is already the correct approach — this is fine | Always acceptable for MVP; concurrent tool calls are not needed |
-| `[patch]` workspace override without pinning to git rev | Faster iteration during development | Lock file drift; demo projects outside the workspace pull upstream rig | Only acceptable during active fork development; pin before any deployment |
+| Pass full continuation state inline in WIT return value (not via KV) | Simpler engine code | Hits 4 KB payload cap after a few steps; must be refactored | Never for production agents; only for stateless echo-style continuation tests |
+| No step limit on continuation chains | Faster initial implementation | Runaway agents burn resources indefinitely | Never; the step limit is a safety invariant |
+| Caller-only permission (no `AllowedCallers`) | Fewer config fields | Cross-AVS service calls are unrestricted | MVP only; add callee-side enforcement before multi-tenant deployments |
+| Synchronous host function for `call-service` via `block_on` | Easier to write than async host function | Deadlocks under any load on the shared Tokio thread pool | Never; the async host function variant is not significantly harder |
+| Temperature > 0 for continuation LLM calls in multi-operator setup | Better reasoning quality | Quorum never reached; workflow stalls permanently | Only on single-operator deployments |
+| No cycle detection in `call-service` | Simpler permission check | Circular call graphs deadlock or loop indefinitely | Never; cycle detection is O(depth) and trivial to add |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| rig `Agent::prompt()` | Calling from inside a second `block_on` | Drive the entire agent loop from a single top-level `block_on` at the WASM component entry point |
-| `wasi:http/outgoing-handler` | Using reqwest native or the browser `fetch` target | Implement rig's HTTP transport trait using WIT-generated `wasi::http` bindings |
-| KV bucket naming | Using a hardcoded bucket name like `"history"` | Namespace by service ID: `format!("agent:{service_id}")` to isolate per-service history |
-| `AllowedHostPermission` | Deploying agent with `None` permission assuming it only controls untrusted external calls | `None` blocks ALL outgoing HTTP including LLM API calls; use `All` or a specific `Only` allowlist |
-| Token budget check | Checking token count after writing to KV | Check and trim BEFORE writing; a failed LLM call after a write leaves the KV in a state with no new messages to recover from |
-| Fuel metering | Assuming fuel applies uniformly | Each `wasi:http` outgoing call consumes orders of magnitude more fuel than pure computation; calibrate with realistic LLM round trips |
-| rig fork version pinning | Using `version = "0.x"` in Cargo.toml | Use `git = "...", rev = "abc1234"` to prevent accidental upstream upgrades |
+| Engine re-invocation loop | Calling `execute_operator_component` recursively from within an async task | Spawn a new async task for each continuation step; do not nest executions in the same call chain |
+| `call-service` host function | Using `func_wrap` (sync) with `block_on` inside | Use `func_wrap_async` (Wasmtime async host function) so the outer component can yield while the inner executes |
+| Continuation state KV key naming | Using a static key like `"continuation_state"` (collides across concurrent invocations) | Key by event ID: `format!("continuation:{event_id}")` — each trigger chain gets its own namespace |
+| WIT return type for continuation | Returning `list<u8>` opaque blob and hoping the engine interprets it | Define a proper WIT discriminated variant — `Continue { state: list<u8> }` / `Done { payload: wasm-response }` |
+| Fuel budget for continuation | Using the same fuel limit as simple query components | Agent continuation steps require 10-50x more fuel per step than simple components; configure per-service |
+| LRU component cache | Letting continuation steps evict each other from the LRU cache | Pin the component `Arc` for the duration of an active continuation chain |
+| `AllowedServiceCalls` | Listing target service IDs without a corresponding `AllowedCallers` on the callee | Add `AllowedCallers` to callee `service.json` to establish bilateral permission |
+| Cross-service state | Reading a KV key from another service's namespace | All inter-service data must be passed through `call-service` return values; KV namespaces are per-service and not shared |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Unbounded conversation history in KV | Every invocation gets slower; eventually hits context limit error | Token budget with trim-from-front eviction at write time | At ~20-50 invocations for GPT-4-class models (128k context window) |
-| Deserializing full history on every invocation | Read latency grows linearly with history length | Implement sliding window: store only last N exchanges, not full history | At >100 historical messages in the KV store |
-| JSON serialization of large binary tool results | Component result payload explodes in size (hex encoding doubles size) | Apply the existing 4 KB cap from the aggregator to tool result storage in KV | Any tool result > 2 KB stored as hex in KV |
-| LLM retries without backoff inside WASI | Rapid-fire retries exhaust fuel budget before epoch timeout fires | Implement exponential backoff with a max retry count of 2-3; the epoch interruption is the outer guard | On any provider rate-limit response (HTTP 429) |
+| Re-compiling WASM between continuation steps (cache eviction) | Steps 1-N fast; later steps slow with no code change | Pin component `Arc` for the active continuation chain | When LRU has fewer slots than concurrently running agents |
+| Unbounded continuation state in KV | State grows with each step; eventually exceeds practical read size | Apply token-budget trimming at each continuation step | At ~5-10 steps for agents that accumulate full conversation history |
+| Tokio task starvation from blocking `call-service` | All services stop processing after first inter-service call | Use `func_wrap_async` for the `call-service` host function | On the first inter-service call under any concurrent load |
+| Full step re-invocation overhead for tiny decision steps | 100ms overhead per step even for a simple "check condition" step | Allow agents to batch multiple sub-steps within a single continuation step before returning `Continue` | At > 20 continuation steps where most steps are fast conditional checks |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Storing raw API keys in the agent's KV conversation history | Key visible to anyone with KV read access to the service namespace | Never log or store provider API keys in KV; read them only from WAVS config vars at invocation time |
-| Logging full LLM prompt/response at INFO level | Prompts may contain user PII or sensitive trigger data | Log at DEBUG; emit only token counts and provider name at INFO |
-| Using `AllowedHostPermission::All` for all agents without review | Agent can call arbitrary external URLs including internal network endpoints | Use `AllowedHostPermission::Only` with an explicit provider allowlist for production deployments |
-| Passing raw trigger data directly into LLM prompt without sanitization | Prompt injection via EVM event data | Treat all trigger data as untrusted; wrap in a structured prompt template that limits where trigger data appears |
+| No `AllowedCallers` enforcement on callee | Any service on the node can call any other service | Add bilateral permission: caller whitelist AND callee allowlist |
+| Continuation state contains raw trigger data unsanitized | State persisted to KV contains potentially adversarial data that gets re-fed to LLM on next step | Sanitize and structure trigger data before adding to continuation state |
+| Circular `call-service` graphs | Infinite execution loop; resource exhaustion | Cycle detection via call chain tracking; enforced at host function level |
+| Step count not persisted | Component can reset its step counter via malicious state serialization | Engine tracks step count independently; do not trust the component-reported step count |
+| `call-service` result returned directly to LLM as trusted content | A compromised callee can inject instructions into the LLM's reasoning context | Treat `call-service` responses as untrusted data; validate schema before including in LLM context |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| OutOfFuel error with no context on why | Developer cannot distinguish "fuel too low" from "infinite loop" | Surface `OutOfFuel` vs `OutOfTime` distinction in the activity feed; show fuel consumed vs budget |
-| Network permission trap looks identical to component crash | Developer spends time debugging component logic, not configuration | Add a startup validation that explicitly checks network permission and emits a structured error before the first LLM call |
-| No indication of which tool call failed in a multi-tool agent loop | Debug requires log inspection, cannot see from the activity feed | Log each tool call and result at WAVS host level before returning to the rig agent |
+| Activity feed shows no events between continuation steps | Operator cannot monitor agent progress; appears hung | Emit a `ContinuationStep` event to the activity feed at each step with step number and state summary |
+| `OutOfFuel` on continuation step N with no context on which step | Developer cannot tell if the fuel limit is too low for all steps or just step N | Surface step number and fuel consumed per step in the engine error; log it in the existing tracing spans |
+| Quorum stall from LLM non-determinism looks identical to network failure | Developer debugs the wrong thing | Surface "operators submitted different payloads" distinctly from "operators did not submit" |
+| `CircularServiceCall` error message does not show the cycle | Developer must manually inspect logs to find the loop | Include the full call chain in the error: `A -> B -> A` |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Fork compiles:** `cargo component build --target wasm32-wasip2` succeeds AND `wasm-tools validate` passes — not just `cargo build`
-- [ ] **No nested executors:** Confirm the integration crate has exactly one `block_on` call (at the WIT `run` entry point) — search for all `block_on` calls in the compiled component's source
-- [ ] **HTTP transport wired:** A minimal agent that makes one LLM API call succeeds when deployed on a WAVS node with `AllowedHostPermission::All` — not just in simulation
-- [ ] **Fuel budget validated:** Run a 5-round tool-use agent and confirm it completes without `OutOfFuel` at the configured fuel limit
-- [ ] **KV token budget enforced:** Run an agent for 100+ invocations and confirm history does not grow unboundedly; confirm the 101st invocation succeeds
-- [ ] **Fork pinned to git rev:** `cargo tree -p rig-core` shows the fork rev, not the upstream crates.io version, in all demo projects
+- [ ] **Continuation state is KV-backed:** The `Continue` WIT return value carries a KV key, not the full state blob — verify by inspecting the serialized return value size is < 64 bytes
+- [ ] **Step limit enforced at engine level:** Deploy an agent component that returns `Continue` unconditionally and confirm the engine terminates it at `MAX_CONTINUATION_STEPS` with an error event
+- [ ] **Multi-operator consensus works at temperature=0:** Run a continuation agent on a 2-operator testnet with temp=0; confirm both operators reach the same `Done` payload and quorum is achieved
+- [ ] **`call-service` uses async host function:** Confirm `func_wrap_async` (not `func_wrap`) in the linker setup for `call-service`; run 2 concurrent inter-service calls and verify neither deadlocks
+- [ ] **Cycle detection rejects A→B→A:** Deploy services A and B with mutual `AllowedServiceCalls`; trigger A and confirm `CircularServiceCall` error before infinite loop
+- [ ] **`AllowedCallers` enforcement rejects unauthorized caller:** Deploy service B with `AllowedCallers: [service_c]`; have service A attempt to call B; confirm rejection
+- [ ] **KV namespace isolation confirmed:** Have service A call service B; have A attempt to read a key written by B; confirm `None` return (isolation working correctly)
+- [ ] **LRU pin works across steps:** Run a 10-step agent while 19 other services are active (filling the LRU); confirm all steps complete at uniform latency without cache-miss spikes
+- [ ] **WIT backward compatibility:** Load a component compiled against `wavs:operator@2.7.0` on the new engine; confirm it executes normally via the legacy world path
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Tokio rt causes linker errors | LOW | Add `default-features = false` to rig-core fork dependency; add `#[cfg]` guards on tokio spawn sites; rebuild |
-| Nested block_on deadlock | MEDIUM | Audit all async entry points in the integration crate; ensure single top-level block_on; no recovery possible mid-execution — component must be redeployed |
-| KV history poisoned by context overflow | LOW | Delete the KV bucket for the affected service instance (`wasi:keyvalue store::delete`); next invocation creates a fresh history |
-| Fuel exhaustion for agent services | LOW | Increase fuel limit in operator config for the specific service workflow; no code change needed |
-| Fork diverged from upstream | HIGH | Use `git diff` against the upstream tag to identify non-platform patches; manually backport; test on both WASI and native targets |
-| Network permission trap | LOW | Update service definition `allowed_hosts`; redeploy service; no code change to component |
+| Runaway continuation loop | LOW | Deactivate the service via the HTTP API; delete the continuation KV keys for the service namespace; fix the termination condition; redeploy |
+| Continuation state poisoned (corrupted KV) | LOW | Delete the KV key for the affected event ID (`continuation:{event_id}`); next trigger starts a fresh chain |
+| Deadlocked Tokio runtime from sync `call-service` | HIGH | Restart the WAVS node; fix host function to use `func_wrap_async` before redeploying; cannot recover without restart |
+| Quorum stall from LLM non-determinism | MEDIUM | Switch to temperature=0 for the agent; redeploy service definition; existing stalled quorum queues will TTL out (default 48h) |
+| Circular call graph deployed | LOW | Update `AllowedServiceCalls` to remove the circular permission on one service; redeploy service definition |
+| WIT interface break for legacy components | HIGH | Maintain old world path in the engine linker; recompile affected components against new WIT when cycle is ready |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Tokio rt linker errors | Phase 1 (rig-core fork) | `cargo component build --target wasm32-wasip2` with no linker errors |
-| Nested block_on deadlock | Phase 1 (rig-core fork) | Minimal async probe test: one await inside block_on, no inner executors |
-| reqwest not available in WASI | Phase 2 (HTTP transport bridge) | End-to-end LLM call via wasi:http outgoing-handler succeeds on deployed WAVS node |
-| Fork divergence | Phase 1 (fork setup) | Git rev pinned in Cargo.toml; diff tracked in FORK_BASIS.md |
-| KV history unbounded growth | Phase 3 (KV memory module) | 100-invocation soak test; history size stable after trim |
-| Fuel exhaustion for agents | Phase 2 (integration crate) | 5-tool-call agent completes within fuel budget; OutOfFuel only on deliberate infinite loop |
-| AllowedHostPermission silent trap | Phase 3 (example agent) | Startup validation emits structured error for None permission before first LLM call |
-| cfg flag inconsistencies | Phase 1 (rig-core fork) | Single canonical `wavs_wasi_target` cfg alias; `cargo check` on both wasm32-wasip2 and wasm32-unknown-unknown |
+| Re-instantiation model misunderstood | Phase 1 (WIT + engine loop) | Unit test: fresh store on each step; no variables persist |
+| LLM non-determinism breaks multi-operator consensus | Phase 1 (engine loop design) | 2-operator integration test with temp=0; both operators agree on all steps |
+| Sync `call-service` deadlocks Tokio | Phase 2 (host function) | `func_wrap_async` used; 2-concurrent-call test passes without deadlock |
+| KV namespace isolation misunderstood | Phase 2 (call-service + docs) | Cross-service KV read returns `None`; documented in service design guide |
+| Continuation state exceeds payload cap | Phase 1 (WIT interface design) | KV-backed state chosen; `Continue` payload verified < 64 bytes |
+| No step limit — runaway agents | Phase 1 (engine loop) | Engine terminates unconditional-Continue agent at `MAX_CONTINUATION_STEPS` |
+| LRU eviction between steps | Phase 1 (engine loop) | Pin component `Arc` per active chain; latency uniform across 10-step agent |
+| Circular `call-service` graph | Phase 2 (host function) | Cycle detection rejects A→B→A; error includes call chain |
+| WIT versioning breaks legacy components | Phase 1 (WIT interface) | Legacy component loads on new engine via fallback world |
+| No callee-side permission enforcement | Phase 2 (permission enforcement) | `AllowedCallers` rejects unauthorized callers; confirmed in integration test |
 
 ## Sources
 
-- Direct code inspection: `/workspace/WAVS/packages/engine/src/worlds/operator/execute.rs` — dual fuel + epoch timeout pattern, `EngineError::OutOfFuel` vs `OutOfTime`
-- Direct code inspection: `/workspace/WAVS/packages/engine/src/worlds/instance.rs` — `EPOCH_YIELD_PERIOD_MS`, `AllowedHostPermission` linker configuration, `KeyValueCtx`
-- Direct code inspection: `/workspace/WAVS/packages/engine/src/backend/wasi_keyvalue/context.rs` — per-namespace KV isolation, `KeyValueCtxProvider` trait
-- Direct code inspection: `/workspace/WAVS/examples/components/echo-data/src/lib.rs` — `wstd::runtime::block_on` as sole async entry point pattern
-- Direct code inspection: `/workspace/WAVS/examples/components/kv-store/src/lib.rs` — bucket open/read/write pattern used by components
-- Direct code inspection: `/workspace/WAVS/.planning/PROJECT.md` — confirmed hard blockers: unconditional reqwest, tokio rt feature, cfg inconsistencies; fork size ~300-500 lines
-- rig-core issue #176 (CF worker support): synchronized async wrappers via feature flag for constrained WASM environments — [github.com/0xPlaygrounds/rig/issues/176](https://github.com/0xPlaygrounds/rig/issues/176)
-- rig v0.31 release notes: reqwest upgraded to 0.13 with rustls default; breaking API changes confirm active churn — [github.com/0xPlaygrounds/rig/discussions/1406](https://github.com/0xPlaygrounds/rig/discussions/1406)
-- reqwest wasm32-wasip2 support issue (open, unresolved): [github.com/seanmonstar/reqwest/issues/2979](https://github.com/seanmonstar/reqwest/issues/2979)
-- Wasmtime interrupting wasm (epoch vs fuel): [docs.wasmtime.dev/examples-interrupting-wasm.html](https://docs.wasmtime.dev/examples-interrupting-wasm.html)
-- wstd async model and temporary nature: [github.com/bytecodealliance/wstd](https://github.com/bytecodealliance/wstd)
-- Cargo patch publishing limitation (fork cannot be published to crates.io): [doc.rust-lang.org/cargo/reference/overriding-dependencies.html](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html)
-- Rust target triple cfg for WASM: `wasm32-wasip2` reports `target_arch = "wasm32"` AND `target_os = "wasi"` — [doc.rust-lang.org/rustc/platform-support/wasm32-wasip2.html](https://doc.rust-lang.org/rustc/platform-support/wasm32-wasip2.html)
+- Direct code inspection: `/workspace/WAVS/packages/wavs/src/subsystems/engine.rs` — `ExecuteOperator` dispatches as separate async tasks; each is independent
+- Direct code inspection: `/workspace/WAVS/packages/engine/src/worlds/operator/execute.rs` — `call_run` is called on a fresh store per invocation; execution context is not preserved
+- Direct code inspection: `/workspace/WAVS/packages/engine/src/worlds/instance.rs` — `configure_store` creates fuel + epoch from scratch per invocation; `configure_linker` creates a new `Linker<T>` per invocation
+- Direct code inspection: `/workspace/WAVS/packages/engine/src/backend/wasi_keyvalue/context.rs` — `KeyValueCtx::new(db, service.id().to_string())` — per-service namespace enforced at construction time
+- Direct code inspection: `/workspace/WAVS/packages/wavs/src/subsystems/engine/wasm_engine.rs` line 161 — `KeyValueCtx::new(self.engine.db.clone(), service.id().to_string())` — confirms KV isolation scope
+- Direct code inspection: `/workspace/WAVS/packages/utils/src/storage/db.rs` — `WavsDb::kv_store` is a `DashMap` (in-memory, not persisted); `QuorumQueue` has TTL cleanup
+- Direct code inspection: `/workspace/WAVS/packages/wavs/src/dispatcher.rs` — `DispatcherCommand` enum; no existing continuation or inter-service RPC variants
+- Direct code inspection: `/workspace/WAVS/wit-definitions/operator/wit/*.wit` — `call-run` returns `result<list<wasm-response>, string>`; changing to a variant is a breaking WIT change
+- Direct code inspection: `/workspace/WAVS/.planning/PROJECT.md` — v3.0 scope: `Continue`/`Done` variants, `call-service` host function, `AllowedServiceCalls`, engine re-invocation loop
+- Wasmtime async host functions: `LinkerInstance::func_wrap_async` required when `Config::async_support(true)`; sync `func_wrap` with `block_on` inside deadlocks under load — [docs.wasmtime.dev/api/wasmtime/component/struct.LinkerInstance.html](https://docs.wasmtime.dev/api/wasmtime/component/struct.LinkerInstance.html)
+- Wasmtime issue #9600: Reentrant WASM component calls — confirmed that component reentrancy requires careful store management, not stack suspension — [github.com/bytecodealliance/wasmtime/issues/9600](https://github.com/bytecodealliance/wasmtime/issues/9600)
+- WAVS ASYNC_NOTES.md: WASI 0.2 has no native stack suspension; WASI 0.3 adds async in the ABI. WAVS is on p2. Continuation must be implemented at application level.
+- Multi-operator quorum: `QuorumQueue` keys by `(EventId, SubmitAction)`; different LLM responses produce different `SubmitAction` payloads; quorum never reached — observed pattern from distributed compute systems with non-deterministic workers
 
 ---
-*Pitfalls research for: rig-core integration into WAVS WASI sandbox*
+*Pitfalls research for: Agent continuation mode and service-to-service RPC in WASI/Wasmtime runtime*
 *Researched: 2026-04-20*

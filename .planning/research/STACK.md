@@ -1,164 +1,274 @@
 # Stack Research
 
-**Domain:** rig-core integration into WASI components — WAVS v2.0 Agent Runtime
+**Domain:** WASI agent runtime — continuation mode + service-to-service RPC (v3.0 additions)
 **Researched:** 2026-04-20
-**Confidence:** HIGH — verified via crates.io API (live versions), docs.rs source inspection, and direct codebase inspection of WAVS packages
+**Confidence:** HIGH — based on direct codebase inspection of all relevant packages
 
 ---
 
 ## Executive Summary
 
-Integrating rig-core into wasm32-wasip2 WASI components requires one new crate (`wavs-rig`), one forked crate (`rig-core` → `rig-wasi`), and zero changes to the host-side WAVS node. The existing `wavs-wasi-utils` and `wstd` crates already provide all the host-function primitives (HTTP, KV, EVM) needed by the four bridges. The fork is scoped to ~300-500 lines across five files; the blockers are well-understood and all fixable.
-
-**Current rig-core version:** 0.35.0 (released 2026-04-13, crates.io verified)
+v3.0 adds agent continuation mode and synchronous service-to-service RPC. Neither feature
+requires new external crates. Every mechanism is built from primitives already in the
+workspace: `wasmtime 42.0.1` async host functions, `wasi:keyvalue` KV, `wit-bindgen 0.53.1`
+variant types, `tokio` async tasks, and the existing `WasmEngine::execute_operator_component`
+path. The total surface area is: one new WIT variant, two new host function registrations,
+one new `Permissions` field, a step loop in `run_trigger`, and a widened `WavsAgent` trait.
 
 ---
 
 ## Recommended Stack
 
-### New Crates to Create
+### No New External Crates
 
-| Crate | Location | Purpose | Why |
-|-------|----------|---------|-----|
-| `wavs-rig` | `packages/wavs-rig/` | Integration layer: 4 bridges between rig and WASI sandbox | Keeps rig-specific code isolated; developers import one crate |
-| `rig-wasi` fork | git dependency | rig-core with WASI blockers patched | rig-core 0.35.0 has hard blockers on wasm32-wasip2; ~300-500 line fork is the only viable path |
+v3.0 adds zero new Cargo dependencies. All building blocks already exist:
 
-### Core Dependencies for `wavs-rig`
+| Existing Primitive | Version | Role in v3.0 |
+|-------------------|---------|--------------|
+| `wasmtime` | 42.0.1 (pinned) | Async host function for `call-service`; new WIT variant binding in `execute.rs` |
+| `wasmtime-wasi` | 42.0.1 (pinned) | No change |
+| `wit-bindgen` | 0.53.1 (pinned) | Re-run codegen after `operator.wit` variant change; no tooling version change |
+| `wasi:keyvalue` (host-provided) | 0.2.0-draft2 | Continuation state persistence under `wavs_agent_step:` key prefix |
+| `tokio` | workspace | Async host function body; step loop; `.await` on recursive component exec |
+| `serde` / `serde_json` | workspace | Serialize `AgentContinuation` opaque state blob to KV |
+| `thiserror` | workspace | Two new `EngineError` variants (`ContinuationLimit`, `ServiceCallDenied`) |
+| `wavs_types::Permissions` | existing | Gains `allowed_service_calls: AllowedServiceCalls` field with serde default `None` |
 
-| Library | Version | Purpose | Why |
-|---------|---------|---------|-----|
-| `rig-core` (forked) | 0.35.0 fork | Agent loop, Tool trait, CompletionModel, 20+ LLM providers | Rig provides the complete agent framework; building from scratch = months of work |
-| `wstd` | 0.6.6 (latest) | Async executor (`block_on`), WASI HTTP client, WASI clock | Already in workspace; provides `wstd::runtime::block_on` used by all existing components |
-| `wasip2` | 1.0.3+wasi-0.2.9 (latest) | WASIp2 raw bindings including `wasi:keyvalue` | Already in workspace as `wasip2 = "1.0.1"` — upgrade to 1.0.3 |
-| `wavs-wasi-utils` | workspace | HTTP helpers, EVM provider helpers | Already provides `fetch_json`, `http_request_post_json` over `wasi:http` |
-| `serde` + `serde_json` | workspace | JSON serialization for tool args/outputs, LLM request bodies | Required by rig Tool trait (JSON Schema) |
-| `schemars` | ~0.8 or 1.0 | JSON Schema generation for `ToolDefinition` | rig-core uses this for typed tool parameters |
-| `anyhow` | workspace | Error propagation across bridge layers | Consistent with rest of WAVS codebase |
+---
 
-### Fork: `rig-core` → `rig-wasi`
+### WIT Changes — `wit-definitions/operator/wit/operator.wit`
 
-**Fork rig-core 0.35.0. Apply five patches. Use as git dependency in `wavs-rig` and the agent example component.**
+**1. New return variant for the `run` export.**
 
-**Do not attempt to use upstream rig-core 0.35.0 for wasm32-wasip2.** It fails to compile due to three hard blockers:
-
-#### Patch 1: Make `reqwest` optional (Cargo.toml + http_client.rs + client/mod.rs)
-
-reqwest 0.12.x does not support wasm32-wasip2 (GitHub issue #2979, opened March 2026, no merged PR as of April 2026). In rig-core 0.35.0, `reqwest = { features = ["json", "stream", "multipart"] }` is an unconditional dependency — not behind a feature gate.
-
-**Required changes:**
-```toml
-# rig-wasi Cargo.toml
-[dependencies]
-reqwest = { version = "0.12", features = ["json", "stream", "multipart"], optional = true }
-
-[features]
-default = ["rustls"]  # remove "reqwest" from default
-reqwest = ["dep:reqwest"]
+Current signature:
+```wit
+export run: func(trigger-action: trigger-action) -> result<list<wasm-response>, string>;
 ```
 
-In `client/mod.rs`: make `H` default type conditional on `reqwest` feature. In `http_client.rs`: gate the reqwest `Client` impl behind `#[cfg(feature = "reqwest")]`.
+New signature:
+```wit
+variant agent-step-result {
+    // Terminal — emit these responses and finish
+    done(list<wasm-response>),
+    // Non-terminal — re-invoke after persisting state
+    continue(agent-continuation),
+}
 
-#### Patch 2: Remove `tokio` `rt` feature, replace `watch` channel in streaming.rs
+record agent-continuation {
+    // Opaque bytes the agent wants restored on next invocation.
+    // If absent, engine auto-restores KV-persisted conversation state.
+    state: option<list<u8>>,
+    // Human-readable step reason (logged, never submitted on-chain)
+    reason: option<string>,
+}
 
-`tokio = { features = ["rt", "sync"] }` — the `rt` feature requires `std::thread`, unavailable on wasip2. The agent loop itself does not use tokio's runtime (it is pure async with `futures::StreamExt`), but `streaming.rs` imports `tokio::sync::watch` for `PauseControl`.
-
-**Required changes:**
-```toml
-# rig-wasi Cargo.toml
-tokio = { version = "1", features = ["sync"], default-features = false }  # drop "rt"
+export run: func(trigger-action: trigger-action) -> result<agent-step-result, string>;
 ```
 
-In `streaming.rs`: replace `tokio::sync::watch` with `futures::channel::oneshot` or a simple `std::sync::atomic::AtomicBool` (PauseControl is streaming-only infrastructure; for WASI MVP with sequential execution, stub it as a no-op pause controller).
+Backward compatibility: non-agent components (plain `wasm-response` semantics) wrap their
+existing logic in `agent-step-result::done(responses)`. The call site in `execute.rs`
+handles both by always expecting `agent-step-result`.
 
-#### Patch 3: Unify cfg detection in wasm_compat.rs
+**2. New `call-service` import in the `host` interface block.**
 
-Current inconsistency: `WasmBoxedFuture` uses `#[cfg(target_family = "wasm")]` (fires on wasip2), but `WasmCompatSend`/`WasmCompatSync` use `#[cfg(all(feature = "wasm", target_arch = "wasm32"))]` (does NOT fire on wasip2 without the `wasm` cargo feature). This creates a type mismatch: futures drop `Send` but traits still require it.
+The existing `host` interface already contains `get-evm-chain-config`, `config-var`, `log`,
+`get-service`, `get-workflow`, `get-event-id`. Add:
 
-**Required change:** Unify to `#[cfg(target_family = "wasm")]` everywhere in `wasm_compat.rs`. This fires correctly on both wasm32-unknown-unknown and wasm32-wasip2 without needing a separate cargo feature flag for the wasip2 case.
+```wit
+import host: interface {
+    // ... existing imports unchanged ...
 
-#### Patch 4: Fix SSE dead zones for wasip2 (sse.rs)
-
-The SSE module has branches for `#[cfg(not(target_arch = "wasm32"))]` (native) and `#[cfg(all(feature = "wasm", target_arch = "wasm32"))]` (browser). On wasip2 without `feature = "wasm"`, neither branch compiles. Either add a third branch for `#[cfg(all(not(feature = "wasm"), target_arch = "wasm32"))]` or gate the entire SSE module behind `#[cfg(not(target_family = "wasm"))]` (streaming responses via SSE are not used in the WASI bridge; rig's agent loop uses the non-streaming completion path).
-
-#### Patch 5: Handle `futures-timer` (if transitively required)
-
-`futures-timer` internally uses `std::thread::sleep` on non-WASM platforms. For wasip2, it needs clock-based delay via `wstd::time` or `wasi::monotonic_clock`. If `futures-timer` is in the dependency tree of the fork, either patch it to use `wstd` timers or replace its usage with `wstd::time::Duration` + `wstd::runtime` primitives directly.
-
-#### Patch 6: Verify `getrandom` feature (trivial)
-
-rig-core uses `getrandom = { features = ["js"] }` for randomness (used in nanoid generation). On wasm32-wasip2, getrandom natively supports wasip2 via `wasi:random/random.get-random-u64` — no feature flag required. The `wasm_js` feature (for browser) should be removed in the fork since it bloats Cargo.lock and can cause build issues on non-browser WASM.
-
-```toml
-# rig-wasi Cargo.toml — getrandom does NOT need wasm_js for wasip2
-getrandom = { version = "0.3", default-features = true }
-# wasip2 target gets random natively via wasi:random
+    // Synchronous RPC to another deployed service on this node.
+    // Returns the first WasmResponse payload bytes from the target.
+    // Blocked if target service-id is not in AllowedServiceCalls.
+    call-service: func(
+        service-id: service-id,
+        workflow-id: workflow-id,
+        payload: list<u8>
+    ) -> result<list<u8>, string>;
+}
 ```
 
-### Cargo Configuration
+No new WIT packages. No new WIT worlds. Both changes go inside `operator.wit`.
 
-**In `wavs-rig/Cargo.toml` (new crate in workspace):**
-```toml
-[package]
-name = "wavs-rig"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
+---
 
-[dependencies]
-rig-core = { git = "https://github.com/[org]/rig-wasi.git", rev = "[commit]", default-features = false }
-wstd = { workspace = true }
-wavs-wasi-utils = { path = "../wasi-utils" }
-serde = { workspace = true }
-serde_json = { workspace = true }
-anyhow = { workspace = true }
+### Rust Host Side — `packages/engine`
+
+**`OperatorHostComponent` (`worlds/operator/component.rs`)** — add two fields:
+
+```rust
+pub struct OperatorHostComponent {
+    // ... existing fields ...
+    pub allowed_service_calls: AllowedServiceCalls,   // new
+    pub services: Arc<RwLock<Services>>,               // new — for call-service dispatch
+}
 ```
 
-**In workspace `Cargo.toml` — add `wavs-rig` to members:**
-```toml
-[workspace]
-members = [
-    # ... existing members ...
-    "packages/wavs-rig",
-]
+`Services` is the existing `crate::services::Services` struct already threaded through
+`WasmEngine`. Pass a clone of the `Arc` at instance construction time.
+
+**`call-service` host function (`worlds/operator/component.rs` or a new `host_fns.rs`):**
+
+```rust
+linker.func_wrap_async("host", "call-service", |mut ctx, (service_id, workflow_id, payload): (String, String, Vec<u8>)| {
+    Box::new(async move {
+        let (allowed, services, engine) = ctx.data_mut().call_service_deps();
+        // 1. Permission check — AllowedServiceCalls::None returns error immediately
+        if !allowed.is_permitted(&service_id) {
+            return Ok((Err(format!("ServiceCallDenied: {}", service_id)),));
+        }
+        // 2. Resolve target service
+        let service = services.get(&service_id)?;
+        // 3. Execute synchronously (awaited inline — host functions can .await in async stores)
+        let responses = engine.execute_operator_component(service, make_trigger_action(service_id, workflow_id, payload)).await?;
+        Ok((Ok(responses.into_iter().next().map(|r| r.payload).unwrap_or_default()),))
+    })
+})?;
 ```
 
-**In workspace `Cargo.toml` — patch entry for rig-core (overrides transitive deps too):**
-```toml
-[patch.crates-io]
-rig-core = { git = "https://github.com/[org]/rig-wasi.git", rev = "[commit]" }
+The host function runs inside the existing `wasmtime` async engine. Direct `.await` on
+`execute_operator_component` is correct — async host functions in Wasmtime with
+`Config::async_support(true)` (already configured) can freely `.await` Tokio futures.
+
+**Engine step loop (`packages/wavs/src/subsystems/engine/wasm_engine.rs`):**
+
+`run_trigger` gains a loop around `execute_operator_component`:
+
+```rust
+const MAX_CONTINUATION_STEPS: u32 = 10;  // config constant, operator-adjustable in service.json
+
+let mut step = 0u32;
+let responses = loop {
+    let step_result = self.engine.execute_one_step(service.clone(), action.clone()).await?;
+    match step_result {
+        AgentStepResult::Done(responses) => break responses,
+        AgentStepResult::Continue(cont) => {
+            // Engine persists continuation state on behalf of the component
+            kv_write_continuation_state(&kv, &action.correlation_id, step, &cont)?;
+            step += 1;
+            if step >= MAX_CONTINUATION_STEPS {
+                return Err(EngineError::ContinuationLimit(service.id(), action.config.workflow_id));
+            }
+        }
+    }
+};
 ```
 
-### WASI Component Example: `examples/components/rig-agent`
+Fuel accumulation across steps: each step starts with the full per-component fuel limit.
+Alternatively, share a single budget across steps (simpler for MVP — each step gets its own
+full budget, which is the easier change and avoids tracking partial fuel).
 
-New example following the existing pattern (like `kv-store`, `cosmos-query`):
+---
 
-```toml
-# examples/components/rig-agent/Cargo.toml
-[dependencies]
-wavs-rig = { path = "../../../packages/wavs-rig" }
-example-helpers = { workspace = true }
-wstd = { workspace = true }
-serde_json = { workspace = true }
+### KV State Convention — Continuation Persistence
 
-[lib]
-crate-type = ["cdylib"]
+The engine (host side) writes and reads continuation state. Components never touch this
+KV namespace directly.
+
+| Key | Content | Who Writes | Who Reads |
+|-----|---------|-----------|----------|
+| `wavs_agent_step:<correlation_id>:<step>` | Serialized `AgentContinuation` bytes | Engine host (after `Continue` return) | Engine host (before next `call_run`) |
+
+This uses the existing per-service `KeyValueCtx` namespace. No bucket/namespace conflicts:
+`WavsMemory` uses `wavs_agent_memory:` prefix; continuation uses `wavs_agent_step:` prefix.
+
+The `correlation_id: String` field already on `TriggerAction` serves as the unique
+per-invocation key component.
+
+---
+
+### Rust Guest Side — `packages/wavs-rig`
+
+**`WavsAgent` trait (`src/agent.rs`)** — widen return type:
+
+```rust
+pub enum AgentOutput<T: Serialize> {
+    Done(T),
+    Continue {
+        // Agent-managed opaque state (optional — WavsMemory handles conversation automatically)
+        state: Option<Vec<u8>>,
+        // Human-readable step reason for logs
+        reason: Option<String>,
+    },
+}
+
+pub trait WavsAgent {
+    type Output: Serialize;
+    fn run(&self, trigger_data: Vec<u8>)
+        -> impl Future<Output = anyhow::Result<AgentOutput<Self::Output>>> + '_;
+}
+```
+
+`run_agent` maps `AgentOutput::Done(v)` → `agent-step-result::done(json_bytes)` and
+`AgentOutput::Continue { .. }` → `agent-step-result::continue(agent-continuation)`.
+
+**`call_service` binding (`src/tools/mod.rs` or new `src/rpc.rs`):**
+
+```rust
+/// Call another deployed WAVS service synchronously.
+/// Requires AllowedServiceCalls to permit the target service-id.
+pub fn call_service(service_id: &str, workflow_id: &str, payload: &[u8]) -> anyhow::Result<Vec<u8>> {
+    use crate::bindings::wavs::operator::host;
+    host::call_service(service_id, workflow_id, payload)
+        .map_err(|e| anyhow::anyhow!("call-service failed: {}", e))
+}
+```
+
+This is usable as a rig tool (implement `Tool` trait wrapping `call_service`) or as a
+direct call within the agent's async loop.
+
+---
+
+### New `wavs_types` Fields (`packages/types/src/service.rs`)
+
+**`Permissions` struct** — one additive field:
+
+```rust
+pub struct Permissions {
+    pub allowed_http_hosts: AllowedHostPermission,  // existing
+    pub file_system: bool,                           // existing
+    pub raw_sockets: bool,                           // existing
+    pub dns_resolution: bool,                        // existing
+    #[serde(default, skip_serializing_if = "AllowedServiceCalls::is_none")]
+    pub allowed_service_calls: AllowedServiceCalls,  // NEW
+}
+```
+
+Serde default `None` means all existing `service.json` files deserialize without change.
+
+**`AllowedServiceCalls` enum** — mirrors `AllowedHostPermission` exactly:
+
+```rust
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AllowedServiceCalls {
+    All,
+    Only(Vec<ServiceId>),
+    #[default]
+    None,
+}
+```
+
+`service.json` usage:
+```json
+{
+  "permissions": {
+    "allowed_service_calls": { "only": ["<target-service-id>"] }
+  }
+}
 ```
 
 ---
 
-## What NOT to Add
+## Supporting Libraries (No New Adds)
 
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| Upstream `rig-core = "0.35.0"` from crates.io | reqwest + tokio rt + cfg inconsistencies = compile failure on wasm32-wasip2 | Fork with 5 targeted patches |
-| `reqwest` in `wavs-rig` directly | reqwest 0.12 does not support wasm32-wasip2 (issue #2979 open, no merge) | `wstd::http::Client` via `wavs-wasi-utils::http` |
-| `tokio` in `wavs-rig` or agent components | tokio `rt` feature requires `std::thread`; wasip2 is single-threaded, single-process | `wstd::runtime::block_on` is the correct async executor |
-| `tokio-wasm` or `tokio_with_wasm` crates | These target wasm32-unknown-unknown (browser); wasip2 is a different target with different primitives | `wstd` 0.6.6 by Bytecode Alliance, designed specifically for wasip2 |
-| `wasm-bindgen` or `js-sys` in agent components | These are browser-WASM primitives; wasip2 components run in Wasmtime, not a browser | `wasip2` crate bindings for WASI APIs |
-| `getrandom` with `wasm_js` feature | Breaks non-browser WASM builds; wasip2 has native getrandom support | Default getrandom — wasip2 support is built-in |
-| New host-side (node) changes for v2.0 MVP | All four bridges operate inside the WASM sandbox using existing host functions | Existing `wasi:http`, `wasi:keyvalue`, `host::log` — zero node changes needed |
-| Streaming/SSE responses for agent loop | SSE adds complexity with no benefit in WASI; sequential completion calls are sufficient | Use rig's non-streaming `prompt()` path |
-| Concurrent tool execution (`buffer_unordered`) | wasip2 is single-threaded; concurrent futures require a multi-task executor that doesn't exist | Set rig's tool concurrency to 1; sequential tool calls work fine |
+| Library | Version | Purpose | Notes |
+|---------|---------|---------|-------|
+| `serde` / `serde_json` | workspace | Serialize `AgentContinuation` state blob to KV bytes | Already used throughout |
+| `thiserror` | workspace | `EngineError::ContinuationLimit`, `EngineError::ServiceCallDenied` | Two new variants in existing error enum |
+| `tokio` | workspace | Async host function body; `.await` inside `func_wrap_async` | `Config::async_support(true)` already set in `BaseEngine` |
+| `wasmtime 42.0.1` | pinned | `func_wrap_async` for `call-service` host function | Already used for all other host functions |
 
 ---
 
@@ -166,34 +276,41 @@ crate-type = ["cdylib"]
 
 | Recommended | Alternative | Why Not |
 |-------------|-------------|---------|
-| Fork rig-core (Option B) | Build agent SDK from scratch (Option C) | Rig has 20+ LLM providers, typed Tool trait, WASM-compat traits. Reimplementing = months of work. Fork is ~300-500 lines. |
-| Fork rig-core (Option B) | Upstream PR to rig-core (Option A) | Option A is correct long-term but review/merge timeline is unknown. Fork moves fast; Option A pursued in parallel. |
-| `wstd::runtime::block_on` | Custom async executor | wstd is maintained by Bytecode Alliance specifically for wasip2. It already works in existing WAVS components. |
-| `wstd::http::Client` for HTTP bridge | `wasi-http-client` crate | wavs-wasi-utils already wraps wstd HTTP; `fetch_json` / `http_request_post_json` are the established patterns in this codebase. |
-| Simple `AtomicBool` for PauseControl stub | Full `futures::channel` watch replacement | PauseControl is streaming infrastructure; WASI MVP uses non-streaming completions. Stub is sufficient and avoids pulling in channels with thread requirements. |
-| `[patch.crates-io]` for rig-core | Separate fork workspace | `[patch.crates-io]` in workspace root automatically patches all transitive dependencies. Clean, no duplication. |
+| KV-persisted continuation state (engine-managed) | Guest-managed KV writes via `wasi:keyvalue` | Engine management is invisible to the guest, enabling step budget enforcement and atomicity guarantees. Guest-managed requires convention compliance with no enforcement. |
+| New WIT `variant` return type on `run` | Separate `run-continuation` WIT export | Separate export breaks the single-entrypoint model and complicates aggregator routing. Variant keeps one export. |
+| Direct `.await` on `execute_operator_component` inside `call-service` host function | New crossbeam channel RPC path | Channel path adds latency and complexity and risks deadlock on the dispatcher thread. Direct async `.await` in the host function body is idiomatic Wasmtime async and already safe in this codebase. |
+| `AllowedServiceCalls` in `Permissions` struct | Separate top-level `service.json` field | `Permissions` is the established pattern; co-location with `allowed_http_hosts` is consistent. |
+| `MAX_CONTINUATION_STEPS = 10` constant | No limit | Without a limit, a buggy agent loops indefinitely and monopolizes the engine. |
+| Per-step full fuel budget | Shared fuel budget across steps | Per-step is simpler for MVP; shared budget is a future refinement if operators need tighter compute metering across multi-step agents. |
 
 ---
 
-## Async Runtime: Why `wstd::runtime::block_on`
+## What NOT to Add
 
-All existing WAVS WASI components use this pattern:
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| New async runtime or executor for guest continuation | WASM is single-threaded; second `block_on` deadlocks | Existing `wstd::runtime::block_on` boundary; continuation is host-driven, not guest-driven |
+| WASI 0.3 async component model | Not stable in Wasmtime 42.0.1; async I/O landed in 2025 roadmap but component model async export is not production-ready | Synchronous host function returning `result<list<u8>, string>` |
+| `tokio::sync::oneshot` channel for `call-service` response | Adds latency and indirection vs. direct `await` | Direct `.await` on `execute_operator_component` inside `func_wrap_async` |
+| Separate "continuation engine" crate | Over-engineering for what is ~200 lines of changes | Extend existing `wavs-engine` and `wavs-rig` packages in-place |
+| Cross-operator `call-service` (calling a service on a different operator node via network) | Network hop, consensus complexity, far out of scope | Single-node synchronous only; cross-node is a v4+ concern |
+| Fuel sharing / accounting across continuation steps for v3.0 MVP | Adds accounting complexity with marginal benefit for initial release | Per-step full fuel budget; add shared accounting later if needed |
 
-```rust
-impl Guest for Component {
-    fn run(trigger_action: TriggerAction) -> Result<Vec<WasmResponse>, String> {
-        wstd::runtime::block_on(async {
-            // async code here
-        })
-    }
-}
-```
+---
 
-wasip2 is single-threaded. `block_on` drives the future to completion cooperatively with the WASI reactor (which handles I/O events like HTTP responses and KV operations). Rig's agent loop — `agent.prompt(&prompt).await` — is a standard async chain with no thread-spawning. It works inside `block_on` as long as:
+## Integration Points With Existing Infrastructure
 
-1. HTTP calls use `wstd::http::Client` (not reqwest)
-2. No `tokio::spawn` is called (rig's agent loop doesn't spawn — it is sequential)
-3. Tool calls are sequential (set concurrency = 1 in rig config)
+| Existing Mechanism | How v3.0 Integrates |
+|-------------------|---------------------|
+| `operator.wit` `run` export | Return type changes from `result<list<wasm-response>, string>` to `result<agent-step-result, string>`; `execute.rs` unwraps `done` case; non-agent components wrap responses in `done` |
+| `OperatorHostComponent` | Gains `allowed_service_calls` and `Arc<RwLock<Services>>` fields; `call-service` host function registered via existing linker pattern |
+| `run_trigger` in `wasm_engine.rs` | Gains step loop; engine drives re-invocation; component sees each step as a fresh `run` call |
+| `KeyValueCtx` + `WavsDb` | Continuation state written under `wavs_agent_step:` prefix by engine host side; same bucket/namespace used by `WavsMemory`, no conflict due to distinct key prefixes |
+| `WavsAgent` trait in `wavs-rig` | Return type widens to `AgentOutput<T>` enum; `run_agent` maps to new WIT `agent-step-result` variant |
+| `Permissions` struct + `service.json` | Gains `allowed_service_calls` with serde default `None`; all existing `service.json` files deserialize without modification |
+| `correlation_id: String` on `TriggerAction` | Used as continuation KV key component to isolate state per trigger invocation |
+| `AllowedHostPermission` pattern | `AllowedServiceCalls` is structurally identical — `All` / `Only(Vec<ServiceId>)` / `None`; same enforcement pattern in linker |
+| Existing `wasmtime` `Config::async_support(true)` | Already set in `BaseEngine::new`; enables `func_wrap_async` for `call-service` host function without config change |
 
 ---
 
@@ -201,43 +318,28 @@ wasip2 is single-threaded. `block_on` drives the future to completion cooperativ
 
 | Package | Version | Status | Notes |
 |---------|---------|--------|-------|
-| `rig-core` | 0.35.0 | Fork required | Latest as of 2026-04-13; fork at this version |
-| `wstd` | 0.6.6 | Upgrade from 0.6.5 | Workspace currently has 0.6.5; 0.6.6 (2026-03-12) is latest |
-| `wasip2` | 1.0.3+wasi-0.2.9 | Upgrade from 1.0.1 | Workspace currently has 1.0.1; 1.0.3 (2026-04-17) is latest |
-| `reqwest` | 0.12.x | Do NOT use in agent components | No wasm32-wasip2 support; issue open, no PR merged |
-| `tokio` (in fork) | 1.x sync-only | Drop `rt` feature in fork | `sync` feature (for `Mutex`, `RwLock`) may still be needed; `rt` must be removed |
-| `getrandom` | 0.3.x | No `wasm_js` flag | wasip2 has native random support; `wasm_js` is browser-only |
-| `schemars` | workspace-compatible | Verify in fork | rig uses schemars for ToolDefinition JSON Schema generation; wasip2-compatible |
-
----
-
-## Integration Points with Existing WAVS Structure
-
-| `wavs-rig` Feature | Bridges To | Existing Code |
-|--------------------|------------|---------------|
-| HTTP transport (LLM API calls) | `wstd::http::Client` | `packages/wasi-utils/src/http.rs` — `fetch_json`, `http_request_post_json` |
-| KV memory (conversation history) | `wasi:keyvalue::store` | `examples/components/kv-store/src/lib.rs` — `store::open`, `bucket.get/set` |
-| EVM query tool | `wavs-wasi-utils::evm` | `packages/wasi-utils/src/evm/` — `get_evm_chain_config`, provider helpers |
-| Logging | `host::log` | `example_helpers::bindings::world::host::log` |
-| Entry point | `wstd::runtime::block_on` | All existing components use this pattern |
-| Component type | `cdylib` + WIT bindings | Same as all examples; `export_layer_trigger_world!(Component)` |
+| `wasmtime` | 42.0.1 | No change | `func_wrap_async` API available; async component model supported |
+| `wit-bindgen` | 0.53.1 | No change | Re-run codegen after WIT change; no version bump needed |
+| `wasi:keyvalue` | 0.2.0-draft2 | No change | New key prefix only; no API change |
+| `wstd` | 0.6.5 | No change | `block_on` unchanged; continuation is host-driven |
+| `wasip2` | 1.0.1 | No change | No new WASI APIs needed |
 
 ---
 
 ## Sources
 
-- `crates.io/api/v1/crates/rig-core` — verified latest version 0.35.0 (released 2026-04-13) (HIGH confidence)
-- `docs.rs/crate/rig-core/latest/source/Cargo.toml.orig` — reqwest features, tokio features, optional deps (HIGH confidence)
-- `docs.rs/rig-core/latest/src/rig/streaming.rs.html` — `use tokio::sync::watch` at line 31 confirmed (HIGH confidence)
-- `docs.rs/rig-core/latest/src/rig/wasm_compat.rs.html` — cfg inconsistency between `WasmCompatSend` and `WasmBoxedFuture` confirmed (HIGH confidence)
-- `github.com/seanmonstar/reqwest/issues/2979` — wasip2 support open issue, no merged PR as of April 2026 (HIGH confidence)
-- `crates.io/api/v1/crates/wstd` — version 0.6.6 (2026-03-12), maintained by Bytecode Alliance (HIGH confidence)
-- `crates.io/api/v1/crates/wasip2` — version 1.0.3+wasi-0.2.9 (2026-04-17) (HIGH confidence)
-- Direct inspection of `/workspace/WAVS/packages/wasi-utils/src/http.rs` — `wstd::http::Client` used for all HTTP in WASI components (HIGH confidence)
-- Direct inspection of `/workspace/WAVS/packages/wasi-utils/Cargo.toml` — no reqwest, uses wstd (HIGH confidence)
-- Direct inspection of `/workspace/WAVS/Cargo.toml` — current workspace versions for wstd (0.6.5), wasip2 (1.0.1), getrandom config (HIGH confidence)
-- `/workspace/WAVS_AGENT_IMPROVEMENTS.md` — April 2026 investigation: confirmed hard blockers, fork strategy, file-level change breakdown (HIGH confidence)
+- Direct inspection of `/workspace/WAVS/packages/engine/src/worlds/operator/execute.rs` — confirmed current `run` call site and `WasmResponse` handling
+- Direct inspection of `/workspace/WAVS/packages/engine/src/worlds/instance.rs` — `OperatorHostComponent` struct, `configure_linker`, existing async store setup
+- Direct inspection of `/workspace/WAVS/packages/engine/src/worlds/operator/component.rs` — existing host component struct; straightforward to extend
+- Direct inspection of `/workspace/WAVS/packages/wavs/src/subsystems/engine/wasm_engine.rs` — `execute_operator_component` async signature; `run_trigger` structure
+- Direct inspection of `/workspace/WAVS/packages/wavs-rig/src/agent.rs` — `WavsAgent` trait and `run_agent` — minimal change needed
+- Direct inspection of `/workspace/WAVS/packages/wavs-rig/src/memory.rs` — `wavs_agent_memory:` key prefix; confirms no collision with `wavs_agent_step:` prefix
+- Direct inspection of `/workspace/WAVS/packages/types/src/service.rs` — `Permissions` struct, `AllowedHostPermission` pattern; `correlation_id` on `TriggerAction`
+- Direct inspection of `/workspace/WAVS/wit-definitions/operator/wit/operator.wit` — confirmed existing `host` interface and `run` export; where changes go
+- [Wasmtime async host functions](https://docs.wasmtime.dev/examples-async.html) — `func_wrap_async` confirmed working with `Config::async_support(true)` — HIGH confidence
+- [WIT reference — variants](https://component-model.bytecodealliance.org/design/wit.html) — variant return types supported in current wit-bindgen 0.53.1 — HIGH confidence
+- `.planning/PROJECT.md` — v3.0 target feature list and existing architectural decisions
 
 ---
-*Stack research for: WAVS v2.0 — rig-core WASI integration*
+*Stack research for: WAVS v3.0 — agent continuation + synchronous service-to-service RPC*
 *Researched: 2026-04-20*
