@@ -120,7 +120,10 @@ Plans:
   2. A component with `allowed_service_calls: None` that attempts `call_service()` receives a clear permission error and the call does not reach the target — the caller's `AllowedServiceCalls` is enforced before dispatch
   3. A callee service with `allowed_callers: None` rejects an inbound `call-service` invocation with a clear error — the callee's `AllowedCallers` is enforced independently of the caller's permission
   4. A call chain A -> B -> A is detected and rejected with a cycle error before infinite recursion occurs — the engine tracks the in-flight call stack and refuses to re-enter a service already in the chain
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 22-01-PLAN.md — Engine-side RPC: wasmtime async feature, selective async bindgen, RpcCaller trait, async call_service with permission/cycle checks
+- [ ] 22-02-PLAN.md — RpcCallerImpl wiring in wavs crate with callee AllowedCallers enforcement, injection into operator execution, RPC tests
 
 ### Phase 23: Integration & Validation
 **Goal**: The full agent composition surface is exercised end-to-end — a multi-step continuation agent, a service-composition agent that calls a utility service, and a permission enforcement test that proves both `AllowedServiceCalls` and `AllowedCallers` reject unauthorized calls
@@ -159,5 +162,5 @@ Plans:
 | 19. Example Agent & E2E Validation | v2.0 | 2/2 | Complete | 2026-04-20 |
 | 20. WIT Interface & Types | v3.0 | 2/2 | Complete    | 2026-04-22 |
 | 21. Agent Continuation Engine | v3.0 | 2/2 | Complete    | 2026-04-22 |
-| 22. Service-to-Service RPC | v3.0 | 0/TBD | Not started | - |
+| 22. Service-to-Service RPC | v3.0 | 0/2 | Not started | - |
 | 23. Integration & Validation | v3.0 | 0/TBD | Not started | - |
