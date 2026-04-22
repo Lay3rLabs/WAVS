@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { useEffect } from 'react';
 import { CloseX } from './CloseX';
 
-type ToastKind = 'info' | 'error';
+type ToastKind = 'info' | 'error' | 'success' | 'warning';
 
 interface ToastItem {
   id: number;
@@ -31,6 +31,8 @@ const useToastStore = create<ToastState>((set) => ({
 export const Toast = {
   info: (message: string) => useToastStore.getState().add('info', message),
   error: (message: string) => useToastStore.getState().add('error', message),
+  success: (message: string) => useToastStore.getState().add('success', message),
+  warning: (message: string) => useToastStore.getState().add('warning', message),
 };
 
 const AUTO_DISMISS_MS = 4000;
@@ -43,23 +45,28 @@ function ToastItemComponent({ toast }: { toast: ToastItem }) {
     return () => clearTimeout(timer);
   }, [toast.id, remove]);
 
-  const isError = toast.kind === 'error';
+  const borderColor = toast.kind === 'error' ? 'border-red-800'
+    : toast.kind === 'success' ? 'border-green-800'
+    : toast.kind === 'warning' ? 'border-yellow-800'
+    : 'border-charcoal-light';
+  const accentColor = toast.kind === 'error' ? 'bg-red-500'
+    : toast.kind === 'success' ? 'bg-green-500'
+    : toast.kind === 'warning' ? 'bg-yellow-500'
+    : 'bg-purple-1';
+  const textColor = toast.kind === 'error' ? 'text-red-3'
+    : toast.kind === 'success' ? 'text-green-300'
+    : toast.kind === 'warning' ? 'text-yellow-300'
+    : 'text-beige-warm';
 
   return (
     <div
-      className={`flex items-start gap-3 pl-3 pr-4 py-3 rounded-lg shadow-lg max-w-sm w-full bg-charcoal-dark border ${
-        isError ? 'border-red-800' : 'border-charcoal-light'
-      }`}
+      className={`flex items-start gap-3 pl-3 pr-4 py-3 rounded-lg shadow-lg max-w-sm w-full bg-charcoal-dark border ${borderColor}`}
     >
       <div
-        className={`w-0.5 self-stretch rounded-full flex-shrink-0 ${
-          isError ? 'bg-red-500' : 'bg-purple-1'
-        }`}
+        className={`w-0.5 self-stretch rounded-full flex-shrink-0 ${accentColor}`}
       />
       <span
-        className={`flex-1 text-sm leading-snug ${
-          isError ? 'text-red-3' : 'text-beige-warm'
-        }`}
+        className={`flex-1 text-sm leading-snug ${textColor}`}
       >
         {toast.message}
       </span>

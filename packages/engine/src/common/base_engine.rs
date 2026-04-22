@@ -107,51 +107,80 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
     pub async fn load_component_from_source(
         &self,
         source: &ComponentSource,
-    ) -> Result<WasmComponent, EngineError> {
-        let digest = source.digest();
-
-        match self.load_component(digest).await {
-            Ok(component) => Ok(component),
-            Err(_) => {
-                let bytes: Vec<u8> = match source {
-                    ComponentSource::Download { uri, .. } => {
-                        fetch_bytes(uri, &self.ipfs_gateway).await.map_err(|e| {
-                            EngineError::StorageError(format!("Failed to download from url: {}", e))
-                        })?
-                    }
-                    ComponentSource::Registry { registry } => {
-                        let client = WkgClient::new(
-                            registry.domain.clone().unwrap_or("wa.dev".to_string()),
-                        )?;
-
-                        client.fetch(registry).await?
-                    }
-                    _ => {
-                        return Err(EngineError::UnknownDigest(digest.clone()));
-                    }
-                };
-
-                if ComponentDigest::hash(&bytes) != *digest {
-                    return Err(EngineError::StorageError(
-                        "Downloaded component digest does not match expected digest".to_string(),
-                    ));
-                }
-
-                self.storage.set_data(&bytes).map_err(|e| {
-                    EngineError::StorageError(format!("Failed to store component: {}", e))
-                })?;
-
-                let component = WasmComponent::new(&self.wasm_engine, &bytes)
-                    .map_err(|e| EngineError::Compile(e.into()))?;
-
-                self.memory_cache
-                    .lock()
-                    .unwrap()
-                    .put(digest.clone(), component.clone());
-
-                Ok(component)
+    ) -> Result<(WasmComponent, ComponentDigest), EngineError> {
+        // If we have a known digest, try cache first
+        if let Some(digest) = source.digest() {
+            if let Ok(component) = self.load_component(digest).await {
+                return Ok((component, digest.clone()));
             }
         }
+
+        // Cache miss or no digest -- fetch the bytes
+        let bytes: Vec<u8> = match source {
+            ComponentSource::Download { uri, .. } => {
+                fetch_bytes(uri, &self.ipfs_gateway).await.map_err(|e| {
+                    EngineError::StorageError(format!("Failed to download from url: {}", e))
+                })?
+            }
+            ComponentSource::Registry { registry } => {
+                let client =
+                    WkgClient::new(registry.domain.clone().unwrap_or("wa.dev".to_string()))?;
+                client.fetch(registry).await?
+            }
+            ComponentSource::Oci { uri, digest } => {
+                use utils::oci::{OciPuller, OciUri};
+
+                let oci_uri = OciUri::parse(uri).map_err(|e| {
+                    EngineError::StorageError(format!("Invalid OCI URI '{}': {}", uri, e))
+                })?;
+
+                // Warn if no digest pinning (OCI-05)
+                if oci_uri.is_unpinned() && digest.is_none() {
+                    tracing::warn!(
+                        uri = %uri,
+                        "Deploying OCI component without digest pin (@sha256:). \
+                         The component content may change if the tag is updated. \
+                         Pin with @sha256:<digest> for reproducible deploys."
+                    );
+                }
+
+                let auth = OciPuller::auth_from_env();
+                let puller = OciPuller::new();
+                puller.pull(&oci_uri, &auth).await.map_err(|e| {
+                    EngineError::StorageError(format!("OCI pull failed for '{}': {}", uri, e))
+                })?
+            }
+            ComponentSource::Digest(digest) => {
+                return Err(EngineError::UnknownDigest(digest.clone()));
+            }
+        };
+
+        // Verify digest if one was declared (OCI-03, also applies to Download/Registry)
+        if let Some(expected_digest) = source.digest() {
+            let computed = ComponentDigest::hash(&bytes);
+            if computed != *expected_digest {
+                return Err(EngineError::StorageError(format!(
+                    "Component digest mismatch: expected {}, got {}",
+                    expected_digest, computed
+                )));
+            }
+        }
+
+        // Store in content-addressed storage (OCI-04: cache by digest)
+        self.storage
+            .set_data(&bytes)
+            .map_err(|e| EngineError::StorageError(format!("Failed to store component: {}", e)))?;
+
+        let component = WasmComponent::new(&self.wasm_engine, &bytes)
+            .map_err(|e| EngineError::Compile(e.into()))?;
+
+        let computed_digest = ComponentDigest::hash(&bytes);
+        self.memory_cache
+            .lock()
+            .unwrap()
+            .put(computed_digest.clone(), component.clone());
+
+        Ok((component, computed_digest))
     }
 
     pub fn store_component_bytes(&self, bytes: &[u8]) -> Result<ComponentDigest, EngineError> {

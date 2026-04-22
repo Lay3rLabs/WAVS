@@ -84,5 +84,6 @@ pub fn create_service(sleep_ms: Option<u64>) -> Service {
         )]),
         status: wavs_types::ServiceStatus::Active,
         manager: SERVICE_MANAGER.clone(),
+        exec_enabled: None,
     }
 }

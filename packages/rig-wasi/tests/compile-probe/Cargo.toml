@@ -1,0 +1,15 @@
+[package]
+name = "rig-wasi-compile-probe"
+edition.workspace = true
+version.workspace = true
+
+# FORK-05: Minimal compile probe — verifies rig-wasi compiles on wasm32-wasip2.
+# This is NOT a functional WAVS component, just a compilation gate.
+# crate-type = ["cdylib"] is required for WASI components (libraries, not binaries).
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+rig-wasi = { path = "../.." }
+wstd = { workspace = true }

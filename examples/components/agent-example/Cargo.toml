@@ -1,0 +1,21 @@
+[package]
+name = "agent-example"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+wavs-rig = { workspace = true }
+rig-wasi = { workspace = true }
+example-helpers = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.component]
+package = "wavs-examples:agent-example"

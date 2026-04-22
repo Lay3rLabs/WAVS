@@ -633,12 +633,25 @@ impl Aggregator {
                 );
                 // Burn queue: Mark as completed to prevent duplicate on-chain submissions
                 self.burn_quorum_queue(queue_id).await?;
+                let tx_hash = tx_resp.tx_hash();
+                let result_payload = {
+                    let raw = &submission.operator_response.payload;
+                    if raw.is_empty() {
+                        None
+                    } else {
+                        let capped = &raw[..raw.len().min(4096)];
+                        Some(const_hex::encode_prefixed(capped))
+                    }
+                };
                 if let Err(e) =
                     self.subsystem_to_dispatcher_tx
                         .send(DispatcherCommand::SubmissionConfirmed {
                             service_id: submission.service_id().clone(),
                             workflow_id: submission.workflow_id().clone(),
                             trigger_data: submission.trigger_action.data.clone(),
+                            correlation_id: submission.trigger_action.correlation_id.clone(),
+                            tx_hash,
+                            result_payload,
                         })
                 {
                     tracing::error!("Error sending SubmissionConfirmed to dispatcher: {:?}", e);

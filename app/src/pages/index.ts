@@ -5,3 +5,4 @@ export { NotFound } from './NotFound';
 export { WalletSetup } from './WalletSetup';
 export { Health } from './Health';
 export { ComponentsPage } from './ComponentsPage';
+export { ComponentDetailPage } from './components/ComponentDetailPage';

@@ -45,9 +45,14 @@ export function HealthIndicator() {
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
+    // Listen for WAVS start/stop to refresh immediately
+    const onWavsStateChange = () => fetchHealth();
+    window.addEventListener('wavs:state-change', onWavsStateChange);
+
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('wavs:state-change', onWavsStateChange);
     };
   }, [fetchHealth]);
 

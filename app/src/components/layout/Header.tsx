@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../atoms';
 import { useAppStore } from '../../stores/appStore';
+import { useAgentStore } from '../../stores/agentStore';
 import { HealthIndicator } from './HealthIndicator';
 import type { ReactNode } from 'react';
 
@@ -69,10 +70,21 @@ const navItems: { path: string; label: string; icon: ReactNode }[] = [
   { path: '/settings',    label: 'Settings',    icon: <SettingsIcon /> },
 ];
 
+// Agent chat icon
+function AgentIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+      <path d="M8 1C4.134 1 1 3.582 1 6.8c0 1.857 1.07 3.507 2.737 4.557L3 14.5l3.5-2.1c.49.065.99.1 1.5.1 3.866 0 7-2.582 7-5.8S11.866 1 8 1z"/>
+    </svg>
+  );
+}
+
 export function Header() {
   const location = useLocation();
   const navigate = useNavigate();
   const isSettingsComplete = useAppStore((state) => state.isSettingsComplete());
+  const togglePanel = useAgentStore((s) => s.togglePanel);
+  const panelOpen = useAgentStore((s) => s.panelOpen);
 
   return (
     <header className="flex items-center justify-between px-8 py-4 border-b border-charcoal-medium bg-charcoal-dark shadow-md">
@@ -107,6 +119,17 @@ export function Header() {
             />
           );
         })}
+
+        {/* Divider + Agent toggle */}
+        <div className="w-px h-6 bg-charcoal-medium mx-1" />
+        <Button
+          text="Agent"
+          size="lg"
+          selected={panelOpen}
+          contentBefore={<AgentIcon />}
+          className="px-5"
+          onClick={togglePanel}
+        />
       </nav>
     </header>
   );
