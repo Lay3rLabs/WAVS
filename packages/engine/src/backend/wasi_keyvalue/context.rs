@@ -29,6 +29,13 @@ impl KeyValueCtx {
             page_size: None,
         }
     }
+
+    /// Returns a clone of the underlying WavsDb.
+    /// Cheap — WavsDb wraps a DashMap which is Arc-backed.
+    pub fn db(&self) -> WavsDb {
+        self.db.clone()
+    }
+
     pub fn add_to_linker<T>(linker: &mut wasmtime::component::Linker<T>) -> Result<(), EngineError>
     where
         T: KeyValueCtxProvider + Send,

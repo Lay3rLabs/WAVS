@@ -90,8 +90,7 @@ impl Host for AggregatorHostComponent {
         let digest = match &workflow.submit {
             wavs_types::Submit::Aggregator { component, .. } => component
                 .source
-                .digest()
-                .expect("aggregator component must have a digest for logging"),
+                .digest(),
             _ => unreachable!(),
         };
 

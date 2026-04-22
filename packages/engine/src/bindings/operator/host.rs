@@ -93,8 +93,7 @@ impl super::world::host::Host for OperatorHostComponent {
         let digest = workflow
             .component
             .source
-            .digest()
-            .expect("operator component must have a digest for logging");
+            .digest();
 
         (self.inner_log)(
             &self.service.id(),

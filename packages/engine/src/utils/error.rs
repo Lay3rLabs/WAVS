@@ -33,6 +33,13 @@ pub enum EngineError {
     #[error("Time limit exceeded by WasmEngine for service: {0}, workflow: {1}")]
     OutOfTime(ServiceId, WorkflowId),
 
+    #[error("ContinuationLimit: exceeded {steps} steps for service: {service_id}, workflow: {workflow_id}")]
+    ContinuationLimit {
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
+        steps: usize,
+    },
+
     #[error("Unable to add to linker: {0}")]
     AddToLinker(wasmtime::Error),
 

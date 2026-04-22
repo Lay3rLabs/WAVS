@@ -109,13 +109,12 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
         source: &ComponentSource,
     ) -> Result<(WasmComponent, ComponentDigest), EngineError> {
         // If we have a known digest, try cache first
-        if let Some(digest) = source.digest() {
-            if let Ok(component) = self.load_component(digest).await {
-                return Ok((component, digest.clone()));
-            }
+        let digest = source.digest();
+        if let Ok(component) = self.load_component(digest).await {
+            return Ok((component, digest.clone()));
         }
 
-        // Cache miss or no digest -- fetch the bytes
+        // Cache miss -- fetch the bytes
         let bytes: Vec<u8> = match source {
             ComponentSource::Download { uri, .. } => {
                 fetch_bytes(uri, &self.ipfs_gateway).await.map_err(|e| {
@@ -127,36 +126,14 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
                     WkgClient::new(registry.domain.clone().unwrap_or("wa.dev".to_string()))?;
                 client.fetch(registry).await?
             }
-            ComponentSource::Oci { uri, digest } => {
-                use utils::oci::{OciPuller, OciUri};
-
-                let oci_uri = OciUri::parse(uri).map_err(|e| {
-                    EngineError::StorageError(format!("Invalid OCI URI '{}': {}", uri, e))
-                })?;
-
-                // Warn if no digest pinning (OCI-05)
-                if oci_uri.is_unpinned() && digest.is_none() {
-                    tracing::warn!(
-                        uri = %uri,
-                        "Deploying OCI component without digest pin (@sha256:). \
-                         The component content may change if the tag is updated. \
-                         Pin with @sha256:<digest> for reproducible deploys."
-                    );
-                }
-
-                let auth = OciPuller::auth_from_env();
-                let puller = OciPuller::new();
-                puller.pull(&oci_uri, &auth).await.map_err(|e| {
-                    EngineError::StorageError(format!("OCI pull failed for '{}': {}", uri, e))
-                })?
-            }
             ComponentSource::Digest(digest) => {
                 return Err(EngineError::UnknownDigest(digest.clone()));
             }
         };
 
-        // Verify digest if one was declared (OCI-03, also applies to Download/Registry)
-        if let Some(expected_digest) = source.digest() {
+        // Verify digest (always present for Download/Registry)
+        {
+            let expected_digest = source.digest();
             let computed = ComponentDigest::hash(&bytes);
             if computed != *expected_digest {
                 return Err(EngineError::StorageError(format!(
