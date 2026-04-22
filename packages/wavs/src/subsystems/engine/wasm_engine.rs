@@ -168,6 +168,8 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 .join(trigger_action.config.service_id.to_string()),
             chain_configs: &chain_configs,
             log: HostComponentLogger::OperatorHostComponentLogger(log_operator),
+            rpc_caller: None,
+            call_stack: vec![],
         }
         .build()?;
 
@@ -460,6 +462,8 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             chain_configs: &chain_configs,
             log: HostComponentLogger::AggregatorHostComponentLogger(log_aggregator),
             service,
+            rpc_caller: None,
+            call_stack: vec![],
         }
         .build()?;
 

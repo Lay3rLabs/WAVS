@@ -126,6 +126,8 @@ impl EngineSetup {
             chain_configs: &self.chain_configs,
             log,
             keyvalue_ctx: self.keyvalue_ctx.clone(),
+            rpc_caller: None,
+            call_stack: vec![],
         };
 
         builder.build().unwrap()

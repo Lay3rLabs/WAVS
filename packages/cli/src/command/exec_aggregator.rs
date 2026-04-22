@@ -159,6 +159,8 @@ impl ExecAggregator {
                 service.id().to_string(),
             ),
             service,
+            rpc_caller: None,
+            call_stack: vec![],
         }
         .build()?;
 

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 use wasmtime_wasi_tls::WasiTlsCtx;
@@ -5,6 +7,7 @@ use wavs_types::{ChainConfigs, ComponentDigest, Service, ServiceId, TriggerData,
 
 use crate::backend::wasi_keyvalue::context::KeyValueCtx;
 use crate::bindings::operator::world::host::LogLevel;
+use crate::rpc::RpcCaller;
 
 // This is defined separately because LogLevel comes from bindings
 pub type OperatorHostComponentLogger =
@@ -23,6 +26,10 @@ pub struct OperatorHostComponent {
     pub(crate) tls_ctx: WasiTlsCtx,
     pub(crate) keyvalue_ctx: KeyValueCtx,
     pub(crate) inner_log: OperatorHostComponentLogger,
+    /// Service IDs in the current call chain, for cycle detection and depth limiting (Phase 22).
+    pub call_stack: Vec<String>,
+    /// Injected RPC caller; None disables service-to-service calls (Phase 22).
+    pub rpc_caller: Option<Arc<dyn RpcCaller>>,
 }
 
 impl WasiView for OperatorHostComponent {

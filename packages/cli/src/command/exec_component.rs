@@ -216,6 +216,8 @@ impl ExecComponent {
                 WavsDb::new().unwrap(),
                 "exec_component".to_string(),
             ),
+            rpc_caller: None,
+            call_stack: vec![],
         }
         .build()
         .context("Failed to build instance dependencies for component execution")?;

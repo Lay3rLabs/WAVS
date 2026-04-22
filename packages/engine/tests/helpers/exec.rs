@@ -97,6 +97,8 @@ pub async fn try_execute_component_raw(
         chain_configs: &Default::default(),
         log: HostComponentLogger::OperatorHostComponentLogger(log_wasi),
         keyvalue_ctx,
+        rpc_caller: None,
+        call_stack: vec![],
     }
     .build()
     .unwrap();
