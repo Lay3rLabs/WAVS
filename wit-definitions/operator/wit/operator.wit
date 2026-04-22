@@ -36,6 +36,18 @@ interface output {
         // also, it MUST be supplied if multiple responses are returned
         event-id-salt: option<list<u8>>
     }
+
+    /// Agent step result — returned by run-agent export
+    variant step-result {
+        done(list<wasm-response>),
+        %continue(string),
+    }
+}
+
+interface agent {
+    use input.{trigger-action};
+    use output.{step-result};
+    run-agent: func(trigger-action: trigger-action) -> result<step-result, string>;
 }
 
 world wavs-world {
@@ -77,11 +89,16 @@ world wavs-world {
         // convenience function to get what the event id will be
         // typically only used for debugging or testing purposes
         get-event-id: func(salt: option<list<u8>>) -> event-id;
+
+        /// Synchronous service-to-service call (stub until Phase 22)
+        call-service: func(service-id: string, payload: list<u8>) -> result<list<u8>, string>;
     }
 
     use input.{trigger-action};
     use output.{wasm-response};
+    use output.{step-result};
 
     // if returning multiple responses, they must all have an event-id-salt
     export run: func(trigger-action: trigger-action) -> result<list<wasm-response>, string>;
+    export agent;
 }
