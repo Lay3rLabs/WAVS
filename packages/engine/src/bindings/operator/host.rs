@@ -104,4 +104,12 @@ impl super::world::host::Host for OperatorHostComponent {
             message,
         );
     }
+
+    fn call_service(
+        &mut self,
+        _service_id: String,
+        _payload: Vec<u8>,
+    ) -> Result<Vec<u8>, String> {
+        Err("call-service not yet implemented (Phase 22)".into())
+    }
 }
