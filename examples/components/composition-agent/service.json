@@ -1,0 +1,31 @@
+{
+  "name": "composition-agent",
+  "workflows": {
+    "default": {
+      "trigger": "manual",
+      "component": {
+        "source": { "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000" },
+        "permissions": {
+          "allowed_http_hosts": "none",
+          "file_system": false,
+          "raw_sockets": false,
+          "dns_resolution": false,
+          "allowed_service_calls": "all"
+        },
+        "fuel_limit": null,
+        "time_limit_seconds": 30,
+        "max_continuation_steps": 5,
+        "config": {},
+        "env_keys": []
+      },
+      "submit": "none"
+    }
+  },
+  "status": "active",
+  "manager": {
+    "evm": {
+      "chain": "evm:31337",
+      "address": "0x0000000000000000000000000000000000000000"
+    }
+  }
+}
