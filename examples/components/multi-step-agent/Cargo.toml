@@ -1,0 +1,18 @@
+[package]
+name = "multi-step-agent"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde_json = { workspace = true }
+serde = { workspace = true }
+example-helpers = { workspace = true }
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[package.metadata.component]
+package = "wavs-tests:multi-step-agent"

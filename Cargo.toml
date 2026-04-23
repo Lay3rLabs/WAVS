@@ -24,6 +24,7 @@ members = [
     "examples/components/_helpers",
     "examples/components/_types",
     "examples/components/kv-store",
+    "examples/components/multi-step-agent",
     "examples/components/agent-example",
     "examples/components/simple-aggregator",
     "examples/components/timer-aggregator",
