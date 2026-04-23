@@ -1,5 +1,21 @@
 # Milestones
 
+## v3.0 Agent Composition (Shipped: 2026-04-23)
+
+**Phases completed:** 4 phases, 8 plans, 8 tasks
+
+**Key accomplishments:**
+
+- One-liner:
+- AllowedServiceCalls enum
+- 1. [Rule 1 - Bug] Fixed pre-existing compile errors from previous phases
+- 1. [Rule 1 - Bug] execute_legacy() used WavsWorld requiring agent export — broke all legacy components
+- `packages/wavs/src/subsystems/engine/rpc_caller.rs`
+- Component (`examples/components/multi-step-agent/src/lib.rs`):
+- utility-service
+
+---
+
 ## v2.0 Agent Runtime (Shipped: 2026-04-20)
 
 **Phases completed:** 3 phases, 7 plans, 1 tasks
