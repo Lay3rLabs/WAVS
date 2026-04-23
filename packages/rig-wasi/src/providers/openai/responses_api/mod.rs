@@ -880,7 +880,7 @@ impl TryFrom<(String, crate::completion::CompletionRequest)> for CompletionReque
 
 /// The completion model struct for OpenAI's response API.
 #[derive(Clone)]
-pub struct ResponsesCompletionModel<T = reqwest::Client> {
+pub struct ResponsesCompletionModel<T = crate::http_client::DefaultHttpClient> {
     /// The OpenAI client
     pub(crate) client: Client<T>,
     /// Name of the model (e.g.: gpt-3.5-turbo-1106)

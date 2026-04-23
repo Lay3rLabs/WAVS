@@ -62,8 +62,8 @@ impl ProviderBuilder for VoyageBuilder {
     }
 }
 
-pub type Client<H = reqwest::Client> = client::Client<VoyageExt, H>;
-pub type ClientBuilder<H = reqwest::Client> = client::ClientBuilder<VoyageBuilder, VoyageApiKey, H>;
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<VoyageExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> = client::ClientBuilder<VoyageBuilder, VoyageApiKey, H>;
 
 impl ProviderClient for Client {
     type Input = String;

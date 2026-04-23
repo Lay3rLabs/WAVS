@@ -95,8 +95,8 @@ impl ProviderBuilder for LlamafileBuilder {
     }
 }
 
-pub type Client<H = reqwest::Client> = client::Client<LlamafileExt, H>;
-pub type ClientBuilder<H = reqwest::Client> = client::ClientBuilder<LlamafileBuilder, Nothing, H>;
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<LlamafileExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> = client::ClientBuilder<LlamafileBuilder, Nothing, H>;
 
 impl Client {
     /// Create a client pointing at the given llamafile base URL
@@ -213,7 +213,7 @@ impl TryFrom<(&str, CompletionRequest)> for LlamafileCompletionRequest {
 
 /// Llamafile completion model.
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     /// The model identifier (usually `LLaMA_CPP`).
     pub model: String,
@@ -549,7 +549,7 @@ where
 ///
 /// Llamafile supports the OpenAI-compatible `/v1/embeddings` endpoint.
 #[derive(Clone)]
-pub struct EmbeddingModel<T = reqwest::Client> {
+pub struct EmbeddingModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     /// The model identifier.
     pub model: String,

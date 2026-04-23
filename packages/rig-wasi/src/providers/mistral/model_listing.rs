@@ -31,7 +31,7 @@ impl From<ListModelEntry> for Model {
 
 /// [`ModelLister`] implementation for the Mistral API (`GET /v1/models`).
 #[derive(Clone)]
-pub struct MistralModelLister<H = reqwest::Client> {
+pub struct MistralModelLister<H = crate::http_client::DefaultHttpClient> {
     client: Client<H>,
 }
 

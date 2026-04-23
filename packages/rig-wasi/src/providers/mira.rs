@@ -73,8 +73,8 @@ impl ProviderBuilder for MiraBuilder {
     }
 }
 
-pub type Client<H = reqwest::Client> = client::Client<MiraExt, H>;
-pub type ClientBuilder<H = reqwest::Client> = client::ClientBuilder<MiraBuilder, MiraApiKey, H>;
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<MiraExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> = client::ClientBuilder<MiraBuilder, MiraApiKey, H>;
 
 #[derive(Debug, Error)]
 pub enum MiraError {
@@ -303,7 +303,7 @@ impl TryFrom<(&str, CompletionRequest)> for MiraCompletionRequest {
 }
 
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     /// Name of the model
     pub model: String,

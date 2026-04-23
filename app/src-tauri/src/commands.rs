@@ -1847,7 +1847,6 @@ pub enum ComponentSourceResult {
     Download { uri: String, digest: String },
     Registry { digest: String, domain: Option<String>, package: String },
     Digest { digest: String },
-    Oci { uri: String, digest: Option<String> },
 }
 
 /// Returns a JSON Schema describing the exported functions of a WASM component.
@@ -1906,7 +1905,7 @@ pub async fn cmd_get_component_metadata(
     // Search all workflows in all services for matching component digest
     for service in &services {
         for (_wf_id, workflow) in &service.workflows {
-            if workflow.component.source.digest() == Some(&component_digest) {
+            if workflow.component.source.digest() == &component_digest {
                 let comp = &workflow.component;
                 return Ok(ComponentMetadataResult {
                     permissions: comp.permissions.clone(),
@@ -1951,10 +1950,6 @@ fn component_source_to_result(source: &wavs_types::ComponentSource) -> Component
         },
         wavs_types::ComponentSource::Digest(d) => ComponentSourceResult::Digest {
             digest: d.to_string(),
-        },
-        wavs_types::ComponentSource::Oci { uri, digest } => ComponentSourceResult::Oci {
-            uri: uri.clone(),
-            digest: digest.as_ref().map(|d| d.to_string()),
         },
     }
 }

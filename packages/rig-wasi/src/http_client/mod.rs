@@ -22,6 +22,14 @@ pub use multipart::MultipartForm;
 #[cfg(feature = "reqwest")]
 pub use reqwest::Client as ReqwestClient;
 
+// Default HTTP client type — resolves to reqwest::Client when available, () otherwise.
+// Used as the default type parameter across all provider structs to avoid
+// direct reqwest::Client references that break on WASI targets.
+#[cfg(feature = "reqwest")]
+pub type DefaultHttpClient = reqwest::Client;
+#[cfg(not(feature = "reqwest"))]
+pub type DefaultHttpClient = ();
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Http error: {0}")]

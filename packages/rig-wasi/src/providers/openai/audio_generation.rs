@@ -10,7 +10,7 @@ pub const TTS_1: &str = "tts-1";
 pub const TTS_1_HD: &str = "tts-1-hd";
 
 #[derive(Clone)]
-pub struct AudioGenerationModel<T = reqwest::Client> {
+pub struct AudioGenerationModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     pub model: String,
 }

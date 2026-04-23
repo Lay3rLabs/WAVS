@@ -90,8 +90,8 @@ impl ProviderBuilder for GroqBuilder {
     }
 }
 
-pub type Client<H = reqwest::Client> = client::Client<GroqExt, H>;
-pub type ClientBuilder<H = reqwest::Client> = client::ClientBuilder<GroqBuilder, String, H>;
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<GroqExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> = client::ClientBuilder<GroqBuilder, String, H>;
 
 impl ProviderClient for Client {
     type Input = String;
@@ -333,7 +333,7 @@ pub struct GroqAdditionalParameters {
 }
 
 #[derive(Clone, Debug)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     /// Name of the model (e.g.: deepseek-r1-distill-llama-70b)
     pub model: String,

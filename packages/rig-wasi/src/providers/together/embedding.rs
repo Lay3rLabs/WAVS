@@ -65,7 +65,7 @@ pub struct Usage {
 }
 
 #[derive(Clone)]
-pub struct EmbeddingModel<T = reqwest::Client> {
+pub struct EmbeddingModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     pub model: String,
     ndims: usize,

@@ -31,7 +31,7 @@ impl From<ListModelEntry> for Model {
 // P7: Gate reqwest::Client default — requires "reqwest" feature on native, unavailable on WASM.
 #[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
 #[derive(Clone)]
-pub struct AnthropicModelLister<H = reqwest::Client> {
+pub struct AnthropicModelLister<H = crate::http_client::DefaultHttpClient> {
     client: Client<H>,
 }
 #[cfg(not(all(not(target_family = "wasm"), feature = "reqwest")))]

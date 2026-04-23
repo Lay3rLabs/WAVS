@@ -48,11 +48,11 @@ where
 }
 
 /// Gemini GenerateContent client.
-pub type Client<H = reqwest::Client> = client::Client<GeminiExt, H>;
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<GeminiExt, H>;
 /// Builder for the Gemini GenerateContent client.
-pub type ClientBuilder<H = reqwest::Client> = client::ClientBuilder<GeminiBuilder, GeminiApiKey, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> = client::ClientBuilder<GeminiBuilder, GeminiApiKey, H>;
 /// Gemini Interactions API client.
-pub type InteractionsClient<H = reqwest::Client> = client::Client<GeminiInteractionsExt, H>;
+pub type InteractionsClient<H = crate::http_client::DefaultHttpClient> = client::Client<GeminiInteractionsExt, H>;
 
 impl ApiKey for GeminiApiKey {}
 

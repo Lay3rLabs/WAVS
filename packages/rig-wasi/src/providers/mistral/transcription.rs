@@ -91,7 +91,7 @@ impl TryFrom<MistralTranscriptionResponse>
 }
 
 #[derive(Clone)]
-pub struct TranscriptionModel<T = reqwest::Client> {
+pub struct TranscriptionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     pub model: String,
 }

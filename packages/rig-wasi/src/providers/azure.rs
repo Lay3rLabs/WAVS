@@ -83,8 +83,8 @@ impl Default for AzureExtBuilder {
     }
 }
 
-pub type Client<H = reqwest::Client> = client::Client<AzureExt, H>;
-pub type ClientBuilder<H = reqwest::Client> =
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<AzureExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> =
     client::ClientBuilder<AzureExtBuilder, AzureOpenAIAuth, H>;
 
 impl Provider for AzureExt {
@@ -423,7 +423,7 @@ impl std::fmt::Display for Usage {
 }
 
 #[derive(Clone)]
-pub struct EmbeddingModel<T = reqwest::Client> {
+pub struct EmbeddingModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     pub model: String,
     ndims: usize,
@@ -659,7 +659,7 @@ impl TryFrom<(&str, CompletionRequest)> for AzureOpenAICompletionRequest {
 }
 
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     /// Name of the model (e.g.: gpt-4o-mini)
     pub model: String,
@@ -821,7 +821,7 @@ where
 // ================================================================
 
 #[derive(Clone)]
-pub struct TranscriptionModel<T = reqwest::Client> {
+pub struct TranscriptionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     /// Name of the model (e.g.: gpt-3.5-turbo-1106)
     pub model: String,
@@ -919,7 +919,7 @@ mod image_generation {
     use serde_json::json;
 
     #[derive(Clone)]
-    pub struct ImageGenerationModel<T = reqwest::Client> {
+    pub struct ImageGenerationModel<T = crate::http_client::DefaultHttpClient> {
         client: Client<T>,
         pub model: String,
     }
@@ -996,7 +996,7 @@ mod audio_generation {
     use serde_json::json;
 
     #[derive(Clone)]
-    pub struct AudioGenerationModel<T = reqwest::Client> {
+    pub struct AudioGenerationModel<T = crate::http_client::DefaultHttpClient> {
         client: Client<T>,
         model: String,
     }

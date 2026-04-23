@@ -52,7 +52,7 @@ use super::Client;
 // =================================================================
 
 #[derive(Clone, Debug)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     pub(crate) client: Client<T>,
     pub model: String,
 }

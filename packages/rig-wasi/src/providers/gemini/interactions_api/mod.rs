@@ -23,7 +23,7 @@ pub use interactions_api_types::*;
 
 /// Completion model wrapper for the Gemini Interactions API.
 #[derive(Clone, Debug)]
-pub struct InteractionsCompletionModel<T = reqwest::Client> {
+pub struct InteractionsCompletionModel<T = crate::http_client::DefaultHttpClient> {
     pub(crate) client: InteractionsClient<T>,
     pub model: String,
 }

@@ -92,8 +92,8 @@ impl ProviderBuilder for GaladrielBuilder {
     }
 }
 
-pub type Client<H = reqwest::Client> = client::Client<GaladrielExt, H>;
-pub type ClientBuilder<H = reqwest::Client> =
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<GaladrielExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> =
     client::ClientBuilder<GaladrielBuilder, GaladrielApiKey, H>;
 
 impl<T> ClientBuilder<T> {
@@ -499,7 +499,7 @@ impl TryFrom<(&str, CompletionRequest)> for GaladrielCompletionRequest {
 }
 
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     /// Name of the model (e.g.: gpt-3.5-turbo-1106)
     pub model: String,

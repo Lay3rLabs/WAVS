@@ -29,7 +29,7 @@ impl From<ListModelEntry> for Model {
 
 /// [`ModelLister`] implementation for the OpenAI API (`GET /models`).
 #[derive(Clone)]
-pub struct OpenAIModelLister<H = reqwest::Client> {
+pub struct OpenAIModelLister<H = crate::http_client::DefaultHttpClient> {
     client: Client<H>,
 }
 

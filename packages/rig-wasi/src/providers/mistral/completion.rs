@@ -297,7 +297,7 @@ impl FromStr for AssistantContent {
 }
 
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     pub(crate) client: Client<T>,
     pub model: String,
 }

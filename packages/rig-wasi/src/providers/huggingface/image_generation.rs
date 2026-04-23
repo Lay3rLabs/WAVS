@@ -31,7 +31,7 @@ impl TryFrom<ImageGenerationResponse>
 }
 
 #[derive(Clone)]
-pub struct ImageGenerationModel<T = reqwest::Client> {
+pub struct ImageGenerationModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     pub model: String,
 }

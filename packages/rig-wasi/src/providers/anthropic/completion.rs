@@ -830,7 +830,7 @@ impl TryFrom<Message> for message::Message {
 // Both variants have identical fields; only the type parameter default differs.
 #[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     pub(crate) client: Client<T>,
     pub model: String,
     pub default_max_tokens: Option<u64>,

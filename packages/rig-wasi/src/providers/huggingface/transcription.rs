@@ -33,7 +33,7 @@ impl TryFrom<TranscriptionResponse>
 }
 
 #[derive(Clone)]
-pub struct TranscriptionModel<T = reqwest::Client> {
+pub struct TranscriptionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     /// Name of the model (e.g.: gpt-3.5-turbo-1106)
     pub model: String,

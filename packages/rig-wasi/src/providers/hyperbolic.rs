@@ -74,8 +74,8 @@ impl ProviderBuilder for HyperbolicBuilder {
     }
 }
 
-pub type Client<H = reqwest::Client> = client::Client<HyperbolicExt, H>;
-pub type ClientBuilder<H = reqwest::Client> = client::ClientBuilder<HyperbolicBuilder, String, H>;
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<HyperbolicExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> = client::ClientBuilder<HyperbolicBuilder, String, H>;
 
 impl ProviderClient for Client {
     type Input = HyperbolicApiKey;
@@ -311,7 +311,7 @@ impl TryFrom<(&str, CompletionRequest)> for HyperbolicCompletionRequest {
 }
 
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     /// Name of the model (e.g.: deepseek-ai/DeepSeek-R1)
     pub model: String,

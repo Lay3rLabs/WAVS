@@ -684,7 +684,7 @@ impl TryFrom<(&str, CompletionRequest)> for HuggingfaceCompletionRequest {
 }
 
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     pub(crate) client: Client<T>,
     /// Name of the model (e.g: google/gemma-2-2b-it)
     pub model: String,

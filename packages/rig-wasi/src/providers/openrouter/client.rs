@@ -21,8 +21,8 @@ pub struct OpenRouterExtBuilder;
 
 type OpenRouterApiKey = BearerAuth;
 
-pub type Client<H = reqwest::Client> = client::Client<OpenRouterExt, H>;
-pub type ClientBuilder<H = reqwest::Client> =
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<OpenRouterExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> =
     client::ClientBuilder<OpenRouterExtBuilder, OpenRouterApiKey, H>;
 
 impl Provider for OpenRouterExt {

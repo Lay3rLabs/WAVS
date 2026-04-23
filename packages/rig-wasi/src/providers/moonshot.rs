@@ -88,8 +88,8 @@ impl<H> Capabilities<H> for MoonshotExt {
     type AudioGeneration = Nothing;
 }
 
-pub type Client<H = reqwest::Client> = client::Client<MoonshotExt, H>;
-pub type ClientBuilder<H = reqwest::Client> =
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<MoonshotExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> =
     client::ClientBuilder<MoonshotBuilder, MoonshotApiKey, H>;
 
 impl ProviderClient for Client {
@@ -209,7 +209,7 @@ impl TryFrom<(&str, CompletionRequest)> for MoonshotCompletionRequest {
 }
 
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     pub model: String,
 }

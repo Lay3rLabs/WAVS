@@ -58,7 +58,7 @@ impl std::fmt::Display for BilledUnits {
 }
 
 #[derive(Clone)]
-pub struct EmbeddingModel<T = reqwest::Client> {
+pub struct EmbeddingModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     pub model: String,
     pub input_type: String,

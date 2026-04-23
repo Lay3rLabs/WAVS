@@ -109,8 +109,8 @@ pub struct HuggingFaceBuilder {
 
 type HuggingFaceApiKey = BearerAuth;
 
-pub type Client<H = reqwest::Client> = client::Client<HuggingFaceExt, H>;
-pub type ClientBuilder<H = reqwest::Client> =
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<HuggingFaceExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> =
     client::ClientBuilder<HuggingFaceBuilder, HuggingFaceApiKey, H>;
 
 impl Provider for HuggingFaceExt {

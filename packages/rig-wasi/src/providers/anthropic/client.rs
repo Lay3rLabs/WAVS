@@ -66,12 +66,12 @@ impl ApiKey for AnthropicKey {
 // Use () as the default H when reqwest is not available; callers must specify
 // .http_client(WasiHttpClient::default()) on WASM or reqwest::Client explicitly on native.
 #[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
-pub type Client<H = reqwest::Client> = client::Client<AnthropicExt, H>;
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<AnthropicExt, H>;
 #[cfg(not(all(not(target_family = "wasm"), feature = "reqwest")))]
 pub type Client<H = ()> = client::Client<AnthropicExt, H>;
 
 #[cfg(all(not(target_family = "wasm"), feature = "reqwest"))]
-pub type ClientBuilder<H = reqwest::Client> =
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> =
     client::ClientBuilder<AnthropicBuilder, AnthropicKey, H>;
 #[cfg(not(all(not(target_family = "wasm"), feature = "reqwest")))]
 pub type ClientBuilder<H = ()> =

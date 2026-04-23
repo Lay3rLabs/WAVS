@@ -136,12 +136,8 @@ impl TryFrom<String> for Nothing {
     }
 }
 
-// P1: Default H type parameter is conditional on reqwest feature.
-// When reqwest is disabled (WASI target), consumers must provide their own H.
-#[cfg(feature = "reqwest")]
-pub type DefaultHttpClient = reqwest::Client;
-#[cfg(not(feature = "reqwest"))]
-pub type DefaultHttpClient = (); // placeholder — consumers provide their own H on WASI
+// P1: Re-export DefaultHttpClient from http_client module for backward compat.
+pub use crate::http_client::DefaultHttpClient;
 
 #[derive(Clone)]
 pub struct Client<Ext = Nothing, H = DefaultHttpClient> {

@@ -78,8 +78,8 @@ impl ProviderBuilder for PerplexityBuilder {
     }
 }
 
-pub type Client<H = reqwest::Client> = client::Client<PerplexityExt, H>;
-pub type ClientBuilder<H = reqwest::Client> =
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<PerplexityExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> =
     client::ClientBuilder<PerplexityBuilder, PerplexityApiKey, H>;
 
 impl ProviderClient for Client {
@@ -258,7 +258,7 @@ impl TryFrom<(&str, CompletionRequest)> for PerplexityCompletionRequest {
 }
 
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     pub model: String,
 }

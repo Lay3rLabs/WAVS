@@ -104,8 +104,8 @@ impl ProviderBuilder for OllamaBuilder {
     }
 }
 
-pub type Client<H = reqwest::Client> = client::Client<OllamaExt, H>;
-pub type ClientBuilder<H = reqwest::Client> = client::ClientBuilder<OllamaBuilder, Nothing, H>;
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<OllamaExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> = client::ClientBuilder<OllamaBuilder, Nothing, H>;
 
 impl ProviderClient for Client {
     type Input = Nothing;
@@ -182,7 +182,7 @@ impl From<ApiResponse<EmbeddingResponse>> for Result<EmbeddingResponse, Embeddin
 // ---------- Embedding Model ----------
 
 #[derive(Clone)]
-pub struct EmbeddingModel<T = reqwest::Client> {
+pub struct EmbeddingModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     pub model: String,
     ndims: usize,
@@ -470,7 +470,7 @@ impl TryFrom<(&str, CompletionRequest)> for OllamaCompletionRequest {
 }
 
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     client: Client<T>,
     pub model: String,
 }
@@ -750,7 +750,7 @@ impl From<ListModelEntry> for Model {
 
 /// [`ModelLister`] implementation for the Ollama API (`GET /api/tags`).
 #[derive(Clone)]
-pub struct OllamaModelLister<H = reqwest::Client> {
+pub struct OllamaModelLister<H = crate::http_client::DefaultHttpClient> {
     client: Client<H>,
 }
 

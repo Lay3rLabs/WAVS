@@ -83,8 +83,8 @@ impl ProviderBuilder for DeepSeekExtBuilder {
     }
 }
 
-pub type Client<H = reqwest::Client> = client::Client<DeepSeekExt, H>;
-pub type ClientBuilder<H = reqwest::Client> = client::ClientBuilder<DeepSeekExtBuilder, String, H>;
+pub type Client<H = crate::http_client::DefaultHttpClient> = client::Client<DeepSeekExt, H>;
+pub type ClientBuilder<H = crate::http_client::DefaultHttpClient> = client::ClientBuilder<DeepSeekExtBuilder, String, H>;
 
 impl ProviderClient for Client {
     type Input = DeepSeekApiKey;
@@ -518,7 +518,7 @@ impl TryFrom<(&str, CompletionRequest)> for DeepseekCompletionRequest {
 
 /// The struct implementing the `CompletionModel` trait
 #[derive(Clone)]
-pub struct CompletionModel<T = reqwest::Client> {
+pub struct CompletionModel<T = crate::http_client::DefaultHttpClient> {
     pub client: Client<T>,
     pub model: String,
 }
