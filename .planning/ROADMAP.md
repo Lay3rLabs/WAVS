@@ -77,7 +77,7 @@ Full details: `.planning/milestones/v2.0-ROADMAP.md`
 - [x] **Phase 20: WIT Interface & Types** — Establish the `run-agent`/`call-service` interface contract; all engine, SDK, and binding work depends on this compiling first (completed 2026-04-22)
 - [x] **Phase 21: Agent Continuation Engine** — Re-invocation loop with KV-backed state persistence, step limit enforcement, and component LRU pinning (completed 2026-04-22)
 - [x] **Phase 22: Service-to-Service RPC** — `call-service` host function with permission enforcement, cycle detection, and bilateral caller/callee access control (completed 2026-04-22)
-- [ ] **Phase 23: Integration & Validation** — End-to-end examples and tests wiring continuation + RPC together, verifying permission enforcement
+- [x] **Phase 23: Integration & Validation** — End-to-end examples and tests wiring continuation + RPC together, verifying permission enforcement (completed 2026-04-23)
 
 ## Phase Details
 
@@ -133,10 +133,10 @@ Plans:
   1. A deployable multi-step agent example exists that triggers, runs 3+ continuation steps with KV-persisted state, and returns a final result — a developer can deploy it and observe each step's KV checkpoint
   2. A deployable service composition example exists where agent A calls utility service B via `call-service` and incorporates B's response into its final result — both services deploy from standard service.json configs
   3. Running a permission enforcement test produces two clear failures: one for a caller missing `AllowedServiceCalls`, one for a callee missing `AllowedCallers` — both rejections include human-readable error messages
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 23-01-PLAN.md — Fix _helpers export macros + multi-step-agent component + continuation E2E test
-- [ ] 23-02-PLAN.md — Utility-service + composition-agent components + RPC E2E + permission enforcement tests
+- [x] 23-01-PLAN.md — Fix _helpers export macros + multi-step-agent component + continuation E2E test
+- [x] 23-02-PLAN.md — Utility-service + composition-agent components + RPC E2E + permission enforcement tests
 
 ## Progress
 
@@ -166,4 +166,4 @@ Plans:
 | 20. WIT Interface & Types | v3.0 | 2/2 | Complete    | 2026-04-22 |
 | 21. Agent Continuation Engine | v3.0 | 2/2 | Complete    | 2026-04-22 |
 | 22. Service-to-Service RPC | v3.0 | 2/2 | Complete    | 2026-04-22 |
-| 23. Integration & Validation | v3.0 | 0/2 | Not started | - |
+| 23. Integration & Validation | v3.0 | 2/2 | Complete   | 2026-04-23 |
