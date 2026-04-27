@@ -39,6 +39,27 @@ export function useGroupedActivity(sourceList: ActivityItem[]): {
         } else {
           orphans.push(item);
         }
+      } else if (item.kind === 'execution_complete') {
+        // submit:"none" services don't carry a correlation_id, so match on
+        // serviceId+workflowId to the oldest still-pending group (FIFO),
+        // which is the trigger this execution responded to.
+        let matched: GroupedActivityEvent | undefined;
+        for (const group of byCorrelation.values()) {
+          if (
+            group.status === 'pending' &&
+            group.trigger.serviceId === item.serviceId &&
+            group.trigger.workflowId === item.workflowId &&
+            (matched === undefined || group.trigger.ts < matched.trigger.ts)
+          ) {
+            matched = group;
+          }
+        }
+        if (matched !== undefined) {
+          matched.submission = item;
+          matched.status = 'complete';
+        } else {
+          orphans.push(item);
+        }
       }
     }
 

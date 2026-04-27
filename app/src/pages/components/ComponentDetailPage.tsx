@@ -109,10 +109,23 @@ function PermissionsTab({ metadata, metadataError }: { metadata: ComponentMetada
       <div className="border-t border-charcoal-light pt-2 mt-1">
         <PermRow label="File System" value={metadata.permissions.file_system ? 'yes' : 'no'} />
       </div>
+      {metadata.permissions.allowed_service_calls && metadata.permissions.allowed_service_calls !== 'none' && (
+        <div className="border-t border-charcoal-light pt-2 mt-1">
+          <PermRow label="Service Calls" value={formatHttpHosts(metadata.permissions.allowed_service_calls)} />
+        </div>
+      )}
       <div className="border-t border-charcoal-light pt-2 mt-1 flex flex-col gap-2">
         <PermRow label="Fuel Limit" value={metadata.fuel_limit !== null ? metadata.fuel_limit.toLocaleString() : 'none'} />
         <PermRow label="Time Limit" value={metadata.time_limit_seconds !== null ? `${metadata.time_limit_seconds}s` : 'none'} />
+        {metadata.max_continuation_steps != null && (
+          <PermRow label="Max Steps" value={String(metadata.max_continuation_steps)} />
+        )}
       </div>
+      {metadata.allowed_callers && (
+        <div className="border-t border-charcoal-light pt-2 mt-1">
+          <PermRow label="Allowed Callers" value={formatHttpHosts(metadata.allowed_callers)} />
+        </div>
+      )}
     </div>
   );
 }

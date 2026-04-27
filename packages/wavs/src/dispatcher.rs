@@ -400,6 +400,28 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                             msg.workflow_id(),
                                             msg.service.name
                                         );
+                                        let result_payload = {
+                                            let raw = &msg.operator_response.payload;
+                                            if raw.is_empty() {
+                                                None
+                                            } else {
+                                                let capped = &raw[..raw.len().min(4096)];
+                                                Some(const_hex::encode_prefixed(capped))
+                                            }
+                                        };
+                                        if let Err(err) = _self.tauri_handle.emit_ext(
+                                            wavs_gui_shared::event::ExecutionCompleteEvent {
+                                                service_id: msg.service_id().clone(),
+                                                workflow_id: msg.workflow_id().clone(),
+                                                trigger_data: msg.trigger_action.data.clone(),
+                                                result_payload,
+                                            },
+                                        ) {
+                                            tracing::error!(
+                                                "Error emitting execution complete event to GUI: {:?}",
+                                                err
+                                            );
+                                        }
                                     }
                                     _ => {
                                         if let Err(e) = _self

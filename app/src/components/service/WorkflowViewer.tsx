@@ -1,5 +1,5 @@
 import { AddressDisplay } from '../atoms';
-import type { Workflow, WorkflowId, Trigger, Component, Submit, AllowedHostPermission } from '../../types';
+import type { Workflow, WorkflowId, Trigger, Component, Submit, AllowedHostPermission, AllowedServiceCalls, AllowedCallers } from '../../types';
 import { getTriggerLabel } from '../../types';
 
 interface WorkflowViewerProps {
@@ -129,11 +129,20 @@ function ComponentSection({ component }: { component: Component }) {
         <InfoRow label="File System" value={component.permissions.file_system ? 'yes' : 'no'} />
         <InfoRow label="Raw Sockets" value={component.permissions.raw_sockets ? 'yes' : 'no'} />
         <InfoRow label="DNS Resolution" value={component.permissions.dns_resolution ? 'yes' : 'no'} />
+        {component.permissions.allowed_service_calls && component.permissions.allowed_service_calls !== 'none' && (
+          <InfoRow label="Service Calls" value={formatHosts(component.permissions.allowed_service_calls)} />
+        )}
         {component.fuel_limit != null && (
           <InfoRow label="Fuel Limit" value={component.fuel_limit.toLocaleString()} />
         )}
         {component.time_limit_seconds != null && (
           <InfoRow label="Time Limit" value={`${component.time_limit_seconds}s`} />
+        )}
+        {component.allowed_callers && (
+          <InfoRow label="Allowed Callers" value={formatHosts(component.allowed_callers)} />
+        )}
+        {component.max_continuation_steps != null && (
+          <InfoRow label="Max Steps" value={String(component.max_continuation_steps)} />
         )}
       </div>
     </div>
@@ -179,7 +188,7 @@ function truncate(s: string, len = 20): string {
 }
 
 
-function formatHosts(hosts: AllowedHostPermission): string {
+function formatHosts(hosts: AllowedHostPermission | AllowedServiceCalls | AllowedCallers): string {
   if (hosts === 'all') return 'all';
   if (hosts === 'none') return 'none';
   return hosts.only.join(', ');

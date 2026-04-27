@@ -19,7 +19,7 @@ import { ServiceUpdateModal } from '../../components/service';
 import { getPublicClient, getAddress } from '../../hooks/useViemClient';
 import { connectToRegistry, fetchOperators } from '../../utils/evm';
 import { getServiceAddress, getServiceChain, getErrorMessage, buildServiceMap } from '../../types';
-import type { Service, KvEntry, FsEntry, Workflow, AllowedHostPermission } from '../../types';
+import type { Service, KvEntry, FsEntry, Workflow, AllowedHostPermission, AllowedServiceCalls, AllowedCallers } from '../../types';
 import type { Address } from 'viem';
 import { getRegistryKeyFromParams } from './ServicesLayout';
 
@@ -288,7 +288,7 @@ function FsBrowser({ serviceId }: { serviceId: string }) {
 
 // ── Components Tab ────────────────────────────────────────────────────────────
 
-function formatHosts(hosts: AllowedHostPermission): string {
+function formatHosts(hosts: AllowedHostPermission | AllowedServiceCalls | AllowedCallers): string {
   if (hosts === 'all') return 'all';
   if (hosts === 'none') return 'none';
   return hosts.only.join(', ');
@@ -375,6 +375,9 @@ function ComponentsTab({ workflows }: { workflows: Record<string, Workflow> }) {
                   <PermRow label="File System" value={component.permissions.file_system ? 'yes' : 'no'} />
                   <PermRow label="Raw Sockets" value={component.permissions.raw_sockets ? 'yes' : 'no'} />
                   <PermRow label="DNS Resolution" value={component.permissions.dns_resolution ? 'yes' : 'no'} />
+                  {component.permissions.allowed_service_calls && component.permissions.allowed_service_calls !== 'none' && (
+                    <PermRow label="Service Calls" value={formatHosts(component.permissions.allowed_service_calls)} />
+                  )}
                 </div>
               </div>
 
@@ -387,6 +390,20 @@ function ComponentsTab({ workflows }: { workflows: Record<string, Workflow> }) {
                     )}
                     {component.time_limit_seconds != null && (
                       <PermRow label="Time" value={`${component.time_limit_seconds}s`} />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {(component.allowed_callers || component.max_continuation_steps != null) && (
+                <div className="border-t border-charcoal-light pt-2 mt-1">
+                  <p className="text-tan-muted text-xs font-medium mb-2">Agent Composition</p>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    {component.allowed_callers && (
+                      <PermRow label="Allowed Callers" value={formatHosts(component.allowed_callers)} />
+                    )}
+                    {component.max_continuation_steps != null && (
+                      <PermRow label="Max Steps" value={String(component.max_continuation_steps)} />
                     )}
                   </div>
                 </div>

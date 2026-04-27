@@ -66,6 +66,22 @@ impl TauriEventExt for SubmissionEvent {
     const NAME: &'static str = "submission";
 }
 
+/// Emitted when a workflow execution completes for a `submit: "none"` service.
+/// The engine produced a result but no on-chain submission happens, so without
+/// this the UI would show the trigger as pending forever.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ExecutionCompleteEvent {
+    pub service_id: ServiceId,
+    pub workflow_id: WorkflowId,
+    pub trigger_data: TriggerData,
+    pub result_payload: Option<String>,
+}
+
+impl TauriEventExt for ExecutionCompleteEvent {
+    const NAME: &'static str = "execution_complete";
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SubmissionFailedEvent {

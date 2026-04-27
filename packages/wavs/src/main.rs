@@ -24,6 +24,10 @@ fn main() {
     config.normalize_credentials();
 
     let ctx = AppContext::new();
+    // Enter the Tokio runtime context so that libraries which require a
+    // reactor (hyper, tonic, BatchSpanProcessor, etc.) can find it even
+    // though we are on the synchronous main thread.
+    let _rt_guard = ctx.rt.enter();
 
     // setup tracing
     let filters = config.tracing_env_filter().unwrap();

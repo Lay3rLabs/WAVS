@@ -121,6 +121,13 @@ export interface SubmissionFailedEvent {
   error: string;
 }
 
+export interface ExecutionCompleteEvent {
+  service_id: ServiceId;
+  workflow_id: WorkflowId;
+  trigger_data: TriggerData;
+  result_payload: string | null;
+}
+
 export type ServiceAction = 'added' | 'removed' | 'paused' | 'resumed';
 
 export interface ServiceEvent {
@@ -154,6 +161,8 @@ export interface Component {
   time_limit_seconds: number | null;
   config: Record<string, string>;
   env_keys: string[];
+  allowed_callers?: AllowedCallers;
+  max_continuation_steps?: number;
 }
 
 export type ComponentSource =
@@ -166,9 +175,20 @@ export interface Permissions {
   file_system: boolean;
   raw_sockets: boolean;
   dns_resolution: boolean;
+  allowed_service_calls: AllowedServiceCalls;
 }
 
 export type AllowedHostPermission =
+  | 'all'
+  | { only: string[] }
+  | 'none';
+
+export type AllowedServiceCalls =
+  | 'all'
+  | { only: string[] }
+  | 'none';
+
+export type AllowedCallers =
   | 'all'
   | { only: string[] }
   | 'none';
@@ -299,6 +319,8 @@ export interface ComponentMetadata {
   config: Record<string, string>;
   env_keys: string[];
   source: ComponentSourceResult;
+  allowed_callers?: AllowedCallers;
+  max_continuation_steps?: number;
 }
 
 export interface ComponentSchema {
@@ -327,7 +349,7 @@ export interface FsEntry {
 }
 
 // Activity types (unified triggers + submissions)
-export type ActivityKind = 'trigger' | 'submission' | 'submission_failed';
+export type ActivityKind = 'trigger' | 'submission' | 'submission_failed' | 'execution_complete';
 
 export interface ActivityItem {
   id: number;

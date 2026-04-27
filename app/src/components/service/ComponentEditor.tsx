@@ -13,9 +13,21 @@ const SOURCE_OPTIONS: DropdownOption<SourceType>[] = [
   { label: 'Digest', value: 'digest' },
 ];
 
-type HttpHostMode = 'all' | 'none' | 'specific';
+type PermissionMode = 'all' | 'none' | 'specific';
 
-const HTTP_HOST_OPTIONS: DropdownOption<HttpHostMode>[] = [
+const HTTP_HOST_OPTIONS: DropdownOption<PermissionMode>[] = [
+  { label: 'None', value: 'none' },
+  { label: 'All', value: 'all' },
+  { label: 'Specific', value: 'specific' },
+];
+
+const SERVICE_CALL_OPTIONS: DropdownOption<PermissionMode>[] = [
+  { label: 'None', value: 'none' },
+  { label: 'All', value: 'all' },
+  { label: 'Specific', value: 'specific' },
+];
+
+const CALLER_OPTIONS: DropdownOption<PermissionMode>[] = [
   { label: 'None', value: 'none' },
   { label: 'All', value: 'all' },
   { label: 'Specific', value: 'specific' },
@@ -39,7 +51,9 @@ export function ComponentEditor({ component, onChange }: ComponentEditorProps) {
 
   const hasAdvanced =
     component.fuelLimit !== '' ||
-    component.timeLimitSeconds !== '';
+    component.timeLimitSeconds !== '' ||
+    component.maxContinuationSteps !== '' ||
+    component.allowedCallers !== 'none';
 
   const handleLookupDigest = async () => {
     if (!component.package) {
@@ -217,6 +231,30 @@ export function ComponentEditor({ component, onChange }: ComponentEditorProps) {
           />
           File System Access
         </label>
+        <div className="flex flex-col gap-2">
+          <label className="text-beige-warm text-sm">Allowed Service Calls</label>
+          <Dropdown
+            options={SERVICE_CALL_OPTIONS}
+            value={component.allowedServiceCalls}
+            onChange={(v) => update({ allowedServiceCalls: v })}
+            size="sm"
+          />
+        </div>
+        {component.allowedServiceCalls === 'specific' && (
+          <div className="flex flex-col gap-2 pl-4">
+            {component.specificServiceCallIds.map((id, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <TextInput placeholder="service ID" value={id} onChange={(v) => {
+                  const ids = [...component.specificServiceCallIds];
+                  ids[i] = v;
+                  update({ specificServiceCallIds: ids });
+                }} className="flex-1" />
+                <button type="button" onClick={() => update({ specificServiceCallIds: component.specificServiceCallIds.filter((_, j) => j !== i) })} className="text-red-3 hover:text-red-4 text-sm cursor-pointer">Remove</button>
+              </div>
+            ))}
+            <button type="button" onClick={() => update({ specificServiceCallIds: [...component.specificServiceCallIds, ''] })} className="self-start text-sm text-purple-2 hover:text-purple-3 cursor-pointer">+ Add Service ID</button>
+          </div>
+        )}
       </div>
 
       {/* Config */}
@@ -265,15 +303,45 @@ export function ComponentEditor({ component, onChange }: ComponentEditorProps) {
       </button>
 
       {showAdvanced && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-2">
-            <label className="text-beige-warm text-sm">Fuel Limit (optional)</label>
-            <TextInput kind="number" placeholder="e.g. 1000000" value={component.fuelLimit} onChange={(v) => update({ fuelLimit: v })} />
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="flex flex-col gap-2">
+              <label className="text-beige-warm text-sm">Fuel Limit (optional)</label>
+              <TextInput kind="number" placeholder="e.g. 1000000" value={component.fuelLimit} onChange={(v) => update({ fuelLimit: v })} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-beige-warm text-sm">Time Limit Seconds (optional)</label>
+              <TextInput kind="number" placeholder="e.g. 30" value={component.timeLimitSeconds} onChange={(v) => update({ timeLimitSeconds: v })} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-beige-warm text-sm">Max Continuation Steps</label>
+              <TextInput kind="number" placeholder="default: 10" value={component.maxContinuationSteps} onChange={(v) => update({ maxContinuationSteps: v })} />
+            </div>
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-beige-warm text-sm">Time Limit Seconds (optional)</label>
-            <TextInput kind="number" placeholder="e.g. 30" value={component.timeLimitSeconds} onChange={(v) => update({ timeLimitSeconds: v })} />
+            <label className="text-beige-warm text-sm">Allowed Callers</label>
+            <Dropdown
+              options={CALLER_OPTIONS}
+              value={component.allowedCallers}
+              onChange={(v) => update({ allowedCallers: v })}
+              size="sm"
+            />
           </div>
+          {component.allowedCallers === 'specific' && (
+            <div className="flex flex-col gap-2 pl-4">
+              {component.specificCallerIds.map((id, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <TextInput placeholder="service ID" value={id} onChange={(v) => {
+                    const ids = [...component.specificCallerIds];
+                    ids[i] = v;
+                    update({ specificCallerIds: ids });
+                  }} className="flex-1" />
+                  <button type="button" onClick={() => update({ specificCallerIds: component.specificCallerIds.filter((_, j) => j !== i) })} className="text-red-3 hover:text-red-4 text-sm cursor-pointer">Remove</button>
+                </div>
+              ))}
+              <button type="button" onClick={() => update({ specificCallerIds: [...component.specificCallerIds, ''] })} className="self-start text-sm text-purple-2 hover:text-purple-3 cursor-pointer">+ Add Caller ID</button>
+            </div>
+          )}
         </div>
       )}
     </div>

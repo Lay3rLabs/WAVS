@@ -1,7 +1,7 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { useAppStore, nextActivityId } from '../stores/appStore';
 import { useAgentStore } from '../stores/agentStore';
-import { buildServiceMap, type SettingsEvent, type LogEvent, type TriggerEvent, type SubmissionEvent, type ServiceEvent, type LogLevel, type SubmissionFailedEvent } from '../types';
+import { buildServiceMap, type SettingsEvent, type LogEvent, type TriggerEvent, type SubmissionEvent, type ServiceEvent, type LogLevel, type SubmissionFailedEvent, type ExecutionCompleteEvent } from '../types';
 import { getServices } from './commands';
 import { Toast } from '../components/atoms/Toast';
 
@@ -12,6 +12,7 @@ const EVENTS = {
   TRIGGER: 'trigger',
   SUBMISSION: 'submission',
   SUBMISSION_FAILED: 'submission_failed',
+  EXECUTION_COMPLETE: 'execution_complete',
   SERVICE: 'service',
 } as const;
 
@@ -72,6 +73,21 @@ export async function startListeners(): Promise<void> {
     });
   });
   unlistenFns.push(unlistenSubmission);
+
+  // Execution complete listener -> ActivityItem (for submit:"none" services)
+  const unlistenExecutionComplete = await listen<ExecutionCompleteEvent>(EVENTS.EXECUTION_COMPLETE, (event) => {
+    const payload = event.payload;
+    store.addActivity({
+      id: nextActivityId(),
+      ts: Date.now(),
+      kind: 'execution_complete',
+      serviceId: payload.service_id,
+      workflowId: payload.workflow_id,
+      triggerData: payload.trigger_data,
+      resultPayload: payload.result_payload,
+    });
+  });
+  unlistenFns.push(unlistenExecutionComplete);
 
   // Submission failed listener -> ActivityItem
   const unlistenSubmissionFailed = await listen<SubmissionFailedEvent>(EVENTS.SUBMISSION_FAILED, (event) => {
