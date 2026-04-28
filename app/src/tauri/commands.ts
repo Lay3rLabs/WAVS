@@ -69,6 +69,22 @@ export async function saveServiceToNode(serviceJson: string): Promise<string> {
   return invoke<string>('cmd_save_service_to_node', { service_json: serviceJson });
 }
 
+/**
+ * Send a manual trigger to the embedded WAVS node for the given service+workflow.
+ * `data` is the raw byte payload (the component's TriggerData::Raw input).
+ */
+export async function sendManualTrigger(
+  serviceId: string,
+  workflowId: string,
+  data: Uint8Array,
+): Promise<void> {
+  return invoke<void>('cmd_send_manual_trigger', {
+    service_id: serviceId,
+    workflow_id: workflowId,
+    data: Array.from(data),
+  });
+}
+
 // Keychain commands
 export async function hasMnemonic(): Promise<boolean> {
   return invoke<boolean>('cmd_has_mnemonic');

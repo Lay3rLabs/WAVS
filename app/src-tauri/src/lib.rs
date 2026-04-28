@@ -17,8 +17,9 @@ use crate::commands::{
     cmd_list_fs_entries, cmd_list_kv_entries, cmd_pick_folder, cmd_publish_component,
     cmd_read_fs_file, cmd_read_wavs_toml, cmd_register_claude_mcp, cmd_remove_service, cmd_restart,
     cmd_save_env_vars, cmd_save_mcp_settings, cmd_save_poa_registries, cmd_save_service_to_node,
-    cmd_set_wavs_home, cmd_start_agent, cmd_start_mcp_server, cmd_start_wavs, cmd_stop_agent,
-    cmd_stop_mcp_server, cmd_store_mnemonic, cmd_upload_to_ipfs, cmd_write_wavs_toml,
+    cmd_send_manual_trigger, cmd_set_wavs_home, cmd_start_agent, cmd_start_mcp_server,
+    cmd_start_wavs, cmd_stop_agent, cmd_stop_mcp_server, cmd_store_mnemonic, cmd_upload_to_ipfs,
+    cmd_write_wavs_toml,
 };
 use crate::state::{
     LogBufferState, McpServerState, MnemonicCacheState, SchemaCacheState, SettingsState,
@@ -122,6 +123,7 @@ pub fn run() {
             cmd_add_service,
             cmd_remove_service,
             cmd_save_service_to_node,
+            cmd_send_manual_trigger,
             cmd_get_services,
             cmd_has_mnemonic,
             cmd_store_mnemonic,

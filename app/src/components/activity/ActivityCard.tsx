@@ -195,8 +195,13 @@ function TxHashDisplay({ hash }: { hash: string }) {
   );
 }
 
-function ResultPreview({ payload }: { payload: string | null | undefined }) {
+function ResultPreview({ payload, expanded: cardExpanded = false }: { payload: string | null | undefined; expanded?: boolean }) {
   const result = decodeResultPayload(payload);
+  // Local expand: independent of the parent card's expand toggle so the
+  // affordance is right where the content is. Defaults to whatever the parent
+  // says, but the user can override with the inline button.
+  const [localOverride, setLocalOverride] = useState<boolean | null>(null);
+  const expanded = localOverride ?? cardExpanded;
 
   if (!payload) return null;
 
@@ -206,37 +211,83 @@ function ResultPreview({ payload }: { payload: string | null | undefined }) {
       ? 'bg-charcoal-medium text-tan-warm'
       : 'bg-charcoal-light text-tan-muted';
 
+  const expandedBlockClass = 'whitespace-pre-wrap font-mono text-xs text-beige-warm/90 max-h-96 overflow-y-auto';
+  const collapsedJsonClass = 'whitespace-pre-wrap font-mono text-xs text-beige-warm/90 max-h-[3.6em] overflow-hidden';
+  const collapsedTextClass = 'font-mono text-xs text-beige-warm break-all line-clamp-3';
+
+  // Heuristic for whether content is worth offering "Show full" for: hex
+  // is always single-line so skip; otherwise show the toggle when the text
+  // has newlines or is longer than would fit collapsed.
+  const isHex = result.kind === 'hex';
+  const offerToggle = !isHex && (result.display.includes('\n') || result.display.length > 200);
+
   return (
-    <span className="inline-flex items-start gap-1 min-w-0">
-      <span className={clsx('shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide', badgeClass)}>
-        {result.kind === 'json' ? 'JSON' : result.kind === 'text' ? 'Text' : 'Hex'}
+    <div className="flex flex-col gap-1 min-w-0 w-full">
+      <span className="inline-flex items-start gap-1 min-w-0">
+        <span className={clsx('shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide', badgeClass)}>
+          {result.kind === 'json' ? 'JSON' : result.kind === 'text' ? 'Text' : 'Hex'}
+        </span>
+        {isHex ? (
+          <span className="font-mono text-xs text-tan-muted break-all">{result.display}</span>
+        ) : expanded ? (
+          <pre className={expandedBlockClass}>{result.display}</pre>
+        ) : result.kind === 'json' ? (
+          <pre className={collapsedJsonClass}>{result.display}</pre>
+        ) : (
+          <span className={collapsedTextClass}>{result.display}</span>
+        )}
       </span>
-      {result.kind === 'json' ? (
-        <pre className="whitespace-pre-wrap font-mono text-xs text-beige-warm/90 max-h-[3.6em] overflow-hidden">
-          {result.display}
-        </pre>
-      ) : result.kind === 'text' ? (
-        <span className="font-mono text-xs text-beige-warm break-all">{result.display}</span>
-      ) : (
-        <span className="font-mono text-xs text-tan-muted">{result.display}</span>
+      {offerToggle && (
+        <button
+          type="button"
+          className="self-start text-[11px] text-tan-muted hover:text-beige-warm cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            setLocalOverride(!expanded);
+          }}
+        >
+          {expanded ? 'Show less' : 'Show full'}
+        </button>
       )}
-    </span>
+    </div>
   );
 }
 
-export function SubmissionRows({ txHash, resultPayload, bgColor = 'bg-charcoal-dark' }: {
+export function SubmissionRows({
+  txHash,
+  resultPayload,
+  bgColor = 'bg-charcoal-dark',
+  dividerLabel,
+  expanded = false,
+}: {
   txHash?: string;
   resultPayload?: string | null;
   bgColor?: string;
+  dividerLabel?: string;
+  expanded?: boolean;
 }) {
   if (!txHash && !resultPayload) return null;
+
+  // Result-only (no tx, e.g. submit:"none" services) — render bare. The parent
+  // pill already labels it "Result"; a divider + per-row "result" label would
+  // repeat that twice for one piece of data. When there's a tx we keep the
+  // structured layout because there are multiple rows to label.
+  if (!txHash && resultPayload) {
+    return (
+      <div className="mt-2">
+        <ResultPreview payload={resultPayload} expanded={expanded} />
+      </div>
+    );
+  }
+
+  const label = dividerLabel ?? 'submission';
 
   return (
     <>
       <div className="relative my-2">
         <div className="border-t border-charcoal-light" />
         <span className={clsx('absolute left-1/2 -translate-x-1/2 -translate-y-1/2 top-0 px-2 text-[10px] text-tan-muted tracking-widest', bgColor)}>
-          submission
+          {label}
         </span>
       </div>
       <div className="flex flex-col gap-1">
@@ -244,7 +295,7 @@ export function SubmissionRows({ txHash, resultPayload, bgColor = 'bg-charcoal-d
         {resultPayload && (
           <div className="flex gap-3 text-xs">
             <span className="text-tan-muted w-20 shrink-0">result</span>
-            <ResultPreview payload={resultPayload} />
+            <ResultPreview payload={resultPayload} expanded={expanded} />
           </div>
         )}
       </div>

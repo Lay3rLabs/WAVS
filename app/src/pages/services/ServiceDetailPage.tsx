@@ -14,6 +14,7 @@ import {
   listKvEntries,
   listFsEntries,
   readFsFile,
+  sendManualTrigger,
 } from '../../tauri';
 import { ServiceUpdateModal } from '../../components/service';
 import { getPublicClient, getAddress } from '../../hooks/useViemClient';
@@ -458,6 +459,80 @@ function StorageTab({ service, serviceId }: { service: Service; serviceId: strin
   );
 }
 
+function SendTriggerModal({
+  serviceId,
+  workflowIds,
+}: {
+  serviceId: string;
+  workflowIds: string[];
+}) {
+  const [workflowId, setWorkflowId] = useState(workflowIds[0] ?? 'default');
+  const [payload, setPayload] = useState('{}');
+  const [loading, setLoading] = useState(false);
+
+  const handleSend = async () => {
+    setLoading(true);
+    try {
+      const data = new TextEncoder().encode(payload);
+      await sendManualTrigger(serviceId, workflowId, data);
+      Toast.success('Trigger sent — watch the Activity tab for the result.');
+      Modal.close();
+    } catch (err) {
+      Toast.error(`Failed to send trigger: ${getErrorMessage(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h3 className="text-beige-light text-lg font-semibold">Send Manual Trigger</h3>
+      <p className="text-tan-muted text-sm">
+        Posts a <code className="text-beige-warm">Trigger::Manual</code> with raw bytes to
+        the embedded WAVS node. The component receives the payload via
+        <code className="text-beige-warm"> TriggerData::Raw</code>.
+      </p>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-tan-muted text-xs">Workflow</label>
+        <select
+          value={workflowId}
+          onChange={(e) => setWorkflowId(e.target.value)}
+          className="bg-charcoal-darkest border border-charcoal-light rounded px-2 py-1 text-beige-warm text-sm"
+        >
+          {workflowIds.map((id) => (
+            <option key={id} value={id}>{id}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-tan-muted text-xs">
+          Payload (sent verbatim as UTF-8 bytes — JSON or any text)
+        </label>
+        <textarea
+          value={payload}
+          onChange={(e) => setPayload(e.target.value)}
+          rows={6}
+          spellCheck={false}
+          className="bg-charcoal-darkest border border-charcoal-light rounded p-2 text-beige-warm text-xs font-mono"
+        />
+      </div>
+
+      <div className="flex gap-2 justify-end">
+        <Button text="Cancel" size="sm" onClick={() => Modal.close()} />
+        <Button
+          text={loading ? 'Sending…' : 'Send'}
+          size="sm"
+          color="purple"
+          disabled={loading}
+          onClick={handleSend}
+        />
+      </div>
+    </div>
+  );
+}
+
 function ConfirmModal({
   title,
   message,
@@ -710,6 +785,22 @@ export function ServiceDetailPage() {
                   variant="outline"
                   onClick={handlePauseResume}
                 />
+                {serviceHashId && (
+                  <Button
+                    text="Send Trigger"
+                    size="sm"
+                    variant="outline"
+                    disabled={isPaused}
+                    onClick={() =>
+                      Modal.open(
+                        <SendTriggerModal
+                          serviceId={serviceHashId}
+                          workflowIds={Object.keys(service.workflows)}
+                        />,
+                      )
+                    }
+                  />
+                )}
               </>
             ) : (
               <Button text="Register Service" size="sm" color="purple" onClick={() => navigate(`/services/new?registry=${registryKey}`)} />

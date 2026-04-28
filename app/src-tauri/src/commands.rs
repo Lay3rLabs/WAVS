@@ -16,7 +16,10 @@ use wavs_gui_shared::{
     error::{AppError, AppResult},
     settings::{SavedRegistry, Settings},
 };
-use wavs_types::{ChainConfigs, Credential, Service, ServiceId, ServiceManager};
+use wavs_types::{
+    ChainConfigs, Credential, Service, ServiceId, ServiceManager, Trigger, TriggerAction,
+    TriggerConfig, TriggerData, WorkflowId,
+};
 
 use crate::agent::{PiSidecarConfig, PiSidecarState};
 
@@ -373,6 +376,39 @@ pub async fn cmd_save_service_to_node(
         .map_err(|e| AppError::Service(format!("Failed to parse save response: {}", e)))?;
 
     Ok(format!("{}/dev/services/{}", wavs_url, save_resp.hash))
+}
+
+/// Send a manual trigger directly into the embedded WAVS dispatcher.
+/// Mirrors `POST /dev/triggers` (`packages/wavs/src/http/handlers/debug.rs`)
+/// without going through HTTP — same trigger_manager.add_trigger call.
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_send_manual_trigger(
+    wavs_instance: State<'_, WavsInstanceState>,
+    service_id: String,
+    workflow_id: String,
+    data: Vec<u8>,
+) -> AppResult<()> {
+    let service_id = ServiceId::from_str(&service_id)
+        .map_err(|e| AppError::Service(format!("Invalid service_id: {}", e)))?;
+    let workflow_id = WorkflowId::from_str(&workflow_id)
+        .map_err(|e| AppError::Service(format!("Invalid workflow_id: {}", e)))?;
+
+    let action = TriggerAction {
+        config: TriggerConfig {
+            service_id,
+            workflow_id,
+            trigger: Trigger::Manual,
+        },
+        data: TriggerData::Raw(data),
+    };
+
+    wavs_instance
+        .dispatcher()?
+        .trigger_manager
+        .add_trigger(action)
+        .map_err(|e| AppError::Service(format!("Failed to send trigger: {}", e)))?;
+
+    Ok(())
 }
 
 /// Load mnemonic from OS keyring and populate the cache.

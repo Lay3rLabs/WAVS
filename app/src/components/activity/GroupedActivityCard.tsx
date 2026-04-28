@@ -9,6 +9,7 @@ import {
   DetailRows,
   SubmissionRows,
 } from './ActivityCard';
+import { StepTimeline } from './StepTimeline';
 
 interface GroupedActivityCardProps {
   group: GroupedActivityEvent;
@@ -94,7 +95,7 @@ export function GroupedActivityCard({
         />
       )}
 
-      {/* Child card (submission) — always visible */}
+      {/* Child card (submission or execution result) — always visible */}
       {group.submission && (
         <div className="ml-2 mt-2 border border-charcoal-light bg-charcoal-darkest rounded-md pl-3 pr-3 pt-3 pb-3">
           {/* Child header row */}
@@ -104,10 +105,16 @@ export function GroupedActivityCard({
                 'shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide',
                 group.submission.kind === 'submission_failed'
                   ? 'bg-red-900/40 text-red-400'
-                  : 'bg-blue-900/40 text-blue-400',
+                  : group.submission.kind === 'execution_complete'
+                    ? 'bg-green-900/40 text-green-400'
+                    : 'bg-blue-900/40 text-blue-400',
               )}
             >
-              {group.submission.kind === 'submission_failed' ? 'Failed' : 'Submit'}
+              {group.submission.kind === 'submission_failed'
+                ? 'Failed'
+                : group.submission.kind === 'execution_complete'
+                  ? 'Result'
+                  : 'Submit'}
             </span>
 
             <span className="shrink-0 text-tan-muted text-xs ml-auto font-mono">
@@ -126,7 +133,18 @@ export function GroupedActivityCard({
             txHash={group.submission.txHash}
             resultPayload={group.submission.resultPayload}
             bgColor="bg-charcoal-darkest"
+            expanded={expanded}
           />
+
+          {/* Step timeline — only for execution_complete (submit:"none" services)
+              and only when the card is expanded, to avoid an extra KV fetch per
+              row in the activity list. */}
+          {expanded && group.submission.kind === 'execution_complete' && (
+            <StepTimeline
+              serviceId={group.trigger.serviceId}
+              workflowId={group.trigger.workflowId}
+            />
+          )}
 
           {/* Child raw JSON toggle — only when expanded */}
           {expanded && (
