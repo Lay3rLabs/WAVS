@@ -1,8 +1,76 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────
+   DESIGN TOKENS — warm-mono refined
+   Layer 0: raw values. UI consumes the semantic aliases below.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  /* Surfaces — warm graphite, depth via lightness not borders */
+  --color-canvas:           #0E0D0C;
+  --color-bg:               #15130F;
+  --color-surface:          #1C1916;
+  --color-surface-raised:   #24201C;
+  --color-surface-overlay:  #2C2723;
+  --color-surface-sunken:   #0A0908;
+
+  /* Hairlines — barely-there to definite */
+  --color-border:           #2A2622;
+  --color-border-strong:    #3A332D;
+  --color-border-focus:     #A78BFA;
+
+  /* Foreground — warm paper, disciplined ramp */
+  --color-fg:               #ECE5DC;
+  --color-fg-secondary:     #B8AFA4;
+  --color-fg-muted:         #7A726A;
+  --color-fg-faint:         #4A4640;
+  --color-fg-inverse:       #0E0D0C;
+
+  /* Accent — electric violet, the only chromatic brand color */
+  --color-accent:           #A78BFA;
+  --color-accent-hover:     #C4B0FF;
+  --color-accent-pressed:   #8A6CE8;
+  --color-accent-fg:        #0E0D0C;
+  --color-accent-tint:      rgba(167, 139, 250, 0.10);
+  --color-accent-edge:      rgba(167, 139, 250, 0.30);
+
+  /* Semantic — desaturated, never neon */
+  --color-success:          #6FBFA3;
+  --color-success-tint:     rgba(111, 191, 163, 0.10);
+  --color-success-edge:     rgba(111, 191, 163, 0.30);
+
+  --color-warning:          #D9A86A;
+  --color-warning-tint:     rgba(217, 168, 106, 0.10);
+  --color-warning-edge:     rgba(217, 168, 106, 0.30);
+
+  --color-danger:           #D87E7E;
+  --color-danger-tint:      rgba(216, 126, 126, 0.10);
+  --color-danger-edge:      rgba(216, 126, 126, 0.30);
+
+  --color-info:             #82A8D6;
+  --color-info-tint:        rgba(130, 168, 214, 0.10);
+  --color-info-edge:        rgba(130, 168, 214, 0.30);
+
+  /* Geometry */
+  --radius-none:   0px;
+  --radius-xs:     2px;
+  --radius-sm:     4px;
+  --radius-md:     6px;
+  --radius-lg:     10px;
+  --radius-pill:   9999px;
+
+  /* Motion */
+  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out:   cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-instant:   80ms;
+  --dur-fast:      140ms;
+  --dur-base:      200ms;
+  --dur-slow:      320ms;
+}
 
 * {
   margin: 0;
@@ -20,9 +88,47 @@ body {
   background-color: #1E1E1E;
   color: #CEC3B7;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar */
+/* When a subtree opts into the new design system */
+.ds {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-feature-settings: "ss01", "ss02", "cv01";
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-size: 13px;
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+}
+
+.ds .font-mono,
+.ds code,
+.ds kbd,
+.ds samp {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-feature-settings: "zero", "ss01";
+}
+
+.ds .font-serif {
+  font-family: 'IBM Plex Serif', Georgia, serif;
+}
+
+/* Selection */
+.ds ::selection {
+  background-color: var(--color-accent-tint);
+  color: var(--color-fg);
+}
+
+/* Focus ring — single source of truth */
+.ds :focus-visible {
+  outline: 1px solid var(--color-border-focus);
+  outline-offset: 1px;
+  border-radius: var(--radius-xs);
+}
+
+/* Custom scrollbar — global (legacy) */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -40,4 +146,24 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #443939;
+}
+
+/* Custom scrollbar — design-system subtree */
+.ds ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ds ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ds ::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 0;
+  border: 3px solid var(--color-bg);
+}
+
+.ds ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
 }

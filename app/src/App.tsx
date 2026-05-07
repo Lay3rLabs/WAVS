@@ -11,6 +11,7 @@ import {
   Health,
   ComponentsPage,
   ComponentDetailPage,
+  Design,
 } from './pages';
 import {
   ServicesLayout,
@@ -34,6 +35,8 @@ function MainAppContent() {
     <div className="h-full flex flex-col">
       <Header />
       <Routes>
+        {/* Design system showcase — renders without Body's legacy chrome */}
+        <Route path="/design" element={<Design />} />
         <Route element={<Body />}>
           <Route path="/settings" element={<Settings />} />
           <Route path="/logs" element={<Logs />} />
