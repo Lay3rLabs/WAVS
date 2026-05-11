@@ -1,5 +1,6 @@
 mod chain_ops;
 mod client;
+mod exec;
 mod scaffold;
 mod server;
 
@@ -33,6 +34,12 @@ struct Args {
     /// Falls back to `signing_mnemonic` in the [wavs] section of ~/.wavs/wavs.toml.
     #[arg(long, env = "WAVS_SIGNING_MNEMONIC")]
     signing_mnemonic: Option<String>,
+
+    /// Enable execution tools (wavs_exec_*). When disabled, only management tools are available.
+    /// This is a safety gate -- execution tools can invoke component logic and (for Tier 3)
+    /// submit on-chain transactions.
+    #[arg(long, env = "WAVS_EXEC_ENABLED", default_value = "false")]
+    exec_enabled: bool,
 }
 
 /// Read a credential field from the [wavs] section of wavs.toml, searching only
@@ -108,6 +115,7 @@ async fn main() -> anyhow::Result<()> {
         args.token,
         args.mcp_chain_credential,
         args.signing_mnemonic,
+        args.exec_enabled,
     );
 
     serve_server(server, stdio())
