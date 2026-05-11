@@ -2,8 +2,8 @@ use std::{collections::BTreeMap, sync::LazyLock};
 
 use utils::filesystem::workspace_path;
 use wavs_types::{
-    AllowedHostPermission, Component, ComponentDigest, ComponentSource, Service, SignatureKind,
-    Submit, WorkflowId,
+    AllowedHostPermission, AllowedServiceCalls, Component, ComponentDigest, ComponentSource,
+    Service, SignatureKind, Submit, WorkflowId,
 };
 
 pub static SERVICE_MANAGER: LazyLock<wavs_types::ServiceManager> =
@@ -51,6 +51,7 @@ pub fn create_service(sleep_ms: Option<u64>) -> Service {
                         allowed_http_hosts: AllowedHostPermission::None,
                         raw_sockets: false,
                         dns_resolution: false,
+                        allowed_service_calls: AllowedServiceCalls::default(),
                     },
                     fuel_limit: Some(u64::MAX),
                     time_limit_seconds: Some(100),
@@ -62,6 +63,8 @@ pub fn create_service(sleep_ms: Option<u64>) -> Service {
                         None => BTreeMap::new(),
                     },
                     env_keys: std::collections::BTreeSet::new(),
+                    allowed_callers: None,
+                    max_continuation_steps: None,
                 },
                 // Use aggregator submit so the submission manager produces packets
                 submit: Submit::Aggregator {
@@ -72,11 +75,14 @@ pub fn create_service(sleep_ms: Option<u64>) -> Service {
                             allowed_http_hosts: AllowedHostPermission::None,
                             raw_sockets: false,
                             dns_resolution: false,
+                            allowed_service_calls: AllowedServiceCalls::default(),
                         },
                         fuel_limit: None,
                         time_limit_seconds: None,
                         config: BTreeMap::new(),
                         env_keys: std::collections::BTreeSet::new(),
+                        allowed_callers: None,
+                        max_continuation_steps: None,
                     }),
                     signature_kind: SignatureKind::evm_default(),
                 },

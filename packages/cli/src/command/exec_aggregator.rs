@@ -4,9 +4,10 @@ use std::time::Instant;
 use utils::config::WAVS_ENV_PREFIX;
 use wavs_engine::worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder};
 use wavs_types::{
-    AggregatorAction, AggregatorInput, AllowedHostPermission, Component, ComponentDigest,
-    ComponentSource, Permissions, Service, ServiceManager, ServiceStatus, SignatureKind, Submit,
-    Trigger, TriggerAction, TriggerConfig, WasmResponse, Workflow, WorkflowId,
+    AggregatorAction, AggregatorInput, AllowedHostPermission, AllowedServiceCalls, Component,
+    ComponentDigest, ComponentSource, Permissions, Service, ServiceManager, ServiceStatus,
+    SignatureKind, Submit, Trigger, TriggerAction, TriggerConfig, WasmResponse, Workflow,
+    WorkflowId,
 };
 
 use crate::util::read_component;
@@ -25,11 +26,14 @@ fn create_dummy_service(
             file_system: true,
             raw_sockets: true,
             dns_resolution: true,
+            allowed_service_calls: Default::default(),
         },
         fuel_limit,
         time_limit_seconds,
         config,
         env_keys,
+        allowed_callers: None,
+        max_continuation_steps: None,
     };
     Service {
         name: "dummy-service".to_string(),
@@ -155,6 +159,8 @@ impl ExecAggregator {
                 service.id().to_string(),
             ),
             service,
+            rpc_caller: None,
+            call_stack: vec![],
         }
         .build()?;
 
@@ -265,6 +271,7 @@ mod test {
                 chain: "evm:anvil".parse().unwrap(),
                 address: alloy_primitives::Address::ZERO,
             },
+            exec_enabled: None,
         }
     }
 

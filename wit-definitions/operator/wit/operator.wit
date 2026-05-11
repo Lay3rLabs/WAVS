@@ -36,7 +36,22 @@ interface output {
         // also, it MUST be supplied if multiple responses are returned
         event-id-salt: option<list<u8>>
     }
+
+    /// Agent step result — returned by run-agent export
+    variant step-result {
+        done(list<wasm-response>),
+        %continue(string),
+    }
 }
+
+interface agent {
+    use input.{trigger-action};
+    use output.{step-result};
+    run-agent: func(trigger-action: trigger-action) -> result<step-result, string>;
+}
+
+/// The shared host imports used by both worlds.
+/// Defined inline in each world (WIT doesn't support world-level interface reuse across worlds).
 
 world wavs-world {
     // include needed for golang support
@@ -77,6 +92,59 @@ world wavs-world {
         // convenience function to get what the event id will be
         // typically only used for debugging or testing purposes
         get-event-id: func(salt: option<list<u8>>) -> event-id;
+
+        /// Synchronous service-to-service call (stub until Phase 22)
+        call-service: func(service-id: string, payload: list<u8>) -> result<list<u8>, string>;
+    }
+
+    use input.{trigger-action};
+    use output.{wasm-response};
+    use output.{step-result};
+
+    // if returning multiple responses, they must all have an event-id-salt
+    export run: func(trigger-action: trigger-action) -> result<list<wasm-response>, string>;
+    export agent;
+}
+
+/// Legacy world — only exports `run`, no agent interface.
+/// Used for components compiled before the agent continuation engine was introduced.
+/// The engine uses this world type for instantiation when the component lacks the agent export.
+world wavs-legacy-world {
+    // include needed for golang support
+    include wasi:cli/imports@0.2.0;
+
+    // wasi:http 0.2.6 uses the `imports` style, but for now import each interface separately
+    import wasi:http/types@0.2.0;
+    import wasi:http/outgoing-handler@0.2.0;
+
+    // for key-value store support
+    include wasi:keyvalue/imports@0.2.0-draft2;
+
+    // for raw socket support
+    include wasi:sockets/imports@0.2.0;
+
+    // for tls support
+    include wasi:tls/imports@0.2.0-draft;
+
+    import host: interface {
+        use chain-types.{evm-chain-config, cosmos-chain-config};
+        use service-types.{service-and-workflow-id, workflow-and-workflow-id};
+        use core-types.{log-level};
+        use event-types.{event-id};
+
+        get-evm-chain-config: func(chain-key: string) -> option<evm-chain-config>;
+        get-cosmos-chain-config: func(chain-key: string) -> option<cosmos-chain-config>;
+
+        config-var: func(key: string) -> option<string>;
+
+        log: func(level: log-level, message: string);
+
+        get-service: func() -> service-and-workflow-id;
+        get-workflow: func() -> workflow-and-workflow-id;
+        get-event-id: func(salt: option<list<u8>>) -> event-id;
+
+        /// Synchronous service-to-service call (stub until Phase 22)
+        call-service: func(service-id: string, payload: list<u8>) -> result<list<u8>, string>;
     }
 
     use input.{trigger-action};

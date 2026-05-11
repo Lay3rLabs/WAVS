@@ -12,9 +12,9 @@ use wavs_engine::{
     worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder},
 };
 use wavs_types::{
-    AllowedHostPermission, ChainKey, ComponentDigest, ComponentSource, Permissions, ServiceId,
-    Submit, Timestamp, Trigger, TriggerAction, TriggerConfig, TriggerData, WasmResponse, Workflow,
-    WorkflowId,
+    AllowedHostPermission, AllowedServiceCalls, ChainKey, ComponentDigest, ComponentSource,
+    Permissions, ServiceId, Submit, Timestamp, Trigger, TriggerAction, TriggerConfig, TriggerData,
+    WasmResponse, Workflow, WorkflowId,
 };
 
 use crate::{
@@ -130,11 +130,14 @@ impl ExecComponent {
                     file_system: true,
                     raw_sockets: true,
                     dns_resolution: true,
+                    allowed_service_calls: Default::default(),
                 },
                 fuel_limit,
                 time_limit_seconds: time_limit,
                 config,
                 env_keys,
+                allowed_callers: None,
+                max_continuation_steps: None,
             },
             submit: Submit::None,
         };
@@ -213,6 +216,8 @@ impl ExecComponent {
                 WavsDb::new().unwrap(),
                 "exec_component".to_string(),
             ),
+            rpc_caller: None,
+            call_stack: vec![],
         }
         .build()
         .context("Failed to build instance dependencies for component execution")?;
