@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use alloy_sol_types::SolValue;
 use serde::{de::DeserializeOwned, Serialize};
@@ -7,6 +8,7 @@ use wasmtime::{component::Component as WasmtimeComponent, Config as WTConfig, En
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     bindings::operator::world::host::LogLevel,
+    rpc::RpcCaller,
     utils::error::EngineError,
     worlds::instance::{HostComponentLogger, InstanceData, InstanceDepsBuilder},
 };
@@ -97,6 +99,8 @@ pub async fn try_execute_component_raw(
         chain_configs: &Default::default(),
         log: HostComponentLogger::OperatorHostComponentLogger(log_wasi),
         keyvalue_ctx,
+        rpc_caller: None,
+        call_stack: vec![],
     }
     .build()
     .unwrap();
@@ -128,6 +132,70 @@ pub async fn try_execute_component_raw(
                 _ => Err(e.to_string()),
             }
         }
+    }
+}
+
+/// Execute a component with an explicit RpcCaller injected (for composition/RPC tests).
+/// The service is built using `make_service_with_allowed_calls` so `AllowedServiceCalls::All`.
+/// Config vars are passed directly to the service component.
+#[allow(dead_code)]
+pub async fn try_execute_component_raw_with_rpc(
+    engine: WTEngine,
+    wasm_bytes: &[u8],
+    config: BTreeMap<String, String>,
+    keyvalue_ctx: Option<KeyValueCtx>,
+    input: Vec<u8>,
+    rpc_caller: Arc<dyn RpcCaller>,
+) -> std::result::Result<Vec<Vec<u8>>, String> {
+    use crate::helpers::service::{make_service_with_allowed_calls, make_trigger_action};
+
+    let service = make_service_with_allowed_calls(ComponentDigest::hash(wasm_bytes), config);
+    let trigger_action = make_trigger_action(&service, None, input);
+
+    let data_dir = tempfile::tempdir().unwrap();
+    let keyvalue_ctx = keyvalue_ctx
+        .unwrap_or_else(|| KeyValueCtx::new(WavsDb::new().unwrap(), "test".to_string()));
+
+    let mut instance_deps = InstanceDepsBuilder {
+        workflow_id: service.workflows.keys().next().cloned().unwrap(),
+        service,
+        data: InstanceData::new_operator(trigger_action.data.clone()),
+        component: WasmtimeComponent::new(&engine, wasm_bytes).unwrap(),
+        engine: &engine,
+        data_dir: data_dir.path().to_path_buf(),
+        chain_configs: &Default::default(),
+        log: HostComponentLogger::OperatorHostComponentLogger(log_wasi),
+        keyvalue_ctx,
+        rpc_caller: Some(rpc_caller),
+        call_stack: vec![],
+    }
+    .build()
+    .unwrap();
+
+    let responses = wavs_engine::worlds::operator::execute::execute(
+        &mut instance_deps,
+        trigger_action,
+        WasmResponse::DEFAULT_MAX_PAYLOAD_SIZE,
+        WasmResponse::DEFAULT_MAX_SALT_SIZE,
+    )
+    .await;
+
+    match responses {
+        Ok(responses) => {
+            if responses.is_empty() {
+                Err("No responses from component".to_string())
+            } else {
+                let mut payloads = Vec::new();
+                for response in responses {
+                    payloads.push(response.payload);
+                }
+                Ok(payloads)
+            }
+        }
+        Err(e) => match e {
+            EngineError::ExecResult(err) => Err(err),
+            _ => Err(e.to_string()),
+        },
     }
 }
 

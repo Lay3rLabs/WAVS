@@ -1,8 +1,53 @@
 use std::collections::BTreeMap;
 use wavs_types::{
-    AllowedHostPermission, ComponentDigest, ComponentSource, Permissions, Service, SignatureKind,
-    Submit, Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow, WorkflowId,
+    AllowedHostPermission, AllowedServiceCalls, ComponentDigest, ComponentSource, Permissions,
+    Service, SignatureKind, Submit, Trigger, TriggerAction, TriggerConfig, TriggerData, Workflow,
+    WorkflowId,
 };
+
+/// Build a service where the component has `AllowedServiceCalls::All` permissions
+/// (caller is allowed to call any service). Used in composition tests.
+#[allow(dead_code)]
+pub fn make_service_with_allowed_calls(
+    wasm_digest: ComponentDigest,
+    config: BTreeMap<String, String>,
+) -> Service {
+    let workflow_id = WorkflowId::new("workflow-1").unwrap();
+    let component = wavs_types::Component {
+        source: ComponentSource::Digest(wasm_digest),
+        permissions: Permissions {
+            allowed_http_hosts: AllowedHostPermission::All,
+            file_system: true,
+            raw_sockets: true,
+            dns_resolution: true,
+            allowed_service_calls: AllowedServiceCalls::All,
+        },
+        fuel_limit: None,
+        time_limit_seconds: None,
+        config,
+        env_keys: Default::default(),
+        allowed_callers: None,
+        max_continuation_steps: None,
+    };
+    let workflow = Workflow {
+        trigger: Trigger::Manual,
+        component: component.clone(),
+        submit: Submit::Aggregator {
+            component: Box::new(component),
+            signature_kind: SignatureKind::evm_default(),
+        },
+    };
+
+    Service {
+        name: "My Service".to_string(),
+        workflows: BTreeMap::from([(workflow_id, workflow)]),
+        status: wavs_types::ServiceStatus::Active,
+        manager: wavs_types::ServiceManager::Evm {
+            chain: "evm:noop".parse().unwrap(),
+            address: Default::default(),
+        },
+    }
+}
 
 #[allow(dead_code)]
 pub fn make_trigger_action(
@@ -30,11 +75,14 @@ pub fn make_service(wasm_digest: ComponentDigest, config: BTreeMap<String, Strin
             file_system: true,
             raw_sockets: true,
             dns_resolution: true,
+            allowed_service_calls: AllowedServiceCalls::None,
         },
         fuel_limit: None,
         time_limit_seconds: None,
         config,
         env_keys: Default::default(),
+        allowed_callers: None,
+        max_continuation_steps: None,
     };
     let workflow = Workflow {
         trigger: Trigger::Manual,

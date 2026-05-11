@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::Arc;
 
 use utils::config::WAVS_ENV_PREFIX;
 use wasmtime::component::HasSelf;
@@ -13,6 +14,7 @@ use wavs_types::{
 };
 
 use crate::backend::wasi_keyvalue::context::KeyValueCtxProvider;
+use crate::rpc::RpcCaller;
 use crate::worlds::aggregator::component::{
     AggregatorHostComponent, AggregatorHostComponentLogger,
 };
@@ -86,6 +88,10 @@ pub struct InstanceDepsBuilder<'a, P> {
     pub chain_configs: &'a ChainConfigs,
     pub log: HostComponentLogger,
     pub keyvalue_ctx: KeyValueCtx,
+    /// Injected RPC caller for service-to-service calls (Phase 22). None disables RPC.
+    pub rpc_caller: Option<Arc<dyn RpcCaller>>,
+    /// Current call chain for cycle detection and depth limiting (Phase 22).
+    pub call_stack: Vec<String>,
 }
 
 pub enum InstanceData {
@@ -124,6 +130,8 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
             chain_configs,
             log,
             keyvalue_ctx,
+            rpc_caller,
+            call_stack,
         } = self;
 
         match (&data, &log) {
@@ -280,6 +288,8 @@ impl<P: AsRef<Path>> InstanceDepsBuilder<'_, P> {
                         HostComponentLogger::OperatorHostComponentLogger(log) => log,
                         _ => unreachable!(),
                     },
+                    call_stack,
+                    rpc_caller,
                 };
                 let mut store = wasmtime::Store::new(engine, host);
 

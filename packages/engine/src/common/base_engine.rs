@@ -107,51 +107,57 @@ impl<S: CAStorage + Send + Sync + 'static> BaseEngine<S> {
     pub async fn load_component_from_source(
         &self,
         source: &ComponentSource,
-    ) -> Result<WasmComponent, EngineError> {
+    ) -> Result<(WasmComponent, ComponentDigest), EngineError> {
+        // If we have a known digest, try cache first
         let digest = source.digest();
+        if let Ok(component) = self.load_component(digest).await {
+            return Ok((component, digest.clone()));
+        }
 
-        match self.load_component(digest).await {
-            Ok(component) => Ok(component),
-            Err(_) => {
-                let bytes: Vec<u8> = match source {
-                    ComponentSource::Download { uri, .. } => {
-                        fetch_bytes(uri, &self.ipfs_gateway).await.map_err(|e| {
-                            EngineError::StorageError(format!("Failed to download from url: {}", e))
-                        })?
-                    }
-                    ComponentSource::Registry { registry } => {
-                        let client = WkgClient::new(
-                            registry.domain.clone().unwrap_or("wa.dev".to_string()),
-                        )?;
+        // Cache miss -- fetch the bytes
+        let bytes: Vec<u8> = match source {
+            ComponentSource::Download { uri, .. } => {
+                fetch_bytes(uri, &self.ipfs_gateway).await.map_err(|e| {
+                    EngineError::StorageError(format!("Failed to download from url: {}", e))
+                })?
+            }
+            ComponentSource::Registry { registry } => {
+                let client =
+                    WkgClient::new(registry.domain.clone().unwrap_or("wa.dev".to_string()))?;
+                client.fetch(registry).await?
+            }
+            ComponentSource::Digest(digest) => {
+                return Err(EngineError::UnknownDigest(digest.clone()));
+            }
+        };
 
-                        client.fetch(registry).await?
-                    }
-                    _ => {
-                        return Err(EngineError::UnknownDigest(digest.clone()));
-                    }
-                };
-
-                if ComponentDigest::hash(&bytes) != *digest {
-                    return Err(EngineError::StorageError(
-                        "Downloaded component digest does not match expected digest".to_string(),
-                    ));
-                }
-
-                self.storage.set_data(&bytes).map_err(|e| {
-                    EngineError::StorageError(format!("Failed to store component: {}", e))
-                })?;
-
-                let component = WasmComponent::new(&self.wasm_engine, &bytes)
-                    .map_err(|e| EngineError::Compile(e.into()))?;
-
-                self.memory_cache
-                    .lock()
-                    .unwrap()
-                    .put(digest.clone(), component.clone());
-
-                Ok(component)
+        // Verify digest (always present for Download/Registry)
+        {
+            let expected_digest = source.digest();
+            let computed = ComponentDigest::hash(&bytes);
+            if computed != *expected_digest {
+                return Err(EngineError::StorageError(format!(
+                    "Component digest mismatch: expected {}, got {}",
+                    expected_digest, computed
+                )));
             }
         }
+
+        // Store in content-addressed storage (OCI-04: cache by digest)
+        self.storage
+            .set_data(&bytes)
+            .map_err(|e| EngineError::StorageError(format!("Failed to store component: {}", e)))?;
+
+        let component = WasmComponent::new(&self.wasm_engine, &bytes)
+            .map_err(|e| EngineError::Compile(e.into()))?;
+
+        let computed_digest = ComponentDigest::hash(&bytes);
+        self.memory_cache
+            .lock()
+            .unwrap()
+            .put(computed_digest.clone(), component.clone());
+
+        Ok((component, computed_digest))
     }
 
     pub fn store_component_bytes(&self, bytes: &[u8]) -> Result<ComponentDigest, EngineError> {

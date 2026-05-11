@@ -138,6 +138,8 @@ impl TryFrom<component_service::Component> for wavs_types::Component {
             time_limit_seconds: src.time_limit_seconds,
             config: src.config.into_iter().collect(),
             env_keys: src.env_keys.into_iter().collect(),
+            allowed_callers: None,
+            max_continuation_steps: None,
         })
     }
 }
@@ -185,6 +187,7 @@ impl From<component_service::Permissions> for wavs_types::Permissions {
             file_system: src.file_system,
             raw_sockets: src.raw_sockets,
             dns_resolution: src.dns_resolution,
+            allowed_service_calls: wavs_types::AllowedServiceCalls::default(),
         }
     }
 }

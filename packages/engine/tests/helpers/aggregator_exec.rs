@@ -50,6 +50,8 @@ pub async fn execute_aggregator_component(
         chain_configs: &chain_configs,
         log: HostComponentLogger::AggregatorHostComponentLogger(log_aggregator),
         keyvalue_ctx,
+        rpc_caller: None,
+        call_stack: vec![],
     }
     .build()
     .unwrap();

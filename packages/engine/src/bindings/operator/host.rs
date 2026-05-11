@@ -1,4 +1,4 @@
-use wavs_types::{ChainKey, EventIdSalt};
+use wavs_types::{AllowedServiceCalls, ChainKey, EventIdSalt};
 
 use crate::worlds::operator::component::OperatorHostComponent;
 
@@ -78,11 +78,10 @@ impl super::world::host::Host for OperatorHostComponent {
     }
 
     fn log(&mut self, level: LogLevel, message: String) {
-        let digest = self
+        let workflow = self
             .service
             .workflows
             .get(&self.workflow_id)
-            .map(|workflow| workflow.component.source.digest())
             .unwrap_or_else(|| {
                 panic!(
                     "Workflow with ID {} not found in service {}",
@@ -91,6 +90,11 @@ impl super::world::host::Host for OperatorHostComponent {
                 )
             });
 
+        let digest = workflow
+            .component
+            .source
+            .digest();
+
         (self.inner_log)(
             &self.service.id(),
             &self.workflow_id,
@@ -98,5 +102,62 @@ impl super::world::host::Host for OperatorHostComponent {
             level,
             message,
         );
+    }
+
+    async fn call_service(
+        &mut self,
+        callee_id: String,
+        payload: Vec<u8>,
+    ) -> Result<Vec<u8>, String> {
+        const RPC_MAX_DEPTH: usize = 5;
+
+        let caller_service_id = self.service.id().to_string();
+
+        // RPC-02: Caller permission check (AllowedServiceCalls)
+        let allowed = match self
+            .service
+            .workflows
+            .get(&self.workflow_id)
+            .map(|w| &w.component.permissions.allowed_service_calls)
+        {
+            Some(AllowedServiceCalls::All) => true,
+            Some(AllowedServiceCalls::Only(ids)) => ids.contains(&callee_id),
+            Some(AllowedServiceCalls::None) | None => false,
+        };
+        if !allowed {
+            return Err(format!(
+                "call-service denied: caller '{}' does not have permission to call '{}'",
+                caller_service_id, callee_id
+            ));
+        }
+
+        // RPC-04: Cycle detection
+        if self.call_stack.contains(&callee_id) {
+            return Err(format!(
+                "call-service cycle detected: '{}' is already in the call chain {:?}",
+                callee_id, self.call_stack
+            ));
+        }
+
+        // RPC-04: Depth limit
+        if self.call_stack.len() >= RPC_MAX_DEPTH {
+            return Err(format!(
+                "call-service depth limit ({}) exceeded: call chain {:?}",
+                RPC_MAX_DEPTH, self.call_stack
+            ));
+        }
+
+        // Get the RPC caller (injected by wavs crate; None means RPC not configured)
+        let rpc_caller = self
+            .rpc_caller
+            .clone()
+            .ok_or_else(|| "call-service not available: no RPC caller configured".to_string())?;
+
+        // Thread the call stack — add current service as caller
+        let mut new_call_stack = self.call_stack.clone();
+        new_call_stack.push(caller_service_id);
+
+        // Delegate to the engine (Plan 02 provides the concrete RpcCaller impl)
+        rpc_caller.call(callee_id, payload, new_call_stack).await
     }
 }

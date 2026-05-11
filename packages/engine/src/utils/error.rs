@@ -33,6 +33,13 @@ pub enum EngineError {
     #[error("Time limit exceeded by WasmEngine for service: {0}, workflow: {1}")]
     OutOfTime(ServiceId, WorkflowId),
 
+    #[error("ContinuationLimit: exceeded {steps} steps for service: {service_id}, workflow: {workflow_id}")]
+    ContinuationLimit {
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
+        steps: usize,
+    },
+
     #[error("Unable to add to linker: {0}")]
     AddToLinker(wasmtime::Error),
 
@@ -64,5 +71,24 @@ pub enum EngineError {
     MismatchedInstanceDataAndLogger {
         data: &'static str,
         logger: &'static str,
+    },
+
+    #[error("call-service permission denied: caller '{caller_id}' cannot call '{callee_id}': {reason}")]
+    RpcPermissionDenied {
+        caller_id: String,
+        callee_id: String,
+        reason: String,
+    },
+
+    #[error("call-service cycle detected: '{callee_id}' already in call chain {call_chain:?}")]
+    RpcCycleDetected {
+        callee_id: String,
+        call_chain: Vec<String>,
+    },
+
+    #[error("call-service depth limit ({limit}) exceeded: call chain {call_chain:?}")]
+    RpcDepthExceeded {
+        limit: usize,
+        call_chain: Vec<String>,
     },
 }
