@@ -1,0 +1,29 @@
+{
+  "name": "agent-example",
+  "workflows": {
+    "agent-workflow-01": {
+      "trigger": "manual",
+      "component": {
+        "source": { "digest": "cbb23e52c9d3299e4b978bbdf9cf575786026efec1a18826f8479032cefb070e" },
+        "permissions": {
+          "allowed_http_hosts": { "only": ["api.anthropic.com"] },
+          "file_system": false,
+          "raw_sockets": false,
+          "dns_resolution": false
+        },
+        "fuel_limit": null,
+        "time_limit_seconds": 60,
+        "config": {},
+        "env_keys": ["WAVS_ENV_ANTHROPIC_API_KEY"]
+      },
+      "submit": "none"
+    }
+  },
+  "status": "active",
+  "manager": {
+    "evm": {
+      "chain": "evm:31337",
+      "address": "0x0000000000000000000000000000000000000000"
+    }
+  }
+}
