@@ -2,6 +2,7 @@
 use std::time::Duration;
 
 use wavs::subsystems::submission::SubmissionCommand;
+use wavs_types::SignatureAlgorithm;
 
 use utils::{context::AppContext, telemetry::Metrics};
 
@@ -30,7 +31,7 @@ fn collect_messages_with_wait() {
 
     ctx.rt.block_on(async {
         submission_manager
-            .add_service_key(service.id(), None)
+            .add_service_key(service.id(), None, SignatureAlgorithm::Secp256k1)
             .unwrap();
     });
 
