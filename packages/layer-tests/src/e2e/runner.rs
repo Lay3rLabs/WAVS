@@ -751,10 +751,7 @@ async fn run_test(
                                     // Return the input data as the "signed data" since the echo
                                     // component echoes input and we verified the BLS signature
                                     // check passed on-chain
-                                    workflow_def
-                                        .input_data
-                                        .to_bytes()
-                                        .unwrap_or_default()
+                                    workflow_def.input_data.to_bytes().unwrap_or_default()
                                 } else {
                                     tracing::info!(
                                         "Waiting for task to land (no re-org) for trigger_id: {}",

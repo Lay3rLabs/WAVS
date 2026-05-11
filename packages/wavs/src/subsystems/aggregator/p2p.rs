@@ -431,11 +431,7 @@ impl PeerSubscriptionMap {
 
     /// Replace all subscriptions for a peer with the given set.
     /// Uses replace-not-merge semantics for heartbeat/hello full state sync.
-    pub fn set_peer_subscriptions(
-        &mut self,
-        peer: &ed25519::PublicKey,
-        services: Vec<[u8; 32]>,
-    ) {
+    pub fn set_peer_subscriptions(&mut self, peer: &ed25519::PublicKey, services: Vec<[u8; 32]>) {
         // Remove existing subscriptions first
         self.remove_peer(peer);
         // Then set the new full set (if non-empty)
@@ -3040,8 +3036,9 @@ mod p2p_broadcast_tests {
         );
 
         // Both peers are connected
-        let connected: HashSet<ed25519::PublicKey> =
-            [peer_v13.clone(), peer_legacy.clone()].into_iter().collect();
+        let connected: HashSet<ed25519::PublicKey> = [peer_v13.clone(), peer_legacy.clone()]
+            .into_iter()
+            .collect();
 
         match map.get_recipients(&svc_a, &connected) {
             Recipients::Some(peers) => {

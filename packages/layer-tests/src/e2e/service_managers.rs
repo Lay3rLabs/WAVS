@@ -3,16 +3,14 @@ use std::{collections::HashMap, sync::Arc};
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::test_utils::{
     middleware::{
-        cosmos::CosmosServiceManager,
-        evm::MiddlewareServiceManagerConfig,
-        operator::AvsOperator,
+        cosmos::CosmosServiceManager, evm::MiddlewareServiceManagerConfig, operator::AvsOperator,
     },
     mock_service_manager::MockEvmServiceManager,
 };
 
 use crate::e2e::handles::EvmMiddlewares;
-use wavs_cli::command::deploy_service::DeployService;
 use alloy_sol_types::SolType;
+use wavs_cli::command::deploy_service::DeployService;
 use wavs_types::{
     ChainKey, ChainKeyNamespace, Service, ServiceManager, ServiceStatus, SignerResponse, Trigger,
 };
@@ -321,10 +319,12 @@ impl ServiceManagers {
                         .expect("Failed to get G1 pubkey bytes");
 
                     // Create proof-of-possession: sign keccak256(abi.encode(operator_address))
-                    let encoded_addr = alloy_sol_types::sol_data::Address::abi_encode(&operator_address);
+                    let encoded_addr =
+                        alloy_sol_types::sol_data::Address::abi_encode(&operator_address);
                     let message = alloy_primitives::keccak256(&encoded_addr);
-                    let g2_proof = utils::bls_signing::bls_sign_digest(&bls_secret, message.as_ref())
-                        .expect("Failed to create BLS proof of possession");
+                    let g2_proof =
+                        utils::bls_signing::bls_sign_digest(&bls_secret, message.as_ref())
+                            .expect("Failed to create BLS proof of possession");
 
                     AvsOperator::with_bls_keys(
                         operator_address,
@@ -365,7 +365,9 @@ impl ServiceManagers {
                             )
                         }
                         SignerResponse::Bls12381 { .. } => {
-                            panic!("Expected Secp256k1 SignerResponse for non-BLS test, got Bls12381");
+                            panic!(
+                                "Expected Secp256k1 SignerResponse for non-BLS test, got Bls12381"
+                            );
                         }
                     }
                 };

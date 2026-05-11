@@ -129,14 +129,12 @@ impl Aggregator {
                                         ),
                                     );
                                 }
-                                return Err(
-                                    AggregatorError::EvmServiceManagerValidateAnyRevert(raw_str),
-                                );
+                                return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(
+                                    raw_str,
+                                ));
                             }
                             None => {
-                                return Err(AggregatorError::EvmServiceManagerValidateUnknown(
-                                    err,
-                                ));
+                                return Err(AggregatorError::EvmServiceManagerValidateUnknown(err));
                             }
                         },
                     }
@@ -214,14 +212,12 @@ impl Aggregator {
                                         ),
                                     );
                                 }
-                                return Err(
-                                    AggregatorError::EvmServiceManagerValidateAnyRevert(raw_str),
-                                );
+                                return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(
+                                    raw_str,
+                                ));
                             }
                             None => {
-                                return Err(AggregatorError::EvmServiceManagerValidateUnknown(
-                                    err,
-                                ));
+                                return Err(AggregatorError::EvmServiceManagerValidateUnknown(err));
                             }
                         },
                     }

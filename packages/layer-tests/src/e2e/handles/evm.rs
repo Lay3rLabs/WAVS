@@ -11,11 +11,7 @@ pub struct EvmInstance {
 }
 
 impl EvmInstance {
-    pub fn spawn(
-        _ctx: AppContext,
-        _configs: &Configs,
-        chain_config: EvmChainConfig,
-    ) -> Self {
+    pub fn spawn(_ctx: AppContext, _configs: &Configs, chain_config: EvmChainConfig) -> Self {
         let port = chain_config
             .http_endpoint
             .as_ref()

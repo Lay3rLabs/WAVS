@@ -673,14 +673,14 @@ impl Aggregator {
                 }
 
                 // Emit error event to GUI
-                if let Err(e) = self
-                    .subsystem_to_dispatcher_tx
-                    .send(DispatcherCommand::SubmissionError {
-                        service_id: submission.service_id().clone(),
-                        workflow_id: submission.workflow_id().clone(),
-                        trigger_data: submission.trigger_action.data.clone(),
-                        error_message: err_str.clone(),
-                    })
+                if let Err(e) =
+                    self.subsystem_to_dispatcher_tx
+                        .send(DispatcherCommand::SubmissionError {
+                            service_id: submission.service_id().clone(),
+                            workflow_id: submission.workflow_id().clone(),
+                            trigger_data: submission.trigger_action.data.clone(),
+                            error_message: err_str.clone(),
+                        })
                 {
                     tracing::error!("Error sending SubmissionError to dispatcher: {:?}", e);
                 }

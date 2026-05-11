@@ -642,7 +642,9 @@ impl WavsMcpServer {
                 hd_index,
                 g1_pubkey_hex,
             }) => {
-                tracing::info!("Service signing key: HD index {hd_index} → BLS G1: {g1_pubkey_hex}");
+                tracing::info!(
+                    "Service signing key: HD index {hd_index} → BLS G1: {g1_pubkey_hex}"
+                );
                 hd_index
             }
             Err(e) => {

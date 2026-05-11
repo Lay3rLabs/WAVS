@@ -15,7 +15,9 @@ use wavs_gui_shared::{
     error::{AppError, AppResult},
     settings::{SavedRegistry, Settings},
 };
-use wavs_types::{ChainConfigs, Credential, Service, ServiceId, ServiceManager, ServiceStatus, SignerResponse};
+use wavs_types::{
+    ChainConfigs, Credential, Service, ServiceId, ServiceManager, ServiceStatus, SignerResponse,
+};
 
 const KEYCHAIN_SERVICE: &str = "wavs-app";
 const KEYCHAIN_ACCOUNT: &str = "mnemonic";
@@ -382,7 +384,11 @@ pub async fn cmd_pause_service(
     // Persist the paused state so it survives restarts
     settings
         .update(&app, |s| {
-            if let Some(svc) = s.saved_services.iter_mut().find(|svc| svc.manager == manager) {
+            if let Some(svc) = s
+                .saved_services
+                .iter_mut()
+                .find(|svc| svc.manager == manager)
+            {
                 svc.status = ServiceStatus::Paused;
             }
         })
@@ -405,7 +411,11 @@ pub async fn cmd_resume_service(
     // Persist the resumed state so it survives restarts
     settings
         .update(&app, |s| {
-            if let Some(svc) = s.saved_services.iter_mut().find(|svc| svc.manager == manager) {
+            if let Some(svc) = s
+                .saved_services
+                .iter_mut()
+                .find(|svc| svc.manager == manager)
+            {
                 svc.status = ServiceStatus::Active;
             }
         })

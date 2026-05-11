@@ -296,10 +296,10 @@ impl SubmissionManager {
             }
         };
 
-        self.signers.write().unwrap().insert(
-            service_id,
-            SignerInfo { signer, hd_index },
-        );
+        self.signers
+            .write()
+            .unwrap()
+            .insert(service_id, SignerInfo { signer, hd_index });
 
         Ok(())
     }
@@ -370,8 +370,7 @@ mod tests {
     #[cfg(feature = "bls")]
     #[test]
     fn submission_bls_signer_produces_correct_signature() {
-        let bls_key =
-            utils::bls_signing::bls_private_key_from_mnemonic(TEST_MNEMONIC, 1).unwrap();
+        let bls_key = utils::bls_signing::bls_private_key_from_mnemonic(TEST_MNEMONIC, 1).unwrap();
         let signer = WavsCryptoSigner::Bls12381(bls_key);
 
         // Verify correct variant

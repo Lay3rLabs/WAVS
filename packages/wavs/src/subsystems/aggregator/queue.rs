@@ -164,9 +164,9 @@ mod tests {
     use super::*;
     use std::str::FromStr;
     use wavs_types::{
-        ChainKey, Envelope, EvmSubmitAction, EventId, SignatureAlgorithm, SignatureKind,
+        ChainKey, Envelope, EventId, EvmSubmitAction, ServiceId, SignatureAlgorithm, SignatureKind,
         SubmitAction, Trigger, TriggerAction, TriggerConfig, WasmResponse, WavsSignature,
-        WorkflowId, ServiceId,
+        WorkflowId,
     };
 
     /// Create a test QuorumQueueId.
@@ -175,7 +175,9 @@ mod tests {
             event_id: EventId::from([0u8; 20]),
             action: SubmitAction::Evm(EvmSubmitAction {
                 chain: ChainKey::from_str("evm:31337").unwrap(),
-                address: "0x0000000000000000000000000000000000000000".parse().unwrap(),
+                address: "0x0000000000000000000000000000000000000000"
+                    .parse()
+                    .unwrap(),
                 gas_price: None,
             }),
         }
@@ -237,7 +239,11 @@ mod tests {
         let sub = mock_submission_with_sig(bls_sig_with_pubkey(vec![1u8; 128]));
 
         let result = append_submission_to_queue(&queue_id, &mut queue, sub);
-        assert!(result.is_ok(), "BLS submission should enter queue: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "BLS submission should enter queue: {:?}",
+            result.err()
+        );
         assert_eq!(queue.len(), 1);
     }
 
@@ -264,7 +270,11 @@ mod tests {
 
         append_submission_to_queue(&queue_id, &mut queue, sub1).unwrap();
         append_submission_to_queue(&queue_id, &mut queue, sub2).unwrap();
-        assert_eq!(queue.len(), 2, "Different G1 pubkeys should be separate entries");
+        assert_eq!(
+            queue.len(),
+            2,
+            "Different G1 pubkeys should be separate entries"
+        );
     }
 
     #[test]
@@ -280,6 +290,9 @@ mod tests {
         let result = append_submission_to_queue(&queue_id, &mut queue, sub);
         // With invalid signature data, evm_signer_address will error, but that's expected.
         // The important thing is it doesn't panic with "BLS signatures do not have EVM signer addresses"
-        assert!(result.is_err(), "Invalid secp256k1 sig should error on address recovery");
+        assert!(
+            result.is_err(),
+            "Invalid secp256k1 sig should error on address recovery"
+        );
     }
 }

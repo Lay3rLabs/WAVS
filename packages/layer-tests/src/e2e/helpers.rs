@@ -380,12 +380,13 @@ pub async fn deploy_submit_contract(
                     address
                 );
 
-                let result = crate::example_evm_client::example_bls_submit::SimpleBlsSubmit::deploy(
-                    evm_client.provider.clone(),
-                    address,
-                )
-                .await
-                .context("Failed to deploy BLS submit contract")?;
+                let result =
+                    crate::example_evm_client::example_bls_submit::SimpleBlsSubmit::deploy(
+                        evm_client.provider.clone(),
+                        address,
+                    )
+                    .await
+                    .context("Failed to deploy BLS submit contract")?;
 
                 let address = *result.address();
                 tracing::info!("BLS submit contract deployed at address: {}", address);

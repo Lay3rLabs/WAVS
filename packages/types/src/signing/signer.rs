@@ -67,10 +67,7 @@ mod bls_helpers {
         eip2537_bytes: &[u8],
     ) -> anyhow::Result<blst::min_pk::Signature> {
         if eip2537_bytes.len() != 256 {
-            anyhow::bail!(
-                "Expected 256-byte EIP-2537 G2, got {}",
-                eip2537_bytes.len()
-            );
+            anyhow::bail!("Expected 256-byte EIP-2537 G2, got {}", eip2537_bytes.len());
         }
         let mut uncompressed = [0u8; 192];
         // EIP-2537 order: [x_c0, x_c1, y_c0, y_c1]; blst ZCash order: [x_c1, x_c0, y_c1, y_c0]
@@ -246,8 +243,8 @@ pub trait WavsSigner: WavsSignable {
             }
             #[cfg(feature = "bls")]
             WavsSignature::Bls12381 { .. } => {
-                use alloy_primitives::{keccak256, Bytes, FixedBytes};
                 use crate::solidity_types::BlsServiceHandler;
+                use alloy_primitives::{keccak256, Bytes, FixedBytes};
 
                 // Collect (keccak256_hash, g1_pubkey_bytes, deserialized_g2_sig) per operator
                 let mut entries: Vec<(FixedBytes<32>, Bytes, blst::min_pk::Signature)> = signatures
@@ -259,16 +256,15 @@ pub trait WavsSigner: WavsSignable {
                             ..
                         } => {
                             let key_hash = keccak256(&g1_pubkey);
-                            let g2_sig =
-                                bls_helpers::deserialize_g2_from_eip2537(&g2_signature)
-                                    .map_err(SigningError::DataHash)?;
+                            let g2_sig = bls_helpers::deserialize_g2_from_eip2537(&g2_signature)
+                                .map_err(SigningError::DataHash)?;
                             Ok((key_hash, Bytes::from(g1_pubkey), g2_sig))
                         }
-                        WavsSignature::Secp256k1 { .. } => Err(SigningError::DataHash(
-                            anyhow::anyhow!(
+                        WavsSignature::Secp256k1 { .. } => {
+                            Err(SigningError::DataHash(anyhow::anyhow!(
                                 "Mixed signature algorithms: expected BLS, got secp256k1"
-                            ),
-                        )),
+                            )))
+                        }
                     })
                     .collect::<Result<_, _>>()?;
 
@@ -278,19 +274,13 @@ pub trait WavsSigner: WavsSignable {
                 // Aggregate G2 signatures via blst point addition
                 let sig_refs: Vec<&blst::min_pk::Signature> =
                     entries.iter().map(|(_, _, s)| s).collect();
-                let aggregate =
-                    blst::min_pk::AggregateSignature::aggregate(&sig_refs, true).map_err(
-                        |e| {
-                            SigningError::DataHash(anyhow::anyhow!(
-                                "BLS aggregate failed: {:?}",
-                                e
-                            ))
-                        },
-                    )?;
+                let aggregate = blst::min_pk::AggregateSignature::aggregate(&sig_refs, true)
+                    .map_err(|e| {
+                        SigningError::DataHash(anyhow::anyhow!("BLS aggregate failed: {:?}", e))
+                    })?;
                 let agg_sig_bytes = bls_helpers::serialize_aggregate_to_eip2537(&aggregate);
 
-                let signer_pubkeys: Vec<Bytes> =
-                    entries.into_iter().map(|(_, pk, _)| pk).collect();
+                let signer_pubkeys: Vec<Bytes> = entries.into_iter().map(|(_, pk, _)| pk).collect();
 
                 Ok(SignatureData::Bls12381(BlsServiceHandler::SignatureData {
                     signerPubkeys: signer_pubkeys,
@@ -392,10 +382,18 @@ mod tests {
             .collect();
 
         let result = signable.signature_data(sigs, 42);
-        assert!(result.is_ok(), "signature_data must succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "signature_data must succeed: {:?}",
+            result.err()
+        );
         match result.unwrap() {
             SignatureData::Bls12381(data) => {
-                assert_eq!(data.aggregateSignature.len(), 256, "Aggregate sig must be 256 bytes (EIP-2537)");
+                assert_eq!(
+                    data.aggregateSignature.len(),
+                    256,
+                    "Aggregate sig must be 256 bytes (EIP-2537)"
+                );
                 assert_eq!(data.signerPubkeys.len(), 3, "Must have 3 signer pubkeys");
                 for pk in &data.signerPubkeys {
                     assert_eq!(pk.len(), 128, "Each G1 pubkey must be 128 bytes (EIP-2537)");

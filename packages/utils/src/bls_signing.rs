@@ -135,9 +135,7 @@ pub fn bls_sign_digest(
 /// while EIP-2537 puts c0 before c1.
 ///
 /// Matches `BLS12381.G2_POINT_SIZE = 256` in poa-middleware contracts.
-pub fn bls_g2_signature_bytes(
-    signature: &blst::min_pk::Signature,
-) -> anyhow::Result<[u8; 256]> {
+pub fn bls_g2_signature_bytes(signature: &blst::min_pk::Signature) -> anyhow::Result<[u8; 256]> {
     let uncompressed = signature.serialize(); // 192 bytes: x_c1|x_c0|y_c1|y_c0 (ZCash order)
     let mut eip2537 = [0u8; 256];
 
@@ -288,13 +286,31 @@ mod tests {
         let sig = bls_sign_digest(&key, &digest).unwrap();
         // Each Fp element: 16 zero padding + 48 data = 64 bytes, 4 elements = 256 bytes
         // Zero padding regions:
-        assert!(sig[0..16].iter().all(|&b| b == 0), "x.c0 padding must be zeros");
-        assert!(sig[64..80].iter().all(|&b| b == 0), "x.c1 padding must be zeros");
-        assert!(sig[128..144].iter().all(|&b| b == 0), "y.c0 padding must be zeros");
-        assert!(sig[192..208].iter().all(|&b| b == 0), "y.c1 padding must be zeros");
+        assert!(
+            sig[0..16].iter().all(|&b| b == 0),
+            "x.c0 padding must be zeros"
+        );
+        assert!(
+            sig[64..80].iter().all(|&b| b == 0),
+            "x.c1 padding must be zeros"
+        );
+        assert!(
+            sig[128..144].iter().all(|&b| b == 0),
+            "y.c0 padding must be zeros"
+        );
+        assert!(
+            sig[192..208].iter().all(|&b| b == 0),
+            "y.c1 padding must be zeros"
+        );
         // Data regions must not be all zeros:
-        assert!(sig[16..64].iter().any(|&b| b != 0), "x.c0 data must not be all zeros");
-        assert!(sig[80..128].iter().any(|&b| b != 0), "x.c1 data must not be all zeros");
+        assert!(
+            sig[16..64].iter().any(|&b| b != 0),
+            "x.c0 data must not be all zeros"
+        );
+        assert!(
+            sig[80..128].iter().any(|&b| b != 0),
+            "x.c1 data must not be all zeros"
+        );
     }
 
     /// Verify that bls_g2_signature_bytes correctly converts from ZCash/blst format
@@ -319,7 +335,8 @@ mod tests {
         // that blst's raw serialize() has c1 before c0 (ZCash format).
         let key = bls_private_key_from_mnemonic(TEST_MNEMONIC, 0).unwrap();
         let raw_bytes = key.encode();
-        let sk = blst::min_pk::SecretKey::from_bytes(&raw_bytes).expect("blst SecretKey from bytes");
+        let sk =
+            blst::min_pk::SecretKey::from_bytes(&raw_bytes).expect("blst SecretKey from bytes");
 
         // Use a simple digest for signing
         let digest = [0x42u8; 32];
@@ -329,25 +346,46 @@ mod tests {
         let eip = bls_g2_signature_bytes(&sig).unwrap();
 
         // EIP-2537[16..64] (x_c0 slot) must contain blst's x_c0 = raw[48..96]
-        assert_eq!(&eip[16..64], &raw[48..96], "x.c0 slot must contain blst raw[48..96] (blst x_c0)");
+        assert_eq!(
+            &eip[16..64],
+            &raw[48..96],
+            "x.c0 slot must contain blst raw[48..96] (blst x_c0)"
+        );
         // EIP-2537[80..128] (x_c1 slot) must contain blst's x_c1 = raw[0..48]
-        assert_eq!(&eip[80..128], &raw[0..48], "x.c1 slot must contain blst raw[0..48] (blst x_c1)");
+        assert_eq!(
+            &eip[80..128],
+            &raw[0..48],
+            "x.c1 slot must contain blst raw[0..48] (blst x_c1)"
+        );
         // EIP-2537[144..192] (y_c0 slot) must contain blst's y_c0 = raw[144..192]
-        assert_eq!(&eip[144..192], &raw[144..192], "y.c0 slot must contain blst raw[144..192] (blst y_c0)");
+        assert_eq!(
+            &eip[144..192],
+            &raw[144..192],
+            "y.c0 slot must contain blst raw[144..192] (blst y_c0)"
+        );
         // EIP-2537[208..256] (y_c1 slot) must contain blst's y_c1 = raw[96..144]
-        assert_eq!(&eip[208..256], &raw[96..144], "y.c1 slot must contain blst raw[96..144] (blst y_c1)");
+        assert_eq!(
+            &eip[208..256],
+            &raw[96..144],
+            "y.c1 slot must contain blst raw[96..144] (blst y_c1)"
+        );
     }
 
     #[test]
     fn private_key_roundtrip_through_blst() {
         let key = bls_private_key_from_mnemonic(TEST_MNEMONIC, 0).unwrap();
         let raw_bytes = key.encode();
-        let sk = blst::min_pk::SecretKey::from_bytes(&raw_bytes).expect("blst SecretKey from bytes");
+        let sk =
+            blst::min_pk::SecretKey::from_bytes(&raw_bytes).expect("blst SecretKey from bytes");
         // Derive pubkey from blst SecretKey and compare with commonware pubkey
         let blst_pk = sk.sk_to_pk();
         let blst_pk_compressed = blst_pk.compress();
         let commonware_pk: &[u8] = &key.public_key();
-        assert_eq!(blst_pk_compressed.as_slice(), commonware_pk, "blst and commonware pubkeys must match");
+        assert_eq!(
+            blst_pk_compressed.as_slice(),
+            commonware_pk,
+            "blst and commonware pubkeys must match"
+        );
     }
 
     #[test]
@@ -356,7 +394,10 @@ mod tests {
         let digest = [0xcd_u8; 32];
         let sig1 = bls_sign_digest(&key, &digest).unwrap();
         let sig2 = bls_sign_digest(&key, &digest).unwrap();
-        assert_eq!(sig1, sig2, "Same key + digest must produce identical signatures");
+        assert_eq!(
+            sig1, sig2,
+            "Same key + digest must produce identical signatures"
+        );
     }
 
     #[test]
@@ -366,6 +407,9 @@ mod tests {
         let digest_b = [0x02_u8; 32];
         let sig_a = bls_sign_digest(&key, &digest_a).unwrap();
         let sig_b = bls_sign_digest(&key, &digest_b).unwrap();
-        assert_ne!(sig_a, sig_b, "Different digests must produce different signatures");
+        assert_ne!(
+            sig_a, sig_b,
+            "Different digests must produce different signatures"
+        );
     }
 }

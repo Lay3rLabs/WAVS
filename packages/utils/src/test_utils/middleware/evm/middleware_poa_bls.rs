@@ -110,14 +110,16 @@ impl PoaBlsMiddleware {
 
         // Parse deployment JSON from poa-middleware/deployments/poa-bls/poa_deploy.json
         let deploy_json_path = poa_middleware_dir.join("deployments/poa-bls/poa_deploy.json");
-        let deploy_json = tokio::fs::read_to_string(&deploy_json_path).await.map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to read BLS deployment JSON at {}: {}. \
+        let deploy_json = tokio::fs::read_to_string(&deploy_json_path)
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to read BLS deployment JSON at {}: {}. \
                  Ensure forge script completed successfully.",
-                deploy_json_path.display(),
-                e
-            )
-        })?;
+                    deploy_json_path.display(),
+                    e
+                )
+            })?;
 
         #[derive(Deserialize)]
         struct PoaDeploymentJson {
@@ -166,7 +168,11 @@ impl PoaBlsMiddleware {
             let avs_operator = &config.avs_operators[i];
 
             // Step 1: Register operator via cast send
-            tracing::info!("Registering BLS operator {} with weight {}", operator, weight);
+            tracing::info!(
+                "Registering BLS operator {} with weight {}",
+                operator,
+                weight
+            );
             let status = tokio::time::timeout(
                 Self::DEFAULT_TIMEOUT,
                 Command::new("cast")
@@ -193,10 +199,9 @@ impl PoaBlsMiddleware {
             }
 
             // Step 2: Update BLS signing key (operator signs with their own key)
-            let operator_key = avs_operator
-                .operator_private_key
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("Operator private key required for BLS middleware"))?;
+            let operator_key = avs_operator.operator_private_key.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("Operator private key required for BLS middleware")
+            })?;
 
             let bls_pubkey = avs_operator
                 .bls_pubkey
@@ -232,7 +237,10 @@ impl PoaBlsMiddleware {
             )
             .await??;
             if !fund_status.success() {
-                bail!("Failed to fund operator address {} for BLS key update", operator);
+                bail!(
+                    "Failed to fund operator address {} for BLS key update",
+                    operator
+                );
             }
 
             tracing::info!(
@@ -264,10 +272,7 @@ impl PoaBlsMiddleware {
             .await??;
 
             if !status.success() {
-                bail!(
-                    "Failed to update BLS signing key for operator {}",
-                    operator
-                );
+                bail!("Failed to update BLS signing key for operator {}", operator);
             }
         }
 
