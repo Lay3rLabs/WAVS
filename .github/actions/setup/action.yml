@@ -44,6 +44,15 @@ runs:
     - name: Install Foundry
       uses: foundry-rs/foundry-toolchain@v1
 
+    - name: Checkout poa-middleware (bls branch) for BLS e2e tests
+      shell: bash
+      run: |
+        set -euo pipefail
+        POA_DIR="${{ runner.workspace }}/contracts/poa-middleware"
+        rm -rf "$POA_DIR"
+        mkdir -p "$(dirname "$POA_DIR")"
+        git clone --depth=1 --branch bls https://github.com/Lay3rLabs/poa-middleware.git "$POA_DIR"
+
     - name: Create placeholder dist folder for macro expansion
       shell: bash
       run: mkdir -p app/dist
