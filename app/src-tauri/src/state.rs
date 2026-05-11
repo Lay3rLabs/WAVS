@@ -20,8 +20,15 @@ impl SettingsState {
     pub async fn load_or_new(app: &AppHandle) -> AppResult<Self> {
         let mut _self = Self::new(app).await?;
 
-        if let Ok(settings) = Self::load_inner(&_self.path).await {
-            *_self.inner.write().unwrap() = settings;
+        tracing::info!("Loading settings from: {}", _self.path.display());
+        match Self::load_inner(&_self.path).await {
+            Ok(settings) => {
+                tracing::info!("Settings loaded, wavs_home: {:?}", settings.wavs_home);
+                *_self.inner.write().unwrap() = settings;
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load settings: {}", e);
+            }
         }
 
         Ok(_self)
@@ -182,9 +189,28 @@ pub struct LogBufferState {
     pub inner: LogBuffer,
 }
 
-#[derive(Default)]
+pub struct SchemaCacheState {
+    pub inner: wit_schema::SchemaCache,
+}
+
+impl Default for SchemaCacheState {
+    fn default() -> Self {
+        Self {
+            inner: wit_schema::SchemaCache::default(),
+        }
+    }
+}
+
 pub struct McpServerState {
     inner: std::sync::Mutex<Option<std::process::Child>>,
+}
+
+impl Default for McpServerState {
+    fn default() -> Self {
+        Self {
+            inner: std::sync::Mutex::new(None),
+        }
+    }
 }
 
 impl McpServerState {
