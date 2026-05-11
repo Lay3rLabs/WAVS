@@ -10,6 +10,7 @@ members = [
     "packages/utils",
     "packages/version-pins",
     "packages/wavs",
+    "packages/wavs-rig",
     "examples/components/cosmos-query",
     "examples/components/chain-trigger-lookup",
     "examples/components/echo-data",
@@ -291,3 +292,5 @@ example-types = { path = "examples/components/_types" }
 cw-wavs-mock-api = { path = "examples/contracts/cosmwasm/mock/api" }
 cw-wavs-trigger-api = { path = "examples/contracts/cosmwasm/trigger/api" }
 wavs-gui-shared = { path = "packages/gui/shared" }
+wavs-rig = { path = "packages/wavs-rig" }
+rig-wasi = { git = "https://github.com/Lay3rLabs/rig-wasi.git", tag = "v0.35.0-wasi.0" }
