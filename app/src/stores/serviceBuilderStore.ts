@@ -7,6 +7,8 @@ import type {
   Submit,
   ComponentSource,
   AllowedHostPermission,
+  AllowedServiceCalls,
+  AllowedCallers,
   ServiceManager,
 } from '../types';
 
@@ -33,6 +35,12 @@ export interface ComponentDraft {
   httpHosts: 'all' | 'none' | 'specific';
   specificHosts: string[];
   fileSystem: boolean;
+  allowedServiceCalls: 'all' | 'none' | 'specific';
+  specificServiceCallIds: string[];
+  // Agent composition
+  allowedCallers: 'all' | 'none' | 'specific';
+  specificCallerIds: string[];
+  maxContinuationSteps: string;
   // Limits
   fuelLimit: string;
   timeLimitSeconds: string;
@@ -59,6 +67,11 @@ function createDefaultComponent(): ComponentDraft {
     httpHosts: 'none',
     specificHosts: [],
     fileSystem: false,
+    allowedServiceCalls: 'none',
+    specificServiceCallIds: [],
+    allowedCallers: 'none',
+    specificCallerIds: [],
+    maxContinuationSteps: '',
     fuelLimit: '',
     timeLimitSeconds: '',
     config: {},
@@ -173,6 +186,24 @@ function buildComponent(draft: ComponentDraft): Component | null {
     allowed_http_hosts = 'none';
   }
 
+  let allowed_service_calls: AllowedServiceCalls;
+  if (draft.allowedServiceCalls === 'all') {
+    allowed_service_calls = 'all';
+  } else if (draft.allowedServiceCalls === 'specific' && draft.specificServiceCallIds.length > 0) {
+    allowed_service_calls = { only: draft.specificServiceCallIds };
+  } else {
+    allowed_service_calls = 'none';
+  }
+
+  let allowed_callers: AllowedCallers | undefined;
+  if (draft.allowedCallers === 'all') {
+    allowed_callers = 'all';
+  } else if (draft.allowedCallers === 'specific' && draft.specificCallerIds.length > 0) {
+    allowed_callers = { only: draft.specificCallerIds };
+  } else {
+    allowed_callers = undefined;
+  }
+
   return {
     source,
     permissions: {
@@ -180,11 +211,14 @@ function buildComponent(draft: ComponentDraft): Component | null {
       file_system: draft.fileSystem,
       raw_sockets: false,
       dns_resolution: false,
+      allowed_service_calls,
     },
     fuel_limit: draft.fuelLimit ? parseInt(draft.fuelLimit, 10) : null,
     time_limit_seconds: draft.timeLimitSeconds ? parseInt(draft.timeLimitSeconds, 10) : null,
     config: draft.config,
     env_keys: draft.envKeys,
+    allowed_callers,
+    max_continuation_steps: draft.maxContinuationSteps ? parseInt(draft.maxContinuationSteps, 10) : undefined,
   };
 }
 
@@ -238,6 +272,26 @@ function reverseComponent(comp: Component): ComponentDraft {
     specificHosts = comp.permissions.allowed_http_hosts.only;
   }
 
+  let allowedServiceCalls: ComponentDraft['allowedServiceCalls'] = 'none';
+  let specificServiceCallIds: string[] = [];
+  const asc = comp.permissions.allowed_service_calls;
+  if (asc === 'all') {
+    allowedServiceCalls = 'all';
+  } else if (typeof asc === 'object' && asc && 'only' in asc) {
+    allowedServiceCalls = 'specific';
+    specificServiceCallIds = asc.only;
+  }
+
+  let allowedCallers: ComponentDraft['allowedCallers'] = 'none';
+  let specificCallerIds: string[] = [];
+  const ac = comp.allowed_callers;
+  if (ac === 'all') {
+    allowedCallers = 'all';
+  } else if (typeof ac === 'object' && ac && 'only' in ac) {
+    allowedCallers = 'specific';
+    specificCallerIds = ac.only;
+  }
+
   return {
     sourceType,
     domain,
@@ -248,6 +302,11 @@ function reverseComponent(comp: Component): ComponentDraft {
     httpHosts,
     specificHosts,
     fileSystem: comp.permissions.file_system,
+    allowedServiceCalls,
+    specificServiceCallIds,
+    allowedCallers,
+    specificCallerIds,
+    maxContinuationSteps: comp.max_continuation_steps != null ? String(comp.max_continuation_steps) : '',
     fuelLimit: comp.fuel_limit != null ? String(comp.fuel_limit) : '',
     timeLimitSeconds: comp.time_limit_seconds != null ? String(comp.time_limit_seconds) : '',
     config: comp.config,

@@ -2,12 +2,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/atoms';
 import { useAppStore } from '../../stores/appStore';
 import { usePOAStore, type ConnectedRegistry } from '../../stores/poaStore';
+import { useServicePolling } from '../../hooks/useServicePolling';
 import { getServiceAddress, getServiceChain, getTriggerLabel } from '../../types';
 import type { Service } from '../../types';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 export function ServiceListPage() {
+  useServicePolling();
   const navigate = useNavigate();
   const services = useAppStore((state) => state.services);
   const registries = usePOAStore((state) => state.registries);

@@ -10,6 +10,8 @@ import {
   WalletSetup,
   Health,
   ComponentsPage,
+  ComponentDetailPage,
+  Design,
 } from './pages';
 import {
   ServicesLayout,
@@ -20,17 +22,21 @@ import {
 } from './pages/services';
 import { useAppStore } from './stores/appStore';
 import { useWalletStore } from './stores/walletStore';
+import { useAgentNavigation } from './hooks/useAgentNavigation';
 import { getSettings, startWavs, getServices } from './tauri';
 import { startListeners, stopListeners } from './tauri/listeners';
 import { buildServiceMap } from './types';
 
 function MainAppContent() {
   const isSettingsComplete = useAppStore((state) => state.isSettingsComplete());
+  useAgentNavigation();
 
   return (
     <div className="h-full flex flex-col">
       <Header />
       <Routes>
+        {/* Design system showcase — renders without Body's legacy chrome */}
+        <Route path="/design" element={<Design />} />
         <Route element={<Body />}>
           <Route path="/settings" element={<Settings />} />
           <Route path="/logs" element={<Logs />} />
@@ -41,6 +47,7 @@ function MainAppContent() {
             <Route path=":chainId/:address/edit" element={<ServiceEditorPage />} />
           </Route>
           <Route path="/components" element={<ComponentsPage />} />
+          <Route path="/components/:digest" element={<ComponentDetailPage />} />
           <Route path="/activity" element={<Activity />} />
           <Route path="/triggers" element={<Navigate to="/activity" replace />} />
           <Route path="/submissions" element={<Navigate to="/activity" replace />} />
@@ -87,6 +94,7 @@ function AppContent() {
         try {
           await startWavs();
           setWavsStarted(true);
+          window.dispatchEvent(new Event('wavs:state-change'));
           // Refresh services now that WAVS is running
           try {
             const services = await getServices();
@@ -135,6 +143,7 @@ function App() {
       try {
         // Load initial settings
         const settings = await getSettings();
+        console.log('[App] Loaded settings:', JSON.stringify(settings));
         if (cancelled) return;
         setSettings(settings);
 
@@ -151,6 +160,32 @@ function App() {
           if (!cancelled) setServices(await buildServiceMap(services));
         } catch {
           // WAVS may not be running yet -- services will load when it starts
+        }
+
+        // Auto-start agent sidecar (check backend first — sidecar may survive hot reload)
+        if (!cancelled) {
+          try {
+            const { useAgentStore } = await import('./stores/agentStore');
+            const { agentStatus } = await import('./tauri/agent');
+            const store = useAgentStore.getState();
+            const { status } = await agentStatus();
+            console.log('[App] Agent backend status:', status);
+            if (status === 'running') {
+              // Sidecar survived hot reload — just sync frontend state
+              store.handleStatusEvent('running');
+              console.log('[App] Agent store status after sync:', useAgentStore.getState().status);
+              store.refreshSessions();
+              // Load current session messages
+              try {
+                const { agentGetMessages } = await import('./tauri/agent');
+                await agentGetMessages();
+              } catch { /* best effort */ }
+            } else {
+              store.startAgent();
+            }
+          } catch {
+            // Agent start failure is non-fatal
+          }
         }
 
         if (!cancelled) setInitialized(true);

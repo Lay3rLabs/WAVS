@@ -1,7 +1,9 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { useAppStore, nextActivityId } from '../stores/appStore';
-import { buildServiceMap, type SettingsEvent, type LogEvent, type TriggerEvent, type SubmissionEvent, type ServiceEvent, type LogLevel } from '../types';
+import { useAgentStore } from '../stores/agentStore';
+import { buildServiceMap, type SettingsEvent, type LogEvent, type TriggerEvent, type SubmissionEvent, type ServiceEvent, type LogLevel, type SubmissionFailedEvent, type ExecutionCompleteEvent } from '../types';
 import { getServices } from './commands';
+import { Toast } from '../components/atoms/Toast';
 
 // Event names matching the Rust backend
 const EVENTS = {
@@ -9,6 +11,8 @@ const EVENTS = {
   LOG: 'log',
   TRIGGER: 'trigger',
   SUBMISSION: 'submission',
+  SUBMISSION_FAILED: 'submission_failed',
+  EXECUTION_COMPLETE: 'execution_complete',
   SERVICE: 'service',
 } as const;
 
@@ -48,6 +52,7 @@ export async function startListeners(): Promise<void> {
       workflowId: action.config.workflow_id,
       triggerData: action.data,
       triggerConfig: action.config,
+      correlationId: action.correlation_id,
     });
   });
   unlistenFns.push(unlistenTrigger);
@@ -62,9 +67,42 @@ export async function startListeners(): Promise<void> {
       serviceId: payload.service_id,
       workflowId: payload.workflow_id,
       triggerData: payload.trigger_data,
+      correlationId: payload.correlation_id,
+      txHash: payload.tx_hash,
+      resultPayload: payload.result_payload,
     });
   });
   unlistenFns.push(unlistenSubmission);
+
+  // Execution complete listener -> ActivityItem (for submit:"none" services)
+  const unlistenExecutionComplete = await listen<ExecutionCompleteEvent>(EVENTS.EXECUTION_COMPLETE, (event) => {
+    const payload = event.payload;
+    store.addActivity({
+      id: nextActivityId(),
+      ts: Date.now(),
+      kind: 'execution_complete',
+      serviceId: payload.service_id,
+      workflowId: payload.workflow_id,
+      triggerData: payload.trigger_data,
+      resultPayload: payload.result_payload,
+    });
+  });
+  unlistenFns.push(unlistenExecutionComplete);
+
+  // Submission failed listener -> ActivityItem
+  const unlistenSubmissionFailed = await listen<SubmissionFailedEvent>(EVENTS.SUBMISSION_FAILED, (event) => {
+    const payload = event.payload;
+    store.addActivity({
+      id: nextActivityId(),
+      ts: Date.now(),
+      kind: 'submission_failed',
+      serviceId: payload.service_id,
+      workflowId: payload.workflow_id,
+      correlationId: payload.correlation_id,
+      error: payload.error,
+    });
+  });
+  unlistenFns.push(unlistenSubmissionFailed);
 
   // Service listener -> re-fetch service list
   const unlistenService = await listen<ServiceEvent>(EVENTS.SERVICE, async (_event) => {
@@ -76,6 +114,46 @@ export async function startListeners(): Promise<void> {
     }
   });
   unlistenFns.push(unlistenService);
+
+  // Agent RPC event listener
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const unlistenAgentEvent = await listen<{ event: any }>('agent:event', (event) => {
+    useAgentStore.getState().handleAgentEvent(event.payload.event);
+  });
+  unlistenFns.push(unlistenAgentEvent);
+
+  // Agent status listener
+  const unlistenAgentStatus = await listen<{ status: string; error?: string }>('agent:status', (event) => {
+    useAgentStore.getState().handleStatusEvent(event.payload.status, event.payload.error);
+  });
+  unlistenFns.push(unlistenAgentStatus);
+
+  // Agent UI control listener
+  const unlistenAgentUiControl = await listen<{ action: string; payload: Record<string, unknown> }>('agent:ui_control', (event) => {
+    const { action, payload } = event.payload;
+    if (action === 'navigate') {
+      window.dispatchEvent(new CustomEvent('agent:navigate', { detail: (payload as { path: string }).path }));
+    } else if (action === 'copy_to_clipboard') {
+      const text = (payload as { text: string }).text;
+      navigator.clipboard.writeText(text).then(() => {
+        Toast.success('Copied to clipboard');
+      }).catch(() => {
+        Toast.error('Failed to copy to clipboard');
+      });
+    } else if (action === 'toast') {
+      const p = payload as { message: string; level?: string };
+      if (p.level === 'error') {
+        Toast.error(p.message);
+      } else if (p.level === 'success') {
+        Toast.success(p.message);
+      } else if (p.level === 'warning') {
+        Toast.warning(p.message);
+      } else {
+        Toast.info(p.message);
+      }
+    }
+  });
+  unlistenFns.push(unlistenAgentUiControl);
 
   console.log('Tauri event listeners started');
 }

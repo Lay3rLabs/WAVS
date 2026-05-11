@@ -14598,6 +14598,7 @@ name = "wavs-app"
 version = "2.8.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "fix-path-env",
  "keyring",
  "log",
@@ -14616,9 +14617,11 @@ dependencies = [
  "tracing-subscriber",
  "utils",
  "wasm-pkg-client",
+ "wasmtime",
  "wavs",
  "wavs-gui-shared",
  "wavs-types",
+ "wit-schema",
 ]
 
 [[package]]

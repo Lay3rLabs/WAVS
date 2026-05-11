@@ -12,6 +12,8 @@ import type {
   McpStatus,
   KvEntry,
   FsEntry,
+  ComponentSchema,
+  ComponentMetadata,
 } from '../types';
 
 export async function setWavsHome(): Promise<string | null> {
@@ -65,6 +67,22 @@ export async function removeService(manager: ServiceManager): Promise<void> {
 
 export async function saveServiceToNode(serviceJson: string): Promise<string> {
   return invoke<string>('cmd_save_service_to_node', { service_json: serviceJson });
+}
+
+/**
+ * Send a manual trigger to the embedded WAVS node for the given service+workflow.
+ * `data` is the raw byte payload (the component's TriggerData::Raw input).
+ */
+export async function sendManualTrigger(
+  serviceId: string,
+  workflowId: string,
+  data: Uint8Array,
+): Promise<void> {
+  return invoke<void>('cmd_send_manual_trigger', {
+    service_id: serviceId,
+    workflow_id: workflowId,
+    data: Array.from(data),
+  });
 }
 
 // Keychain commands
@@ -174,4 +192,12 @@ export async function listFsEntries(serviceId: string, path: string): Promise<Fs
 
 export async function readFsFile(serviceId: string, path: string): Promise<number[]> {
   return invoke<number[]>('cmd_read_fs_file', { service_id: serviceId, path });
+}
+
+export async function getComponentSchema(digest: string): Promise<ComponentSchema> {
+  return invoke<ComponentSchema>('cmd_get_component_schema', { digest });
+}
+
+export async function getComponentMetadata(digest: string): Promise<ComponentMetadata> {
+  return invoke<ComponentMetadata>('cmd_get_component_metadata', { digest });
 }
