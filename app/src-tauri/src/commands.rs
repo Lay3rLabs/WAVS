@@ -1309,7 +1309,7 @@ pub async fn cmd_derive_bls_pubkey(
 ) -> AppResult<BlsPubkeyResponse> {
     let mnemonic = get_mnemonic_cached(&mnemonic_cache)
         .ok_or_else(|| AppError::Keychain("No mnemonic found".to_string()))?;
-    let key = utils::bls_signing::bls_private_key_from_mnemonic(&mnemonic.to_string(), hd_index)
+    let key = utils::bls_signing::bls_private_key_from_mnemonic(mnemonic.as_ref(), hd_index)
         .map_err(|e| AppError::Service(format!("BLS key derivation failed: {}", e)))?;
     let g1_bytes = utils::bls_signing::bls_g1_pubkey_bytes(&key)
         .map_err(|e| AppError::Service(format!("G1 pubkey derivation failed: {}", e)))?;
@@ -1328,7 +1328,7 @@ pub async fn cmd_bls_sign_proof_of_possession(
 ) -> AppResult<BlsProofResponse> {
     let mnemonic = get_mnemonic_cached(&mnemonic_cache)
         .ok_or_else(|| AppError::Keychain("No mnemonic found".to_string()))?;
-    let key = utils::bls_signing::bls_private_key_from_mnemonic(&mnemonic.to_string(), hd_index)
+    let key = utils::bls_signing::bls_private_key_from_mnemonic(mnemonic.as_ref(), hd_index)
         .map_err(|e| AppError::Service(format!("BLS key derivation failed: {}", e)))?;
 
     // Compute the digest the contract expects: keccak256(abi.encode(operator))

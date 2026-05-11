@@ -52,6 +52,8 @@ runs:
         rm -rf "$POA_DIR"
         mkdir -p "$(dirname "$POA_DIR")"
         git clone --depth=1 --branch bls https://github.com/Lay3rLabs/poa-middleware.git "$POA_DIR"
+        # OpenZeppelin contracts ship via npm; foundry.toml remaps node_modules.
+        npm --prefix "$POA_DIR" ci --no-audit --no-fund
 
     - name: Create placeholder dist folder for macro expansion
       shell: bash

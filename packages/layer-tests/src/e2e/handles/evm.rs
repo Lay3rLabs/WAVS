@@ -56,7 +56,7 @@ struct LameAnvilInstanceBuilder {
 
 impl LameAnvilInstanceBuilder {
     pub fn spawn(self) -> LameAnvilInstance {
-        let mut args = vec![
+        let args = vec![
             "-p".to_string(),
             self.port.to_string(),
             "--chain-id".to_string(),
