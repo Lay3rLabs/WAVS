@@ -112,6 +112,14 @@ impl SubmissionManager {
                                     .metrics
                                     .increment_sign_error_count(&req.service, req.workflow_id());
                                 tracing::error!("Error processing message: {:?}", e);
+                                let _ = _self.subsystem_to_dispatcher_tx.send(
+                                    DispatcherCommand::SubmissionFailed {
+                                        service_id: req.service_id().clone(),
+                                        workflow_id: req.workflow_id().clone(),
+                                        correlation_id: String::new(),
+                                        error: format!("Signing error: {}", e),
+                                    },
+                                );
                                 return;
                             }
                         };
@@ -128,6 +136,14 @@ impl SubmissionManager {
                                     req.workflow_id(),
                                 );
                                 tracing::error!("Error dispatching submission: {:?}", e);
+                                let _ = _self.subsystem_to_dispatcher_tx.send(
+                                    DispatcherCommand::SubmissionFailed {
+                                        service_id: req.service_id().clone(),
+                                        workflow_id: req.workflow_id().clone(),
+                                        correlation_id: String::new(),
+                                        error: format!("Dispatch error: {}", e),
+                                    },
+                                );
                             }
                         }
                     });

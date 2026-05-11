@@ -326,6 +326,7 @@ impl TriggerManager {
         let mut cron_stream_state = StreamStartState::Waiting;
         let mut atproto_stream_state = StreamStartState::Waiting;
         let hypercore_stream_states = Arc::clone(&self.hypercore_stream_states);
+        let mut pending_evm_subscriptions: HashMap<ChainKey, Vec<TriggerCommand>> = HashMap::new();
 
         // Create a stream for cron triggers that produces a trigger for each due task
 
@@ -570,6 +571,26 @@ impl TriggerManager {
                                     {
                                         *chain_state = StreamStartState::Connected;
                                     }
+
+                                    // Replay any subscription commands that arrived before the controller was ready
+                                    if let Some(pending) = pending_evm_subscriptions.remove(&chain) {
+                                        let controllers = self.evm_controllers.read().unwrap();
+                                        if let Some(controller) = controllers.get(&chain) {
+                                            for cmd in pending {
+                                                match cmd {
+                                                    TriggerCommand::WatchEvmContractEvents { addresses, event_hashes, .. } => {
+                                                        tracing::info!("Replaying queued WatchEvmContractEvents for chain {chain}");
+                                                        controller.subscriptions.enable_logs(addresses, event_hashes);
+                                                    }
+                                                    TriggerCommand::WatchEvmBlocks { .. } => {
+                                                        tracing::info!("Replaying queued WatchEvmBlocks for chain {chain}");
+                                                        controller.subscriptions.toggle_block_height(true);
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -584,10 +605,17 @@ impl TriggerManager {
                                     .enable_logs(addresses, event_hashes);
                             }
                             None => {
-                                tracing::error!(
-                                        "No EVM controller found for chain {chain}, cannot watch contract event"
-                                    );
-                                continue;
+                                tracing::debug!(
+                                    "EVM controller for chain {chain} not yet ready, queuing WatchEvmContractEvents"
+                                );
+                                pending_evm_subscriptions
+                                    .entry(chain.clone())
+                                    .or_default()
+                                    .push(TriggerCommand::WatchEvmContractEvents {
+                                        chain,
+                                        addresses,
+                                        event_hashes,
+                                    });
                             }
                         },
                         TriggerCommand::WatchEvmBlocks { chain } => {
@@ -596,10 +624,13 @@ impl TriggerManager {
                                     evm_controller.subscriptions.toggle_block_height(true);
                                 }
                                 None => {
-                                    tracing::error!(
-                                        "No EVM controller found for chain {chain}, cannot watch blocks"
+                                    tracing::debug!(
+                                        "EVM controller for chain {chain} not yet ready, queuing WatchEvmBlocks"
                                     );
-                                    continue;
+                                    pending_evm_subscriptions
+                                        .entry(chain.clone())
+                                        .or_default()
+                                        .push(TriggerCommand::WatchEvmBlocks { chain });
                                 }
                             }
                         }

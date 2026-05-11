@@ -59,11 +59,14 @@ impl EngineSetup {
                     allowed_http_hosts: AllowedHostPermission::None,
                     raw_sockets: false,
                     dns_resolution: false,
+                    allowed_service_calls: Default::default(),
                 },
                 fuel_limit: None,
                 time_limit_seconds: None,
                 config,
                 env_keys: std::collections::BTreeSet::new(),
+                allowed_callers: None,
+                max_continuation_steps: None,
             },
             submit: wavs_types::Submit::None,
         };
@@ -123,6 +126,8 @@ impl EngineSetup {
             chain_configs: &self.chain_configs,
             log,
             keyvalue_ctx: self.keyvalue_ctx.clone(),
+            rpc_caller: None,
+            call_stack: vec![],
         };
 
         builder.build().unwrap()

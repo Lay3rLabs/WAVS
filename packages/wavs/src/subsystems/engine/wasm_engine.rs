@@ -5,6 +5,7 @@ use tracing::{event, instrument, span};
 use utils::storage::db::WavsDb;
 use utils::telemetry::EngineMetrics;
 use wavs_engine::bindings::aggregator::world::wavs::types::chain::AnyTxHash;
+use wavs_engine::rpc::RpcCaller;
 use wavs_engine::{
     backend::wasi_keyvalue::context::KeyValueCtx,
     common::base_engine::{BaseEngine, BaseEngineConfig},
@@ -71,22 +72,39 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         &self,
         source: &ComponentSource,
     ) -> Result<ComponentDigest, EngineError> {
-        let digest = source.digest().clone();
+        // Check cache first using the source's digest
+        let digest = source.digest();
         if self.engine.storage.data_exists(&digest.clone().into())? {
-            Ok(digest)
-        } else {
-            match source {
-                ComponentSource::Download { .. } | ComponentSource::Registry { .. } => {
-                    // Fetches component, validates it has the expected digest, and stores it in the lookup
-                    self.engine.load_component_from_source(source).await?;
-                    Ok(digest)
-                }
-                ComponentSource::Digest(_) => {
+            return Ok(digest.clone());
+        }
+
+        match source {
+            ComponentSource::Download { .. } | ComponentSource::Registry { .. } => {
+                let (_component, digest) = self.engine.load_component_from_source(source).await?;
+                Ok(digest)
+            }
+            ComponentSource::Digest(digest) => {
+                if !self.engine.storage.data_exists(&digest.clone().into())? {
                     self.metrics.increment_total_errors("unknown digest");
-                    Err(EngineError::UnknownDigest(digest))
+                    return Err(EngineError::UnknownDigest(digest.clone()));
                 }
+                Ok(digest.clone())
             }
         }
+    }
+
+    /// Returns the raw WASM bytes for a component by digest.
+    /// Used by the Tauri schema command to pass bytes to wit-schema.
+    pub fn get_component_bytes(&self, digest: &ComponentDigest) -> Result<Vec<u8>, EngineError> {
+        self.engine.storage
+            .get_data(&digest.clone().into())
+            .map_err(EngineError::Storage)
+    }
+
+    /// Returns a reference to the underlying wasmtime::Engine.
+    /// Used by the Tauri schema command to construct wasmtime::component::Component.
+    pub fn wasmtime_engine(&self) -> &wasmtime::Engine {
+        &self.engine.wasm_engine
     }
 
     // TODO: paginate this
@@ -101,7 +119,8 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
         Ok(digests?)
     }
 
-    /// This will execute a contract that implements the wavs:operator wit interface
+    /// This will execute a contract that implements the wavs:operator wit interface.
+    /// RPC caller and call stack default to None/empty (no nested RPC).
     #[instrument(skip(self, service, trigger_action), fields(subsys = "Engine"))]
     pub async fn execute_operator_component(
         &self,
@@ -117,6 +136,39 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             )));
         }
 
+        self.execute_operator_component_inner(service, trigger_action, None, vec![])
+            .await
+    }
+
+    /// Execute an operator component with an injected RPC caller and call stack.
+    ///
+    /// Used by RpcCallerImpl to run a callee service with:
+    /// - `rpc_caller`: enables nested call-service from the callee
+    /// - `call_stack`: the in-flight chain of caller service IDs, used for
+    ///   cycle detection and depth limiting in the callee's host function
+    #[instrument(
+        skip(self, service, trigger_action, rpc_caller),
+        fields(subsys = "Engine")
+    )]
+    pub async fn execute_operator_component_with_rpc(
+        &self,
+        service: Service,
+        trigger_action: TriggerAction,
+        rpc_caller: Option<Arc<dyn RpcCaller>>,
+        call_stack: Vec<String>,
+    ) -> Result<Vec<WasmResponse>, EngineError> {
+        self.execute_operator_component_inner(service, trigger_action, rpc_caller, call_stack)
+            .await
+    }
+
+    /// Internal shared implementation for both execute_operator_component variants.
+    async fn execute_operator_component_inner(
+        &self,
+        service: Service,
+        trigger_action: TriggerAction,
+        rpc_caller: Option<Arc<dyn RpcCaller>>,
+        call_stack: Vec<String>,
+    ) -> Result<Vec<WasmResponse>, EngineError> {
         let workflow = service
             .workflows
             .get(&trigger_action.config.workflow_id)
@@ -127,10 +179,11 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 )
             })?;
 
-        let digest = workflow.component.source.digest().clone();
+        let (component, _digest) = self
+            .engine
+            .load_component_from_source(&workflow.component.source)
+            .await?;
         let chain_configs = self.engine.get_chain_configs()?;
-
-        let component = self.engine.load_component(&digest).await?;
 
         let service_id = service.id();
         let workflow_id = trigger_action.config.workflow_id.clone();
@@ -150,6 +203,8 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 .join(trigger_action.config.service_id.to_string()),
             chain_configs: &chain_configs,
             log: HostComponentLogger::OperatorHostComponentLogger(log_operator),
+            rpc_caller,
+            call_stack,
         }
         .build()?;
 
@@ -415,17 +470,19 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
                 )
             })?;
 
-        let digest = match &workflow.submit {
-            wavs_types::Submit::Aggregator { component, .. } => component.source.digest().clone(),
+        let aggregator_source = match &workflow.submit {
+            wavs_types::Submit::Aggregator { component, .. } => &component.source,
             wavs_types::Submit::None => {
                 tracing::info!("Submit is None for service_id: {}", service.id(),);
                 return Ok(None);
             }
         };
 
+        let (component, _digest) = self
+            .engine
+            .load_component_from_source(aggregator_source)
+            .await?;
         let chain_configs = self.engine.get_chain_configs()?;
-
-        let component = self.engine.load_component(&digest).await?;
 
         let instance_deps = InstanceDepsBuilder {
             keyvalue_ctx: KeyValueCtx::new(self.engine.db.clone(), service.id().to_string()),
@@ -440,6 +497,8 @@ impl<S: CAStorage + Send + Sync + 'static> WasmEngine<S> {
             chain_configs: &chain_configs,
             log: HostComponentLogger::AggregatorHostComponentLogger(log_aggregator),
             service,
+            rpc_caller: None,
+            call_stack: vec![],
         }
         .build()?;
 

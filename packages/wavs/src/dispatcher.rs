@@ -132,6 +132,15 @@ pub enum DispatcherCommand {
         service_id: ServiceId,
         workflow_id: WorkflowId,
         trigger_data: TriggerData,
+        correlation_id: String,
+        tx_hash: String,
+        result_payload: Option<String>,
+    },
+    SubmissionFailed {
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
+        correlation_id: String,
+        error: String,
     },
 }
 
@@ -391,6 +400,28 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                             msg.workflow_id(),
                                             msg.service.name
                                         );
+                                        let result_payload = {
+                                            let raw = &msg.operator_response.payload;
+                                            if raw.is_empty() {
+                                                None
+                                            } else {
+                                                let capped = &raw[..raw.len().min(4096)];
+                                                Some(const_hex::encode_prefixed(capped))
+                                            }
+                                        };
+                                        if let Err(err) = _self.tauri_handle.emit_ext(
+                                            wavs_gui_shared::event::ExecutionCompleteEvent {
+                                                service_id: msg.service_id().clone(),
+                                                workflow_id: msg.workflow_id().clone(),
+                                                trigger_data: msg.trigger_action.data.clone(),
+                                                result_payload,
+                                            },
+                                        ) {
+                                            tracing::error!(
+                                                "Error emitting execution complete event to GUI: {:?}",
+                                                err
+                                            );
+                                        }
                                     }
                                     _ => {
                                         if let Err(e) = _self
@@ -456,16 +487,46 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             service_id,
                             workflow_id,
                             trigger_data,
+                            correlation_id,
+                            tx_hash,
+                            result_payload,
                         } => {
                             if let Err(err) = _self.tauri_handle.emit_ext(
                                 wavs_gui_shared::event::SubmissionEvent {
                                     service_id,
                                     workflow_id,
                                     trigger_data,
+                                    correlation_id,
+                                    tx_hash,
+                                    result_payload,
                                 },
                             ) {
                                 tracing::error!(
                                     "Error emitting submission event to GUI: {:?}",
+                                    err
+                                );
+                            }
+                        }
+                        DispatcherCommand::SubmissionFailed {
+                            service_id,
+                            workflow_id,
+                            correlation_id,
+                            error,
+                        } => {
+                            tracing::error!(
+                                "Submission failed for service {}: {}",
+                                service_id, error
+                            );
+                            if let Err(err) = _self.tauri_handle.emit_ext(
+                                wavs_gui_shared::event::SubmissionFailedEvent {
+                                    service_id,
+                                    workflow_id,
+                                    correlation_id,
+                                    error,
+                                },
+                            ) {
+                                tracing::error!(
+                                    "Error emitting submission failed event to GUI: {:?}",
                                     err
                                 );
                             }
