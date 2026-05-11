@@ -12,3 +12,12 @@ pub static COMPONENT_PERMISSIONS_BYTES: &[u8] =
 
 pub static COMPONENT_SIMPLE_AGGREGATOR_BYTES: &[u8] =
     include_bytes!("../../../../examples/build/components/simple_aggregator.wasm");
+
+pub static COMPONENT_MULTI_STEP_AGENT_BYTES: &[u8] =
+    include_bytes!("../../../../examples/build/components/multi_step_agent.wasm");
+
+pub static COMPONENT_UTILITY_SERVICE_BYTES: &[u8] =
+    include_bytes!("../../../../examples/build/components/utility_service.wasm");
+
+pub static COMPONENT_COMPOSITION_AGENT_BYTES: &[u8] =
+    include_bytes!("../../../../examples/build/components/composition_agent.wasm");
