@@ -661,7 +661,9 @@ fn is_subscription_announcement(msg: &P2pMessage) -> bool {
 /// - allowed_connection_rate_per_peer: Quota::per_second(1)
 /// - allowed_handshake_rate_per_ip: Quota::per_second(16)
 /// - allowed_handshake_rate_per_subnet: Quota::per_second(128)
+///
 /// These are non-zero defaults confirmed from the Config::local() source.
+#[allow(clippy::too_many_arguments)]
 async fn run_lookup_network(
     context: impl commonware_runtime::Spawner
         + commonware_runtime::Clock
@@ -723,7 +725,7 @@ async fn run_lookup_network(
     // NOTE: In lookup mode, peers without addresses cannot be connected to,
     // but authorized_peers without addresses are still recognized if they connect to us.
     for hex_key in authorized_peer_hexes {
-        match parse_authorized_peers(&[hex_key.clone()]) {
+        match parse_authorized_peers(std::slice::from_ref(hex_key)) {
             Ok(keys) => {
                 for key in keys {
                     if !peer_entries.iter().any(|(k, _)| k == &key) {
@@ -894,7 +896,7 @@ async fn run_lookup_network(
                                         if !retry_queue.is_empty() {
                                             let queued = retry_queue.drain_all();
                                             for queued_msg in queued {
-                                                let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                                drop(mailbox.broadcast(Recipients::All, queued_msg.clone()).await);
                                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
                                                 let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &connected_peer_set);
                                                 let queued_bytes = Encode::encode(&queued_msg);
@@ -961,7 +963,7 @@ async fn run_lookup_network(
                         let _ = response_tx.send(status);
                     }
                     Some(P2pCommand::BlockPeer { pubkey_hex }) => {
-                        match parse_authorized_peers(&[pubkey_hex.clone()]) {
+                        match parse_authorized_peers(std::slice::from_ref(&pubkey_hex)) {
                             Ok(keys) if !keys.is_empty() => {
                                 oracle.block(keys[0].clone()).await;
                                 tracing::info!("Blocked peer: {}", pubkey_hex);
@@ -1132,7 +1134,7 @@ async fn run_lookup_network(
                         if !retry_queue.is_empty() {
                             let queued = retry_queue.drain_all();
                             for queued_msg in queued {
-                                let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                drop(mailbox.broadcast(Recipients::All, queued_msg.clone()).await);
                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
                                 let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &connected_peer_set);
                                 let queued_bytes = Encode::encode(&queued_msg);
@@ -1181,6 +1183,7 @@ async fn run_lookup_network(
 ///
 /// NET-01: Discovery-based peer discovery with bootstrappers
 /// NET-04: Automatic reconnection (built-in to discovery::Network via dial_frequency)
+#[allow(clippy::too_many_arguments)]
 async fn run_discovery_network(
     context: impl commonware_runtime::Spawner
         + commonware_runtime::Clock
@@ -1394,7 +1397,7 @@ async fn run_discovery_network(
                                         if !retry_queue.is_empty() {
                                             let queued = retry_queue.drain_all();
                                             for queued_msg in queued {
-                                                let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                                drop(mailbox.broadcast(Recipients::All, queued_msg.clone()).await);
                                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
                                                 let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &connected_peer_set);
                                                 let queued_bytes = Encode::encode(&queued_msg);
@@ -1461,7 +1464,7 @@ async fn run_discovery_network(
                         let _ = response_tx.send(status);
                     }
                     Some(P2pCommand::BlockPeer { pubkey_hex }) => {
-                        match parse_authorized_peers(&[pubkey_hex.clone()]) {
+                        match parse_authorized_peers(std::slice::from_ref(&pubkey_hex)) {
                             Ok(keys) if !keys.is_empty() => {
                                 oracle.block(keys[0].clone()).await;
                                 tracing::info!("Blocked peer: {}", pubkey_hex);
@@ -1630,7 +1633,7 @@ async fn run_discovery_network(
                         if !retry_queue.is_empty() {
                             let queued = retry_queue.drain_all();
                             for queued_msg in queued {
-                                let _ = mailbox.broadcast(Recipients::All, queued_msg.clone()).await;
+                                drop(mailbox.broadcast(Recipients::All, queued_msg.clone()).await);
                                 // TGT-04: Re-resolve recipients at drain time from current subscription state
                                 let retry_recipients = peer_subscriptions.get_recipients(&queued_msg.service_id_bytes, &connected_peer_set);
                                 let queued_bytes = Encode::encode(&queued_msg);

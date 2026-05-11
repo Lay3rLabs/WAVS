@@ -167,8 +167,8 @@ impl Aggregator {
                 // Convert to service manager's own Alloy-generated types for validate()
                 // (same fields, yet another distinct Rust type from the sol! macro)
                 let sm_envelope = BlsServiceManagerEnvelope {
-                    eventId: envelope.eventId.clone(),
-                    ordering: envelope.ordering.clone(),
+                    eventId: envelope.eventId,
+                    ordering: envelope.ordering,
                     payload: envelope.payload.clone(),
                 };
                 let sm_sig_data = BlsServiceManagerSignatureData {
