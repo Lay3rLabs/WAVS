@@ -32,3 +32,6 @@ keyring = "3"
 reqwest = { workspace = true, features = ["multipart"] }
 toml = { workspace = true }
 wasm-pkg-client = { workspace = true }
+const-hex = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-sol-types = { workspace = true }

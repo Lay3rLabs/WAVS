@@ -1,6 +1,7 @@
 import { Dropdown, type DropdownOption } from '../atoms';
 import { ComponentEditor } from './ComponentEditor';
 import type { SubmitDraft } from '../../stores/serviceBuilderStore';
+import type { SignatureAlgorithm, SignaturePrefix } from '../../types';
 
 type SubmitType = 'none' | 'aggregator';
 
@@ -9,9 +10,14 @@ const SUBMIT_OPTIONS: DropdownOption<SubmitType>[] = [
   { label: 'Aggregator', value: 'aggregator' },
 ];
 
-type SigPrefix = 'eip191' | 'none';
+type SigAlgorithm = SignatureAlgorithm;
 
-const PREFIX_OPTIONS: DropdownOption<SigPrefix>[] = [
+const ALGORITHM_OPTIONS: DropdownOption<SigAlgorithm>[] = [
+  { label: 'ECDSA (secp256k1)', value: 'secp256k1' },
+  { label: 'BLS (bls12381)', value: 'bls12381' },
+];
+
+const PREFIX_OPTIONS: DropdownOption<SignaturePrefix>[] = [
   { label: 'EIP-191', value: 'eip191' },
   { label: 'None', value: 'none' },
 ];
@@ -40,6 +46,21 @@ export function SubmitEditor({ submit, onChange }: SubmitEditorProps) {
 
       {submit.type === 'aggregator' && (
         <div className="flex flex-col gap-4 p-4 rounded bg-charcoal-dark border border-charcoal-light">
+          <div className="flex flex-col gap-2">
+            <label className="text-beige-warm text-sm">Signature Algorithm</label>
+            <Dropdown
+              options={ALGORITHM_OPTIONS}
+              value={submit.signatureAlgorithm}
+              onChange={(v) => {
+                const updates: Partial<SubmitDraft> = { signatureAlgorithm: v };
+                // BLS does not use EIP-191 prefix
+                if (v === 'bls12381') updates.signaturePrefix = 'none';
+                update(updates);
+              }}
+              size="sm"
+            />
+          </div>
+
           <div className="flex flex-col gap-2">
             <label className="text-beige-warm text-sm">Signature Prefix</label>
             <Dropdown

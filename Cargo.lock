@@ -13963,7 +13963,10 @@ dependencies = [
 name = "wavs-app"
 version = "2.8.0"
 dependencies = [
+ "alloy-primitives",
+ "alloy-sol-types",
  "anyhow",
+ "const-hex",
  "fix-path-env",
  "keyring",
  "log",

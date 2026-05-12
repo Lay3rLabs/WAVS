@@ -13,11 +13,13 @@ import {
   listKvEntries,
   listFsEntries,
   readFsFile,
+  getServiceSigner,
+  blsSignProofOfPossession,
 } from '../../tauri';
 import { ServiceUpdateModal } from '../../components/service';
-import { getPublicClient, getAddress } from '../../hooks/useViemClient';
-import { connectToRegistry, fetchOperators } from '../../utils/evm';
-import { getServiceAddress, getServiceChain, getErrorMessage, buildServiceMap } from '../../types';
+import { getPublicClient, getWalletClient, getAddress } from '../../hooks/useViemClient';
+import { connectToRegistry, fetchOperators, updateBlsSigningKey, checkBlsRegistrationStatus } from '../../utils/evm';
+import { getServiceAddress, getServiceChain, getErrorMessage, buildServiceMap, isBLSService } from '../../types';
 import type { Service, KvEntry, FsEntry, Workflow, AllowedHostPermission } from '../../types';
 import type { Address } from 'viem';
 import { getRegistryKeyFromParams } from './ServicesLayout';
@@ -486,11 +488,36 @@ function ConfirmModal({
   );
 }
 
+function RegistrationBadge({ status }: { status: 'registered' | 'unregistered' | 'unknown' }) {
+  const styles: Record<string, string> = {
+    registered: 'bg-success-900/30 text-success-500',
+    unregistered: 'bg-charcoal-light text-tan-muted',
+    unknown: 'bg-charcoal-light text-tan-muted',
+  };
+  const labels: Record<string, string> = {
+    registered: 'Registered',
+    unregistered: 'Unregistered',
+    unknown: 'Unknown',
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold ${styles[status]}`}>
+      {labels[status]}
+    </span>
+  );
+}
+
 export function ServiceDetailPage() {
   const { chainId, address } = useParams<{ chainId: string; address: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('workflows');
   const [refreshing, setRefreshing] = useState(false);
+
+  // BLS state
+  const [blsPubkey, setBlsPubkey] = useState<string | null>(null);
+  const [blsHdIndex, setBlsHdIndex] = useState<number>(0);
+  const [blsRegStatus, setBlsRegStatus] = useState<'registered' | 'unregistered' | 'unknown'>('unknown');
+  const [blsRegistering, setBlsRegistering] = useState(false);
+  const [blsLoading, setBlsLoading] = useState(false);
 
   const services = useAppStore((state) => state.services);
   const setServices = useAppStore((state) => state.setServices);
@@ -527,6 +554,38 @@ export function ServiceDetailPage() {
 
   const chainKey = registry?.chainKey ?? getServiceChain(service!.manager);
   const contractAddress = (registry?.address ?? address) as Address;
+  const serviceBls = service ? isBLSService(service) : false;
+
+  // Load BLS operator key and registration status on mount
+  useEffect(() => {
+    if (!serviceBls || !service) return;
+    let cancelled = false;
+    async function loadBlsInfo() {
+      setBlsLoading(true);
+      try {
+        const signerResp = await getServiceSigner(service!.manager);
+        if ('bls12381' in signerResp && !cancelled) {
+          setBlsPubkey(signerResp.bls12381.g1_pubkey_hex);
+          setBlsHdIndex(signerResp.bls12381.hd_index);
+        }
+      } catch {
+        // signer unavailable
+      }
+      if (registry && !cancelled) {
+        try {
+          const pc = getPublicClient(registry.rpcUrl, registry.chainId);
+          const opAddr = await getAddress();
+          const st = await checkBlsRegistrationStatus(pc, registry.address as Address, opAddr);
+          if (!cancelled) setBlsRegStatus(st);
+        } catch {
+          if (!cancelled) setBlsRegStatus('unknown');
+        }
+      }
+      if (!cancelled) setBlsLoading(false);
+    }
+    loadBlsInfo();
+    return () => { cancelled = true; };
+  }, [serviceBls, service?.manager, registry?.address]);
 
   const refreshServices = async () => {
     const servicesData = await getServices();
@@ -599,6 +658,27 @@ export function ServiceDetailPage() {
         contractAddress={contractAddress}
       />,
     );
+  };
+
+  const handleBlsRegister = async () => {
+    if (!registry) return;
+    setBlsRegistering(true);
+    try {
+      const operatorAddress = await getAddress();
+      const proofResp = await blsSignProofOfPossession(blsHdIndex, operatorAddress);
+      const blsKeyHex = `0x${proofResp.g1_pubkey_hex}` as `0x${string}`;
+      const blsProofHex = `0x${proofResp.g2_proof_hex}` as `0x${string}`;
+      const publicClient = getPublicClient(registry.rpcUrl, registry.chainId);
+      const walletClient = await getWalletClient(registry.rpcUrl, registry.chainId);
+      await updateBlsSigningKey(publicClient, walletClient, registry.address as Address, blsKeyHex, blsProofHex);
+      setBlsRegStatus('registered');
+      Toast.info('BLS key registered successfully!');
+      await handleRefresh();
+    } catch (err) {
+      Toast.error(`BLS registration failed: ${getErrorMessage(err)}`);
+    } finally {
+      setBlsRegistering(false);
+    }
   };
 
   const isPaused = service?.status === 'paused';
@@ -678,6 +758,38 @@ export function ServiceDetailPage() {
           )}
         </div>
 
+        {/* BLS Operator Key Section */}
+        {serviceBls && (
+          <>
+            <div className="p-3 rounded bg-charcoal-dark border border-charcoal-light mt-3 mb-1">
+              {blsLoading ? (
+                <p className="text-tan-muted text-xs">Loading operator key...</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-tan-muted text-xs font-semibold">BLS Operator Key</span>
+                    <RegistrationBadge status={blsRegStatus} />
+                  </div>
+                  {blsPubkey ? (
+                    <AddressDisplay address={`0x${blsPubkey}`} />
+                  ) : (
+                    <p className="text-red-3 text-xs">Failed to load BLS operator key.</p>
+                  )}
+                </>
+              )}
+            </div>
+            {!registry && (
+              <div className="p-3 rounded bg-charcoal-dark border border-amber-700/50 mt-2">
+                <p className="text-amber-400 text-xs font-semibold mb-1">Registry Required for BLS Registration</p>
+                <p className="text-tan-muted text-xs">
+                  To register your BLS key on-chain, add this service's contract address as a POA registry
+                  from the Services page. The registry enables on-chain key registration and operator management.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
         {/* Actions — primary left, destructive right */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           {/* Primary actions */}
@@ -691,6 +803,15 @@ export function ServiceDetailPage() {
                   variant="outline"
                   onClick={handlePauseResume}
                 />
+                {serviceBls && blsRegStatus === 'unregistered' && (
+                  <Button
+                    text={blsRegistering ? 'Registering...' : 'Register BLS Key'}
+                    size="sm"
+                    color="purple"
+                    disabled={blsRegistering}
+                    onClick={handleBlsRegister}
+                  />
+                )}
               </>
             ) : (
               <Button text="Register Service" size="sm" color="purple" onClick={() => navigate(`/services/new?registry=${registryKey}`)} />

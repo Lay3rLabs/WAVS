@@ -15,7 +15,9 @@ use wavs_gui_shared::{
     error::{AppError, AppResult},
     settings::{SavedRegistry, Settings},
 };
-use wavs_types::{ChainConfigs, Credential, Service, ServiceId, ServiceManager};
+use wavs_types::{
+    ChainConfigs, Credential, Service, ServiceId, ServiceManager, ServiceStatus, SignerResponse,
+};
 
 const KEYCHAIN_SERVICE: &str = "wavs-app";
 const KEYCHAIN_ACCOUNT: &str = "mnemonic";
@@ -367,6 +369,60 @@ pub async fn cmd_save_service_to_node(
     Ok(format!("{}/dev/services/{}", wavs_url, save_resp.hash))
 }
 
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_pause_service(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    wavs_instance: State<'_, WavsInstanceState>,
+    manager: ServiceManager,
+) -> AppResult<()> {
+    let service_id = ServiceId::from(&manager);
+    wavs_instance
+        .dispatcher()?
+        .pause_service(service_id)
+        .map_err(|e| AppError::Service(format!("Failed to pause service: {}", e)))?;
+    // Persist the paused state so it survives restarts
+    settings
+        .update(&app, |s| {
+            if let Some(svc) = s
+                .saved_services
+                .iter_mut()
+                .find(|svc| svc.manager == manager)
+            {
+                svc.status = ServiceStatus::Paused;
+            }
+        })
+        .await?;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_resume_service(
+    app: AppHandle,
+    settings: State<'_, SettingsState>,
+    wavs_instance: State<'_, WavsInstanceState>,
+    manager: ServiceManager,
+) -> AppResult<()> {
+    let service_id = ServiceId::from(&manager);
+    wavs_instance
+        .dispatcher()?
+        .resume_service(service_id)
+        .map_err(|e| AppError::Service(format!("Failed to resume service: {}", e)))?;
+    // Persist the resumed state so it survives restarts
+    settings
+        .update(&app, |s| {
+            if let Some(svc) = s
+                .saved_services
+                .iter_mut()
+                .find(|svc| svc.manager == manager)
+            {
+                svc.status = ServiceStatus::Active;
+            }
+        })
+        .await?;
+    Ok(())
+}
+
 /// Load mnemonic from OS keyring and populate the cache.
 fn load_from_keyring(cache: &MnemonicCacheState) -> Option<Credential> {
     let result = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
@@ -673,6 +729,17 @@ pub async fn cmd_publish_component(
 pub struct McpStatus {
     pub running: bool,
     pub pid: Option<u32>,
+}
+
+#[derive(Serialize)]
+pub struct BlsPubkeyResponse {
+    pub g1_pubkey_hex: String,
+}
+
+#[derive(Serialize)]
+pub struct BlsProofResponse {
+    pub g1_pubkey_hex: String,
+    pub g2_proof_hex: String,
 }
 
 /// Resolve the wavs-mcp binary path.
@@ -1194,4 +1261,92 @@ pub async fn cmd_clear_persisted_services(
         .await?;
     log::info!("Cleared all persisted services and registries");
     Ok(())
+}
+
+// --- P2P Status ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_p2p_status(
+    wavs_instance: State<'_, WavsInstanceState>,
+    wavs_config: State<'_, WavsConfigState>,
+) -> AppResult<wavs_types::P2pStatus> {
+    let dispatcher = wavs_instance.dispatcher()?;
+    let mut status = dispatcher.aggregator.get_p2p_status().await;
+
+    let mode = match wavs_config.get_cloned() {
+        Some(config) => match config.p2p {
+            wavs::subsystems::aggregator::p2p::P2pConfig::Disabled => "disabled",
+            wavs::subsystems::aggregator::p2p::P2pConfig::Local { .. } => "local",
+            wavs::subsystems::aggregator::p2p::P2pConfig::Remote { .. } => "remote",
+        },
+        None => "unknown",
+    };
+    status.discovery_mode = mode.to_string();
+
+    Ok(status)
+}
+
+// --- Service Signer ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_get_service_signer(
+    wavs_instance: State<'_, WavsInstanceState>,
+    service_manager: ServiceManager,
+) -> AppResult<SignerResponse> {
+    let service_id = ServiceId::from(&service_manager);
+    wavs_instance
+        .dispatcher()?
+        .get_service_signer(service_id)
+        .map_err(|e| AppError::Service(e.to_string()))
+}
+
+// --- BLS Key Derivation ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_derive_bls_pubkey(
+    mnemonic_cache: State<'_, MnemonicCacheState>,
+    hd_index: u32,
+) -> AppResult<BlsPubkeyResponse> {
+    let mnemonic = get_mnemonic_cached(&mnemonic_cache)
+        .ok_or_else(|| AppError::Keychain("No mnemonic found".to_string()))?;
+    let key = utils::bls_signing::bls_private_key_from_mnemonic(mnemonic.as_ref(), hd_index)
+        .map_err(|e| AppError::Service(format!("BLS key derivation failed: {}", e)))?;
+    let g1_bytes = utils::bls_signing::bls_g1_pubkey_bytes(&key)
+        .map_err(|e| AppError::Service(format!("G1 pubkey derivation failed: {}", e)))?;
+    Ok(BlsPubkeyResponse {
+        g1_pubkey_hex: const_hex::encode(g1_bytes),
+    })
+}
+
+// --- BLS Proof of Possession ---
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn cmd_bls_sign_proof_of_possession(
+    mnemonic_cache: State<'_, MnemonicCacheState>,
+    hd_index: u32,
+    operator_address: String,
+) -> AppResult<BlsProofResponse> {
+    let mnemonic = get_mnemonic_cached(&mnemonic_cache)
+        .ok_or_else(|| AppError::Keychain("No mnemonic found".to_string()))?;
+    let key = utils::bls_signing::bls_private_key_from_mnemonic(mnemonic.as_ref(), hd_index)
+        .map_err(|e| AppError::Service(format!("BLS key derivation failed: {}", e)))?;
+
+    // Compute the digest the contract expects: keccak256(abi.encode(operator))
+    let operator: alloy_primitives::Address = operator_address
+        .parse()
+        .map_err(|e| AppError::Service(format!("Invalid operator address: {}", e)))?;
+    let encoded = alloy_sol_types::SolValue::abi_encode(&(operator,));
+    let digest: [u8; 32] = alloy_primitives::keccak256(&encoded).into();
+
+    let proof = utils::bls_signing::bls_sign_digest(&key, &digest)
+        .map_err(|e| AppError::Service(format!("BLS proof signing failed: {}", e)))?;
+
+    // Also return the G1 pubkey for convenience
+    let g1_bytes = utils::bls_signing::bls_g1_pubkey_bytes(&key)
+        .map_err(|e| AppError::Service(format!("G1 pubkey derivation failed: {}", e)))?;
+
+    Ok(BlsProofResponse {
+        g1_pubkey_hex: const_hex::encode(g1_bytes),
+        g2_proof_hex: const_hex::encode(proof),
+    })
 }
