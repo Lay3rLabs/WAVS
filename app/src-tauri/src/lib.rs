@@ -4,16 +4,14 @@
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::commands::{
-    cmd_add_service, cmd_bls_sign_proof_of_possession, cmd_clear_persisted_services,
-    cmd_delete_mnemonic, cmd_derive_bls_pubkey, cmd_get_chain_configs, cmd_get_component_digest,
-    cmd_get_health_status, cmd_get_mcp_binary_path, cmd_get_mcp_status, cmd_get_mnemonic,
-    cmd_get_p2p_status, cmd_get_service_signer, cmd_get_services, cmd_get_settings,
-    cmd_get_wavs_url, cmd_has_mnemonic, cmd_list_fs_entries, cmd_list_kv_entries,
-    cmd_pause_service, cmd_pick_folder, cmd_publish_component, cmd_read_fs_file,
-    cmd_read_wavs_toml, cmd_register_claude_mcp, cmd_remove_service, cmd_restart,
-    cmd_resume_service, cmd_save_env_vars, cmd_save_mcp_settings, cmd_save_poa_registries,
-    cmd_save_service_to_node, cmd_set_wavs_home, cmd_start_mcp_server, cmd_start_wavs,
-    cmd_stop_mcp_server, cmd_store_mnemonic, cmd_upload_to_ipfs, cmd_write_wavs_toml,
+    cmd_add_service, cmd_clear_persisted_services, cmd_delete_mnemonic, cmd_get_chain_configs,
+    cmd_get_component_digest, cmd_get_health_status, cmd_get_mcp_binary_path, cmd_get_mcp_status,
+    cmd_get_mnemonic, cmd_get_services, cmd_get_settings, cmd_get_wavs_url, cmd_has_mnemonic,
+    cmd_list_fs_entries, cmd_list_kv_entries, cmd_pick_folder, cmd_publish_component,
+    cmd_read_fs_file, cmd_read_wavs_toml, cmd_register_claude_mcp, cmd_remove_service, cmd_restart,
+    cmd_save_env_vars, cmd_save_mcp_settings, cmd_save_poa_registries, cmd_save_service_to_node,
+    cmd_set_wavs_home, cmd_start_mcp_server, cmd_start_wavs, cmd_stop_mcp_server,
+    cmd_store_mnemonic, cmd_upload_to_ipfs, cmd_write_wavs_toml,
 };
 use crate::state::{
     LogBufferState, McpServerState, MnemonicCacheState, SettingsState, WavsConfigState,
@@ -128,13 +126,7 @@ pub fn run() {
             cmd_register_claude_mcp,
             cmd_list_kv_entries,
             cmd_list_fs_entries,
-            cmd_read_fs_file,
-            cmd_pause_service,
-            cmd_resume_service,
-            cmd_get_p2p_status,
-            cmd_get_service_signer,
-            cmd_derive_bls_pubkey,
-            cmd_bls_sign_proof_of_possession
+            cmd_read_fs_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

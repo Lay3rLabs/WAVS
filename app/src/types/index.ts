@@ -103,14 +103,6 @@ export interface SubmissionEvent {
   service_id: ServiceId;
   workflow_id: WorkflowId;
   trigger_data: TriggerData;
-  tx_hash: string | null;
-}
-
-export interface SubmissionErrorEvent {
-  service_id: ServiceId;
-  workflow_id: WorkflowId;
-  trigger_data: TriggerData;
-  error_message: string;
 }
 
 export type ServiceAction = 'added' | 'removed' | 'paused' | 'resumed';
@@ -207,38 +199,8 @@ export interface SignatureKind {
   prefix: SignaturePrefix | null;
 }
 
-export type SignatureAlgorithm = 'secp256k1' | 'bls12381';
-export type SignaturePrefix = 'eip191' | 'none';
-
-// P2P network status (mirrors packages/types/src/http.rs:134 P2pStatus)
-export interface P2pStatus {
-  enabled: boolean;
-  discovery_mode: string;
-  local_peer_id: string | null;
-  listen_addresses: string[];
-  connected_peers: number;
-  peer_ids: string[];
-  subscribed_services: string[];
-  peer_subscriptions: Record<string, number>;  // OBS-01: per-service peer counts
-}
-
-// Service signer response (mirrors packages/types/src/http.rs:13 SignerResponse)
-// Rust uses #[serde(rename_all = "snake_case")] with NO tag attribute = externally tagged enum
-// JSON output: {"secp256k1": {"hd_index": 0, "evm_address": "0x..."}} or {"bls12381": {"hd_index": 0, "g1_pubkey_hex": "..."}}
-export type SignerResponse =
-  | { secp256k1: { hd_index: number; evm_address: string } }
-  | { bls12381: { hd_index: number; g1_pubkey_hex: string } };
-
-// BLS public key derivation response (for cmd_derive_bls_pubkey)
-export interface BlsPubkeyResponse {
-  g1_pubkey_hex: string;
-}
-
-// BLS proof-of-possession response (for cmd_bls_sign_proof_of_possession)
-export interface BlsProofResponse {
-  g1_pubkey_hex: string;
-  g2_proof_hex: string;
-}
+export type SignatureAlgorithm = 'secp256k1';
+export type SignaturePrefix = 'eip191';
 
 // Chain types
 export interface ChainConfigs {
@@ -325,58 +287,16 @@ export interface FsEntry {
 }
 
 // Activity types (unified triggers + submissions)
-export type ActivityStatus = 'pending' | 'executed' | 'confirmed' | 'error';
+export type ActivityKind = 'trigger' | 'submission';
 
-export interface UnifiedActivity {
+export interface ActivityItem {
   id: number;
-  correlationKey: string;
-  triggerTs: number;
-  submissionTs: number | null;
-  status: ActivityStatus;
+  ts: number;
+  kind: ActivityKind;
   serviceId: ServiceId;
   workflowId: WorkflowId;
   triggerData: TriggerData;
   triggerConfig?: TriggerConfig;
-  txHash: string | null;
-  errorMessage: string | null;
-}
-
-export function correlationKey(serviceId: string, workflowId: string, triggerData: TriggerData): string {
-  if ('EvmContractEvent' in triggerData) {
-    const d = triggerData.EvmContractEvent;
-    return `${serviceId}:${workflowId}:evm:${d.chain}:${d.block_number}:${d.log_index}`;
-  }
-  if ('CosmosContractEvent' in triggerData) {
-    const d = triggerData.CosmosContractEvent;
-    return `${serviceId}:${workflowId}:cosmos:${d.chain}:${d.block_height}:${d.event_index}`;
-  }
-  if ('BlockInterval' in triggerData) {
-    const d = triggerData.BlockInterval;
-    return `${serviceId}:${workflowId}:block:${d.chain}:${d.block_height}`;
-  }
-  if ('Cron' in triggerData) {
-    return `${serviceId}:${workflowId}:cron:${triggerData.Cron.trigger_time}`;
-  }
-  if ('AtProtoEvent' in triggerData) {
-    const d = triggerData.AtProtoEvent;
-    return `${serviceId}:${workflowId}:atproto:${d.sequence}`;
-  }
-  if ('HypercoreAppend' in triggerData) {
-    const d = triggerData.HypercoreAppend;
-    return `${serviceId}:${workflowId}:hypercore:${d.feed_key}:${d.index}`;
-  }
-  if ('Raw' in triggerData) {
-    return `${serviceId}:${workflowId}:raw:${triggerData.Raw.length}:${Date.now()}`;
-  }
-  return `${serviceId}:${workflowId}:unknown:${Date.now()}`;
-}
-
-/** Check if a service uses BLS signature algorithm in any workflow */
-export function isBLSService(service: Service): boolean {
-  return Object.values(service.workflows).some((wf) => {
-    if (wf.submit === 'none') return false;
-    return wf.submit.aggregator.signature_kind.algorithm === 'bls12381';
-  });
 }
 
 // Helper to get a human-readable service key from manager (for display/fallback only)

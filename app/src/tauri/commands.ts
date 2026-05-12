@@ -12,10 +12,6 @@ import type {
   McpStatus,
   KvEntry,
   FsEntry,
-  P2pStatus,
-  SignerResponse,
-  BlsPubkeyResponse,
-  BlsProofResponse,
 } from '../types';
 
 export async function setWavsHome(): Promise<string | null> {
@@ -178,30 +174,4 @@ export async function listFsEntries(serviceId: string, path: string): Promise<Fs
 
 export async function readFsFile(serviceId: string, path: string): Promise<number[]> {
   return invoke<number[]>('cmd_read_fs_file', { service_id: serviceId, path });
-}
-
-// P2P status command
-export async function getP2pStatus(): Promise<P2pStatus> {
-  return invoke<P2pStatus>('cmd_get_p2p_status');
-}
-
-// Service signer info command
-export async function getServiceSigner(serviceManager: ServiceManager): Promise<SignerResponse> {
-  return invoke<SignerResponse>('cmd_get_service_signer', { service_manager: serviceManager });
-}
-
-// BLS public key derivation command
-export async function deriveBlsPubkey(hdIndex: number): Promise<BlsPubkeyResponse> {
-  return invoke<BlsPubkeyResponse>('cmd_derive_bls_pubkey', { hd_index: hdIndex });
-}
-
-// BLS proof of possession command
-export async function blsSignProofOfPossession(
-  hdIndex: number,
-  operatorAddress: string
-): Promise<BlsProofResponse> {
-  return invoke<BlsProofResponse>('cmd_bls_sign_proof_of_possession', {
-    hd_index: hdIndex,
-    operator_address: operatorAddress,
-  });
 }

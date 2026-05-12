@@ -47,20 +47,6 @@ function ComponentsIcon() {
   );
 }
 
-// P2P — three connected nodes forming a network triangle
-function P2pIcon() {
-  return (
-    <svg viewBox="0 0 14 14" fill="currentColor" width="14" height="14">
-      <circle cx="7" cy="2" r="1.8" />
-      <circle cx="2.5" cy="11" r="1.8" />
-      <circle cx="11.5" cy="11" r="1.8" />
-      <line x1="7" y1="3.8" x2="2.5" y2="9.2" stroke="currentColor" strokeWidth="1.3" />
-      <line x1="7" y1="3.8" x2="11.5" y2="9.2" stroke="currentColor" strokeWidth="1.3" />
-      <line x1="4.3" y1="11" x2="9.7" y2="11" stroke="currentColor" strokeWidth="1.3" />
-    </svg>
-  );
-}
-
 // Settings — horizontal sliders with knobs
 function SettingsIcon() {
   return (
@@ -79,7 +65,6 @@ const navItems: { path: string; label: string; icon: ReactNode }[] = [
   { path: '/services',    label: 'Services',    icon: <ServicesIcon /> },
   { path: '/components',  label: 'Components',  icon: <ComponentsIcon /> },
   { path: '/activity',    label: 'Activity',    icon: <ActivityIcon /> },
-  { path: '/p2p',         label: 'P2P',         icon: <P2pIcon /> },
   { path: '/logs',        label: 'Logs',        icon: <LogsIcon /> },
   { path: '/settings',    label: 'Settings',    icon: <SettingsIcon /> },
 ];

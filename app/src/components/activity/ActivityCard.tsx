@@ -1,5 +1,5 @@
 import { clsx } from 'clsx';
-import type { UnifiedActivity, ActivityStatus, TriggerData, TriggerConfig } from '../../types';
+import type { ActivityItem, TriggerData, TriggerConfig } from '../../types';
 import { getTriggerDataLabel } from '../../types';
 import { useAppStore } from '../../stores/appStore';
 
@@ -165,72 +165,8 @@ function DetailRows({ data, config }: { data: TriggerData; config?: TriggerConfi
   return null;
 }
 
-function StatusBadge({ status }: { status: ActivityStatus }) {
-  const styles = {
-    pending: 'bg-amber-900/40 text-amber-400',
-    executed: 'bg-blue-900/40 text-blue-400',
-    confirmed: 'bg-green-900/40 text-green-400',
-    error: 'bg-red-900/40 text-red-400',
-  };
-  const labels = {
-    pending: 'PENDING',
-    executed: 'EXECUTED',
-    confirmed: 'CONFIRMED',
-    error: 'ERROR',
-  };
-  return (
-    <span className={clsx('shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide', styles[status])}>
-      {labels[status]}
-    </span>
-  );
-}
-
-function truncateTxHash(hash: string): string {
-  if (hash.length <= 18) return hash;
-  return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
-}
-
-function SubmissionSection({ item }: { item: UnifiedActivity }) {
-  if (item.status === 'pending' || item.status === 'executed') return null;
-
-  if (item.status === 'confirmed') {
-    return (
-      <div className="mt-2 px-3 py-2 rounded bg-charcoal-darkest border border-charcoal-light/30">
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-tan-muted">Submitted</span>
-          {item.submissionTs && (
-            <span className="text-tan-muted font-mono">{formatTimestamp(item.submissionTs)}</span>
-          )}
-          {item.txHash ? (
-            <span className="font-mono text-xs text-primary-500">{truncateTxHash(item.txHash)}</span>
-          ) : (
-            <span className="text-tan-muted font-mono">(no hash)</span>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // status === 'error'
-  return (
-    <div className="mt-2 px-3 py-2 rounded bg-charcoal-darkest border border-red-900/30">
-      <div className="flex items-center gap-2 text-xs">
-        <span className="text-red-400 font-semibold">Error</span>
-        {item.submissionTs && (
-          <span className="text-tan-muted font-mono">{formatTimestamp(item.submissionTs)}</span>
-        )}
-      </div>
-      {item.errorMessage && (
-        <div className="text-red-400 text-xs mt-1 break-words max-h-20 overflow-y-auto">
-          {item.errorMessage}
-        </div>
-      )}
-    </div>
-  );
-}
-
 interface ActivityCardProps {
-  item: UnifiedActivity;
+  item: ActivityItem;
   expanded: boolean;
   onToggleExpand: () => void;
   compact?: boolean;
@@ -241,33 +177,34 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
 
   const serviceName = getServiceLabel(item.serviceId);
   const triggerLabel = getTriggerDataLabel(item.triggerData);
+  const isTrigger = item.kind === 'trigger';
   const accent = getTriggerAccent(item.triggerData);
-
-  const statusBorder = {
-    pending: 'border-charcoal-light/30',
-    executed: 'border-blue-900/30',
-    confirmed: 'border-green-900/30',
-    error: 'border-red-900/30',
-  }[item.status];
 
   return (
     <div
       className={clsx(
         'pl-3 pr-4 pt-3 pb-3 rounded-lg border border-l-4 bg-charcoal-dark transition-colors',
-        statusBorder,
+        isTrigger ? 'border-green-900/30' : 'border-blue-900/30',
         accent.border,
       )}
     >
       {/* Header row */}
       <div className="flex items-center gap-2 min-w-0">
-        <StatusBadge status={item.status} />
+        <span
+          className={clsx(
+            'shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide',
+            isTrigger ? 'bg-green-900/40 text-green-400' : 'bg-blue-900/40 text-blue-400',
+          )}
+        >
+          {isTrigger ? 'Trigger' : 'Submit'}
+        </span>
 
         <span className={clsx('shrink-0 px-2 py-0.5 rounded text-xs font-medium', accent.pill)}>
           {triggerLabel}
         </span>
 
         <span className="shrink-0 text-tan-muted text-xs ml-auto font-mono">
-          {formatTimestamp(item.triggerTs)}
+          {formatTimestamp(item.ts)}
         </span>
       </div>
 
@@ -280,14 +217,12 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
 
       <DetailRows data={item.triggerData} config={item.triggerConfig} />
 
-      <SubmissionSection item={item} />
-
       <button
         type="button"
         className="mt-2 text-xs text-tan-muted hover:text-beige-warm cursor-pointer select-none"
         onClick={onToggleExpand}
       >
-        Raw {expanded ? '\u25B2' : '\u25BC'}
+        Raw {expanded ? '▲' : '▼'}
       </button>
 
       {expanded && (
@@ -297,8 +232,6 @@ export function ActivityCard({ item, expanded, onToggleExpand, compact }: Activi
             {item.triggerConfig
               ? `\n\n// Trigger Config\n${JSON.stringify(item.triggerConfig.trigger, null, 2)}`
               : ''}
-            {item.txHash ? `\n\n// Tx Hash\n${item.txHash}` : ''}
-            {item.errorMessage ? `\n\n// Error\n${item.errorMessage}` : ''}
           </pre>
         </div>
       )}

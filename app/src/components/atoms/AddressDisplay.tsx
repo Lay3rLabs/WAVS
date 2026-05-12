@@ -4,7 +4,6 @@ import { clsx } from 'clsx';
 interface AddressDisplayProps {
   address: string;
   full?: boolean;
-  alwaysShowCopy?: boolean;
   className?: string;
 }
 
@@ -16,7 +15,7 @@ function shortenAddress(address: string): string {
  * Displays an Ethereum address with click-to-copy.
  * Shows a copy icon on hover. Use `full` to show the entire address.
  */
-export function AddressDisplay({ address, full = false, alwaysShowCopy = false, className }: AddressDisplayProps) {
+export function AddressDisplay({ address, full = false, className }: AddressDisplayProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async (e: React.MouseEvent) => {
@@ -45,7 +44,7 @@ export function AddressDisplay({ address, full = false, alwaysShowCopy = false, 
         title="Copy address"
         className={clsx(
           'inline-flex items-center shrink-0 transition-opacity',
-          copied || alwaysShowCopy ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
         )}
       >
         {copied ? (

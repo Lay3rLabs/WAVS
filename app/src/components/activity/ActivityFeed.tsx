@@ -3,10 +3,10 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAppStore } from '../../stores/appStore';
 import { ActivityCard } from './ActivityCard';
 import { getTriggerDataLabel } from '../../types';
-import type { ActivityStatus, UnifiedActivity, ServiceId, WorkflowId } from '../../types';
+import type { ActivityKind, ActivityItem, ServiceId, WorkflowId } from '../../types';
 
 type SortOrder = 'newest' | 'oldest';
-type StatusFilter = 'all' | ActivityStatus;
+type KindFilter = 'all' | ActivityKind;
 
 const ESTIMATED_ITEM_HEIGHT = 90;
 const NEAR_BOTTOM_THRESHOLD = 200;
@@ -25,7 +25,7 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
   const clearActivity = useAppStore((state) => state.clearActivity);
 
   // Filter state
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all');
   const [serviceFilter, setServiceFilter] = useState<ServiceId | ''>('');
   const [workflowFilter, setWorkflowFilter] = useState<WorkflowId | ''>('');
   const [search, setSearch] = useState('');
@@ -33,7 +33,7 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
 
   // Pause state
   const [paused, setPaused] = useState(false);
-  const [snapshot, setSnapshot] = useState<UnifiedActivity[]>([]);
+  const [snapshot, setSnapshot] = useState<ActivityItem[]>([]);
 
   // Expanded state -- lifted here so it survives virtualizer recycling
   const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
@@ -90,8 +90,8 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
       items = items.filter((i) => i.workflowId === workflowFilter);
     }
 
-    if (statusFilter !== 'all') {
-      items = items.filter((i) => i.status === statusFilter);
+    if (kindFilter !== 'all') {
+      items = items.filter((i) => i.kind === kindFilter);
     }
 
     if (search) {
@@ -108,7 +108,7 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
       return [...items].reverse();
     }
     return items;
-  }, [sourceList, serviceId, serviceFilter, workflowFilter, statusFilter, search, sort, getServiceLabel]);
+  }, [sourceList, serviceId, serviceFilter, workflowFilter, kindFilter, search, sort, getServiceLabel]);
 
   // Virtualizer
   const virtualizer = useVirtualizer({
@@ -117,16 +117,6 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
     estimateSize: () => ESTIMATED_ITEM_HEIGHT,
     overscan: 8,
   });
-
-  // Re-measure virtualizer when status updates change card heights
-  const activityListRef = useRef(activityList);
-  useEffect(() => {
-    // Only re-measure if existing items changed (status update), not just new items
-    if (activityListRef.current !== activityList && activityListRef.current.length === activityList.length) {
-      virtualizer.measure();
-    }
-    activityListRef.current = activityList;
-  }, [activityList, virtualizer]);
 
   // Track scroll position via ref
   const handleScroll = useCallback(() => {
@@ -178,20 +168,20 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
     <div className="flex flex-col h-full">
       {/* Toolbar */}
       <div className="flex items-center gap-2.5 flex-wrap pb-4 border-b border-charcoal-medium mb-4">
-        {/* Status filter tabs */}
+        {/* Kind filter tabs */}
         <div className="flex rounded-md overflow-hidden border border-charcoal-light">
-          {(['all', 'pending', 'executed', 'confirmed', 'error'] as StatusFilter[]).map((s) => (
+          {(['all', 'trigger', 'submission'] as KindFilter[]).map((k) => (
             <button
-              key={s}
+              key={k}
               type="button"
-              className={`px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-                statusFilter === s
+              className={`px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                kindFilter === k
                   ? 'bg-purple-1 text-cream-light'
                   : 'bg-charcoal-dark text-tan-muted hover:text-beige-warm hover:bg-charcoal-medium'
               }`}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => setKindFilter(k)}
             >
-              {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+              {k === 'all' ? 'All' : k === 'trigger' ? 'Triggers' : 'Submissions'}
             </button>
           ))}
         </div>
@@ -277,7 +267,7 @@ export function ActivityFeed({ serviceId, workflowIds }: ActivityFeedProps) {
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center flex-1 gap-2 py-12">
           <span className="text-tan-muted text-sm">No activity yet</span>
-          <span className="text-tan-muted/60 text-xs">Events will appear here as services process triggers</span>
+          <span className="text-tan-muted/60 text-xs">Trigger and submission events will appear here</span>
         </div>
       ) : (
         <div className="relative flex-1 min-h-0">
