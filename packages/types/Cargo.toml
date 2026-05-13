@@ -55,7 +55,7 @@ alloy-signer-local = { workspace = true, optional = true }
 commonware-cryptography = { workspace = true, optional = true }
 blst = { version = "0.3.16", optional = true }
 commonware-codec = { version = "2026.3.0", optional = true }
-tokio = { version = "1", optional = true, default-features = false, features = ["sync"] }
+tokio = { version = "1", optional = true, default-features = false, features = ["sync", "rt"] }
 cosmwasm-schema = { workspace = true, optional = true }
 ts-rs = { version = "11.1", features = ["serde-compat"], optional = true }
 
