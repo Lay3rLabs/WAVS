@@ -1,6 +1,12 @@
 name: "Repo setup"
 description: "Common CI setup steps (tools, deps, caches, etc.)"
 
+inputs:
+  github-token:
+    description: "GitHub token for authenticated API requests (avoids rate limits)"
+    required: false
+    default: ""
+
 runs:
   using: "composite"
   steps:
@@ -14,6 +20,11 @@ runs:
           libappindicator3-dev \
           librsvg2-dev \
           patchelf
+
+    - name: Install protoc
+      uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ inputs.github-token }}
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
