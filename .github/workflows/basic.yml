@@ -62,3 +62,6 @@ jobs:
 
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Check wavs-types standalone feature builds
+        run: cargo check -p wavs-types --no-default-features --features full --locked
