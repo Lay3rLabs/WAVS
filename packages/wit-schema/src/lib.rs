@@ -480,8 +480,7 @@ mod tests {
             generate_schema_cached(&engine, &echo_component, &echo_bytes, &options, &cache)
                 .unwrap();
         let schema2 =
-            generate_schema_cached(&engine, &agg_component, &agg_bytes, &options, &cache)
-                .unwrap();
+            generate_schema_cached(&engine, &agg_component, &agg_bytes, &options, &cache).unwrap();
 
         assert_ne!(
             schema1, schema2,
@@ -492,6 +491,9 @@ mod tests {
         let echo_digest = wavs_types::ComponentDigest::hash(&echo_bytes);
         let agg_digest = wavs_types::ComponentDigest::hash(&agg_bytes);
         assert!(cache.get(&echo_digest).is_some(), "echo should be cached");
-        assert!(cache.get(&agg_digest).is_some(), "aggregator should be cached");
+        assert!(
+            cache.get(&agg_digest).is_some(),
+            "aggregator should be cached"
+        );
     }
 }

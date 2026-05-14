@@ -90,11 +90,7 @@ pub fn exec_error(
 
 /// Convenience wrapper: same as `exec_error` but returns the inner
 /// `CallToolResult` directly (useful when building an `McpError::data` field).
-fn exec_error_value(
-    code: &str,
-    message: &str,
-    partial_result: Option<&[u8]>,
-) -> McpError {
+fn exec_error_value(code: &str, message: &str, partial_result: Option<&[u8]>) -> McpError {
     let mut error = serde_json::json!({
         "error_code": code,
         "message": message,
@@ -514,32 +510,26 @@ pub async fn handle_exec_tool(
                 ctx.client
                     .execute_component(&service_id, &workflow_id, &trigger, &data);
 
-            let result = match tokio::time::timeout(
-                Duration::from_millis(timeout_ms),
-                execute_fut,
-            )
-            .await
-            {
-                Err(_elapsed) => {
-                    return exec_error(
-                        ERR_EXECUTION_TIMEOUT,
-                        &format!(
-                            "Component execution timed out after {timeout_ms}ms"
-                        ),
-                        None,
-                    );
-                }
-                Ok(Err(e)) => {
-                    return exec_error(
-                        ERR_COMPONENT_FAILED,
-                        &format!(
+            let result =
+                match tokio::time::timeout(Duration::from_millis(timeout_ms), execute_fut).await {
+                    Err(_elapsed) => {
+                        return exec_error(
+                            ERR_EXECUTION_TIMEOUT,
+                            &format!("Component execution timed out after {timeout_ms}ms"),
+                            None,
+                        );
+                    }
+                    Ok(Err(e)) => {
+                        return exec_error(
+                            ERR_COMPONENT_FAILED,
+                            &format!(
                             "Component execution failed for {service_name}/{workflow_id}: {e:#}"
                         ),
-                        None,
-                    );
-                }
-                Ok(Ok(responses)) => responses,
-            };
+                            None,
+                        );
+                    }
+                    Ok(Ok(responses)) => responses,
+                };
 
             // Extract the first WasmResponse payload
             if result.is_empty() {
@@ -574,13 +564,11 @@ pub async fn handle_exec_tool(
                         Err(_) => format!("0x{}", const_hex::encode(&bytes)),
                     }
                 } else {
-                    serde_json::to_string_pretty(payload)
-                        .unwrap_or_else(|_| payload.to_string())
+                    serde_json::to_string_pretty(payload).unwrap_or_else(|_| payload.to_string())
                 }
             } else {
                 // No "payload" field -- return the full response object
-                serde_json::to_string_pretty(first)
-                    .unwrap_or_else(|_| first.to_string())
+                serde_json::to_string_pretty(first).unwrap_or_else(|_| first.to_string())
             };
 
             Ok(CallToolResult {
@@ -599,33 +587,33 @@ pub async fn handle_exec_tool(
                 ctx.client
                     .execute_component(&service_id, &workflow_id, &trigger, &data);
 
-            let result = match tokio::time::timeout(
-                Duration::from_millis(timeout_ms),
-                execute_fut,
-            )
-            .await
-            {
-                Err(_elapsed) => {
-                    return exec_error(
-                        ERR_EXECUTION_TIMEOUT,
-                        &format!("Component execution timed out after {timeout_ms}ms"),
-                        None,
-                    );
-                }
-                Ok(Err(e)) => {
-                    return exec_error(
-                        ERR_COMPONENT_FAILED,
-                        &format!(
+            let result =
+                match tokio::time::timeout(Duration::from_millis(timeout_ms), execute_fut).await {
+                    Err(_elapsed) => {
+                        return exec_error(
+                            ERR_EXECUTION_TIMEOUT,
+                            &format!("Component execution timed out after {timeout_ms}ms"),
+                            None,
+                        );
+                    }
+                    Ok(Err(e)) => {
+                        return exec_error(
+                            ERR_COMPONENT_FAILED,
+                            &format!(
                             "Component execution failed for {service_name}/{workflow_id}: {e:#}"
                         ),
-                        None,
-                    );
-                }
-                Ok(Ok(responses)) => responses,
-            };
+                            None,
+                        );
+                    }
+                    Ok(Ok(responses)) => responses,
+                };
 
             if result.is_empty() {
-                return exec_error(ERR_COMPONENT_FAILED, "Component returned no responses", None);
+                return exec_error(
+                    ERR_COMPONENT_FAILED,
+                    "Component returned no responses",
+                    None,
+                );
             }
 
             // Extract payload bytes from the first response
@@ -885,33 +873,33 @@ pub async fn handle_exec_tool(
                 ctx.client
                     .execute_component(&service_id, &workflow_id, &trigger, &data);
 
-            let result = match tokio::time::timeout(
-                Duration::from_millis(timeout_ms),
-                execute_fut,
-            )
-            .await
-            {
-                Err(_elapsed) => {
-                    return exec_error(
-                        ERR_EXECUTION_TIMEOUT,
-                        &format!("Component execution timed out after {timeout_ms}ms"),
-                        None,
-                    );
-                }
-                Ok(Err(e)) => {
-                    return exec_error(
-                        ERR_COMPONENT_FAILED,
-                        &format!(
+            let result =
+                match tokio::time::timeout(Duration::from_millis(timeout_ms), execute_fut).await {
+                    Err(_elapsed) => {
+                        return exec_error(
+                            ERR_EXECUTION_TIMEOUT,
+                            &format!("Component execution timed out after {timeout_ms}ms"),
+                            None,
+                        );
+                    }
+                    Ok(Err(e)) => {
+                        return exec_error(
+                            ERR_COMPONENT_FAILED,
+                            &format!(
                             "Component execution failed for {service_name}/{workflow_id}: {e:#}"
                         ),
-                        None,
-                    );
-                }
-                Ok(Ok(responses)) => responses,
-            };
+                            None,
+                        );
+                    }
+                    Ok(Ok(responses)) => responses,
+                };
 
             if result.is_empty() {
-                return exec_error(ERR_COMPONENT_FAILED, "Component returned no responses", None);
+                return exec_error(
+                    ERR_COMPONENT_FAILED,
+                    "Component returned no responses",
+                    None,
+                );
             }
 
             let first = &result[0];
@@ -1145,8 +1133,7 @@ mod tests {
                 }
             }
         });
-        let result =
-            resolve_tool_service("wavs_exec_echo_service_default", &services);
+        let result = resolve_tool_service("wavs_exec_echo_service_default", &services);
         assert!(result.is_some());
         let (sid, wid, name, _source) = result.unwrap();
         assert_eq!(sid, "abc123");
@@ -1172,15 +1159,21 @@ mod tests {
     #[test]
     fn component_source_desc_variants() {
         assert_eq!(
-            component_source_desc(&serde_json::json!({"component": {"source": {"oci": {"uri": "ghcr.io/test:v1"}}}})),
+            component_source_desc(
+                &serde_json::json!({"component": {"source": {"oci": {"uri": "ghcr.io/test:v1"}}}})
+            ),
             "ghcr.io/test:v1"
         );
         assert_eq!(
-            component_source_desc(&serde_json::json!({"component": {"source": {"digest": "abcdef123456789012"}}})),
+            component_source_desc(
+                &serde_json::json!({"component": {"source": {"digest": "abcdef123456789012"}}})
+            ),
             "component:abcdef123456"
         );
         assert_eq!(
-            component_source_desc(&serde_json::json!({"component": {"source": {"download": {"uri": "https://example.com/comp.wasm"}}}})),
+            component_source_desc(
+                &serde_json::json!({"component": {"source": {"download": {"uri": "https://example.com/comp.wasm"}}}})
+            ),
             "https://example.com/comp.wasm"
         );
         assert_eq!(

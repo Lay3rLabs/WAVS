@@ -66,20 +66,15 @@ const WIT_DEPS: &[(&str, &str)] = &[
     ),
     (
         "wasi-tls-0.2.0-draft",
-        include_str!(
-            "../../../wit-definitions/operator/wit/deps/wasi-tls-0.2.0-draft/package.wit"
-        ),
+        include_str!("../../../wit-definitions/operator/wit/deps/wasi-tls-0.2.0-draft/package.wit"),
     ),
     (
         "wavs-types-2.7.0",
-        include_str!(
-            "../../../wit-definitions/operator/wit/deps/wavs-types-2.7.0/package.wit"
-        ),
+        include_str!("../../../wit-definitions/operator/wit/deps/wavs-types-2.7.0/package.wit"),
     ),
 ];
 
-const OPERATOR_WIT: &str =
-    include_str!("../../../wit-definitions/operator/wit/operator.wit");
+const OPERATOR_WIT: &str = include_str!("../../../wit-definitions/operator/wit/operator.wit");
 
 // ---------------------------------------------------------------------------
 // Return scaffold as text (no disk writes)
@@ -181,10 +176,7 @@ pub fn scaffold_component_to_disk(
     }
 
     // Write Cargo.toml
-    write_file(
-        &project_dir.join("Cargo.toml"),
-        &generate_cargo_toml(name),
-    )?;
+    write_file(&project_dir.join("Cargo.toml"), &generate_cargo_toml(name))?;
 
     // Write src/lib.rs
     write_file(
@@ -200,10 +192,7 @@ pub fn scaffold_component_to_disk(
 
     // Write all WIT dependency files
     for (dep_name, content) in WIT_DEPS {
-        write_file(
-            &wit_deps_dir.join(dep_name).join("package.wit"),
-            content,
-        )?;
+        write_file(&wit_deps_dir.join(dep_name).join("package.wit"), content)?;
     }
 
     let underscored = name.replace('-', "_");
@@ -253,8 +242,7 @@ fn create_dir(path: &Path) -> Result<(), String> {
 }
 
 fn write_file(path: &Path, content: &str) -> Result<(), String> {
-    fs::write(path, content)
-        .map_err(|e| format!("Failed to write {}: {e}", path.display()))
+    fs::write(path, content).map_err(|e| format!("Failed to write {}: {e}", path.display()))
 }
 
 // ---------------------------------------------------------------------------
@@ -340,7 +328,13 @@ mod tests {
         fs::create_dir_all(&tmp).unwrap();
 
         // Test each trigger type scaffolds without error
-        for trigger in &["manual", "cron", "block_interval", "evm_contract_event", "cosmos_contract_event"] {
+        for trigger in &[
+            "manual",
+            "cron",
+            "block_interval",
+            "evm_contract_event",
+            "cosmos_contract_event",
+        ] {
             let name = format!("test-{}", trigger.replace('_', "-"));
             let result = scaffold_component_to_disk(
                 &name,
@@ -348,18 +342,44 @@ mod tests {
                 tmp.to_str().unwrap(),
                 Some("Test component"),
             );
-            assert!(result.is_ok(), "scaffold failed for {trigger}: {}", result.unwrap_err());
+            assert!(
+                result.is_ok(),
+                "scaffold failed for {trigger}: {}",
+                result.unwrap_err()
+            );
 
             let project = tmp.join(&name);
-            assert!(project.join("Cargo.toml").exists(), "missing Cargo.toml for {trigger}");
-            assert!(project.join("src/lib.rs").exists(), "missing lib.rs for {trigger}");
-            assert!(project.join("src/bindings.rs").exists(), "missing bindings.rs for {trigger}");
-            assert!(project.join("wit/operator.wit").exists(), "missing operator.wit for {trigger}");
-            assert!(project.join("wit/deps/wavs-types-2.7.0/package.wit").exists(), "missing wavs-types for {trigger}");
+            assert!(
+                project.join("Cargo.toml").exists(),
+                "missing Cargo.toml for {trigger}"
+            );
+            assert!(
+                project.join("src/lib.rs").exists(),
+                "missing lib.rs for {trigger}"
+            );
+            assert!(
+                project.join("src/bindings.rs").exists(),
+                "missing bindings.rs for {trigger}"
+            );
+            assert!(
+                project.join("wit/operator.wit").exists(),
+                "missing operator.wit for {trigger}"
+            );
+            assert!(
+                project
+                    .join("wit/deps/wavs-types-2.7.0/package.wit")
+                    .exists(),
+                "missing wavs-types for {trigger}"
+            );
 
             // Verify 10 WIT dep directories
             let deps: Vec<_> = fs::read_dir(project.join("wit/deps")).unwrap().collect();
-            assert_eq!(deps.len(), 10, "expected 10 WIT deps for {trigger}, got {}", deps.len());
+            assert_eq!(
+                deps.len(),
+                10,
+                "expected 10 WIT deps for {trigger}, got {}",
+                deps.len()
+            );
         }
 
         // Verify duplicate directory is rejected
@@ -376,8 +396,14 @@ mod tests {
         assert!(text.contains("Cargo.toml"), "should contain Cargo.toml");
         assert!(text.contains("bindings.rs"), "should contain bindings.rs");
         assert!(text.contains("operator.wit"), "should contain operator.wit");
-        assert!(text.contains("wavs-types-2.7.0"), "should contain wavs-types");
-        assert!(text.contains("wasm32-wasip2"), "should mention wasip2 target");
+        assert!(
+            text.contains("wavs-types-2.7.0"),
+            "should contain wavs-types"
+        );
+        assert!(
+            text.contains("wasm32-wasip2"),
+            "should mention wasip2 target"
+        );
     }
 }
 

@@ -32,5 +32,6 @@ pub fn run(args: WitSchemaArgs) -> Result<serde_json::Value> {
         wit_path: args.wit_path,
     };
 
-    generate_schema(&engine, &component, &options).context("Failed to generate schema from component")
+    generate_schema(&engine, &component, &options)
+        .context("Failed to generate schema from component")
 }

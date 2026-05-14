@@ -53,10 +53,9 @@ mod string_or_number {
         match opt {
             None => Ok(None),
             Some(StringOrNum::Num(n)) => Ok(Some(n)),
-            Some(StringOrNum::Str(s)) => s
-                .parse::<u64>()
-                .map(Some)
-                .map_err(serde::de::Error::custom),
+            Some(StringOrNum::Str(s)) => {
+                s.parse::<u64>().map(Some).map_err(serde::de::Error::custom)
+            }
         }
     }
 
@@ -74,10 +73,9 @@ mod string_or_number {
         match opt {
             None => Ok(None),
             Some(StringOrNum::Num(n)) => Ok(Some(n)),
-            Some(StringOrNum::Str(s)) => s
-                .parse::<u32>()
-                .map(Some)
-                .map_err(serde::de::Error::custom),
+            Some(StringOrNum::Str(s)) => {
+                s.parse::<u32>().map(Some).map_err(serde::de::Error::custom)
+            }
         }
     }
 }
@@ -121,7 +119,10 @@ pub struct SimulateTriggerParams {
     /// TriggerData as JSON, e.g. `{"Cron":{"trigger_time":0}}`
     pub data_json: String,
     /// How many times to fire the trigger (default: 1)
-    #[serde(default, deserialize_with = "string_or_number::deserialize_option_usize")]
+    #[serde(
+        default,
+        deserialize_with = "string_or_number::deserialize_option_usize"
+    )]
     pub count: Option<usize>,
 }
 
@@ -158,7 +159,10 @@ pub struct QueryLogsParams {
     #[serde(default, deserialize_with = "string_or_number::deserialize_option_u64")]
     pub since_id: Option<u64>,
     /// Maximum number of entries to return (default: 100, max: 1000).
-    #[serde(default, deserialize_with = "string_or_number::deserialize_option_usize")]
+    #[serde(
+        default,
+        deserialize_with = "string_or_number::deserialize_option_usize"
+    )]
     pub limit: Option<usize>,
     /// Minimum log level filter: trace | debug | info | warn | error.
     /// Returns entries at this level and above (e.g. "info" includes warn + error).
@@ -175,7 +179,10 @@ pub struct QueryComponentLogsParams {
     #[serde(default, deserialize_with = "string_or_number::deserialize_option_u64")]
     pub since_id: Option<u64>,
     /// Maximum number of entries to return (default: 100, max: 1000).
-    #[serde(default, deserialize_with = "string_or_number::deserialize_option_usize")]
+    #[serde(
+        default,
+        deserialize_with = "string_or_number::deserialize_option_usize"
+    )]
     pub limit: Option<usize>,
     /// Minimum log level filter: trace | debug | info | warn | error.
     pub level: Option<String>,
@@ -559,7 +566,9 @@ impl WavsMcpServer {
                     Err(_) => String::new(),
                 };
                 self.notify_tools_changed().await;
-                ok(format!("Service registered successfully.{nav_directive}{signer_info}"))
+                ok(format!(
+                    "Service registered successfully.{nav_directive}{signer_info}"
+                ))
             }
             Ok(v) => {
                 self.notify_tools_changed().await;
@@ -681,8 +690,7 @@ impl WavsMcpServer {
         {
             if is_placeholder_address(&addr) {
                 let random_addr = format!("0x{}", random_hex(40));
-                service_value["manager"]["evm"]["address"] =
-                    serde_json::Value::String(random_addr);
+                service_value["manager"]["evm"]["address"] = serde_json::Value::String(random_addr);
                 true
             } else {
                 false
@@ -720,7 +728,9 @@ impl WavsMcpServer {
                     let addr = service_value["manager"]["evm"]["address"]
                         .as_str()
                         .unwrap_or("unknown");
-                    format!("\nmanager_address: {addr}  (placeholder was replaced with unique address)")
+                    format!(
+                        "\nmanager_address: {addr}  (placeholder was replaced with unique address)"
+                    )
                 } else {
                     String::new()
                 };
@@ -1144,7 +1154,10 @@ impl WavsMcpServer {
         if output.status.success() {
             // Scan for output .wasm files so callers can pass the path directly to wavs_upload_component.
             // Check both wasip1 (cargo component) and wasip2 (standalone) output dirs.
-            for target_dir in &["target/wasm32-wasip1/release", "target/wasm32-wasip2/release"] {
+            for target_dir in &[
+                "target/wasm32-wasip1/release",
+                "target/wasm32-wasip2/release",
+            ] {
                 let wasm_dir = dir_path.join(target_dir);
                 if let Ok(entries) = std::fs::read_dir(&wasm_dir) {
                     let mut wasm_files: Vec<String> = entries
@@ -1166,10 +1179,14 @@ impl WavsMcpServer {
         } else {
             // Enhance error messages for common issues
             let stderr = String::from_utf8_lossy(&output.stderr);
-            if stderr.contains("failed to create a target world") || stderr.contains("package not found") {
-                result.push_str("\n\n💡 Hint: WIT interface files may be missing or incomplete. \
+            if stderr.contains("failed to create a target world")
+                || stderr.contains("package not found")
+            {
+                result.push_str(
+                    "\n\n💡 Hint: WIT interface files may be missing or incomplete. \
                     For standalone projects, ensure all wit/deps/*/package.wit files are present. \
-                    Re-run wavs_scaffold_component to get the complete file list.");
+                    Re-run wavs_scaffold_component to get the complete file list.",
+                );
             }
             if stderr.contains("no export") && stderr.contains("run") {
                 result.push_str("\n\n💡 Hint: Component doesn't export the required 'run' function. \
@@ -1698,24 +1715,24 @@ impl ServerHandler for WavsMcpServer {
                 },
             ];
 
-            // Conditionally add dynamic exec tools for deployed services
-            if self.exec_enabled {
-                match self.get_services_cached().await {
-                    Ok(services) => {
-                        let exec_tools = exec::build_exec_tools(&services);
-                        tools.extend(exec_tools);
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to build exec tools: {}", e.message);
-                        // Continue with just management tools -- don't fail the whole list
-                    }
+        // Conditionally add dynamic exec tools for deployed services
+        if self.exec_enabled {
+            match self.get_services_cached().await {
+                Ok(services) => {
+                    let exec_tools = exec::build_exec_tools(&services);
+                    tools.extend(exec_tools);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to build exec tools: {}", e.message);
+                    // Continue with just management tools -- don't fail the whole list
                 }
             }
+        }
 
-            Ok(ListToolsResult {
-                tools,
-                next_cursor: None,
-            })
+        Ok(ListToolsResult {
+            tools,
+            next_cursor: None,
+        })
     }
 
     async fn call_tool(
