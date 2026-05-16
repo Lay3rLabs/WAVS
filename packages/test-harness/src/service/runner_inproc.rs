@@ -24,10 +24,17 @@ use wavs_engine::{
         operator::execute::execute as op_execute,
     },
 };
+
+// Re-export the aggregator action types so downstream tests can match on the
+// runner's output without depending on `wavs-engine` paths directly.
+pub use wavs_engine::worlds::aggregator::execute::{
+    AggregatorAction as RunnerAggregatorAction, SubmitAction as RunnerSubmitAction,
+};
 use wavs_types::{
-    AggregatorInput, AllowedHostPermission, Component, ComponentDigest, ComponentSource, EventId,
-    Permissions, Service, ServiceId, ServiceManager, ServiceStatus, SignatureKind, Submit, Trigger,
-    TriggerAction, TriggerConfig, TriggerData, WasmResponse, WorkflowId,
+    AggregatorInput, AllowedHostPermission, ChainConfigs, Component, ComponentDigest,
+    ComponentSource, EventId, Permissions, Service, ServiceId, ServiceManager, ServiceStatus,
+    SignatureKind, Submit, Trigger, TriggerAction, TriggerConfig, TriggerData, WasmResponse,
+    WorkflowId,
 };
 
 use crate::service::ServiceSpec;
@@ -41,6 +48,7 @@ pub struct InProcRunner {
     config: BTreeMap<String, String>,
     service: Service,
     workflow_id: WorkflowId,
+    chain_configs: ChainConfigs,
 }
 
 impl InProcRunner {
@@ -70,6 +78,7 @@ impl InProcRunner {
             config,
             service,
             workflow_id,
+            chain_configs: spec.chain_configs_ref().clone(),
         })
     }
 
@@ -85,11 +94,13 @@ impl InProcRunner {
         &self.workflow_id
     }
 
-    /// Execute the operator component once with the given raw input bytes.
-    /// Returns the list of payload bytes emitted by the component.
-    pub async fn run_component(&self, input: Vec<u8>) -> Result<Vec<Vec<u8>>> {
-        let engine = build_engine()?;
-        let trigger_action = TriggerAction {
+    /// Build the canonical [`TriggerAction`] for this runner from raw input
+    /// bytes. The same `TriggerAction` should be reused when constructing the
+    /// `AggregatorInput` for the aggregator stage so the derived `EventId`
+    /// matches between operator emit and aggregator consume — production wires
+    /// it the same way.
+    pub fn default_trigger_action(&self, input: Vec<u8>) -> TriggerAction {
+        TriggerAction {
             config: TriggerConfig {
                 service_id: self.service.id().clone(),
                 workflow_id: self.workflow_id.clone(),
@@ -103,8 +114,30 @@ impl InProcRunner {
                     .clone(),
             },
             data: TriggerData::Raw(input),
-        };
+        }
+    }
 
+    /// Execute the operator component once with the given raw input bytes.
+    /// Returns the list of payload bytes emitted by the component.
+    ///
+    /// Thin wrapper around [`Self::run_component_full`] — kept for callers that
+    /// only need the payload bytes. Callers feeding output into the aggregator
+    /// should prefer `run_component_full` to preserve `ordering` and
+    /// `event_id_salt`.
+    pub async fn run_component(&self, input: Vec<u8>) -> Result<Vec<Vec<u8>>> {
+        let trigger_action = self.default_trigger_action(input);
+        let responses = self.run_component_full(trigger_action).await?;
+        Ok(responses.into_iter().map(|r| r.payload).collect())
+    }
+
+    /// Execute the operator component and return the full set of
+    /// [`WasmResponse`]s — payload bytes plus `ordering` and `event_id_salt`
+    /// — so callers can build an [`AggregatorInput`] without losing fields.
+    pub async fn run_component_full(
+        &self,
+        trigger_action: TriggerAction,
+    ) -> Result<Vec<WasmResponse>> {
+        let engine = build_engine()?;
         let data_dir = tempfile::tempdir()?;
         let keyvalue_ctx = KeyValueCtx::new(WavsDb::new()?, "test".to_string());
 
@@ -116,7 +149,7 @@ impl InProcRunner {
                 .map_err(|e| anyhow!("instantiate operator component: {e}"))?,
             engine: &engine,
             data_dir: data_dir.path().to_path_buf(),
-            chain_configs: &Default::default(),
+            chain_configs: &self.chain_configs,
             log: HostComponentLogger::OperatorHostComponentLogger(log_host),
             keyvalue_ctx,
         }
@@ -132,7 +165,7 @@ impl InProcRunner {
         .await
         .map_err(map_engine_error)?;
 
-        Ok(responses.into_iter().map(|r| r.payload).collect())
+        Ok(responses)
     }
 
     /// Execute the aggregator component once on a single packet input.
@@ -162,7 +195,7 @@ impl InProcRunner {
                 .map_err(|e| anyhow!("instantiate aggregator component: {e}"))?,
             engine: &engine,
             data_dir: data_dir.path().to_path_buf(),
-            chain_configs: &Default::default(),
+            chain_configs: &self.chain_configs,
             log: HostComponentLogger::AggregatorHostComponentLogger(log_host_agg),
             keyvalue_ctx,
         }

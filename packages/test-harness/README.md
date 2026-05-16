@@ -76,52 +76,102 @@ The RPC URL is never logged verbatim — only via [`chain::redact_url`].
 
 | Tier | Stages run | Stages mocked | Use case |
 |---|---|---|---|
-| **InProc** (default) | compute (real WASM via `wavs-engine`) + aggregate (real WASM) + envelope signing + on-chain `handleSignedEnvelope` + assert | dispatcher subsystems | deterministic PR tier on local Anvil or fork |
+| **InProc** (default) | compute (real WASM via `wavs-engine`) + aggregate (real WASM via `wavs-engine`) + envelope signing + on-chain `handleSignedEnvelope` + state assertion | dispatcher subsystems | deterministic PR tier on local Anvil or fork |
 | **Subprocess** | binary spawn + `/health` probe + `POST /dev/services` + on-chain submission + assert; v1 covers the spawn + service-registration loop, full trigger emission via the harness's `chain::*` primitives is composable | nothing — runs the real `wavs` binary | nightly fork + pre-release |
 
-InProc executes the actual operator and aggregator WASM directly through
-`wavs-engine`, then signs an envelope and submits it on-chain via
-`handleSignedEnvelope` to `SimpleSubmit` (the canonical reference handler).
-Tests assert against the handler's stored state. Everything from trigger
-through submission is exercised; only the WAVS dispatcher's trigger /
-submission orchestration is bypassed.
+InProc executes the actual operator **and aggregator** WASM directly through
+`wavs-engine` — the `lifecycle_component_through_aggregator_then_sign_then_submit_then_assert`
+test in `tests/end_to_end_smoke.rs` drives the full issue-#1147 path:
+
+```
+trigger → operator (real WASM) → aggregator (real WASM, emits SubmitAction)
+        → harness signs envelope → handleSignedEnvelope on-chain
+        → handler state assertion
+```
+
+The harness signs after the aggregator emits its `SubmitAction`, matching
+production semantics: `packages/wavs/src/subsystems/submission.rs:140-155`
+shows the dispatcher building the `Envelope` from the operator's
+`WasmResponse` + the aggregator-derived `EventId` and signing it before
+submission. `Envelope::from_operator_response` mirrors that conversion
+(including the `ordering` field's big-endian u64 packing).
+
+`simple_aggregator.wasm` is pass-through — it always emits one `Submit`
+per packet, no quorum check. A multi-operator quorum smoke test belongs
+in a follow-up with a quorum-aware aggregator component. The current
+test exercises the aggregator **lifecycle stage**, not its quorum
+decision-making.
+
+Only the WAVS dispatcher's trigger streaming and submission
+orchestration is bypassed — the harness drives each stage explicitly so
+tests stay deterministic.
 
 Subprocess spawns the actual `wavs` binary against a tempdir HOME/DATA and
 a generated `wavs.toml`, polls `/health` until ready, and exposes the
 HTTP-API surface for service registration and lifecycle drive. The runner
 is feature-gated behind `subprocess` to keep the default dep graph small.
 
-### End-to-end lifecycle path (InProc)
+### End-to-end lifecycle path (InProc, including aggregator)
 
 ```rust
 use wavs_test_harness::{
     chain,
-    envelope::{self, sign_envelope, Envelope},
-    service::{InProcRunner, MockHandler, MockHandlerConfig, ServiceSpec},
+    envelope::{sign_envelope, Envelope},
+    service::{
+        InProcRunner, MockHandler, MockHandlerConfig, RunnerAggregatorAction,
+        RunnerSubmitAction, ServiceSpec,
+    },
 };
+use wavs_types::AggregatorInput;
 
 // 1. Anvil with a wallet-bound provider.
-let (provider, _anvil, _deployer) = chain::spawn_local_with_deployer().await?;
+let (provider, anvil, _deployer) = chain::spawn_local_with_deployer().await?;
 
-// 2. Deploy the reference SimpleServiceManager + SimpleSubmit pair.
+// 2. Deploy SimpleServiceManager + SimpleSubmit with one registered operator.
 let operator = alloy_signer_local::PrivateKeySigner::random();
-let config = MockHandlerConfig::single_operator(operator.address());
-let handler = MockHandler::deploy(provider.clone(), &config).await?;
+let handler = MockHandler::deploy(
+    provider.clone(),
+    &MockHandlerConfig::single_operator(operator.address()),
+).await?;
 
-// 3. Run real operator WASM through wavs-engine.
+// 3. Build the spec WITH chain configs + aggregator config vars. The
+//    aggregator reads `chain` + `service_handler` from host::config_var and
+//    fails closed if `evm:local` is not registered in chain_configs.
 let spec = ServiceSpec::new()
     .component_wasm("path/to/strategy.wasm")
-    .aggregator_wasm("path/to/aggregator.wasm");
+    .aggregator_wasm("path/to/simple_aggregator.wasm")
+    .with_evm_local_chain("local", &anvil.endpoint())
+    .config_var("chain", "evm:local")
+    .config_var("service_handler", handler.handler.to_string());
 let runner = InProcRunner::from_spec(&spec)?;
-let outputs = runner.run_component(payload_bytes).await?;
 
-// 4. Sign + submit.
-let env = Envelope::new(envelope::event_id_from_nonce(1), outputs[0].clone());
-let sigdata = sign_envelope(&env, &[operator], reference_block)?;
+// 4. Operator stage — keep the trigger_action so we can reuse it for
+//    aggregator-side EventId derivation.
+let trigger = runner.default_trigger_action(payload_bytes.clone());
+let mut responses = runner.run_component_full(trigger.clone()).await?;
+let operator_response = responses.remove(0);
+
+// 5. Aggregator stage — drives simple_aggregator.wasm.
+let agg_input = AggregatorInput {
+    trigger_action: trigger,
+    operator_response: operator_response.clone(),
+};
+let event_id = agg_input.event_id()?;
+let actions = runner.run_aggregator(event_id.clone(), agg_input).await?;
+match &actions[0] {
+    RunnerAggregatorAction::Submit(RunnerSubmitAction::Evm(evm)) => {
+        assert_eq!(&evm.address.raw_bytes[..], handler.handler.as_slice());
+    }
+    _ => panic!("expected Evm Submit"),
+}
+
+// 6. Sign envelope built from the aggregator-derived EventId.
+let env = Envelope::from_operator_response(event_id, &operator_response);
+let sigdata = sign_envelope(&env, std::slice::from_ref(&operator), reference_block)?;
+
+// 7. Submit + assert.
 handler.submit_envelope(&env, &sigdata).await?;
-
-// 5. Assert handler state.
-assert!(handler.is_valid_trigger(1).await?);
+assert!(handler.is_valid_trigger(trigger_id).await?);
 ```
 
 ### Oracle mocking on a fork

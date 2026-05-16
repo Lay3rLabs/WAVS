@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
+use wavs_types::{ChainConfigs, EvmChainConfig};
 
 /// Declarative description of a service-under-test.
 #[derive(Debug, Clone, Default)]
@@ -21,6 +22,7 @@ pub struct ServiceSpec {
     aggregator_wasm: Option<PathBuf>,
     config_vars: BTreeMap<String, String>,
     operator_count: Option<usize>,
+    chain_configs: ChainConfigs,
 }
 
 impl ServiceSpec {
@@ -66,6 +68,49 @@ impl ServiceSpec {
         self
     }
 
+    /// Override the chain config registry passed to the wasmtime host.
+    ///
+    /// The aggregator world's `get_evm_chain_config(chain)` host call returns
+    /// `None` against the default empty `ChainConfigs`, which causes
+    /// `simple_aggregator.wasm` to fail with `no chain config for X`. Tests
+    /// that drive the aggregator stage need to register at least the
+    /// destination chain — see [`Self::with_evm_local_chain`] for the common
+    /// local-Anvil case.
+    pub fn chain_configs(mut self, configs: ChainConfigs) -> Self {
+        self.chain_configs = configs;
+        self
+    }
+
+    /// Register a local EVM chain (typically Anvil) by chain-key id with the
+    /// spec's [`ChainConfigs`]. The resulting chain is reachable to the
+    /// aggregator as `evm:<id>` (e.g. `with_evm_local_chain("local", endpoint)`
+    /// registers `evm:local`).
+    ///
+    /// Convenience around `chain_configs.add_chain(...)` so consumers don't
+    /// have to wire up the `EvmChainConfig` struct by hand.
+    pub fn with_evm_local_chain(
+        mut self,
+        id: impl Into<String>,
+        http_endpoint: impl Into<String>,
+    ) -> Self {
+        let id_str = id.into();
+        let chain_key = format!("evm:{id_str}");
+        self.chain_configs
+            .add_chain(
+                chain_key.parse().expect("evm:<id> must parse as ChainKey"),
+                EvmChainConfig {
+                    chain_id: id_str.parse().expect("chain id must parse"),
+                    http_endpoint: Some(http_endpoint.into()),
+                    ws_endpoints: vec![],
+                    faucet_endpoint: None,
+                    ws_priority_endpoint_index: None,
+                }
+                .into(),
+            )
+            .expect("add_chain should not fail for evm namespace");
+        self
+    }
+
     /// Validate the spec is complete enough to boot a service.
     pub fn validate(&self) -> Result<()> {
         let cw = self
@@ -102,6 +147,10 @@ impl ServiceSpec {
 
     pub fn operators(&self) -> usize {
         self.operator_count.unwrap_or(1)
+    }
+
+    pub fn chain_configs_ref(&self) -> &ChainConfigs {
+        &self.chain_configs
     }
 }
 

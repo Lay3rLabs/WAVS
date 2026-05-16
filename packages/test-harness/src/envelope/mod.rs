@@ -22,6 +22,7 @@ use alloy_signer::SignerSync;
 use alloy_signer_local::PrivateKeySigner;
 use alloy_sol_types::{sol, SolCall, SolValue};
 use anyhow::{anyhow, Context, Result};
+use wavs_types::{EventId, WasmResponse};
 
 sol! {
     /// The canonical envelope shape that all WAVS service handlers verify.
@@ -59,6 +60,34 @@ impl Envelope {
             eventId: FixedBytes::from(event_id),
             ordering: FixedBytes::default(),
             payload: payload.into().into(),
+        }
+    }
+
+    /// Build an envelope from an operator [`WasmResponse`] + the [`EventId`]
+    /// derived for this trigger event.
+    ///
+    /// Mirrors the production conversion in
+    /// `packages/wavs/src/subsystems/submission.rs` (the `Submission::sign_request`
+    /// path):
+    ///
+    /// - `event_id` (`[u8; 20]`) → `eventId` (`bytes20`).
+    /// - `response.ordering` (`Option<u64>`) → `ordering` (`bytes12`):
+    ///   `Some(u)` puts `u.to_be_bytes()` in bytes 0..8 (matches `EventOrder::new_u64`),
+    ///   leaving bytes 8..12 zero. `None` leaves the field all zero.
+    /// - `response.payload` → `payload`.
+    ///
+    /// Prefer this over [`Self::new`] when you have a real operator response —
+    /// it preserves ordering semantics so production-shaped tests stay
+    /// production-shaped.
+    pub fn from_operator_response(event_id: EventId, response: &WasmResponse) -> Self {
+        let mut ordering = [0u8; 12];
+        if let Some(o) = response.ordering {
+            ordering[0..8].copy_from_slice(&o.to_be_bytes());
+        }
+        Self {
+            eventId: FixedBytes::from(*event_id.as_bytes()),
+            ordering: FixedBytes::from(ordering),
+            payload: response.payload.clone().into(),
         }
     }
 
@@ -251,6 +280,37 @@ mod tests {
         let env = Envelope::new(event_id_from_nonce(1), vec![]);
         let res = sign_envelope(&env, &[], 0);
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn from_operator_response_packs_ordering_big_endian() {
+        let event_id_bytes = [0x33u8; 20];
+        let event_id: EventId = event_id_bytes.into();
+        let resp = WasmResponse {
+            payload: vec![0xde, 0xad, 0xbe, 0xef],
+            ordering: Some(0x0102_0304_0506_0708),
+            event_id_salt: None,
+        };
+        let env = Envelope::from_operator_response(event_id, &resp);
+
+        assert_eq!(env.eventId.0, event_id_bytes);
+        // u64 0x0102030405060708 lands in the first 8 bytes (big-endian).
+        let mut expected = [0u8; 12];
+        expected[0..8].copy_from_slice(&0x0102_0304_0506_0708u64.to_be_bytes());
+        assert_eq!(env.ordering.0, expected);
+        assert_eq!(env.payload.as_ref(), &[0xde, 0xad, 0xbe, 0xef]);
+    }
+
+    #[test]
+    fn from_operator_response_with_no_ordering_leaves_field_zero() {
+        let event_id: EventId = [0xabu8; 20].into();
+        let resp = WasmResponse {
+            payload: vec![1, 2, 3],
+            ordering: None,
+            event_id_salt: None,
+        };
+        let env = Envelope::from_operator_response(event_id, &resp);
+        assert_eq!(env.ordering.0, [0u8; 12]);
     }
 
     #[test]

@@ -1,14 +1,19 @@
-//! End-to-end lifecycle smoke test — the path called out by the PR review:
-//! `trigger -> operator (real WASM) -> sign envelope -> submit on-chain -> assert`.
+//! End-to-end lifecycle smoke tests — the path called out by the PR review:
+//! `trigger -> operator (real WASM) -> aggregator (real WASM) -> sign envelope ->
+//! submit on-chain -> assert`.
 //!
-//! This test boots a local Anvil instance, deploys the `SimpleServiceManager`
-//! and `SimpleSubmit` reference mocks, runs the `echo_data.wasm` operator
-//! component through `InProcRunner`, signs the produced payload with an
-//! operator key registered in the manager, submits the signed envelope via
-//! `handleSignedEnvelope`, and asserts the handler stored the trigger as valid.
-//! Then negative cases prove `validate()` actually rejects bad input.
+//! Two flavors ship here:
 //!
-//! Skips gracefully if `examples/build/components/echo_data.wasm` is missing.
+//! - `lifecycle_component_through_aggregator_*` runs the FULL path including
+//!   the aggregator stage. This is the test that satisfies issue #1147's
+//!   acceptance criterion for the realistic end-to-end path.
+//! - `lifecycle_component_then_sign_then_submit_without_aggregator` skips the
+//!   aggregator hop. Kept because the supporting negative-case tests
+//!   (`validate_rejects_*`) test the *handler's* `validate()` directly — those
+//!   gain no coverage from the extra aggregator hop and stay simple.
+//!
+//! Skips gracefully if `examples/build/components/{echo_data,simple_aggregator}.wasm`
+//! is missing.
 
 use std::path::PathBuf;
 
@@ -22,9 +27,11 @@ use wavs_test_harness::{
     envelope::{self, sign_envelope, Envelope},
     service::{
         handler::{ISimpleSubmit, ISimpleTrigger, SimpleSubmit},
-        InProcRunner, MockHandler, MockHandlerConfig, ServiceSpec,
+        InProcRunner, MockHandler, MockHandlerConfig, RunnerAggregatorAction, RunnerSubmitAction,
+        ServiceSpec,
     },
 };
+use wavs_types::AggregatorInput;
 
 fn example_wasm(name: &str) -> PathBuf {
     let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -49,7 +56,7 @@ fn trigger_id(id: u64) -> ISimpleTrigger::TriggerId {
 }
 
 #[tokio::test]
-async fn lifecycle_component_then_sign_then_submit_then_assert() {
+async fn lifecycle_component_then_sign_then_submit_without_aggregator() {
     let _ = tracing_subscriber::fmt::try_init();
 
     let component = example_wasm("echo_data.wasm");
@@ -277,4 +284,164 @@ async fn sort_signature_data_lets_submission_succeed() {
         "sorted multi-signer submission must succeed"
     );
     assert!(handler.is_valid_trigger(11).await.unwrap());
+}
+
+/// The realistic end-to-end path called out by #1147:
+///
+/// `trigger -> operator (real WASM) -> aggregator (real WASM) -> sign envelope ->
+///  on-chain handleSignedEnvelope -> handler state assertion`.
+///
+/// What's exercised:
+/// 1. `InProcRunner::run_component_full` runs the operator WASM and returns the
+///    full `WasmResponse` (payload + ordering + event_id_salt).
+/// 2. `InProcRunner::run_aggregator` runs the **aggregator WASM** on that
+///    response and returns the routing `SubmitAction` — production-shape.
+/// 3. The aggregator's `SubmitAction` is asserted to target the deployed
+///    handler address + the registered chain key. This is the proof the
+///    aggregator stage actually ran.
+/// 4. `Envelope::from_operator_response` builds the on-chain envelope using
+///    the aggregator-derived `EventId` (so the production-side EventId
+///    derivation rule is exercised end-to-end).
+/// 5. The harness signs the envelope and submits via the handler's
+///    `handleSignedEnvelope`; the test asserts the handler stored the trigger
+///    payload + signer set.
+///
+/// Caveat: `simple_aggregator.wasm` is pass-through (no quorum check). A
+/// multi-operator quorum smoke test belongs in a follow-up with a
+/// quorum-aware aggregator component. This test exercises the **lifecycle
+/// stage**, not quorum semantics.
+#[tokio::test]
+async fn lifecycle_component_through_aggregator_then_sign_then_submit_then_assert() {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let component = example_wasm("echo_data.wasm");
+    let aggregator = example_wasm("simple_aggregator.wasm");
+    if !component.exists() || !aggregator.exists() {
+        eprintln!(
+            "[skipping] {} or aggregator not found — run `just wasi-build-native`",
+            component.display()
+        );
+        return;
+    }
+
+    // 1. Anvil + wallet-bound provider.
+    let (provider, anvil, _deployer) = chain::spawn_local_with_deployer()
+        .await
+        .expect("spawn local anvil");
+    let anvil_endpoint = anvil.endpoint();
+
+    // 2. Deploy SimpleServiceManager + SimpleSubmit; register one operator.
+    let operator = PrivateKeySigner::random();
+    let handler_config = MockHandlerConfig::single_operator(operator.address());
+    let handler = MockHandler::deploy(provider.clone(), &handler_config)
+        .await
+        .expect("deploy MockHandler");
+
+    // 3. Build the spec WITH chain configs + the aggregator's config vars.
+    //    The aggregator reads `chain` and `service_handler` from
+    //    host::config_var; without an `evm:local` entry in chain_configs,
+    //    `host::get_evm_chain_config(...)` would return None and the
+    //    aggregator would error out.
+    let chain_key_str = "evm:local";
+    let spec = ServiceSpec::new()
+        .component_wasm(&component)
+        .aggregator_wasm(&aggregator)
+        .with_evm_local_chain("local", &anvil_endpoint)
+        .config_var("chain", chain_key_str)
+        .config_var("service_handler", handler.handler.to_string())
+        .operator_count(1);
+    let runner = InProcRunner::from_spec(&spec).expect("build runner");
+
+    // 4. Operator stage — drive echo_data with an ABI-encoded DataWithId.
+    let trigger_id_value: u64 = 71;
+    let payload_in = data_with_id_payload(trigger_id_value, b"e2e-through-aggregator");
+    let trigger_action = runner.default_trigger_action(payload_in.clone());
+
+    let responses = runner
+        .run_component_full(trigger_action.clone())
+        .await
+        .expect("run component");
+    assert_eq!(responses.len(), 1, "echo_data emits exactly one response");
+    let operator_response = responses.into_iter().next().unwrap();
+    assert_eq!(
+        operator_response.payload, payload_in,
+        "echo_data should return its input verbatim"
+    );
+
+    // 5. AGGREGATOR STAGE — the path the reviewer said was missing.
+    let agg_input = AggregatorInput {
+        trigger_action: trigger_action.clone(),
+        operator_response: operator_response.clone(),
+    };
+    let event_id = agg_input
+        .event_id()
+        .expect("derive EventId for aggregation");
+    eprintln!("[harness] derived EventId: {:?}", event_id.as_bytes());
+
+    let actions = runner
+        .run_aggregator(event_id.clone(), agg_input)
+        .await
+        .expect("run aggregator");
+    assert_eq!(
+        actions.len(),
+        1,
+        "simple_aggregator emits exactly one Submit per packet"
+    );
+
+    // Assert the aggregator emitted a Submit targeting our handler.
+    let RunnerAggregatorAction::Submit(submit_action) = &actions[0] else {
+        panic!("expected Submit action, got {:?}", &actions[0]);
+    };
+    match submit_action {
+        RunnerSubmitAction::Evm(evm) => {
+            // chain string matches what we configured.
+            assert_eq!(evm.chain, chain_key_str, "aggregator chain mismatch");
+            // address bytes match the deployed handler.
+            assert_eq!(
+                &evm.address.raw_bytes[..],
+                handler.handler.as_slice(),
+                "aggregator must submit to the deployed handler address"
+            );
+        }
+        RunnerSubmitAction::Cosmos(_) => panic!("expected Evm submit action"),
+    }
+    eprintln!("[harness] aggregator Submit action verified — chain + handler match");
+
+    // 6. Build the envelope from the operator response using the
+    //    aggregator-derived EventId (mirrors production submission.rs).
+    let env_msg = Envelope::from_operator_response(event_id, &operator_response);
+
+    let block_number = provider.get_block_number().await.expect("block number");
+    let reference_block = block_number.saturating_sub(1) as u32;
+    let sigdata = sign_envelope(&env_msg, std::slice::from_ref(&operator), reference_block)
+        .expect("sign envelope");
+
+    // 7. Submit + assert.
+    let receipt = handler
+        .submit_envelope(&env_msg, &sigdata)
+        .await
+        .expect("submit envelope");
+    assert!(receipt.status(), "handleSignedEnvelope must succeed");
+
+    assert!(
+        handler
+            .is_valid_trigger(trigger_id_value)
+            .await
+            .expect("isValidTriggerId"),
+        "handler must mark triggerId {trigger_id_value} valid after handleSignedEnvelope"
+    );
+
+    let stored = SimpleSubmit::new(handler.handler, &provider)
+        .getSignedData(trigger_id_value)
+        .call()
+        .await
+        .expect("getSignedData");
+    assert_eq!(
+        stored.envelope.payload, env_msg.payload,
+        "stored payload must match what the aggregator routed + we submitted"
+    );
+    assert_eq!(stored.signatureData.signers[0], operator.address());
+
+    // Suppress unused warnings on builds where U256 isn't otherwise touched.
+    let _ = U256::ZERO;
 }

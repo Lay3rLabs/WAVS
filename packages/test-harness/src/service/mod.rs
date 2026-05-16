@@ -22,6 +22,6 @@ pub use operators::{
     OperatorSet, PoaMiddleware, ANVIL_DEPLOYER_ADDRESS, ANVIL_DEPLOYER_KEY,
 };
 #[cfg(feature = "inproc")]
-pub use runner_inproc::InProcRunner;
+pub use runner_inproc::{InProcRunner, RunnerAggregatorAction, RunnerSubmitAction};
 #[cfg(feature = "subprocess")]
 pub use runner_subprocess::{SubprocessConfig, SubprocessRunner};
