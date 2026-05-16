@@ -14618,6 +14618,8 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "utils",
+ "wasmtime",
+ "wavs-engine",
  "wavs-types",
 ]
 
