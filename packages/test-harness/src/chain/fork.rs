@@ -229,7 +229,10 @@ mod tests {
     fn from_profile_prefers_env_block_over_profile_block() {
         let profile = crate::fixtures::ChainProfile::load("base").unwrap();
         let profile_block = profile.chain.fork_block;
-        assert!(profile_block.is_some(), "base profile must declare fork_block");
+        assert!(
+            profile_block.is_some(),
+            "base profile must declare fork_block"
+        );
 
         temp_env::with_vars(
             [

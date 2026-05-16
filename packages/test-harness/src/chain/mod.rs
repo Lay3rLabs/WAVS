@@ -9,9 +9,9 @@ pub mod logging;
 pub mod snapshot;
 pub mod time;
 
-pub use anvil::{safe_spawn_anvil, spawn_local};
+pub use anvil::{safe_spawn_anvil, spawn_local, spawn_local_with_deployer};
 #[cfg(feature = "fork")]
-pub use fork::{spawn_fork, ForkOptions, DEFAULT_FORK_RPC_ENV};
+pub use fork::{spawn_fork, ForkOptions, DEFAULT_FORK_BLOCK_ENV, DEFAULT_FORK_RPC_ENV};
 pub use impersonate::{
     enable_auto_impersonate, impersonate_funded, set_balance, stop_impersonating, ONE_ETH,
 };

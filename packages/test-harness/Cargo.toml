@@ -48,6 +48,7 @@ alloy-provider = { workspace = true, features = ["anvil-api", "anvil-node"] }
 alloy-signer = { workspace = true }
 alloy-signer-local = { workspace = true }
 alloy-sol-types = { workspace = true }
+alloy-sol-macro = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 
 [dev-dependencies]

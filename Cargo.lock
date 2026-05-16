@@ -14604,6 +14604,7 @@ dependencies = [
  "alloy-rpc-types-eth",
  "alloy-signer",
  "alloy-signer-local",
+ "alloy-sol-macro",
  "alloy-sol-types",
  "anyhow",
  "async-trait",

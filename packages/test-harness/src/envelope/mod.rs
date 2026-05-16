@@ -17,10 +17,11 @@
 //! with downstream apps under `@wavs/solidity@0.6.x`.
 
 use alloy_primitives::{eip191_hash_message, keccak256, Address, FixedBytes, B256, U256};
+use alloy_provider::Provider;
 use alloy_signer::SignerSync;
 use alloy_signer_local::PrivateKeySigner;
-use alloy_sol_types::{sol, SolValue};
-use anyhow::{anyhow, Result};
+use alloy_sol_types::{sol, SolCall, SolValue};
+use anyhow::{anyhow, Context, Result};
 
 sol! {
     /// The canonical envelope shape that all WAVS service handlers verify.
@@ -37,6 +38,16 @@ sol! {
         address[] signers;
         bytes[] signatures;
         uint32 referenceBlock;
+    }
+
+    /// `IWavsServiceHandler.handleSignedEnvelope` selector, used to encode
+    /// on-chain submission calldata.
+    #[sol(rpc)]
+    interface IHandler {
+        function handleSignedEnvelope(
+            Envelope calldata envelope,
+            SignatureData calldata signatureData
+        ) external;
     }
 }
 
@@ -121,6 +132,81 @@ pub fn signer_address(signer: &PrivateKeySigner) -> Address {
     signer.address()
 }
 
+/// Submit a signed envelope to a service handler's `handleSignedEnvelope`
+/// entry point. Returns the transaction receipt.
+///
+/// This is the "submit" stage of the WAVS lifecycle, completing the
+/// `trigger → compute → aggregate → sign → SUBMIT → assert` path. Use
+/// [`crate::service::handler::MockHandler::deploy`] to deploy the contract on
+/// local Anvil, then pass `handler.handler` as the `handler_addr`.
+///
+/// The function uses ABI-encoded calldata with the canonical
+/// `IWavsServiceHandler.handleSignedEnvelope(Envelope, SignatureData)`
+/// selector, so the same call shape works against any compliant handler —
+/// `SimpleSubmit`, `wavs-defi`'s `SmartVaultServiceHandler`, or production
+/// handlers built on `@wavs/solidity`.
+pub async fn submit_envelope<P>(
+    provider: &P,
+    handler_addr: Address,
+    envelope: &Envelope,
+    signature: &SignatureData,
+) -> Result<alloy_rpc_types_eth::TransactionReceipt>
+where
+    P: Provider,
+{
+    use alloy_network::TransactionBuilder;
+    use alloy_rpc_types_eth::TransactionRequest;
+
+    let calldata = IHandler::handleSignedEnvelopeCall {
+        envelope: envelope.clone(),
+        signatureData: signature.clone(),
+    }
+    .abi_encode();
+
+    let tx = TransactionRequest::default()
+        .with_to(handler_addr)
+        .with_input(calldata);
+
+    let pending = provider
+        .send_transaction(tx)
+        .await
+        .context("send handleSignedEnvelope tx")?;
+    let receipt = pending
+        .get_receipt()
+        .await
+        .context("await handleSignedEnvelope receipt")?;
+    if !receipt.status() {
+        return Err(anyhow!(
+            "handleSignedEnvelope reverted (tx={:?})",
+            receipt.transaction_hash
+        ));
+    }
+    tracing::debug!(
+        tx = ?receipt.transaction_hash,
+        block = ?receipt.block_number,
+        gas = receipt.gas_used,
+        "envelope submitted"
+    );
+    Ok(receipt)
+}
+
+/// Sort signers (and their signatures) ascending by address — required by
+/// `SimpleServiceManager` and `WavsServiceManager.validate()`. Mutates in place.
+///
+/// Call this *after* [`sign_envelope`] but *before* submitting if signers were
+/// not registered in sorted order.
+pub fn sort_signature_data(sigdata: &mut SignatureData) {
+    let mut indices: Vec<usize> = (0..sigdata.signers.len()).collect();
+    indices.sort_by_key(|i| sigdata.signers[*i]);
+    let new_signers: Vec<Address> = indices.iter().map(|i| sigdata.signers[*i]).collect();
+    let new_sigs: Vec<alloy_primitives::Bytes> = indices
+        .iter()
+        .map(|i| sigdata.signatures[*i].clone())
+        .collect();
+    sigdata.signers = new_signers;
+    sigdata.signatures = new_sigs;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,5 +251,30 @@ mod tests {
         let env = Envelope::new(event_id_from_nonce(1), vec![]);
         let res = sign_envelope(&env, &[], 0);
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn sort_signature_data_sorts_signers_and_signatures_together() {
+        // Build a SignatureData with intentionally out-of-order signers, then
+        // sort and check both arrays moved together.
+        let a = Address::from([0xaa; 20]);
+        let b = Address::from([0x11; 20]);
+        let c = Address::from([0x55; 20]);
+
+        let mut sd = SignatureData {
+            signers: vec![a, b, c],
+            signatures: vec![
+                alloy_primitives::Bytes::from_static(b"sig-aa"),
+                alloy_primitives::Bytes::from_static(b"sig-11"),
+                alloy_primitives::Bytes::from_static(b"sig-55"),
+            ],
+            referenceBlock: 0,
+        };
+        sort_signature_data(&mut sd);
+
+        assert_eq!(sd.signers, vec![b, c, a]);
+        assert_eq!(sd.signatures[0].as_ref(), b"sig-11");
+        assert_eq!(sd.signatures[1].as_ref(), b"sig-55");
+        assert_eq!(sd.signatures[2].as_ref(), b"sig-aa");
     }
 }
