@@ -41,7 +41,7 @@ alloy-contract = { workspace = true }
 alloy-network = { workspace = true }
 alloy-node-bindings = { workspace = true }
 alloy-primitives = { workspace = true }
-alloy-provider = { workspace = true }
+alloy-provider = { workspace = true, features = ["anvil-api", "anvil-node"] }
 alloy-signer = { workspace = true }
 alloy-signer-local = { workspace = true }
 alloy-sol-types = { workspace = true }
