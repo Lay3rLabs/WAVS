@@ -1,0 +1,34 @@
+# Base mainnet profile for fork-tier tests.
+#
+# Addresses sourced from wavs-defi/CLAUDE.md and config/smart_vault.template.json.
+# Pinned-block defaults match the convention in wavs-defi's foundry.toml.
+
+[chain]
+name = "base"
+chain_id = 8453
+fork_block = 29000000
+rpc_env = "FORK_RPC_URL"
+
+[addresses]
+# Tokens
+usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+weth = "0x4200000000000000000000000000000000000006"
+
+# Aerodrome (concentrated liquidity)
+aerodrome_pool_weth_usdc = "0xb2cc224c1c9feE385f8ad6a55b4d94e92359dc59"
+aerodrome_nft_manager = "0x827922686190790b37229fd06084350E74485b72"
+aerodrome_router = "0xBE6D8f0d05cC4be24d5167a3eF062215bE6D18a5"
+
+# Avantis (perp DEX)
+avantis_trading = "0x44914408af82bC9983bbb330e3578E1105e11d4e"
+avantis_trading_storage = "0x8a311D7048c35985aa31C131B9A13e03a5f7422d"
+avantis_gov = "0x3775AF82c6C5705140944cD515fE899214Fb0288"
+
+# Oracles
+chainlink_eth_usd = "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70"
+pyth = "0x8250f4aF4B972684F7b336503E2D6dFeDeB1487a"
+
+[accounts]
+funded_key_env = "FUNDED_KEY"
+usdc_whale = "0xEe7aE85f2Fe2239E27D9c1E23fFFe168D63b4055"
+avantis_operator = "0xaa0b5a5828af43dc9ba15fbdd53d324811e4e92f"

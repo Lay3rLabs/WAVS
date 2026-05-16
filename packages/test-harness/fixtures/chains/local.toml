@@ -1,0 +1,14 @@
+# Local Anvil profile — no fork, no env vars required.
+
+[chain]
+name = "local"
+chain_id = 31337
+# fork_block intentionally omitted — local Anvil starts at block 0.
+# rpc_env intentionally omitted — local Anvil is spawned in-process.
+
+[addresses]
+# Empty. Local tests deploy their own contracts.
+
+[accounts]
+# Anvil ships with a deterministic default mnemonic; the harness uses
+# `chain::anvil::spawn_local()` which does not require a funded_key_env.

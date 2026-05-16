@@ -1,3 +1,7 @@
 //! TOML-backed chain profiles and typed address lookups.
-//!
-//! Submodules land in Step 3.
+
+pub mod addresses;
+pub mod profile;
+
+pub use addresses::Addresses;
+pub use profile::{AccountsSection, ChainProfile, ChainSection};
