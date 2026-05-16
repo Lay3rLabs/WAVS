@@ -12,11 +12,11 @@ pub mod runner_inproc;
 pub mod runner_subprocess;
 
 pub use config::ServiceSpec;
-#[cfg(feature = "inproc")]
-pub use runner_inproc::InProcRunner;
-#[cfg(feature = "subprocess")]
-pub use runner_subprocess::{SubprocessConfig, SubprocessRunner};
 pub use operators::{
     AvsOperator, EigenlayerMiddleware, EvmMiddleware, EvmMiddlewareType, MockEvmServiceManager,
     OperatorSet, PoaMiddleware, ANVIL_DEPLOYER_ADDRESS, ANVIL_DEPLOYER_KEY,
 };
+#[cfg(feature = "inproc")]
+pub use runner_inproc::InProcRunner;
+#[cfg(feature = "subprocess")]
+pub use runner_subprocess::{SubprocessConfig, SubprocessRunner};

@@ -18,10 +18,7 @@ pub async fn mine_blocks(
 
 /// Toggle auto-mining. When off, blocks are produced only via [`mine_blocks`] or
 /// [`set_block_timestamp`] + a transaction.
-pub async fn set_automine(
-    provider: &(impl Provider + AnvilApi<Ethereum>),
-    on: bool,
-) -> Result<()> {
+pub async fn set_automine(provider: &(impl Provider + AnvilApi<Ethereum>), on: bool) -> Result<()> {
     provider.anvil_set_auto_mine(on).await?;
     Ok(())
 }
@@ -44,4 +41,3 @@ pub async fn set_next_block_timestamp(
     provider.anvil_set_next_block_timestamp(ts).await?;
     Ok(())
 }
-

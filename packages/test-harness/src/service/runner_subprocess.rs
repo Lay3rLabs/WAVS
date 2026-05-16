@@ -128,7 +128,8 @@ mod tests {
             .data_dir("/tmp/wavs-test")
             .env("WAVS_LOG", "debug");
         assert_eq!(
-            c.wavs_binary_path().map(|p| p.to_string_lossy().to_string()),
+            c.wavs_binary_path()
+                .map(|p| p.to_string_lossy().to_string()),
             Some("/usr/local/bin/wavs".to_string())
         );
         assert_eq!(c.rpc_url_value(), Some("http://127.0.0.1:8545"));

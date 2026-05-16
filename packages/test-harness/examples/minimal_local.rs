@@ -24,9 +24,7 @@ async fn main() -> anyhow::Result<()> {
     let component = example_wasm("echo_data.wasm");
     let aggregator = example_wasm("simple_aggregator.wasm");
     if !component.exists() || !aggregator.exists() {
-        eprintln!(
-            "Missing example WASM. Run `just wasi-build-native` from the WAVS repo root."
-        );
+        eprintln!("Missing example WASM. Run `just wasi-build-native` from the WAVS repo root.");
         return Ok(());
     }
 

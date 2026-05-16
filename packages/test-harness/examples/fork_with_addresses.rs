@@ -15,8 +15,10 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let profile = ChainProfile::load("base")?;
-    println!("[example] profile: name={} chain_id={}",
-        profile.chain.name, profile.chain.chain_id);
+    println!(
+        "[example] profile: name={} chain_id={}",
+        profile.chain.name, profile.chain.chain_id
+    );
 
     // The RPC URL is read from FORK_RPC_URL and never printed verbatim.
     match profile.resolve_rpc_url() {

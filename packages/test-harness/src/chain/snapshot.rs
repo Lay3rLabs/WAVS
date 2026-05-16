@@ -18,10 +18,7 @@ pub async fn snapshot(provider: &(impl Provider + AnvilApi<Ethereum>)) -> Result
 }
 
 /// Revert the chain to a previous snapshot. Returns `true` on success.
-pub async fn revert(
-    provider: &(impl Provider + AnvilApi<Ethereum>),
-    id: U256,
-) -> Result<bool> {
+pub async fn revert(provider: &(impl Provider + AnvilApi<Ethereum>), id: U256) -> Result<bool> {
     let ok = provider.anvil_revert(id).await?;
     tracing::debug!(snapshot_id = %id, ok, "evm_revert");
     Ok(ok)
@@ -44,10 +41,7 @@ impl SnapshotGuard {
     }
 
     /// Revert to the captured snapshot. Consumes the guard.
-    pub async fn revert(
-        mut self,
-        provider: &(impl Provider + AnvilApi<Ethereum>),
-    ) -> Result<bool> {
+    pub async fn revert(mut self, provider: &(impl Provider + AnvilApi<Ethereum>)) -> Result<bool> {
         let id = self.id.take().expect("guard already consumed");
         revert(provider, id).await
     }

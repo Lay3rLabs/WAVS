@@ -13,8 +13,8 @@
 use alloy_primitives::Address;
 
 pub use utils::test_utils::middleware::evm::{
-    EigenlayerMiddleware, EvmMiddleware, EvmMiddlewareType, PoaMiddleware,
-    ANVIL_DEPLOYER_ADDRESS, ANVIL_DEPLOYER_KEY,
+    EigenlayerMiddleware, EvmMiddleware, EvmMiddlewareType, PoaMiddleware, ANVIL_DEPLOYER_ADDRESS,
+    ANVIL_DEPLOYER_KEY,
 };
 pub use utils::test_utils::middleware::operator::AvsOperator;
 pub use utils::test_utils::mock_service_manager::MockEvmServiceManager;
