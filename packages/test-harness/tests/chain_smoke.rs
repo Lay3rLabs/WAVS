@@ -53,7 +53,7 @@ async fn impersonate_and_set_balance() {
 fn fork_options_from_env_requires_fork_rpc_url() {
     // With no FORK_RPC_URL set, from_env must fail with a non-leaking error.
     temp_env::with_var_unset("FORK_RPC_URL", || {
-        let res = wavs_test_harness::chain::ForkOptions::from_env(Some(123));
+        let res = wavs_test_harness::chain::ForkOptions::from_env();
         assert!(res.is_err());
         let msg = format!("{}", res.unwrap_err());
         assert!(msg.contains("FORK_RPC_URL"));

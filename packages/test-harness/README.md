@@ -46,11 +46,9 @@ FORK_RPC_URL=<base-rpc> cargo run -p wavs-test-harness --example fork_with_addre
 use wavs_test_harness::{chain, fixtures::ChainProfile};
 
 let profile = ChainProfile::load("base")?;            // chain_id + addresses + rpc_env
-let opts = chain::ForkOptions {
-    rpc_url: profile.resolve_rpc_url()?,              // reads FORK_RPC_URL
-    block_number: profile.chain.fork_block,
-    timeout_ms: None,
-};
+// `from_profile` resolves FORK_RPC_URL via the profile's rpc_env and pins the
+// block to FORK_BLOCK_NUMBER (env) or profile.chain.fork_block (fallback).
+let opts = chain::ForkOptions::from_profile(&profile)?;
 let (provider, _anvil) = chain::spawn_fork(opts).await?;
 
 let usdc = profile.address("usdc")?;
@@ -61,6 +59,16 @@ chain::impersonate_funded(&provider, whale).await?;
 // … your test …
 chain::stop_impersonating(&provider, whale).await?;
 ```
+
+### Fork block pinning precedence
+
+For determinism, the harness pins the fork block in this order (highest wins):
+
+1. `ForkOptions::with_block_number(b)` — explicit override.
+2. `FORK_BLOCK_NUMBER` env var — CI override.
+3. `ChainProfile.chain.fork_block` — profile default (via `from_profile`).
+4. None — Anvil follows upstream `latest`; spawn logs a `warn!` so the
+   determinism gap is visible.
 
 The RPC URL is never logged verbatim — only via [`chain::redact_url`].
 
