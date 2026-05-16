@@ -51,6 +51,12 @@ alloy-sol-types = { workspace = true }
 alloy-sol-macro = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 
+# Subprocess runner-only deps. Cheap enough to leave outside the feature gate.
+reqwest = { workspace = true, features = ["json"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 tokio = { workspace = true }
 tempfile = { workspace = true }
