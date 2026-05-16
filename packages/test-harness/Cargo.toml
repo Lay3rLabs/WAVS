@@ -25,6 +25,9 @@ subprocess = []
 [dependencies]
 utils = { workspace = true, features = ["test-utils"] }
 wavs-types = { workspace = true, features = ["full"] }
+wavs-engine = { workspace = true }
+wasmtime = { workspace = true }
+tempfile = { workspace = true }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
