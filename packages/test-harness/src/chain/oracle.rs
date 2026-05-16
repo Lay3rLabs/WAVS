@@ -63,13 +63,13 @@ sol! {
 /// install_chainlink_aggregator_v3(&provider, chainlink_eth_usd, chainlink_usd(3_000.0)).await?;
 /// # Ok(()) }
 /// ```
-pub async fn install_chainlink_aggregator_v3<P: Provider>(
+pub async fn install_chainlink_aggregator_v3<P>(
     provider: &P,
     feed_address: Address,
     initial_price: I256,
 ) -> Result<()>
 where
-    P: AnvilApi<Ethereum>,
+    P: Provider + AnvilApi<Ethereum>,
 {
     let bytecode = hex::decode(CHAINLINK_V3_MOCK_RUNTIME)
         .context("decode embedded ChainlinkV3Mock runtime bytecode")?;
@@ -127,9 +127,9 @@ mod tests {
     fn chainlink_usd_scales_correctly() {
         assert_eq!(
             chainlink_usd(3000.0),
-            I256::try_from(3_000_00000000i64).unwrap()
+            I256::try_from(300_000_000_000_i64).unwrap()
         );
-        assert_eq!(chainlink_usd(0.5), I256::try_from(50_000_000i64).unwrap());
+        assert_eq!(chainlink_usd(0.5), I256::try_from(50_000_000_i64).unwrap());
     }
 
     #[tokio::test]

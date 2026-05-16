@@ -203,7 +203,7 @@ impl<P: Provider + Clone + 'static> MockHandler<P> {
     pub async fn is_valid_trigger(&self, trigger_id: u64) -> Result<bool> {
         let h = SimpleSubmit::new(self.handler, &self.provider);
         let ok = h
-            .isValidTriggerId(trigger_id.into())
+            .isValidTriggerId(trigger_id)
             .call()
             .await
             .with_context(|| format!("isValidTriggerId({trigger_id})"))?;

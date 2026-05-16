@@ -19,7 +19,7 @@
 //!
 //! Three profiles ship with the crate: `local`, `base`, `mainnet`. Consumers may
 //! also load arbitrary profiles via [`ChainProfile::from_path`] or
-//! [`ChainProfile::from_str`].
+//! [`ChainProfile::from_toml_str`].
 
 use std::path::Path;
 
@@ -85,7 +85,7 @@ impl ChainProfile {
                 ))
             }
         };
-        Self::from_str(raw).with_context(|| format!("parse bundled profile `{name}`"))
+        Self::from_toml_str(raw).with_context(|| format!("parse bundled profile `{name}`"))
     }
 
     /// Load a profile from an arbitrary path.
@@ -93,11 +93,11 @@ impl ChainProfile {
         let path = path.as_ref();
         let raw = std::fs::read_to_string(path)
             .with_context(|| format!("read profile {}", path.display()))?;
-        Self::from_str(&raw).with_context(|| format!("parse profile {}", path.display()))
+        Self::from_toml_str(&raw).with_context(|| format!("parse profile {}", path.display()))
     }
 
     /// Parse a profile from a TOML string. Prefer [`Self::load`] or [`Self::from_path`].
-    pub fn from_str(s: &str) -> Result<Self> {
+    pub fn from_toml_str(s: &str) -> Result<Self> {
         Ok(toml::from_str(s)?)
     }
 

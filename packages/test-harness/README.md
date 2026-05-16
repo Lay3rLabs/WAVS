@@ -157,7 +157,7 @@ Three profiles ship via `include_str!`:
 - `mainnet.toml`   — `chain_id=1`, `FORK_RPC_URL`, tokens + Aave v3 pool.
 
 Consumers can ship their own profiles via `ChainProfile::from_path(...)`
-or `ChainProfile::from_str(...)`.
+or `ChainProfile::from_toml_str(...)`.
 
 ## Determinism boundary
 

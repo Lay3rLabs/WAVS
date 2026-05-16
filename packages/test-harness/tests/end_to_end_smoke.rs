@@ -1,13 +1,12 @@
 //! End-to-end lifecycle smoke test — the path called out by the PR review:
-//!
-//!   trigger → operator (real WASM) → sign envelope → submit on-chain → assert
+//! `trigger -> operator (real WASM) -> sign envelope -> submit on-chain -> assert`.
 //!
 //! This test boots a local Anvil instance, deploys the `SimpleServiceManager`
-//! + `SimpleSubmit` reference mocks, runs the `echo_data.wasm` operator
+//! and `SimpleSubmit` reference mocks, runs the `echo_data.wasm` operator
 //! component through `InProcRunner`, signs the produced payload with an
 //! operator key registered in the manager, submits the signed envelope via
-//! `handleSignedEnvelope`, and asserts the handler stored the trigger as
-//! valid. Then negative cases prove `validate()` actually rejects bad input.
+//! `handleSignedEnvelope`, and asserts the handler stored the trigger as valid.
+//! Then negative cases prove `validate()` actually rejects bad input.
 //!
 //! Skips gracefully if `examples/build/components/echo_data.wasm` is missing.
 
@@ -103,8 +102,8 @@ async fn lifecycle_component_then_sign_then_submit_then_assert() {
     } else {
         0
     } as u32;
-    let sigdata =
-        sign_envelope(&env_msg, &[operator.clone()], reference_block).expect("sign envelope");
+    let sigdata = sign_envelope(&env_msg, std::slice::from_ref(&operator), reference_block)
+        .expect("sign envelope");
 
     // 5. Submit on-chain and watch the receipt.
     let receipt = handler

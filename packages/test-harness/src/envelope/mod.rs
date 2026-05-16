@@ -235,7 +235,7 @@ mod tests {
     fn sign_envelope_produces_recoverable_signature() {
         let signer = PrivateKeySigner::random();
         let env = Envelope::new(event_id_from_nonce(7), vec![0xaa]);
-        let sigdata = sign_envelope(&env, &[signer.clone()], 0).unwrap();
+        let sigdata = sign_envelope(&env, std::slice::from_ref(&signer), 0).unwrap();
 
         assert_eq!(sigdata.signers.len(), 1);
         assert_eq!(sigdata.signers[0], signer.address());
