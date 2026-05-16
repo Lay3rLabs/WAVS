@@ -76,17 +76,63 @@ The RPC URL is never logged verbatim — only via [`chain::redact_url`].
 
 | Tier | Stages run | Stages mocked | Use case |
 |---|---|---|---|
-| **InProc** (default) | compute (real WASM via `wavs-engine`) + aggregate (real WASM) + envelope signing | dispatcher subsystems | deterministic PR tier on local Anvil or fork |
-| **Subprocess** (preview) | everything in the real `wavs` binary | nothing | nightly fork + pre-release |
+| **InProc** (default) | compute (real WASM via `wavs-engine`) + aggregate (real WASM) + envelope signing + on-chain `handleSignedEnvelope` + assert | dispatcher subsystems | deterministic PR tier on local Anvil or fork |
+| **Subprocess** | binary spawn + `/health` probe + `POST /dev/services` + on-chain submission + assert; v1 covers the spawn + service-registration loop, full trigger emission via the harness's `chain::*` primitives is composable | nothing — runs the real `wavs` binary | nightly fork + pre-release |
 
 InProc executes the actual operator and aggregator WASM directly through
-`wavs-engine`, bypassing the full dispatcher (trigger manager, submission
-manager, signing). It's fast, deterministic, and exercises the same WASM
-code path that runs in production.
+`wavs-engine`, then signs an envelope and submits it on-chain via
+`handleSignedEnvelope` to `SimpleSubmit` (the canonical reference handler).
+Tests assert against the handler's stored state. Everything from trigger
+through submission is exercised; only the WAVS dispatcher's trigger /
+submission orchestration is bypassed.
 
-Subprocess ships in this release with API shape locked but lifecycle methods
-stubbed — calling `start()` returns a descriptive `unimplemented` error.
-See `src/service/runner_subprocess.rs` for the planned wiring.
+Subprocess spawns the actual `wavs` binary against a tempdir HOME/DATA and
+a generated `wavs.toml`, polls `/health` until ready, and exposes the
+HTTP-API surface for service registration and lifecycle drive. The runner
+is feature-gated behind `subprocess` to keep the default dep graph small.
+
+### End-to-end lifecycle path (InProc)
+
+```rust
+use wavs_test_harness::{
+    chain,
+    envelope::{self, sign_envelope, Envelope},
+    service::{InProcRunner, MockHandler, MockHandlerConfig, ServiceSpec},
+};
+
+// 1. Anvil with a wallet-bound provider.
+let (provider, _anvil, _deployer) = chain::spawn_local_with_deployer().await?;
+
+// 2. Deploy the reference SimpleServiceManager + SimpleSubmit pair.
+let operator = alloy_signer_local::PrivateKeySigner::random();
+let config = MockHandlerConfig::single_operator(operator.address());
+let handler = MockHandler::deploy(provider.clone(), &config).await?;
+
+// 3. Run real operator WASM through wavs-engine.
+let spec = ServiceSpec::new()
+    .component_wasm("path/to/strategy.wasm")
+    .aggregator_wasm("path/to/aggregator.wasm");
+let runner = InProcRunner::from_spec(&spec)?;
+let outputs = runner.run_component(payload_bytes).await?;
+
+// 4. Sign + submit.
+let env = Envelope::new(envelope::event_id_from_nonce(1), outputs[0].clone());
+let sigdata = sign_envelope(&env, &[operator], reference_block)?;
+handler.submit_envelope(&env, &sigdata).await?;
+
+// 5. Assert handler state.
+assert!(handler.is_valid_trigger(1).await?);
+```
+
+### Oracle mocking on a fork
+
+```rust
+use wavs_test_harness::chain::oracle::{chainlink_usd, install_chainlink_aggregator_v3};
+
+let chainlink_eth_usd = profile.address("chainlink_eth_usd")?;
+install_chainlink_aggregator_v3(&provider, chainlink_eth_usd, chainlink_usd(3_000.0)).await?;
+// Downstream contract reads now see ETH/USD = $3000 deterministically.
+```
 
 ## CI tiers
 
@@ -162,27 +208,41 @@ also doesn't block this v1.
 
 ## What ships in v1
 
-- `chain`: local Anvil + pinned fork (feature `fork`, on by default).
+- `chain`: local Anvil (`spawn_local`, `spawn_local_with_deployer`) +
+  pinned fork (feature `fork`, on by default).
   `snapshot` / `revert` with RAII guard. `impersonate_funded`,
   `enable_auto_impersonate`, `whale_fund`. `mine_blocks`, `set_automine`,
   `increase_time`, `set_next_block_timestamp`. `redact_url` / `redact_key`
-  for sanitized logs.
+  for sanitized logs. `oracle::install_chainlink_aggregator_v3` +
+  `set_chainlink_price` for forked-chain oracle mocking.
 - `fixtures`: `ChainProfile` (TOML), `Addresses` typed lookup. Three
-  bundled profiles.
+  bundled profiles. `ForkOptions::from_env` reads `FORK_RPC_URL` +
+  `FORK_BLOCK_NUMBER`; `ForkOptions::from_profile` adds the profile's
+  declared `fork_block` as a fallback default.
 - `service`: `ServiceSpec` builder, middleware mock re-exports
   (`EvmMiddleware`, `MockEvmServiceManager`, `AvsOperator`),
-  `InProcRunner` (real WASM via `wavs-engine`), `SubprocessRunner`
-  (preview, off-by-default feature).
+  `InProcRunner` (real WASM via `wavs-engine`),
+  `MockHandler` (`SimpleServiceManager` + `SimpleSubmit` deployable pair
+  for on-chain envelope validation), `SubprocessRunner`
+  (functional spawn + health probe + service registration, feature
+  `subprocess`).
 - `lifecycle`: `manual_input_json` / `manual_input_raw`, `wait_for` /
   `wait_until` polling helpers, `assert_within` tolerance check.
 - `envelope`: canonical `Envelope` / `SignatureData` shape mirroring
-  `@wavs/solidity@0.6.x`, `sign_envelope`, `event_id_from_nonce` /
-  `event_id_from_seed`, `Envelope::message_hash` / `signing_hash`.
+  `@wavs/solidity@0.6.x`, `sign_envelope`, `submit_envelope` (on-chain
+  `handleSignedEnvelope` dispatch), `sort_signature_data`,
+  `event_id_from_nonce` / `event_id_from_seed`,
+  `Envelope::message_hash` / `signing_hash`.
 - `harness::TestHarness<P>` convenience wrapper.
 
 ## What's not in v1
 
-- Full subprocess wiring (API shape only).
+- Full trigger-emission + quorum-waiting on the subprocess tier (the
+  spawn + service-registration loop ships; the rest is composable today
+  by combining `SubprocessRunner` with the harness's `chain::*`
+  primitives — bundled helpers land in the next PR).
+- Pyth + other oracle shapes (Chainlink AggregatorV3 ships; the same
+  `anvil_set_code` pattern applies, only the bytecode differs).
 - Cosmos fork support.
 - A `with_deploy(closure)` builder hook on `TestHarness` (deferred until
   async-closure ergonomics stabilize; compose primitives directly today).
