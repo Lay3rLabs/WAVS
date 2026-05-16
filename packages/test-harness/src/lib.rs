@@ -18,5 +18,9 @@
 pub mod chain;
 pub mod envelope;
 pub mod fixtures;
+pub mod harness;
 pub mod lifecycle;
 pub mod service;
+
+#[cfg(feature = "inproc")]
+pub use harness::TestHarness;
