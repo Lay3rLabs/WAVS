@@ -1052,6 +1052,17 @@ pub async fn validate_service(
                                 ));
                             }
                         }
+                        Some(AnyChainConfig::Solana(_)) => {
+                            // slice 2: block-interval validation on Solana
+                            // (we'd query `getSlot` and reuse the same
+                            // start/end shape). Block-interval on Solana
+                            // isn't a currently declared trigger pattern,
+                            // so just warn for now.
+                            errors.push(format!(
+                                "Workflow '{}' uses BlockInterval on Solana chain '{}', which is not yet supported (slice 2)",
+                                workflow_id, chain
+                            ));
+                        }
                     },
                     _ => {}
                 }

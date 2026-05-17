@@ -58,6 +58,14 @@ pub async fn handle_get_service(
                     address,
                 }
             }
+            AnyChainConfig::Solana(_) => {
+                // slice 2: Solana service managers are not yet supported; v1
+                // submission paths remain EVM / Cosmos only.
+                return AnyError::from(anyhow!(
+                    "Solana service managers are not yet supported (slice 2)"
+                ))
+                .into_response();
+            }
         },
         None => {
             return AnyError::from(anyhow!("missing chain config for {chain_key}")).into_response();

@@ -99,6 +99,15 @@ impl TriggerCommand {
                             chain: chain.clone(),
                         }]
                     }
+                    AnyChainConfig::Solana(_) => {
+                        // slice 2: solana block-interval stream not yet
+                        // implemented. Block-interval triggers on a Solana
+                        // chain are not declared by current services.
+                        tracing::warn!(
+                            "Block interval on Solana chain {chain} not yet supported (slice 2)"
+                        );
+                        Vec::new()
+                    }
                 },
                 None => {
                     tracing::warn!("Block interval set for non-existant chain-config: {chain}");
@@ -570,6 +579,23 @@ impl TriggerManager {
                                     {
                                         *chain_state = StreamStartState::Connected;
                                     }
+                                }
+                                AnyChainConfig::Solana(_) => {
+                                    // slice 2: solana trigger stream. For
+                                    // now we accept the chain config but do
+                                    // not start a stream, and mark the chain
+                                    // as Waiting so a future implementation
+                                    // can re-try once the stream wiring
+                                    // exists.
+                                    tracing::warn!(
+                                        "Solana trigger stream not yet implemented (slice 2); chain {chain} listener not started"
+                                    );
+                                    if let Some(chain_state) =
+                                        listening_chain_states.get_mut(&chain)
+                                    {
+                                        *chain_state = StreamStartState::Waiting;
+                                    }
+                                    continue;
                                 }
                             }
                         }

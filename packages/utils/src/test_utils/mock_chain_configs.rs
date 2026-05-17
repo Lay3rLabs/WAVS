@@ -31,6 +31,7 @@ pub fn mock_chain_configs() -> Arc<RwLock<ChainConfigs>> {
         )]
         .into_iter()
         .collect(),
+        solana: BTreeMap::new(),
         dev: BTreeMap::new(),
     }))
 }

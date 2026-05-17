@@ -23,6 +23,13 @@ pub async fn health_check_single_chain(
             check_cosmos_chain_health_query(key.clone(), config.clone()).await?;
             tracing::info!("Cosmos chain [{key}] is healthy");
         }
+        AnyChainConfig::Solana(_) => {
+            // slice 2: solana chain health check (will use solana-client rpc
+            // probe analogous to the evm/cosmos paths above).
+            tracing::info!(
+                "Solana chain [{key}] health check not implemented yet (slice 2); skipping"
+            );
+        }
     }
     Ok(())
 }

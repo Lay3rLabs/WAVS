@@ -167,6 +167,16 @@ impl CliContext {
                     .contract_info(&address)
                     .await
                     .is_ok(),
+                AnyChainConfig::Solana(_) => {
+                    // slice 2: query the Solana RPC `getAccountInfo` to
+                    // determine whether the address exists. For now this is
+                    // unimplemented; treat the address as not-found so
+                    // callers can surface a clear error.
+                    tracing::warn!(
+                        "address_exists_on_chain for Solana chain {chain} not yet implemented (slice 2)"
+                    );
+                    false
+                }
             },
         )
     }

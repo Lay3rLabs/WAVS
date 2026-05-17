@@ -1164,6 +1164,7 @@ mod test {
             ]
             .into_iter()
             .collect(),
+            solana: BTreeMap::new(),
             dev: BTreeMap::new(),
         }
     }

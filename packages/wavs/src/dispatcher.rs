@@ -1043,6 +1043,13 @@ async fn query_service_from_address(
 
             service_uri
         }
+        AnyChainConfig::Solana(_) => {
+            // slice 2 / v2: Solana submission path. v1 is trigger-only —
+            // services with a Solana service manager are not yet supported.
+            return Err(DispatcherError::Config(format!(
+                "Solana service managers are not yet supported (chain {chain}, slice 2/v2)"
+            )));
+        }
     };
 
     let service_uri = UriString::try_from(service_uri)?;
