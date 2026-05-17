@@ -397,3 +397,112 @@ async fn cron_trigger_is_removed_when_config_is_gone() {
         "Expected no triggers to fire after removing all"
     );
 }
+
+#[test]
+fn solana_program_event_lookup() {
+    use wavs_types::{SolanaAddress, SolanaCommitment, SolanaEventFilter};
+
+    let config = Config::default();
+    let services = wavs::services::Services::new(WavsDb::new().unwrap());
+    let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
+    let manager = TriggerManager::new(
+        &config,
+        TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
+        services,
+        trigger_to_dispatcher_tx,
+    )
+    .unwrap();
+
+    let chain = ChainKey::new("solana:devnet").unwrap();
+    let system_program = SolanaAddress::from_base58("11111111111111111111111111111111").unwrap();
+    let token_program =
+        SolanaAddress::from_base58("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap();
+
+    // Two triggers for the same (chain, program_id) but with different
+    // filters: an Anchor discriminator and a log-substring. The lookup
+    // table should group both under (chain, system_program); per-filter
+    // dispatch is the dispatcher's job.
+    let service_a = ServiceId::hash("svc-a");
+    let workflow_a = WorkflowId::new("wf-a").unwrap();
+    let trigger_a = TriggerConfig::solana_program_event(
+        service_a.clone(),
+        workflow_a.to_string().as_str(),
+        chain.to_string().as_str(),
+        system_program,
+        SolanaEventFilter::Discriminator(vec![1, 2, 3, 4, 5, 6, 7, 8]),
+        SolanaCommitment::Confirmed,
+    );
+
+    let service_b = ServiceId::hash("svc-b");
+    let workflow_b = WorkflowId::new("wf-b").unwrap();
+    let trigger_b = TriggerConfig::solana_program_event(
+        service_b.clone(),
+        workflow_b.to_string().as_str(),
+        chain.to_string().as_str(),
+        system_program,
+        SolanaEventFilter::LogContains("matched".to_string()),
+        SolanaCommitment::Confirmed,
+    );
+
+    // Third trigger on a different program — should not collide with the
+    // first two.
+    let service_c = ServiceId::hash("svc-c");
+    let workflow_c = WorkflowId::new("wf-c").unwrap();
+    let trigger_c = TriggerConfig::solana_program_event(
+        service_c.clone(),
+        workflow_c.to_string().as_str(),
+        chain.to_string().as_str(),
+        token_program,
+        SolanaEventFilter::LogContains("transfer".to_string()),
+        SolanaCommitment::Confirmed,
+    );
+
+    manager.get_lookup_maps().add_trigger(trigger_a).unwrap();
+    manager.get_lookup_maps().add_trigger(trigger_b).unwrap();
+    manager.get_lookup_maps().add_trigger(trigger_c).unwrap();
+
+    {
+        let lock = manager
+            .get_lookup_maps()
+            .triggers_by_solana_program
+            .read()
+            .unwrap();
+        // (chain, system_program) bucket has both triggers
+        let system_bucket = lock.get(&(chain.clone(), system_program)).unwrap();
+        assert_eq!(system_bucket.len(), 2);
+        // (chain, token_program) bucket has the third
+        let token_bucket = lock.get(&(chain.clone(), token_program)).unwrap();
+        assert_eq!(token_bucket.len(), 1);
+    }
+
+    // Removing workflow A should leave B and C; the (chain,
+    // system_program) bucket should still contain one entry.
+    manager
+        .get_lookup_maps()
+        .remove_workflow(service_a, workflow_a)
+        .unwrap();
+    {
+        let lock = manager
+            .get_lookup_maps()
+            .triggers_by_solana_program
+            .read()
+            .unwrap();
+        let system_bucket = lock.get(&(chain.clone(), system_program)).unwrap();
+        assert_eq!(system_bucket.len(), 1);
+    }
+
+    // Removing service B should empty the (chain, system_program)
+    // bucket entirely (the lookup table garbage-collects empty sets).
+    manager.remove_service(service_b).unwrap();
+    {
+        let lock = manager
+            .get_lookup_maps()
+            .triggers_by_solana_program
+            .read()
+            .unwrap();
+        assert!(lock.get(&(chain.clone(), system_program)).is_none());
+        // Token bucket is untouched.
+        let token_bucket = lock.get(&(chain.clone(), token_program)).unwrap();
+        assert_eq!(token_bucket.len(), 1);
+    }
+}

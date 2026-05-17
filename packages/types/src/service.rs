@@ -754,7 +754,8 @@ mod test_ext {
     };
 
     use crate::{
-        ByteArray, ChainKey, ChainKeyError, ComponentSource, ServiceId, WorkflowId, WorkflowIdError,
+        ByteArray, ChainKey, ChainKeyError, ComponentSource, ServiceId, SolanaEventFilter,
+        WorkflowId, WorkflowIdError,
     };
 
     use super::{Component, Trigger, TriggerConfig};
@@ -836,6 +837,21 @@ mod test_ext {
                 service_id,
                 workflow_id: workflow_id.try_into().unwrap(),
                 trigger: Trigger::evm_contract_event(contract_address, chain, event_hash),
+            }
+        }
+
+        pub fn solana_program_event(
+            service_id: ServiceId,
+            workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
+            chain: impl TryInto<ChainKey, Error = ChainKeyError>,
+            program_id: crate::SolanaAddress,
+            filter: SolanaEventFilter,
+            commitment: crate::SolanaCommitment,
+        ) -> Self {
+            Self {
+                service_id,
+                workflow_id: workflow_id.try_into().unwrap(),
+                trigger: Trigger::solana_program_event(chain, program_id, filter, commitment),
             }
         }
 

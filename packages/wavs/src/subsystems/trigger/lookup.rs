@@ -6,7 +6,8 @@ use std::{
 use bimap::BiMap;
 use utils::telemetry::TriggerMetrics;
 use wavs_types::{
-    AtProtoAction, ByteArray, ChainKey, ServiceId, Trigger, TriggerConfig, WorkflowId,
+    AtProtoAction, ByteArray, ChainKey, ServiceId, SolanaAddress, Trigger, TriggerConfig,
+    WorkflowId,
 };
 
 use crate::{
@@ -41,6 +42,19 @@ pub struct LookupMaps {
         Arc<RwLock<HashMap<(String, Option<String>, Option<AtProtoAction>), HashSet<LookupId>>>>,
     /// lookup id by hypercore feed key
     pub triggers_by_hypercore_append: Arc<RwLock<HashMap<String, HashSet<LookupId>>>>,
+    /// lookup id by (solana chain, program id). Per-trigger
+    /// [`wavs_types::SolanaEventFilter`] (Anchor discriminator or log
+    /// substring) is checked against the actual log line inside the
+    /// dispatcher — see `dispatcher_match_solana_log` below.
+    ///
+    /// Solana doesn't expose an event-hash equivalent in the log stream
+    /// (Anchor discriminators only appear on `Program data:` lines, and
+    /// non-Anchor programs use free-text logs), so we group by
+    /// `(chain, program_id)` and let the dispatcher do the secondary
+    /// filter check. This mirrors how the EVM lookup hits the
+    /// `event_hash` first and then the per-trigger config narrows further
+    /// via the log topic shape.
+    pub triggers_by_solana_program: Arc<RwLock<HashMap<(ChainKey, SolanaAddress), HashSet<LookupId>>>>,
     // ServiceId <-> ServiceManager address
     pub service_manager: Arc<RwLock<BiMap<ServiceId, layer_climb::prelude::Address>>>,
     /// Efficient block schedulers (one per chain) for block interval triggers
@@ -64,6 +78,7 @@ impl LookupMaps {
             triggers_by_atproto_event_exact: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_atproto_event_pattern: Arc::new(RwLock::new(HashMap::new())),
             triggers_by_hypercore_append: Arc::new(RwLock::new(HashMap::new())),
+            triggers_by_solana_program: Arc::new(RwLock::new(HashMap::new())),
             block_schedulers: BlockSchedulers::default(),
             triggers_by_service_workflow: Arc::new(RwLock::new(BTreeMap::new())),
             service_manager: Arc::new(RwLock::new(BiMap::new())),
@@ -224,16 +239,20 @@ impl LookupMaps {
                     .or_default()
                     .insert(lookup_id);
             }
-            Trigger::SolanaProgramEvent { .. } => {
-                // slice 2: keyed lookup table for solana triggers (likely
-                // `(chain, program_id, discriminator)` analogous to the EVM
-                // event-hash table above). For now we only register the
-                // trigger in `trigger_configs` so service add/remove flows
-                // remain consistent.
-                tracing::debug!(
-                    lookup_id,
-                    "Registering SolanaProgramEvent trigger without lookup-table entry (slice 2)"
-                );
+            Trigger::SolanaProgramEvent {
+                chain, program_id, ..
+            } => {
+                // Key by (chain, program_id); the per-trigger
+                // `SolanaEventFilter` (Anchor discriminator or
+                // `LogContains` substring) is checked inside the
+                // dispatcher against the actual log lines.
+                let key = (chain.clone(), program_id);
+                self.triggers_by_solana_program
+                    .write()
+                    .unwrap()
+                    .entry(key)
+                    .or_default()
+                    .insert(lookup_id);
             }
             Trigger::Manual => {}
         }
@@ -356,9 +375,17 @@ impl LookupMaps {
                         }
                     }
                 }
-                Trigger::SolanaProgramEvent { .. } => {
-                    // slice 2: no per-trigger lookup table yet; nothing to
-                    // remove besides the entry in `trigger_configs` below.
+                Trigger::SolanaProgramEvent {
+                    chain, program_id, ..
+                } => {
+                    let key = (chain, program_id);
+                    let mut lock = self.triggers_by_solana_program.write().unwrap();
+                    if let Some(set) = lock.get_mut(&key) {
+                        set.remove(&lookup_id);
+                        if set.is_empty() {
+                            lock.remove(&key);
+                        }
+                    }
                 }
             }
         }
@@ -380,6 +407,7 @@ impl LookupMaps {
         let mut triggers_by_atproto_event_pattern =
             self.triggers_by_atproto_event_pattern.write().unwrap();
         let mut triggers_by_hypercore_append = self.triggers_by_hypercore_append.write().unwrap();
+        let mut triggers_by_solana_program = self.triggers_by_solana_program.write().unwrap();
         let mut triggers_by_service_workflow_lock =
             self.triggers_by_service_workflow.write().unwrap();
 
@@ -479,8 +507,18 @@ impl LookupMaps {
                                 }
                             }
                         }
-                        Trigger::SolanaProgramEvent { .. } => {
-                            // slice 2: no per-trigger lookup table yet.
+                        Trigger::SolanaProgramEvent {
+                            chain,
+                            program_id,
+                            ..
+                        } => {
+                            let key = (chain.clone(), *program_id);
+                            if let Some(set) = triggers_by_solana_program.get_mut(&key) {
+                                set.remove(lookup_id);
+                                if set.is_empty() {
+                                    triggers_by_solana_program.remove(&key);
+                                }
+                            }
                         }
                     }
                 }
