@@ -1,6 +1,8 @@
 use alloy_primitives::U256;
 use alloy_provider::Provider;
 use alloy_rpc_types_eth::SyncStatus;
+use solana_client::nonblocking::rpc_client::RpcClient as SolanaRpcClient;
+use solana_commitment_config::{CommitmentConfig, CommitmentLevel};
 use thiserror::Error;
 
 use crate::{
@@ -8,7 +10,10 @@ use crate::{
     error::EvmClientError,
     evm_client::{EvmEndpoint, EvmQueryClient},
 };
-use wavs_types::{AnyChainConfig, ChainKey, CosmosChainConfig, EvmChainConfig};
+use wavs_types::{
+    AnyChainConfig, ChainKey, CosmosChainConfig, EvmChainConfig, SolanaChainConfig,
+    SolanaCommitment,
+};
 
 pub async fn health_check_single_chain(
     key: &ChainKey,
@@ -23,12 +28,9 @@ pub async fn health_check_single_chain(
             check_cosmos_chain_health_query(key.clone(), config.clone()).await?;
             tracing::info!("Cosmos chain [{key}] is healthy");
         }
-        AnyChainConfig::Solana(_) => {
-            // slice 2: solana chain health check (will use solana-client rpc
-            // probe analogous to the evm/cosmos paths above).
-            tracing::info!(
-                "Solana chain [{key}] health check not implemented yet (slice 2); skipping"
-            );
+        AnyChainConfig::Solana(config) => {
+            check_solana_chain_health_query(key.clone(), config.clone()).await?;
+            tracing::info!("Solana chain [{key}] is healthy");
         }
     }
     Ok(())
@@ -108,6 +110,40 @@ async fn check_cosmos_chain_health_query(
     Ok(())
 }
 
+async fn check_solana_chain_health_query(
+    key: ChainKey,
+    config: SolanaChainConfig,
+) -> Result<(), HealthCheckError> {
+    let http = config.http_endpoint.clone().ok_or_else(|| {
+        HealthCheckError::SolanaMissingHttpEndpoint(key.clone())
+    })?;
+
+    let commitment = CommitmentConfig {
+        commitment: match config.commitment {
+            SolanaCommitment::Processed => CommitmentLevel::Processed,
+            SolanaCommitment::Confirmed => CommitmentLevel::Confirmed,
+            SolanaCommitment::Finalized => CommitmentLevel::Finalized,
+        },
+    };
+    let client = SolanaRpcClient::new_with_commitment(http, commitment);
+
+    // `getHealth` returns "ok" or an error code; succeeding here is the
+    // canonical "node is up and caught up" probe.
+    client
+        .get_health()
+        .await
+        .map_err(|e| HealthCheckError::SolanaHealth(key.clone(), e.to_string()))?;
+
+    // Sanity-check we can read a slot, mirroring the evm
+    // `get_block_number` and cosmos `block_height` probes.
+    client
+        .get_slot()
+        .await
+        .map_err(|e| HealthCheckError::SolanaSlot(key.clone(), e.to_string()))?;
+
+    Ok(())
+}
+
 pub async fn check_evm_chain_endpoint_health_query(
     key: ChainKey,
     endpoint: EvmEndpoint,
@@ -181,4 +217,13 @@ pub enum HealthCheckError {
 
     #[error("[{0}] node info: {1:?}")]
     CosmosNodeInfo(ChainKey, anyhow::Error),
+
+    #[error("[{0}] Solana chain config has no http_endpoint")]
+    SolanaMissingHttpEndpoint(ChainKey),
+
+    #[error("[{0}] Solana getHealth failed: {1}")]
+    SolanaHealth(ChainKey, String),
+
+    #[error("[{0}] Solana getSlot failed: {1}")]
+    SolanaSlot(ChainKey, String),
 }
