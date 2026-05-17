@@ -32,6 +32,10 @@ cfg-if = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
 alloy-json-abi = { workspace = true }
+bs58 = { workspace = true }
+solana-client = { workspace = true }
+solana-commitment-config = { workspace = true }
+solana-pubkey = { workspace = true }
 cron = { workspace = true }
 rand = { workspace = true }
 opentelemetry = { workspace = true }

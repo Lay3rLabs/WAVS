@@ -42,6 +42,8 @@ alloy-signer-local = { workspace = true }
 alloy-network = { workspace = true }
 alloy-transport = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
+solana-client = { workspace = true }
+solana-commitment-config = { workspace = true }
 utoipa = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry-jaeger-propagator = { workspace = true }
