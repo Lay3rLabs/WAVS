@@ -14607,6 +14607,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bincode",
+ "bs58",
  "cfg-if 1.0.4",
  "chrono",
  "const-hex",
