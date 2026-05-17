@@ -100,11 +100,13 @@ impl TriggerCommand {
                         }]
                     }
                     AnyChainConfig::Solana(_) => {
-                        // slice 2: solana block-interval stream not yet
-                        // implemented. Block-interval triggers on a Solana
-                        // chain are not declared by current services.
+                        // Block-interval (slot-interval) triggers on a
+                        // Solana chain are not part of slice 2 (program
+                        // log triggers only). Slot subscriptions are a
+                        // v1.5 follow-up — see SVM design doc, "Non-Goals
+                        // for v1".
                         tracing::warn!(
-                            "Block interval on Solana chain {chain} not yet supported (slice 2)"
+                            "Block interval on Solana chain {chain} not yet supported (v1.5)"
                         );
                         Vec::new()
                     }
@@ -123,9 +125,13 @@ impl TriggerCommand {
                 }]
             }
             Trigger::SolanaProgramEvent { chain, .. } => {
-                // slice 2: solana trigger stream. Emit a chain-listening
-                // command so future Solana stream wiring can hook in; do not
-                // emit any chain-specific watch command yet.
+                // Emit a chain-listening command; the Solana stream is
+                // started by the `AnyChainConfig::Solana` arm of the
+                // `StartListeningChain` handler below. Per-program
+                // filtering is done by the trigger lookup table (keyed by
+                // `(chain, program_id)`); the stream itself subscribes
+                // with `RpcTransactionLogsFilter::Mentions(<every program
+                // id registered on this chain>)`.
                 vec![Self::StartListeningChain {
                     chain: chain.clone(),
                 }]
@@ -588,22 +594,94 @@ impl TriggerManager {
                                         *chain_state = StreamStartState::Connected;
                                     }
                                 }
-                                AnyChainConfig::Solana(_) => {
-                                    // slice 2: solana trigger stream. For
-                                    // now we accept the chain config but do
-                                    // not start a stream, and mark the chain
-                                    // as Waiting so a future implementation
-                                    // can re-try once the stream wiring
-                                    // exists.
-                                    tracing::warn!(
-                                        "Solana trigger stream not yet implemented (slice 2); chain {chain} listener not started"
-                                    );
-                                    if let Some(chain_state) =
-                                        listening_chain_states.get_mut(&chain)
-                                    {
-                                        *chain_state = StreamStartState::Waiting;
+                                AnyChainConfig::Solana(chain_config) => {
+                                    let ws_endpoint = match chain_config.ws_endpoint.clone() {
+                                        Some(ws) => ws,
+                                        None => {
+                                            tracing::error!(
+                                                "Solana chain {chain} has no ws_endpoint; cannot start stream"
+                                            );
+                                            if let Some(chain_state) =
+                                                listening_chain_states.get_mut(&chain)
+                                            {
+                                                *chain_state = StreamStartState::Waiting;
+                                            }
+                                            continue;
+                                        }
+                                    };
+
+                                    // Collect every program id currently
+                                    // registered for this chain from the
+                                    // lookup table. The subscription
+                                    // re-fires whenever a service is
+                                    // added/removed only if a previously
+                                    // missing program id is now needed —
+                                    // for v1, we re-subscribe on chain
+                                    // (re)start and accept that adding a
+                                    // service with a new program id
+                                    // requires a chain re-listen.
+                                    let program_ids: Vec<wavs_types::SolanaAddress> = self
+                                        .lookup_maps
+                                        .triggers_by_solana_program
+                                        .read()
+                                        .unwrap()
+                                        .keys()
+                                        .filter_map(|(k, p)| {
+                                            if k == &chain {
+                                                Some(*p)
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .collect();
+
+                                    if program_ids.is_empty() {
+                                        tracing::debug!(
+                                            "No Solana programs registered for chain {chain}; deferring stream start until a SolanaProgramEvent trigger is added"
+                                        );
+                                        if let Some(chain_state) =
+                                            listening_chain_states.get_mut(&chain)
+                                        {
+                                            *chain_state = StreamStartState::Waiting;
+                                        }
+                                        continue;
                                     }
-                                    continue;
+
+                                    let solana_config =
+                                        streams::solana_stream::SolanaStreamConfig {
+                                            ws_endpoint,
+                                            program_ids,
+                                            commitment: chain_config.commitment,
+                                        };
+
+                                    match streams::solana_stream::start_solana_stream(
+                                        chain.clone(),
+                                        solana_config,
+                                        self.metrics.clone(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(solana_stream) => {
+                                            multiplexed_stream.push(solana_stream);
+                                            if let Some(chain_state) =
+                                                listening_chain_states.get_mut(&chain)
+                                            {
+                                                *chain_state = StreamStartState::Connected;
+                                            }
+                                        }
+                                        Err(err) => {
+                                            tracing::error!(
+                                                "Failed to start Solana event stream: {:?}",
+                                                err
+                                            );
+                                            if let Some(chain_state) =
+                                                listening_chain_states.get_mut(&chain)
+                                            {
+                                                *chain_state = StreamStartState::Waiting;
+                                            }
+                                            continue;
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1088,6 +1166,9 @@ impl TriggerManager {
                 StreamTriggers::Hypercore { event } => {
                     dispatcher_commands.extend(self.handle_hypercore_event(event));
                 }
+                StreamTriggers::Solana { chain, slot, logs } => {
+                    dispatcher_commands.extend(self.handle_solana_logs(chain, slot, logs));
+                }
             }
 
             if !dispatcher_commands.is_empty() {
@@ -1159,6 +1240,89 @@ impl TriggerManager {
         } else {
             Vec::new()
         }
+    }
+
+    /// Match each parsed Solana log line against the registered
+    /// per-program triggers, test the per-trigger filter
+    /// ([`wavs_types::SolanaEventFilter`]) against the raw log line, and
+    /// emit one [`DispatcherCommand::Trigger`] per match.
+    ///
+    /// `chain` and `slot` are the replay-identity prefix shared by every
+    /// log line in `logs`; per-log fields (`signature`, `log_index`,
+    /// `instruction_index`, `inner_instruction_index`) come from each
+    /// [`streams::solana_stream::SolanaStreamLog`].
+    fn handle_solana_logs(
+        &self,
+        chain: ChainKey,
+        _slot: u64,
+        logs: Vec<streams::solana_stream::SolanaStreamLog>,
+    ) -> Vec<DispatcherCommand> {
+        let mut commands = Vec::new();
+
+        // Snapshot of the lookup table by `(chain, program_id)`. We take
+        // the read lock once per notification rather than once per log.
+        let triggers_by_program = self
+            .lookup_maps
+            .triggers_by_solana_program
+            .read()
+            .unwrap();
+
+        for log in logs {
+            let key = (chain.clone(), log.program_id);
+            let candidate_lookups = match triggers_by_program.get(&key) {
+                Some(set) => set.clone(),
+                None => continue,
+            };
+
+            for lookup_id in candidate_lookups {
+                let trigger_config = match self.lookup_maps.get_trigger_config(lookup_id) {
+                    Some(cfg) => cfg,
+                    None => continue,
+                };
+
+                let (filter, declared_program_id) = match &trigger_config.trigger {
+                    Trigger::SolanaProgramEvent {
+                        filter, program_id, ..
+                    } => (filter.clone(), *program_id),
+                    _ => continue,
+                };
+
+                // Defensive: the lookup-table key should have already
+                // narrowed program_id, but the dispatcher re-checks in
+                // case a race re-keyed the lookup.
+                if declared_program_id != log.program_id {
+                    continue;
+                }
+
+                let Some(decoded) =
+                    streams::solana_stream::match_log_filter(&filter, &log.raw_log)
+                else {
+                    continue;
+                };
+
+                // For `Discriminator` matches we have the decoded payload
+                // from the `Program data:` line; for `LogContains` we
+                // deliver the raw log line bytes (UTF-8) so the component
+                // can re-parse if needed.
+                let data = decoded.unwrap_or_else(|| log.raw_log.as_bytes().to_vec());
+
+                commands.push(DispatcherCommand::Trigger(TriggerAction {
+                    data: TriggerData::SolanaProgramEvent {
+                        chain: chain.clone(),
+                        slot: log.slot,
+                        signature: log.signature.clone(),
+                        instruction_index: log.instruction_index,
+                        inner_instruction_index: log.inner_instruction_index,
+                        log_index: log.log_index,
+                        program_id: log.program_id,
+                        data,
+                    },
+                    config: trigger_config,
+                }));
+            }
+        }
+
+        commands
     }
 
     fn handle_hypercore_event(
