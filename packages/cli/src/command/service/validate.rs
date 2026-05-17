@@ -171,7 +171,12 @@ pub async fn validate_contracts_exist(
             | Trigger::Manual
             | Trigger::BlockInterval { .. }
             | Trigger::AtProtoEvent { .. }
-            | Trigger::HypercoreAppend { .. } => {}
+            | Trigger::HypercoreAppend { .. }
+            | Trigger::SolanaProgramEvent { .. } => {
+                // slice 2: solana program-existence validation (analogous to
+                // the EVM / Cosmos arms above) will be added when the
+                // service_json validator gains a Solana branch.
+            }
         }
     }
 

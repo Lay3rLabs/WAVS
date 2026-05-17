@@ -224,6 +224,17 @@ impl LookupMaps {
                     .or_default()
                     .insert(lookup_id);
             }
+            Trigger::SolanaProgramEvent { .. } => {
+                // slice 2: keyed lookup table for solana triggers (likely
+                // `(chain, program_id, discriminator)` analogous to the EVM
+                // event-hash table above). For now we only register the
+                // trigger in `trigger_configs` so service add/remove flows
+                // remain consistent.
+                tracing::debug!(
+                    lookup_id,
+                    "Registering SolanaProgramEvent trigger without lookup-table entry (slice 2)"
+                );
+            }
             Trigger::Manual => {}
         }
 
@@ -345,6 +356,10 @@ impl LookupMaps {
                         }
                     }
                 }
+                Trigger::SolanaProgramEvent { .. } => {
+                    // slice 2: no per-trigger lookup table yet; nothing to
+                    // remove besides the entry in `trigger_configs` below.
+                }
             }
         }
 
@@ -463,6 +478,9 @@ impl LookupMaps {
                                     triggers_by_hypercore_append.remove(feed_key);
                                 }
                             }
+                        }
+                        Trigger::SolanaProgramEvent { .. } => {
+                            // slice 2: no per-trigger lookup table yet.
                         }
                     }
                 }

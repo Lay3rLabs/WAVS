@@ -122,6 +122,14 @@ impl TriggerCommand {
                     feed_key: feed_key.clone(),
                 }]
             }
+            Trigger::SolanaProgramEvent { chain, .. } => {
+                // slice 2: solana trigger stream. Emit a chain-listening
+                // command so future Solana stream wiring can hook in; do not
+                // emit any chain-specific watch command yet.
+                vec![Self::StartListeningChain {
+                    chain: chain.clone(),
+                }]
+            }
             Trigger::Manual => Vec::new(),
         }
     }

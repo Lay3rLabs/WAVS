@@ -85,7 +85,51 @@ impl TryFrom<wavs_types::Trigger> for component_service::Trigger {
                     component_service::TriggerHypercoreAppend { feed_key },
                 )
             }
+            wavs_types::Trigger::SolanaProgramEvent {
+                chain,
+                program_id,
+                filter,
+                commitment,
+            } => component_service::Trigger::SolanaProgramEvent(
+                component_service::TriggerSolanaProgramEvent {
+                    chain: chain.to_string(),
+                    program_id: program_id.into(),
+                    filter: filter.into(),
+                    commitment: commitment.into(),
+                },
+            ),
         })
+    }
+}
+
+impl From<wavs_types::SolanaAddress> for component_chain::SolanaAddress {
+    fn from(address: wavs_types::SolanaAddress) -> Self {
+        Self {
+            raw_bytes: address.as_bytes().to_vec(),
+        }
+    }
+}
+
+impl From<wavs_types::SolanaCommitment> for component_chain::SolanaCommitment {
+    fn from(src: wavs_types::SolanaCommitment) -> Self {
+        match src {
+            wavs_types::SolanaCommitment::Processed => component_chain::SolanaCommitment::Processed,
+            wavs_types::SolanaCommitment::Confirmed => component_chain::SolanaCommitment::Confirmed,
+            wavs_types::SolanaCommitment::Finalized => component_chain::SolanaCommitment::Finalized,
+        }
+    }
+}
+
+impl From<wavs_types::SolanaEventFilter> for component_service::SolanaEventFilter {
+    fn from(src: wavs_types::SolanaEventFilter) -> Self {
+        match src {
+            wavs_types::SolanaEventFilter::Discriminator(bytes) => {
+                component_service::SolanaEventFilter::Discriminator(bytes)
+            }
+            wavs_types::SolanaEventFilter::LogContains(s) => {
+                component_service::SolanaEventFilter::LogContains(s)
+            }
+        }
     }
 }
 
@@ -488,6 +532,27 @@ impl TryFrom<wavs_types::TriggerData> for component_input::TriggerData {
                     data,
                 },
             )),
+            wavs_types::TriggerData::SolanaProgramEvent {
+                chain,
+                slot,
+                signature,
+                instruction_index,
+                inner_instruction_index,
+                log_index,
+                program_id,
+                data,
+            } => Ok(component_input::TriggerData::SolanaProgramEvent(
+                component_events::TriggerDataSolanaProgramEvent {
+                    chain: chain.to_string(),
+                    slot,
+                    signature,
+                    instruction_index,
+                    inner_instruction_index,
+                    log_index,
+                    program_id: program_id.into(),
+                    data,
+                },
+            )),
             wavs_types::TriggerData::Raw(data) => Ok(component_input::TriggerData::Raw(data)),
         }
     }
@@ -651,6 +716,29 @@ impl TryFrom<wavs_types::TriggerData> for aggregator_operator_input::TriggerData
                 aggregator_events::TriggerDataHypercoreAppend {
                     feed_key,
                     index,
+                    data,
+                },
+            )),
+            wavs_types::TriggerData::SolanaProgramEvent {
+                chain,
+                slot,
+                signature,
+                instruction_index,
+                inner_instruction_index,
+                log_index,
+                program_id,
+                data,
+            } => Ok(aggregator_operator_input::TriggerData::SolanaProgramEvent(
+                aggregator_events::TriggerDataSolanaProgramEvent {
+                    chain: chain.to_string(),
+                    slot,
+                    signature,
+                    instruction_index,
+                    inner_instruction_index,
+                    log_index,
+                    program_id: aggregator_chain::SolanaAddress {
+                        raw_bytes: program_id.as_bytes().to_vec(),
+                    },
                     data,
                 },
             )),
@@ -928,6 +1016,38 @@ impl TryFrom<wavs_types::Trigger> for aggregator_service::Trigger {
                     aggregator_service::TriggerHypercoreAppend { feed_key },
                 )
             }
+            wavs_types::Trigger::SolanaProgramEvent {
+                chain,
+                program_id,
+                filter,
+                commitment,
+            } => aggregator_service::Trigger::SolanaProgramEvent(
+                aggregator_service::TriggerSolanaProgramEvent {
+                    chain: chain.to_string(),
+                    program_id: aggregator_chain::SolanaAddress {
+                        raw_bytes: program_id.as_bytes().to_vec(),
+                    },
+                    filter: match filter {
+                        wavs_types::SolanaEventFilter::Discriminator(bytes) => {
+                            aggregator_service::SolanaEventFilter::Discriminator(bytes)
+                        }
+                        wavs_types::SolanaEventFilter::LogContains(s) => {
+                            aggregator_service::SolanaEventFilter::LogContains(s)
+                        }
+                    },
+                    commitment: match commitment {
+                        wavs_types::SolanaCommitment::Processed => {
+                            aggregator_chain::SolanaCommitment::Processed
+                        }
+                        wavs_types::SolanaCommitment::Confirmed => {
+                            aggregator_chain::SolanaCommitment::Confirmed
+                        }
+                        wavs_types::SolanaCommitment::Finalized => {
+                            aggregator_chain::SolanaCommitment::Finalized
+                        }
+                    },
+                },
+            ),
         })
     }
 }

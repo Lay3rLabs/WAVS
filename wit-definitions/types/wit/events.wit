@@ -1,5 +1,5 @@
 interface events {
-    use chain.{chain-key, evm-address, evm-event-log, cosmos-address, cosmos-event};
+    use chain.{chain-key, evm-address, evm-event-log, cosmos-address, cosmos-event, solana-address, solana-commitment};
     use core.{timestamp};
     type event-id = list<u8>; // 20-byte unique hash
 
@@ -11,6 +11,7 @@ interface events {
         cron(trigger-data-cron),
         atproto-event(trigger-data-atproto-event),
         hypercore-append(trigger-data-hypercore-append),
+        solana-program-event(trigger-data-solana-program-event),
         raw(list<u8>)
     }
 
@@ -52,6 +53,23 @@ interface events {
     record trigger-data-hypercore-append {
         feed-key: string,
         index: u64,
+        data: list<u8>
+    }
+
+    // Per-occurrence Solana log/event data delivered to the operator
+    // component. The (slot, signature, instruction-index,
+    // inner-instruction-index, log-index) tuple is the replay-identity tuple
+    // from the SVM design doc.
+    record trigger-data-solana-program-event {
+        chain: chain-key,
+        slot: u64,
+        signature: string,
+        instruction-index: u32,
+        // None for top-level instructions, Some(i) for inner-instruction at
+        // index i.
+        inner-instruction-index: option<u32>,
+        log-index: u32,
+        program-id: solana-address,
         data: list<u8>
     }
 }

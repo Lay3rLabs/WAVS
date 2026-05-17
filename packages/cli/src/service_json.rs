@@ -115,6 +115,13 @@ impl ServiceJsonExt for ServiceBuilder {
                             ));
                         }
                     }
+                    Trigger::SolanaProgramEvent { .. } => {
+                        // slice 2: validate program_id length / base58
+                        // shape, filter non-empty, chain belongs to a
+                        // configured solana chain. For now we accept any
+                        // declaration so service.json with Solana triggers
+                        // round-trips.
+                    }
                     Trigger::Manual | Trigger::AtProtoEvent { .. } => {}
                 },
             }
