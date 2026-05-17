@@ -28,6 +28,11 @@ members = [
     "examples/contracts/cosmwasm/mock/service-handler",
     "app/src-tauri",
 ]
+exclude = [
+    # Solana fixture program (Anchor) — has its own workspace; built via
+    # `anchor build`, not `cargo build --workspace`. See README.
+    "examples/contracts/solana/event-emitter",
+]
 resolver = "2"
 
 [profile.dev]
