@@ -609,7 +609,7 @@ async fn run_test(
                 }
             }
             Trigger::SolanaProgramEvent { .. } => unimplemented!(
-                "Solana program-event triggers are not implemented in e2e runner (slice 2)"
+                "Solana program-event triggers are not implemented in e2e runner (slice 3)"
             ),
             Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
         };

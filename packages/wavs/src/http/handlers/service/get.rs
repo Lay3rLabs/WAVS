@@ -59,10 +59,12 @@ pub async fn handle_get_service(
                 }
             }
             AnyChainConfig::Solana(_) => {
-                // slice 2: Solana service managers are not yet supported; v1
-                // submission paths remain EVM / Cosmos only.
+                // Solana service managers are a v2 deliverable — v1 of
+                // the SVM design doc is trigger-only and routes
+                // submission through the existing EVM / Cosmos service
+                // managers. See `docs/design/svm-support.md`.
                 return AnyError::from(anyhow!(
-                    "Solana service managers are not yet supported (slice 2)"
+                    "Solana service managers are not yet supported (v2)"
                 ))
                 .into_response();
             }

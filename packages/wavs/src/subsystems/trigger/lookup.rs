@@ -54,7 +54,8 @@ pub struct LookupMaps {
     /// filter check. This mirrors how the EVM lookup hits the
     /// `event_hash` first and then the per-trigger config narrows further
     /// via the log topic shape.
-    pub triggers_by_solana_program: Arc<RwLock<HashMap<(ChainKey, SolanaAddress), HashSet<LookupId>>>>,
+    pub triggers_by_solana_program:
+        Arc<RwLock<HashMap<(ChainKey, SolanaAddress), HashSet<LookupId>>>>,
     // ServiceId <-> ServiceManager address
     pub service_manager: Arc<RwLock<BiMap<ServiceId, layer_climb::prelude::Address>>>,
     /// Efficient block schedulers (one per chain) for block interval triggers
@@ -508,9 +509,7 @@ impl LookupMaps {
                             }
                         }
                         Trigger::SolanaProgramEvent {
-                            chain,
-                            program_id,
-                            ..
+                            chain, program_id, ..
                         } => {
                             let key = (chain.clone(), *program_id);
                             if let Some(set) = triggers_by_solana_program.get_mut(&key) {

@@ -232,22 +232,23 @@ impl CliContext {
                             return Ok(false);
                         }
                     };
-                    let client = solana_client::nonblocking::rpc_client::RpcClient::new_with_commitment(
-                        http.to_string(),
-                        solana_commitment_config::CommitmentConfig {
-                            commitment: match solana_config.commitment {
-                                wavs_types::SolanaCommitment::Processed => {
-                                    solana_commitment_config::CommitmentLevel::Processed
-                                }
-                                wavs_types::SolanaCommitment::Confirmed => {
-                                    solana_commitment_config::CommitmentLevel::Confirmed
-                                }
-                                wavs_types::SolanaCommitment::Finalized => {
-                                    solana_commitment_config::CommitmentLevel::Finalized
-                                }
+                    let client =
+                        solana_client::nonblocking::rpc_client::RpcClient::new_with_commitment(
+                            http.to_string(),
+                            solana_commitment_config::CommitmentConfig {
+                                commitment: match solana_config.commitment {
+                                    wavs_types::SolanaCommitment::Processed => {
+                                        solana_commitment_config::CommitmentLevel::Processed
+                                    }
+                                    wavs_types::SolanaCommitment::Confirmed => {
+                                        solana_commitment_config::CommitmentLevel::Confirmed
+                                    }
+                                    wavs_types::SolanaCommitment::Finalized => {
+                                        solana_commitment_config::CommitmentLevel::Finalized
+                                    }
+                                },
                             },
-                        },
-                    );
+                        );
                     match client.get_account(&pubkey).await {
                         Ok(_) => true,
                         Err(err) => {

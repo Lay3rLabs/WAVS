@@ -1121,10 +1121,7 @@ pub async fn validate_service(
         }
 
         // Validate that referenced contracts exist on-chain
-        if !cosmos_clients.is_empty()
-            || !evm_providers.is_empty()
-            || !solana_clients.is_empty()
-        {
+        if !cosmos_clients.is_empty() || !evm_providers.is_empty() || !solana_clients.is_empty() {
             if let Err(err) = validate_contracts_exist(
                 &service.name,
                 triggers,

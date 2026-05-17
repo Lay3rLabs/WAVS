@@ -626,13 +626,15 @@ impl TriggerManager {
                                         .read()
                                         .unwrap()
                                         .keys()
-                                        .filter_map(|(k, p)| {
-                                            if k == &chain {
-                                                Some(*p)
-                                            } else {
-                                                None
-                                            }
-                                        })
+                                        .filter_map(
+                                            |(k, p)| {
+                                                if k == &chain {
+                                                    Some(*p)
+                                                } else {
+                                                    None
+                                                }
+                                            },
+                                        )
                                         .collect();
 
                                     if program_ids.is_empty() {
@@ -1261,11 +1263,7 @@ impl TriggerManager {
 
         // Snapshot of the lookup table by `(chain, program_id)`. We take
         // the read lock once per notification rather than once per log.
-        let triggers_by_program = self
-            .lookup_maps
-            .triggers_by_solana_program
-            .read()
-            .unwrap();
+        let triggers_by_program = self.lookup_maps.triggers_by_solana_program.read().unwrap();
 
         for log in logs {
             let key = (chain.clone(), log.program_id);
@@ -1294,8 +1292,7 @@ impl TriggerManager {
                     continue;
                 }
 
-                let Some(decoded) =
-                    streams::solana_stream::match_log_filter(&filter, &log.raw_log)
+                let Some(decoded) = streams::solana_stream::match_log_filter(&filter, &log.raw_log)
                 else {
                     continue;
                 };

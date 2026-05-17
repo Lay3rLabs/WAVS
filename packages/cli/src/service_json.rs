@@ -311,7 +311,9 @@ mod solana_validator_tests {
         let bad = service_with_solana_trigger(SolanaEventFilter::Discriminator(vec![1, 2, 3]));
         let errors = bad.validate();
         assert!(
-            errors.iter().any(|e| e.contains("Anchor convention is exactly 8")),
+            errors
+                .iter()
+                .any(|e| e.contains("Anchor convention is exactly 8")),
             "expected discriminator-length error in {errors:?}"
         );
     }

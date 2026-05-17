@@ -114,9 +114,10 @@ async fn check_solana_chain_health_query(
     key: ChainKey,
     config: SolanaChainConfig,
 ) -> Result<(), HealthCheckError> {
-    let http = config.http_endpoint.clone().ok_or_else(|| {
-        HealthCheckError::SolanaMissingHttpEndpoint(key.clone())
-    })?;
+    let http = config
+        .http_endpoint
+        .clone()
+        .ok_or_else(|| HealthCheckError::SolanaMissingHttpEndpoint(key.clone()))?;
 
     let commitment = CommitmentConfig {
         commitment: match config.commitment {
