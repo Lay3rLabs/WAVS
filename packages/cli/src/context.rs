@@ -105,6 +105,50 @@ impl CliContext {
         Ok(evm_client)
     }
 
+    /// Construct a non-signing Solana RPC client for the given chain id.
+    /// Mirrors `new_evm_client_read_only` — Solana submission is out of
+    /// scope for v1, so we only need the read-side RPC client for
+    /// trigger / health validation paths.
+    pub(crate) fn new_solana_rpc_client(
+        &self,
+        chain_id: ChainKeyId,
+    ) -> Result<solana_client::nonblocking::rpc_client::RpcClient> {
+        let chain_config = self
+            .config
+            .chains
+            .read()
+            .map_err(|_| anyhow!("Chains lock is poisoned"))?
+            .solana
+            .get(&chain_id)
+            .context(format!("chain id {chain_id} not found"))?
+            .clone()
+            .build(chain_id);
+
+        let http = chain_config
+            .http_endpoint
+            .as_deref()
+            .context("Solana chain has no http_endpoint")?;
+
+        Ok(
+            solana_client::nonblocking::rpc_client::RpcClient::new_with_commitment(
+                http.to_string(),
+                solana_commitment_config::CommitmentConfig {
+                    commitment: match chain_config.commitment {
+                        wavs_types::SolanaCommitment::Processed => {
+                            solana_commitment_config::CommitmentLevel::Processed
+                        }
+                        wavs_types::SolanaCommitment::Confirmed => {
+                            solana_commitment_config::CommitmentLevel::Confirmed
+                        }
+                        wavs_types::SolanaCommitment::Finalized => {
+                            solana_commitment_config::CommitmentLevel::Finalized
+                        }
+                    },
+                },
+            ),
+        )
+    }
+
     pub async fn new_cosmos_client(&self, chain_id: ChainKeyId) -> Result<SigningClient> {
         let chain_config = self
             .config
@@ -167,15 +211,52 @@ impl CliContext {
                     .contract_info(&address)
                     .await
                     .is_ok(),
-                AnyChainConfig::Solana(_) => {
-                    // slice 2: query the Solana RPC `getAccountInfo` to
-                    // determine whether the address exists. For now this is
-                    // unimplemented; treat the address as not-found so
-                    // callers can surface a clear error.
-                    tracing::warn!(
-                        "address_exists_on_chain for Solana chain {chain} not yet implemented (slice 2)"
+                AnyChainConfig::Solana(solana_config) => {
+                    // We treat the address bytes as a 32-byte Solana
+                    // pubkey. `address_exists_on_chain` is only currently
+                    // called for non-Solana paths (the type system enforces
+                    // this — `layer_climb::Address` only has Cosmos/Evm
+                    // variants today), so this arm is defensive plumbing
+                    // for the day a Solana-aware caller exists.
+                    let bytes = address.as_bytes();
+                    let Ok(pubkey_bytes) = <[u8; 32]>::try_from(bytes.as_slice()) else {
+                        return Ok(false);
+                    };
+                    let pubkey = solana_pubkey::Pubkey::new_from_array(pubkey_bytes);
+                    let http = match solana_config.http_endpoint.as_deref() {
+                        Some(http) => http,
+                        None => {
+                            tracing::warn!(
+                                "address_exists_on_chain for Solana chain {chain}: no http_endpoint configured"
+                            );
+                            return Ok(false);
+                        }
+                    };
+                    let client = solana_client::nonblocking::rpc_client::RpcClient::new_with_commitment(
+                        http.to_string(),
+                        solana_commitment_config::CommitmentConfig {
+                            commitment: match solana_config.commitment {
+                                wavs_types::SolanaCommitment::Processed => {
+                                    solana_commitment_config::CommitmentLevel::Processed
+                                }
+                                wavs_types::SolanaCommitment::Confirmed => {
+                                    solana_commitment_config::CommitmentLevel::Confirmed
+                                }
+                                wavs_types::SolanaCommitment::Finalized => {
+                                    solana_commitment_config::CommitmentLevel::Finalized
+                                }
+                            },
+                        },
                     );
-                    false
+                    match client.get_account(&pubkey).await {
+                        Ok(_) => true,
+                        Err(err) => {
+                            tracing::debug!(
+                                "Solana getAccountInfo({pubkey}) on chain {chain} returned: {err:?}"
+                            );
+                            false
+                        }
+                    }
                 }
             },
         )

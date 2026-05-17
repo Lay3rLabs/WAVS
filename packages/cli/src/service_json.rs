@@ -3,8 +3,8 @@ use std::{num::NonZeroU64, str::FromStr};
 use alloy_primitives::Address;
 use cron::Schedule;
 use wavs_types::{
-    AggregatorBuilder, ServiceBuilder, ServiceManagerBuilder, Submit, SubmitBuilder, Timestamp,
-    Trigger, TriggerBuilder, WAVS_ENV_PREFIX,
+    AggregatorBuilder, ServiceBuilder, ServiceManagerBuilder, SolanaEventFilter, Submit,
+    SubmitBuilder, Timestamp, Trigger, TriggerBuilder, WAVS_ENV_PREFIX,
 };
 
 pub trait ServiceJsonExt {
@@ -115,12 +115,44 @@ impl ServiceJsonExt for ServiceBuilder {
                             ));
                         }
                     }
-                    Trigger::SolanaProgramEvent { .. } => {
-                        // slice 2: validate program_id length / base58
-                        // shape, filter non-empty, chain belongs to a
-                        // configured solana chain. For now we accept any
-                        // declaration so service.json with Solana triggers
-                        // round-trips.
+                    Trigger::SolanaProgramEvent {
+                        chain: _,
+                        program_id,
+                        filter,
+                        commitment: _,
+                    } => {
+                        // The `SolanaAddress` newtype already enforces the
+                        // 32-byte invariant at deserialize time, so we
+                        // only need to validate the filter here. We do
+                        // re-check the address length defensively in case
+                        // a future loosened constructor lets a wrong-
+                        // length address through.
+                        if program_id.as_bytes().len() != 32 {
+                            errors.push(format!(
+                                "Workflow '{}' has a Solana program_id that is not 32 bytes",
+                                workflow_id
+                            ));
+                        }
+
+                        match filter {
+                            SolanaEventFilter::Discriminator(disc) => {
+                                if disc.len() != 8 {
+                                    errors.push(format!(
+                                        "Workflow '{}' has a Solana discriminator of {} bytes; Anchor convention is exactly 8",
+                                        workflow_id,
+                                        disc.len()
+                                    ));
+                                }
+                            }
+                            SolanaEventFilter::LogContains(needle) => {
+                                if needle.is_empty() {
+                                    errors.push(format!(
+                                        "Workflow '{}' has an empty Solana log-contains filter",
+                                        workflow_id
+                                    ));
+                                }
+                            }
+                        }
                     }
                     Trigger::Manual | Trigger::AtProtoEvent { .. } => {}
                 },
@@ -235,4 +267,89 @@ pub fn validate_block_interval_config_on_chain(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod solana_validator_tests {
+    use super::*;
+    use wavs_types::{
+        Component, ComponentBuilder, ComponentDigest, ComponentSource, ServiceBuilder,
+        SolanaAddress, SolanaCommitment, SolanaEventFilter, WorkflowBuilder, WorkflowId,
+    };
+
+    fn service_with_solana_trigger(filter: SolanaEventFilter) -> ServiceBuilder {
+        let program_id = SolanaAddress::from_base58("11111111111111111111111111111111").unwrap();
+        let trigger = Trigger::solana_program_event(
+            "solana:devnet",
+            program_id,
+            filter,
+            SolanaCommitment::Confirmed,
+        );
+
+        let workflow = WorkflowBuilder {
+            component: ComponentBuilder::new(Component::new(ComponentSource::Digest(
+                ComponentDigest::hash([0u8; 32]),
+            ))),
+            trigger: TriggerBuilder::Trigger(trigger),
+            submit: SubmitBuilder::Submit(Submit::None),
+        };
+
+        let mut workflows = std::collections::BTreeMap::new();
+        workflows.insert(WorkflowId::new("workflow-test").unwrap(), workflow);
+
+        ServiceBuilder {
+            name: "test-service".to_string(),
+            workflows,
+            status: wavs_types::ServiceStatus::Active,
+            manager: ServiceManagerBuilder::default(),
+        }
+    }
+
+    #[test]
+    fn solana_discriminator_must_be_eight_bytes() {
+        // Anchor convention is exactly 8 bytes.
+        let bad = service_with_solana_trigger(SolanaEventFilter::Discriminator(vec![1, 2, 3]));
+        let errors = bad.validate();
+        assert!(
+            errors.iter().any(|e| e.contains("Anchor convention is exactly 8")),
+            "expected discriminator-length error in {errors:?}"
+        );
+    }
+
+    #[test]
+    fn solana_log_contains_must_be_nonempty() {
+        let bad = service_with_solana_trigger(SolanaEventFilter::LogContains(String::new()));
+        let errors = bad.validate();
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("empty Solana log-contains filter")),
+            "expected empty-needle error in {errors:?}"
+        );
+    }
+
+    #[test]
+    fn solana_eight_byte_discriminator_is_accepted() {
+        let good = service_with_solana_trigger(SolanaEventFilter::Discriminator(vec![0u8; 8]));
+        let errors = good.validate();
+        // Other unrelated validation errors are fine (e.g. unset
+        // service-manager); we only care that the trigger itself doesn't
+        // contribute one.
+        assert!(
+            !errors.iter().any(|e| e.contains("Solana discriminator")),
+            "did not expect discriminator error in {errors:?}"
+        );
+    }
+
+    #[test]
+    fn solana_log_contains_nonempty_is_accepted() {
+        let good = service_with_solana_trigger(SolanaEventFilter::LogContains("Transfer".into()));
+        let errors = good.validate();
+        assert!(
+            !errors
+                .iter()
+                .any(|e| e.contains("empty Solana log-contains filter")),
+            "did not expect log-contains error in {errors:?}"
+        );
+    }
 }

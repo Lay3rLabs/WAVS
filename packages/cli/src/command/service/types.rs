@@ -12,6 +12,7 @@ use wavs_types::{
 pub enum ChainType {
     Cosmos,
     EVM,
+    Solana,
 }
 
 /// Result of service initialization

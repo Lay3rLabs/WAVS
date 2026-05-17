@@ -2,6 +2,7 @@ use alloy_provider::{Provider, RootProvider};
 use anyhow::Result;
 use layer_climb::{prelude::CosmosAddr, querier::QueryClient as CosmosQueryClient};
 use reqwest::Client;
+use solana_client::nonblocking::rpc_client::RpcClient as SolanaRpcClient;
 use std::collections::HashMap;
 use wavs_types::{ChainKey, ServiceManager, Trigger, WorkflowId};
 
@@ -98,6 +99,7 @@ pub async fn validate_contracts_exist(
     service_manager: Option<&ServiceManager>,
     evm_providers: &HashMap<ChainKey, RootProvider>,
     cosmos_clients: &HashMap<ChainKey, CosmosQueryClient>,
+    solana_clients: &HashMap<ChainKey, SolanaRpcClient>,
     errors: &mut Vec<String>,
 ) -> Result<()> {
     // Track which contracts we've already checked to avoid duplicate checks
@@ -166,17 +168,48 @@ pub async fn validate_contracts_exist(
                     ));
                 }
             }
+            Trigger::SolanaProgramEvent {
+                chain, program_id, ..
+            } => {
+                // Check if we have a Solana RPC client for this chain
+                if let Some(client) = solana_clients.get(chain) {
+                    let context = format!(
+                        "Service {} workflow {} trigger Solana program",
+                        service_name, workflow_id
+                    );
+                    let pubkey = solana_pubkey::Pubkey::new_from_array(*program_id.as_bytes());
+                    match client.get_account(&pubkey).await {
+                        Ok(account) => {
+                            // The on-chain account must be executable for
+                            // it to be a program. Non-executable accounts
+                            // with the same pubkey wouldn't fire program
+                            // logs; flag this as a warning so service
+                            // authors can catch typos.
+                            if !account.executable {
+                                errors.push(format!(
+                                    "{context} {pubkey} exists but is not executable; the trigger will never fire"
+                                ));
+                            }
+                        }
+                        Err(err) => {
+                            errors.push(format!(
+                                "{context} {pubkey} could not be fetched from chain {chain}: {err}"
+                            ));
+                        }
+                    }
+                } else {
+                    errors.push(format!(
+                        "Cannot check Solana program for workflow {} - no client configured for chain {}",
+                        workflow_id, chain
+                    ));
+                }
+            }
             // Other trigger types don't need contract validation
             Trigger::Cron { .. }
             | Trigger::Manual
             | Trigger::BlockInterval { .. }
             | Trigger::AtProtoEvent { .. }
-            | Trigger::HypercoreAppend { .. }
-            | Trigger::SolanaProgramEvent { .. } => {
-                // slice 2: solana program-existence validation (analogous to
-                // the EVM / Cosmos arms above) will be added when the
-                // service_json validator gains a Solana branch.
-            }
+            | Trigger::HypercoreAppend { .. } => {}
         }
     }
 
