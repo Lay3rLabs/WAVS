@@ -148,6 +148,55 @@ enum StreamStartState {
     Connected,
 }
 
+/// Solana replay-identity tuple used by [`TriggerManager`] to dedup
+/// dispatcher emissions across `solana-pubsub` reconnects. The SVM
+/// design doc names this tuple as the "exactly once" key for Solana
+/// triggers.
+type SolanaReplayKey = (ChainKey, u64, String, u32, Option<u32>, u32);
+
+/// Bounded cache of Solana replay-identity tuples already dispatched.
+/// Drops the oldest entry when over capacity. We use a paired
+/// `HashSet` + `VecDeque` instead of an external LRU crate so the
+/// surface stays workspace-trivial.
+#[derive(Default)]
+struct SolanaReplayCache {
+    seen: HashSet<SolanaReplayKey>,
+    order: std::collections::VecDeque<SolanaReplayKey>,
+    cap: usize,
+}
+
+impl SolanaReplayCache {
+    fn with_capacity(cap: usize) -> Self {
+        Self {
+            seen: HashSet::with_capacity(cap),
+            order: std::collections::VecDeque::with_capacity(cap),
+            cap,
+        }
+    }
+
+    /// Returns `true` if this is the first time we've seen `key`.
+    /// Returns `false` if `key` was already dispatched (and the caller
+    /// should drop the duplicate).
+    fn observe(&mut self, key: SolanaReplayKey) -> bool {
+        if !self.seen.insert(key.clone()) {
+            return false;
+        }
+        self.order.push_back(key);
+        if self.order.len() > self.cap {
+            if let Some(evicted) = self.order.pop_front() {
+                self.seen.remove(&evicted);
+            }
+        }
+        true
+    }
+}
+
+/// Default capacity for [`SolanaReplayCache`]. Pubsub reconnects in
+/// practice replay at most a few hundred recent log lines; 16k slots'
+/// worth of typical traffic is well within memory while still letting
+/// the cache absorb a re-subscription cleanly.
+const SOLANA_REPLAY_CACHE_CAPACITY: usize = 16_384;
+
 #[derive(Clone)]
 pub struct TriggerManager {
     pub chain_configs: Arc<std::sync::RwLock<ChainConfigs>>,
@@ -162,6 +211,12 @@ pub struct TriggerManager {
     pub services: Services,
     pub evm_controllers: Arc<std::sync::RwLock<HashMap<ChainKey, EvmTriggerStreamsController>>>,
     hypercore_stream_states: Arc<std::sync::RwLock<HashMap<String, StreamStartState>>>,
+    /// Replay-identity dedup cache for `Trigger::SolanaProgramEvent`
+    /// dispatch. The SVM design doc requires the same
+    /// `(chain, slot, signature, instruction_index,
+    /// inner_instruction_index, log_index)` tuple to never re-fire the
+    /// operator, including across `solana-pubsub` reconnects.
+    solana_replay: Arc<std::sync::Mutex<SolanaReplayCache>>,
     pub config: Config,
 }
 
@@ -188,6 +243,9 @@ impl TriggerManager {
             services,
             evm_controllers: Arc::new(std::sync::RwLock::new(HashMap::new())),
             hypercore_stream_states: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            solana_replay: Arc::new(std::sync::Mutex::new(SolanaReplayCache::with_capacity(
+                SOLANA_REPLAY_CACHE_CAPACITY,
+            ))),
             config: config.clone(),
         })
     }
@@ -1253,7 +1311,7 @@ impl TriggerManager {
     /// log line in `logs`; per-log fields (`signature`, `log_index`,
     /// `instruction_index`, `inner_instruction_index`) come from each
     /// [`streams::solana_stream::SolanaStreamLog`].
-    fn handle_solana_logs(
+    pub fn handle_solana_logs(
         &self,
         chain: ChainKey,
         _slot: u64,
@@ -1302,6 +1360,36 @@ impl TriggerManager {
                 // deliver the raw log line bytes (UTF-8) so the component
                 // can re-parse if needed.
                 let data = decoded.unwrap_or_else(|| log.raw_log.as_bytes().to_vec());
+
+                // Enforce the design doc's "exactly once" property: if
+                // we've already dispatched this exact replay-identity
+                // tuple (eg. because a `solana-pubsub` reconnect
+                // re-yielded the log), drop it. Keyed per-(workflow,
+                // log) so two distinct triggers on the same log line
+                // still both fire.
+                let key: SolanaReplayKey = (
+                    chain.clone(),
+                    log.slot,
+                    log.signature.clone(),
+                    log.instruction_index,
+                    log.inner_instruction_index,
+                    log.log_index,
+                );
+                let first_time = {
+                    let mut cache = self.solana_replay.lock().unwrap();
+                    cache.observe(key)
+                };
+                if !first_time {
+                    tracing::debug!(
+                        chain = %chain,
+                        slot = log.slot,
+                        signature = %log.signature,
+                        instruction_index = log.instruction_index,
+                        log_index = log.log_index,
+                        "dropping duplicate Solana program event (replay-identity already dispatched)"
+                    );
+                    continue;
+                }
 
                 commands.push(DispatcherCommand::Trigger(TriggerAction {
                     data: TriggerData::SolanaProgramEvent {

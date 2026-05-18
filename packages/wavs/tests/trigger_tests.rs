@@ -506,3 +506,125 @@ fn solana_program_event_lookup() {
         assert_eq!(token_bucket.len(), 1);
     }
 }
+
+/// Replay-protection regression test for the slice 3 deliverable.
+///
+/// The SVM design doc requires that the same
+/// `(slot, signature, instruction_index, inner_instruction_index, log_index)`
+/// tuple does NOT re-fire the operator, including across deliberate
+/// `solana-pubsub` reconnects. This test simulates the reconnect by
+/// pushing the same `SolanaStreamLog` through the dispatcher twice:
+/// the first call should produce a `DispatcherCommand::Trigger`; the
+/// second call (mimicking a reconnect that replays the same notification)
+/// should be silently dropped by the dedup cache.
+#[test]
+fn solana_program_event_replay_protection() {
+    use wavs::subsystems::trigger::streams::solana_stream::SolanaStreamLog;
+    use wavs_types::{SolanaAddress, SolanaCommitment, SolanaEventFilter};
+
+    let config = Config::default();
+    let services = wavs::services::Services::new(WavsDb::new().unwrap());
+    let (trigger_to_dispatcher_tx, _) = crossbeam::channel::unbounded::<DispatcherCommand>();
+    let manager = TriggerManager::new(
+        &config,
+        TriggerMetrics::new(opentelemetry::global::meter("trigger-test-metrics")),
+        services,
+        trigger_to_dispatcher_tx,
+    )
+    .unwrap();
+
+    // Activate the test service so the lookup table will surface it.
+    let chain = ChainKey::new("solana:devnet").unwrap();
+    let program = SolanaAddress::from_base58("11111111111111111111111111111111").unwrap();
+
+    let workflow_id = WorkflowId::new("wf-replay").unwrap();
+
+    let trigger = wavs_types::Trigger::SolanaProgramEvent {
+        chain: chain.clone(),
+        program_id: program,
+        filter: SolanaEventFilter::LogContains("Program log: matched".to_string()),
+        commitment: SolanaCommitment::Confirmed,
+    };
+    let workflow = Workflow {
+        component: Component {
+            source: ComponentSource::Digest(ComponentDigest::hash([0u8; 32])),
+            permissions: Default::default(),
+            fuel_limit: None,
+            time_limit_seconds: None,
+            config: Default::default(),
+            env_keys: Default::default(),
+        },
+        trigger: trigger.clone(),
+        submit: Submit::None,
+    };
+    let mut workflows = std::collections::BTreeMap::new();
+    workflows.insert(workflow_id.clone(), workflow);
+    let manager_service = Service {
+        name: "replay-test".to_string(),
+        status: ServiceStatus::Active,
+        manager: ServiceManager::Evm {
+            chain: ChainKey::new("evm:anvil").unwrap(),
+            address: rand_address_evm(),
+        },
+        workflows,
+    };
+    let service_id = manager_service.id();
+    manager.services.save(&manager_service).unwrap();
+    manager
+        .get_lookup_maps()
+        .add_trigger(wavs_types::TriggerConfig {
+            service_id: service_id.clone(),
+            workflow_id: workflow_id.clone(),
+            trigger,
+        })
+        .unwrap();
+
+    // The replay-identity tuple is identical between the two pushes.
+    let log = SolanaStreamLog {
+        slot: 42,
+        signature: "5".repeat(88), // base58-shaped placeholder
+        instruction_index: 0,
+        inner_instruction_index: None,
+        log_index: 3,
+        program_id: program,
+        raw_log: "Program log: matched the discriminator".to_string(),
+    };
+
+    // First observation: a single Trigger command should land.
+    let first = manager.handle_solana_logs(chain.clone(), 42, vec![log.clone()]);
+    assert_eq!(
+        first.len(),
+        1,
+        "first observation should produce exactly one DispatcherCommand::Trigger; got {first:?}"
+    );
+
+    // Reconnect simulation: the exact same notification arrives again.
+    // The replay cache must drop it.
+    let second = manager.handle_solana_logs(chain.clone(), 42, vec![log.clone()]);
+    assert!(
+        second.is_empty(),
+        "second observation of identical replay-identity should be deduped; got {second:?}"
+    );
+
+    // A different log_index in the same transaction is a genuinely new
+    // event and must NOT be deduped.
+    let next_log = SolanaStreamLog {
+        log_index: 4,
+        ..log.clone()
+    };
+    let next = manager.handle_solana_logs(chain.clone(), 42, vec![next_log]);
+    assert_eq!(
+        next.len(),
+        1,
+        "distinct log_index must produce a new Trigger; got {next:?}"
+    );
+
+    // And a different signature with otherwise-identical fields is also
+    // a new event.
+    let other_tx = SolanaStreamLog {
+        signature: "6".repeat(88),
+        ..log.clone()
+    };
+    let other = manager.handle_solana_logs(chain.clone(), 42, vec![other_tx]);
+    assert_eq!(other.len(), 1, "distinct signature must produce a new Trigger");
+}
