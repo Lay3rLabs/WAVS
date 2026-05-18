@@ -247,6 +247,37 @@ dev-tool *args:
 start-anvil:
     anvil
 
+# Requires the Solana CLI installed locally. We do NOT auto-install:
+# the operator owns that decision. Install with:
+#   sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+#
+# spin up a local solana-test-validator on RPC 8899 / WS 8900 (SVM trigger demo + solana_e2e test)
+start-solana-validator:
+    @if ! command -v solana-test-validator >/dev/null 2>&1; then \
+        echo "error: solana-test-validator not found on PATH."; \
+        echo "       install the Anza Solana toolchain first:"; \
+        echo "         sh -c \"\$(curl -sSfL https://release.anza.xyz/stable/install)\""; \
+        echo "       see examples/contracts/solana/event-emitter/README.md"; \
+        exit 1; \
+    fi
+    solana-test-validator --reset --quiet
+
+# Run `just start-solana-validator` first in another shell. Outputs
+# the deployed program id (printed by `anchor deploy`) which the demo
+# service.json template expects.
+#
+# build + deploy the event-emitter Anchor fixture program to the running solana-test-validator
+deploy-solana-fixture:
+    @if ! command -v anchor >/dev/null 2>&1; then \
+        echo "error: anchor CLI not found on PATH."; \
+        echo "       install with:"; \
+        echo "         cargo install --git https://github.com/coral-xyz/anchor anchor-cli --tag v0.32.1"; \
+        echo "       see examples/contracts/solana/event-emitter/README.md"; \
+        exit 1; \
+    fi
+    cd examples/contracts/solana/event-emitter && anchor build
+    cd examples/contracts/solana/event-emitter && anchor deploy
+
 # e.g. `just cli-exec ./examples/build/components/echo_data.wasm "hello world"`
 cli-exec COMPONENT INPUT:
     @cd packages/cli && cargo run exec --component {{COMPONENT}} --input '{{INPUT}}'
