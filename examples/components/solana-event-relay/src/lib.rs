@@ -38,8 +38,8 @@ struct Component;
 ///
 /// Pre-computed at build-time to avoid pulling sha2 into the WASI component.
 /// Verified by the `solana_e2e` integration test (see
-/// `packages/wavs/tests/solana_e2e.rs::anchor_event_discriminator`).
-const MESSAGE_EMITTED_DISCRIMINATOR: [u8; 8] = [0xe4, 0xdc, 0xc4, 0x21, 0x33, 0x5e, 0xc3, 0x35];
+/// `packages/layer-tests/tests/solana_e2e.rs::anchor_event_discriminator_matches_relay_component`).
+const MESSAGE_EMITTED_DISCRIMINATOR: [u8; 8] = [0xab, 0x0f, 0xdc, 0xb7, 0x2d, 0x7f, 0xb7, 0x27];
 
 impl Guest for Component {
     fn run(trigger_action: TriggerAction) -> std::result::Result<Vec<WasmResponse>, String> {
