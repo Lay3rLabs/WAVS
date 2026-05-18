@@ -21,6 +21,7 @@ members = [
     "examples/components/_types",
     "examples/components/kv-store",
     "examples/components/simple-aggregator",
+    "examples/components/solana-event-relay",
     "examples/components/timer-aggregator",
     "examples/contracts/cosmwasm/trigger/api",
     "examples/contracts/cosmwasm/trigger/simple",

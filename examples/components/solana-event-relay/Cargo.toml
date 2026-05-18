@@ -1,0 +1,16 @@
+[package]
+name = "solana-event-relay"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+example-helpers = { workspace = true }
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[package.metadata.component]
+package = "wavs-tests:solana-event-relay"
