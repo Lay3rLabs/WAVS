@@ -8,6 +8,7 @@ mod matrix;
 mod report;
 mod runner;
 mod service_managers;
+pub mod solana_trigger;
 mod test_definition;
 mod test_registry;
 

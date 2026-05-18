@@ -16,6 +16,11 @@ pub struct Clients {
     pub cli_ctx: Arc<wavs_cli::context::CliContext>,
     pub evm_clients: Arc<HashMap<ChainKey, EvmSigningClient>>,
     pub cosmos_client_pools: Arc<HashMap<ChainKey, SigningClientPool>>,
+    /// HTTP RPC endpoints for each configured Solana chain. The Solana
+    /// trigger arm of the e2e runner uses these to submit `emit`
+    /// transactions to the local `solana-test-validator`. Empty when no
+    /// Solana chain is configured for the test run.
+    pub solana_endpoints: Arc<HashMap<ChainKey, String>>,
 }
 
 impl Clients {
@@ -115,12 +120,36 @@ impl Clients {
             cosmos_client_pools.insert(chain_config.into(), pool);
         }
 
+        // Collect HTTP RPC endpoints for any configured Solana chains.
+        // We don't construct an RpcClient here — the e2e runner spins up
+        // a fresh one per `emit` so it can pick the right commitment.
+        let mut solana_endpoints: HashMap<ChainKey, String> = HashMap::new();
+        for chain_config in chains.solana_iter() {
+            if let Some(http) = chain_config.http_endpoint.clone() {
+                solana_endpoints.insert((&chain_config).into(), http);
+            }
+        }
+
         Self {
             http_clients,
             cli_ctx: Arc::new(cli_ctx),
             evm_clients: Arc::new(evm_clients),
             cosmos_client_pools: Arc::new(cosmos_client_pools),
+            solana_endpoints: Arc::new(solana_endpoints),
         }
+    }
+
+    /// HTTP RPC endpoint for a configured Solana chain, or an error if
+    /// the chain isn't configured / isn't a Solana chain / has no
+    /// `http_endpoint` set.
+    pub fn get_solana_endpoint(&self, chain: &ChainKey) -> anyhow::Result<String> {
+        self.solana_endpoints
+            .get(chain)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!(
+                "no Solana RPC endpoint configured for chain {chain}; \
+                 either the chain isn't a Solana chain or its `http_endpoint` is unset"
+            ))
     }
 
     pub fn get_evm_client(&self, chain: &ChainKey) -> EvmSigningClient {

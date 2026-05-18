@@ -56,3 +56,18 @@ hypercore-protocol = { workspace = true }
 hyperswarm = { workspace = true }
 futures-lite = { workspace = true }
 async-std = "1"
+
+# Slice 3: Solana e2e trigger emission. The runner's Solana arm builds
+# and submits an `event-emitter` transaction to a local
+# `solana-test-validator`; these crates are the minimum surface needed
+# for keypair signing + transaction construction + RPC submission.
+solana-client = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-keypair = { workspace = true }
+solana-signer = { workspace = true }
+solana-message = { workspace = true }
+solana-transaction = { workspace = true }
+solana-instruction = { workspace = true }
+solana-hash = { workspace = true }
+solana-sha256-hasher = { workspace = true }
+solana-commitment-config = { workspace = true }
