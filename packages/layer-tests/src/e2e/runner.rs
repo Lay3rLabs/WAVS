@@ -611,9 +611,7 @@ async fn run_test(
             Trigger::SolanaProgramEvent {
                 chain, program_id, ..
             } => {
-                use crate::e2e::solana_trigger::{
-                    self, Keypair, Signer,
-                };
+                use crate::e2e::solana_trigger::{self, Keypair, Signer};
 
                 let rpc_endpoint = clients.get_solana_endpoint(chain)?;
                 let payload = input_bytes
@@ -630,13 +628,9 @@ async fn run_test(
                 .await?;
 
                 let program_pubkey = solana_trigger::parse_program_id(&program_id.to_base58())?;
-                let outcome = solana_trigger::emit_event(
-                    &rpc_endpoint,
-                    program_pubkey,
-                    &payer,
-                    &payload,
-                )
-                .await?;
+                let outcome =
+                    solana_trigger::emit_event(&rpc_endpoint, program_pubkey, &payer, &payload)
+                        .await?;
 
                 tracing::info!(
                     "Solana emit landed in slot {} with signature {}",

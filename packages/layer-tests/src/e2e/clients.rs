@@ -143,13 +143,12 @@ impl Clients {
     /// the chain isn't configured / isn't a Solana chain / has no
     /// `http_endpoint` set.
     pub fn get_solana_endpoint(&self, chain: &ChainKey) -> anyhow::Result<String> {
-        self.solana_endpoints
-            .get(chain)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!(
+        self.solana_endpoints.get(chain).cloned().ok_or_else(|| {
+            anyhow::anyhow!(
                 "no Solana RPC endpoint configured for chain {chain}; \
                  either the chain isn't a Solana chain or its `http_endpoint` is unset"
-            ))
+            )
+        })
     }
 
     pub fn get_evm_client(&self, chain: &ChainKey) -> EvmSigningClient {

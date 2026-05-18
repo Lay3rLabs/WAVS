@@ -44,10 +44,7 @@ fn strip_anchor_framing(raw: &[u8]) -> Result<Vec<u8>, String> {
     }
     let len = u32::from_le_bytes(raw[8..12].try_into().unwrap()) as usize;
     if 12 + len != raw.len() {
-        return Err(format!(
-            "borsh length {len} != actual {}",
-            raw.len() - 12
-        ));
+        return Err(format!("borsh length {len} != actual {}", raw.len() - 12));
     }
     Ok(raw[12..].to_vec())
 }
@@ -149,7 +146,11 @@ async fn solana_emit_and_observe() {
         if std::time::Instant::now() > deadline {
             panic!("airdrop did not confirm in 30s");
         }
-        if client.confirm_transaction(&airdrop_sig).await.unwrap_or(false) {
+        if client
+            .confirm_transaction(&airdrop_sig)
+            .await
+            .unwrap_or(false)
+        {
             break;
         }
         tokio::time::sleep(Duration::from_millis(200)).await;
@@ -204,7 +205,9 @@ async fn solana_emit_and_observe() {
 
     let observed = logs.iter().any(|line| {
         if let Some(Some(decoded)) = match_log_filter(&filter, line) {
-            strip_anchor_framing(&decoded).map(|p| p == payload).unwrap_or(false)
+            strip_anchor_framing(&decoded)
+                .map(|p| p == payload)
+                .unwrap_or(false)
         } else {
             false
         }

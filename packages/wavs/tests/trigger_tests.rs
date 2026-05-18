@@ -626,5 +626,9 @@ fn solana_program_event_replay_protection() {
         ..log.clone()
     };
     let other = manager.handle_solana_logs(chain.clone(), 42, vec![other_tx]);
-    assert_eq!(other.len(), 1, "distinct signature must produce a new Trigger");
+    assert_eq!(
+        other.len(),
+        1,
+        "distinct signature must produce a new Trigger"
+    );
 }
