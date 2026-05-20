@@ -77,6 +77,8 @@ use example_helpers::trigger::{decode_trigger_event, encode_trigger_output};
 
 ## Host APIs
 
+For on-chain reads related to a trigger, use the trigger's block height as the canonical snapshot. Pass that block number/height to EVM, Cosmos, or RPC calls when supported, and avoid mixing historical trigger data with unpinned `latest` reads.
+
 ```rust
 host::config_var("my-key")               // → Option<String>; reads service config
 host::log(host::LogLevel::Info, "msg");  // levels: Debug, Info, Warn, Error

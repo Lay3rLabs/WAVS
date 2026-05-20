@@ -14,6 +14,14 @@ WAVS runs off-chain computation as sandboxed WebAssembly (WASI) components trigg
 
 ---
 
+## Deterministic On-Chain Reads
+
+Treat the trigger/event block height as the canonical snapshot for on-chain data that relates to that trigger. When a component performs EVM, Cosmos, or other RPC reads and the client/API supports it, pass the trigger block number or block height explicitly instead of reading `latest` state.
+
+Avoid mixing historical trigger data with unpinned latest-state reads. Pinning reads to the trigger block improves replayability and prevents nondeterministic state/timestamp mismatches, such as an oracle response whose `updatedAt` appears newer than the block timestamp because an RPC backend served cached state from a different snapshot.
+
+---
+
 ## MCP Setup
 
 The `wavs:` MCP tools below require `wavs-mcp` to be running and registered with Claude Code.
