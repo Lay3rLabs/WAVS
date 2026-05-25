@@ -15,8 +15,12 @@ use std::{
 use layer_climb::prelude::*;
 use tracing::instrument;
 use utils::{
-    async_transaction::AsyncTransaction, config::EvmChainConfigExt, context::AppContext,
-    evm_client::EvmSigningClient, storage::db::WavsDb, telemetry::AggregatorMetrics,
+    async_transaction::AsyncTransaction,
+    config::EvmChainConfigExt,
+    context::AppContext,
+    evm_client::{EvmSigningClient, NonceManagerKind},
+    storage::db::WavsDb,
+    telemetry::AggregatorMetrics,
 };
 use wavs_engine::bindings::aggregator::world::AnyTxHash;
 use wavs_types::{
@@ -728,7 +732,16 @@ impl Aggregator {
             }
         };
 
-        let client_config = chain_config.signing_client_config(credential.clone())?;
+        let mut client_config = chain_config.signing_client_config(credential.clone())?;
+        // [vault patch 2.0.0-vault.1] Force SafeNonceManager for on-chain submissions.
+        // The default FastNonceManager caches an in-memory nonce counter that increments on
+        // every send attempt (including failures) and only re-seeds from chain at client
+        // construction. A sustained run of failed sends (e.g. gas exhaustion) desyncs it far
+        // past the on-chain nonce and wedges submission until the process is restarted.
+        // SafeNonceManager queries the chain nonce per send, removing that failure mode.
+        // Submissions are already serialized per-chain (chain_transaction), so there is no
+        // concurrent-tx nonce-collision risk. Cost: one extra eth_getTransactionCount per tx.
+        client_config.nonce_manager_kind = NonceManagerKind::Safe;
 
         let client = EvmSigningClient::new(client_config)
             .await
