@@ -637,6 +637,16 @@ impl Aggregator {
                 );
                 // Burn queue: Mark as completed to prevent duplicate on-chain submissions
                 self.burn_quorum_queue(queue_id).await?;
+                if let Err(e) =
+                    self.subsystem_to_dispatcher_tx
+                        .send(DispatcherCommand::SubmissionConfirmed {
+                            service_id: submission.service_id().clone(),
+                            workflow_id: submission.workflow_id().clone(),
+                            trigger_data: submission.trigger_action.data.clone(),
+                        })
+                {
+                    tracing::error!("Error sending SubmissionConfirmed to dispatcher: {:?}", e);
+                }
             }
 
             Err(err) => {

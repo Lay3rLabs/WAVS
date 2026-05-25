@@ -13,6 +13,7 @@ use super::{app::TestApp, mock_app::MockE2ETestRunner};
 pub struct TestHttpApp {
     pub inner: TestApp,
     pub ctx: AppContext,
+    pub log_buffer: wavs::log_buffer::LogBuffer,
     _temp_data_dir: Option<Arc<tempfile::TempDir>>,
     _http_router: axum::Router,
 }
@@ -48,6 +49,7 @@ impl TestHttpApp {
         let meter = opentelemetry::global::meter("wavs_test_metrics");
         let metrics = HttpMetrics::new(meter);
 
+        let log_buffer = wavs::log_buffer::LogBufferInner::new();
         ctx.clone().rt.block_on(async move {
             let health_status = wavs::health::SharedHealthStatus::new();
             let http_router = wavs::http::server::make_router(
@@ -56,6 +58,7 @@ impl TestHttpApp {
                 true,
                 metrics,
                 health_status,
+                log_buffer.clone(),
             )
             .await
             .unwrap();
@@ -63,6 +66,7 @@ impl TestHttpApp {
             Self {
                 ctx,
                 inner,
+                log_buffer,
                 _http_router: http_router,
                 _temp_data_dir: temp_data_dir.map(Arc::new),
             }

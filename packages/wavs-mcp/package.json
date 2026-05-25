@@ -1,0 +1,27 @@
+{
+  "name": "@wavs/mcp",
+  "version": "2.0.0-rc.13",
+  "description": "WAVS MCP server — exposes WAVS operations to AI assistants via the Model Context Protocol",
+  "keywords": ["wavs", "mcp", "wasm", "avs"],
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lay3rLabs/wavs.git",
+    "directory": "packages/wavs-mcp"
+  },
+  "bin": {
+    "wavs-mcp": "bin/run.mjs"
+  },
+  "scripts": {
+    "prepack": "node scripts/copy-skill-files.mjs",
+    "postinstall": "node postinstall.mjs"
+  },
+  "files": [
+    "bin/",
+    "postinstall.mjs",
+    "skill/"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

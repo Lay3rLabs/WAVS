@@ -325,7 +325,7 @@ impl FastNonceManager {
     {
         match self.address {
             Some(address) => {
-                let current_nonce = provider.get_transaction_count(address).await?;
+                let current_nonce = provider.get_transaction_count(address).pending().await?;
                 self.counter
                     .store(current_nonce, std::sync::atomic::Ordering::SeqCst);
                 Ok(current_nonce)
@@ -390,7 +390,7 @@ impl NonceManager for SafeNonceManager {
                 )));
             }
         }
-        Ok(provider.get_transaction_count(address).await?)
+        Ok(provider.get_transaction_count(address).pending().await?)
     }
 }
 

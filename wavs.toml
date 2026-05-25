@@ -2,41 +2,56 @@
 # - General settings (shared across all processes)
 # - WAVS server-specific settings
 # - CLI-specific settings
-# - Aggregator-specific settings
 #
 # Environment variable overrides follow these patterns:
 # - WAVS server settings: WAVS_<UPPERCASE_KEY>
 # - CLI settings: WAVS_CLI_<UPPERCASE_KEY>
-# - Aggregator settings: WAVS_AGGREGATOR_<UPPERCASE_KEY>
 #
 # For arrays, use a comma-separated list in a single string:
 # e.g., WAVS_LOG_LEVEL="info, wavs=debug" or WAVS_CORS_ALLOWED_ORIGINS="https://example.com, https://example2.com"
+#
+# Config file search order (first found wins):
+# 1. CLI arg --home / env WAVS_HOME
+# 2. Current working directory (./wavs.toml)
+# 3. ~/.wavs/wavs.toml
+# 4. macOS: ~/Library/Application Support/wavs/wavs.toml
+#    Linux: ~/.config/wavs/wavs.toml
+#    Windows: AppData\Roaming\wavs\wavs.toml
+# 5. ~/.config/wavs/wavs.toml
+# 6. /etc/wavs/wavs.toml
 
 # ----------------------------
 # Default settings (shared)
 # ----------------------------
-# The log level, in the format of tracing directives. Default is ["info"]
-# See https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
+# These settings apply to all components unless overridden in a component-specific section.
 [default]
+
+# Log level using tracing directives. Default: ["info"]
+# See https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 # log_level = ["info", "wavs=debug"]
 
+# Jaeger OTLP endpoint for distributed tracing
 # jaeger = "http://localhost:4317"
+
+# Prometheus remote-write endpoint for metrics
 # prometheus = "http://localhost:9090"
 
-# The IPFS gateway URL used to access IPFS content over HTTP.
+# IPFS gateway URL for fetching service definitions from IPFS
 # ipfs_gateway = "https://ipfs.io/ipfs/"
 
+# ----------------------------
 # Chain configurations (shared across components)
-# Each component can override these in its own section if needed
+# Each component can override these in its own section if needed.
+# ----------------------------
 
-# Cosmos chains
+# Cosmos chains — keyed by chain ID
 # [default.chains.cosmos.layer-local]
 # bech32_prefix = "layer"
 # rpc_endpoint = "http://localhost:26657"
 # grpc_endpoint = "http://localhost:9090"
 # gas_price = 0.025
 # gas_denom = "uslay"
-# faucet_endpoint = "http://localhost:8000"
+# faucet_endpoint = "http://localhost:8000"   # optional
 
 # [default.chains.cosmos.pion-1]
 # bech32_prefix = "neutron"
@@ -45,99 +60,206 @@
 # gas_price = 0.0053
 # gas_denom = "untrn"
 
-# # EVM chains
+# EVM chains — keyed by chain ID
 # [default.chains.evm.31337]
 # ws_endpoints = ["ws://localhost:8545"]
-# http_endpoint = "http://localhost:8545"
-# poll_interval_ms = 7000
-# event_channel_size = 16
+# http_endpoint = "http://localhost:8545"     # optional; preferred for signing if present
+# ws_priority_endpoint_index = 0              # optional; preferred WS endpoint index for queries
+# faucet_endpoint = "http://localhost:8000"   # optional
 
 # [default.chains.evm.11155111]
 # ws_endpoints = ["wss://ethereum-sepolia-rpc.publicnode.com"]
 # http_endpoint = "https://ethereum-sepolia-rpc.publicnode.com"
-# poll_interval_ms = 7000
-# event_channel_size = 20000
 
 # [default.chains.evm.17000]
 # ws_endpoints = ["wss://ethereum-holesky-rpc.publicnode.com"]
 # http_endpoint = "https://ethereum-holesky-rpc.publicnode.com"
-# poll_interval_ms = 7000
 
+# Dev chains — named aliases with explicit type + chain_id
+# Used when you want a friendly name for a local fork of a public chain.
 # [default.chains.dev.holesky-fork]
 # type = "evm"
 # chain_id = "17000"
 # ws_endpoints = ["ws://localhost:8545"]
 # http_endpoint = "http://localhost:8545"
-# poll_interval_ms = 7000
 
 # ----------------------------
-# WAVS specific settings
+# WAVS server settings
 # ----------------------------
 [wavs]
 
+# IPFS gateway for this node (overrides [default])
+# Using a local IPFS node for dev; change to "https://ipfs.io/ipfs/" for production.
+ipfs_gateway = "http://127.0.0.1:8080/ipfs/"
+
+# CORS allowed origins for the HTTP API
 cors_allowed_origins = [
     "https://lay3rlabs.github.io/*",
     "http://localhost:*",
     "http://127.0.0.1:*",
 ]
 
-# The port on which the server will listen. Default is 8000
-port = 8000
+# Port for the HTTP API. Default: 8000
+port = 8041
 
-# The host to serve on. Default is localhost
-# host = "localhost"
+# Host/IP to bind the server to. Default: "127.0.0.1"
+# host = "127.0.0.1"
 
-# The directory to store the data. Default is "/var/wavs"
+# Directory for persistent data storage. Default: "/var/wavs"
 # data = "/var/wavs"
 
-# Optional bearer token to protect mutating HTTP endpoints
-# If set here or via env var `WAVS_BEARER_TOKEN`, POST/DELETE endpoints require `Authorization: Bearer <token>`
-# Generate with `openssl rand -hex 32`
+# Log level (overrides [default] if set). Default: ["info"]
+# log_level = ["info", "wavs=debug"]
+
+# Bearer token to protect all mutating (POST/DELETE) HTTP endpoints.
+# Clients must send `Authorization: Bearer <token>`.
+# Generate with: openssl rand -hex 32
+# Env var: WAVS_BEARER_TOKEN
 # bearer_token = "change-me"
 
-# Aggregator subsystem configuration
+# Credential (private key or mnemonic) for on-chain management via MCP tools
+# (wavs_set_service_uri, wavs_deploy_service_manager, etc.).
+# NOTE: Do not commit real credentials. Set in ~/.wavs/wavs.toml instead.
+# Env var: WAVS_MCP_CHAIN_CREDENTIAL
+# Using the first Anvil test account (safe for local development only)
+mcp_chain_credential = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+
+# BIP39 mnemonic for WAVS operator key derivation.
+# Signing keys for each service are HD-derived from this mnemonic.
+# NOTE: Do not commit real credentials. Set in ~/.wavs/wavs.toml instead.
+# Env var: WAVS_SIGNING_MNEMONIC
+signing_mnemonic = "test test test test test test test test test test test junk"
+
+# Aggregator credential for submitting results to Cosmos chains.
+# Env var: WAVS_AGGREGATOR_COSMOS_CREDENTIAL
+# aggregator_cosmos_credential = "your mnemonic here"
+
+# Aggregator credential for submitting results to EVM chains (private key or mnemonic).
+# Env var: WAVS_AGGREGATOR_EVM_CREDENTIAL
+# aggregator_evm_credential = "0x..."
+
+# Enable /dev/* endpoints for local testing (upload components, simulate triggers, etc.)
+# Default: false
+dev_endpoints_enabled = true
+
+# Size of the in-memory LRU cache for compiled WASM modules. Default: 20
+# wasm_lru_size = 20
+
+# Maximum Wasmtime fuel (compute metering) per component execution. Default: unlimited
+# wasm_lru_size controls how many compiled modules are cached; fuel controls compute per run.
+# max_wasm_fuel = 18446744073709551615
+
+# Maximum wall-clock time (seconds) per component execution. Default: unlimited
+# max_execution_seconds = 18446744073709551615
+
+# Maximum HTTP request body size in megabytes. Default: 15
+# max_body_size_mb = 15
+
+# Maximum WASM response payload size in bytes. Default: 52428800 (50MB)
+# max_wasm_payload_size = 52428800
+
+# Maximum WASM response event_id_salt size in bytes. Default: 1048576 (1MB)
+# max_wasm_salt_size = 1048576
+
+# Health check behavior for chain RPC endpoints at startup.
+# Options: "bypass" (skip checks), "wait" (warn on failure, default), "exit" (panic on failure)
+# health_check_mode = "wait"
+
+# Prometheus metrics push interval in seconds. Only used if [wavs].prometheus is set. Default: 30
+# prometheus_push_interval_secs = 30
+
+# ATProto Jetstream WebSocket endpoint for ATProto event triggers.
+# Default: "wss://jetstream1.us-east.bsky.network/subscribe"
+# jetstream_endpoint = "wss://jetstream1.us-east.bsky.network/subscribe"
+
+# Maximum message size for Jetstream in bytes. Default: 1048576 (1MB). Set to 0 for no limit.
+# jetstream_max_message_size = 1048576
+
+# Hyperswarm bootstrap node address (host:port) for Hypercore discovery. Default: none
+# hyperswarm_bootstrap = "bootstrap.example.com:49737"
+
+# ----------------------------
+# Aggregator subsystem settings
+# ----------------------------
 # [wavs.aggregator]
-# Time-to-live for burned quorum queues in seconds (default: 172800 = 48 hours)
-# After a queue is successfully submitted on-chain, it's marked as "burned" and kept
-# in memory for this duration to prevent duplicate processing. Older entries are cleaned up.
+
+# Time-to-live for burned quorum queues in seconds. Default: 172800 (48 hours)
+# After a queue is successfully submitted on-chain, it's marked "burned" and kept
+# in memory for this duration to prevent duplicate processing.
 # burned_queue_ttl_secs = 172800
 
-# P2P is disabled by default (for single-operator setups)
-#
-# To enable P2P with local mDNS peer discovery (for development/testing):
+# ----------------------------
+# P2P networking settings
+# ----------------------------
+# P2P is disabled by default (for single-operator setups).
+# Enable for multi-operator deployments to share submissions and reach quorum consensus.
+
+# Option 1 — Local mDNS discovery (development/testing, auto-discovers peers on the LAN):
 # p2p = { local = { listen_port = 9000 } }
 #
-# Or using section format:
+# All local options with defaults shown:
 # [wavs.p2p.local]
 # listen_port = 9000
-#
-# To enable P2P with Kademlia DHT for production (remote peer discovery):
+# max_retry_duration_secs = 10        # Max seconds to retry a failed publish
+# retry_interval_ms = 200             # Interval between publish retries
+# submission_ttl_secs = 300           # How long to store submissions for catch-up (5 min)
+# max_catchup_submissions = 100       # Max submissions returned in a catch-up response
+# cleanup_interval_secs = 60          # Interval between expired-submission cleanup passes
+# max_pending_publishes = 1000        # Max entries in the retry queue (prevents OOM)
+# max_stored_submissions_per_service = 500   # Max stored submissions per service
+# catchup_request_timeout_secs = 30   # Timeout for the catch-up request/response protocol
+# max_concurrent_catchup_requests_per_service = 3  # Max concurrent catch-up requests per service
+
+# Option 2 — Remote Kademlia DHT discovery (production, connects across the internet):
 # p2p = { remote = { listen_port = 9000, bootstrap_nodes = ["/ip4/1.2.3.4/tcp/9000/p2p/12D3KooW..."] } }
 #
-# Or using section format:
+# All remote options with defaults shown:
 # [wavs.p2p.remote]
 # listen_port = 9000
-# bootstrap_nodes = ["/ip4/1.2.3.4/tcp/9000/p2p/12D3KooW..."]
-#
-# Note: Any node can serve as a bootstrap server for others. Empty bootstrap_nodes
-# means this is the initial bootstrap server; otherwise it joins via existing nodes.
-#
-# To explicitly disable P2P:
+# bootstrap_nodes = []                # Empty = this node acts as the bootstrap server
+# max_retry_duration_secs = 10
+# retry_interval_ms = 200
+# submission_ttl_secs = 300
+# max_catchup_submissions = 100
+# cleanup_interval_secs = 60
+# kademlia_discovery_interval_secs = 60   # Interval for DHT discovery queries (remote only)
+# max_pending_publishes = 1000
+# max_stored_submissions_per_service = 500
+# catchup_request_timeout_secs = 30
+# max_concurrent_catchup_requests_per_service = 3
+
+# Option 3 — Explicitly disabled (default):
 # p2p = "disabled"
 
-# WAVS-specific chain overrides (if needed)
-# Example:
-# [wavs.chains.evm.local]
-# chain_id = "31337"
+# ----------------------------
+# WAVS-specific chain overrides
+# Same format as [default.chains.*] but only applies to the WAVS node.
+# ----------------------------
+# [wavs.chains.evm.31337]
 # ws_endpoints = ["ws://localhost:8545"]
 # http_endpoint = "http://localhost:8545"
 
 # ----------------------------
-# CLI specific settings
+# CLI settings
 # ----------------------------
 [cli]
-# The directory to store the data. Default is "/var/wavs-cli"
+
+# WAVS node HTTP endpoint. Default: "http://127.0.0.1:8000"
+# wavs_endpoint = "http://127.0.0.1:8000"
+
+# Directory for CLI data storage. Default: "/var/wavs-cli"
 # data = "/var/wavs-cli"
 
-# WAVS endpoint
-# wavs_endpoint = "http://localhost:8000"
+# Log level for the CLI. Default: ["info"]
+# log_level = ["info"]
+
+# IPFS gateway (overrides [default]). Default: "https://ipfs.io/ipfs/"
+# ipfs_gateway = "https://ipfs.io/ipfs/"
+
+# Mnemonic for submitting transactions on Cosmos chains.
+# Env var: WAVS_CLI_COSMOS_MNEMONIC
+# cosmos_mnemonic = "word1 word2 ... word24"
+
+# Credential (private key or mnemonic) for submitting transactions on EVM chains.
+# Env var: WAVS_CLI_EVM_CREDENTIAL
+# evm_credential = "0x..."

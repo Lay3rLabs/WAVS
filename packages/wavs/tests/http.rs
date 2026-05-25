@@ -392,6 +392,251 @@ fn test_add_chain_prevents_duplicates() {
 }
 
 #[test]
+fn http_logs_polling() {
+    use wavs::http::handlers::logs::LogsResponse;
+    use wavs::log_buffer::LogEntry;
+
+    let app = TestHttpApp::new();
+
+    // Push entries directly into the buffer (simulates InMemoryLogLayer capturing events)
+    for i in 0..5u64 {
+        app.log_buffer.push(LogEntry {
+            id: 0, // assigned by push()
+            timestamp_ms: 1_000 + i,
+            level: if i % 2 == 0 {
+                "INFO".to_string()
+            } else {
+                "WARN".to_string()
+            },
+            target: "wavs::test".to_string(),
+            fields: format!("message=\"entry {i}\""),
+        });
+    }
+
+    // Fetch all logs
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/dev/logs")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert!(response.status().is_success());
+    let resp: LogsResponse = app.ctx.rt.block_on(map_response(response));
+    assert_eq!(resp.entries.len(), 5);
+    assert_eq!(resp.next_id, 5);
+
+    // Fetch only WARN entries
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/dev/logs?level=warn")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert!(response.status().is_success());
+    let resp: LogsResponse = app.ctx.rt.block_on(map_response(response));
+    // entries 1, 3 are WARN
+    assert_eq!(resp.entries.len(), 2);
+    assert!(resp.entries.iter().all(|e| e.level == "WARN"));
+
+    // Incremental poll: fetch only entries with id >= 3
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/dev/logs?since_id=3")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert!(response.status().is_success());
+    let resp: LogsResponse = app.ctx.rt.block_on(map_response(response));
+    assert_eq!(resp.entries.len(), 2); // entries 3 and 4
+    assert_eq!(resp.entries[0].id, 3);
+}
+
+#[test]
+fn http_logs_invalid_level_returns_400() {
+    let app = TestHttpApp::new();
+
+    for uri in ["/dev/logs?level=verbose", "/dev/logs/stream?level=verbose"] {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.clone().ctx.rt.block_on({
+            let mut app = app.clone();
+            async move { app.http_router().await.call(req).await.unwrap() }
+        });
+
+        assert_eq!(
+            response.status(),
+            400,
+            "expected 400 for invalid level in {uri}"
+        );
+    }
+}
+
+#[test]
+fn http_logs_zero_limit_clamped() {
+    use wavs::http::handlers::logs::LogsResponse;
+    use wavs::log_buffer::LogEntry;
+
+    let app = TestHttpApp::new();
+
+    app.log_buffer.push(LogEntry {
+        id: 0, // assigned by push()
+        timestamp_ms: 1000,
+        level: "INFO".to_string(),
+        target: "wavs::test".to_string(),
+        fields: "message=\"hello\"".to_string(),
+    });
+
+    // limit=0 should be clamped to 1, not return an empty list
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/dev/logs?limit=0")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert!(response.status().is_success());
+    let resp: LogsResponse = app.ctx.rt.block_on(map_response(response));
+    assert_eq!(resp.entries.len(), 1, "limit=0 should be clamped to 1");
+}
+
+/// Read exactly `n` SSE events from a streaming response body, with a per-frame timeout.
+/// Each SSE event is delimited by a blank line (`\n\n`).
+async fn read_sse_events(body: axum::body::Body, n: usize) -> Vec<wavs::log_buffer::LogEntry> {
+    use http_body_util::BodyExt;
+
+    let mut body = body;
+    let mut raw = String::new();
+    let mut events = Vec::new();
+
+    while events.len() < n {
+        let frame = tokio::time::timeout(std::time::Duration::from_secs(2), body.frame())
+            .await
+            .expect("timeout reading SSE frame")
+            .expect("body ended before expected frame count")
+            .expect("frame error");
+
+        if let Ok(data) = frame.into_data() {
+            raw.push_str(&String::from_utf8_lossy(&data));
+        }
+
+        // Parse all complete SSE events accumulated so far
+        while let Some(pos) = raw.find("\n\n") {
+            let event_str = raw[..pos].to_string();
+            raw = raw[pos + 2..].to_string();
+            if let Some(json) = event_str.strip_prefix("data: ") {
+                if let Ok(entry) = serde_json::from_str(json) {
+                    events.push(entry);
+                }
+            }
+        }
+    }
+
+    events
+}
+
+#[test]
+fn http_logs_sse_replay_ordering() {
+    use wavs::log_buffer::LogEntry;
+
+    let app = TestHttpApp::new();
+
+    // Push 4 entries before connecting: alternating INFO/WARN
+    for i in 0..4u64 {
+        app.log_buffer.push(LogEntry {
+            id: 0, // assigned by push()
+            timestamp_ms: 1000 + i,
+            level: if i % 2 == 0 {
+                "INFO".to_string()
+            } else {
+                "WARN".to_string()
+            },
+            target: "wavs::test".to_string(),
+            fields: format!("message=\"sse-entry {i}\""),
+        });
+    }
+
+    // Connect and receive all 4 replayed entries
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/dev/logs/stream")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert_eq!(response.status(), 200);
+    assert!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .starts_with("text/event-stream"),
+        "expected SSE content-type"
+    );
+
+    let events = app
+        .ctx
+        .rt
+        .block_on(read_sse_events(response.into_body(), 4));
+
+    assert_eq!(events.len(), 4);
+    // Entries arrive in id order
+    for (i, e) in events.iter().enumerate() {
+        assert_eq!(e.id, i as u64);
+    }
+
+    // Connect with level=warn filter — should replay only entries 1 and 3
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri("/dev/logs/stream?level=warn")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().ctx.rt.block_on({
+        let mut app = app.clone();
+        async move { app.http_router().await.call(req).await.unwrap() }
+    });
+
+    assert_eq!(response.status(), 200);
+    let warn_events = app
+        .ctx
+        .rt
+        .block_on(read_sse_events(response.into_body(), 2));
+
+    assert_eq!(warn_events.len(), 2);
+    assert!(warn_events.iter().all(|e| e.level == "WARN"));
+    assert_eq!(warn_events[0].id, 1);
+    assert_eq!(warn_events[1].id, 3);
+}
+
+#[test]
 fn body_size_limit() {
     let app = TestHttpApp::new();
 

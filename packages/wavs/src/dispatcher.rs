@@ -36,13 +36,14 @@ use utils::error::EvmClientError;
 use utils::service::fetch_service;
 use utils::storage::fs::FileStorage;
 use utils::telemetry::{DispatcherMetrics, WavsMetrics};
+use wavs_gui_shared::event::TauriEventEmitterExt;
 use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessages;
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, ServiceManager,
-    Submission, Submit, WorkflowIdError,
+    Submission, Submit, TriggerData, WorkflowIdError,
 };
-use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction};
+use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction, WorkflowId};
 
 use crate::config::Config;
 use crate::service_registry::{RegistryError, ServiceRegistry};
@@ -82,6 +83,34 @@ pub struct Dispatcher<S: CAStorage> {
     evm_http_providers: Arc<RwLock<HashMap<ChainKey, DynProvider>>>,
     /// Cached Cosmos query clients per chain to avoid creating new connections for each query
     cosmos_query_clients: Arc<RwLock<HashMap<ChainKey, QueryClient>>>,
+    pub tauri_handle: TauriHandle,
+}
+
+#[derive(Clone)]
+pub enum TauriHandle {
+    #[cfg(feature = "gui")]
+    Real(tauri::AppHandle),
+    Mock,
+}
+
+impl TauriEventEmitterExt for TauriHandle {
+    fn emit_ext<E: wavs_gui_shared::event::TauriEventExt>(
+        &self,
+        _event: E,
+    ) -> Result<(), wavs_gui_shared::error::AppError> {
+        match self {
+            #[cfg(feature = "gui")]
+            TauriHandle::Real(handle) => handle.emit_ext(_event),
+            TauriHandle::Mock => Ok(()),
+        }
+    }
+}
+
+#[cfg(feature = "gui")]
+impl From<tauri::AppHandle> for TauriHandle {
+    fn from(handle: tauri::AppHandle) -> Self {
+        TauriHandle::Real(handle)
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -99,10 +128,19 @@ pub enum DispatcherCommand {
         service: Service,
         kind: AggregatorExecuteKind,
     },
+    SubmissionConfirmed {
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
+        trigger_data: TriggerData,
+    },
 }
 
 impl Dispatcher<FileStorage> {
-    pub fn new(config: &Config, metrics: WavsMetrics) -> Result<Self, DispatcherError> {
+    pub fn new(
+        config: &Config,
+        metrics: WavsMetrics,
+        tauri_handle: impl Into<TauriHandle>,
+    ) -> Result<Self, DispatcherError> {
         // Create all our channels for communication
         // except dispatcher_to_trigger calls its local stream channel
         let (subsystem_to_dispatcher_tx, subsystem_to_dispatcher_rx) =
@@ -185,6 +223,7 @@ impl Dispatcher<FileStorage> {
             dispatcher_to_aggregator_tx,
             evm_http_providers: Arc::new(RwLock::new(HashMap::new())),
             cosmos_query_clients: Arc::new(RwLock::new(HashMap::new())),
+            tauri_handle: tauri_handle.into(),
         })
     }
 }
@@ -283,11 +322,31 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                 }
                             };
 
+                            // Skip paused services early to avoid unnecessary work and
+                            // misleading GUI events.
+                            if !_self.services.is_active(&action.config.service_id) {
+                                tracing::debug!(
+                                    service_id = %action.config.service_id,
+                                    "Skipping trigger for paused service",
+                                );
+                                continue;
+                            }
+
                             tracing::debug!(
                                 service_id = %action.config.service_id,
                                 workflow_id = %action.config.workflow_id,
                                 "Dispatcher received trigger action",
                             );
+
+                            if let Err(err) =
+                                _self
+                                    .tauri_handle
+                                    .emit_ext(wavs_gui_shared::event::TriggerEvent {
+                                        action: action.clone(),
+                                    })
+                            {
+                                tracing::error!("Error emitting trigger event to GUI: {:?}", err);
+                            }
                             if let Err(err) = _self
                                 .dispatcher_to_engine_tx
                                 .send(EngineCommand::ExecuteOperator { service, action })
@@ -393,6 +452,24 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                                 );
                             }
                         }
+                        DispatcherCommand::SubmissionConfirmed {
+                            service_id,
+                            workflow_id,
+                            trigger_data,
+                        } => {
+                            if let Err(err) = _self.tauri_handle.emit_ext(
+                                wavs_gui_shared::event::SubmissionEvent {
+                                    service_id,
+                                    workflow_id,
+                                    trigger_data,
+                                },
+                            ) {
+                                tracing::error!(
+                                    "Error emitting submission event to GUI: {:?}",
+                                    err
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -434,9 +511,47 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             // Process results sequentially (DB writes and manager registration are not async-safe to parallelize)
             let mut restored = Vec::new();
             for (entry, result) in fetched {
-                let service = result?;
+                let service = match result {
+                    Ok(s) => s,
+                    Err(e) => {
+                        // Only remove the registry entry when the on-chain contract is genuinely
+                        // absent or has an invalid URI. Transient errors (connection refused,
+                        // HTTP 5xx, timeout) are NOT evidence of staleness — keep the entry so
+                        // the next startup can retry.
+                        let is_genuine_stale = matches!(
+                            &e,
+                            DispatcherError::AlloyContract(_) | DispatcherError::URICreation(_)
+                        );
+                        if is_genuine_stale {
+                            tracing::warn!(
+                                "Failed to restore service for {:?}: {e:#}. Removing stale registry entry.",
+                                entry.service_manager
+                            );
+                            if let Err(rem_err) =
+                                self.service_registry.remove(&entry.service_manager)
+                            {
+                                tracing::error!(
+                                    "Failed to remove stale registry entry for {:?}: {rem_err}",
+                                    entry.service_manager
+                                );
+                            }
+                        } else {
+                            tracing::warn!(
+                                "Failed to restore service for {:?}: {e:#}. Keeping registry entry for next startup.",
+                                entry.service_manager
+                            );
+                        }
+                        continue;
+                    }
+                };
 
-                // Store the service in DB
+                // Check if Path A (cmd_start_wavs) already loaded this service from the
+                // settings cache before the HTTP server was up. If so, refresh the stored
+                // definition with the authoritative on-chain version but skip manager
+                // registration to avoid double-registration errors.
+                let already_in_memory = self.services.exists(&service.id()).unwrap_or(false);
+
+                // Always refresh the stored definition with the authoritative on-chain version
                 self.services.save(&service)?;
 
                 // Store components
@@ -444,21 +559,28 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                     .store_components_for_service(&service)
                     .await?;
 
-                // Add to managers with explicit HD index from registry
-                add_service_to_managers(
-                    &service,
-                    &self.trigger_manager,
-                    &self.submission_manager,
-                    &self.dispatcher_to_aggregator_tx,
-                    Some(entry.hd_index),
-                )?;
+                if !already_in_memory {
+                    // Add to managers with explicit HD index from registry
+                    add_service_to_managers(
+                        &service,
+                        &self.trigger_manager,
+                        &self.submission_manager,
+                        &self.dispatcher_to_aggregator_tx,
+                        Some(entry.hd_index),
+                    )?;
 
-                tracing::info!(
-                    "Restored service {} [{:?}] with HD index {}",
-                    service.name,
-                    service.manager,
-                    entry.hd_index
-                );
+                    tracing::info!(
+                        "Restored service {} [{:?}] with HD index {}",
+                        service.name,
+                        service.manager,
+                        entry.hd_index
+                    );
+                } else {
+                    tracing::debug!(
+                        "Service {} already loaded from settings cache; skipping manager setup",
+                        service.name
+                    );
+                }
                 restored.push(service);
             }
             Ok::<_, DispatcherError>(restored)
@@ -649,7 +771,23 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     pub fn remove_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
         // Remove from persistent registry first so an IO failure doesn't leave
         // the service already gone from memory but still on disk.
-        if let Some(sm) = self.services.get(&id).ok().map(|s| s.manager.clone()) {
+        // Fall back to a registry scan when the service is not in the runtime store —
+        // this handles cases where a startup-restore failed (e.g. chain was reset) but
+        // the registry entry was not cleaned up, leaving the manager address blocked.
+        let sm = self
+            .services
+            .get(&id)
+            .ok()
+            .map(|s| s.manager.clone())
+            .or_else(|| {
+                self.service_registry
+                    .entries()
+                    .into_iter()
+                    .find(|e| ServiceId::from(&e.service_manager) == id)
+                    .map(|e| e.service_manager)
+            });
+
+        if let Some(sm) = sm {
             self.service_registry.remove(&sm)?;
         }
 
@@ -700,6 +838,16 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
         service_id: ServiceId,
     ) -> Result<SignerResponse, DispatcherError> {
         Ok(self.submission_manager.get_service_signer(service_id)?)
+    }
+
+    /// Returns a map from ServiceManager → HD index for all persisted registry entries.
+    /// Used by `cmd_start_wavs` to restore services with the correct signing key.
+    pub fn registry_hd_index_map(&self) -> std::collections::BTreeMap<ServiceManager, u32> {
+        self.service_registry
+            .entries()
+            .into_iter()
+            .map(|e| (e.service_manager, e.hd_index))
+            .collect()
     }
 
     #[instrument(skip(self), fields(subsys = "Dispatcher"))]

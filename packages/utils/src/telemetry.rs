@@ -16,22 +16,18 @@ use wavs_types::{ChainKey, Service, WorkflowId};
 
 const DEFAULT_PROMETHEUS_PUSH_INTERVAL: u64 = 30; // seconds
 
-pub fn setup_tracing(
-    collector: &str,
-    service_name: &str,
-    filters: tracing_subscriber::EnvFilter,
-) -> SdkTracerProvider {
+/// Build an OTLP/gRPC `SdkTracerProvider` without installing it globally.
+/// Callers are responsible for calling `global::set_tracer_provider` and
+/// composing the returned provider into their subscriber chain.
+pub fn build_tracer_provider(collector: &str, service_name: &str) -> SdkTracerProvider {
     global::set_text_map_propagator(opentelemetry_jaeger_propagator::Propagator::new());
-    let endpoint = format!("{collector}/v1/traces");
     let exporter = SpanExporter::builder()
         .with_tonic()
-        .with_endpoint(endpoint)
+        .with_endpoint(collector)
         .build()
         .expect("Failed to build OTLP exporter");
-
     let batch_processor = trace::BatchSpanProcessor::builder(exporter).build();
-
-    let provider = SdkTracerProvider::builder()
+    SdkTracerProvider::builder()
         .with_span_processor(batch_processor)
         .with_sampler(Sampler::AlwaysOn)
         .with_resource(
@@ -39,7 +35,15 @@ pub fn setup_tracing(
                 .with_service_name(service_name.to_owned())
                 .build(),
         )
-        .build();
+        .build()
+}
+
+pub fn setup_tracing(
+    collector: &str,
+    service_name: &str,
+    filters: tracing_subscriber::EnvFilter,
+) -> SdkTracerProvider {
+    let provider = build_tracer_provider(collector, service_name);
     global::set_tracer_provider(provider.clone());
     let tracer = provider.tracer(format!("{service_name}-tracer"));
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);

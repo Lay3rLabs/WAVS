@@ -1,18 +1,19 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use opentelemetry::global;
+use opentelemetry::{global, trace::TracerProvider as _};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utils::{
     config::{ConfigBuilder, ConfigExt},
     context::AppContext,
-    telemetry::{setup_metrics, setup_tracing, Metrics},
+    telemetry::{build_tracer_provider, setup_metrics, Metrics},
 };
 use wavs::{
     args::CliArgs,
     config::{Config, HealthCheckMode},
-    dispatcher::Dispatcher,
+    dispatcher::{Dispatcher, TauriHandle},
     health::SharedHealthStatus,
+    log_buffer::{InMemoryLogLayer, LogBufferInner},
 };
 
 fn main() {
@@ -26,11 +27,32 @@ fn main() {
 
     // setup tracing
     let filters = config.tracing_env_filter().unwrap();
+    let log_buffer =
+        LogBufferInner::with_capacity(config.log_buffer_capacity, config.log_broadcast_capacity);
+    // Only install the InMemoryLogLayer when dev endpoints are enabled;
+    // the layer clones and broadcasts every event, so skip the overhead in
+    // production configurations where /dev/logs is not registered.
+    let log_layer = config
+        .dev_endpoints_enabled
+        .then(|| InMemoryLogLayer::new(log_buffer.clone()));
     let tracer_provider = if let Some(collector) = config.jaeger.as_ref() {
-        Some(ctx.rt.block_on({
-            let config = config.clone();
-            async move { setup_tracing(collector, "wavs", config.tracing_env_filter().unwrap()) }
-        }))
+        let provider = build_tracer_provider(collector.as_str(), "wavs");
+        global::set_tracer_provider(provider.clone());
+        let tracer = provider.tracer("wavs-tracer");
+        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_line_number(true)
+                    .compact(),
+            )
+            .with(telemetry)
+            .with(log_layer)
+            .with(filters)
+            .try_init()
+            .unwrap();
+        tracing::info!("Jaeger tracing enabled");
+        Some(provider)
     } else {
         tracing_subscriber::registry()
             .with(
@@ -39,6 +61,7 @@ fn main() {
                     .with_target(false)
                     .compact(),
             )
+            .with(log_layer)
             .with(filters)
             .try_init()
             .unwrap();
@@ -114,9 +137,17 @@ fn main() {
     }
 
     let config_clone = config.clone();
-    let dispatcher = Arc::new(Dispatcher::new(&config_clone, metrics.wavs).unwrap());
+    let dispatcher =
+        Arc::new(Dispatcher::new(&config_clone, metrics.wavs, TauriHandle::Mock).unwrap());
 
-    wavs::run_server(ctx, config, dispatcher, metrics.http, health_status);
+    wavs::run_server(
+        ctx,
+        config,
+        dispatcher,
+        metrics.http,
+        health_status,
+        log_buffer,
+    );
 
     if let Some(tracer) = tracer_provider {
         if tracer.shutdown().is_err() {

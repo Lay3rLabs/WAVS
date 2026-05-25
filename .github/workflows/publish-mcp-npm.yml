@@ -1,0 +1,115 @@
+name: Publish wavs-mcp to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write  # needed to upload release assets
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Build platform binaries and upload to the GitHub release
+  # -------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            asset: wavs-mcp-aarch64-apple-darwin.tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            asset: wavs-mcp-x86_64-apple-darwin.tar.gz
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            asset: wavs-mcp-x86_64-unknown-linux-gnu.tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            asset: wavs-mcp-aarch64-unknown-linux-gnu.tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            asset: wavs-mcp-x86_64-pc-windows-msvc.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (aarch64 Linux)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Build wavs-mcp
+        run: cargo build --release --target ${{ matrix.target }} -p wavs-mcp
+
+      - name: Package binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          BINARY="target/${{ matrix.target }}/release/wavs-mcp"
+          tar -czf "${{ matrix.asset }}" -C "$(dirname $BINARY)" "$(basename $BINARY)"
+
+      - name: Package binary (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "target/${{ matrix.target }}/release/wavs-mcp.exe" `
+            -DestinationPath "${{ matrix.asset }}"
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.asset }}
+
+  # -------------------------------------------------------------------------
+  # Publish the npm package once all binaries are uploaded
+  # -------------------------------------------------------------------------
+  publish-npm:
+    name: Publish @wavs/mcp to npm
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Check if package version already exists on npm
+        id: npm_exists
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://registry.npmjs.org/@wavs/mcp/$VERSION")
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Package @wavs/mcp@$VERSION already exists on npm"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish to npm
+        if: steps.npm_exists.outputs.exists == 'false'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd packages/wavs-mcp
+          npm publish --access public

@@ -1,0 +1,34 @@
+[package]
+name = "wavs-app"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "wavs_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { workspace = true }
+
+[dependencies]
+wavs = { workspace = true, features = ["gui"] }
+wavs-types = { workspace = true, features = ["full"] }
+wavs-gui-shared = { workspace = true, features = ["backend"] }
+utils = { workspace = true }
+tauri = { workspace = true }
+tauri-plugin-dialog = { workspace = true }
+tauri-plugin-fs = { workspace = true }
+fix-path-env = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+log = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+anyhow = { workspace = true }
+keyring = "3"
+reqwest = { workspace = true, features = ["multipart"] }
+toml = { workspace = true }
+wasm-pkg-client = { workspace = true }
