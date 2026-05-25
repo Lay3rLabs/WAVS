@@ -15,8 +15,11 @@ use std::{
 use layer_climb::prelude::*;
 use tracing::instrument;
 use utils::{
-    async_transaction::AsyncTransaction, config::EvmChainConfigExt, context::AppContext,
-    evm_client::{EvmSigningClient, NonceManagerKind}, storage::db::WavsDb,
+    async_transaction::AsyncTransaction,
+    config::EvmChainConfigExt,
+    context::AppContext,
+    evm_client::{EvmSigningClient, NonceManagerKind},
+    storage::db::WavsDb,
     telemetry::AggregatorMetrics,
 };
 use wavs_engine::bindings::aggregator::world::AnyTxHash;
