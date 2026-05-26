@@ -608,6 +608,39 @@ async fn run_test(
                     vec![trigger_id]
                 }
             }
+            Trigger::SolanaProgramEvent {
+                chain, program_id, ..
+            } => {
+                use crate::e2e::solana_trigger::{self, Keypair, Signer};
+
+                let rpc_endpoint = clients.get_solana_endpoint(chain)?;
+                let payload = input_bytes
+                    .clone()
+                    .ok_or_else(|| anyhow!("SolanaProgramEvent trigger requires an input"))?;
+
+                let payer = Keypair::new();
+                solana_trigger::airdrop_payer(
+                    &rpc_endpoint,
+                    &payer.pubkey(),
+                    1_000_000_000, // 1 SOL, plenty for fees
+                    Duration::from_secs(30),
+                )
+                .await?;
+
+                let program_pubkey = solana_trigger::parse_program_id(&program_id.to_base58())?;
+                let outcome =
+                    solana_trigger::emit_event(&rpc_endpoint, program_pubkey, &payer, &payload)
+                        .await?;
+
+                tracing::info!(
+                    "Solana emit landed in slot {} with signature {}",
+                    outcome.slot,
+                    outcome.signature
+                );
+
+                // The relay component uses the slot as its trigger id.
+                vec![TriggerId::new(outcome.slot)]
+            }
             Trigger::Manual => unimplemented!("Manual trigger type is not implemented"),
         };
 

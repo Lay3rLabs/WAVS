@@ -13,6 +13,8 @@ pub enum ChainConfigError {
     ExpectedEvmChain,
     #[error("Expected Cosmos chain")]
     ExpectedCosmosChain,
+    #[error("Expected Solana chain")]
+    ExpectedSolanaChain,
     #[error("Invalid chain: {0}")]
     InvalidChainKey(#[from] ChainKeyError),
     #[error("Chain already exists: {0}")]
@@ -21,7 +23,9 @@ pub enum ChainConfigError {
     InvalidNamespaceForCosmos(ChainKeyNamespace),
     #[error("Namespace for cosmos chain must be {evm} or {dev}, got {0}", evm=ChainKeyNamespace::EVM, dev=ChainKeyNamespace::DEV)]
     InvalidNamespaceForEvm(ChainKeyNamespace),
-    #[error("Namespace must be one of {cosmos}, {evm}, or {dev}, got {0}", cosmos=ChainKeyNamespace::COSMOS, evm=ChainKeyNamespace::EVM, dev=ChainKeyNamespace::DEV)]
+    #[error("Namespace for solana chain must be {solana} or {dev}, got {0}", solana=ChainKeyNamespace::SOLANA, dev=ChainKeyNamespace::DEV)]
+    InvalidNamespaceForSolana(ChainKeyNamespace),
+    #[error("Namespace must be one of {cosmos}, {evm}, {solana}, or {dev}, got {0}", cosmos=ChainKeyNamespace::COSMOS, evm=ChainKeyNamespace::EVM, solana=ChainKeyNamespace::SOLANA, dev=ChainKeyNamespace::DEV)]
     InvalidNamespace(ChainKeyNamespace),
     #[error("Chain ID mismatch: expected {expected}, got {actual}")]
     IdMismatch {
@@ -80,11 +84,42 @@ impl From<EvmChainConfig> for ChainKey {
     }
 }
 
+/// Solana chain configuration.
+///
+/// `commitment` is the default commitment level used by trigger subscriptions
+/// when a trigger does not specify its own commitment. See
+/// [`crate::SolanaCommitment`] for the variants and their semantics.
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+pub struct SolanaChainConfig {
+    pub chain_id: ChainKeyId,
+    pub http_endpoint: Option<String>,
+    pub ws_endpoint: Option<String>,
+    pub faucet_endpoint: Option<String>,
+    #[serde(default)]
+    pub commitment: crate::SolanaCommitment,
+}
+
+impl From<&SolanaChainConfig> for ChainKey {
+    fn from(config: &SolanaChainConfig) -> Self {
+        ChainKey {
+            id: config.chain_id.clone(),
+            namespace: ChainKeyNamespace::SOLANA.parse().unwrap(),
+        }
+    }
+}
+
+impl From<SolanaChainConfig> for ChainKey {
+    fn from(config: SolanaChainConfig) -> Self {
+        (&config).into()
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AnyChainConfig {
     Cosmos(CosmosChainConfig),
     Evm(EvmChainConfig),
+    Solana(SolanaChainConfig),
 }
 
 impl From<&AnyChainConfig> for ChainKey {
@@ -92,6 +127,7 @@ impl From<&AnyChainConfig> for ChainKey {
         match config {
             AnyChainConfig::Cosmos(config) => config.into(),
             AnyChainConfig::Evm(config) => config.into(),
+            AnyChainConfig::Solana(config) => config.into(),
         }
     }
 }
@@ -107,6 +143,7 @@ impl AnyChainConfig {
         match self {
             AnyChainConfig::Cosmos(config) => &config.chain_id,
             AnyChainConfig::Evm(config) => &config.chain_id,
+            AnyChainConfig::Solana(config) => &config.chain_id,
         }
     }
 }
@@ -123,13 +160,21 @@ impl From<EvmChainConfig> for AnyChainConfig {
     }
 }
 
+impl From<SolanaChainConfig> for AnyChainConfig {
+    fn from(config: SolanaChainConfig) -> Self {
+        AnyChainConfig::Solana(config)
+    }
+}
+
 impl TryFrom<AnyChainConfig> for CosmosChainConfig {
     type Error = ChainConfigError;
 
     fn try_from(config: AnyChainConfig) -> Result<Self, Self::Error> {
         match config {
             AnyChainConfig::Cosmos(config) => Ok(config),
-            AnyChainConfig::Evm(_) => Err(ChainConfigError::ExpectedCosmosChain),
+            AnyChainConfig::Evm(_) | AnyChainConfig::Solana(_) => {
+                Err(ChainConfigError::ExpectedCosmosChain)
+            }
         }
     }
 }
@@ -140,7 +185,22 @@ impl TryFrom<AnyChainConfig> for EvmChainConfig {
     fn try_from(config: AnyChainConfig) -> Result<Self, Self::Error> {
         match config {
             AnyChainConfig::Evm(config) => Ok(config),
-            AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEvmChain),
+            AnyChainConfig::Cosmos(_) | AnyChainConfig::Solana(_) => {
+                Err(ChainConfigError::ExpectedEvmChain)
+            }
+        }
+    }
+}
+
+impl TryFrom<AnyChainConfig> for SolanaChainConfig {
+    type Error = ChainConfigError;
+
+    fn try_from(config: AnyChainConfig) -> Result<Self, Self::Error> {
+        match config {
+            AnyChainConfig::Solana(config) => Ok(config),
+            AnyChainConfig::Cosmos(_) | AnyChainConfig::Evm(_) => {
+                Err(ChainConfigError::ExpectedSolanaChain)
+            }
         }
     }
 }
@@ -210,14 +270,27 @@ impl AnyChainConfig {
     pub fn to_cosmos_config(&self) -> Result<CosmosChainConfig, ChainConfigError> {
         match self {
             AnyChainConfig::Cosmos(config) => Ok(config.clone()),
-            AnyChainConfig::Evm(_) => Err(ChainConfigError::ExpectedCosmosChain),
+            AnyChainConfig::Evm(_) | AnyChainConfig::Solana(_) => {
+                Err(ChainConfigError::ExpectedCosmosChain)
+            }
         }
     }
 
     pub fn to_evm_config(&self) -> Result<EvmChainConfig, ChainConfigError> {
         match self {
             AnyChainConfig::Evm(config) => Ok(config.clone()),
-            AnyChainConfig::Cosmos(_) => Err(ChainConfigError::ExpectedEvmChain),
+            AnyChainConfig::Cosmos(_) | AnyChainConfig::Solana(_) => {
+                Err(ChainConfigError::ExpectedEvmChain)
+            }
+        }
+    }
+
+    pub fn to_solana_config(&self) -> Result<SolanaChainConfig, ChainConfigError> {
+        match self {
+            AnyChainConfig::Solana(config) => Ok(config.clone()),
+            AnyChainConfig::Cosmos(_) | AnyChainConfig::Evm(_) => {
+                Err(ChainConfigError::ExpectedSolanaChain)
+            }
         }
     }
 
@@ -233,7 +306,7 @@ impl AnyChainConfig {
 }
 
 /// Chains are identified by `ChainKey`, which is a combination of a namespace and id
-/// for now - we natively support 3 namespaces: cosmos, evm, and dev
+/// for now - we natively support 4 namespaces: cosmos, evm, solana, and dev
 #[derive(Debug, Default, Deserialize, Serialize, Clone, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ChainConfigs {
@@ -243,6 +316,9 @@ pub struct ChainConfigs {
     /// EVM-style chains
     #[serde(default)]
     pub evm: BTreeMap<ChainKeyId, EvmChainConfigBuilder>,
+    /// Solana / SVM chains
+    #[serde(default)]
+    pub solana: BTreeMap<ChainKeyId, SolanaChainConfigBuilder>,
     /// DEV-only chains
     /// The key here can be different than the chain_id inside the config
     #[serde(default)]
@@ -260,6 +336,10 @@ impl ChainConfigs {
                 .evm
                 .get(&key.id)
                 .map(|c| AnyChainConfig::Evm(c.clone().build(key.id.clone()))),
+            ChainKeyNamespace::SOLANA => self
+                .solana
+                .get(&key.id)
+                .map(|c| AnyChainConfig::Solana(c.clone().build(key.id.clone()))),
             ChainKeyNamespace::DEV => self.dev.get(&key.id).cloned(),
             _ => None,
         }
@@ -273,6 +353,12 @@ impl ChainConfigs {
 
     pub fn evm_iter(&self) -> impl Iterator<Item = EvmChainConfig> + '_ {
         self.evm
+            .iter()
+            .map(|(id, config)| config.clone().build(id.clone()))
+    }
+
+    pub fn solana_iter(&self) -> impl Iterator<Item = SolanaChainConfig> + '_ {
+        self.solana
             .iter()
             .map(|(id, config)| config.clone().build(id.clone()))
     }
@@ -293,6 +379,12 @@ impl ChainConfigs {
         for id in self.cosmos.keys() {
             keys.push(ChainKey {
                 namespace: ChainKeyNamespace::COSMOS.parse()?,
+                id: id.clone(),
+            });
+        }
+        for id in self.solana.keys() {
+            keys.push(ChainKey {
+                namespace: ChainKeyNamespace::SOLANA.parse()?,
                 id: id.clone(),
             });
         }
@@ -318,6 +410,14 @@ impl ChainConfigs {
                 .collect(),
             ChainKeyNamespace::EVM => self
                 .evm
+                .keys()
+                .map(|id| ChainKey {
+                    namespace: namespace.clone(),
+                    id: id.clone(),
+                })
+                .collect(),
+            ChainKeyNamespace::SOLANA => self
+                .solana
                 .keys()
                 .map(|id| ChainKey {
                     namespace: namespace.clone(),
@@ -387,6 +487,24 @@ impl ChainConfigs {
                 }
                 _ => return Err(ChainConfigError::InvalidNamespaceForCosmos(key.namespace)),
             },
+            ChainKeyNamespace::SOLANA => match config {
+                AnyChainConfig::Solana(solana_config) => {
+                    if solana_config.chain_id != key.id {
+                        return Err(ChainConfigError::IdMismatch {
+                            expected: key.id,
+                            actual: solana_config.chain_id,
+                        });
+                    }
+                    let solana_config = SolanaChainConfigBuilder {
+                        http_endpoint: solana_config.http_endpoint,
+                        ws_endpoint: solana_config.ws_endpoint,
+                        faucet_endpoint: solana_config.faucet_endpoint,
+                        commitment: solana_config.commitment,
+                    };
+                    self.solana.insert(key.id, solana_config);
+                }
+                _ => return Err(ChainConfigError::InvalidNamespaceForSolana(key.namespace)),
+            },
             _ => return Err(ChainConfigError::InvalidNamespace(key.namespace)),
         }
 
@@ -435,5 +553,98 @@ impl EvmChainConfigBuilder {
             faucet_endpoint: self.faucet_endpoint,
             ws_priority_endpoint_index: self.ws_priority_endpoint_index,
         }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+pub struct SolanaChainConfigBuilder {
+    pub http_endpoint: Option<String>,
+    pub ws_endpoint: Option<String>,
+    pub faucet_endpoint: Option<String>,
+    #[serde(default)]
+    pub commitment: crate::SolanaCommitment,
+}
+
+impl SolanaChainConfigBuilder {
+    pub fn build(self, id: ChainKeyId) -> SolanaChainConfig {
+        SolanaChainConfig {
+            chain_id: id,
+            http_endpoint: self.http_endpoint,
+            ws_endpoint: self.ws_endpoint,
+            faucet_endpoint: self.faucet_endpoint,
+            commitment: self.commitment,
+        }
+    }
+}
+
+#[cfg(test)]
+mod solana_chain_config_tests {
+    use super::*;
+    use crate::SolanaCommitment;
+
+    fn sample() -> SolanaChainConfig {
+        SolanaChainConfig {
+            chain_id: "mainnet".parse().unwrap(),
+            http_endpoint: Some("https://api.mainnet-beta.solana.com".into()),
+            ws_endpoint: Some("wss://api.mainnet-beta.solana.com".into()),
+            faucet_endpoint: None,
+            commitment: SolanaCommitment::Confirmed,
+        }
+    }
+
+    #[test]
+    fn chain_key_from_solana_config() {
+        let config = sample();
+        let key: ChainKey = (&config).into();
+        assert_eq!(key.namespace.as_str(), ChainKeyNamespace::SOLANA);
+        assert_eq!(key.id.as_str(), "mainnet");
+    }
+
+    #[test]
+    fn any_chain_config_solana_round_trip() {
+        let config = sample();
+        let any: AnyChainConfig = config.clone().into();
+        let extracted: SolanaChainConfig = any.try_into().unwrap();
+        assert_eq!(extracted.chain_id, config.chain_id);
+        assert_eq!(extracted.commitment, config.commitment);
+    }
+
+    #[test]
+    fn try_from_solana_into_cosmos_fails() {
+        let any: AnyChainConfig = sample().into();
+        let res: Result<CosmosChainConfig, _> = any.try_into();
+        assert_eq!(res.unwrap_err(), ChainConfigError::ExpectedCosmosChain);
+    }
+
+    #[test]
+    fn try_from_solana_into_evm_fails() {
+        let any: AnyChainConfig = sample().into();
+        let res: Result<EvmChainConfig, _> = any.try_into();
+        assert_eq!(res.unwrap_err(), ChainConfigError::ExpectedEvmChain);
+    }
+
+    #[test]
+    fn add_chain_inserts_solana() {
+        let mut configs = ChainConfigs::default();
+        let config = sample();
+        let key: ChainKey = (&config).into();
+        configs
+            .add_chain(key.clone(), config.clone().into())
+            .unwrap();
+        let got = configs.get_chain(&key).unwrap();
+        assert!(matches!(got, AnyChainConfig::Solana(_)));
+    }
+
+    #[test]
+    fn add_chain_rejects_mismatched_id() {
+        let mut configs = ChainConfigs::default();
+        let mut config = sample();
+        config.chain_id = "mainnet".parse().unwrap();
+        let key = ChainKey {
+            namespace: ChainKeyNamespace::SOLANA.parse().unwrap(),
+            id: "devnet".parse().unwrap(),
+        };
+        let err = configs.add_chain(key, config.into()).unwrap_err();
+        assert!(matches!(err, ChainConfigError::IdMismatch { .. }));
     }
 }

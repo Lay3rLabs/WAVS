@@ -60,4 +60,28 @@ interface chain {
         ws-endpoints: list<string>,
         http-endpoint: option<string>,
     }
+
+    // A 32-byte Solana pubkey (program id, account address, PDA, etc.).
+    //
+    // The on-wire representation in trigger declarations is base58, but the
+    // WIT-level record carries the raw 32 bytes so components don't have to
+    // pull in a base58 decoder.
+    record solana-address {
+        raw-bytes: list<u8> // 32 bytes
+    }
+
+    // Commitment level for Solana subscriptions, mirroring the standard
+    // processed / confirmed / finalized levels exposed by Solana RPC.
+    variant solana-commitment {
+        processed,
+        confirmed,
+        finalized,
+    }
+
+    record solana-chain-config {
+        chain-id: string,
+        http-endpoint: option<string>,
+        ws-endpoint: option<string>,
+        commitment: solana-commitment,
+    }
 }

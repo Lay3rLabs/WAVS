@@ -1009,6 +1009,9 @@ pub async fn validate_service(
                     Trigger::EvmContractEvent { chain, .. } => {
                         chains_to_validate.insert((chain.clone(), ChainType::EVM));
                     }
+                    Trigger::SolanaProgramEvent { chain, .. } => {
+                        chains_to_validate.insert((chain.clone(), ChainType::Solana));
+                    }
                     Trigger::BlockInterval {
                         chain,
                         start_block,
@@ -1052,6 +1055,17 @@ pub async fn validate_service(
                                 ));
                             }
                         }
+                        Some(AnyChainConfig::Solana(_)) => {
+                            // Block-interval (slot-interval) triggers on
+                            // Solana are a v1.5 follow-up per the design
+                            // doc's "Non-Goals for v1" — see also the
+                            // BlockInterval arm in
+                            // `subsystems/trigger.rs`.
+                            errors.push(format!(
+                                "Workflow '{}' uses BlockInterval on Solana chain '{}', which is not yet supported (v1.5)",
+                                workflow_id, chain
+                            ));
+                        }
                     },
                     _ => {}
                 }
@@ -1083,6 +1097,7 @@ pub async fn validate_service(
         // Build maps of clients for chains actually used
         let mut cosmos_clients = HashMap::new();
         let mut evm_providers = HashMap::new();
+        let mut solana_clients = HashMap::new();
 
         // Only get clients for chains actually used in triggers or submits
         for (chain, chain_type) in chains_to_validate.iter() {
@@ -1097,17 +1112,23 @@ pub async fn validate_service(
                         evm_providers.insert(chain.clone(), client.provider.root().clone());
                     }
                 }
+                ChainType::Solana => {
+                    if let Ok(client) = ctx.new_solana_rpc_client(chain.id.clone()) {
+                        solana_clients.insert(chain.clone(), client);
+                    }
+                }
             }
         }
 
         // Validate that referenced contracts exist on-chain
-        if !cosmos_clients.is_empty() || !evm_providers.is_empty() {
+        if !cosmos_clients.is_empty() || !evm_providers.is_empty() || !solana_clients.is_empty() {
             if let Err(err) = validate_contracts_exist(
                 &service.name,
                 triggers,
                 service_manager,
                 &evm_providers,
                 &cosmos_clients,
+                &solana_clients,
                 &mut errors,
             )
             .await

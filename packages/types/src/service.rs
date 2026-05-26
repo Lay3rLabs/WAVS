@@ -13,7 +13,9 @@ use wasm_pkg_common::package::PackageRef;
 #[cfg(feature = "ts-bindings")]
 use ts_rs::TS;
 
-use crate::{ByteArray, ComponentDigest, ServiceDigest, Timestamp};
+use crate::{
+    ByteArray, ComponentDigest, ServiceDigest, SolanaAddress, SolanaCommitment, Timestamp,
+};
 
 use super::{ChainKey, ServiceId, WorkflowId};
 
@@ -338,8 +340,44 @@ pub enum Trigger {
         /// Feed key to filter on.
         feed_key: String,
     },
+    /// A Solana program emits an event (a log line / borsh-serialized event)
+    /// that matches `filter`.
+    ///
+    /// Replay-identity for the delivered [`TriggerData::SolanaProgramEvent`]
+    /// is `(slot, signature, instruction_index, inner_instruction_index,
+    /// log_index)`. See the SVM design doc.
+    SolanaProgramEvent {
+        /// The Solana chain to subscribe to.
+        chain: ChainKey,
+        /// The program id whose logs we filter on.
+        program_id: SolanaAddress,
+        /// How to identify the matching event within the program's logs.
+        filter: SolanaEventFilter,
+        /// Commitment level for the subscription. Defaults to `confirmed`.
+        #[serde(default)]
+        commitment: SolanaCommitment,
+    },
     // not a real trigger, just for testing
     Manual,
+}
+
+/// How a Solana program event is matched within a program's logs.
+///
+/// `Discriminator` matches against the leading bytes of an Anchor / borsh
+/// event payload (the most common shape for Anchor programs). `LogContains`
+/// matches a substring against the program log line for non-Anchor programs
+/// that emit human-readable logs.
+#[cfg_attr(feature = "ts-bindings", derive(TS))]
+#[cfg_attr(feature = "ts-bindings", ts(export))]
+#[derive(Hash, Serialize, Deserialize, Clone, Debug, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SolanaEventFilter {
+    /// Match against the leading discriminator bytes of the event payload.
+    /// Anchor uses an 8-byte SHA256-derived prefix; we accept any length so
+    /// callers can match arbitrary prefixes.
+    Discriminator(#[serde(with = "const_hex")] Vec<u8>),
+    /// Match against a substring of the program log line.
+    LogContains(String),
 }
 
 /// The data that came from the trigger and is passed to the component after being converted into the WIT-friendly type
@@ -427,6 +465,30 @@ pub enum TriggerData {
         /// Raw entry data
         data: Vec<u8>,
     },
+    /// Solana program event delivered to a component. The replay-identity
+    /// tuple `(slot, signature, instruction_index, inner_instruction_index,
+    /// log_index)` is sufficient to dedupe across reorgs at the configured
+    /// commitment level.
+    SolanaProgramEvent {
+        /// The Solana chain the event was observed on
+        chain: ChainKey,
+        /// The slot the event was observed in
+        slot: u64,
+        /// The transaction signature (base58)
+        signature: String,
+        /// Index of the matching instruction within the transaction
+        instruction_index: u32,
+        /// If the event came from an inner instruction, its index within the
+        /// outer instruction. `None` for top-level instructions.
+        inner_instruction_index: Option<u32>,
+        /// Index of the matching log line within the transaction
+        log_index: u32,
+        /// The program id that emitted the event
+        program_id: SolanaAddress,
+        /// The raw event payload (after stripping the program log prefix /
+        /// borsh-decoded). Encoding is program-specific.
+        data: Vec<u8>,
+    },
     Raw(Vec<u8>),
 }
 
@@ -449,6 +511,7 @@ impl TriggerData {
             TriggerData::Cron { .. } => "cron",
             TriggerData::AtProtoEvent { .. } => "atproto_event",
             TriggerData::HypercoreAppend { .. } => "hypercore_append",
+            TriggerData::SolanaProgramEvent { .. } => "solana_program_event",
             TriggerData::Raw(_) => "manual",
         }
     }
@@ -457,7 +520,8 @@ impl TriggerData {
         match self {
             TriggerData::CosmosContractEvent { chain, .. }
             | TriggerData::EvmContractEvent { chain, .. }
-            | TriggerData::BlockInterval { chain, .. } => Some(chain),
+            | TriggerData::BlockInterval { chain, .. }
+            | TriggerData::SolanaProgramEvent { chain, .. } => Some(chain),
             TriggerData::Cron { .. }
             | TriggerData::AtProtoEvent { .. }
             | TriggerData::HypercoreAppend { .. }
@@ -690,7 +754,8 @@ mod test_ext {
     };
 
     use crate::{
-        ByteArray, ChainKey, ChainKeyError, ComponentSource, ServiceId, WorkflowId, WorkflowIdError,
+        ByteArray, ChainKey, ChainKeyError, ComponentSource, ServiceId, SolanaEventFilter,
+        WorkflowId, WorkflowIdError,
     };
 
     use super::{Component, Trigger, TriggerConfig};
@@ -731,6 +796,19 @@ mod test_ext {
                 event_hash,
             }
         }
+        pub fn solana_program_event(
+            chain: impl TryInto<ChainKey, Error = ChainKeyError>,
+            program_id: crate::SolanaAddress,
+            filter: super::SolanaEventFilter,
+            commitment: crate::SolanaCommitment,
+        ) -> Self {
+            Trigger::SolanaProgramEvent {
+                chain: chain.try_into().unwrap(),
+                program_id,
+                filter,
+                commitment,
+            }
+        }
     }
 
     impl TriggerConfig {
@@ -762,6 +840,21 @@ mod test_ext {
             }
         }
 
+        pub fn solana_program_event(
+            service_id: ServiceId,
+            workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
+            chain: impl TryInto<ChainKey, Error = ChainKeyError>,
+            program_id: crate::SolanaAddress,
+            filter: SolanaEventFilter,
+            commitment: crate::SolanaCommitment,
+        ) -> Self {
+            Self {
+                service_id,
+                workflow_id: workflow_id.try_into().unwrap(),
+                trigger: Trigger::solana_program_event(chain, program_id, filter, commitment),
+            }
+        }
+
         pub fn block_interval_event(
             service_id: ServiceId,
             workflow_id: impl TryInto<WorkflowId, Error = WorkflowIdError>,
@@ -790,6 +883,90 @@ mod test_ext {
                 workflow_id: workflow_id.try_into().unwrap(),
                 trigger: Trigger::Manual,
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod solana_trigger_tests {
+    use super::*;
+    use crate::{SolanaAddress, SolanaCommitment};
+
+    const SYSTEM_PROGRAM: &str = "11111111111111111111111111111111";
+
+    fn sample_trigger() -> Trigger {
+        Trigger::SolanaProgramEvent {
+            chain: "solana:mainnet".parse().unwrap(),
+            program_id: SolanaAddress::from_base58(SYSTEM_PROGRAM).unwrap(),
+            filter: SolanaEventFilter::Discriminator(vec![1, 2, 3, 4, 5, 6, 7, 8]),
+            commitment: SolanaCommitment::Confirmed,
+        }
+    }
+
+    fn sample_trigger_data() -> TriggerData {
+        TriggerData::SolanaProgramEvent {
+            chain: "solana:mainnet".parse().unwrap(),
+            slot: 123_456_789,
+            signature: "5xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx".to_string(),
+            instruction_index: 0,
+            inner_instruction_index: None,
+            log_index: 0,
+            program_id: SolanaAddress::from_base58(SYSTEM_PROGRAM).unwrap(),
+            data: vec![1, 2, 3, 4],
+        }
+    }
+
+    #[test]
+    fn trigger_serde_round_trip() {
+        let trigger = sample_trigger();
+        let json = serde_json::to_string(&trigger).unwrap();
+        let back: Trigger = serde_json::from_str(&json).unwrap();
+        assert_eq!(trigger, back);
+    }
+
+    #[test]
+    fn trigger_data_serde_round_trip() {
+        let data = sample_trigger_data();
+        let json = serde_json::to_string(&data).unwrap();
+        let back: TriggerData = serde_json::from_str(&json).unwrap();
+        assert_eq!(data, back);
+    }
+
+    #[test]
+    fn trigger_data_trigger_type_is_solana_program_event() {
+        assert_eq!(sample_trigger_data().trigger_type(), "solana_program_event");
+    }
+
+    #[test]
+    fn trigger_data_chain_is_some_for_solana_event() {
+        let data = sample_trigger_data();
+        let chain = data.chain().expect("solana trigger data has a chain");
+        assert_eq!(chain.namespace.as_str(), "solana");
+    }
+
+    #[test]
+    fn solana_event_filter_log_contains_round_trip() {
+        let filter = SolanaEventFilter::LogContains("Program log: matched".to_string());
+        let json = serde_json::to_string(&filter).unwrap();
+        let back: SolanaEventFilter = serde_json::from_str(&json).unwrap();
+        assert_eq!(filter, back);
+    }
+
+    #[test]
+    fn trigger_commitment_defaults_to_confirmed_on_deserialize() {
+        // When the JSON omits `commitment`, `SolanaCommitment::default()` kicks in.
+        let json = serde_json::json!({
+            "solana_program_event": {
+                "chain": "solana:mainnet",
+                "program_id": SYSTEM_PROGRAM,
+                "filter": { "discriminator": "0102030405060708" },
+            }
+        });
+        let trigger: Trigger = serde_json::from_value(json).unwrap();
+        if let Trigger::SolanaProgramEvent { commitment, .. } = trigger {
+            assert_eq!(commitment, SolanaCommitment::Confirmed);
+        } else {
+            panic!("expected SolanaProgramEvent");
         }
     }
 }

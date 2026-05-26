@@ -6,7 +6,7 @@ interface service {
     type semver-version = string;
 
     use core.{digest, timestamp};
-    use chain.{chain-key, evm-address, cosmos-address};
+    use chain.{chain-key, evm-address, cosmos-address, solana-address, solana-commitment};
 
     // Service types
     record service {
@@ -94,6 +94,7 @@ interface service {
         cron(trigger-cron),
         atproto-event(trigger-atproto-event),
         hypercore-append(trigger-hypercore-append),
+        solana-program-event(trigger-solana-program-event),
         manual
     }
 
@@ -130,6 +131,20 @@ interface service {
 
     record trigger-hypercore-append {
         feed-key: string
+    }
+
+    // Filter for Solana program events. Either a discriminator match against
+    // the raw event data, or a substring match against the log line.
+    variant solana-event-filter {
+        discriminator(list<u8>),
+        log-contains(string),
+    }
+
+    record trigger-solana-program-event {
+        chain: chain-key,
+        program-id: solana-address,
+        filter: solana-event-filter,
+        commitment: solana-commitment,
     }
 
 

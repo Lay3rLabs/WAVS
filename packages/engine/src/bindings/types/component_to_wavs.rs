@@ -55,6 +55,52 @@ impl TryFrom<component_service::Trigger> for wavs_types::Trigger {
                     feed_key: source.feed_key,
                 }
             }
+            component_service::Trigger::SolanaProgramEvent(source) => {
+                wavs_types::Trigger::SolanaProgramEvent {
+                    chain: source.chain.parse()?,
+                    program_id: source.program_id.try_into()?,
+                    filter: source.filter.try_into()?,
+                    commitment: source.commitment.into(),
+                }
+            }
+        })
+    }
+}
+
+impl TryFrom<component_chain::SolanaAddress> for wavs_types::SolanaAddress {
+    type Error = anyhow::Error;
+
+    fn try_from(address: component_chain::SolanaAddress) -> Result<Self, Self::Error> {
+        let bytes: [u8; 32] = address
+            .raw_bytes
+            .as_slice()
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Solana address must be 32 bytes"))?;
+        Ok(wavs_types::SolanaAddress::new(bytes))
+    }
+}
+
+impl From<component_chain::SolanaCommitment> for wavs_types::SolanaCommitment {
+    fn from(src: component_chain::SolanaCommitment) -> Self {
+        match src {
+            component_chain::SolanaCommitment::Processed => wavs_types::SolanaCommitment::Processed,
+            component_chain::SolanaCommitment::Confirmed => wavs_types::SolanaCommitment::Confirmed,
+            component_chain::SolanaCommitment::Finalized => wavs_types::SolanaCommitment::Finalized,
+        }
+    }
+}
+
+impl TryFrom<component_service::SolanaEventFilter> for wavs_types::SolanaEventFilter {
+    type Error = anyhow::Error;
+
+    fn try_from(src: component_service::SolanaEventFilter) -> Result<Self, Self::Error> {
+        Ok(match src {
+            component_service::SolanaEventFilter::Discriminator(bytes) => {
+                wavs_types::SolanaEventFilter::Discriminator(bytes)
+            }
+            component_service::SolanaEventFilter::LogContains(s) => {
+                wavs_types::SolanaEventFilter::LogContains(s)
+            }
         })
     }
 }

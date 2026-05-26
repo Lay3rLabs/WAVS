@@ -66,6 +66,29 @@ interface chain {
     ws-endpoints: list<string>,
     http-endpoint: option<string>,
   }
+
+  /// A 32-byte Solana pubkey (program id, account address, PDA, etc.).
+  ///
+  /// The on-wire representation in trigger declarations is base58, but the
+  /// WIT-level record carries the raw 32 bytes so components don't have to
+  /// pull in a base58 decoder.
+  record solana-address {
+    raw-bytes: list<u8>,
+  }
+
+  /// Commitment level for Solana subscriptions.
+  variant solana-commitment {
+    processed,
+    confirmed,
+    finalized,
+  }
+
+  record solana-chain-config {
+    chain-id: string,
+    http-endpoint: option<string>,
+    ws-endpoint: option<string>,
+    commitment: solana-commitment,
+  }
 }
 
 interface core {
@@ -98,7 +121,7 @@ interface core {
 }
 
 interface events {
-  use chain.{chain-key, evm-address, evm-event-log, cosmos-address, cosmos-event};
+  use chain.{chain-key, evm-address, evm-event-log, cosmos-address, cosmos-event, solana-address, solana-commitment};
   use core.{timestamp};
 
   type event-id = list<u8>;
@@ -144,6 +167,23 @@ interface events {
     data: list<u8>,
   }
 
+  /// Per-occurrence Solana log/event data delivered to the operator
+  /// component. The (slot, signature, instruction-index,
+  /// inner-instruction-index, log-index) tuple is the replay-identity
+  /// tuple from the SVM design doc.
+  record trigger-data-solana-program-event {
+    chain: chain-key,
+    slot: u64,
+    signature: string,
+    instruction-index: u32,
+    /// None for top-level instructions, Some(i) for inner-instruction at
+    /// index i.
+    inner-instruction-index: option<u32>,
+    log-index: u32,
+    program-id: solana-address,
+    data: list<u8>,
+  }
+
   /// 20-byte unique hash
   variant trigger-data {
     evm-contract-event(trigger-data-evm-contract-event),
@@ -152,13 +192,14 @@ interface events {
     cron(trigger-data-cron),
     atproto-event(trigger-data-atproto-event),
     hypercore-append(trigger-data-hypercore-append),
+    solana-program-event(trigger-data-solana-program-event),
     raw(list<u8>),
   }
 }
 
 interface service {
   use core.{digest, timestamp};
-  use chain.{chain-key, evm-address, cosmos-address};
+  use chain.{chain-key, evm-address, cosmos-address, solana-address, solana-commitment};
 
   /// Basic types
   type service-id = string;
@@ -266,6 +307,20 @@ interface service {
     feed-key: string,
   }
 
+  /// Filter for Solana program events. Either a discriminator match against
+  /// the raw event data, or a substring match against the log line.
+  variant solana-event-filter {
+    discriminator(list<u8>),
+    log-contains(string),
+  }
+
+  record trigger-solana-program-event {
+    chain: chain-key,
+    program-id: solana-address,
+    filter: solana-event-filter,
+    commitment: solana-commitment,
+  }
+
   /// Trigger types
   variant trigger {
     evm-contract-event(trigger-evm-contract-event),
@@ -274,6 +329,7 @@ interface service {
     cron(trigger-cron),
     atproto-event(trigger-atproto-event),
     hypercore-append(trigger-hypercore-append),
+    solana-program-event(trigger-solana-program-event),
     manual,
   }
 

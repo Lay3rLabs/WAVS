@@ -12,6 +12,7 @@ use wavs_types::{
 pub enum ChainType {
     Cosmos,
     EVM,
+    Solana,
 }
 
 /// Result of service initialization
@@ -164,6 +165,18 @@ impl std::fmt::Display for WorkflowTriggerResult {
             Trigger::HypercoreAppend { feed_key } => {
                 writeln!(f, "  Trigger Type: Hypercore Append")?;
                 writeln!(f, "    Feed Key: {}", feed_key)?;
+            }
+            Trigger::SolanaProgramEvent {
+                chain,
+                program_id,
+                filter,
+                commitment,
+            } => {
+                writeln!(f, "  Trigger Type: Solana Program Event")?;
+                writeln!(f, "    Chain:      {}", chain)?;
+                writeln!(f, "    Program ID: {}", program_id)?;
+                writeln!(f, "    Filter:     {:?}", filter)?;
+                writeln!(f, "    Commitment: {}", commitment)?;
             }
         }
 

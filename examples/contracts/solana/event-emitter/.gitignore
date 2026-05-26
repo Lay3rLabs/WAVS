@@ -1,0 +1,10 @@
+.anchor
+.DS_Store
+target/
+node_modules/
+test-ledger/
+
+# Anchor build/test artifacts
+*.so
+*-keypair.json
+Cargo.lock

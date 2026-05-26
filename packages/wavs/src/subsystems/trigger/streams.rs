@@ -5,11 +5,13 @@ pub mod evm_stream;
 pub mod hypercore_protocol;
 pub mod hypercore_stream;
 pub mod local_command_stream;
+pub mod solana_stream;
 
 use self::hypercore_stream::HypercoreAppendEvent;
 use crate::subsystems::trigger::{
     streams::atproto_jetstream::AtProtoEvent,
-    streams::cosmos_stream::StreamTriggerCosmosContractEvent, TriggerCommand,
+    streams::cosmos_stream::StreamTriggerCosmosContractEvent,
+    streams::solana_stream::SolanaStreamLog, TriggerCommand,
 };
 
 use super::{error::TriggerError, lookup::LookupId};
@@ -69,5 +71,14 @@ pub enum StreamTriggers {
     },
     Hypercore {
         event: HypercoreAppendEvent,
+    },
+    /// One Solana transaction's parsed log lines, all sharing the same
+    /// `(slot, signature)` replay-identity prefix. The dispatcher walks
+    /// `logs` and tests each entry's `program_id` + raw log against the
+    /// registered per-trigger filters.
+    Solana {
+        chain: ChainKey,
+        slot: u64,
+        logs: Vec<SolanaStreamLog>,
     },
 }
