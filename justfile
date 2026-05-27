@@ -181,6 +181,14 @@ cosmwasm-build-inner CONTRACT_PATH:
 test-wavs-e2e:
     ulimit -n 65536 && RUST_LOG=debug,alloy_rpc=off,alloy_provider=off,wasmtime=off,cranelift=off,hyper_util=off cargo test -p layer-tests
 
+# reusable integration test harness — local Anvil + in-process runner (deterministic, no fork required)
+test-harness:
+    cargo test -p wavs-test-harness
+
+# reusable integration test harness — pinned-fork tier (requires FORK_RPC_URL)
+test-harness-fork:
+    cargo test -p wavs-test-harness --features fork
+
 update-submodules:
     git submodule update --init --recursive
 

@@ -1,0 +1,22 @@
+# Ethereum mainnet profile for fork-tier tests.
+#
+# Address set is intentionally minimal. Downstream apps should layer on
+# protocol-specific addresses by composing their own profile or by passing an
+# augmented profile via ChainProfile::from_path.
+
+[chain]
+name = "mainnet"
+chain_id = 1
+rpc_env = "FORK_RPC_URL"
+
+[addresses]
+usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+weth = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+usdt = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+dai = "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+
+# Aave v3 mainnet
+aave_v3_pool = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
+
+[accounts]
+funded_key_env = "FUNDED_KEY"

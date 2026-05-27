@@ -1,0 +1,64 @@
+[package]
+name = "wavs-test-harness"
+description = "Reusable integration test harness for WAVS apps — chain control, service lifecycle, and contract assertions"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+# Features are additive. `fork` and `inproc` are on by default because the harness
+# is only useful when at least one runner tier is enabled. `subprocess` is preview
+# and stays off by default to keep the dep graph small.
+#
+# Consumers should add `wavs-test-harness` as a [dev-dependencies] entry only —
+# never as a regular dependency — to keep the `utils/test-utils` feature out of
+# their production builds.
+[features]
+default = ["fork", "inproc"]
+fork = []
+inproc = []
+subprocess = []
+
+[dependencies]
+utils = { workspace = true, features = ["test-utils"] }
+wavs-types = { workspace = true, features = ["full"] }
+wavs-engine = { workspace = true }
+wasmtime = { workspace = true }
+tempfile = { workspace = true }
+
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+toml = { workspace = true }
+url = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+alloy-contract = { workspace = true }
+alloy-network = { workspace = true }
+alloy-node-bindings = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-provider = { workspace = true, features = ["anvil-api", "anvil-node"] }
+alloy-signer = { workspace = true }
+alloy-signer-local = { workspace = true }
+alloy-sol-types = { workspace = true }
+alloy-sol-macro = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
+
+# Subprocess runner-only deps. Cheap enough to leave outside the feature gate.
+reqwest = { workspace = true, features = ["json"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tokio = { workspace = true }
+tempfile = { workspace = true }
+temp-env = { workspace = true }

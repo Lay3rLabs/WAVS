@@ -6,6 +6,7 @@ members = [
     "packages/engine",
     "packages/gui/shared",
     "packages/layer-tests",
+    "packages/test-harness",
     "packages/types",
     "packages/utils",
     "packages/version-pins",
@@ -282,6 +283,7 @@ awsm_web = {version = "0.45.0", default-features = false, features = ["dom", "fi
 # local
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
+wavs-test-harness = { path = "packages/test-harness" }
 wavs-engine = { path = "packages/engine" }
 wavs-types = { path = "packages/types" }
 wavs-cli = { path = "packages/cli" }
