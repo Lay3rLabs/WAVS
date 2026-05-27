@@ -147,9 +147,9 @@ alloy-eips = "1.0.42"
 alloy-network-primitives = "1.0.42"
 alloy-serde = "1.0.42"
 alloy-tx-macros = "1.0.42"
-alloy-eip2930 = "0.2.1"
-alloy-eip7702 = "0.6.1"
-alloy-json-rpc = "1.6.3"
+alloy-eip2930 = "=0.2.1"
+alloy-eip7702 = "=0.6.1"
+alloy-json-rpc = "=1.6.3"
 
 layer-climb = "0.9.0"
 layer-climb-address = { version = "0.9.0", features = [

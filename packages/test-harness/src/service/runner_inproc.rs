@@ -49,6 +49,7 @@ pub struct InProcRunner {
     service: Service,
     workflow_id: WorkflowId,
     chain_configs: ChainConfigs,
+    engine: WTEngine,
 }
 
 impl InProcRunner {
@@ -79,6 +80,7 @@ impl InProcRunner {
             service,
             workflow_id,
             chain_configs: spec.chain_configs_ref().clone(),
+            engine: build_engine()?,
         })
     }
 
@@ -137,7 +139,6 @@ impl InProcRunner {
         &self,
         trigger_action: TriggerAction,
     ) -> Result<Vec<WasmResponse>> {
-        let engine = build_engine()?;
         let data_dir = tempfile::tempdir()?;
         let keyvalue_ctx = KeyValueCtx::new(WavsDb::new()?, "test".to_string());
 
@@ -145,9 +146,9 @@ impl InProcRunner {
             workflow_id: self.workflow_id.clone(),
             service: self.service.clone(),
             data: InstanceData::new_operator(trigger_action.data.clone()),
-            component: WasmtimeComponent::new(&engine, &self.component_bytes)
+            component: WasmtimeComponent::new(&self.engine, &self.component_bytes)
                 .map_err(|e| anyhow!("instantiate operator component: {e}"))?,
-            engine: &engine,
+            engine: &self.engine,
             data_dir: data_dir.path().to_path_buf(),
             chain_configs: &self.chain_configs,
             log: HostComponentLogger::OperatorHostComponentLogger(log_host),
@@ -179,7 +180,6 @@ impl InProcRunner {
         event_id: EventId,
         input: AggregatorInput,
     ) -> Result<Vec<AggregatorAction>> {
-        let engine = build_engine()?;
         let data_dir = tempfile::tempdir()?;
         let keyvalue_ctx = KeyValueCtx::new(WavsDb::new()?, "test-agg".to_string());
 
@@ -191,9 +191,9 @@ impl InProcRunner {
             workflow_id: agg_wf,
             service: agg_service,
             data: InstanceData::new_aggregator(event_id),
-            component: WasmtimeComponent::new(&engine, &self.aggregator_bytes)
+            component: WasmtimeComponent::new(&self.engine, &self.aggregator_bytes)
                 .map_err(|e| anyhow!("instantiate aggregator component: {e}"))?,
-            engine: &engine,
+            engine: &self.engine,
             data_dir: data_dir.path().to_path_buf(),
             chain_configs: &self.chain_configs,
             log: HostComponentLogger::AggregatorHostComponentLogger(log_host_agg),

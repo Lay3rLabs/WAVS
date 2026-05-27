@@ -127,11 +127,13 @@ pub fn sign_envelope(
         signer_addrs.push(s.address());
         sigs.push(sig.as_bytes().to_vec().into());
     }
-    Ok(SignatureData {
+    let mut sigdata = SignatureData {
         signers: signer_addrs,
         signatures: sigs,
         referenceBlock: reference_block,
-    })
+    };
+    sort_signature_data(&mut sigdata);
+    Ok(sigdata)
 }
 
 /// Build a 20-byte event id from a 32-byte seed (typically a transaction hash or
@@ -222,8 +224,8 @@ where
 /// Sort signers (and their signatures) ascending by address — required by
 /// `SimpleServiceManager` and `WavsServiceManager.validate()`. Mutates in place.
 ///
-/// Call this *after* [`sign_envelope`] but *before* submitting if signers were
-/// not registered in sorted order.
+/// [`sign_envelope`] calls this automatically. This helper remains public for
+/// callers that manually construct or modify [`SignatureData`].
 pub fn sort_signature_data(sigdata: &mut SignatureData) {
     let mut indices: Vec<usize> = (0..sigdata.signers.len()).collect();
     indices.sort_by_key(|i| sigdata.signers[*i]);
@@ -273,6 +275,17 @@ mod tests {
         // Sanity: signature is 65 bytes (r || s || v).
         let sig_bytes: &Bytes = &sigdata.signatures[0];
         assert_eq!(sig_bytes.len(), 65);
+    }
+
+    #[test]
+    fn sign_envelope_sorts_signers_ascending() {
+        let high = PrivateKeySigner::from_slice(&[0xf0; 32]).unwrap();
+        let low = PrivateKeySigner::from_slice(&[0x01; 32]).unwrap();
+        let env = Envelope::new(event_id_from_nonce(9), vec![0xbb]);
+        let sigdata = sign_envelope(&env, &[high.clone(), low.clone()], 0).unwrap();
+
+        assert_eq!(sigdata.signers, vec![low.address(), high.address()]);
+        assert_eq!(sigdata.signatures.len(), 2);
     }
 
     #[test]

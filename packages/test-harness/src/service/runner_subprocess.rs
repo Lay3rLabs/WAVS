@@ -41,7 +41,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use tokio::{io::AsyncReadExt, process::Child};
+use tokio::{io::AsyncReadExt, process::Child, task::JoinHandle};
 
 use crate::service::ServiceSpec;
 
@@ -152,6 +152,7 @@ pub struct SubprocessRunner {
     _home_dir: Option<tempfile::TempDir>,
     _data_dir: Option<tempfile::TempDir>,
     http: reqwest::Client,
+    log_forwarders: Vec<JoinHandle<()>>,
 }
 
 impl SubprocessRunner {
@@ -172,6 +173,7 @@ impl SubprocessRunner {
                 .timeout(Duration::from_secs(10))
                 .build()
                 .context("build reqwest client")?,
+            log_forwarders: Vec::new(),
         })
     }
 
@@ -260,31 +262,13 @@ impl SubprocessRunner {
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
         let log_buf = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
-        if let Some(mut s) = stdout {
-            let buf = log_buf.clone();
-            tokio::spawn(async move {
-                let mut tmp = [0u8; 4096];
-                while let Ok(n) = s.read(&mut tmp).await {
-                    if n == 0 {
-                        break;
-                    }
-                    let chunk = String::from_utf8_lossy(&tmp[..n]).into_owned();
-                    buf.lock().unwrap().push_str(&chunk);
-                }
-            });
+        if let Some(s) = stdout {
+            self.log_forwarders
+                .push(spawn_log_forwarder(s, log_buf.clone()));
         }
-        if let Some(mut s) = stderr {
-            let buf = log_buf.clone();
-            tokio::spawn(async move {
-                let mut tmp = [0u8; 4096];
-                while let Ok(n) = s.read(&mut tmp).await {
-                    if n == 0 {
-                        break;
-                    }
-                    let chunk = String::from_utf8_lossy(&tmp[..n]).into_owned();
-                    buf.lock().unwrap().push_str(&chunk);
-                }
-            });
+        if let Some(s) = stderr {
+            self.log_forwarders
+                .push(spawn_log_forwarder(s, log_buf.clone()));
         }
 
         self.child = Some(child);
@@ -385,14 +369,15 @@ impl SubprocessRunner {
         }
 
         let exit = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
-        match exit {
-            Ok(Ok(status)) => Ok(status),
+        let status = match exit {
+            Ok(Ok(status)) => status,
             _ => {
                 let _ = child.kill().await;
-                let status = child.wait().await.context("await sigkilled child")?;
-                Ok(status)
+                child.wait().await.context("await sigkilled child")?
             }
-        }
+        };
+        self.join_log_forwarders().await;
+        Ok(status)
     }
 }
 
@@ -402,7 +387,41 @@ impl Drop for SubprocessRunner {
             // Best-effort cleanup; can't await in Drop.
             let _ = child.start_kill();
         }
+        self.abort_log_forwarders();
     }
+}
+
+impl SubprocessRunner {
+    async fn join_log_forwarders(&mut self) {
+        for handle in self.log_forwarders.drain(..) {
+            let _ = tokio::time::timeout(Duration::from_secs(1), handle).await;
+        }
+    }
+
+    fn abort_log_forwarders(&mut self) {
+        for handle in self.log_forwarders.drain(..) {
+            handle.abort();
+        }
+    }
+}
+
+fn spawn_log_forwarder<R>(
+    mut reader: R,
+    buf: std::sync::Arc<std::sync::Mutex<String>>,
+) -> JoinHandle<()>
+where
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut tmp = [0u8; 4096];
+        while let Ok(n) = reader.read(&mut tmp).await {
+            if n == 0 {
+                break;
+            }
+            let chunk = String::from_utf8_lossy(&tmp[..n]).into_owned();
+            buf.lock().unwrap().push_str(&chunk);
+        }
+    })
 }
 
 // ---------------------------------------------------------------------------

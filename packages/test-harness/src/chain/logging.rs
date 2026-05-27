@@ -3,15 +3,21 @@
 //! Never log raw RPC URLs or private keys. Use [`redact_url`] / [`redact_key`] anywhere
 //! a sensitive value crosses into a log line.
 
-/// Redact an RPC URL down to a non-identifying suffix.
+/// Redact an RPC URL without leaking credentials, query strings, or fragments.
 ///
-/// Returns `…<last-8-chars>` for strings longer than 8 characters, otherwise `…<input>`.
-/// This is enough to disambiguate which provider is in use without leaking the API key.
+/// Keeps only scheme, host, and port. Paths, query strings, fragments, and userinfo
+/// are removed because provider API keys commonly appear there.
 pub fn redact_url(url: &str) -> String {
-    if url.len() > 8 {
-        format!("…{}", &url[url.len() - 8..])
-    } else {
-        format!("…{url}")
+    match url::Url::parse(url) {
+        Ok(parsed) => {
+            let scheme = parsed.scheme();
+            let host = parsed.host_str().unwrap_or("redacted");
+            match parsed.port() {
+                Some(port) => format!("{scheme}://{host}:{port}/…"),
+                None => format!("{scheme}://{host}/…"),
+            }
+        }
+        Err(_) => "<redacted-url>".to_string(),
     }
 }
 
@@ -33,10 +39,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn redacts_long_urls_to_suffix() {
-        let s = redact_url("https://api.example.com/v1/abc123XYZ");
-        assert_eq!(s, "…bc123XYZ");
-        assert!(!s.contains("example"));
+    fn redacts_url_paths_queries_fragments_and_credentials() {
+        let s = redact_url("https://user:secret@api.example.com/v1/abc123XYZ?key=leak#frag");
+        assert_eq!(s, "https://api.example.com/…");
+        assert!(!s.contains("secret"));
+        assert!(!s.contains("abc123XYZ"));
+        assert!(!s.contains("key="));
+        assert!(!s.contains("frag"));
     }
 
     #[test]
@@ -48,7 +57,7 @@ mod tests {
 
     #[test]
     fn redacts_short_inputs_safely() {
-        assert_eq!(redact_url("x"), "…x");
+        assert_eq!(redact_url("x"), "<redacted-url>");
         assert_eq!(redact_key("0xab"), "<redacted>");
     }
 }

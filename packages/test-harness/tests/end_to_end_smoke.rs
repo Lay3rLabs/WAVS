@@ -226,8 +226,11 @@ async fn validate_rejects_out_of_order_signers() {
     } else {
         0
     } as u32;
-    // Submit with `high` first to trigger InvalidSignatureOrder.
-    let sigdata = sign_envelope(&env_msg, &[high, low], reference_block).unwrap();
+    // sign_envelope sorts automatically for harness safety; manually break the
+    // ordering here to keep coverage for the handler's InvalidSignatureOrder path.
+    let mut sigdata = sign_envelope(&env_msg, &[high, low], reference_block).unwrap();
+    sigdata.signers.reverse();
+    sigdata.signatures.reverse();
 
     let res = handler.submit_envelope(&env_msg, &sigdata).await;
     assert!(
@@ -271,9 +274,9 @@ async fn sort_signature_data_lets_submission_succeed() {
         0
     } as u32;
 
-    // Build sigdata in the wrong order on purpose, then sort.
-    let mut sigdata = sign_envelope(&env_msg, &[high, low], reference_block).unwrap();
-    envelope::sort_signature_data(&mut sigdata);
+    // Build sigdata from callers in the wrong order; sign_envelope sorts it
+    // automatically before returning.
+    let sigdata = sign_envelope(&env_msg, &[high, low], reference_block).unwrap();
 
     let receipt = handler
         .submit_envelope(&env_msg, &sigdata)

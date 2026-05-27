@@ -215,8 +215,8 @@ or `ChainProfile::from_toml_str(...)`.
   gives deterministic block production. Pair with `chain::set_next_block_timestamp`
   for tests that depend on block timestamps.
 - **Snapshot / revert.** `chain::SnapshotGuard::take(&provider)` captures
-  state; explicit `.revert(&provider)` rolls back. The guard logs a warning
-  if dropped without explicit revert (async-drop is unstable).
+  state; explicit `.revert(&provider)` rolls back. The guard panics if
+  dropped without explicit revert (async-drop is unstable).
 - **Operator signing.** All envelope signatures are deterministic for a given
   signer key. Use the same operator set across re-runs to keep signature
   bytes stable.
