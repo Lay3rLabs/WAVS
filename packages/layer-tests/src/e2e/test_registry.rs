@@ -6,11 +6,13 @@ use example_types::{
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use wavs_types::AtProtoAction;
 
 use super::clients::Clients;
 use super::components::{AggregatorComponent, ComponentName, OperatorComponent};
 use super::config::CRON_INTERVAL_DATA;
+use super::handles::hypercore::HypercoreClients;
 use super::matrix::{CosmosService, CrossChainService, EvmService, TestMatrix};
 use super::test_definition::{
     AggregatorDefinition, CosmosTriggerDefinition, EvmTriggerDefinition, ExpectedOutput, InputData,
@@ -37,34 +39,10 @@ pub enum CosmosContractDefinition {
     Submit(CosmosSubmitDefinition),
 }
 
-use super::handles::hypercore::HypercoreTestClient;
-
-/// Factory data to create a hypercore test client
-#[derive(Clone)]
-pub struct HypercoreClientFactory {
-    pub test_name: String,
-    pub hyperswarm_bootstrap: Option<String>,
-    pub signing_key_bytes: Vec<u8>,
-}
-
 /// Registry for managing test definitions and their deployed services
+#[derive(Default)]
 pub struct TestRegistry {
     tests: Vec<TestDefinition>,
-    /// Map of test name to hypercore client factory for real hypercore e2e tests
-    /// Client is created just before test runs to avoid DHT announcement expiration
-    hypercore_client_factories: DashMap<String, HypercoreClientFactory>,
-    /// Map of test name to actually created hypercore test client
-    hypercore_clients: DashMap<String, Arc<HypercoreTestClient>>,
-}
-
-impl Default for TestRegistry {
-    fn default() -> Self {
-        Self {
-            tests: Vec::new(),
-            hypercore_client_factories: DashMap::new(),
-            hypercore_clients: DashMap::new(),
-        }
-    }
 }
 
 impl TestRegistry {
@@ -101,52 +79,16 @@ impl TestRegistry {
         self.tests.iter()
     }
 
-    /// Get a hypercore test client by test name
-    pub fn get_hypercore_client(&self, test_name: &str) -> Option<Arc<HypercoreTestClient>> {
-        self.hypercore_clients.get(test_name).map(|v| v.clone())
-    }
-
-    // Store a hypercore client factory for a test (client will be created later)
-    // pub fn insert_hypercore_client_factory(
-    //     &self,
-    //     test_name: String,
-    //     factory: HypercoreClientFactory,
-    // ) {
-    //     self.hypercore_client_factories.insert(test_name, factory);
-    // }
-
-    /// Create hypercore clients from factories for all tests that need them
-    /// Called right before tests run to ensure DHT announcements are fresh
-    pub async fn create_hypercore_clients(&self) -> anyhow::Result<()> {
-        for entry in self.hypercore_client_factories.iter() {
-            let test_name = entry.key();
-            let factory = entry.value();
-            if !self.hypercore_clients.contains_key(test_name) {
-                tracing::info!(
-                    "Creating hypercore client for test '{}' right before test execution",
-                    test_name
-                );
-                let client = HypercoreTestClient::new(
-                    &factory.test_name,
-                    factory.hyperswarm_bootstrap.clone(),
-                    &factory.signing_key_bytes,
-                )
-                .await?;
-                self.hypercore_clients
-                    .insert(test_name.clone(), Arc::new(client));
-            }
-        }
-        Ok(())
-    }
-
-    /// Create a registry based on the test mode
+    /// Create a registry based on the test mode.
+    /// Returns the registry and a `HypercoreClients` with any pending entries
+    /// that were registered during test definition.
     pub async fn from_test_mode(
         test_mode: crate::config::TestMode,
         chain_configs: Arc<RwLock<ChainConfigs>>,
         clients: &Clients,
         cosmos_code_map: &CosmosCodeMap,
-        //hyperswarm_bootstrap: Option<String>,
-    ) -> Self {
+        hyperswarm_bootstrap: Option<String>,
+    ) -> (Self, HypercoreClients) {
         // Convert TestMode to TestMatrix
         let matrix: TestMatrix = test_mode.into();
 
@@ -154,6 +96,7 @@ impl TestRegistry {
         let chains = ChainKeys::from_config(&chain_configs.read().unwrap());
 
         let mut registry = Self::new();
+        let mut hypercore_clients = HypercoreClients::new();
 
         // Process EVM services
         for service in &matrix.evm {
@@ -166,12 +109,15 @@ impl TestRegistry {
                 EvmService::AtprotoEchoData => {
                     registry.register_evm_atproto_echo_data_test(chain);
                 }
-                // #[cfg(feature = "hypercore-tests")]
-                // EvmService::HypercoreEchoData => {
-                //     registry
-                //         .register_evm_hypercore_echo_data_test(chain, hyperswarm_bootstrap.clone())
-                //         .await;
-                // }
+                EvmService::HypercoreEchoData => {
+                    registry
+                        .register_evm_hypercore_echo_data_test(
+                            chain,
+                            hyperswarm_bootstrap.clone(),
+                            &mut hypercore_clients,
+                        )
+                        .await;
+                }
                 EvmService::EchoDataSecondaryChain => {
                     let secondary = chains.secondary_evm().unwrap();
                     registry.register_evm_echo_data_secondary_chain_test(secondary);
@@ -290,7 +236,7 @@ impl TestRegistry {
             }
         }
 
-        registry
+        (registry, hypercore_clients)
     }
 
     // Helper function to create simple aggregator configuration
@@ -356,63 +302,60 @@ impl TestRegistry {
         )
     }
 
-    // #[cfg(feature = "hypercore-tests")]
-    // async fn register_evm_hypercore_echo_data_test(
-    //     &mut self,
-    //     chain: &ChainKey,
-    //     hyperswarm_bootstrap: Option<String>,
-    // ) -> &mut Self {
-    //     // Generate signing key now to get feed_key for the trigger,
-    //     // but delay creating the full client until right before test runs
-    //     let test_name = "evm_hypercore_echo_data";
-    //     use hypercore::SigningKey;
-    //     use rand_core::OsRng;
+    async fn register_evm_hypercore_echo_data_test(
+        &mut self,
+        chain: &ChainKey,
+        hyperswarm_bootstrap: Option<String>,
+        hypercore_clients: &mut HypercoreClients,
+    ) -> &mut Self {
+        // Generate signing key now to get feed_key for the trigger,
+        // but delay creating the full client until right before test runs
+        let test_name = "evm_hypercore_echo_data";
+        use hypercore::SigningKey;
+        use rand_core::OsRng;
 
-    //     let signing_key = SigningKey::generate(&mut OsRng);
-    //     let public_key_bytes = signing_key.verifying_key().to_bytes();
-    //     let feed_key = const_hex::encode(public_key_bytes);
-    //     let signing_key_bytes = signing_key.to_bytes();
+        let signing_key = SigningKey::generate(&mut OsRng);
+        let public_key_bytes = signing_key.verifying_key().to_bytes();
+        let feed_key = const_hex::encode(public_key_bytes);
+        let signing_key_bytes = signing_key.to_bytes();
 
-    //     tracing::info!(
-    //         "Generated signing key for hypercore test '{}' with feed key: {}",
-    //         test_name,
-    //         feed_key
-    //     );
+        tracing::info!(
+            "Generated signing key for hypercore test '{}' with feed key: {}",
+            test_name,
+            feed_key
+        );
 
-    //     // Store the factory to create the client later
-    //     self.insert_hypercore_client_factory(
-    //         test_name.to_string(),
-    //         HypercoreClientFactory {
-    //             test_name: test_name.to_string(),
-    //             hyperswarm_bootstrap,
-    //             signing_key_bytes: signing_key_bytes.to_vec(),
-    //         },
-    //     );
+        // Queue deferred client creation (actual client created right before test runs)
+        hypercore_clients.insert_pending(
+            test_name.to_string(),
+            hyperswarm_bootstrap,
+            signing_key_bytes.to_vec(),
+        );
 
-    //     self.register(
-    //         TestBuilder::new(test_name)
-    //             .with_description(
-    //                 "Tests the EchoData component with real Hypercore append triggers",
-    //             )
-    //             .add_workflow(
-    //                 WorkflowId::new("hypercore_echo_data").unwrap(),
-    //                 WorkflowBuilder::new()
-    //                     .with_operator_component(OperatorComponent::EchoData)
-    //                     .with_aggregator_component(AggregatorComponent::SimpleAggregator)
-    //                     .with_trigger(TriggerDefinition::Existing(Trigger::HypercoreAppend {
-    //                         feed_key,
-    //                     }))
-    //                     .with_submit(SubmitDefinition::Aggregator(Self::simple_aggregator(chain)))
-    //                     .with_input_data(InputData::Text("hypercore-echo".to_string()))
-    //                     .with_expected_output(ExpectedOutput::Text("hypercore-echo".to_string()))
-    //                     .with_timeout(Duration::from_secs(60))
-    //                     .build(),
-    //             )
-    //             .with_service_manager_chain(chain)
-    //             .with_group(TestGroupId::Hypercore)
-    //             .build(),
-    //     )
-    // }
+        self.register(
+            TestBuilder::new(test_name)
+                .with_description(
+                    "Tests the EchoData component with real Hypercore append triggers",
+                )
+                .add_workflow(
+                    WorkflowId::new("hypercore_echo_data").unwrap(),
+                    WorkflowBuilder::new()
+                        .with_operator_component(OperatorComponent::EchoData)
+                        .with_aggregator_component(AggregatorComponent::SimpleAggregator)
+                        .with_trigger(TriggerDefinition::Existing(Trigger::HypercoreAppend {
+                            feed_key,
+                        }))
+                        .with_submit(SubmitDefinition::Aggregator(Self::simple_aggregator(chain)))
+                        .with_input_data(InputData::Text("hypercore-echo".to_string()))
+                        .with_expected_output(ExpectedOutput::Text("hypercore-echo".to_string()))
+                        .with_timeout(Duration::from_secs(60))
+                        .build(),
+                )
+                .with_service_manager_chain(chain)
+                .with_group(TestGroupId::Hypercore)
+                .build(),
+        )
+    }
 
     fn register_evm_echo_data_secondary_chain_test(
         &mut self,

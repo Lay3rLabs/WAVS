@@ -722,14 +722,22 @@ impl TriggerManager {
                                 )
                                 .await;
                             match hypercore_start_result {
-                                Ok(hypercore_stream) => {
+                                Ok((hypercore_stream, peer_connected_rx)) => {
                                     multiplexed_stream.push(hypercore_stream);
 
-                                    // Mark as connected once stream starts successfully
-                                    hypercore_stream_states
-                                        .write()
-                                        .unwrap()
-                                        .insert(feed_key.clone(), StreamStartState::Connected);
+                                    // State stays as Connecting until a peer actually connects.
+                                    // Spawn a task that updates the state when the first peer
+                                    // connects via hyperswarm.
+                                    let states = Arc::clone(&hypercore_stream_states);
+                                    let fk = feed_key.clone();
+                                    tokio::spawn(async move {
+                                        if peer_connected_rx.await.is_ok() {
+                                            states
+                                                .write()
+                                                .unwrap()
+                                                .insert(fk, StreamStartState::Connected);
+                                        }
+                                    });
                                 }
                                 Err(err) => {
                                     tracing::error!("Failed to start hypercore stream: {:?}", err);

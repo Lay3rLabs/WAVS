@@ -6,16 +6,71 @@
 use ::hypercore_protocol::discovery_key;
 use hypercore::{Hypercore, HypercoreBuilder, PartialKeypair, SigningKey, Storage, VerifyingKey};
 use hyperswarm::{Config as SwarmConfig, Hyperswarm, TopicConfig};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
+use std::time::Duration;
 use tempfile::TempDir;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use wavs::subsystems::trigger::streams::hypercore_protocol;
+
+/// Manages hypercore test client lifecycle (deferred creation and retrieval).
+///
+/// During test registration, pending entries are inserted with the signing key
+/// and bootstrap address. Clients are created lazily right before tests run
+/// so DHT announcements stay fresh.
+#[derive(Default)]
+pub struct HypercoreClients {
+    /// Pending: (hyperswarm_bootstrap, signing_key_bytes)
+    pending: HashMap<String, (Option<String>, Vec<u8>)>,
+    clients: HashMap<String, Arc<HypercoreTestClient>>,
+}
+
+impl HypercoreClients {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Queue a test for deferred hypercore client creation.
+    pub fn insert_pending(
+        &mut self,
+        test_name: String,
+        hyperswarm_bootstrap: Option<String>,
+        signing_key_bytes: Vec<u8>,
+    ) {
+        self.pending
+            .insert(test_name, (hyperswarm_bootstrap, signing_key_bytes));
+    }
+
+    /// Create hypercore clients for all pending tests, draining the pending queue.
+    /// Called right before tests run to ensure DHT announcements are fresh.
+    /// No-op if the queue has already been drained.
+    pub async fn create_clients(&mut self) -> anyhow::Result<()> {
+        for (test_name, (bootstrap, key_bytes)) in self.pending.drain() {
+            tracing::info!(
+                "Creating hypercore client for test '{}' right before test execution",
+                test_name
+            );
+            let client = HypercoreTestClient::new(&test_name, bootstrap, &key_bytes).await?;
+            self.clients.insert(test_name, Arc::new(client));
+        }
+        Ok(())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.clients.is_empty() && self.pending.is_empty()
+    }
+
+    /// Get a hypercore test client by test name.
+    pub fn get(&self, test_name: &str) -> Option<Arc<HypercoreTestClient>> {
+        self.clients.get(test_name).cloned()
+    }
+}
 
 /// Test client for creating and managing hypercore feeds in e2e tests.
 pub struct HypercoreTestClient {
@@ -25,20 +80,23 @@ pub struct HypercoreTestClient {
     feed_key: String,
     /// Handle for the hyperswarm task
     swarm_handle: JoinHandle<()>,
+    /// Handle for the periodic re-lookup task
+    relookup_handle: JoinHandle<()>,
     /// TempDir storage - must be kept alive for the lifetime of the client
     _storage_dir: TempDir,
     /// Connection count for testing mesh formation
     connection_count_for_swarm: Arc<AtomicUsize>,
 }
 
-// Properly clean up the swarm task when the client is dropped
+// Properly clean up the swarm and re-lookup tasks when the client is dropped
 impl Drop for HypercoreTestClient {
     fn drop(&mut self) {
         tracing::info!(
-            "Dropping HypercoreTestClient for feed_key: {}, aborting swarm task",
+            "Dropping HypercoreTestClient for feed_key: {}, aborting swarm tasks",
             self.feed_key
         );
         self.swarm_handle.abort();
+        self.relookup_handle.abort();
     }
 }
 
@@ -121,6 +179,25 @@ impl HypercoreTestClient {
         let feed_key_bytes_for_swarm = feed_key_bytes;
         let connection_count_for_swarm = Arc::new(AtomicUsize::new(0));
 
+        // The hyperswarm DHT only executes announce/lookup once after
+        // bootstrapping. Periodically re-issue them so peers that announce
+        // later are still discovered. Stops once a peer connects.
+        let swarm_handle_for_relookup = swarm.handle();
+        let connection_count_for_relookup = Arc::clone(&connection_count_for_swarm);
+        let relookup_handle = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(2));
+            interval.tick().await; // skip immediate first tick
+            loop {
+                interval.tick().await;
+                if connection_count_for_relookup.load(Ordering::Relaxed) > 0 {
+                    tracing::debug!("Peer connected, stopping DHT re-lookup");
+                    break;
+                }
+                swarm_handle_for_relookup.configure(topic, TopicConfig::default());
+                swarm_handle_for_relookup.configure(topic, TopicConfig::announce_and_lookup());
+            }
+        });
+
         // Clone the Arc for the spawned task (we keep the original for the struct)
         let swarm_connection_count = Arc::clone(&connection_count_for_swarm);
         let swarm_handle = tokio::spawn(async move {
@@ -159,6 +236,7 @@ impl HypercoreTestClient {
                                 is_initiator,
                                 feed,
                                 feed_key_bytes,
+                                None,
                             )
                             .await;
 
@@ -195,6 +273,7 @@ impl HypercoreTestClient {
             feed,
             feed_key,
             swarm_handle,
+            relookup_handle,
             _storage_dir: storage_dir,
             connection_count_for_swarm,
         })

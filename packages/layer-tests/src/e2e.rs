@@ -145,15 +145,15 @@ async fn _run(
     let cosmos_code_map = CosmosCodeMap::new(DashMap::new());
 
     // Create test registry from test mode
-    let registry = test_registry::TestRegistry::from_test_mode(
+    let (registry, hypercore_clients) = test_registry::TestRegistry::from_test_mode(
         mode,
         configs.chains.clone(),
         &clients,
         &cosmos_code_map,
-        // configs
-        //     .wavs_configs
-        //     .first()
-        //     .and_then(|config| config.hyperswarm_bootstrap.clone()),
+        configs
+            .wavs_configs
+            .first()
+            .and_then(|config| config.hyperswarm_bootstrap.clone()),
     )
     .await;
 
@@ -183,6 +183,7 @@ async fn _run(
         clients,
         registry,
         component_sources,
+        hypercore_clients,
         service_managers,
         cosmos_code_map,
         report.clone(),

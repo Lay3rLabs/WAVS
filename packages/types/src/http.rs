@@ -81,13 +81,23 @@ pub struct DevTriggerStreamsInfo {
 }
 
 impl DevTriggerStreamsInfo {
-    pub fn finalized(&self) -> bool {
+    /// Returns true when all chain streams (EVM, Cosmos) are connected and ready.
+    pub fn chains_finalized(&self) -> bool {
         self.chains.values().all(|info| {
             !info.any_active_rpcs_in_flight && info.is_connected && info.current_endpoint.is_some()
-        }) && self
-            .hypercore
+        })
+    }
+
+    /// Returns true when all hypercore feeds have connected to at least one peer.
+    pub fn hypercore_finalized(&self) -> bool {
+        self.hypercore
             .values()
             .all(|info| matches!(info, DevHypercoreStreamState::Connected))
+    }
+
+    /// Returns true when all trigger streams (chains + hypercore) are fully ready.
+    pub fn finalized(&self) -> bool {
+        self.chains_finalized() && self.hypercore_finalized()
     }
 
     pub fn any_active_subscriptions(&self) -> bool {

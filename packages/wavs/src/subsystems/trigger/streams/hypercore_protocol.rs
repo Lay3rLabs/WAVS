@@ -46,6 +46,7 @@ pub async fn run_protocol<S>(
     is_initiator: bool,
     hypercore: Arc<Mutex<Hypercore>>,
     feed_key: [u8; 32],
+    replication_ready: Option<tokio::sync::oneshot::Sender<()>>,
 ) -> Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -57,6 +58,8 @@ where
         is_initiator,
         const_hex::encode(dkey)
     );
+
+    let mut replication_ready = replication_ready;
 
     while let Some(event) = protocol.next().await {
         let event = event.context("hypercore protocol event")?;
@@ -77,7 +80,7 @@ where
             ProtocolEvent::Channel(channel) => {
                 if channel.discovery_key() == &dkey {
                     tracing::info!("Hypercore protocol channel opened");
-                    spawn_peer(channel, hypercore.clone());
+                    spawn_peer(channel, hypercore.clone(), replication_ready.take());
                 }
             }
             _ => {}
@@ -87,7 +90,11 @@ where
     Ok(())
 }
 
-fn spawn_peer(mut channel: Channel, hypercore: Arc<Mutex<Hypercore>>) {
+fn spawn_peer(
+    mut channel: Channel,
+    hypercore: Arc<Mutex<Hypercore>>,
+    replication_ready: Option<tokio::sync::oneshot::Sender<()>>,
+) {
     tokio::spawn(async move {
         let mut peer_state = PeerState::default();
         let mut receiver = {
@@ -135,6 +142,12 @@ fn spawn_peer(mut channel: Channel, hypercore: Arc<Mutex<Hypercore>>) {
             info.length,
             info.contiguous_length
         );
+
+        // Signal that replication is ready — the channel is open and
+        // the initial Synchronize has been sent to the remote peer.
+        if let Some(tx) = replication_ready {
+            let _ = tx.send(());
+        }
 
         loop {
             tokio::select! {
