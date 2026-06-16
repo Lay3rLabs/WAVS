@@ -11,7 +11,7 @@ use utils::{
     telemetry::Metrics,
     test_utils::middleware::{
         cosmos::{CosmosMiddleware, CosmosMiddlewareKind},
-        evm::EvmMiddleware,
+        evm::{EvmMiddleware, EvmMiddlewareType},
     },
 };
 use wavs::dispatcher::{Dispatcher, TauriHandle};
@@ -26,10 +26,18 @@ use crate::config::TestP2pMode;
 use super::config::Configs;
 //use super::matrix::EvmService;
 
+/// Holds both the default (secp256k1) and optional BLS middleware so that
+/// per-test dispatch can select the right one without global state.
+#[derive(Clone)]
+pub struct EvmMiddlewares {
+    pub default: EvmMiddleware,
+    pub bls: Option<EvmMiddleware>,
+}
+
 pub struct AppHandles {
     /// One handle per WAVS operator instance
     pub wavs_handles: Vec<std::thread::JoinHandle<()>>,
-    pub evm_middleware: Option<EvmMiddleware>,
+    pub evm_middlewares: Option<EvmMiddlewares>,
     pub cosmos_middlewares: CosmosMiddlewares,
     _evm_chains: Vec<EvmInstance>,
     _cosmos_chains: Vec<CosmosInstance>,
@@ -99,7 +107,7 @@ impl AppHandles {
 
         // Check if we're using Remote P2P mode (Kademlia)
 
-        if configs.p2p == TestP2pMode::Kademlia && configs.num_operators() > 1 {
+        if configs.p2p == TestP2pMode::Remote && configs.num_operators() > 1 {
             // Remote mode: start operator 0 first, get bootstrap address, then start others
             wavs_handles = Self::start_wavs_remote_mode(ctx, configs, &metrics)
                 .expect("Failed to start operators in remote mode");
@@ -111,15 +119,21 @@ impl AppHandles {
             }
         }
 
-        let evm_middleware = if evm_chains.is_empty() {
+        let evm_middlewares = if evm_chains.is_empty() {
             None
         } else {
-            Some(EvmMiddleware::new(configs.evm_middleware_type).unwrap())
+            let default = EvmMiddleware::new(configs.evm_middleware_type).unwrap();
+            let bls = if configs.matrix.bls_multi_operator_enabled() {
+                Some(EvmMiddleware::new(EvmMiddlewareType::PoaBls).unwrap())
+            } else {
+                None
+            };
+            Some(EvmMiddlewares { default, bls })
         };
 
         Self {
             wavs_handles,
-            evm_middleware,
+            evm_middlewares,
             cosmos_middlewares: Arc::new(cosmos_middlewares),
             _evm_chains: evm_chains,
             _cosmos_chains: cosmos_chains,
@@ -200,16 +214,19 @@ impl AppHandles {
             loop {
                 match client.get_p2p_status().await {
                     Ok(status) => {
-                        // Prefer external_addresses, fall back to listen_addresses
-                        let addr = status
-                            .external_addresses
-                            .first()
-                            .or(status.listen_addresses.first())
-                            .cloned();
-
-                        if let Some(addr) = addr {
-                            tracing::info!("Got bootstrap address from operator 0: {}", addr);
-                            return Ok(addr);
+                        // Combine peer_id + listen address into bootstrapper format:
+                        // "<hex_ed25519_pubkey>@<host>:<port>"
+                        if let (Some(peer_id), Some(socket_addr)) =
+                            (status.local_peer_id, status.listen_addresses.first())
+                        {
+                            // Replace 0.0.0.0 wildcard with 127.0.0.1 for local testing
+                            let port = socket_addr.split(':').next_back().unwrap_or("9000");
+                            let bootstrap_addr = format!("{}@127.0.0.1:{}", peer_id, port);
+                            tracing::info!(
+                                "Got bootstrap address from operator 0: {}",
+                                bootstrap_addr
+                            );
+                            return Ok(bootstrap_addr);
                         }
                     }
                     Err(e) => {
@@ -234,33 +251,16 @@ impl AppHandles {
             let mut config = wavs_config.clone();
             if let P2pConfig::Remote {
                 listen_port,
-                bootstrap_nodes: _,
-                max_retry_duration_secs,
-                retry_interval_ms,
-                submission_ttl_secs,
-                max_catchup_submissions,
-                cleanup_interval_secs,
-                kademlia_discovery_interval_secs,
-                max_pending_publishes,
-                max_stored_submissions_per_service,
-                catchup_request_timeout_secs,
-                max_concurrent_catchup_requests_per_service,
+                authorized_peers,
+                ..
             } = &config.p2p
             {
                 config.p2p = P2pConfig::Remote {
                     listen_port: *listen_port,
-                    bootstrap_nodes: vec![bootstrap_addr.clone()],
-                    max_retry_duration_secs: *max_retry_duration_secs,
-                    retry_interval_ms: *retry_interval_ms,
-                    submission_ttl_secs: *submission_ttl_secs,
-                    max_catchup_submissions: *max_catchup_submissions,
-                    cleanup_interval_secs: *cleanup_interval_secs,
-                    kademlia_discovery_interval_secs: *kademlia_discovery_interval_secs,
-                    max_pending_publishes: *max_pending_publishes,
-                    max_stored_submissions_per_service: *max_stored_submissions_per_service,
-                    catchup_request_timeout_secs: *catchup_request_timeout_secs,
-                    max_concurrent_catchup_requests_per_service:
-                        *max_concurrent_catchup_requests_per_service,
+                    bootstrappers: vec![bootstrap_addr.clone()],
+                    authorized_peers: authorized_peers.clone(),
+                    max_message_size: None,
+                    deque_size: None,
                 };
             }
 

@@ -189,47 +189,58 @@ dev_endpoints_enabled = true
 # burned_queue_ttl_secs = 172800
 
 # ----------------------------
-# P2P networking settings
+# P2P networking settings (commonware)
 # ----------------------------
 # P2P is disabled by default (for single-operator setups).
 # Enable for multi-operator deployments to share submissions and reach quorum consensus.
+#
+# Peer identities use Ed25519 public keys derived from signing_mnemonic.
+# Addresses use socket format: "<hex_ed25519_pubkey>@<host>:<port>"
 
-# Option 1 — Local mDNS discovery (development/testing, auto-discovers peers on the LAN):
+# Option 1 -- Disabled (default, single-operator):
+# p2p = "disabled"
+
+# Option 2 -- Local lookup mode (development/testing, known peer addresses):
 # p2p = { local = { listen_port = 9000 } }
 #
-# All local options with defaults shown:
 # [wavs.p2p.local]
 # listen_port = 9000
-# max_retry_duration_secs = 10        # Max seconds to retry a failed publish
-# retry_interval_ms = 200             # Interval between publish retries
-# submission_ttl_secs = 300           # How long to store submissions for catch-up (5 min)
-# max_catchup_submissions = 100       # Max submissions returned in a catch-up response
-# cleanup_interval_secs = 60          # Interval between expired-submission cleanup passes
-# max_pending_publishes = 1000        # Max entries in the retry queue (prevents OOM)
-# max_stored_submissions_per_service = 500   # Max stored submissions per service
-# catchup_request_timeout_secs = 30   # Timeout for the catch-up request/response protocol
-# max_concurrent_catchup_requests_per_service = 3  # Max concurrent catch-up requests per service
+# peer_addresses = ["<hex_ed25519_pubkey>@127.0.0.1:9001"]
+# authorized_peers = ["<hex_ed25519_pubkey>"]
+# max_message_size = 65536    # Max P2P message size in bytes (default: 64KB)
+# deque_size = 128            # Broadcast cache per peer for catch-up (default: 128 messages)
 
-# Option 2 — Remote Kademlia DHT discovery (production, connects across the internet):
-# p2p = { remote = { listen_port = 9000, bootstrap_nodes = ["/ip4/1.2.3.4/tcp/9000/p2p/12D3KooW..."] } }
+# Option 3 -- Remote discovery mode (production, bootstrapper-based peer discovery):
+# p2p = { remote = { listen_port = 9000, bootstrappers = ["<hex_ed25519_pubkey>@1.2.3.4:9000"] } }
 #
-# All remote options with defaults shown:
 # [wavs.p2p.remote]
 # listen_port = 9000
-# bootstrap_nodes = []                # Empty = this node acts as the bootstrap server
-# max_retry_duration_secs = 10
-# retry_interval_ms = 200
-# submission_ttl_secs = 300
-# max_catchup_submissions = 100
-# cleanup_interval_secs = 60
-# kademlia_discovery_interval_secs = 60   # Interval for DHT discovery queries (remote only)
-# max_pending_publishes = 1000
-# max_stored_submissions_per_service = 500
-# catchup_request_timeout_secs = 30
-# max_concurrent_catchup_requests_per_service = 3
+# bootstrappers = []          # Empty = this node acts as a bootstrapper
+# authorized_peers = ["<hex_ed25519_pubkey>"]
+# max_message_size = 65536
+# deque_size = 128
 
-# Option 3 — Explicitly disabled (default):
-# p2p = "disabled"
+# ----- Local dev preset (multi-operator on localhost) -----
+# Two operators on a single machine for testing. Each needs its own wavs.toml.
+#
+# Node 1 (wavs-node-1.toml):
+#   [wavs]
+#   port = 8041
+#   signing_mnemonic = "<mnemonic_1>"
+#   [wavs.p2p.local]
+#   listen_port = 9000
+#   peer_addresses = ["<node2_ed25519_pubkey>@127.0.0.1:9001"]
+#
+# Node 2 (wavs-node-2.toml):
+#   [wavs]
+#   port = 8042
+#   signing_mnemonic = "<mnemonic_2>"
+#   [wavs.p2p.local]
+#   listen_port = 9001
+#   peer_addresses = ["<node1_ed25519_pubkey>@127.0.0.1:9000"]
+#
+# To get a node's Ed25519 public key from its mnemonic:
+#   wavs-cli p2p identity --mnemonic "your mnemonic words here"
 
 # ----------------------------
 # WAVS-specific chain overrides

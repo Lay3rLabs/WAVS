@@ -90,32 +90,37 @@ pub struct WavsSignatureData {
 }
 
 impl WavsSignatureData {
-    pub fn new(signature_data: crate::solidity_types::SignatureData) -> Self {
-        Self {
-            signers: signature_data
-                .signers
-                .into_iter()
-                .map(layer_climb_address::EvmAddr::from)
-                .collect(),
-            signatures: signature_data
-                .signatures
-                .into_iter()
-                .map(|s| s.to_vec().into())
-                .collect(),
-            reference_block: signature_data.referenceBlock,
+    pub fn new(signature_data: crate::SignatureData) -> Self {
+        match signature_data {
+            crate::SignatureData::Secp256k1(inner) => Self {
+                signers: inner
+                    .signers
+                    .into_iter()
+                    .map(layer_climb_address::EvmAddr::from)
+                    .collect(),
+                signatures: inner
+                    .signatures
+                    .into_iter()
+                    .map(|s| s.to_vec().into())
+                    .collect(),
+                reference_block: inner.referenceBlock,
+            },
+            crate::SignatureData::Bls12381(_) => {
+                unimplemented!("CosmWasm BLS SignatureData conversion not supported in v1.1")
+            }
         }
     }
 }
 
-impl From<crate::solidity_types::SignatureData> for WavsSignatureData {
-    fn from(signature_data: crate::solidity_types::SignatureData) -> Self {
+impl From<crate::SignatureData> for WavsSignatureData {
+    fn from(signature_data: crate::SignatureData) -> Self {
         Self::new(signature_data)
     }
 }
 
-impl From<WavsSignatureData> for crate::solidity_types::SignatureData {
+impl From<WavsSignatureData> for crate::SignatureData {
     fn from(signature_data: WavsSignatureData) -> Self {
-        crate::solidity_types::SignatureData {
+        crate::SignatureData::Secp256k1(crate::solidity_types::SignatureData {
             signers: signature_data
                 .signers
                 .into_iter()
@@ -127,7 +132,7 @@ impl From<WavsSignatureData> for crate::solidity_types::SignatureData {
                 .map(|s| s.to_vec().into())
                 .collect(),
             referenceBlock: signature_data.reference_block,
-        }
+        })
     }
 }
 
@@ -154,17 +159,18 @@ mod tests {
             payload: vec![1, 2, 3].into(),
         };
 
-        let signature_data = crate::solidity_types::SignatureData {
-            signers: vec![
-                alloy_primitives::Address::new([42; 20]),
-                alloy_primitives::Address::new([1; 20]),
-            ],
-            signatures: vec![
-                alloy_primitives::Bytes::from(vec![1, 2, 3]),
-                alloy_primitives::Bytes::from(vec![4, 5, 6]),
-            ],
-            referenceBlock: 12345,
-        };
+        let signature_data =
+            crate::SignatureData::Secp256k1(crate::solidity_types::SignatureData {
+                signers: vec![
+                    alloy_primitives::Address::new([42; 20]),
+                    alloy_primitives::Address::new([1; 20]),
+                ],
+                signatures: vec![
+                    alloy_primitives::Bytes::from(vec![1, 2, 3]),
+                    alloy_primitives::Bytes::from(vec![4, 5, 6]),
+                ],
+                referenceBlock: 12345,
+            });
 
         // Create the messages for the service handler via .into()
         let msg_1 = ExampleServiceHandlerExecuteMsg::ServiceHandler(

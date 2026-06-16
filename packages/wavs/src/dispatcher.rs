@@ -41,7 +41,7 @@ use wavs_types::contracts::cosmwasm::service_manager::ServiceManagerQueryMessage
 use wavs_types::IWavsServiceManager::IWavsServiceManagerInstance;
 use wavs_types::{
     AnyChainConfig, ChainConfigError, ChainConfigs, ChainKey, ComponentDigest, ServiceManager,
-    Submission, Submit, TriggerData, WorkflowIdError,
+    SignatureAlgorithm, Submission, Submit, TriggerData, WorkflowIdError,
 };
 use wavs_types::{Service, ServiceError, ServiceId, SignerResponse, TriggerAction, WorkflowId};
 
@@ -132,6 +132,13 @@ pub enum DispatcherCommand {
         service_id: ServiceId,
         workflow_id: WorkflowId,
         trigger_data: TriggerData,
+        tx_hash: Option<String>,
+    },
+    SubmissionError {
+        service_id: ServiceId,
+        workflow_id: WorkflowId,
+        trigger_data: TriggerData,
+        error_message: String,
     },
 }
 
@@ -456,16 +463,38 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                             service_id,
                             workflow_id,
                             trigger_data,
+                            tx_hash,
                         } => {
                             if let Err(err) = _self.tauri_handle.emit_ext(
                                 wavs_gui_shared::event::SubmissionEvent {
                                     service_id,
                                     workflow_id,
                                     trigger_data,
+                                    tx_hash,
                                 },
                             ) {
                                 tracing::error!(
                                     "Error emitting submission event to GUI: {:?}",
+                                    err
+                                );
+                            }
+                        }
+                        DispatcherCommand::SubmissionError {
+                            service_id,
+                            workflow_id,
+                            trigger_data,
+                            error_message,
+                        } => {
+                            if let Err(err) = _self.tauri_handle.emit_ext(
+                                wavs_gui_shared::event::SubmissionErrorEvent {
+                                    service_id,
+                                    workflow_id,
+                                    trigger_data,
+                                    error_message,
+                                },
+                            ) {
+                                tracing::error!(
+                                    "Error emitting submission error event to GUI: {:?}",
                                     err
                                 );
                             }
@@ -551,7 +580,21 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
                 // registration to avoid double-registration errors.
                 let already_in_memory = self.services.exists(&service.id()).unwrap_or(false);
 
-                // Always refresh the stored definition with the authoritative on-chain version
+                // Always refresh the stored definition with the authoritative on-chain version,
+                // but preserve the existing pause status — it is local-only state that the
+                // chain doesn't know about.
+                let service = if already_in_memory {
+                    if let Ok(existing) = self.services.get(&service.id()) {
+                        Service {
+                            status: existing.status,
+                            ..service
+                        }
+                    } else {
+                        service
+                    }
+                } else {
+                    service
+                };
                 self.services.save(&service)?;
 
                 // Store components
@@ -768,6 +811,22 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
     }
 
     #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    pub fn pause_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
+        let mut service = self.services.get(&id)?;
+        service.status = wavs_types::ServiceStatus::Paused;
+        self.services.save(&service)?;
+        Ok(())
+    }
+
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
+    pub fn resume_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
+        let mut service = self.services.get(&id)?;
+        service.status = wavs_types::ServiceStatus::Active;
+        self.services.save(&service)?;
+        Ok(())
+    }
+
+    #[instrument(skip(self), fields(subsys = "Dispatcher"))]
     pub fn remove_service(&self, id: ServiceId) -> Result<(), DispatcherError> {
         // Remove from persistent registry first so an IO failure doesn't leave
         // the service already gone from memory but still on disk.
@@ -876,9 +935,13 @@ impl<S: CAStorage + 'static> Dispatcher<S> {
             });
         }
 
-        let SignerResponse::Secp256k1 { hd_index, .. } = self
+        let hd_index = match self
             .submission_manager
-            .get_service_signer(service_id.clone())?;
+            .get_service_signer(service_id.clone())?
+        {
+            SignerResponse::Secp256k1 { hd_index, .. } => hd_index,
+            SignerResponse::Bls12381 { hd_index, .. } => hd_index,
+        };
 
         if tracing::enabled!(tracing::Level::INFO) {
             let old_service = self.services.get(&service_id)?;
@@ -1064,7 +1127,17 @@ fn add_service_to_managers(
     aggregator_tx: &crossbeam::channel::Sender<AggregatorCommand>,
     hd_index: Option<u32>,
 ) -> Result<(), DispatcherError> {
-    if let Err(err) = submissions.add_service_key(service.id(), hd_index) {
+    // Determine algorithm from the first workflow's submit configuration
+    let algorithm = service
+        .workflows
+        .values()
+        .find_map(|w| match &w.submit {
+            Submit::Aggregator { signature_kind, .. } => Some(signature_kind.algorithm.clone()),
+            Submit::None => None,
+        })
+        .unwrap_or(SignatureAlgorithm::Secp256k1); // default for backward compat
+
+    if let Err(err) = submissions.add_service_key(service.id(), hd_index, algorithm) {
         tracing::error!("Error adding service to submission manager: {:?}", err);
         return Err(err.into());
     }

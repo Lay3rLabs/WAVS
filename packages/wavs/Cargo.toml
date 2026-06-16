@@ -10,6 +10,8 @@ license.workspace = true
 publish = false
 
 [features]
+default = ["bls"]
+bls = []
 test-utils = []
 dev = []
 gui = ["dep:tauri", "wavs-gui-shared/backend"]
@@ -47,7 +49,7 @@ alloy-contract = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-signer-local = { workspace = true }
-alloy-provider = { workspace = true }
+alloy-provider = { workspace = true, features = ["reqwest", "reqwest-default-tls", "ws", "pubsub"] }
 alloy-sol-types = { workspace = true }
 wasm-pkg-common = { workspace = true }
 chrono = { workspace = true }
@@ -66,7 +68,16 @@ slotmap = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 rand = { workspace = true }
-libp2p = { workspace = true }
+bip39 = { workspace = true }
+rand_chacha = "0.3"
+commonware-p2p = "2026.3.0"
+commonware-cryptography = { workspace = true }
+commonware-math = "2026.3.0"
+commonware-runtime = "2026.3.0"
+commonware-utils = "2026.3.0"
+commonware-codec = "2026.3.0"
+commonware-broadcast = "2026.3.0"
+rand_core = "0.6"
 hypercore = { workspace = true }
 hypercore-protocol = { workspace = true }
 hyperswarm = { workspace = true }
@@ -75,11 +86,13 @@ base64 = { workspace = true }
 tauri = {workspace = true, optional = true}
 
 [dev-dependencies]
+toml = { workspace = true }
 criterion = { workspace = true }
 wavs-benchmark-common = { workspace = true }
 utils = { workspace = true, features = ["test-utils"] }
 example-types = { workspace = true }
 alloy-node-bindings = { workspace = true }
+commonware-cryptography = { workspace = true }
 
 
 [[bench]]

@@ -10,7 +10,7 @@ license.workspace = true
 publish = false
 
 [features]
-test-utils = ["dep:rand", "dep:bip39", "dep:toml", "dep:cw-wavs-mock-api"]
+test-utils = ["dep:rand", "dep:toml", "dep:cw-wavs-mock-api"]
 
 [dependencies]
 wasm-pkg-client = { workspace = true }
@@ -35,7 +35,7 @@ const-hex = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-sol-types = { workspace = true }
 alloy-contract = { workspace = true }
-alloy-provider = { workspace = true}
+alloy-provider = { workspace = true, features = ["reqwest", "reqwest-default-tls", "ws", "pubsub"] }
 alloy-node-bindings = { workspace = true }
 alloy-signer = { workspace = true }
 alloy-signer-local = { workspace = true }
@@ -56,8 +56,18 @@ axum = { workspace = true }
 axum-extra = { workspace = true }
 tempfile = { workspace = true }
 rand = { workspace = true, optional = true }
-bip39 = { workspace = true, optional = true }
+bip39 = { workspace = true }
 subtle = { workspace = true }
+
+# BLS key derivation dependencies
+commonware-cryptography = { workspace = true }
+commonware-math = "2026.3.0"
+rand_chacha = "0.3"
+rand_core = "0.6"
+hkdf = "0.12"
+blst = "0.3.16"
+commonware-codec = "2026.3.0"
+sha2 = { workspace = true }
 toml = { workspace = true, optional = true }
 cw-wavs-mock-api = { workspace = true, optional = true }
 

@@ -2,6 +2,7 @@
 
 pub mod alloy_helpers;
 pub mod async_transaction;
+pub mod bls_signing;
 pub mod config;
 pub mod context;
 pub mod error;

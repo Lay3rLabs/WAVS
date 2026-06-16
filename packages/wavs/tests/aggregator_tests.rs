@@ -4,6 +4,7 @@ mod wavs_systems;
 
 use utils::{context::AppContext, init_tracing_tests, telemetry::Metrics};
 use wavs::subsystems::aggregator::AggregatorCommand;
+use wavs_types::SignatureAlgorithm;
 
 use crate::wavs_systems::{
     channels::TestChannels,
@@ -35,7 +36,7 @@ fn send_to_self() {
 
     ctx.rt.block_on(async {
         submission_manager
-            .add_service_key(service.id(), None)
+            .add_service_key(service.id(), None, SignatureAlgorithm::Secp256k1)
             .unwrap();
     });
 

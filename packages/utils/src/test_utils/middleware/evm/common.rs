@@ -8,6 +8,7 @@ use crate::test_utils::middleware::operator::AvsOperator;
 
 pub use super::middleware_eigen::EigenlayerMiddleware;
 pub use super::middleware_poa::PoaMiddleware;
+pub use super::middleware_poa_bls::PoaBlsMiddleware;
 
 pub const EVM_EIGENLAYER_MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/wavs-middleware:0.5.0-beta.10";
 pub const EVM_POA_MIDDLEWARE_IMAGE: &str = "ghcr.io/lay3rlabs/poa-middleware:1.0.1";
@@ -21,6 +22,7 @@ pub enum EvmMiddlewareType {
     #[default]
     Eigenlayer,
     Poa,
+    PoaBls,
 }
 
 pub fn middleware_config_filename(id: &str) -> String {
@@ -35,6 +37,7 @@ pub fn middleware_deploy_filename(id: &str) -> String {
 pub enum EvmMiddleware {
     Eigenlayer(Arc<EigenlayerMiddleware>),
     Poa(Arc<PoaMiddleware>),
+    PoaBls(Arc<PoaBlsMiddleware>),
 }
 impl EvmMiddleware {
     pub fn new(middleware_type: EvmMiddlewareType) -> Result<Self> {
@@ -43,6 +46,7 @@ impl EvmMiddleware {
                 Ok(Self::Eigenlayer(Arc::new(EigenlayerMiddleware::new()?)))
             }
             EvmMiddlewareType::Poa => Ok(Self::Poa(Arc::new(PoaMiddleware::new()))),
+            EvmMiddlewareType::PoaBls => Ok(Self::PoaBls(Arc::new(PoaBlsMiddleware::new()))),
         }
     }
     pub async fn deploy_service_manager(
@@ -65,6 +69,12 @@ impl EvmMiddleware {
                 })?;
                 m.deploy_service_manager(rpc_url, deployer_key_hex).await
             }
+            Self::PoaBls(m) => {
+                let deployer_key_hex = deployer_key_hex.ok_or_else(|| {
+                    anyhow::anyhow!("Deployer key hex is required for BLS POA middleware")
+                })?;
+                m.deploy_service_manager(rpc_url, deployer_key_hex).await
+            }
         }
     }
 
@@ -76,6 +86,7 @@ impl EvmMiddleware {
         match self {
             Self::Eigenlayer(m) => m.configure_service_manager(service_manager, config).await,
             Self::Poa(m) => m.configure_service_manager(service_manager, config).await,
+            Self::PoaBls(m) => m.configure_service_manager(service_manager, config).await,
         }
     }
 
@@ -90,6 +101,10 @@ impl EvmMiddleware {
                     .await
             }
             Self::Poa(m) => {
+                m.set_service_manager_uri(service_manager, service_uri)
+                    .await
+            }
+            Self::PoaBls(m) => {
                 m.set_service_manager_uri(service_manager, service_uri)
                     .await
             }

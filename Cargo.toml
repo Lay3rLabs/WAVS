@@ -128,12 +128,12 @@ wildmatch = "2.5.0"
 alloy-node-bindings = "=1.0.42"
 alloy-json-abi = "1.4.1"
 alloy-primitives = { version = "1.4.1", features = ["serde"] }
-alloy-provider = { version = "=1.0.42", features = ["ws", "pubsub"] }
+alloy-provider = { version = "=1.0.42", default-features = false }
 alloy-sol-types = "1.4.1"
 alloy-sol-macro = { version = "1.4.1", features = ["json"] }
 alloy-transport = "=1.0.42"
 alloy-transport-http = "=1.0.42"
-alloy-rpc-client = "=1.0.42"
+alloy-rpc-client = { version = "=1.0.42", default-features = false }
 alloy-contract = "=1.0.42"
 alloy-signer = "=1.0.42"
 alloy-signer-local = { version = "=1.0.42", features = ["mnemonic"] }
@@ -233,24 +233,6 @@ crossbeam = "0.8.4"
 # versioning
 semver = { version = "1.0.27", features = ["serde"] }
 
-# p2p
-# Cargo.toml
-libp2p = { version = "0.56", features = [
-    "tokio",            # tokio runtime
-    "tcp",
-    "dns",
-    "noise",
-    "yamux",
-    "identify",
-    "ping",
-    "gossipsub",
-    "request-response",
-    "kad",              # WAN discovery
-    "mdns",             # local dev discovery
-    "autonat",          # NAT detection for external address discovery
-    "macros",
-    "secp256k1",        # secp256k1 identity for P2P (derived from signing_mnemonic)
-] }
 
 # Tauri - backend
 tauri = { version = "2.10.2", features = ["protocol-asset"] }
@@ -279,11 +261,14 @@ mime_guess = "2.0.5"
 awsm_web = {version = "0.45.0", default-features = false, features = ["dom", "file"]}
 
 
+# P2P / crypto
+commonware-cryptography = "2026.3.0"
+
 # local
 utils = { path = "packages/utils" }
 wavs = { path = "packages/wavs" }
 wavs-engine = { path = "packages/engine" }
-wavs-types = { path = "packages/types" }
+wavs-types = { path = "packages/types", default-features = false }
 wavs-cli = { path = "packages/cli" }
 wavs-benchmark-common = { path = "packages/wavs/benches/common" }
 example-helpers = { path = "examples/components/_helpers" }

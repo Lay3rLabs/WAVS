@@ -5,10 +5,12 @@ cfg_if::cfg_if! {
     }
 }
 
+use crate::solidity_types::BlsServiceHandler;
 pub use crate::solidity_types::Envelope;
 use crate::{
-    ServiceId, ServiceManagerEnvelope, ServiceManagerSignatureData, SignatureData, SignatureKind,
-    SubmitAction, TriggerAction, TriggerData, WasmResponse, WorkflowId,
+    solidity_types::SignatureData as Secp256k1SignatureData, ServiceId, ServiceManagerEnvelope,
+    ServiceManagerSignatureData, SignatureKind, SubmitAction, TriggerAction, TriggerData,
+    WasmResponse, WorkflowId,
 };
 use alloy_primitives::{eip191_hash_message, keccak256, FixedBytes, SignatureError};
 use alloy_sol_types::SolValue;
@@ -82,21 +84,64 @@ impl From<Envelope> for ServiceManagerEnvelope {
     }
 }
 
+/// Unified signature data enum supporting both secp256k1 and BLS12-381 signature schemes.
+/// Each variant wraps the Alloy-generated type from its respective ABI.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SignatureData {
+    /// secp256k1 ECDSA: signers (address[]), signatures (bytes[]), referenceBlock (uint32)
+    Secp256k1(Secp256k1SignatureData),
+    /// BLS12-381: signerPubkeys (bytes[]), aggregateSignature (bytes), referenceBlock (uint32)
+    Bls12381(BlsServiceHandler::SignatureData),
+}
+
 impl From<SignatureData> for ServiceManagerSignatureData {
     fn from(signature_data: SignatureData) -> Self {
-        ServiceManagerSignatureData {
-            signers: signature_data.signers,
-            signatures: signature_data.signatures,
-            referenceBlock: signature_data.referenceBlock,
+        match signature_data {
+            SignatureData::Secp256k1(inner) => ServiceManagerSignatureData {
+                signers: inner.signers,
+                signatures: inner.signatures,
+                referenceBlock: inner.referenceBlock,
+            },
+            SignatureData::Bls12381(_) => {
+                panic!(
+                    "BLS SignatureData cannot convert to ServiceManagerSignatureData -- use BLS contract interface directly"
+                )
+            }
         }
     }
 }
 
+/// Operator signature for a submission envelope.
+/// BLS signatures carry the G1 pubkey alongside the G2 signature because BLS is not self-recovering.
+///
+/// NOTE: This is a BREAKING serialization change from the previous struct format.
+/// Old format: {"data": [...], "kind": {...}}
+/// New format: {"algorithm": "secp256k1", "data": [...], "kind": {...}}
+/// There must be no in-flight Submission objects when upgrading.
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema, PartialEq, Eq, Hash)]
-#[serde(rename_all = "snake_case")]
-pub struct WavsSignature {
-    pub data: Vec<u8>,
-    pub kind: SignatureKind,
+#[serde(rename_all = "snake_case", tag = "algorithm")]
+pub enum WavsSignature {
+    Secp256k1 {
+        data: Vec<u8>,
+        kind: SignatureKind,
+    },
+    Bls12381 {
+        /// 256-byte G2 signature (EIP-2537 uncompressed format)
+        g2_signature: Vec<u8>,
+        /// 128-byte G1 public key (EIP-2537 uncompressed format)
+        g1_pubkey: Vec<u8>,
+        kind: SignatureKind,
+    },
+}
+
+impl WavsSignature {
+    /// Get the SignatureKind regardless of algorithm variant
+    pub fn kind(&self) -> &SignatureKind {
+        match self {
+            WavsSignature::Secp256k1 { kind, .. } => kind,
+            WavsSignature::Bls12381 { kind, .. } => kind,
+        }
+    }
 }
 
 #[derive(
@@ -251,7 +296,7 @@ pub enum SigningError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::AtProtoAction;
+    use crate::{AtProtoAction, SignatureAlgorithm};
 
     #[test]
     fn atproto_event_id_ignores_seq_and_timestamp() {
@@ -302,5 +347,52 @@ mod tests {
             EventId::new(&service_id, &workflow_id, EventIdSalt::Trigger(&different)).unwrap();
 
         assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn wavs_signature_secp256k1_serde_roundtrip() {
+        let sig = WavsSignature::Secp256k1 {
+            data: vec![1, 2, 3],
+            kind: SignatureKind::evm_default(),
+        };
+        let json = serde_json::to_string(&sig).unwrap();
+        // Verify the tagged format includes "algorithm" field
+        assert!(
+            json.contains("\"algorithm\":\"secp256k1\""),
+            "JSON must contain algorithm tag: {json}"
+        );
+        let decoded: WavsSignature = serde_json::from_str(&json).unwrap();
+        assert_eq!(sig, decoded);
+    }
+
+    #[test]
+    fn wavs_signature_bls12381_serde_roundtrip() {
+        let sig = WavsSignature::Bls12381 {
+            g2_signature: vec![0u8; 256],
+            g1_pubkey: vec![0u8; 128],
+            kind: SignatureKind {
+                algorithm: SignatureAlgorithm::Bls12381,
+                prefix: None,
+            },
+        };
+        let json = serde_json::to_string(&sig).unwrap();
+        assert!(
+            json.contains("\"algorithm\":\"bls12381\""),
+            "JSON must contain algorithm tag: {json}"
+        );
+        let decoded: WavsSignature = serde_json::from_str(&json).unwrap();
+        assert_eq!(sig, decoded);
+    }
+
+    #[test]
+    fn wavs_signature_old_format_does_not_deserialize() {
+        // Document the breaking change: old struct format without "algorithm" tag
+        // will fail to deserialize into the new enum. This is expected.
+        let old_format = r#"{"data":[1,2,3],"kind":{"algorithm":"secp256k1","prefix":"eip191"}}"#;
+        let result = serde_json::from_str::<WavsSignature>(old_format);
+        assert!(
+            result.is_err(),
+            "Old format without 'algorithm' tag must fail: this is a breaking serialization change"
+        );
     }
 }

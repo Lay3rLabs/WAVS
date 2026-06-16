@@ -4,6 +4,11 @@ pub mod peer;
 mod queue;
 mod submit;
 
+#[cfg(test)]
+mod p2p_config_tests;
+#[cfg(test)]
+mod p2p_status_tests;
+
 use std::{
     collections::HashMap,
     sync::{
@@ -630,10 +635,11 @@ impl Aggregator {
                 self.save_quorum_queue(queue_id, queue).await?;
             }
             Ok(tx_resp) => {
+                let tx_hash_str = tx_resp.tx_hash();
                 tracing::info!(
                     "Aggregator: Successfully submitted on-chain for {}: tx hash: {}",
                     submission.label(),
-                    tx_resp.tx_hash()
+                    tx_hash_str
                 );
                 // Burn queue: Mark as completed to prevent duplicate on-chain submissions
                 self.burn_quorum_queue(queue_id).await?;
@@ -643,6 +649,7 @@ impl Aggregator {
                             service_id: submission.service_id().clone(),
                             workflow_id: submission.workflow_id().clone(),
                             trigger_data: submission.trigger_action.data.clone(),
+                            tx_hash: Some(tx_hash_str),
                         })
                 {
                     tracing::error!("Error sending SubmissionConfirmed to dispatcher: {:?}", e);
@@ -668,6 +675,20 @@ impl Aggregator {
                         err
                     );
                 }
+
+                // Emit error event to GUI
+                if let Err(e) =
+                    self.subsystem_to_dispatcher_tx
+                        .send(DispatcherCommand::SubmissionError {
+                            service_id: submission.service_id().clone(),
+                            workflow_id: submission.workflow_id().clone(),
+                            trigger_data: submission.trigger_action.data.clone(),
+                            error_message: err_str.clone(),
+                        })
+                {
+                    tracing::error!("Error sending SubmissionError to dispatcher: {:?}", e);
+                }
+
                 // IMPORTANT: Always save the queue on error
                 // We appended the current submission above, so failing to save it would lose this submission
                 // When the next submission arrives (from P2P or operator), it will:

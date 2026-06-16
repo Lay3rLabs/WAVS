@@ -261,6 +261,9 @@ impl From<component_service::SignatureAlgorithm> for wavs_types::SignatureAlgori
             component_service::SignatureAlgorithm::Secp256k1 => {
                 wavs_types::SignatureAlgorithm::Secp256k1
             }
+            component_service::SignatureAlgorithm::Bls12381 => {
+                wavs_types::SignatureAlgorithm::Bls12381
+            }
         }
     }
 }

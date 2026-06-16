@@ -240,28 +240,44 @@ impl SubscriptionsInner {
     }
 
     pub fn enable_logs(&self, address: Vec<Address>, topics: Vec<B256>) {
-        {
+        let filter_changed = {
             let mut lock = self._logs.write().unwrap();
 
-            let lock = lock.get_or_insert_default();
+            let was_none = lock.is_none();
+            let filter = lock.get_or_insert_default();
+
+            let prev_addr_len = filter.addresses.len();
+            let prev_topic_len = filter.topics.len();
 
             for address in address {
-                lock.addresses.insert(address);
+                filter.addresses.insert(address);
             }
 
             for topic in topics {
-                lock.topics.insert(topic);
+                filter.topics.insert(topic);
             }
 
             self.metrics.record_active_log_filters(
                 &self.chain_key,
-                (lock.addresses.len() + lock.topics.len()) as u64,
+                (filter.addresses.len() + filter.topics.len()) as u64,
             );
-        }
-        self.unsubscribe(SubscriptionCategory::AllLogs);
 
-        // logs is different, needs to resubscribe since different filters are different subscriptions
-        self.resubscribe();
+            // The filter changed if we transitioned from no filter (None) to having one,
+            // or if new addresses/topics were actually inserted.
+            was_none
+                || filter.addresses.len() != prev_addr_len
+                || filter.topics.len() != prev_topic_len
+        };
+
+        // Only disrupt the existing subscription when the filter actually changed.
+        // Re-subscribing with an identical filter is unnecessary and creates a brief
+        // window where events can be missed (between unsubscribe and resubscribe
+        // responses landing), causing race conditions in tests.
+        if filter_changed {
+            self.unsubscribe(SubscriptionCategory::AllLogs);
+            // logs is different, needs to resubscribe since different filters are different subscriptions
+            self.resubscribe();
+        }
     }
 
     // disable specific log filters, if no filters remain, it will unsubscribe from all logs

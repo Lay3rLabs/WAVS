@@ -20,9 +20,10 @@ mod service_handler {
     );
 }
 
-pub use service_handler::{
-    IWavsServiceHandler, IWavsServiceHandler::Envelope, IWavsServiceHandler::SignatureData,
-};
+pub use service_handler::{IWavsServiceHandler, IWavsServiceHandler::Envelope};
+// SignatureData is re-exported under alias to avoid collision with the signing::SignatureData enum.
+// The raw Alloy type is accessible as crate::solidity_types::SignatureData.
+pub(crate) use service_handler::IWavsServiceHandler::SignatureData;
 pub use service_manager::IWavsServiceManager;
 // yup, the service handler interface as seen by the service manager is a different service handler interface
 // even though it's literally a direct import of the same file

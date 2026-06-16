@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 cw-wavs-mock-api = { workspace = true }
-wavs-types = { workspace = true }
+wavs-types = { workspace = true, features = ["cosmwasm"] }
 cosmwasm-std = { workspace = true }
 anyhow = { workspace = true }
 cw-storage-plus = { workspace = true }

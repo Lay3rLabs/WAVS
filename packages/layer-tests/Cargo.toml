@@ -37,7 +37,7 @@ alloy-signer-local = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-sol-types = { workspace = true }
 alloy-primitives = { workspace = true }
-alloy-provider = { workspace = true, features = ["anvil-node"] }
+alloy-provider = { workspace = true, features = ["reqwest", "reqwest-default-tls", "anvil-node", "ws", "pubsub"] }
 alloy-signer = { workspace = true }
 alloy-contract = { workspace = true }
 uuid = { workspace = true }

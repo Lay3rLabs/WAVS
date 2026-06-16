@@ -549,6 +549,13 @@ impl SignatureKind {
             prefix: Some(SignaturePrefix::Eip191),
         }
     }
+
+    pub fn bls_default() -> Self {
+        Self {
+            algorithm: SignatureAlgorithm::Bls12381,
+            prefix: None, // BLS uses hash-to-curve with its own DST, no EIP-191 prefix
+        }
+    }
 }
 
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
@@ -557,7 +564,7 @@ impl SignatureKind {
 #[serde(rename_all = "snake_case")]
 pub enum SignatureAlgorithm {
     Secp256k1,
-    // Future: Bls12381, Ed25519, Secp256r1, etc.
+    Bls12381,
 }
 
 #[cfg_attr(feature = "ts-bindings", derive(TS))]
@@ -617,6 +624,24 @@ fn permission_defaults() {
         AllowedHostPermission::None
     );
     assert!(!permissions_default.file_system);
+}
+
+#[test]
+fn signature_algorithm_bls12381_serde() {
+    let algo = SignatureAlgorithm::Bls12381;
+    let json = serde_json::to_string(&algo).unwrap();
+    assert_eq!(json, "\"bls12381\"");
+    let decoded: SignatureAlgorithm = serde_json::from_str(&json).unwrap();
+    assert_eq!(decoded, SignatureAlgorithm::Bls12381);
+}
+
+#[test]
+fn signature_kind_bls_default() {
+    let kind = SignatureKind::bls_default();
+    assert_eq!(kind.algorithm, SignatureAlgorithm::Bls12381);
+    assert_eq!(kind.prefix, None);
+    let json = serde_json::to_string(&kind).unwrap();
+    assert!(json.contains("bls12381"));
 }
 
 // TODO: remove / change defaults?

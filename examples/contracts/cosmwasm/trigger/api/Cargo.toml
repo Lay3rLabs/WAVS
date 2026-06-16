@@ -8,7 +8,7 @@ license = "Apache-2.0"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-wavs-types = { workspace = true }
+wavs-types = { workspace = true, features = ["cosmwasm"] }
 cosmwasm-std = {workspace = true}
 anyhow = {workspace = true}
 cosmwasm-schema = {workspace = true}

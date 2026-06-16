@@ -30,7 +30,7 @@ shellexpand = { workspace = true }
 uuid = { workspace = true }
 cfg-if = { workspace = true }
 alloy-primitives = { workspace = true }
-alloy-provider = { workspace = true }
+alloy-provider = { workspace = true, features = ["reqwest", "reqwest-default-tls", "ws", "pubsub"] }
 alloy-json-abi = { workspace = true }
 cron = { workspace = true }
 rand = { workspace = true }

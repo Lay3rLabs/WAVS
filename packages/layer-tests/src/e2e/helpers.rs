@@ -78,6 +78,7 @@ pub async fn create_service_for_test(
             clients,
             component_sources,
             cosmos_code_map.clone(),
+            test.bls,
         )
         .await;
 
@@ -135,6 +136,7 @@ async fn deploy_workflow(
     clients: &Clients,
     component_sources: &ComponentSources,
     cosmos_code_map: CosmosCodeMap,
+    bls: bool,
 ) -> WorkflowDeployment {
     let component = deploy_component(
         component_sources,
@@ -146,7 +148,7 @@ async fn deploy_workflow(
     tracing::info!("[{}] Creating submit from config", test_name);
 
     let submission_contract =
-        deploy_submit_contract(clients, cosmos_code_map.clone(), service_manager)
+        deploy_submit_contract(clients, cosmos_code_map.clone(), service_manager, bls)
             .await
             .unwrap();
 
@@ -154,6 +156,7 @@ async fn deploy_workflow(
         &workflow_definition.submit,
         &submission_contract,
         Some(component_sources),
+        bls,
     )
     .await
     .unwrap();
@@ -290,6 +293,7 @@ pub async fn create_submit_from_config(
     submit_config: &SubmitDefinition,
     submission_contract: &layer_climb::prelude::Address,
     component_sources: Option<&ComponentSources>,
+    bls: bool,
 ) -> Result<Submit> {
     match submit_config {
         SubmitDefinition::Aggregator(aggregator) => match aggregator {
@@ -321,9 +325,15 @@ pub async fn create_submit_from_config(
 
                 let component = deploy_component(sources, component_def, config_vars, env_vars);
 
+                let signature_kind = if bls {
+                    SignatureKind::bls_default()
+                } else {
+                    SignatureKind::evm_default()
+                };
+
                 Ok(Submit::Aggregator {
                     component: Box::new(component),
-                    signature_kind: SignatureKind::evm_default(),
+                    signature_kind,
                 })
             }
         },
@@ -335,6 +345,7 @@ pub async fn deploy_submit_contract(
     clients: &Clients,
     cosmos_code_map: CosmosCodeMap,
     service_manager: ServiceManager,
+    bls: bool,
 ) -> Result<layer_climb::prelude::Address> {
     match service_manager {
         ServiceManager::Cosmos { chain, address } => {
@@ -362,23 +373,44 @@ pub async fn deploy_submit_contract(
         ServiceManager::Evm { chain, address } => {
             let evm_client = clients.get_evm_client(&chain);
 
-            tracing::info!(
-                "Deploying submit contract on chain {} with service manager: {}",
-                chain,
-                address
-            );
+            if bls {
+                tracing::info!(
+                    "Deploying BLS submit contract on chain {} with service manager: {}",
+                    chain,
+                    address
+                );
 
-            let result = crate::example_evm_client::example_submit::SimpleSubmit::deploy(
-                evm_client.provider.clone(),
-                address,
-            )
-            .await
-            .context("Failed to deploy submit contract")?;
+                let result =
+                    crate::example_evm_client::example_bls_submit::SimpleBlsSubmit::deploy(
+                        evm_client.provider.clone(),
+                        address,
+                    )
+                    .await
+                    .context("Failed to deploy BLS submit contract")?;
 
-            let address = *result.address();
-            tracing::info!("Submit contract deployed at address: {}", address);
+                let address = *result.address();
+                tracing::info!("BLS submit contract deployed at address: {}", address);
 
-            Ok(address.into())
+                Ok(address.into())
+            } else {
+                tracing::info!(
+                    "Deploying submit contract on chain {} with service manager: {}",
+                    chain,
+                    address
+                );
+
+                let result = crate::example_evm_client::example_submit::SimpleSubmit::deploy(
+                    evm_client.provider.clone(),
+                    address,
+                )
+                .await
+                .context("Failed to deploy submit contract")?;
+
+                let address = *result.address();
+                tracing::info!("Submit contract deployed at address: {}", address);
+
+                Ok(address.into())
+            }
         }
     }
 }
@@ -512,6 +544,43 @@ pub async fn simulate_anvil_reorg(
     Ok(())
 }
 
+pub async fn evm_wait_for_bls_trigger_validated(
+    evm_submit_client: EvmSigningClient,
+    address: alloy_primitives::Address,
+    trigger_id: TriggerId,
+    submit_start_block: u64,
+    timeout: Duration,
+) -> Result<()> {
+    let submit_client = SimpleEvmSubmitClient::new(evm_submit_client, address);
+
+    tokio::time::timeout(timeout, async move {
+        loop {
+            let current_block = submit_client
+                .evm_client
+                .provider
+                .get_block_number()
+                .await
+                .map_err(|e| anyhow!("Failed to get block number: {e}"))?;
+
+            if current_block <= submit_start_block {
+                submit_client.evm_client.provider.evm_mine(None).await?;
+            }
+
+            if submit_client.trigger_validated(trigger_id).await {
+                return Ok(());
+            }
+
+            tracing::debug!(
+                "Waiting for BLS trigger validation on trigger {}",
+                trigger_id
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("Timeout when waiting for BLS trigger to be validated"))?
+}
+
 pub async fn evm_wait_for_task_to_land(
     evm_submit_client: EvmSigningClient,
     address: alloy_primitives::Address,
@@ -616,6 +685,7 @@ pub async fn change_service_for_test(
                 clients,
                 component_sources,
                 cosmos_code_map,
+                false, // change_service doesn't support BLS workflow changes
             )
             .await;
 

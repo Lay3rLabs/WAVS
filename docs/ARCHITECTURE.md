@@ -77,4 +77,4 @@ Burned (submitted) queues are retained for a configurable TTL (default 48 hours)
 
 ## P2P Networking
 
-The Aggregator subsystem includes optional P2P networking for multi-operator deployments. Each registered service gets its own GossipSub topic; operators subscribe on service registration and unsubscribe on removal. Peer discovery uses either mDNS (local/dev) or Kademlia DHT (production). See [P2P.md](P2P.md) for configuration details.
+The Aggregator subsystem includes optional P2P networking for multi-operator deployments. Operators broadcast signed submissions via a commonware broadcast channel with application-level service filtering. Peer connectivity uses either lookup mode (local/dev, known addresses) or discovery mode (production, bootstrapper-based). Identities are Ed25519 keypairs derived from the signing mnemonic. See [P2P.md](P2P.md) for configuration details.

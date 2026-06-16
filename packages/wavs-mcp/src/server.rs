@@ -343,6 +343,12 @@ impl WavsMcpServer {
                     }) => {
                         format!("\nSigning key: HD index {hd_index} ({evm_address})\nCall wavs_register_operator next if using PoA.")
                     }
+                    Ok(wavs_types::SignerResponse::Bls12381 {
+                        hd_index,
+                        g1_pubkey_hex,
+                    }) => {
+                        format!("\nSigning key: HD index {hd_index} (BLS G1: {g1_pubkey_hex})\nCall wavs_register_operator next if using PoA.")
+                    }
                     Err(_) => String::new(),
                 };
                 ok(format!("Service registered successfully.{signer_info}"))
@@ -456,6 +462,12 @@ impl WavsMcpServer {
                             evm_address,
                         }) => {
                             format!("\nSigning key: HD index {hd_index} ({evm_address})")
+                        }
+                        Ok(wavs_types::SignerResponse::Bls12381 {
+                            hd_index,
+                            g1_pubkey_hex,
+                        }) => {
+                            format!("\nSigning key: HD index {hd_index} (BLS G1: {g1_pubkey_hex})")
                         }
                         Err(_) => String::new(),
                     }
@@ -626,6 +638,15 @@ impl WavsMcpServer {
                 tracing::info!("Service signing key: HD index {hd_index} → {evm_address}");
                 hd_index
             }
+            Ok(wavs_types::SignerResponse::Bls12381 {
+                hd_index,
+                g1_pubkey_hex,
+            }) => {
+                tracing::info!(
+                    "Service signing key: HD index {hd_index} → BLS G1: {g1_pubkey_hex}"
+                );
+                hd_index
+            }
             Err(e) => {
                 return err(format!(
                     "Failed to query service signing key from WAVS node: {e:#}\n\n\
@@ -673,6 +694,12 @@ impl WavsMcpServer {
             }) => ok(format!(
                 "Service signing key:\n  HD index:    {hd_index}\n  EVM address: {evm_address}"
             )),
+            Ok(wavs_types::SignerResponse::Bls12381 {
+                hd_index,
+                g1_pubkey_hex,
+            }) => ok(format!(
+                "Service signing key (BLS):\n  HD index:     {hd_index}\n  G1 pubkey:    {g1_pubkey_hex}"
+            )),
             Err(e) => err(format!("Failed to get service signer: {e:#}")),
         }
     }
@@ -700,6 +727,7 @@ impl WavsMcpServer {
         // Step 2: query the node for the service-specific signing key.
         let hd_index = match self.client.get_service_signer(manager.clone()).await {
             Ok(wavs_types::SignerResponse::Secp256k1 { hd_index, .. }) => hd_index,
+            Ok(wavs_types::SignerResponse::Bls12381 { hd_index, .. }) => hd_index,
             Err(e) => {
                 return err(format!(
                     "Service deployed but could not query signing key: {e:#}\n\

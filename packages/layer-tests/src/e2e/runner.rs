@@ -40,7 +40,9 @@ use crate::{
 };
 use serde_json::json;
 
-use super::helpers::{evm_wait_for_task_to_land, simulate_anvil_reorg};
+use super::helpers::{
+    evm_wait_for_bls_trigger_validated, evm_wait_for_task_to_land, simulate_anvil_reorg,
+};
 use super::test_definition::WorkflowDefinition;
 
 /// Simplified test runner that leverages services directly attached to test definitions
@@ -727,6 +729,29 @@ async fn run_test(
                                         // return mocked signed data with empty content to match ExpectedOutput::Dropped
                                         Err(_) => Vec::new(),
                                     }
+                                } else if test.bls {
+                                    // BLS: SimpleBlsSubmit doesn't have getSignedData(),
+                                    // so just verify the trigger was validated (BLS pairing check passed on-chain)
+                                    tracing::info!(
+                                        "Waiting for BLS trigger validation for trigger_id: {}",
+                                        trigger_id
+                                    );
+                                    evm_wait_for_bls_trigger_validated(
+                                        client,
+                                        submission_contract.clone().try_into().unwrap(),
+                                        trigger_id,
+                                        submit_start_block,
+                                        *timeout,
+                                    )
+                                    .await?;
+                                    tracing::info!(
+                                        "BLS trigger validated for trigger_id: {}",
+                                        trigger_id
+                                    );
+                                    // Return the input data as the "signed data" since the echo
+                                    // component echoes input and we verified the BLS signature
+                                    // check passed on-chain
+                                    workflow_def.input_data.to_bytes().unwrap_or_default()
                                 } else {
                                     tracing::info!(
                                         "Waiting for task to land (no re-org) for trigger_id: {}",

@@ -11,7 +11,7 @@ use utils::{
     filesystem::workspace_path,
     test_utils::middleware::evm::EvmMiddlewareType,
 };
-use wavs::subsystems::aggregator::p2p::P2pConfig;
+use wavs::subsystems::aggregator::p2p::{pubkey_from_mnemonic, P2pConfig};
 use wavs_types::{ChainConfigs, CosmosChainConfigBuilder, Credential, EvmChainConfigBuilder};
 
 use crate::config::{TestConfig, TestP2pMode};
@@ -250,39 +250,55 @@ impl From<TestConfig> for Configs {
 
             // Enable P2P for multi-operator tests
             if num_operators > 1 {
+                // Pre-compute Ed25519 pubkeys for all operators from their mnemonics.
+                // In commonware-p2p, peers must be in the oracle's authorized set to connect.
+                // Without this, operators reject each other's connections.
+                let all_operator_pubkeys: Vec<String> = mnemonics
+                    .operators
+                    .iter()
+                    .map(|cred| {
+                        pubkey_from_mnemonic(cred.as_str())
+                            .expect("Failed to derive P2P pubkey from operator mnemonic")
+                    })
+                    .collect();
+
+                // Each operator authorizes all OTHER operators
+                let other_pubkeys: Vec<String> = all_operator_pubkeys
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != operator_index)
+                    .map(|(_, pk)| pk.clone())
+                    .collect();
+
                 match test_config.p2p {
-                    TestP2pMode::Kademlia => {
-                        // Remote mode: Kademlia DHT discovery
-                        // Operator 0 is the bootstrap server (empty bootstrap_nodes)
-                        // Operators 1+ will have bootstrap_nodes set at runtime after operator 0 starts
+                    TestP2pMode::Remote => {
+                        // Remote mode: discovery with bootstrapper nodes
+                        // Operator 0 is the bootstrap server (empty bootstrappers)
+                        // Operators 1+ will have bootstrappers set at runtime after operator 0 starts
                         wavs_config.p2p = P2pConfig::Remote {
                             listen_port: DEFAULT_P2P_BASE_PORT + operator_index as u16,
-                            bootstrap_nodes: vec![], // Set at runtime for operators 1+
-                            max_retry_duration_secs: None,
-                            retry_interval_ms: None,
-                            submission_ttl_secs: None,
-                            max_catchup_submissions: None,
-                            cleanup_interval_secs: None,
-                            kademlia_discovery_interval_secs: Some(2),
-                            catchup_request_timeout_secs: None,
-                            max_concurrent_catchup_requests_per_service: None,
-                            max_pending_publishes: None,
-                            max_stored_submissions_per_service: None,
+                            bootstrappers: vec![], // Set at runtime for operators 1+
+                            authorized_peers: other_pubkeys,
+                            max_message_size: None,
+                            deque_size: None,
                         };
                     }
-                    TestP2pMode::Mdns => {
-                        // Local mode: mDNS discovery
+                    TestP2pMode::Local => {
+                        // Local mode: lookup with known peer addresses (pubkey@host:port)
+                        let peer_addresses: Vec<String> = all_operator_pubkeys
+                            .iter()
+                            .enumerate()
+                            .filter(|(i, _)| *i != operator_index)
+                            .map(|(i, pk)| {
+                                format!("{}@127.0.0.1:{}", pk, DEFAULT_P2P_BASE_PORT + i as u16)
+                            })
+                            .collect();
                         wavs_config.p2p = P2pConfig::Local {
                             listen_port: DEFAULT_P2P_BASE_PORT + operator_index as u16,
-                            max_retry_duration_secs: None,
-                            retry_interval_ms: None,
-                            submission_ttl_secs: None,
-                            max_catchup_submissions: None,
-                            cleanup_interval_secs: None,
-                            catchup_request_timeout_secs: None,
-                            max_concurrent_catchup_requests_per_service: None,
-                            max_pending_publishes: None,
-                            max_stored_submissions_per_service: None,
+                            peer_addresses,
+                            authorized_peers: other_pubkeys,
+                            max_message_size: None,
+                            deque_size: None,
                         };
                     }
                 }

@@ -17,6 +17,12 @@ pub enum SignerResponse {
         /// The evm-style address ("0x" prefixed hex string) derived from the key
         evm_address: String,
     },
+    Bls12381 {
+        /// The derivation index used to create this key from the mnemonic
+        hd_index: u32,
+        /// The 128-byte G1 public key in hex (EIP-2537 uncompressed format)
+        g1_pubkey_hex: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema)]
@@ -128,19 +134,22 @@ pub enum DevTriggerStreamSubscriptionKind {
 pub struct P2pStatus {
     /// Whether P2P networking is enabled
     pub enabled: bool,
-    /// Local peer ID
+    /// Discovery mode: "disabled", "local", "remote", or "unknown"
+    #[serde(default)]
+    pub discovery_mode: String,
+    /// Local peer ID (Ed25519 public key, hex-encoded)
     pub local_peer_id: Option<String>,
-    /// Listen addresses (multiaddrs with peer ID appended, e.g. "/ip4/0.0.0.0/tcp/9000/p2p/12D3KooW...")
+    /// Listen addresses (socket format, e.g. "0.0.0.0:9000")
     pub listen_addresses: Vec<String>,
-    /// External addresses discovered via AutoNAT/Identify (preferred for NAT traversal)
-    /// These are addresses that peers outside NAT can use to reach us.
-    pub external_addresses: Vec<String>,
     /// Number of connected peers
     pub connected_peers: usize,
-    /// List of connected peer IDs
+    /// Connected peer IDs (Ed25519 public keys, hex-encoded)
     pub peer_ids: Vec<String>,
-    /// Topics we're subscribed to
-    pub subscribed_topics: Vec<String>,
-    /// Number of peers subscribed to our topics (topic -> peer count)
-    pub topic_peer_counts: HashMap<String, usize>,
+    /// Services this node is subscribed to (hex-encoded service ID hashes)
+    pub subscribed_services: Vec<String>,
+    /// Per-service peer subscription counts (OBS-01).
+    /// Keys are hex-encoded service_id hashes, values are the number of
+    /// peers that have announced subscription to that service.
+    #[serde(default)]
+    pub peer_subscriptions: HashMap<String, usize>,
 }

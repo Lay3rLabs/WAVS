@@ -286,6 +286,9 @@ impl From<wavs_types::SignatureAlgorithm> for component_service::SignatureAlgori
             wavs_types::SignatureAlgorithm::Secp256k1 => {
                 component_service::SignatureAlgorithm::Secp256k1
             }
+            wavs_types::SignatureAlgorithm::Bls12381 => {
+                component_service::SignatureAlgorithm::Bls12381
+            }
         }
     }
 }
@@ -849,6 +852,9 @@ impl From<wavs_types::SignatureAlgorithm> for aggregator_service::SignatureAlgor
         match src {
             wavs_types::SignatureAlgorithm::Secp256k1 => {
                 aggregator_service::SignatureAlgorithm::Secp256k1
+            }
+            wavs_types::SignatureAlgorithm::Bls12381 => {
+                aggregator_service::SignatureAlgorithm::Bls12381
             }
         }
     }

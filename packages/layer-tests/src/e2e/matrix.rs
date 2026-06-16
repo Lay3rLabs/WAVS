@@ -40,6 +40,7 @@ pub enum EvmService {
     TimerAggregatorReorg,
     GasPrice,
     MultiOperator,
+    BlsMultiOperator,
 }
 
 #[derive(
@@ -134,6 +135,11 @@ impl TestMatrix {
 
     pub fn multi_operator_enabled(&self) -> bool {
         self.evm.contains(&EvmService::MultiOperator)
+            || self.evm.contains(&EvmService::BlsMultiOperator)
+    }
+
+    pub fn bls_multi_operator_enabled(&self) -> bool {
+        self.evm.contains(&EvmService::BlsMultiOperator)
     }
 }
 
@@ -202,6 +208,9 @@ impl From<EvmService> for Vec<ComponentName> {
                 ]
             }
             EvmService::MultiOperator => {
+                vec![ComponentName::Operator(OperatorComponent::EchoData)]
+            }
+            EvmService::BlsMultiOperator => {
                 vec![ComponentName::Operator(OperatorComponent::EchoData)]
             }
         }

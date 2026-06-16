@@ -29,6 +29,8 @@ impl EvmInstance {
         );
 
         // Something is broken with Alloy's anvil thing... let's use our own
+        // Note: anvil 1.4.4+ defaults to Prague hardfork, which includes EIP-2537
+        // precompiles needed for BLS. No explicit --hardfork flag needed.
         let anvil = LameAnvilInstanceBuilder {
             port,
             chain_id: chain_config.chain_id.to_string(),

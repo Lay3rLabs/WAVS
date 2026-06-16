@@ -6,9 +6,12 @@ wavs_concurrency = true
 middleware_concurrency = true
 grouping = false
 evm_middleware_type = "poa"   # "eigenlayer" or "poa"
-p2p = "kademlia"              # "mdns" (local) or "kademlia" (remote)
+p2p = "remote"                # "local" or "remote"
 # Run all tests
 mode = "all"
+# mode = { "isolated" = [{ evm = "echo_data" }, { evm = "bls_multi_operator" }] }
+# mode = { "isolated" = [{ evm = "change_workflow" }] }
+# mode = { "isolated" = [{ evm = "echo_data" }] }
 # mode = { "isolated" = [{ evm = "hypercore_echo_data" }] }
 # mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }
 # mode = { "isolated" = [{ evm = "echo_data" }, {evm = "multi_operator"}] }

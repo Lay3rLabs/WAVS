@@ -5,7 +5,7 @@ use alloy_signer::k256::SecretKey;
 use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
 use std::time::Duration;
 use tokio::time::sleep;
-use wavs_types::{Credential, Envelope, SignatureData};
+use wavs_types::{BlsServiceHandlerRpc, Credential, Envelope, SignatureData};
 
 use crate::{error::EvmClientError, evm_client::AnyNonceManager};
 
@@ -48,6 +48,17 @@ impl EvmSigningClient {
         max_gas: Option<u64>,
         gas_price: Option<u128>,
     ) -> Result<TransactionReceipt, EvmClientError> {
+        // Extract secp256k1 inner type for the EVM contract call
+        let inner_sig_data = match signature_data {
+            SignatureData::Secp256k1(inner) => inner,
+            SignatureData::Bls12381(_) => {
+                // BLS uses a different contract interface -- call send_bls_envelope_signatures() instead
+                return Err(EvmClientError::SendTransaction(anyhow::anyhow!(
+                    "Use send_bls_envelope_signatures() for BLS submissions"
+                )));
+            }
+        };
+
         if self
             .provider
             .get_code_at(service_handler)
@@ -62,7 +73,7 @@ impl EvmSigningClient {
             None => {
                 let gas_estimate = self
                     .service_handler(service_handler)
-                    .handleSignedEnvelope(envelope.clone(), signature_data.clone())
+                    .handleSignedEnvelope(envelope.clone(), inner_sig_data.clone())
                     .estimate_gas()
                     .await
                     .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
@@ -80,7 +91,7 @@ impl EvmSigningClient {
 
         let service_handler_instance = self.service_handler(service_handler);
         let mut tx_builder = service_handler_instance
-            .handleSignedEnvelope(envelope, signature_data)
+            .handleSignedEnvelope(envelope, inner_sig_data)
             .gas(gas);
 
         // Set gas price if provided
@@ -152,6 +163,123 @@ impl EvmSigningClient {
             false => Err(EvmClientError::TransactionWithReceipt(Box::new(receipt))),
         }
     }
+
+    pub async fn send_bls_envelope_signatures(
+        &self,
+        envelope: Envelope,
+        signature_data: wavs_types::BlsServiceHandler::SignatureData,
+        service_handler: Address,
+        max_gas: Option<u64>,
+        gas_price: Option<u128>,
+    ) -> Result<TransactionReceipt, EvmClientError> {
+        if self
+            .provider
+            .get_code_at(service_handler)
+            .await
+            .map_err(|e| EvmClientError::FailedGetCode(service_handler, e.into()))?
+            .is_empty()
+        {
+            return Err(EvmClientError::NotContract(service_handler));
+        }
+
+        // Convert secp256k1 Envelope to BLS Envelope (same fields, different Alloy-generated type)
+        let bls_envelope = BlsServiceHandlerRpc::Envelope {
+            eventId: envelope.eventId,
+            ordering: envelope.ordering,
+            payload: envelope.payload,
+        };
+
+        // Convert non-rpc SignatureData to rpc SignatureData (same fields, different Alloy macro output)
+        let rpc_signature_data = BlsServiceHandlerRpc::SignatureData {
+            signerPubkeys: signature_data.signerPubkeys,
+            aggregateSignature: signature_data.aggregateSignature,
+            referenceBlock: signature_data.referenceBlock,
+        };
+
+        let bls_handler = self.bls_service_handler(service_handler);
+
+        let gas = match max_gas {
+            None => {
+                let gas_estimate = bls_handler
+                    .handleSignedEnvelope(bls_envelope.clone(), rpc_signature_data.clone())
+                    .estimate_gas()
+                    .await
+                    .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
+
+                ((gas_estimate as f32) * self.gas_estimate_multiplier()) as u64
+            }
+            Some(gas) => gas.min(30_000_000),
+        };
+
+        let mut tx_builder = bls_handler
+            .handleSignedEnvelope(bls_envelope, rpc_signature_data)
+            .gas(gas);
+
+        if let Some(price) = gas_price {
+            tx_builder = tx_builder.gas_price(price);
+        }
+
+        let mut retry_count = 0;
+
+        let receipt = loop {
+            let send_result = tx_builder.send().await;
+
+            match send_result {
+                Ok(pending_tx) => {
+                    break pending_tx
+                        .get_receipt()
+                        .await
+                        .map_err(|e| EvmClientError::TransactionWithoutReceipt(e.into()))?;
+                }
+                Err(e) => {
+                    if retry_count >= MAX_RETRIES {
+                        return Err(EvmClientError::SendTransaction(e.into()));
+                    }
+
+                    retry_count += 1;
+
+                    let error_msg = e.to_string().to_lowercase();
+                    let is_nonce_error = error_msg.contains("replacement transaction underpriced")
+                        || error_msg.contains("nonce");
+
+                    if is_nonce_error {
+                        tracing::warn!(
+                            "Nonce error detected (attempt {}/{}), refreshing nonce and retrying: {}",
+                            retry_count, MAX_RETRIES, e
+                        );
+
+                        if let AnyNonceManager::Fast(fast_nonce_manager) = &self.nonce_manager {
+                            if fast_nonce_manager
+                                .set_current_nonce(&self.provider)
+                                .await
+                                .is_ok()
+                            {
+                                let delay_ms = BASE_RETRY_DELAY_MS * (1 << (retry_count - 1));
+                                sleep(Duration::from_millis(delay_ms)).await;
+                                continue;
+                            }
+                        }
+                    } else {
+                        tracing::warn!(
+                            "Transaction failed (attempt {}/{}), retrying: {}",
+                            retry_count,
+                            MAX_RETRIES,
+                            e
+                        );
+
+                        let delay_ms = BASE_RETRY_DELAY_MS * (1 << (retry_count - 1));
+                        sleep(Duration::from_millis(delay_ms)).await;
+                        continue;
+                    }
+                }
+            }
+        };
+
+        match receipt.status() {
+            true => Ok(receipt),
+            false => Err(EvmClientError::TransactionWithReceipt(Box::new(receipt))),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -160,7 +288,7 @@ mod test {
     use alloy_provider::Provider;
     use alloy_rpc_types_eth::TransactionTrait;
     use alloy_signer_local::{coins_bip39::English, MnemonicBuilder, PrivateKeySigner};
-    use wavs_types::{Credential, Envelope, SignatureKind, WavsSigner};
+    use wavs_types::{Credential, Envelope, SignatureKind, WavsCryptoSigner, WavsSigner};
 
     use crate::{
         evm_client::{AnyNonceManager, EvmSigningClient, EvmSigningClientConfig},
@@ -196,10 +324,11 @@ mod test {
     #[tokio::test]
     async fn signature_validation() {
         let signer = mock_signer();
+        let crypto_signer = WavsCryptoSigner::Secp256k1(signer.clone());
         let envelope = mock_envelope();
 
         let signature = envelope
-            .sign(&signer, SignatureKind::evm_default())
+            .sign(&crypto_signer, SignatureKind::evm_default())
             .await
             .unwrap();
 
@@ -211,7 +340,7 @@ mod test {
         // also see that we can recover with no prefix
         let signature = envelope
             .sign(
-                &signer,
+                &crypto_signer,
                 SignatureKind {
                     algorithm: wavs_types::SignatureAlgorithm::Secp256k1,
                     prefix: None,
@@ -227,11 +356,14 @@ mod test {
 
         // and that it fails if we try the wrong prefix
         let mut signature = envelope
-            .sign(&signer, SignatureKind::evm_default())
+            .sign(&crypto_signer, SignatureKind::evm_default())
             .await
             .unwrap();
 
-        signature.kind.prefix = None;
+        match &mut signature {
+            wavs_types::WavsSignature::Secp256k1 { kind, .. } => kind.prefix = None,
+            _ => unreachable!("expected secp256k1 signature"),
+        }
 
         assert_ne!(
             signature.evm_signer_address(&envelope).unwrap(),
@@ -241,7 +373,7 @@ mod test {
         // in both directions
         let mut signature = envelope
             .sign(
-                &signer,
+                &crypto_signer,
                 SignatureKind {
                     algorithm: wavs_types::SignatureAlgorithm::Secp256k1,
                     prefix: None,
@@ -250,7 +382,12 @@ mod test {
             .await
             .unwrap();
 
-        signature.kind.prefix = Some(wavs_types::SignaturePrefix::Eip191);
+        match &mut signature {
+            wavs_types::WavsSignature::Secp256k1 { kind, .. } => {
+                kind.prefix = Some(wavs_types::SignaturePrefix::Eip191)
+            }
+            _ => unreachable!("expected secp256k1 signature"),
+        }
 
         assert_ne!(
             signature.evm_signer_address(&envelope).unwrap(),
@@ -361,8 +498,9 @@ mod test {
 
         // Build a signed envelope referencing the primary signer.
         let envelope = mock_envelope();
+        let crypto_signer = WavsCryptoSigner::Secp256k1(primary_client.signer.as_ref().clone());
         let signature = envelope
-            .sign(primary_client.signer.as_ref(), SignatureKind::evm_default())
+            .sign(&crypto_signer, SignatureKind::evm_default())
             .await
             .expect("signing envelope should succeed");
         let current_block = primary_client

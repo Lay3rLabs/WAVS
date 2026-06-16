@@ -64,7 +64,15 @@ pub async fn inner_handle_info(state: HttpState) -> HttpResult<InfoResponse> {
         .unwrap_or_default();
 
     // Get P2P status
-    let p2p_status = state.dispatcher.aggregator.get_p2p_status().await;
+    let mut p2p_status = state.dispatcher.aggregator.get_p2p_status().await;
+    // Fill in discovery_mode from config if not already set by the P2P task
+    if p2p_status.discovery_mode.is_empty() {
+        p2p_status.discovery_mode = match &state.config.p2p {
+            P2pConfig::Disabled => "disabled".to_string(),
+            P2pConfig::Local { .. } => "local".to_string(),
+            P2pConfig::Remote { .. } => "remote".to_string(),
+        };
+    }
 
     Ok(InfoResponse {
         has_aggregator_cosmos: state.config.aggregator_cosmos_credential.is_some(),

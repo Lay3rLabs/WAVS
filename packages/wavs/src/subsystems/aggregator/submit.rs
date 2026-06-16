@@ -10,10 +10,12 @@ use wavs_types::{
             error::WavsValidateError, ServiceManagerQueryMessages, WavsValidateResult,
         },
     },
-    CosmosSubmitAction, EvmSubmitAction,
+    BlsServiceHandlerRpc, BlsServiceManagerEnvelope, BlsServiceManagerRpc,
+    BlsServiceManagerSignatureData, CosmosSubmitAction, EvmSubmitAction,
     IWavsServiceHandler::IWavsServiceHandlerInstance,
     IWavsServiceManager::IWavsServiceManagerInstance,
-    ServiceManagerError, Submission, WavsSignature, WavsSigner,
+    ServiceManagerError, ServiceManagerSignatureData, SignatureData, Submission, WavsSignature,
+    WavsSigner,
 };
 
 use crate::subsystems::aggregator::{error::AggregatorError, Aggregator};
@@ -70,72 +72,170 @@ impl Aggregator {
             .envelope
             .signature_data(signatures, block_height_minus_one)?;
 
-        let result = service_manager
-            .validate(
-                queue.first().unwrap().envelope.clone().into(),
-                signature_data.clone().into(),
-            )
-            .call()
-            .await;
+        let envelope = queue.first().unwrap().envelope.clone();
 
-        if let Err(err) = result {
-            match err.as_decoded_interface_error::<ServiceManagerError>() {
-                Some(err) => match err {
-                    ServiceManagerError::InsufficientQuorum(info) => {
-                        return Err(AggregatorError::InsufficientQuorum {
-                            signer_weight: info.signerWeight.to_string(),
-                            threshold_weight: info.thresholdWeight.to_string(),
-                            total_weight: info.totalWeight.to_string(),
-                        });
+        match signature_data {
+            SignatureData::Secp256k1(ref inner) => {
+                // secp256k1 path: validate via service manager, then submit
+                let result = service_manager
+                    .validate(
+                        envelope.clone().into(),
+                        ServiceManagerSignatureData {
+                            signers: inner.signers.clone(),
+                            signatures: inner.signatures.clone(),
+                            referenceBlock: inner.referenceBlock,
+                        },
+                    )
+                    .call()
+                    .await;
+
+                if let Err(err) = result {
+                    match err.as_decoded_interface_error::<ServiceManagerError>() {
+                        Some(err) => match err {
+                            ServiceManagerError::InsufficientQuorum(info) => {
+                                return Err(AggregatorError::InsufficientQuorum {
+                                    signer_weight: info.signerWeight.to_string(),
+                                    threshold_weight: info.thresholdWeight.to_string(),
+                                    total_weight: info.totalWeight.to_string(),
+                                });
+                            }
+                            err => {
+                                return Err(AggregatorError::EvmServiceManagerValidateKnown(err));
+                            }
+                        },
+                        None => match err.as_revert_data() {
+                            Some(raw) => {
+                                let raw_str = raw.to_string();
+                                // Detect SignerNotRegistered() error (selector 0x3dda1739)
+                                //
+                                // This is a transient error indicating operators haven't completed registration
+                                // on-chain yet. Common scenarios:
+                                // - P2P catch-up delivers submissions before operator registration completes
+                                // - PoA middleware: Sequential docker exec calls for operator registration are slow
+                                // - EigenLayer middleware: Batch registration is fast but still has a small timing window
+                                //
+                                // The aggregator's retry mechanism will:
+                                // 1. Save the queue when this error is detected
+                                // 2. Retry submission when next submission arrives
+                                // 3. Succeed once operators are registered on-chain
+                                if raw_str == "0x3dda1739" {
+                                    tracing::warn!(
+                                        "Signer not registered yet for submission {}. Queue will be saved for retry.",
+                                        queue.last().unwrap().label()
+                                    );
+                                    return Err(
+                                        AggregatorError::EvmServiceManagerValidateAnyRevert(
+                                            format!("SignerNotRegistered ({})", raw_str),
+                                        ),
+                                    );
+                                }
+                                return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(
+                                    raw_str,
+                                ));
+                            }
+                            None => {
+                                return Err(AggregatorError::EvmServiceManagerValidateUnknown(err));
+                            }
+                        },
                     }
-                    err => {
-                        return Err(AggregatorError::EvmServiceManagerValidateKnown(err));
-                    }
-                },
-                None => match err.as_revert_data() {
-                    Some(raw) => {
-                        let raw_str = raw.to_string();
-                        // Detect SignerNotRegistered() error (selector 0x3dda1739)
-                        //
-                        // This is a transient error indicating operators haven't completed registration
-                        // on-chain yet. Common scenarios:
-                        // - P2P catch-up delivers submissions before operator registration completes
-                        // - PoA middleware: Sequential docker exec calls for operator registration are slow
-                        // - EigenLayer middleware: Batch registration is fast but still has a small timing window
-                        //
-                        // The aggregator's retry mechanism will:
-                        // 1. Save the queue when this error is detected
-                        // 2. Retry submission when next submission arrives
-                        // 3. Succeed once operators are registered on-chain
-                        if raw_str == "0x3dda1739" {
-                            tracing::warn!(
-                                "Signer not registered yet for submission {}. Queue will be saved for retry.",
-                                queue.last().unwrap().label()
-                            );
-                            return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(
-                                format!("SignerNotRegistered ({})", raw_str),
-                            ));
-                        }
-                        return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(raw_str));
-                    }
-                    None => {
-                        return Err(AggregatorError::EvmServiceManagerValidateUnknown(err));
-                    }
-                },
+                };
+
+                let tx_receipt = client
+                    .send_envelope_signatures(
+                        envelope,
+                        signature_data,
+                        contract_address,
+                        None,
+                        action.gas_price,
+                    )
+                    .await?;
+
+                Ok(AnyTransactionReceipt::Evm(Box::new(tx_receipt)))
             }
-        };
+            SignatureData::Bls12381(ref bls_sig_data) => {
+                // BLS path: look up BLS service manager, validate, then submit via BLS handler
+                let bls_service_handler =
+                    BlsServiceHandlerRpc::new(contract_address, client.provider.clone());
+                let bls_sm_address = bls_service_handler
+                    .getServiceManager()
+                    .call()
+                    .await
+                    .map_err(AggregatorError::EvmServiceManagerLookup)?;
+                let bls_service_manager =
+                    BlsServiceManagerRpc::new(bls_sm_address, client.provider.clone());
 
-        let tx_receipt = client
-            .send_envelope_signatures(
-                queue.first().unwrap().envelope.clone(),
-                signature_data,
-                contract_address,
-                None,
-                action.gas_price,
-            )
-            .await?;
+                // Convert to service manager's own Alloy-generated types for validate()
+                // (same fields, yet another distinct Rust type from the sol! macro)
+                let sm_envelope = BlsServiceManagerEnvelope {
+                    eventId: envelope.eventId,
+                    ordering: envelope.ordering,
+                    payload: envelope.payload.clone(),
+                };
+                let sm_sig_data = BlsServiceManagerSignatureData {
+                    signerPubkeys: bls_sig_data.signerPubkeys.clone(),
+                    aggregateSignature: bls_sig_data.aggregateSignature.clone(),
+                    referenceBlock: bls_sig_data.referenceBlock,
+                };
 
-        Ok(AnyTransactionReceipt::Evm(Box::new(tx_receipt)))
+                let result = bls_service_manager
+                    .validate(sm_envelope, sm_sig_data)
+                    .call()
+                    .await;
+
+                if let Err(err) = result {
+                    // Try to decode typed errors first (same error selectors as secp256k1 service manager)
+                    match err.as_decoded_interface_error::<ServiceManagerError>() {
+                        Some(err) => match err {
+                            ServiceManagerError::InsufficientQuorum(info) => {
+                                return Err(AggregatorError::InsufficientQuorum {
+                                    signer_weight: info.signerWeight.to_string(),
+                                    threshold_weight: info.thresholdWeight.to_string(),
+                                    total_weight: info.totalWeight.to_string(),
+                                });
+                            }
+                            err => {
+                                return Err(AggregatorError::EvmServiceManagerValidateKnown(err));
+                            }
+                        },
+                        None => match err.as_revert_data() {
+                            Some(raw) => {
+                                let raw_str = raw.to_string();
+                                // SignerNotRegistered (0x3dda1739)
+                                if raw_str == "0x3dda1739" {
+                                    tracing::warn!(
+                                        "BLS signer not registered yet for submission {}. Queue will be saved for retry.",
+                                        queue.last().unwrap().label()
+                                    );
+                                    return Err(
+                                        AggregatorError::EvmServiceManagerValidateAnyRevert(
+                                            format!("SignerNotRegistered ({})", raw_str),
+                                        ),
+                                    );
+                                }
+                                return Err(AggregatorError::EvmServiceManagerValidateAnyRevert(
+                                    raw_str,
+                                ));
+                            }
+                            None => {
+                                return Err(AggregatorError::EvmServiceManagerValidateUnknown(err));
+                            }
+                        },
+                    }
+                }
+
+                let tx_receipt = client
+                    .send_bls_envelope_signatures(
+                        envelope,
+                        bls_sig_data.clone(),
+                        contract_address,
+                        None,
+                        action.gas_price,
+                    )
+                    .await?;
+
+                Ok(AnyTransactionReceipt::Evm(Box::new(tx_receipt)))
+            }
+        }
     }
 
     pub async fn handle_action_submit_cosmos(

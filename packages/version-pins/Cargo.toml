@@ -10,7 +10,7 @@ rust-version.workspace = true
 [dependencies]
 # This package exists solely to pin transitive dependency versions
 # for Rust 1.86 compatibility in our Docker build environment.
-alloy-provider = { workspace = true }
+alloy-provider = { workspace = true, features = ["reqwest", "reqwest-default-tls", "ws", "pubsub"] }
 alloy-network = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-consensus = { workspace = true }

@@ -9,8 +9,8 @@ use crate::e2e::{AnyService, CosmosService, CrossChainService, EvmService, TestM
 #[serde(rename_all = "snake_case")]
 pub enum TestP2pMode {
     #[default]
-    Mdns,
-    Kademlia,
+    Local,
+    Remote,
 }
 
 /// The fully parsed and validated config struct we use in the application

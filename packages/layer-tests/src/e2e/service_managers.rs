@@ -3,15 +3,16 @@ use std::{collections::HashMap, sync::Arc};
 use futures::{stream::FuturesUnordered, StreamExt};
 use utils::test_utils::{
     middleware::{
-        cosmos::CosmosServiceManager,
-        evm::{EvmMiddleware, MiddlewareServiceManagerConfig},
-        operator::AvsOperator,
+        cosmos::CosmosServiceManager, evm::MiddlewareServiceManagerConfig, operator::AvsOperator,
     },
     mock_service_manager::MockEvmServiceManager,
 };
+
+use crate::e2e::handles::EvmMiddlewares;
+use alloy_sol_types::SolType;
 use wavs_cli::command::deploy_service::DeployService;
 use wavs_types::{
-    ChainKey, ChainKeyNamespace, Service, ServiceManager, ServiceStatus, SignerResponse,
+    ChainKey, ChainKeyNamespace, Service, ServiceManager, ServiceStatus, SignerResponse, Trigger,
 };
 
 use crate::{
@@ -58,7 +59,7 @@ impl ServiceManagers {
         &mut self,
         registry: &TestRegistry,
         clients: &Clients,
-        evm_middleware: Option<EvmMiddleware>,
+        evm_middlewares: Option<EvmMiddlewares>,
         cosmos_middlewares: CosmosMiddlewares,
     ) {
         tracing::warn!("WAVS Concurrency: {}", self.configs.wavs_concurrency);
@@ -67,7 +68,7 @@ impl ServiceManagers {
             self.configs.middleware_concurrency
         );
         tracing::warn!("Bootstrapping service managers...");
-        self.deploy_service_managers(registry, clients, evm_middleware, cosmos_middlewares)
+        self.deploy_service_managers(registry, clients, evm_middlewares, cosmos_middlewares)
             .await;
         tracing::warn!("Bootstrapping initial service uris...");
         self.set_initial_service_uris(registry, clients).await;
@@ -94,7 +95,7 @@ impl ServiceManagers {
         &mut self,
         registry: &TestRegistry,
         clients: &Clients,
-        evm_middleware: Option<EvmMiddleware>,
+        evm_middlewares: Option<EvmMiddlewares>,
         cosmos_middlewares: CosmosMiddlewares,
     ) {
         let mut lookup = HashMap::new();
@@ -107,15 +108,24 @@ impl ServiceManagers {
                 .clone()
                 .unwrap_or_else(|| panic!("missing service manager chain for test {}", test.name));
             futures.push({
-                let evm_middleware = evm_middleware.clone();
+                let evm_middlewares = evm_middlewares.clone();
                 let cosmos_middlewares = cosmos_middlewares.clone();
+                let test_bls = test.bls;
                 async move {
                     match chain.namespace.as_str() {
                         ChainKeyNamespace::EVM => {
                             let wallet_client = clients.get_evm_client(&chain);
                             let test_name = test.name.clone();
-                            let middleware = evm_middleware.clone().unwrap();
-                            tracing::info!("Deploying service manager for test {}", test_name);
+                            // Per-test middleware dispatch: BLS tests use PoaBls, others use default
+                            let middlewares = evm_middlewares.as_ref()
+                                .expect("EVM middlewares required for EVM test");
+                            let middleware = if test_bls {
+                                middlewares.bls.clone()
+                                    .expect("BLS middleware required for BLS test but not created -- is BlsMultiOperator in matrix?")
+                            } else {
+                                middlewares.default.clone()
+                            };
+                            tracing::info!("Deploying service manager for test {} (bls={})", test_name, test_bls);
                             let manager = MockEvmServiceManager::new(middleware, wallet_client)
                                 .await
                                 .unwrap();
@@ -262,10 +272,7 @@ impl ServiceManagers {
                 // Reuse existing HTTP client for this WAVS instance
                 let http_client = &clients.http_clients[operator_offset];
 
-                let SignerResponse::Secp256k1 {
-                    evm_address: avs_signer_address,
-                    hd_index: wavs_signer_hd_index,
-                } = http_client
+                let signer_resp = http_client
                     .get_service_signer(service_manager.clone())
                     .await
                     .unwrap();
@@ -282,28 +289,88 @@ impl ServiceManagers {
                 let operator_address = operator_signer.address();
                 let operator_private_key = const_hex::encode(operator_signer.to_bytes());
 
-                // Get the signing key that this WAVS instance will use
-                let signing_signer = utils::evm_client::signing::make_signer(
-                    operator_mnemonic,
-                    Some(wavs_signer_hd_index),
-                )
-                .unwrap();
-                let signing_address = signing_signer.address();
-                let signing_private_key = const_hex::encode(signing_signer.to_bytes());
+                let avs_operator = if test.bls {
+                    // BLS operator registration: derive BLS key, create G1 pubkey + G2 proof.
+                    // At bootstrap time the service may still be registered with Secp256k1 (empty
+                    // workflows placeholder). Accept either response type — only the HD index is
+                    // needed to derive the BLS key. The signer algorithm is corrected to Bls12381
+                    // later when update_services runs change_service_inner.
+                    let wavs_signer_hd_index = match signer_resp {
+                        SignerResponse::Bls12381 { hd_index, .. } => hd_index,
+                        SignerResponse::Secp256k1 { hd_index, .. } => {
+                            tracing::warn!(
+                                "BLS test '{}' got Secp256k1 signer response at bootstrap (HD {}); \
+                                 using HD index for BLS key derivation — algorithm will be updated by update_services",
+                                test.name, hd_index
+                            );
+                            hd_index
+                        }
+                    };
 
-                assert_eq!(
-                    signing_address.to_string().to_lowercase(),
-                    avs_signer_address.to_lowercase(),
-                    "Derived signing address doesn't match WAVS signer address for operator {}",
-                    operator_offset
-                );
+                    // Derive BLS key from operator mnemonic + WAVS signer HD index
+                    let bls_secret = utils::bls_signing::bls_private_key_from_mnemonic(
+                        operator_mnemonic.as_str(),
+                        wavs_signer_hd_index,
+                    )
+                    .expect("Failed to derive BLS key from operator mnemonic");
 
-                let avs_operator = AvsOperator::with_keys(
-                    operator_address,
-                    signing_address,
-                    operator_private_key,
-                    signing_private_key,
-                );
+                    // Get G1 pubkey (128 bytes EIP-2537)
+                    let g1_pubkey = utils::bls_signing::bls_g1_pubkey_bytes(&bls_secret)
+                        .expect("Failed to get G1 pubkey bytes");
+
+                    // Create proof-of-possession: sign keccak256(abi.encode(operator_address))
+                    let encoded_addr =
+                        alloy_sol_types::sol_data::Address::abi_encode(&operator_address);
+                    let message = alloy_primitives::keccak256(&encoded_addr);
+                    let g2_proof =
+                        utils::bls_signing::bls_sign_digest(&bls_secret, message.as_ref())
+                            .expect("Failed to create BLS proof of possession");
+
+                    AvsOperator::with_bls_keys(
+                        operator_address,
+                        operator_private_key,
+                        g1_pubkey.to_vec(),
+                        g2_proof.to_vec(),
+                    )
+                } else {
+                    // Secp256k1 operator registration: existing path unchanged
+                    match signer_resp {
+                        SignerResponse::Secp256k1 {
+                            evm_address,
+                            hd_index,
+                        } => {
+                            let wavs_signer_hd_index = hd_index;
+
+                            // Get the signing key that this WAVS instance will use
+                            let signing_signer = utils::evm_client::signing::make_signer(
+                                operator_mnemonic,
+                                Some(wavs_signer_hd_index),
+                            )
+                            .unwrap();
+                            let signing_address = signing_signer.address();
+                            let signing_private_key = const_hex::encode(signing_signer.to_bytes());
+
+                            assert_eq!(
+                                signing_address.to_string().to_lowercase(),
+                                evm_address.to_lowercase(),
+                                "Derived signing address doesn't match WAVS signer address for operator {}",
+                                operator_offset
+                            );
+
+                            AvsOperator::with_keys(
+                                operator_address,
+                                signing_address,
+                                operator_private_key,
+                                signing_private_key,
+                            )
+                        }
+                        SignerResponse::Bls12381 { .. } => {
+                            panic!(
+                                "Expected Secp256k1 SignerResponse for non-BLS test, got Bls12381"
+                            );
+                        }
+                    }
+                };
 
                 avs_operators.push(avs_operator);
             }
@@ -494,7 +561,10 @@ impl ServiceManagers {
                     }
                 }
 
-                // doesn't hurt to wait again for rpcs at least in case trigger contract changed
+                // Wait specifically for each EVM trigger contract address to be in the
+                // subscription, not just any subscription. Using None would return prematurely
+                // if the service manager address is already subscribed, before the trigger
+                // contract address is added.
                 if let AnyServiceManagerInstance::Evm { .. } = service_manager_instance {
                     for (idx, http_client) in http_clients.iter().enumerate() {
                         tracing::info!(
@@ -502,7 +572,25 @@ impl ServiceManagers {
                             idx,
                             service.name
                         );
-                        wait_for_evm_trigger_streams_to_finalize(http_client, None).await;
+                        let mut found_evm_trigger = false;
+                        for workflow in service.workflows.values() {
+                            if let Trigger::EvmContractEvent { chain, address, .. } =
+                                &workflow.trigger
+                            {
+                                wait_for_evm_trigger_streams_to_finalize(
+                                    http_client,
+                                    Some(ServiceManager::Evm {
+                                        chain: chain.clone(),
+                                        address: *address,
+                                    }),
+                                )
+                                .await;
+                                found_evm_trigger = true;
+                            }
+                        }
+                        if !found_evm_trigger {
+                            wait_for_evm_trigger_streams_to_finalize(http_client, None).await;
+                        }
                     }
                 }
             });

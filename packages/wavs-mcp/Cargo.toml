@@ -15,7 +15,7 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
-wavs-types = { workspace = true }
+wavs-types = { workspace = true, features = ["full"] }
 anyhow = { workspace = true }
 const-hex = { workspace = true }
 tracing = { workspace = true }

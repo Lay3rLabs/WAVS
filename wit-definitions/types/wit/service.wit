@@ -151,7 +151,7 @@ interface service {
 
     variant signature-algorithm {
         secp256k1,
-        // Future: Bls12381, Ed25519, Secp256r1, etc.
+        bls12381,
     }
 
     variant signature-prefix {
