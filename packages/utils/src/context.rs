@@ -26,6 +26,13 @@ impl AnyRuntime {
         }
     }
 
+    pub fn enter(&self) -> tokio::runtime::EnterGuard<'_> {
+        match self {
+            AnyRuntime::Tokio(rt) => rt.enter(),
+            AnyRuntime::TokioHandle(handle) => handle.enter(),
+        }
+    }
+
     pub fn spawn<F>(&self, fut: F) -> tokio::task::JoinHandle<F::Output>
     where
         F: std::future::Future + Send + 'static,

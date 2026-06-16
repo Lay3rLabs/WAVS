@@ -21,6 +21,7 @@ use wavs_cli::{
         exec_component::{ExecComponent, ExecComponentArgs},
         service::handle_service_command,
         upload_component::{UploadComponent, UploadComponentArgs},
+        wit_schema,
     },
     context::CliContext,
     util::{write_output_file, ComponentInput},
@@ -135,11 +136,36 @@ async fn main() {
         .try_init()
         .unwrap();
 
+    // Handle commands that don't need CliContext (purely local, no network)
+    if let Command::WitSchema {
+        component,
+        wit_path,
+        args: _,
+    } = &command
+    {
+        match wit_schema::run(wit_schema::WitSchemaArgs {
+            component_path: component.clone(),
+            wit_path: wit_path.clone(),
+        }) {
+            Ok(schema) => {
+                // D-08: Always output JSON to stdout, pipe-friendly
+                println!("{}", serde_json::to_string_pretty(&schema).unwrap());
+                return;
+            }
+            Err(e) => {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+
+    // Only create CliContext for commands that need it
     let ctx = CliContext::try_new(&command, config.clone(), None)
         .await
         .unwrap();
 
     match command {
+        Command::WitSchema { .. } => unreachable!("handled above"),
         Command::DeployService {
             service_uri,
             set_uri,

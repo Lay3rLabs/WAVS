@@ -1,16 +1,84 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use rmcp::{
     handler::server::tool::schema_for_type,
     model::*,
     schemars,
-    service::{RequestContext, RoleServer},
+    service::{Peer, RequestContext, RoleServer},
     ServerHandler,
 };
 use serde::Deserialize;
 
 use crate::chain_ops;
 use crate::client::WavsClient;
+use crate::exec;
+
+/// Serde helper: deserialize a number that may arrive as a JSON string (LLMs often quote numbers).
+mod string_or_number {
+    use serde::{self, Deserialize, Deserializer};
+
+    pub fn deserialize_option_usize<'de, D>(deserializer: D) -> Result<Option<usize>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum StringOrNum {
+            Num(usize),
+            Str(String),
+        }
+        let opt: Option<StringOrNum> = Option::deserialize(deserializer)?;
+        match opt {
+            None => Ok(None),
+            Some(StringOrNum::Num(n)) => Ok(Some(n)),
+            Some(StringOrNum::Str(s)) => s
+                .parse::<usize>()
+                .map(Some)
+                .map_err(serde::de::Error::custom),
+        }
+    }
+
+    pub fn deserialize_option_u64<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum StringOrNum {
+            Num(u64),
+            Str(String),
+        }
+        let opt: Option<StringOrNum> = Option::deserialize(deserializer)?;
+        match opt {
+            None => Ok(None),
+            Some(StringOrNum::Num(n)) => Ok(Some(n)),
+            Some(StringOrNum::Str(s)) => {
+                s.parse::<u64>().map(Some).map_err(serde::de::Error::custom)
+            }
+        }
+    }
+
+    pub fn deserialize_option_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum StringOrNum {
+            Num(u32),
+            Str(String),
+        }
+        let opt: Option<StringOrNum> = Option::deserialize(deserializer)?;
+        match opt {
+            None => Ok(None),
+            Some(StringOrNum::Num(n)) => Ok(Some(n)),
+            Some(StringOrNum::Str(s)) => {
+                s.parse::<u32>().map(Some).map_err(serde::de::Error::custom)
+            }
+        }
+    }
+}
 use crate::scaffold;
 
 // ── Parameter structs ──────────────────────────────────────────────────────
@@ -39,7 +107,9 @@ pub struct UploadComponentParams {
 
 #[derive(Deserialize, schemars::JsonSchema)]
 pub struct SimulateTriggerParams {
-    /// Service ID — 64-char hex string derived from the ServiceManager
+    /// Service ID — 64-char hex string derived from the ServiceManager.
+    /// This is returned by wavs_deploy_dev_service as `service_id`.
+    /// NOT the deploy_hash — the service_id is a different value.
     pub service_id: String,
     /// Workflow ID — lowercase alphanumeric, 3–36 chars (e.g. "default")
     pub workflow_id: String,
@@ -49,6 +119,10 @@ pub struct SimulateTriggerParams {
     /// TriggerData as JSON, e.g. `{"Cron":{"trigger_time":0}}`
     pub data_json: String,
     /// How many times to fire the trigger (default: 1)
+    #[serde(
+        default,
+        deserialize_with = "string_or_number::deserialize_option_usize"
+    )]
     pub count: Option<usize>,
 }
 
@@ -82,8 +156,13 @@ pub struct QueryKvParams {
 pub struct QueryLogsParams {
     /// Return only entries with id >= since_id. Pass the `next_id` from the previous response
     /// to page forward. Defaults to 0 (return from the oldest buffered entry).
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_u64")]
     pub since_id: Option<u64>,
     /// Maximum number of entries to return (default: 100, max: 1000).
+    #[serde(
+        default,
+        deserialize_with = "string_or_number::deserialize_option_usize"
+    )]
     pub limit: Option<usize>,
     /// Minimum log level filter: trace | debug | info | warn | error.
     /// Returns entries at this level and above (e.g. "info" includes warn + error).
@@ -97,8 +176,13 @@ pub struct QueryLogsParams {
 pub struct QueryComponentLogsParams {
     /// Return only entries with id >= since_id. Pass the `next_id` from the previous response
     /// to page forward. Defaults to 0 (return from the oldest buffered entry).
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_u64")]
     pub since_id: Option<u64>,
     /// Maximum number of entries to return (default: 100, max: 1000).
+    #[serde(
+        default,
+        deserialize_with = "string_or_number::deserialize_option_usize"
+    )]
     pub limit: Option<usize>,
     /// Minimum log level filter: trace | debug | info | warn | error.
     pub level: Option<String>,
@@ -116,6 +200,10 @@ pub struct ScaffoldComponentParams {
     pub name: String,
     /// Trigger type: evm_contract_event | cosmos_contract_event | block_interval | cron | manual
     pub trigger_type: String,
+    /// Directory to create the project in. The component directory `{dir}/{name}/` will be created.
+    /// If omitted, returns the file contents as text instead of writing to disk.
+    /// Example: "/tmp" creates "/tmp/price-feed/"
+    pub dir: Option<String>,
     /// Optional description of what this component does
     pub description: Option<String>,
 }
@@ -152,6 +240,7 @@ pub struct RegisterOperatorParams {
     /// Weight to assign to the operator (default: 100).
     /// Represents relative stake weight — higher weight = more influence in multi-operator consensus.
     /// For single-operator setups, any positive value works; 100 is conventional.
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_u64")]
     pub weight: Option<u64>,
     /// RPC endpoint URL for the chain (e.g. "http://localhost:8545")
     pub rpc_url: String,
@@ -166,9 +255,16 @@ pub struct BuildComponentParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
+pub struct ValidateComponentParams {
+    /// Path to the compiled .wasm component file
+    pub wasm_path: String,
+}
+
+#[derive(Deserialize, schemars::JsonSchema)]
 pub struct GetSigningAddressParams {
     /// HD derivation index to use (default: 0). Use the hd_index reported by
     /// wavs_get_service_signer to check a service-specific signing key.
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_u32")]
     pub hd_index: Option<u32>,
 }
 
@@ -178,6 +274,7 @@ pub struct DeployAndRegisterParams {
     /// EVM: `{"evm":{"chain":"evm:31337","address":"0xAbCd..."}}`
     pub service_manager_json: String,
     /// Weight to assign to the operator (default: 100).
+    #[serde(default, deserialize_with = "string_or_number::deserialize_option_u64")]
     pub weight: Option<u64>,
     /// RPC endpoint URL for the chain (e.g. "http://localhost:8545")
     pub rpc_url: String,
@@ -198,12 +295,85 @@ fn err(text: impl Into<String>) -> Result<CallToolResult, McpError> {
 fn parse_args<T: serde::de::DeserializeOwned>(
     args: Option<serde_json::Map<String, serde_json::Value>>,
 ) -> Result<T, McpError> {
-    let value = serde_json::Value::Object(args.unwrap_or_default());
+    let mut map = args.unwrap_or_default();
+    // MCP clients (especially Claude) often send bools and numbers as strings.
+    // Coerce string values that look like bools/numbers to their native JSON types.
+    coerce_string_values(&mut map);
+    let value = serde_json::Value::Object(map);
     serde_json::from_value(value).map_err(|e| ErrorData {
         code: ErrorCode::INVALID_PARAMS,
         message: format!("Invalid parameters: {e}").into(),
         data: None,
     })
+}
+
+/// Coerce string values that look like bools or numbers to native JSON types.
+/// Handles: "true"/"false" → bool, "123" → number, "1.5" → number.
+/// Only applies to top-level string values (not nested objects/arrays).
+fn coerce_string_values(map: &mut serde_json::Map<String, serde_json::Value>) {
+    for value in map.values_mut() {
+        if let serde_json::Value::String(s) = value {
+            match s.as_str() {
+                "true" => *value = serde_json::Value::Bool(true),
+                "false" => *value = serde_json::Value::Bool(false),
+                other => {
+                    if let Ok(n) = other.parse::<u64>() {
+                        *value = serde_json::Value::Number(n.into());
+                    } else if let Ok(n) = other.parse::<f64>() {
+                        if let Some(n) = serde_json::Number::from_f64(n) {
+                            *value = serde_json::Value::Number(n);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Detect placeholder/example addresses that agents copy verbatim from schema examples.
+/// Matches patterns like 0x1234567890..., 0xAbCdEf..., 0xServiceManagerAddress, etc.
+fn is_placeholder_address(addr: &str) -> bool {
+    let lower = addr.to_lowercase();
+    // Non-hex characters in the address part → clearly a placeholder like "0xServiceManagerAddress"
+    if let Some(hex_part) = lower.strip_prefix("0x") {
+        if hex_part.chars().any(|c| !c.is_ascii_hexdigit()) {
+            return true;
+        }
+    }
+    // Common sequential/repeating patterns agents generate
+    let patterns = [
+        "0x1234567890",
+        "0xabcdef1234",
+        "0x0000000000",
+        "0xaaaaaaaaaa",
+        "0x1111111111",
+    ];
+    for p in patterns {
+        if lower.starts_with(p) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Generate a unique hex string of the given length for use as a dev manager address.
+/// Uses timestamp + process ID + counter for uniqueness (no `rand` crate needed).
+fn random_hex(len: usize) -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64;
+    let pid = std::process::id() as u64;
+    let count = COUNTER.fetch_add(1, Ordering::Relaxed);
+
+    // Hash the values together to produce enough hex chars
+    let mut s = format!("{:016x}{:08x}{:016x}", nanos, pid, count);
+    s.truncate(len);
+    s
 }
 
 fn no_params() -> Arc<serde_json::Map<String, serde_json::Value>> {
@@ -234,6 +404,10 @@ pub struct WavsMcpServer {
     client: WavsClient,
     mcp_chain_credential: Option<String>,
     signing_mnemonic: Option<String>,
+    exec_enabled: bool,
+    service_cache: Arc<exec::ServiceCache>,
+    peer: Arc<tokio::sync::RwLock<Option<Peer<RoleServer>>>>,
+    pending_confirmations: Arc<exec::PendingConfirmations>,
 }
 
 impl WavsMcpServer {
@@ -242,11 +416,16 @@ impl WavsMcpServer {
         token: Option<String>,
         mcp_chain_credential: Option<String>,
         signing_mnemonic: Option<String>,
+        exec_enabled: bool,
     ) -> Self {
         Self {
             client: WavsClient::new(wavs_url, token),
             mcp_chain_credential,
             signing_mnemonic,
+            exec_enabled,
+            service_cache: Arc::new(exec::ServiceCache::new(Duration::from_secs(5))),
+            peer: Arc::new(tokio::sync::RwLock::new(None)),
+            pending_confirmations: Arc::new(exec::PendingConfirmations::new()),
         }
     }
 
@@ -288,6 +467,32 @@ impl WavsMcpServer {
                     data: None,
                 })
             })
+    }
+
+    // ── Service cache helpers ──────────────────────────────────────────────
+
+    async fn get_services_cached(&self) -> Result<serde_json::Value, McpError> {
+        if let Some(cached) = self.service_cache.get().await {
+            return Ok(cached);
+        }
+        let services = self.client.list_services().await.map_err(|e| ErrorData {
+            code: ErrorCode::INTERNAL_ERROR,
+            message: format!("Failed to fetch services: {e:#}").into(),
+            data: None,
+        })?;
+        self.service_cache.set(services.clone()).await;
+        Ok(services)
+    }
+
+    /// Invalidate the service cache and notify the MCP client that the tool
+    /// list has changed. Called after deploy/delete operations.
+    async fn notify_tools_changed(&self) {
+        self.service_cache.invalidate().await;
+        if let Some(peer) = self.peer.try_read().ok().and_then(|g| g.clone()) {
+            if let Err(e) = peer.notify_tool_list_changed().await {
+                tracing::warn!("Failed to send tools/list_changed notification: {e}");
+            }
+        }
     }
 
     // ── Tool implementations ───────────────────────────────────────────────
@@ -334,6 +539,21 @@ impl WavsMcpServer {
                 Ok(m) => m,
                 Err(e) => return err(format!("Invalid service_manager_json: {e}")),
             };
+        let nav_directive = match &manager {
+            wavs_types::ServiceManager::Evm { chain, address } => {
+                format!(
+                    "\n\n⚡ ACTION REQUIRED: If you have the ui_navigate tool, call it NOW with path=\"/services/{chain}/{address}\" \
+                     to show the user their new service. Do this BEFORE any other step."
+                )
+            }
+            wavs_types::ServiceManager::Cosmos { chain, address } => {
+                format!(
+                    "\n\n⚡ ACTION REQUIRED: If you have the ui_navigate tool, call it NOW with path=\"/services/{chain}/{address}\" \
+                     to show the user their new service. Do this BEFORE any other step."
+                )
+            }
+        };
+
         match self.client.deploy_service(manager.clone()).await {
             Ok(v) if v.is_null() => {
                 let signer_info = match self.client.get_service_signer(manager).await {
@@ -345,9 +565,15 @@ impl WavsMcpServer {
                     }
                     Err(_) => String::new(),
                 };
-                ok(format!("Service registered successfully.{signer_info}"))
+                self.notify_tools_changed().await;
+                ok(format!(
+                    "Service registered successfully.{nav_directive}{signer_info}"
+                ))
             }
-            Ok(v) => ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string())),
+            Ok(v) => {
+                self.notify_tools_changed().await;
+                ok(serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string()))
+            }
             Err(e) => err(format!("Failed to deploy service: {e:#}")),
         }
     }
@@ -362,7 +588,10 @@ impl WavsMcpServer {
             Err(e) => return err(format!("Invalid service_manager_json: {e}")),
         };
         match self.client.delete_service(manager).await {
-            Ok(()) => ok("Service deleted successfully"),
+            Ok(()) => {
+                self.notify_tools_changed().await;
+                ok("Service deleted successfully")
+            }
             Err(e) => err(format!("Failed to delete service: {e:#}")),
         }
     }
@@ -443,26 +672,129 @@ impl WavsMcpServer {
         args: Option<serde_json::Map<String, serde_json::Value>>,
     ) -> Result<CallToolResult, McpError> {
         let p: DeployDevServiceParams = parse_args(args)?;
-        let manager: Option<wavs_types::ServiceManager> =
-            serde_json::from_str::<serde_json::Value>(&p.service_json)
-                .ok()
-                .and_then(|v| serde_json::from_value(v.get("manager")?.clone()).ok());
-        match self.client.deploy_dev_service(&p.service_json).await {
+
+        // Parse the service JSON
+        let mut service_value: serde_json::Value =
+            serde_json::from_str(&p.service_json).map_err(|e| ErrorData {
+                code: ErrorCode::INVALID_PARAMS,
+                message: format!("Invalid service JSON: {e}").into(),
+                data: None,
+            })?;
+
+        // For dev services: replace placeholder manager addresses with unique random ones.
+        // This prevents "already registered" errors when agents copy example addresses verbatim.
+        let manager_replaced = if let Some(addr) = service_value
+            .pointer("/manager/evm/address")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+        {
+            if is_placeholder_address(&addr) {
+                let random_addr = format!("0x{}", random_hex(40));
+                service_value["manager"]["evm"]["address"] = serde_json::Value::String(random_addr);
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        let service_json = serde_json::to_string(&service_value).unwrap();
+
+        let manager: Option<wavs_types::ServiceManager> = service_value
+            .get("manager")
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+
+        // Extract workflow IDs for the summary
+        let workflow_ids: Vec<String> = service_value
+            .get("workflows")
+            .and_then(|v| v.as_object())
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default();
+
+        match self.client.deploy_dev_service(&service_json).await {
             Ok(hash) => {
+                // Compute the service_id from the ServiceManager
+                let service_id_info = if let Some(ref mgr) = manager {
+                    let sid = wavs_types::ServiceId::from(mgr);
+                    format!(
+                        "\nservice_id: {sid}  ← use this for wavs_simulate_trigger and wavs_query_component_logs"
+                    )
+                } else {
+                    String::new()
+                };
+
+                let manager_info = if manager_replaced {
+                    let addr = service_value["manager"]["evm"]["address"]
+                        .as_str()
+                        .unwrap_or("unknown");
+                    format!(
+                        "\nmanager_address: {addr}  (placeholder was replaced with unique address)"
+                    )
+                } else {
+                    String::new()
+                };
+
+                let workflow_info = if !workflow_ids.is_empty() {
+                    format!(
+                        "\nworkflow_id(s): {}",
+                        workflow_ids
+                            .iter()
+                            .map(|w| format!("\"{}\"", w))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                } else {
+                    String::new()
+                };
+
                 let signer_info = if let Some(mgr) = manager {
                     match self.client.get_service_signer(mgr).await {
                         Ok(wavs_types::SignerResponse::Secp256k1 {
                             hd_index,
                             evm_address,
-                        }) => {
-                            format!("\nSigning key: HD index {hd_index} ({evm_address})")
-                        }
+                        }) => format!("\nsigning_key: HD index {hd_index} ({evm_address})"),
                         Err(_) => String::new(),
                     }
                 } else {
                     String::new()
                 };
-                ok(format!("Service registered.\nHash: {hash}{signer_info}"))
+
+                // Build the ui_navigate action directive
+                let nav_action = service_value
+                    .pointer("/manager/evm")
+                    .and_then(|evm| {
+                        let chain = evm.get("chain")?.as_str()?;
+                        let addr = evm.get("address")?.as_str()?;
+                        Some(format!("/services/{chain}/{addr}"))
+                    })
+                    .or_else(|| {
+                        service_value.pointer("/manager/cosmos").and_then(|cosmos| {
+                            let chain = cosmos.get("chain")?.as_str()?;
+                            let addr = cosmos.get("address")?.as_str()?;
+                            Some(format!("/services/{chain}/{addr}"))
+                        })
+                    });
+
+                let nav_directive = if let Some(path) = nav_action {
+                    format!(
+                        "\n\n⚡ ACTION REQUIRED: If you have the ui_navigate tool, call it NOW with path=\"{path}\" \
+                         to show the user their new service. Do this BEFORE simulate_trigger or any other step."
+                    )
+                } else {
+                    String::new()
+                };
+
+                self.notify_tools_changed().await;
+                ok(format!(
+                    "✅ Service deployed successfully.\
+                     {nav_directive}\n\n\
+                     deploy_hash: {hash}\
+                     {service_id_info}\
+                     {manager_info}\
+                     {workflow_info}\
+                     {signer_info}"
+                ))
             }
             Err(e) => err(format!("Failed to deploy dev service: {e:#}")),
         }
@@ -742,11 +1074,25 @@ impl WavsMcpServer {
         args: Option<serde_json::Map<String, serde_json::Value>>,
     ) -> Result<CallToolResult, McpError> {
         let p: ScaffoldComponentParams = parse_args(args)?;
-        ok(scaffold::scaffold_component(
-            &p.name,
-            &p.trigger_type,
-            p.description.as_deref(),
-        ))
+        if let Some(dir) = &p.dir {
+            // Write files to disk
+            match scaffold::scaffold_component_to_disk(
+                &p.name,
+                &p.trigger_type,
+                dir,
+                p.description.as_deref(),
+            ) {
+                Ok(summary) => ok(summary),
+                Err(e) => err(format!("Failed to scaffold component: {e}")),
+            }
+        } else {
+            // Return file contents as text
+            ok(scaffold::scaffold_component_text(
+                &p.name,
+                &p.trigger_type,
+                p.description.as_deref(),
+            ))
+        }
     }
 
     async fn tool_build_component(
@@ -756,8 +1102,29 @@ impl WavsMcpServer {
         let p: BuildComponentParams = parse_args(args)?;
         let release = p.release.unwrap_or(true);
 
+        // Detect standalone vs workspace project.
+        // Standalone projects have a local `wit/` directory and no `[package.metadata.component]`
+        // with `package = "component:..."` that cargo-component uses.
+        // For standalone, use `cargo build --target wasm32-wasip2`.
+        // For workspace, use `cargo component build`.
+        let dir_path = std::path::Path::new(&p.dir);
+        let has_local_wit = dir_path.join("wit").is_dir();
+        let cargo_toml_path = dir_path.join("Cargo.toml");
+        let has_component_metadata = std::fs::read_to_string(&cargo_toml_path)
+            .map(|s| s.contains("[package.metadata.component]"))
+            .unwrap_or(false);
+
+        // Use standalone build (wasm32-wasip2) when:
+        // - Project has local wit/ directory AND no component metadata, OR
+        // - Project has local wit/ directory AND is not in a cargo workspace
+        let use_standalone = has_local_wit && !has_component_metadata;
+
         let mut cmd = tokio::process::Command::new("cargo");
-        cmd.arg("component").arg("build");
+        if use_standalone {
+            cmd.arg("build").arg("--target").arg("wasm32-wasip2");
+        } else {
+            cmd.arg("component").arg("build");
+        }
         if release {
             cmd.arg("--release");
         }
@@ -765,38 +1132,178 @@ impl WavsMcpServer {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
 
+        let build_cmd_str = if use_standalone {
+            "cargo build --target wasm32-wasip2"
+        } else {
+            "cargo component build"
+        };
+
         let output = match cmd.output().await {
             Ok(o) => o,
-            Err(e) => return err(format!("Failed to run `cargo component build`: {e:#}")),
+            Err(e) => return err(format!("Failed to run `{build_cmd_str}`: {e:#}")),
         };
 
         let mut result = format!(
-            "Exit code: {}\n\nstdout:\n{}\n\nstderr:\n{}",
+            "Build command: {build_cmd_str}{release_flag}\nExit code: {}\n\nstdout:\n{}\n\nstderr:\n{}",
             output.status.code().unwrap_or(-1),
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
+            release_flag = if release { " --release" } else { "" },
         );
 
         if output.status.success() {
             // Scan for output .wasm files so callers can pass the path directly to wavs_upload_component.
-            let wasm_dir = std::path::Path::new(&p.dir).join("target/wasm32-wasip1/release");
-            if let Ok(entries) = std::fs::read_dir(&wasm_dir) {
-                let mut wasm_files: Vec<String> = entries
-                    .filter_map(|e| e.ok())
-                    .map(|e| e.path())
-                    .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("wasm"))
-                    .filter_map(|p| p.to_str().map(|s| s.to_owned()))
-                    .collect();
-                wasm_files.sort();
-                if !wasm_files.is_empty() {
-                    result.push_str("\n\nOutput WASM files:");
-                    for f in &wasm_files {
-                        result.push_str(&format!("\n  {f}"));
+            // Check both wasip1 (cargo component) and wasip2 (standalone) output dirs.
+            for target_dir in &[
+                "target/wasm32-wasip1/release",
+                "target/wasm32-wasip2/release",
+            ] {
+                let wasm_dir = dir_path.join(target_dir);
+                if let Ok(entries) = std::fs::read_dir(&wasm_dir) {
+                    let mut wasm_files: Vec<String> = entries
+                        .filter_map(|e| e.ok())
+                        .map(|e| e.path())
+                        .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("wasm"))
+                        .filter_map(|p| p.to_str().map(|s| s.to_owned()))
+                        .collect();
+                    wasm_files.sort();
+                    if !wasm_files.is_empty() {
+                        result.push_str("\n\nOutput WASM files:");
+                        for f in &wasm_files {
+                            result.push_str(&format!("\n  {f}"));
+                        }
                     }
                 }
             }
             ok(result)
         } else {
+            // Enhance error messages for common issues
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("failed to create a target world")
+                || stderr.contains("package not found")
+            {
+                result.push_str(
+                    "\n\n💡 Hint: WIT interface files may be missing or incomplete. \
+                    For standalone projects, ensure all wit/deps/*/package.wit files are present. \
+                    Re-run wavs_scaffold_component to get the complete file list.",
+                );
+            }
+            if stderr.contains("no export") && stderr.contains("run") {
+                result.push_str("\n\n💡 Hint: Component doesn't export the required 'run' function. \
+                    Ensure the `export!()` macro (standalone) or `export_layer_trigger_world!()` macro (workspace) \
+                    is present, and that `impl Guest for Component` is correct.");
+            }
+            err(result)
+        }
+    }
+
+    async fn tool_validate_component(
+        &self,
+        args: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<CallToolResult, McpError> {
+        let p: ValidateComponentParams = parse_args(args)?;
+        let wasm_path = std::path::Path::new(&p.wasm_path);
+
+        if !wasm_path.exists() {
+            return err(format!("File not found: {}", p.wasm_path));
+        }
+
+        // Use wasm-tools to inspect the component
+        let output = match tokio::process::Command::new("wasm-tools")
+            .args(["component", "wit"])
+            .arg(&p.wasm_path)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .await
+        {
+            Ok(o) => o,
+            Err(e) => {
+                return err(format!(
+                    "Failed to run `wasm-tools component wit`: {e:#}\n\n\
+                     Install with: cargo install wasm-tools"
+                ))
+            }
+        };
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return err(format!(
+                "❌ Not a valid WASI component.\n\n\
+                 The file may be a core WebAssembly module (not a component).\n\
+                 - If using standalone build, ensure you built with: `cargo build --target wasm32-wasip2 --release`\n\
+                 - If using workspace build, ensure you used: `cargo component build --release`\n\n\
+                 wasm-tools error:\n{stderr}"
+            ));
+        }
+
+        let wit_output = String::from_utf8_lossy(&output.stdout);
+
+        // Check for the required export
+        let has_run_export = wit_output.contains("export run: func(trigger-action: trigger-action) -> result<list<wasm-response>, string>");
+
+        // Check for key imports
+        let has_operator_input = wit_output.contains("wavs:operator/input");
+        let has_operator_output = wit_output.contains("wavs:operator/output");
+        let has_types = wit_output.contains("wavs:types/");
+
+        let mut issues: Vec<String> = Vec::new();
+        let mut info: Vec<String> = Vec::new();
+
+        if !has_run_export {
+            issues.push(
+                "Missing `export run` function. Ensure the export macro is present:\n  \
+                 - Standalone: `bindings::export!(Component with_types_in bindings);`\n  \
+                 - Workspace: `export_layer_trigger_world!(Component);`\n  \
+                 And that `impl Guest for Component` has the correct signature."
+                    .to_string(),
+            );
+        } else {
+            info.push("✅ Exports `run` function with correct signature".to_string());
+        }
+
+        if !has_operator_input || !has_operator_output {
+            issues.push(
+                "Missing wavs:operator imports. The WIT files may be incomplete or corrupted."
+                    .to_string(),
+            );
+        } else {
+            info.push("✅ Imports wavs:operator input/output interfaces".to_string());
+        }
+
+        if !has_types {
+            issues.push(
+                "Missing wavs:types imports. Ensure wavs-types WIT dep is present.".to_string(),
+            );
+        } else {
+            info.push("✅ Imports wavs:types definitions".to_string());
+        }
+
+        // File size info
+        if let Ok(metadata) = std::fs::metadata(&p.wasm_path) {
+            let size_kb = metadata.len() / 1024;
+            info.push(format!("📦 Component size: {} KB", size_kb));
+        }
+
+        let mut result = String::new();
+        if issues.is_empty() {
+            result.push_str("# ✅ Component Validation Passed\n\n");
+            result.push_str(&format!("File: `{}`\n\n", p.wasm_path));
+            for line in &info {
+                result.push_str(&format!("{line}\n"));
+            }
+            result.push_str("\nThe component is ready for upload with `wavs_upload_component`.");
+            ok(result)
+        } else {
+            result.push_str("# ❌ Component Validation Failed\n\n");
+            result.push_str(&format!("File: `{}`\n\n", p.wasm_path));
+            for line in &info {
+                result.push_str(&format!("{line}\n"));
+            }
+            result.push_str("\n## Issues\n\n");
+            for issue in &issues {
+                result.push_str(&format!("- {issue}\n\n"));
+            }
             err(result)
         }
     }
@@ -810,6 +1317,12 @@ Use this as a reference when calling wavs_save_service or wavs_deploy_dev_servic
 Raw 64-character hex string returned by wavs_upload_component. NO "sha256:" prefix.
 Example: f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420
 
+### Manager address
+The `manager` field uniquely identifies the service.
+- For real deployments: use the actual on-chain ServiceManager contract address.
+- For dev/testing (wavs_deploy_dev_service): use any placeholder (e.g. `0x1234...`). 
+  The tool automatically replaces placeholder addresses with unique random ones to avoid collisions.
+
 ---
 
 ### Manual trigger (fires only via wavs_simulate_trigger)
@@ -817,7 +1330,7 @@ Example: f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420
 {
   "name": "my-service",
   "status": "active",
-  "manager": {"evm": {"chain": "evm:31337", "address": "0xServiceManagerAddress"}},
+  "manager": {"evm": {"chain": "evm:31337", "address": "0x1234567890abcdef1234567890abcdef12345678"}},
   "workflows": {
     "default": {
       "trigger": "manual",
@@ -840,7 +1353,7 @@ Example: f0b42a5171c9dcd75eac41c8ce2c4e7882d304c885266d8ac7b70af996b9a420
 {
   "name": "my-cron-service",
   "status": "active",
-  "manager": {"evm": {"chain": "evm:31337", "address": "0xServiceManagerAddress"}},
+  "manager": {"evm": {"chain": "evm:31337", "address": "0x1234567890abcdef1234567890abcdef12345678"}},
   "workflows": {
     "default": {
       "trigger": {"cron": {"schedule": "0 * * * * * *", "start_time": null, "end_time": null}},
@@ -946,29 +1459,49 @@ Note: trigger_json for simulate uses {"manual": null}, not the bare string "manu
 
 impl ServerHandler for WavsMcpServer {
     fn get_info(&self) -> ServerInfo {
+        let mut instructions = String::from(
+            "MCP server for the WAVS (WebAssembly-based Actively Validated Services) platform.\n\
+             \n\
+             Read tools (no auth needed): wavs_get_node_info, wavs_get_health, wavs_list_services, wavs_get_service\n\
+             Write tools (need --token): wavs_deploy_service, wavs_delete_service\n\
+             Dev tools (need dev endpoints): wavs_upload_component, wavs_save_service, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv\n\
+             Chain-write tools (need WAVS_MCP_CHAIN_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
+             Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator, wavs_deploy_and_register, wavs_get_signing_address\n\
+             Node-read tools (need --token): wavs_get_service_signer\n\
+             Local tools: wavs_get_service_schema, wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component, wavs_validate_component",
+        );
+        if self.exec_enabled {
+            instructions.push_str(
+                "\n\nExecution tools (--exec-enabled): wavs_exec_* tools are dynamically generated \
+                 for each deployed service workflow. Use trust_tier to select result_only, signed_result, \
+                 or on_chain execution mode.",
+            );
+        }
         ServerInfo {
             server_info: Implementation {
                 name: "wavs-mcp".into(),
                 version: env!("CARGO_PKG_VERSION").into(),
             },
             capabilities: ServerCapabilities {
-                tools: Some(Default::default()),
+                tools: Some(ToolsCapability {
+                    list_changed: Some(true),
+                }),
                 ..Default::default()
             },
-            instructions: Some(
-                "MCP server for the WAVS (WebAssembly-based Actively Validated Services) platform.\n\
-                 \n\
-                 Read tools (no auth needed): wavs_get_node_info, wavs_get_health, wavs_list_services, wavs_get_service\n\
-                 Write tools (need --token): wavs_deploy_service, wavs_delete_service\n\
-                 Dev tools (need dev endpoints): wavs_upload_component, wavs_save_service, wavs_simulate_trigger, wavs_deploy_dev_service, wavs_query_kv\n\
-                 Chain-write tools (need WAVS_MCP_CHAIN_CREDENTIAL on MCP server): wavs_set_service_uri, wavs_deploy_service_manager, wavs_deploy_poa_service_manager\n\
-                 Chain-write tools (also need WAVS_SIGNING_MNEMONIC): wavs_register_operator, wavs_deploy_and_register, wavs_get_signing_address\n\
-                 Node-read tools (need --token): wavs_get_service_signer\n\
-                 Local tools: wavs_get_service_schema, wavs_get_wit_interface, wavs_scaffold_component, wavs_build_component"
-                    .to_string(),
-            ),
+            instructions: Some(instructions),
             ..Default::default()
         }
+    }
+
+    fn set_peer(&mut self, peer: Peer<RoleServer>) {
+        let peer_store = self.peer.clone();
+        tokio::spawn(async move {
+            *peer_store.write().await = Some(peer);
+        });
+    }
+
+    fn get_peer(&self) -> Option<Peer<RoleServer>> {
+        self.peer.try_read().ok().and_then(|g| g.clone())
     }
 
     async fn list_tools(
@@ -978,8 +1511,7 @@ impl ServerHandler for WavsMcpServer {
     ) -> Result<ListToolsResult, McpError> {
         let empty = no_params();
 
-        Ok(ListToolsResult {
-            tools: vec![
+        let mut tools = vec![
                 // Read tools
                 tool("wavs_get_node_info",
                      "Get WAVS node information: service count, chain keys, aggregator config, P2P status",
@@ -1095,13 +1627,20 @@ impl ServerHandler for WavsMcpServer {
                 Tool {
                     name: "wavs_simulate_trigger".into(),
                     description: "Simulate a trigger against a deployed service. \
+                        The service_id parameter is the 64-char hex ID returned by wavs_deploy_dev_service \
+                        (labeled as `service_id`, NOT the `deploy_hash`). \
+                        The trigger_json and data_json must match the trigger type configured in the service. \
+                        Use wavs_get_service_schema for examples of trigger/data JSON formats. \
                         Requires dev endpoints enabled in wavs.toml.".into(),
                     input_schema: schema_for_type::<SimulateTriggerParams>().into(),
                 },
                 Tool {
                     name: "wavs_deploy_dev_service".into(),
                     description: "Register a service directly without an on-chain contract (dev/testing only). \
-                        Pass the full Service JSON. Handles the two-step save+register flow internally. \
+                        Pass the full Service JSON. Placeholder manager addresses (like 0x1234...) are \
+                        automatically replaced with unique random addresses to prevent collisions. \
+                        Returns the service_id (needed for wavs_simulate_trigger) and other details. \
+                        Handles the two-step save+register flow internally. \
                         Requires dev endpoints enabled in wavs.toml and --token. \
                         Call wavs_get_service_schema first to see a minimal valid example. \
                         Use this for local dev. For production with a real ServiceManager contract, \
@@ -1147,17 +1686,51 @@ impl ServerHandler for WavsMcpServer {
                      empty.clone()),
                 Tool {
                     name: "wavs_scaffold_component".into(),
-                    description: "Generate a ready-to-build WAVS WASM component scaffold (Cargo.toml + lib.rs). \
+                    description: "Create a complete, ready-to-build WAVS WASM component project. \
+                        If `dir` is provided, writes all files to disk at `{dir}/{name}/` (recommended). \
+                        If `dir` is omitted, returns file contents as text for manual creation. \
+                        Includes Cargo.toml, src/lib.rs, src/bindings.rs, and the full WIT interface directory. \
+                        The generated project is self-contained and builds with `cargo build --target wasm32-wasip2 --release`. \
+                        After scaffolding, customize src/lib.rs then use wavs_build_component to compile. \
                         Trigger types: evm_contract_event | cosmos_contract_event | block_interval | cron | manual".into(),
                     input_schema: schema_for_type::<ScaffoldComponentParams>().into(),
                 },
                 Tool {
                     name: "wavs_build_component".into(),
-                    description: "Build a WAVS WASM component using `cargo component build`. \
-                        Returns full build output.".into(),
+                    description: "Build a WAVS WASM component. \
+                        Auto-detects build mode: uses `cargo build --target wasm32-wasip2` for standalone projects \
+                        (with local wit/ directory) or `cargo component build` for workspace projects. \
+                        Returns full build output and output .wasm file paths.".into(),
                     input_schema: schema_for_type::<BuildComponentParams>().into(),
                 },
-            ],
+                Tool {
+                    name: "wavs_validate_component".into(),
+                    description: "Validate a compiled .wasm component before uploading. \
+                        Checks that the file is a valid WASI component (not a core module), \
+                        exports the required `run` function with the correct signature, \
+                        and imports the expected WAVS interfaces. \
+                        Requires `wasm-tools` to be installed. \
+                        Run this after wavs_build_component and before wavs_upload_component.".into(),
+                    input_schema: schema_for_type::<ValidateComponentParams>().into(),
+                },
+            ];
+
+        // Conditionally add dynamic exec tools for deployed services
+        if self.exec_enabled {
+            match self.get_services_cached().await {
+                Ok(services) => {
+                    let exec_tools = exec::build_exec_tools(&services);
+                    tools.extend(exec_tools);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to build exec tools: {}", e.message);
+                    // Continue with just management tools -- don't fail the whole list
+                }
+            }
+        }
+
+        Ok(ListToolsResult {
+            tools,
             next_cursor: None,
         })
     }
@@ -1193,6 +1766,33 @@ impl ServerHandler for WavsMcpServer {
             "wavs_get_wit_interface" => self.tool_get_wit_interface().await,
             "wavs_scaffold_component" => self.tool_scaffold_component(args).await,
             "wavs_build_component" => self.tool_build_component(args).await,
+            "wavs_validate_component" => self.tool_validate_component(args).await,
+            name if name.starts_with("wavs_exec_") => {
+                if !self.exec_enabled {
+                    return Err(ErrorData {
+                        code: ErrorCode::INVALID_REQUEST,
+                        message: "Execution tools are disabled. Restart the MCP server with --exec-enabled.".into(),
+                        data: None,
+                    });
+                }
+                let services = self.get_services_cached().await?;
+                let signing_cred = self
+                    .signing_mnemonic
+                    .as_deref()
+                    .and_then(|s| s.parse::<wavs_types::Credential>().ok());
+                let chain_cred = self
+                    .mcp_chain_credential
+                    .as_deref()
+                    .and_then(|s| s.parse::<wavs_types::Credential>().ok());
+                let ctx = exec::ExecContext {
+                    client: &self.client,
+                    services_json: &services,
+                    signing_mnemonic: signing_cred.as_ref(),
+                    mcp_chain_credential: chain_cred.as_ref(),
+                    pending_confirmations: Some(&self.pending_confirmations),
+                };
+                exec::handle_exec_tool(&ctx, name, args).await
+            }
             name => Err(ErrorData {
                 code: ErrorCode::METHOD_NOT_FOUND,
                 message: format!("Unknown tool: {name}").into(),
